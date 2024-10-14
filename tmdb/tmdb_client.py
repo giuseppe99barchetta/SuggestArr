@@ -11,7 +11,7 @@ import logging
 import requests
 
 # Constants for HTTP status codes and timeout
-HTTP_OK = 200
+HTTP_OK = {200, 201}
 REQUEST_TIMEOUT = 10  # Timeout in seconds for HTTP requests
 
 class TMDbClient:
@@ -37,7 +37,7 @@ class TMDbClient:
         url = f"{self.tmdb_api_url}/movie/{movie_id}/recommendations?api_key={self.api_key}"
         try:
             response = requests.get(url, timeout=REQUEST_TIMEOUT)
-            if response.status_code == HTTP_OK:
+            if response.status_code in HTTP_OK:
                 data = response.json()
                 return [movie['id'] for movie in data['results']]
             logging.error("Error retrieving movie recommendations: %d", response.status_code)
@@ -56,7 +56,7 @@ class TMDbClient:
         url = f"{self.tmdb_api_url}/tv/{tvshow_id}/recommendations?api_key={self.api_key}"
         try:
             response = requests.get(url, timeout=REQUEST_TIMEOUT)
-            if response.status_code == HTTP_OK:
+            if response.status_code in HTTP_OK:
                 data = response.json()
                 return [tvshow['id'] for tvshow in data['results']]
             logging.error("Error retrieving TV show recommendations: %d", response.status_code)
@@ -75,7 +75,7 @@ class TMDbClient:
         url = f"{self.tmdb_api_url}/find/{tvdb_id}?api_key={self.api_key}&external_source=tvdb_id"
         try:
             response = requests.get(url, timeout=REQUEST_TIMEOUT)
-            if response.status_code == HTTP_OK:
+            if response.status_code in HTTP_OK:
                 data = response.json()
                 if 'tv_results' in data and data['tv_results']:
                     return data['tv_results'][0]['id']

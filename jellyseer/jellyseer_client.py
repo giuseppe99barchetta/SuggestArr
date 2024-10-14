@@ -11,7 +11,7 @@ import logging
 import requests
 
 # Constants for HTTP status codes and request timeout
-HTTP_OK = 200
+HTTP_OK = {200, 201}
 REQUEST_TIMEOUT = 10  # Timeout in seconds for HTTP requests
 
 class JellyseerClient:
@@ -42,7 +42,7 @@ class JellyseerClient:
 
         try:
             response = self.session.get(url, timeout=REQUEST_TIMEOUT)
-            if response.status_code == HTTP_OK:
+            if response.status_code in HTTP_OK:
                 data = response.json()
                 for item in data.get('results', []):
                     if item['media']['tmdbId'] == tmdb_id \
@@ -79,7 +79,7 @@ class JellyseerClient:
                 json=data,
                 timeout=REQUEST_TIMEOUT
             )
-            if response.status_code == HTTP_OK:
+            if response.status_code in HTTP_OK:
                 return response.json()
             logging.error("Failed to request media (ID: %s): %d", media_id, response.status_code)
         except requests.Timeout:
