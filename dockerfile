@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN apt-get update && apt-get install -y cron
 
 # Add the cron job
-RUN echo "50 23 * * * cd /app && /usr/local/bin/python automate_process.py >> /var/log/cron.log 2>&1" > /etc/cron.d/automation-cron
+RUN echo "0 0 * * * cd /app && /usr/local/bin/python automate_process.py >> /var/log/cron.log 2>&1" > /etc/cron.d/automation-cron
 
 # Give execution rights to the cron job
 RUN chmod 0644 /etc/cron.d/automation-cron
