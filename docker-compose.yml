@@ -14,7 +14,10 @@ services:
       JELLYSEER_TOKEN: ${JELLYSEER_TOKEN}
       MAX_SIMILAR_MOVIE: 5 # (Optional: default 5, max 20)
       MAX_SIMILAR_TV: 2 # (Optional: default 2, max 20)
+      CRON_TIMES: ${CRON_TIMES:-0 0 * * *}  # Default cron schedule is midnight
     volumes:
       - .:/app
     container_name: jellyser_automation_job
     restart: always
+    ports:
+      - "5000:5000"

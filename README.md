@@ -8,6 +8,8 @@ This project is designed to fully automate the process of managing media content
 - Fetches recently watched movies and TV shows from Jellyfin for all users.
 - Searches for similar movies and TV shows on TMDb.
 - Sends download requests for similar content to Jellyseer.
+- Web Interface: A user-friendly web interface for configuration management.
+- Cron Job Management: Easily update the cron job schedule directly from the web interface.
 
 ## Prerequisites
 - Python 3.x or Docker
@@ -30,6 +32,7 @@ The project uses the following environment variables that can be passed via the 
 - `JELLYSEER_TOKEN`: The API token for accessing Jellyseer.
 - `MAX_SIMILAR_MOVIE`: (Optional) The maximum number of similar movies to download. Default is 3, with a max limit of 20.
 - `MAX_SIMILAR_TV`: (Optional) The maximum number of similar TV shows to download. Default is 2, with a max limit of 20.
+- `CRON_TIMES`: (Optional) Your preferred cron schedule otherwise it runs at midnight.
 
 ## Docker Usage
 
@@ -52,6 +55,7 @@ services:
       JELLYSEER_PASSWORD: ${JELLYSEER_PASSWORD}
       MAX_SIMILAR_MOVIE: ${MAX_SIMILAR_MOVIE:-3}  # Default is 3
       MAX_SIMILAR_TV: ${MAX_SIMILAR_TV:-2}  # Default is 2
+      CRON_TIMES: ${CRON_TIMES:-0 0 * * *}  # Default cron schedule is midnight
     volumes:
       - .:/app
     container_name: automation_job
@@ -81,6 +85,7 @@ export JELLYFIN_API_URL=http://your_jellyfin_url
 export JELLYFIN_TOKEN=your_jellyfin_token
 export JELLYSEER_API_URL=http://your_jellyseer_url
 export JELLYSEER_TOKEN=your_jellyseer_token
+export CRON_TIMES="0 0 * * *"  # Optional, your preferred cron schedule
 ```
 
 Or create an .env file inside the project.
@@ -90,11 +95,6 @@ Or create an .env file inside the project.
 ```bash
 python automate_process.py
 ```
-
-## Other Documentation
-- [FAQ](FAQ.md)
-- [Contributing Guidelines](CONTRIBUTING.md)
-- [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Contribute
 Contributions are highly welcome! Feel free to open issues, submit pull requests, or provide any feedback that can improve the project. Whether you're fixing bugs, improving documentation, or adding new features, all contributions are greatly appreciated.
