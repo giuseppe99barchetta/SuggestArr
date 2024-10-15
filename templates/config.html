@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configure JRA</title>
+    <!-- Google Fonts: Quicksand -->
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div id="toast-run" class="toast"></div>
+    <div id="toast-config" class="toast"></div>
+
+    <div class="form-card">
+        <h1 class="text-center">Configuration for JRA</h1>
+        <form method="POST" class="mt-4">
+            <div class="mb-3">
+                <label for="TMDB_API_KEY" class="form-label">TMDB API Key:</label>
+                <input type="text" class="form-control" id="TMDB_API_KEY" name="TMDB_API_KEY" value="{{ config.TMDB_API_KEY }}" placeholder="Enter your TMDB API Key">
+            </div>
+            <div class="mb-3">
+                <label for="JELLYFIN_API_URL" class="form-label">Jellyfin API URL:</label>
+                <input type="text" class="form-control" id="JELLYFIN_API_URL" name="JELLYFIN_API_URL" value="{{ config.JELLYFIN_API_URL }}" placeholder="http://your-jellyfin-url">
+            </div>
+            <div class="mb-3">
+                <label for="JELLYFIN_TOKEN" class="form-label">Jellyfin Token:</label>
+                <input type="text" class="form-control" id="JELLYFIN_TOKEN" name="JELLYFIN_TOKEN" value="{{ config.JELLYFIN_TOKEN }}" placeholder="Your Jellyfin Token">
+            </div>
+            <div class="mb-3">
+                <label for="JELLYSEER_API_URL" class="form-label">Jellyseer API URL:</label>
+                <input type="text" class="form-control" id="JELLYSEER_API_URL" name="JELLYSEER_API_URL" value="{{ config.JELLYSEER_API_URL }}" placeholder="http://your-jellyseer-url">
+            </div>
+            <div class="mb-3">
+                <label for="JELLYSEER_TOKEN" class="form-label">Jellyseer Token:</label>
+                <input type="text" class="form-control" id="JELLYSEER_TOKEN" name="JELLYSEER_TOKEN" value="{{ config.JELLYSEER_TOKEN }}" placeholder="Your Jellyseer Token">
+            </div>
+            <div class="mb-3">
+                <label for="MAX_SIMILAR_MOVIE" class="form-label">Max Similar Movies:</label>
+                <input type="number" class="form-control" id="MAX_SIMILAR_MOVIE" name="MAX_SIMILAR_MOVIE" value="{{ config.MAX_SIMILAR_MOVIE }}" min="1" max="20" placeholder="Enter max similar movies">
+            </div>
+            <div class="mb-3">
+                <label for="MAX_SIMILAR_TV" class="form-label">Max Similar TV Shows:</label>
+                <input type="number" class="form-control" id="MAX_SIMILAR_TV" name="MAX_SIMILAR_TV" value="{{ config.MAX_SIMILAR_TV }}" min="1" max="20" placeholder="Enter max similar TV shows">
+            </div>
+            <div class="mb-3">
+                <label for="CRON_TIMES" class="form-label">
+                    Cron Schedule:
+                    <i class="fas fa-info-circle" 
+                       data-bs-toggle="tooltip" 
+                       data-bs-placement="right" 
+                       title="Enter a valid cron schedule (e.g., '0 0 * * *' for daily at midnight). For help, visit crontab.guru">
+                    </i>
+                </label>
+                <input type="text" class="form-control" id="CRON_TIMES" name="CRON_TIMES" value="{{ config.CRON_TIMES }}" placeholder="0 0 * * *">
+                <small class="form-text text-muted" id="cron-description"></small>
+            </div>
+            <button type="submit" class="btn btn-primary w-100" id="submit-conf">Save Configuration</button>
+            <button type="button" class="btn btn-primary w-100" id="run-now" style="display: none;">Force Run</button>
+
+        </form>
+
+        <!-- Footer Links -->
+        <div class="footer">
+            <p>
+                <a href="https://github.com/giuseppe99barchetta/jellyseer_request_automation" target="_blank">
+                    <i class="fab fa-github"></i>
+                </a>
+                <a href="https://www.reddit.com/r/selfhosted/comments/1g3dn1t/automate_media_recommendations_and_downloads_with/" target="_blank">
+                    <i class="fab fa-reddit"></i>
+                </a>
+                <a href="https://hub.docker.com/repository/docker/ciuse99/jellyseer_request_automation" target="_blank">
+                    <i class="fab fa-docker"></i>
+                </a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Cronstrue JS for crontab  -->
+    <script src="https://cdn.jsdelivr.net/npm/cronstrue@2.13.0/dist/cronstrue.min.js"></script>
+    <!-- Custom script -->
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    
+</body>
+</html>

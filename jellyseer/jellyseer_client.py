@@ -7,8 +7,9 @@ Classes:
     - JellyseerClient: A class to interact with the Jellyseer API.
 """
 
-import logging
 import requests
+
+from config.logger_manager import LoggerManager
 
 # Constants for HTTP status codes and request timeout
 HTTP_OK = {200, 201, 202}
@@ -23,9 +24,9 @@ class JellyseerClient:
         """
         Initializes the JellyseerClient with the API URL and logs in the user.
         :param api_url: The URL of the Jellyseer API.
-        :param username: The username for Jellyseer login.
-        :param password: The password for Jellyseer login.
+        :param api_key: The API KEY for Jellyseer.
         """
+        self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.api_url = api_url
         self.api_key = api_key
         self.session = requests.Session()
@@ -49,13 +50,13 @@ class JellyseerClient:
                             and item['media']['mediaType'].lower() == media_type.lower():
                         return True
                 return False
-            logging.error(
+            self.logger.error(
                 "Failed to verify %s request status: %d", media_type, response.status_code
             )
         except requests.Timeout:
-            logging.error("Request to check if media was already requested timed out.")
+            self.logger.error("Request to check if media was already requested timed out.")
         except requests.RequestException as e:
-            logging.error("An error occurred while checking media request: %s", str(e))
+            self.logger.error("An error occurred while checking media request: %s", str(e))
 
         return False
 
@@ -81,10 +82,16 @@ class JellyseerClient:
             )
             if response.status_code in HTTP_OK:
                 return response.json()
-            logging.error("Failed to request media (ID: %s): %d", media_id, response.status_code)
+            self.logger.error(
+                "Failed to request media (ID: %s): %d", media_id, response.status_code
+            )
         except requests.Timeout:
-            logging.error("Request to Jellyseer timed out while requesting media: %s", media_id)
+            self.logger.error(
+                "Request to Jellyseer timed out while requesting media: %s", media_id
+            )
         except requests.RequestException as e:
-            logging.error("An error occurred while requesting media (ID: %s): %s", media_id, str(e))
+            self.logger.error(
+                "An error occurred while requesting media (ID: %s): %s", media_id, str(e)
+            )
 
         return None

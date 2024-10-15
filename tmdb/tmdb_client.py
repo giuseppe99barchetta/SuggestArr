@@ -7,8 +7,9 @@ Classes:
     - TMDbClient: A class to interact with the TMDb API.
 """
 
-import logging
 import requests
+
+from config.logger_manager import LoggerManager
 
 # Constants for HTTP status codes and timeout
 HTTP_OK = {200, 201}
@@ -25,6 +26,7 @@ class TMDbClient:
         Initializes the TMDbClient with the provided API key.
         :param api_key: API key to authenticate requests to TMDb.
         """
+        self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.api_key = api_key
         self.tmdb_api_url = "https://api.themoviedb.org/3"
 
@@ -40,11 +42,15 @@ class TMDbClient:
             if response.status_code in HTTP_OK:
                 data = response.json()
                 return [movie['id'] for movie in data['results']]
-            logging.error("Error retrieving movie recommendations: %d", response.status_code)
+            self.logger.error(
+                "Error retrieving movie recommendations: %d: %s",
+                response.status_code,
+                str(response.json()['status_message'])
+                )
         except requests.Timeout:
-            logging.error("Request to TMDb timed out.")
+            self.logger.error("Request to TMDb timed out.")
         except requests.RequestException as e:
-            logging.error("An error occurred while requesting movie recommendations: %s", str(e))
+            self.logger.error("An error occurred while requesting movie recommendations: %s", str(e))
         return []
 
     def find_similar_tvshows(self, tvshow_id):
@@ -59,11 +65,11 @@ class TMDbClient:
             if response.status_code in HTTP_OK:
                 data = response.json()
                 return [tvshow['id'] for tvshow in data['results']]
-            logging.error("Error retrieving TV show recommendations: %d", response.status_code)
+            self.logger.error("Error retrieving TV show recommendations: %d", response.status_code)
         except requests.Timeout:
-            logging.error("Request to TMDb timed out.")
+            self.logger.error("Request to TMDb timed out.")
         except requests.RequestException as e:
-            logging.error("An error occurred while requesting TV show recommendations: %s", str(e))
+            self.logger.error("An error occurred while requesting TV show recommendations: %s", str(e))
         return []
 
     def find_tmdb_id_from_tvdb(self, tvdb_id):
@@ -79,11 +85,11 @@ class TMDbClient:
                 data = response.json()
                 if 'tv_results' in data and data['tv_results']:
                     return data['tv_results'][0]['id']
-                logging.warning("No results found on TMDb for TVDb ID: %s", tvdb_id)
+                self.logger.warning("No results found on TMDb for TVDb ID: %s", tvdb_id)
             else:
-                logging.error("Error converting TVDb ID to TMDb ID: %d", response.status_code)
+                self.logger.error("Error converting TVDb ID to TMDb ID: %d", response.status_code)
         except requests.Timeout:
-            logging.error("Request to TMDb timed out.")
+            self.logger.error("Request to TMDb timed out.")
         except requests.RequestException as e:
-            logging.error("An error occurred while converting TVDb ID: %s", str(e))
+            self.logger.error("An error occurred while converting TVDb ID: %s", str(e))
         return None

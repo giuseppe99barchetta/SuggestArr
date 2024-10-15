@@ -9,36 +9,15 @@ Classes:
     - ContentAutomation: A class that handles the automation of movie and TV show processing.
 """
 
-import logging
+
 import os
-from config import TMDB_API_KEY, JELLYFIN_API_URL, JELLYFIN_TOKEN, JELLYSEER_API_URL, \
-    JELLYSEER_TOKEN
+from dotenv import load_dotenv
+
 from jellyfin.jellyfin_client import JellyfinClient
 from jellyseer.jellyseer_client import JellyseerClient
 from tmdb.tmdb_client import TMDbClient
-
-# Constants
-LOG_DIR = 'logs'
-LOG_FILE_PATH = os.path.join(LOG_DIR, 'automate.log')
-LOG_LEVEL = logging.INFO
-
-# Ensure the log directory exists
-if not os.path.exists(LOG_DIR):
-    try:
-        os.makedirs(LOG_DIR)
-    except OSError as e:
-        logging.error("Failed to create log directory: %s", str(e))
-
-# Configure logging
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),  # Logs to the console
-        logging.FileHandler(LOG_FILE_PATH, mode='a')  # Logs to a file
-    ]
-)
-
+from config.config import load_env_vars
+from config.logger_manager import LoggerManager
 
 class ContentAutomation:
     """
@@ -50,16 +29,25 @@ class ContentAutomation:
         """
         Initialize the clients for Jellyfin, TMDb, and Jellyseer.
         """
+        self.logger = LoggerManager.get_logger(self.__class__.__name__)
+        env_vars = load_env_vars()
+
+        jellyfin_api_url = env_vars['JELLYFIN_API_URL']
+        jellyfin_token = env_vars['JELLYFIN_TOKEN']
+        jellyseer_api_url = env_vars['JELLYSEER_API_URL']
+        jellyseer_token = env_vars['JELLYSEER_TOKEN']
+        tmdb_api_key = env_vars['TMDB_API_KEY']
+
         self.jellyfin_client = JellyfinClient(
-            JELLYFIN_API_URL,
-            JELLYFIN_TOKEN
+            jellyfin_api_url,
+            jellyfin_token
         )
         self.jellyseer_client = JellyseerClient(
-            JELLYSEER_API_URL,
-            JELLYSEER_TOKEN
+            jellyseer_api_url,
+            jellyseer_token
         )
         self.tmdb_client = TMDbClient(
-            TMDB_API_KEY
+            tmdb_api_key
         )
 
         self.max_similar_movie = min(int(os.getenv('MAX_SIMILAR_MOVIE', '3')), 20)
@@ -72,6 +60,7 @@ class ContentAutomation:
         Main entry point to start the automation process.
         """
         users = self.jellyfin_client.get_all_users()
+        load_dotenv(override=True)
         for user in users:
             self.process_user_recent_items(user)
 
@@ -81,7 +70,7 @@ class ContentAutomation:
         :param user: The Jellyfin user object.
         """
         user_id = user['Id']
-        logging.info(
+        self.logger.info(
             "Fetching recently watched content for user: %s (%s)", user['Name'], user_id)
 
         recent_items = self.jellyfin_client.get_recent_items(user_id)
@@ -116,7 +105,7 @@ class ContentAutomation:
                 if not self.jellyseer_client.check_already_requested(similar_movie_id, 'movie'):
                     self.jellyseer_client.request_media(
                         'movie', similar_movie_id)
-                    logging.info(
+                    self.logger.info(
                         "Requested download for movie with ID: %s", similar_movie_id)
 
     def process_episode(self, user_id, item):
@@ -129,7 +118,7 @@ class ContentAutomation:
         series_id = item.get('SeriesId')
         series_name = item.get('SeriesName')
         if series_id and series_id not in self.processed_series:
-            logging.info("Processing series: %s (Series ID: %s)",
+            self.logger.info("Processing series: %s (Series ID: %s)",
                         series_name, series_id)
             self.processed_series.add(series_id)
 
@@ -144,13 +133,13 @@ class ContentAutomation:
         :param tvdb_id: The TVDb ID of the series.
         :param series_name: The name of the series being processed.
         """
-        logging.info("TVDb ID for series '%s': %s", series_name, tvdb_id)
+        self.logger.info("TVDb ID for series '%s': %s", series_name, tvdb_id)
         tmdb_id = self.tmdb_client.find_tmdb_id_from_tvdb(tvdb_id)
 
         if tmdb_id:
             similar_tvshows = self.tmdb_client.find_similar_tvshows(tmdb_id)
             if similar_tvshows:
-                logging.info(
+                self.logger.info(
                     "Found %d similar TV shows for '%s'", len(
                         similar_tvshows), series_name
                 )
@@ -159,13 +148,13 @@ class ContentAutomation:
                     if not self.jellyseer_client.check_already_requested(similar_tvshow_id, 'tv'):
                         self.jellyseer_client.request_media(
                             'tv', similar_tvshow_id)
-                        logging.info(
+                        self.logger.info(
                             "Requested download for TV show with ID: %s", similar_tvshow_id)
             else:
-                logging.warning(
+                self.logger.warning(
                     "No similar TV shows found for '%s'", series_name)
         else:
-            logging.warning(
+            self.logger.warning(
                 "Could not find TMDb ID for series '%s'", series_name)
 
 

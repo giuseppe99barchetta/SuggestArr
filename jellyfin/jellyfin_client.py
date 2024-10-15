@@ -5,11 +5,13 @@ The client can retrieve users, recent items, and provider IDs for media content.
 Classes:
     - JellyfinClient: A class that handles communication with the Jellyfin API.
 """
-import logging
 import requests
+
+from config.logger_manager import LoggerManager
 
 # Constants
 REQUEST_TIMEOUT = 10  # Timeout in seconds for HTTP requests
+
 
 class JellyfinClient:
     """
@@ -23,6 +25,7 @@ class JellyfinClient:
         :param api_url: The base URL for the Jellyfin API.
         :param token: The authentication token for Jellyfin.
         """
+        self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.api_url = api_url
         self.headers = {"X-Emby-Token": token}
 
@@ -33,15 +36,18 @@ class JellyfinClient:
         """
         url = f"{self.api_url}/Users"
         try:
-            response = requests.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT)
+            response = requests.get(
+                url, headers=self.headers, timeout=REQUEST_TIMEOUT)
             if response.status_code == 200:
                 return response.json()
 
-            logging.error("Failed to retrieve users: %d", response.status_code)
+            self.logger.error("Failed to retrieve users: %d",
+                              response.status_code)
         except requests.Timeout:
-            logging.error("Request to get users timed out.")
+            self.logger.error("Request to get users timed out.")
         except requests.RequestException as e:
-            logging.error("An error occurred while retrieving users: %s", str(e))
+            self.logger.error(
+                "An error occurred while retrieving users: %s", str(e))
         return []
 
     def get_recent_items(self, user_id, limit=100):
@@ -71,11 +77,14 @@ class JellyfinClient:
             if response.status_code == 200:
                 return response.json()
 
-            logging.error("Failed to get recent items for %s: %d", user_id, response.status_code)
+            self.logger.error(
+                "Failed to get recent items for %s: %d", user_id, response.status_code)
         except requests.Timeout:
-            logging.error("Request to get recent items for user %s timed out.", user_id)
+            self.logger.error(
+                "Request to get recent items for user %s timed out.", user_id)
         except requests.RequestException as e:
-            logging.error("Error while retrieving recent items for %s: %s", user_id, str(e))
+            self.logger.error(
+                "Error while retrieving recent items for %s: %s", user_id, str(e))
         return None
 
     def get_item_provider_id(self, user_id, item_id, provider='Tmdb'):
@@ -88,14 +97,18 @@ class JellyfinClient:
         """
         url = f"{self.api_url}/Users/{user_id}/Items/{item_id}"
         try:
-            response = requests.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT)
+            response = requests.get(
+                url, headers=self.headers, timeout=REQUEST_TIMEOUT)
             if response.status_code == 200:
                 item_data = response.json()
                 return item_data.get('ProviderIds', {}).get(provider)
 
-            logging.error("Failed to retrieve ID for item %s: %d", item_id, response.status_code)
+            self.logger.error(
+                "Failed to retrieve ID for item %s: %d", item_id, response.status_code)
         except requests.Timeout:
-            logging.error("Request to get provider ID for item %s timed out.", item_id)
+            self.logger.error(
+                "Request to get provider ID for item %s timed out.", item_id)
         except requests.RequestException as e:
-            logging.error("An error occurred while retrieving ID for item %s: %s", item_id, str(e))
+            self.logger.error(
+                "An error occurred while retrieving ID for item %s: %s", item_id, str(e))
         return None
