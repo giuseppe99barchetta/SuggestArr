@@ -69,6 +69,12 @@ To start the container with Docker Compose:
 docker-compose up --build
 ```
 
+## Web Interface
+
+The web interface will be available at: [http://localhost:5000](http://localhost:5000). This interface allows you to manage the automation process more efficiently and specify custom cron schedules.
+
+Make sure your environment is set up correctly and that the application is running to access the web interface.
+
 ## Running Without Docker
 You can also run the project locally by installing the dependencies and setting the environment variables.
 
