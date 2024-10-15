@@ -31,7 +31,7 @@ def reload_env():
     Ricarica le variabili d'ambiente dal file .env
     """
     load_dotenv(override=True)
-    logger.info("Environment variables reloaded from .env")
+    logger.debug("Environment variables reloaded from .env")
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -39,10 +39,8 @@ def configure():
     """
     Get and save environment variables from the web interface.
     """
-    logger.info("Accessing configuration page.")
-
     if request.method == 'POST':
-        logger.info("Received POST request to save configuration.")
+        logger.debug("Received POST request to save configuration.")
         save_env_vars(request)
         logger.info("Configuration saved successfully.")
         return redirect(url_for('configure'))
@@ -50,7 +48,7 @@ def configure():
     # Carica le variabili correnti dal file .env
     config = load_env_vars()
 
-    logger.info("Configuration page loaded with current environment values.")
+    logger.debug("Configuration page loaded with current environment values.")
     return render_template('config.html', config=config)
 
 @app.route('/run_now', methods=['POST'])
@@ -65,7 +63,7 @@ def run_now():
         automation = ContentAutomation()
         automation.run()
 
-        logger.info("Process executed successfully in the background.")
+        logger.debug("Process executed successfully in the background.")
         return jsonify({'status': 'success', 'message': 'Process started.'}), 202
 
     except ValueError as ve:
@@ -80,5 +78,11 @@ def run_now():
 
 
 if __name__ == '__main__':
-    logger.info("Starting Flask application.")
+    print("\n\n===========================================================")
+    print("Welcome to the Jellyfin TMDb Sync Automation Application!")
+    print("Manage your settings through the web interface at: http://localhost:5000")
+    print("Fill in the input fields with your data and let the cron job handle the rest!")
+    print("To run the automation process immediately, click the 'Force Run' button.")
+    print("The 'Force Run' button will appear only after you save your settings.")
+    print("===========================================================\n\n")
     app.run(host='0.0.0.0', port=5000)
