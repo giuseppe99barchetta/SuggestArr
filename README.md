@@ -41,25 +41,27 @@ You can run the project using Docker Compose for easy setup and execution.
 ### Docker Compose Example
 
 ```yaml
-version: "3.8"
-
 services:
   automation:
-    image: ciuse99/jellyseer_request_automation
+    image: ciuse99/jellyseer_request_automation:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
-      TMDB_API_KEY: ${TMDB_API_KEY}
-      JELLYFIN_API_URL: ${JELLYFIN_API_URL}
-      JELLYFIN_TOKEN: ${JELLYFIN_TOKEN}
-      JELLYSEER_API_URL: ${JELLYSEER_API_URL}
-      JELLYSEER_USER: ${JELLYSEER_USER}
-      JELLYSEER_PASSWORD: ${JELLYSEER_PASSWORD}
-      MAX_SIMILAR_MOVIE: ${MAX_SIMILAR_MOVIE:-3}  # Default is 3
-      MAX_SIMILAR_TV: ${MAX_SIMILAR_TV:-2}  # Default is 2
-      CRON_TIMES: ${CRON_TIMES:-0 0 * * *}  # Default cron schedule is midnight
+      TMDB_API_KEY: ${TMDB_API_KEY} # (Optional: You can configure it in the dashboard)
+      JELLYFIN_API_URL: ${JELLYFIN_API_URL} # (Optional: You can configure it in the dashboard)
+      JELLYFIN_TOKEN: ${JELLYFIN_TOKEN} # (Optional: You can configure it in the dashboard)
+      JELLYSEER_API_URL: ${JELLYSEER_API_URL} # (Optional: You can configure it in the dashboard)
+      JELLYSEER_TOKEN: ${JELLYSEER_TOKEN} # (Optional: You can configure it in the dashboard)
+      MAX_SIMILAR_MOVIE: 5 # (Optional: You can configure it in the dashboard. Default: 2, Max: 20)
+      MAX_SIMILAR_TV: 2 # (Optional: You can configure it in the dashboard. Default: 2, Max: 20)
+      CRON_TIMES: ${CRON_TIMES:-0 0 * * *}  # (Optional: You can configure it in the dashboard. Default run at midnight.)
     volumes:
       - .:/app
-    container_name: automation_job
+    container_name: jellyser_automation_job
     restart: always
+    ports:
+      - "5000:5000"
 ```
 To start the container with Docker Compose:
 

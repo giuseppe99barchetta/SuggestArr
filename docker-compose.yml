@@ -7,14 +7,14 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      TMDB_API_KEY: ${TMDB_API_KEY}
-      JELLYFIN_API_URL: ${JELLYFIN_API_URL}
-      JELLYFIN_TOKEN: ${JELLYFIN_TOKEN}
-      JELLYSEER_API_URL: ${JELLYSEER_API_URL}
-      JELLYSEER_TOKEN: ${JELLYSEER_TOKEN}
-      MAX_SIMILAR_MOVIE: 5 # (Optional: default 5, max 20)
-      MAX_SIMILAR_TV: 2 # (Optional: default 2, max 20)
-      CRON_TIMES: ${CRON_TIMES:-0 0 * * *}  # Default cron schedule is midnight
+      TMDB_API_KEY: ${TMDB_API_KEY} # (Optional: You can configure it in the dashboard)
+      JELLYFIN_API_URL: ${JELLYFIN_API_URL} # (Optional: You can configure it in the dashboard)
+      JELLYFIN_TOKEN: ${JELLYFIN_TOKEN} # (Optional: You can configure it in the dashboard)
+      JELLYSEER_API_URL: ${JELLYSEER_API_URL} # (Optional: You can configure it in the dashboard)
+      JELLYSEER_TOKEN: ${JELLYSEER_TOKEN} # (Optional: You can configure it in the dashboard)
+      MAX_SIMILAR_MOVIE: 5 # (Optional: You can configure it in the dashboard. Default: 2, Max: 20)
+      MAX_SIMILAR_TV: 2 # (Optional: You can configure it in the dashboard. Default: 2, Max: 20)
+      CRON_TIMES: ${CRON_TIMES:-0 0 * * *}  # (Optional: You can configure it in the dashboard. Default run at midnight.)
     volumes:
       - .:/app
     container_name: jellyser_automation_job
