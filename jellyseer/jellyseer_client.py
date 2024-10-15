@@ -11,7 +11,7 @@ import logging
 import requests
 
 # Constants for HTTP status codes and request timeout
-HTTP_OK = {200, 201}
+HTTP_OK = {200, 201, 202}
 REQUEST_TIMEOUT = 10  # Timeout in seconds for HTTP requests
 
 class JellyseerClient:
