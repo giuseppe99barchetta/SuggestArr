@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configure JRA</title>
+    <title>SuggestArr</title>
     <!-- Google Fonts: Quicksand -->
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Bootstrap CSS -->
@@ -18,7 +18,7 @@
     <div id="toast-config" class="toast"></div>
 
     <div class="form-card">
-        <h1 class="text-center">Configuration for JRA</h1>
+        <h1 class="text-center">SuggestArr Configuration</h1>
         <form method="POST" class="mt-4">
             <div class="mb-3">
                 <label for="TMDB_API_KEY" class="form-label">TMDB API Key:</label>
@@ -40,14 +40,16 @@
                 <label for="JELLYSEER_TOKEN" class="form-label">Jellyseer Token:</label>
                 <input type="text" class="form-control" id="JELLYSEER_TOKEN" name="JELLYSEER_TOKEN" value="{{ config.JELLYSEER_TOKEN }}" placeholder="Your Jellyseer Token">
             </div>
-            <div class="mb-3">
-                <label for="MAX_SIMILAR_MOVIE" class="form-label">Max Similar Movies:</label>
-                <input type="number" class="form-control" id="MAX_SIMILAR_MOVIE" name="MAX_SIMILAR_MOVIE" value="{{ config.MAX_SIMILAR_MOVIE }}" min="1" max="20" placeholder="Enter max similar movies">
-            </div>
-            <div class="mb-3">
-                <label for="MAX_SIMILAR_TV" class="form-label">Max Similar TV Shows:</label>
-                <input type="number" class="form-control" id="MAX_SIMILAR_TV" name="MAX_SIMILAR_TV" value="{{ config.MAX_SIMILAR_TV }}" min="1" max="20" placeholder="Enter max similar TV shows">
-            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label for="MAX_SIMILAR_MOVIE" class="form-label">Max Similar Movies:</label>
+                    <input type="number" class="form-control" id="MAX_SIMILAR_MOVIE" name="MAX_SIMILAR_MOVIE" value="{{ config.MAX_SIMILAR_MOVIE }}" min="1" max="20" placeholder="Enter max similar movies">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label for="MAX_SIMILAR_TV" class="form-label">Max Similar TV Shows:</label>
+                    <input type="number" class="form-control" id="MAX_SIMILAR_TV" name="MAX_SIMILAR_TV" value="{{ config.MAX_SIMILAR_TV }}" min="1" max="20" placeholder="Enter max similar TV shows">
+                </div>
+            </div>            
             <div class="mb-3">
                 <label for="CRON_TIMES" class="form-label">
                     Cron Schedule:
@@ -68,7 +70,7 @@
         <!-- Footer Links -->
         <div class="footer">
             <p>
-                <a href="https://github.com/giuseppe99barchetta/jellyseer_request_automation" target="_blank">
+                <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank">
                     <i class="fab fa-github"></i>
                 </a>
                 <a href="https://www.reddit.com/r/selfhosted/comments/1g3dn1t/automate_media_recommendations_and_downloads_with/" target="_blank">
