@@ -4,7 +4,6 @@ It uses the dotenv library to load variables from a .env file and validates thei
 """
 import os
 import subprocess
-import platform
 from dotenv import load_dotenv
 
 from croniter import croniter
@@ -35,33 +34,30 @@ def load_env_vars():
         CRON_TIMES: os.getenv(CRON_TIMES, '0 0 * * *'),
     }
 
-def save_env_vars(request_env):
+def save_env_vars(config_data):
     """
     Save environment variables from web interface.
     """
+    cron_times = config_data.get('CRON_TIMES', '0 0 * * *')
 
-    cron_times = request_env.form.get('CRON_TIMES', '0 0 * * *')
-
-    # Validate cron time
     if not croniter.is_valid(cron_times):
         raise ValueError("Invalid cron time provided.")
 
     env_vars = {
-        TMDB_API_KEY: request_env.form.get(TMDB_API_KEY, ''),
-        JELLYFIN_API_URL: request_env.form.get(JELLYFIN_API_URL, ''),
-        JELLYFIN_TOKEN: request_env.form.get(JELLYFIN_TOKEN, ''),
-        JELLYSEER_API_URL: request_env.form.get(JELLYSEER_API_URL, ''),
-        JELLYSEER_TOKEN: request_env.form.get(JELLYSEER_TOKEN, ''),
-        MAX_SIMILAR_MOVIE: request_env.form.get(MAX_SIMILAR_MOVIE, '5'),
-        MAX_SIMILAR_TV: request_env.form.get(MAX_SIMILAR_TV, '2'),
-        CRON_TIMES: cron_times,
+        'TMDB_API_KEY': config_data.get('TMDB_API_KEY', ''),
+        'JELLYFIN_API_URL': config_data.get('JELLYFIN_API_URL', ''),
+        'JELLYFIN_TOKEN': config_data.get('JELLYFIN_TOKEN', ''),
+        'JELLYSEER_API_URL': config_data.get('JELLYSEER_API_URL', ''),
+        'JELLYSEER_TOKEN': config_data.get('JELLYSEER_TOKEN', ''),
+        'MAX_SIMILAR_MOVIE': config_data.get('MAX_SIMILAR_MOVIE', '5'),
+        'MAX_SIMILAR_TV': config_data.get('MAX_SIMILAR_TV', '2'),
+        'CRON_TIMES': cron_times,
     }
 
     with open('.env', 'w', encoding='utf-8') as f:
         for key, value in env_vars.items():
             f.write(f'{key}="{value}"\n')
 
-    # Reload variables
     load_env_vars()
     update_cron_job(cron_times)
 

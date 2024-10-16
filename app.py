@@ -1,7 +1,7 @@
 """
 Main Flask application for managing environment variables and running processes.
 """
-from flask import Flask, redirect, render_template, request, jsonify, url_for
+from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from utils.utils import AppUtils
 from automate_process import ContentAutomation
@@ -32,18 +32,39 @@ def register_routes(app): # pylint: disable=redefined-outer-name
     Register the application routes.
     """
 
-    @app.route('/', methods=['GET', 'POST'])
+    @app.route('/', methods=['GET'])
     def configure():
         """
-        Get and save environment variables from the web interface.
+        Load configuration page
         """
-        if request.method == 'POST':
-            save_env_vars(request)
-            return redirect(url_for('configure'))
+        return render_template('config.html')
 
-        # Load current environment variables
-        config = load_env_vars()
-        return render_template('config.html', config=config)
+    @app.route('/api/config', methods=['GET'])
+    def fetch_config():
+        """
+        Load current config in json
+        """
+        try:
+            config = load_env_vars()
+            return jsonify(config), 200
+        except Exception as e: # pylint: disable=broad-except
+            return jsonify(
+                {'message': f'Error loading configuration: {str(e)}', 'status': 'error'}), 500
+
+    @app.route('/api/save', methods=['POST'])
+    def save_config():
+        """
+        Save env variables
+        """
+        try:
+            config_data = request.json
+            save_env_vars(config_data)
+            return jsonify(
+                {'message': 'Configuration saved successfully!', 'status': 'success'}), 200
+        except Exception as e: # pylint: disable=broad-except
+            return jsonify(
+                {'message': f'Error saving configuration: {str(e)}', 'status': 'error'}), 500
+
 
     @app.route('/run_now', methods=['POST'])
     def run_now():
@@ -55,7 +76,7 @@ def register_routes(app): # pylint: disable=redefined-outer-name
             automation = ContentAutomation()
             automation.run()
 
-            return jsonify({'status': 'success', 'message': 'Process started.'}), 202
+            return jsonify({'status': 'success', 'message': 'Force Run correctly completed!'}), 202
 
         except ValueError as ve:
             return jsonify({'status': 'error', 'message': 'Value error: ' + str(ve)}), 400

@@ -1,110 +1,105 @@
-document.addEventListener('DOMContentLoaded', function () {
-    // Initialize tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
+new Vue({
+    el: '#app',
+    data: {
+        config: {
+            TMDB_API_KEY: '',
+            JELLYFIN_API_URL: '',
+            JELLYFIN_TOKEN: '',
+            JELLYSEER_API_URL: '',
+            JELLYSEER_TOKEN: '',
+            MAX_SIMILAR_MOVIE: '5',
+            MAX_SIMILAR_TV: '2',
+            CRON_TIMES: '0 0 * * *'
+        },
+        isConfigSaved: false,
+        isLoading: false
+    },
+    mounted() {
+        this.fetchConfig();
+        // Check if the fields have values, and if so, consider the config as saved
+        if (this.config.TMDB_API_KEY && this.config.JELLYFIN_API_URL && this.config.JELLYFIN_TOKEN && this.config.JELLYSEER_API_URL && this.config.JELLYSEER_TOKEN) {
+            this.isConfigSaved = true;
+        }
 
-    // Check if all fields are filled at page load
-    checkFormFields();
-
-    // Add event listeners to form fields to disable the Force Run button when modified
-    const formFields = document.querySelectorAll('input');
-    formFields.forEach(field => {
-        field.addEventListener('input', function() {
-            document.getElementById('run-now').style.display = 'none'; // Hide the button on any modification
-        });
-    });
-
-    // Handle form submission with AJAX
-    const form = document.querySelector('form');
-    form.addEventListener('submit', function (event) {
-        event.preventDefault(); // Prevent default form submission
-        const formData = new FormData(this);
-
-        fetch(this.action, {
-            method: 'POST',
-            body: formData,
-        })
-        .then(response => {
-            if (response.ok) {
-                showToast("Configuration saved successfully!", 'toast-config');
-                document.getElementById('run-now').style.display = 'block'; // Show Force Run button
-            } else {
-                showToast("Error saving configuration!", 'toast-config');
-            }
-        })
-        .catch((error) => {
-            console.error('Error:', error);
-            showToast("An error occurred while saving the configuration!", 'toast-config');
-        });
-    });
-
-    // Handle Force Run button click
-    document.getElementById('run-now').addEventListener('click', function() {
-        showToast("Process started in background.", 'toast-run');
-        fetch('/run_now', {
-            method: 'POST',
-        })
-        .then(response => {
-            if (response.ok) {
-                showToast("Process completed! Check Jellyseer for new Movie or TV Show!", 'toast-run');
-            } else {
-                showToast("Error occurred during the process!", 'toast-run');
-            }
-        })
-        .catch((error) => {
-            console.error('Error:', error);
-            showToast("An error occurred during the process!", 'toast-run');
-        });
-    });
-
-    // Handle cron input changes
-    document.getElementById('CRON_TIMES').addEventListener('input', function () {
-        const cronInput = this.value;
+        // Listener for real-time cron to time conversion
+        const cronInput = document.getElementById('CRON_TIMES');
         const cronDescriptionElement = document.getElementById('cron-description');
-        try {
-            const humanReadable = cronstrue.toString(cronInput);
-            cronDescriptionElement.textContent = humanReadable;
-        } catch (err) {
-            console.error(err);
-            cronDescriptionElement.textContent = 'Invalid cron expression';
-        }
-    });
+
+        cronInput.addEventListener('input', function () {
+            const cronValue = cronInput.value;
+            try {
+                const humanReadable = cronstrue.toString(cronValue);
+                cronDescriptionElement.textContent = humanReadable;
+            } catch (err) {
+                cronDescriptionElement.textContent = 'Invalid cron expression';
+            }
+        });
+    },
+    methods: {
+        fetchConfig() {
+            axios.get('/api/config')
+                .then(response => {
+                    this.config = response.data;
+                    this.isConfigSaved = true;
+                })
+                .catch(error => {
+                    console.error('Error fetching configuration:', error);
+                    this.showToast('Error fetching configuration:' + error, 'error');
+                });
+        },
+        saveConfig() {
+            axios.post('/api/save', this.config, {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+                })
+                .then(response => {
+                    this.showToast(response.data.message, response.data.status);
+                })
+                .catch(error => {
+                    if (error.response && error.response.data && error.response.data.message) {
+                        this.showToast(error.response.data.message, response.data.status);
+                    } else {
+                        this.showToast('An unexpected error occurred.', response.data.status);
+                    }
+                });
+        },
+        forceRun() {
+            this.isLoading = true;
+            axios.post('/run_now')
+            .then(response => {
+                this.showToast(response.data.message, response.data.status);
+            })
+            .catch(error => {
+                console.error(error.response);  // Error handling
+                this.showToast('Error starting the process.', response.data.status);
+            })
+            .finally(() => {
+                this.isLoading = false;
+            });
+        },
+        showToast(message, status) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            toastMessage.innerText = message;
+
+            if (status === 'success') {
+                toast.classList.remove('bg-red-500');
+                toast.classList.add('bg-green-500');
+            } else if (status === 'error') {
+                toast.classList.remove('bg-green-500');
+                toast.classList.add('bg-red-500');
+            }
+
+            // Show toast
+            toast.classList.remove('opacity-0');
+            toast.classList.add('opacity-100');
+
+            // Hide toast after 3 seconds
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+            }, 3000);
+        },
+    }
 });
-
-// Check if all form fields are filled
-function checkFormFields() {
-    const requiredFields = ['TMDB_API_KEY', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYSEER_API_URL', 'JELLYSEER_TOKEN', 'MAX_SIMILAR_MOVIE', 'MAX_SIMILAR_TV', 'CRON_TIMES'];
-
-    let allFieldsFilled = true;
-    requiredFields.forEach(fieldId => {
-        const field = document.getElementById(fieldId);
-        if (!field || field.value.trim() === '') {
-            allFieldsFilled = false;
-        }
-    });
-
-    // Show the Force Run button if all fields are filled
-    const runNowButton = document.getElementById('run-now');
-    if (allFieldsFilled) {
-        runNowButton.style.display = 'block';
-    } else {
-        runNowButton.style.display = 'none';
-    }
-}
-
-// Show toast message function
-function showToast(message, toast_id) {
-    const toast = document.getElementById(toast_id);
-    if (!toast) {
-        console.error('Toast element not found:', toast_id);
-        return;
-    }
-    toast.textContent = message;
-    toast.style.display = 'block';
-
-    setTimeout(() => {
-        toast.style.display = 'none';
-    }, 5000);
-}
