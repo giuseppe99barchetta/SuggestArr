@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   automation:
-    image: ciuse99/jellyseer_request_automation:latest
+    image: ciuse99/suggestarr:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -17,7 +17,7 @@ services:
       CRON_TIMES: ${CRON_TIMES:-0 0 * * *}  # (Optional: You can configure it in the dashboard. Default run at midnight.)
     volumes:
       - .:/app
-    container_name: jellyser_automation_job
+    container_name: SuggestArr
     restart: always
     ports:
       - "5000:5000"

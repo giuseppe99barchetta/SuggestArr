@@ -43,7 +43,7 @@ You can run the project using Docker Compose for easy setup and execution.
 ```yaml
 services:
   automation:
-    image: ciuse99/jellyseer_request_automation:latest
+    image: ciuse99/suggestarr:latest
     build:
       context: .
       dockerfile: Dockerfile
