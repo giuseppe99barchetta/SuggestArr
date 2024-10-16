@@ -9,8 +9,10 @@ new Vue({
             JELLYSEER_TOKEN: '',
             MAX_SIMILAR_MOVIE: '5',
             MAX_SIMILAR_TV: '2',
-            CRON_TIMES: '0 0 * * *'
+            CRON_TIMES: '0 0 * * *',
+            JELLYSEER_USER: ''
         },
+        users: [],
         isConfigSaved: false,
         isLoading: false
     },
@@ -40,12 +42,40 @@ new Vue({
             axios.get('/api/config')
                 .then(response => {
                     this.config = response.data;
+                    this.fetchUsers();
                     this.isConfigSaved = true;
                 })
                 .catch(error => {
                     console.error('Error fetching configuration:', error);
                     this.showToast('Error fetching configuration:' + error, 'error');
                 });
+        },
+        fetchUsers() {
+            if (this.config.JELLYSEER_TOKEN && this.config.JELLYSEER_API_URL) {
+                axios.post('/api/get_users', this.config, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (response.data.type === 'success') {
+                        this.users = response.data.users;
+                    } else {
+                        this.users = []
+                        this.config.JELLYSEER_USER = 'default'
+                        this.showToast(response.data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    this.users = []
+                    this.config.JELLYSEER_USER = 'default'
+                    this.showToast('Failed to fetch users. Please check the API key.', 'error');
+                });
+            } else {
+                // If API key or URL is not provided, clear the users list
+                this.config.JELLYSEER_USER = 'default'
+                this.users = [];
+            }
         },
         saveConfig() {
             axios.post('/api/save', this.config, {

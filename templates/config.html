@@ -48,8 +48,24 @@
                 </div>
 
                 <div>
-                    <label for="JELLYSEER_TOKEN" class="block text-sm font-semibold text-gray-300">Jellyseer Token:</label>
-                    <input type="text" class="mt-2 block w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md focus:ring-indigo-500 focus:border-indigo-500 transition duration-300 px-4 py-2" id="JELLYSEER_TOKEN" v-model="config.JELLYSEER_TOKEN" placeholder="Your Jellyseer Token">
+                    <label for="JELLYSEER_TOKEN" class="block text-sm font-semibold text-gray-300">Jellyseer API Key:</label>
+                    <input type="text" class="mt-2 block w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md focus:ring-indigo-500 focus:border-indigo-500 transition duration-300 px-4 py-2"
+                        id="JELLYSEER_TOKEN" v-model="config.JELLYSEER_TOKEN" @blur="fetchUsers" placeholder="Enter your Jellyseer API Key">
+                </div>
+            
+                <div id="app" v-cloak>
+                    {% raw %}
+                    <label for="USER_SELECTION" class="block text-sm font-semibold text-gray-300">Select a Jellyseer user:</label>
+                    <select id="USER_SELECTION" v-model="config.JELLYSEER_USER" 
+                            :disabled="!users || users.length === 0" 
+                            class="mt-2 block w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-300">
+                        <option disabled value="">Select a Jellyseer user:</option>
+                        <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
+                    </select>
+                    <div v-if="!users || users.length === 0">
+                        <small class="text-gray-400">Insert correct Jellyseer URL and API to retrieve the users.</small>
+                    </div>
+                    {% endraw %}
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">

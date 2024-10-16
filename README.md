@@ -9,6 +9,7 @@ This project is designed to fully automate the process of managing media content
 - Searches for similar movies and TV shows on TMDb.
 - Sends download requests for similar content to Jellyseer.
 - Web Interface: A user-friendly web interface for configuration management.
+- User Selection: Choose a specific Jellyseer user to initiate requests, enabling you to manage and approve auto-requested content.
 - Cron Job Management: Easily update the cron job schedule directly from the web interface.
 
 ## Prerequisites
@@ -33,6 +34,7 @@ The project uses the following environment variables that can be passed via the 
 - `MAX_SIMILAR_MOVIE`: (Optional) The maximum number of similar movies to download. Default is 3, with a max limit of 20.
 - `MAX_SIMILAR_TV`: (Optional) The maximum number of similar TV shows to download. Default is 2, with a max limit of 20.
 - `CRON_TIMES`: (Optional) Your preferred cron schedule otherwise it runs at midnight.
+- `JELLYSEER_USER`: (Optional) Your preferred user to make Movie or TV Show request to Jellyseer. Otherwise it use the admin profile.
 
 ## Docker Usage
 
@@ -56,9 +58,10 @@ services:
       MAX_SIMILAR_MOVIE: 5 # (Optional: You can configure it in the dashboard. Default: 2, Max: 20)
       MAX_SIMILAR_TV: 2 # (Optional: You can configure it in the dashboard. Default: 2, Max: 20)
       CRON_TIMES: ${CRON_TIMES:-0 0 * * *}  # (Optional: You can configure it in the dashboard. Default run at midnight.)
+      JELLYSEER_USER: 1 # (Optional: You can configure it in the dashboard. Otherwise it use the admin profile.)
     volumes:
       - .:/app
-    container_name: jellyser_automation_job
+    container_name: SuggestArr
     restart: always
     ports:
       - "5000:5000"
@@ -94,6 +97,7 @@ export JELLYFIN_TOKEN=your_jellyfin_token
 export JELLYSEER_API_URL=http://your_jellyseer_url
 export JELLYSEER_TOKEN=your_jellyseer_token
 export CRON_TIMES="0 0 * * *"  # Optional, your preferred cron schedule
+export JELLYSEER_USER=1 # Optional, your preferred user to make request to Jellyseer
 ```
 
 Or create an .env file inside the project.

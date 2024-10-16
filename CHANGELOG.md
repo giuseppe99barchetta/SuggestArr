@@ -1,4 +1,9 @@
 # Changelog  
+## [1.0.3] - 2024-10-16 
+### Added
+- **User Selection**: Added the ability to select a specific Jellyseer user to initiate requests, enabling management and approval of content.
+- **Web Interface Redesign**: Completely revamped the web interface for improved user experience and functionality.
+
 ## [1.0.2] - 2024-10-16  
 ### Added  
 - **Utility Class**: Introduced `AppUtils` utility class to handle environment loading, worker identification, and welcome message logging. This improves code modularity and reusability.  

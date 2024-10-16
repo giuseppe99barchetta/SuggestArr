@@ -3,6 +3,7 @@ Main Flask application for managing environment variables and running processes.
 """
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
+from jellyseer.jellyseer_client import JellyseerClient
 from utils.utils import AppUtils
 from automate_process import ContentAutomation
 from config.config import load_env_vars, save_env_vars
@@ -84,6 +85,34 @@ def register_routes(app): # pylint: disable=redefined-outer-name
             return jsonify({'status': 'error', 'message': 'File not found: ' + str(fnfe)}), 404
         except Exception as e: # pylint: disable=broad-except
             return jsonify({'status': 'error', 'message': 'Unexpected error: ' + str(e)}), 500
+
+    @app.route('/api/get_users', methods=['POST'])
+    def get_users():
+        """
+        Fetch Jellyseer users using the provided API key.
+        """
+        try:
+            config_data = request.json
+            api_url = config_data.get('JELLYSEER_API_URL')
+            api_key = config_data.get('JELLYSEER_TOKEN')
+
+            if not api_key:
+                return jsonify({'message': 'API key is required', 'type': 'error'}), 400
+
+            # Initialize JellyseerClient with the provided API key
+            jellyseer_client = JellyseerClient(api_url=api_url, api_key=api_key)
+
+            # Fetch users from Jellyseer
+            users = jellyseer_client.get_all_users()
+
+            if users is None or len(users) == 0:
+                return jsonify({'message': 'Failed to fetch users', 'type': 'error'}), 500
+
+            return jsonify(
+                {'message': 'Users fetched successfully', 'users': users, 'type': 'success'}), 200
+
+        except Exception as e: # pylint: disable=broad-except
+            return jsonify({'message': f'Error fetching users: {str(e)}', 'type': 'error'}), 500
 
 if __name__ == '__main__':
     app = create_app()

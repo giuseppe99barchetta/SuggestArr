@@ -4,6 +4,7 @@ It uses the dotenv library to load variables from a .env file and validates thei
 """
 import os
 import subprocess
+import platform
 from dotenv import load_dotenv
 
 from croniter import croniter
@@ -17,6 +18,7 @@ JELLYSEER_TOKEN = 'JELLYSEER_TOKEN'
 MAX_SIMILAR_MOVIE = 'MAX_SIMILAR_MOVIE'
 MAX_SIMILAR_TV = 'MAX_SIMILAR_TV'
 CRON_TIMES = 'CRON_TIMES'
+JELLYSEER_USER = 'JELLYSEER_USER'
 
 def load_env_vars():
     """
@@ -32,6 +34,7 @@ def load_env_vars():
         MAX_SIMILAR_MOVIE: os.getenv(MAX_SIMILAR_MOVIE, '5'),
         MAX_SIMILAR_TV: os.getenv(MAX_SIMILAR_TV, '2'),
         CRON_TIMES: os.getenv(CRON_TIMES, '0 0 * * *'),
+        JELLYSEER_USER: os.getenv(JELLYSEER_USER, 'default')
     }
 
 def save_env_vars(config_data):
@@ -52,6 +55,7 @@ def save_env_vars(config_data):
         'MAX_SIMILAR_MOVIE': config_data.get('MAX_SIMILAR_MOVIE', '5'),
         'MAX_SIMILAR_TV': config_data.get('MAX_SIMILAR_TV', '2'),
         'CRON_TIMES': cron_times,
+        'JELLYSEER_USER': config_data.get('JELLYSEER_USER', 'default')
     }
 
     with open('.env', 'w', encoding='utf-8') as f:
@@ -59,7 +63,10 @@ def save_env_vars(config_data):
             f.write(f'{key}="{value}"\n')
 
     load_env_vars()
-    update_cron_job(cron_times)
+
+    # Update cron only in linux system
+    if platform.system() != 'Windows':
+        update_cron_job(cron_times)
 
 
 def update_cron_job(cron_time):

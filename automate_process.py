@@ -37,6 +37,7 @@ class ContentAutomation:
         jellyseer_api_url = env_vars['JELLYSEER_API_URL']
         jellyseer_token = env_vars['JELLYSEER_TOKEN']
         tmdb_api_key = env_vars['TMDB_API_KEY']
+        jellyseer_user = env_vars['JELLYSEER_USER']
 
         self.jellyfin_client = JellyfinClient(
             jellyfin_api_url,
@@ -44,7 +45,8 @@ class ContentAutomation:
         )
         self.jellyseer_client = JellyseerClient(
             jellyseer_api_url,
-            jellyseer_token
+            jellyseer_token,
+            jellyseer_user
         )
         self.tmdb_client = TMDbClient(
             tmdb_api_key

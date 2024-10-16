@@ -20,7 +20,7 @@ class JellyseerClient:
     A client to interact with the Jellyseer API for handling media requests and authentication.
     """
 
-    def __init__(self, api_url, api_key):
+    def __init__(self, api_url, api_key, jellyseer_user = None):
         """
         Initializes the JellyseerClient with the API URL and logs in the user.
         :param api_url: The URL of the Jellyseer API.
@@ -29,6 +29,7 @@ class JellyseerClient:
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.api_url = api_url
         self.api_key = api_key
+        self.user_id = jellyseer_user if jellyseer_user else "default"
         self.session = requests.Session()
         self.session.headers.update({'X-Api-Key': self.api_key})
 
@@ -68,7 +69,14 @@ class JellyseerClient:
         :param tvdb_id: The TVDb ID of the media item (optional, only for TV shows).
         :return: The response JSON from Jellyseer or None if an error occurs.
         """
-        data = {"mediaType": media_type, "mediaId": media_id}
+        data = {
+            "mediaType": media_type,
+            "mediaId": media_id,
+        }
+
+        # Only add userId if it's not "default"
+        if self.user_id != "default":
+            data["userId"] = int(self.user_id)
 
         if media_type == 'tv':
             data["tvdbId"] = tvdb_id if tvdb_id else media_id
@@ -95,3 +103,30 @@ class JellyseerClient:
             )
 
         return None
+
+    def get_all_users(self):
+        """Fetch all users from Jellyseer API, returning a list of user IDs and names."""
+        try:
+            response = self.session.get(
+                f"{self.api_url}/api/v1/user",
+                timeout=REQUEST_TIMEOUT
+            )
+
+            if response.status_code in HTTP_OK:
+                users_data = response.json().get('results', [])
+                # Extracting only id and displayName or jellyfinUsername as fallback
+                return [
+                    {
+                        'id': user['id'],
+                        'name': (user.get('displayName') 
+                                 or user.get('jellyfinUsername', 'Unknown User'))
+                    }
+                    for user in users_data
+                ]
+
+        except requests.Timeout:
+            self.logger.error("Request to get all Jellyseer users timed out.")
+        except requests.RequestException as e:
+            self.logger.error("An error occurred while requesting users from Jellyseer: %s", str(e))
+
+        return []
