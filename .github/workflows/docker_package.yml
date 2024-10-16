@@ -11,10 +11,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4.2.1
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3.7.1
 
       - name: Login to GHCR
         run: echo ${{ secrets.CR_PAT }} | docker login ghcr.io -u giuseppe99barchetta --password-stdin
