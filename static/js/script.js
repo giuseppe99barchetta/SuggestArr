@@ -54,13 +54,13 @@ new Vue({
                 }
                 })
                 .then(response => {
-                    this.showToast(response.data.message, response.data.status);
+                    this.showToast(response.data.message, 'success');
                 })
                 .catch(error => {
                     if (error.response && error.response.data && error.response.data.message) {
-                        this.showToast(error.response.data.message, response.data.status);
+                        this.showToast(error.response.data.message, 'error');
                     } else {
-                        this.showToast('An unexpected error occurred.', response.data.status);
+                        this.showToast('An unexpected error occurred.', 'error');
                     }
                 });
         },
@@ -68,11 +68,11 @@ new Vue({
             this.isLoading = true;
             axios.post('/run_now')
             .then(response => {
-                this.showToast(response.data.message, response.data.status);
+                this.showToast(response.data.message, 'success');
             })
             .catch(error => {
-                console.error(error.response);  // Error handling
-                this.showToast('Error starting the process.', response.data.status);
+                console.error(error.response);
+                this.showToast('Error starting the process.', 'error');
             })
             .finally(() => {
                 this.isLoading = false;
