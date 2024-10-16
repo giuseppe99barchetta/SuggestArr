@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+    {% include 'header.html' %}
+    <body class="bg-gradient-to-br from-gray-900 to-gray-800 text-gray-200 font-quicksand min-h-screen flex items-center justify-center">
+        {% include 'toast.html' %}
+        <div class="container mx-auto p-6" id="app">
+            <div class="max-w-lg mx-auto bg-gray-800 shadow-lg rounded-lg p-6 transform hover:scale-105 transition-transform duration-500">
+                <h1 class="text-center text-3xl font-bold mb-6 text-indigo-400">SuggestArr Configuration</h1>
+                {% include 'config-form.html' %}
+                {% include 'docs.html' %}
+                {% include 'navbar.html' %}
+                {% include 'footer.html' %}
+            </div>
+        </div>
+        <!-- Include Vue.js and altre librerie -->
+        <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+        <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/cronstrue@2.13.0/dist/cronstrue.min.js"></script>
+        <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    </body>
+</html>

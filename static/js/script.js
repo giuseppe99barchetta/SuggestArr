@@ -12,6 +12,7 @@ new Vue({
             CRON_TIMES: '0 0 * * *',
             JELLYSEER_USER: ''
         },
+        activeTab: 'config',
         users: [],
         isConfigSaved: false,
         isLoading: false

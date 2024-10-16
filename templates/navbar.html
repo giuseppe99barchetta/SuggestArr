@@ -1,0 +1,14 @@
+<div class="w-full max-w-xs mx-auto flex">
+    <button 
+        @click="activeTab = 'config'" 
+        class="w-full bg-gray-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 mx-1 rounded-md focus:outline-none transition duration-300 flex items-center justify-center text-sm" 
+        :class="{'bg-indigo-600 text-white': activeTab === 'config', 'bg-gray-700 text-gray-300': activeTab !== 'config'}">
+        <i class="fas fa-cog"></i> <!-- Settings Icon -->
+    </button>
+    <button 
+        @click="activeTab = 'docs'" 
+        class="w-full bg-gray-700 hover:bg-indigo-600 text-white font-bold py-2 px-4 mx-1 rounded-md focus:outline-none transition duration-300 flex items-center justify-center text-sm" 
+        :class="{'bg-indigo-600 text-white': activeTab === 'docs', 'bg-gray-700 text-gray-300': activeTab !== 'docs'}">
+        <i class="fas fa-question-circle"></i> <!-- Question Mark Icon -->
+    </button>
+</div>

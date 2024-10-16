@@ -38,7 +38,7 @@ def register_routes(app): # pylint: disable=redefined-outer-name
         """
         Load configuration page
         """
-        return render_template('config.html')
+        return render_template('index.html')
 
     @app.route('/api/config', methods=['GET'])
     def fetch_config():
