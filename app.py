@@ -1,88 +1,69 @@
 """
-Flask web application for configuring environment variables related to TMDb, Jellyfin, 
-and Jellyseer APIs. 
-
-Features:
-- Save user configurations through a web interface.
-- Execute media processing in the background.
-
-Endpoints:
-- `/`: Manage configuration settings.
-- `/run_now`: Execute the media processing.
-
-Dependencies:
-- Flask, Flask-CORS, dotenv, logger.
+Main Flask application for managing environment variables and running processes.
 """
 from flask import Flask, redirect, render_template, request, jsonify, url_for
 from flask_cors import CORS
-from dotenv import load_dotenv
-
+from utils.utils import AppUtils
 from automate_process import ContentAutomation
-from config.logger_manager import LoggerManager
 from config.config import load_env_vars, save_env_vars
 
-logger = LoggerManager.get_logger(__name__)
-
-app = Flask(__name__)
-CORS(app)
-
-def reload_env():
+# App Factory Pattern for modularity and testability
+def create_app():
     """
-    Ricarica le variabili d'ambiente dal file .env
+    Create and configure the Flask application.
     """
-    load_dotenv(override=True)
-    logger.debug("Environment variables reloaded from .env")
 
+    if AppUtils.is_last_worker():
+        AppUtils.print_welcome_message() # Print only for last worker
 
-@app.route('/', methods=['GET', 'POST'])
-def configure():
+    application = Flask(__name__)
+    CORS(application)
+
+    # Register routes
+    register_routes(application)
+
+    # Load environment variables at startup
+    AppUtils.load_environment()
+
+    return application
+
+def register_routes(app): # pylint: disable=redefined-outer-name
     """
-    Get and save environment variables from the web interface.
+    Register the application routes.
     """
-    if request.method == 'POST':
-        logger.debug("Received POST request to save configuration.")
-        save_env_vars(request)
-        logger.info("Configuration saved successfully.")
-        return redirect(url_for('configure'))
 
-    # Carica le variabili correnti dal file .env
-    config = load_env_vars()
+    @app.route('/', methods=['GET', 'POST'])
+    def configure():
+        """
+        Get and save environment variables from the web interface.
+        """
+        if request.method == 'POST':
+            save_env_vars(request)
+            return redirect(url_for('configure'))
 
-    logger.debug("Configuration page loaded with current environment values.")
-    return render_template('config.html', config=config)
+        # Load current environment variables
+        config = load_env_vars()
+        return render_template('config.html', config=config)
 
-@app.route('/run_now', methods=['POST'])
-def run_now():
-    """
-    Endpoint to execute the process in the background.
-    """
-    logger.info("Received request to start process now.")
+    @app.route('/run_now', methods=['POST'])
+    def run_now():
+        """
+        Endpoint to execute the process in the background.
+        """
+        try:
+            # Execute automation process
+            automation = ContentAutomation()
+            automation.run()
 
-    try:
-        # Esegui il processo di automazione
-        automation = ContentAutomation()
-        automation.run()
+            return jsonify({'status': 'success', 'message': 'Process started.'}), 202
 
-        logger.debug("Process executed successfully in the background.")
-        return jsonify({'status': 'success', 'message': 'Process started.'}), 202
-
-    except ValueError as ve:
-        logger.error("Value error occurred: %s", str(ve))
-        return jsonify({'status': 'error', 'message': 'Value error: ' + str(ve)}), 400
-    except FileNotFoundError as fnfe:
-        logger.error("File not found: %s", str(fnfe))
-        return jsonify({'status': 'error', 'message': 'File not found: ' + str(fnfe)}), 404
-    except Exception as e: # pylint: disable=broad-except
-        logger.error("An unexpected error occurred: %s", str(e))
-        return jsonify({'status': 'error', 'message': 'Unexpected error: ' + str(e)}), 500
-
+        except ValueError as ve:
+            return jsonify({'status': 'error', 'message': 'Value error: ' + str(ve)}), 400
+        except FileNotFoundError as fnfe:
+            return jsonify({'status': 'error', 'message': 'File not found: ' + str(fnfe)}), 404
+        except Exception as e: # pylint: disable=broad-except
+            return jsonify({'status': 'error', 'message': 'Unexpected error: ' + str(e)}), 500
 
 if __name__ == '__main__':
-    print("\n\n===========================================================")
-    print("Welcome to the Jellyfin TMDb Sync Automation Application!")
-    print("Manage your settings through the web interface at: http://localhost:5000")
-    print("Fill in the input fields with your data and let the cron job handle the rest!")
-    print("To run the automation process immediately, click the 'Force Run' button.")
-    print("The 'Force Run' button will appear only after you save your settings.")
-    print("===========================================================\n\n")
+    app = create_app()
     app.run(host='0.0.0.0', port=5000)
