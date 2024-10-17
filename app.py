@@ -68,26 +68,25 @@ def register_routes(app): # pylint: disable=redefined-outer-name
 
 
     @app.route('/run_now', methods=['POST'])
-    def run_now():
+    async def run_now():
         """
         Endpoint to execute the process in the background.
         """
         try:
-            # Execute automation process
             automation = ContentAutomation()
-            automation.run()
+            await automation.run()
 
             return jsonify({'status': 'success', 'message': 'Force Run correctly completed!'}), 202
-
         except ValueError as ve:
             return jsonify({'status': 'error', 'message': 'Value error: ' + str(ve)}), 400
         except FileNotFoundError as fnfe:
             return jsonify({'status': 'error', 'message': 'File not found: ' + str(fnfe)}), 404
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:
             return jsonify({'status': 'error', 'message': 'Unexpected error: ' + str(e)}), 500
 
+
     @app.route('/api/get_users', methods=['POST'])
-    def get_users():
+    async def get_users():
         """
         Fetch Jellyseer users using the provided API key.
         """
@@ -103,7 +102,7 @@ def register_routes(app): # pylint: disable=redefined-outer-name
             jellyseer_client = JellyseerClient(api_url=api_url, api_key=api_key)
 
             # Fetch users from Jellyseer
-            users = jellyseer_client.get_all_users()
+            users = await jellyseer_client.get_all_users()
 
             if users is None or len(users) == 0:
                 return jsonify({'message': 'Failed to fetch users', 'type': 'error'}), 500

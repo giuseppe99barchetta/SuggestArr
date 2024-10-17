@@ -1,4 +1,18 @@
 # Changelog  
+## [1.0.4] - 2024-10-17
+### Important
+- **Approve automatic request**: To have the ability to approve automatic request made by SuggestArr you need to create a new local account in Jellyseer and provide the credential in the web interface or via the docker-compose file.
+### Added
+- **Asynchronous Processing**: Refactored the `JellyseerClient` and `ContentAutomation` to use asynchronous methods for improved performance, handling media requests concurrently.
+- **Caching of Jellyseer Requests**: Implemented caching of all Jellyseer requests upon client initialization, reducing the number of API calls made during the media request verification process.
+  
+### Fixed
+- **Duplicate Requests Prevention**: Resolved an issue where requests for already available content in Jellyseer were being re-requested, optimizing the workflow to skip items that had been previously requested.
+- **Duplicate Requests Prevention**: User selection not working as expected. Need to login via user and password to perform request action as a specific user.
+
+### Improved
+- **Docker Performance**: Addressed issues where long-running processes in Docker would cause premature termination. Refined the logic to ensure processes complete successfully without interruption.
+
 ## [1.0.3] - 2024-10-16 
 ### Added
 - **User Selection**: Added the ability to select a specific Jellyseer user to initiate requests, enabling management and approval of content.

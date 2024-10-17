@@ -5,6 +5,7 @@ The client can retrieve users, recent items, and provider IDs for media content.
 Classes:
     - JellyfinClient: A class that handles communication with the Jellyfin API.
 """
+import aiohttp
 import requests
 
 from config.logger_manager import LoggerManager
@@ -29,25 +30,23 @@ class JellyfinClient:
         self.api_url = api_url
         self.headers = {"X-Emby-Token": token}
 
-    def get_all_users(self):
+    async def get_all_users(self):
         """
-        Retrieves a list of all users from the Jellyfin server.
+        Retrieves a list of all users from the Jellyfin server asynchronously.
         :return: A list of users in JSON format if successful, otherwise an empty list.
         """
         url = f"{self.api_url}/Users"
         try:
-            response = requests.get(
-                url, headers=self.headers, timeout=REQUEST_TIMEOUT)
-            if response.status_code == 200:
-                return response.json()
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status == 200:
+                        # Ottieni il JSON in modo asincrono
+                        data = await response.json()  # 'await' qui è corretto
+                        return data  # 'data' è già un dizionario
+                    self.logger.error("Failed to retrieve users: %d", response.status)
+        except aiohttp.ClientError as e:
+            self.logger.error("An error occurred while retrieving users: %s", str(e))
 
-            self.logger.error("Failed to retrieve users: %d",
-                              response.status_code)
-        except requests.Timeout:
-            self.logger.error("Request to get users timed out.")
-        except requests.RequestException as e:
-            self.logger.error(
-                "An error occurred while retrieving users: %s", str(e))
         return []
 
     def get_recent_items(self, user_id, limit=100):
@@ -63,7 +62,7 @@ class JellyfinClient:
             "SortOrder": "Descending",
             "Filters": "IsPlayed",
             "Recursive": "true",
-            "IncludeItemTypes": "Movie,Series,Episode",
+            "IncludeItemTypes": "Movie,Episode",
             "Limit": limit
         }
         try:

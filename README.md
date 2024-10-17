@@ -35,6 +35,8 @@ The project uses the following environment variables that can be passed via the 
 - `MAX_SIMILAR_TV`: (Optional) The maximum number of similar TV shows to download. Default is 2, with a max limit of 20.
 - `CRON_TIMES`: (Optional) Your preferred cron schedule otherwise it runs at midnight.
 - `JELLYSEER_USER`: (Optional) Your preferred user to make Movie or TV Show request to Jellyseer. Otherwise it use the admin profile.
+- `JELLYSEER_USER_NAME`: (Optional) The username of the Jellyseer user to authenticate requests.
+- `JELLYSEER_USER_PSW`: (Optional) The password for the Jellyseer user to authenticate requests.
 
 ## Docker Usage
 
@@ -58,7 +60,9 @@ services:
       MAX_SIMILAR_MOVIE: 5 # (Optional: You can configure it in the dashboard. Default: 2, Max: 20)
       MAX_SIMILAR_TV: 2 # (Optional: You can configure it in the dashboard. Default: 2, Max: 20)
       CRON_TIMES: ${CRON_TIMES:-0 0 * * *}  # (Optional: You can configure it in the dashboard. Default run at midnight.)
-      JELLYSEER_USER: 1 # (Optional: You can configure it in the dashboard. Otherwise it use the admin profile.)
+      JELLYSEER_USER: 1 # (Optional: Id of the user you want to use. Otherwise it use the admin profile.)
+      JELLYSEER_USER_NAME: your_username # (Optional: To authenticate as a specific user)
+      JELLYSEER_USER_PSW: your_password # (Optional: To authenticate as a specific user)
     volumes:
       - .:/app
     container_name: SuggestArr
@@ -74,9 +78,19 @@ docker-compose up --build
 
 ## Web Interface
 
-The web interface will be available at: [http://localhost:5000](http://localhost:5000). This interface allows you to manage the automation process more efficiently and specify custom cron schedules.
+The web interface will be available at: [http://localhost:5000](http://localhost:5000). This interface allows you to manage the automation process more efficiently and specify custom cron schedules. It also provides the ability to select a specific Jellyseer user to make requests on their behalf.
 
 Make sure your environment is set up correctly and that the application is running to access the web interface.
+
+### Using a Specific Jellyseer User for Requests
+If you'd like to use a specific Jellyseer user to make media requests, follow these steps:
+
+1. In the web interface, enable the user selection option by checking the corresponding box.
+2. Select the desired user from the dropdown list.
+3. Enter the password for the selected user.
+4. The system will now use this user to make media requests, rather than using the admin or default profile.
+
+Note: Currently, only local Jellyseer users are supported.
 
 ## Running Without Docker
 You can also run the project locally by installing the dependencies and setting the environment variables.
@@ -98,6 +112,8 @@ export JELLYSEER_API_URL=http://your_jellyseer_url
 export JELLYSEER_TOKEN=your_jellyseer_token
 export CRON_TIMES="0 0 * * *"  # Optional, your preferred cron schedule
 export JELLYSEER_USER=1 # Optional, your preferred user to make request to Jellyseer
+export JELLYSEER_USER_NAME=your_username # Optional, your preferred username for Jellyseer
+export JELLYSEER_USER_PSW=your_password # Optional, your preferred password for Jellyseer
 ```
 
 Or create an .env file inside the project.

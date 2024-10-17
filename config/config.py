@@ -18,7 +18,9 @@ JELLYSEER_TOKEN = 'JELLYSEER_TOKEN'
 MAX_SIMILAR_MOVIE = 'MAX_SIMILAR_MOVIE'
 MAX_SIMILAR_TV = 'MAX_SIMILAR_TV'
 CRON_TIMES = 'CRON_TIMES'
-JELLYSEER_USER = 'JELLYSEER_USER'
+JELLYSEER_USER_ID = 'JELLYSEER_USER_ID'
+JELLYSEER_USER_NAME = 'JELLYSEER_USER_NAME'
+JELLYSEER_USER_PSW = 'JELLYSEER_USER_PSW'
 
 def load_env_vars():
     """
@@ -34,7 +36,9 @@ def load_env_vars():
         MAX_SIMILAR_MOVIE: os.getenv(MAX_SIMILAR_MOVIE, '5'),
         MAX_SIMILAR_TV: os.getenv(MAX_SIMILAR_TV, '2'),
         CRON_TIMES: os.getenv(CRON_TIMES, '0 0 * * *'),
-        JELLYSEER_USER: os.getenv(JELLYSEER_USER, 'default')
+        JELLYSEER_USER_ID: os.getenv(JELLYSEER_USER_ID, 'default'),
+        JELLYSEER_USER_NAME: os.getenv(JELLYSEER_USER_NAME, None),
+        JELLYSEER_USER_PSW: os.getenv(JELLYSEER_USER_PSW, None)
     }
 
 def save_env_vars(config_data):
@@ -55,7 +59,9 @@ def save_env_vars(config_data):
         'MAX_SIMILAR_MOVIE': config_data.get('MAX_SIMILAR_MOVIE', '5'),
         'MAX_SIMILAR_TV': config_data.get('MAX_SIMILAR_TV', '2'),
         'CRON_TIMES': cron_times,
-        'JELLYSEER_USER': config_data.get('JELLYSEER_USER', 'default')
+        'JELLYSEER_USER_ID': config_data.get('JELLYSEER_USER_ID', 'default'),
+        'JELLYSEER_USER_PSW': config_data.get('JELLYSEER_USER_PSW', ''),
+        'JELLYSEER_USER_NAME': config_data.get('JELLYSEER_USER_NAME', ''),
     }
 
     with open('.env', 'w', encoding='utf-8') as f:

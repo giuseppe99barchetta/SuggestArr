@@ -11,6 +11,7 @@ Classes:
 
 
 import os
+import asyncio
 from dotenv import load_dotenv
 
 from jellyfin.jellyfin_client import JellyfinClient
@@ -37,7 +38,9 @@ class ContentAutomation:
         jellyseer_api_url = env_vars['JELLYSEER_API_URL']
         jellyseer_token = env_vars['JELLYSEER_TOKEN']
         tmdb_api_key = env_vars['TMDB_API_KEY']
-        jellyseer_user = env_vars['JELLYSEER_USER']
+        jellyseer_user_id = env_vars['JELLYSEER_USER_ID']
+        jellyseer_user_name = env_vars['JELLYSEER_USER_NAME']
+        jellyseer_user_psw = env_vars['JELLYSEER_USER_PSW']
 
         self.jellyfin_client = JellyfinClient(
             jellyfin_api_url,
@@ -46,7 +49,9 @@ class ContentAutomation:
         self.jellyseer_client = JellyseerClient(
             jellyseer_api_url,
             jellyseer_token,
-            jellyseer_user
+            jellyseer_user_id,
+            jellyseer_user_name,
+            jellyseer_user_psw
         )
         self.tmdb_client = TMDbClient(
             tmdb_api_key
@@ -57,107 +62,78 @@ class ContentAutomation:
 
         self.processed_series = set()  # To track series already processed
 
-    def run(self):
-        """
-        Main entry point to start the automation process.
-        """
-        users = self.jellyfin_client.get_all_users()
+    async def run(self):
+        """Main entry point to start the automation process."""
+        users = await self.jellyfin_client.get_all_users()
         load_dotenv(override=True)
-        for user in users:
-            self.process_user_recent_items(user)
 
-    def process_user_recent_items(self, user):
-        """
-        Process the recently watched items (movies and TV shows) for a specific Jellyfin user.
-        :param user: The Jellyfin user object.
-        """
+        await self.jellyseer_client.init()
+        tasks = [self.process_user_recent_items(user) for user in users]
+        await asyncio.gather(*tasks)
+
+    async def process_user_recent_items(self, user):
+        """Process the recently watched items (movies and TV shows) for a specific Jellyfin user."""
         user_id = user['Id']
         self.logger.info(
-            "Fetching recently watched content for user: %s (%s)", user['Name'], user_id)
+            "Fetching recently watched content for user: %s (%s)", user['Name'], user_id
+        )
 
         recent_items = self.jellyfin_client.get_recent_items(user_id)
         if recent_items and 'Items' in recent_items:
-            for item in recent_items['Items']:
-                self.process_item(user_id, item)
+            tasks = [self.process_item(user_id, item) for item in recent_items['Items']]
+            await asyncio.gather(*tasks)
 
-    def process_item(self, user_id, item):
-        """
-        Process an individual item (either a movie or TV show) based on its type.
-        :param user_id: The ID of the Jellyfin user.
-        :param item: The item to be processed (movie or TV show episode).
-        """
+    async def process_item(self, user_id, item):
+        """Process an individual item (either a movie or TV show)."""
         item_type = item['Type']
         item_id = item['Id']
 
-        if item_type == 'Movie':
-            self.process_movie(user_id, item_id)
-        elif item_type == 'Episode':
-            self.process_episode(user_id, item)
+        if item_type.lower() == 'movie':
+            await self.process_movie(user_id, item_id)
+        elif item_type.lower() == 'episode':
+            await self.process_episode(user_id, item)
 
-    def process_movie(self, user_id, item_id):
-        """
-        Process a movie by finding similar movies via TMDb and requesting them via Jellyseer.
-        :param user_id: The ID of the Jellyfin user.
-        :param item_id: The ID of the movie item.
-        """
+    async def process_movie(self, user_id, item_id):
+        """Process a movie by finding similar movies via TMDb and requesting them via Jellyseer."""
         tmdb_id = self.jellyfin_client.get_item_provider_id(user_id, item_id)
+        self.logger.info("Processing movie: %s (TMDB id)", tmdb_id)
         if tmdb_id:
             similar_movies = self.tmdb_client.find_similar_movies(tmdb_id)
             for similar_movie_id in similar_movies[:self.max_similar_movie]:
-                if not self.jellyseer_client.check_already_requested(similar_movie_id, 'movie'):
-                    self.jellyseer_client.request_media(
-                        'movie', similar_movie_id)
-                    self.logger.info(
-                        "Requested download for movie with ID: %s", similar_movie_id)
+                if not await self.jellyseer_client.check_already_requested(similar_movie_id, 'movie'):
+                    await self.jellyseer_client.request_media('movie', similar_movie_id)
+                    self.logger.info("Requested download for movie with ID: %s", similar_movie_id)
 
-    def process_episode(self, user_id, item):
-        """
-        Process a TV show episode by finding similar TV shows via TMDb and requesting them
-        via Jellyseer.
-        :param user_id: The ID of the Jellyfin user.
-        :param item: The episode item to be processed.
-        """
+
+    async def process_episode(self, user_id, item):
+        """Process a TV show episode by finding similar TV shows via TMDb and requesting them via Jellyseer."""
         series_id = item.get('SeriesId')
         series_name = item.get('SeriesName')
         if series_id and series_id not in self.processed_series:
-            self.logger.info("Processing series: %s (Series ID: %s)",
-                        series_name, series_id)
+            self.logger.info("Processing series: %s (Series ID: %s)", series_name, series_id)
             self.processed_series.add(series_id)
 
-            tvdb_id = self.jellyfin_client.get_item_provider_id(
-                user_id, series_id, provider='Tvdb')
+            tvdb_id = self.jellyfin_client.get_item_provider_id(user_id, series_id, provider='Tvdb')
             if tvdb_id:
-                self.request_similar_tv_shows(tvdb_id, series_name)
+                await self.request_similar_tv_shows(tvdb_id, series_name)
 
-    def request_similar_tv_shows(self, tvdb_id, series_name):
-        """
-        Request similar TV shows via Jellyseer after finding them through TMDb.
-        :param tvdb_id: The TVDb ID of the series.
-        :param series_name: The name of the series being processed.
-        """
+    async def request_similar_tv_shows(self, tvdb_id, series_name):
+        """Request similar TV shows via Jellyseer after finding them through TMDb."""
         self.logger.info("TVDb ID for series '%s': %s", series_name, tvdb_id)
         tmdb_id = self.tmdb_client.find_tmdb_id_from_tvdb(tvdb_id)
 
         if tmdb_id:
             similar_tvshows = self.tmdb_client.find_similar_tvshows(tmdb_id)
             if similar_tvshows:
-                self.logger.info(
-                    "Found %d similar TV shows for '%s'", len(
-                        similar_tvshows), series_name
-                )
-
+                self.logger.info("Found %d similar TV shows for '%s'", len(similar_tvshows), series_name)
                 for similar_tvshow_id in similar_tvshows[:self.max_similar_tv]:
-                    if not self.jellyseer_client.check_already_requested(similar_tvshow_id, 'tv'):
-                        self.jellyseer_client.request_media(
-                            'tv', similar_tvshow_id)
-                        self.logger.info(
-                            "Requested download for TV show with ID: %s", similar_tvshow_id)
+                    if not await self.jellyseer_client.check_already_requested(similar_tvshow_id, 'tv'):
+                        await self.jellyseer_client.request_media('tv', similar_tvshow_id)
+                        self.logger.info("Requested download for TV show with ID: %s", similar_tvshow_id)
             else:
-                self.logger.warning(
-                    "No similar TV shows found for '%s'", series_name)
+                self.logger.warning("No similar TV shows found for '%s'", series_name)
         else:
-            self.logger.warning(
-                "Could not find TMDb ID for series '%s'", series_name)
+            self.logger.warning("Could not find TMDb ID for series '%s'", series_name)
 
 
 if __name__ == "__main__":

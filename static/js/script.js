@@ -10,12 +10,27 @@ new Vue({
             MAX_SIMILAR_MOVIE: '5',
             MAX_SIMILAR_TV: '2',
             CRON_TIMES: '0 0 * * *',
-            JELLYSEER_USER: ''
+            JELLYSEER_USER_ID: '',
+            JELLYSEER_USER_NAME: '',
+            JELLYSEER_USER_PSW: ''
         },
+        selectedUser: null,
+        enableUserSelection: false,
         activeTab: 'config',
         users: [],
         isConfigSaved: false,
         isLoading: false
+    },
+    watch: {
+        selectedUser(newValue) {
+            if (newValue) {
+                this.config.JELLYSEER_USER_ID = newValue.id;
+                this.config.JELLYSEER_USER_NAME = newValue.name;
+            } else {
+                this.config.JELLYSEER_USER_ID = '';
+                this.config.JELLYSEER_USER_NAME = '';
+            }
+        }
     },
     mounted() {
         this.fetchConfig();
@@ -61,20 +76,24 @@ new Vue({
                 .then(response => {
                     if (response.data.type === 'success') {
                         this.users = response.data.users;
+                        if (this.config.JELLYSEER_USER_ID) {
+                            this.selectedUser = this.users.find(user => user.id === +this.config.JELLYSEER_USER_ID) || null;
+                            this.enableUserSelection = true;
+                        }
                     } else {
                         this.users = []
-                        this.config.JELLYSEER_USER = 'default'
+                        this.config.JELLYSEER_USER_ID = 'default'
                         this.showToast(response.data.message, 'error');
                     }
                 })
                 .catch(error => {
                     this.users = []
-                    this.config.JELLYSEER_USER = 'default'
+                    this.config.JELLYSEER_USER_ID = 'default'
                     this.showToast('Failed to fetch users. Please check the API key.', 'error');
                 });
             } else {
                 // If API key or URL is not provided, clear the users list
-                this.config.JELLYSEER_USER = 'default'
+                this.config.JELLYSEER_USER_ID = 'default'
                 this.users = [];
             }
         },

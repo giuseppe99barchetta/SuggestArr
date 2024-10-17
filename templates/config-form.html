@@ -67,25 +67,53 @@
                    placeholder="Enter your Jellyseer API Key">
         </div>
 
-        <div id="app" v-cloak>
-            {% raw %}
-            <label for="USER_SELECTION" class="block text-sm font-semibold text-gray-300">
-                Select a Jellyseer user:
+        <div>
+            <label for="enable_user_selection" class="inline-flex items-center text-gray-300">
+                <input type="checkbox" id="enable_user_selection" v-model="enableUserSelection" class="form-checkbox h-5 w-5 text-indigo-600">
+                <span class="ml-2">Edit Jellyseer User&nbsp;</span>
                 <span class="tooltip text-gray-400">
                     <i class="fas fa-question-circle cursor-pointer"></i>
-                    <span class="tooltip-text">Select a user from the list retrieved from Jellyseer.</span>
+                    <span class="tooltip-text">If you want to change the user who makes requests to Jellyseer.</span>
                 </span>
             </label>
-            <select id="USER_SELECTION" v-model="config.JELLYSEER_USER" 
-                    :disabled="!users || users.length === 0" 
-                    class="mt-2 block w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-300">
-                <option disabled value="">Select a Jellyseer user:</option>
-                <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
-            </select>
-            <div v-if="!users || users.length === 0">
-                <small class="text-gray-400">Insert correct Jellyseer URL and API to retrieve the users.</small>
+        </div>
+        
+        <div v-if="enableUserSelection">
+            <div id="app" v-cloak>
+                {% raw %}
+                <label for="USER_SELECTION" class="block text-sm font-semibold text-gray-300">
+                    Select a Jellyseer user:
+                    <span class="tooltip text-gray-400">
+                        <i class="fas fa-question-circle cursor-pointer"></i>
+                        <span class="tooltip-text">Select a user from the list retrieved from Jellyseer.</span>
+                    </span>
+                </label>
+                <select id="USER_SELECTION" v-model="selectedUser" 
+                :disabled="!users || users.length === 0" 
+                class="mt-2 block w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-300">
+            <option disabled value="">Select a Jellyseer user:</option>
+            <option v-for="user in users" :key="user.id" :value="user">{{ user.name }}</option>
+        </select>
+        
+                <div v-if="!users || users.length === 0">
+                    <small class="text-gray-400">Insert correct Jellyseer URL and API to retrieve the users.</small>
+                </div>
+                {% endraw %}
             </div>
-            {% endraw %}
+
+            <div v-if="config.JELLYSEER_USER_ID">
+                <label for="JELLYSEER_USER_PSW" class="block text-sm font-semibold text-gray-300">
+                    Jellyseer User Password:
+                    <span class="tooltip text-gray-400">
+                        <i class="fas fa-question-circle cursor-pointer"></i>
+                        <span class="tooltip-text">Enter the password for the selected Jellyseer user.</span>
+                    </span>
+                </label>
+                <input type="password" class="mt-2 block w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md focus:ring-indigo-500 focus:border-indigo-500 transition duration-300 px-4 py-2" 
+                       id="JELLYSEER_USER_PSW" 
+                       v-model="config.JELLYSEER_USER_PSW" 
+                       placeholder="Enter Jellyseer User Password">
+            </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
