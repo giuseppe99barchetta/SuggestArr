@@ -7,6 +7,7 @@ Classes:
     - JellyseerClient: A class to interact with the Jellyseer API.
 """
 
+import concurrent.futures
 import requests
 
 from config.logger_manager import LoggerManager
@@ -36,30 +37,52 @@ class JellyseerClient:
     def check_already_requested(self, tmdb_id, media_type):
         """
         Checks if a media item has already been requested in Jellyseer.
-        :param tmdb_id: The TMDb ID of the media item.
-        :param media_type: The type of media ('movie' or 'tv').
-        :return: True if the media has already been requested, False otherwise.
         """
-        url = f"{self.api_url}/api/v1/request?take=100&skip=0&sort=added&requestedBy=1"
+        total_jellyseer_request = self.get_total_request()
+        batch_size = 20
+
+        def fetch_batch(skip):
+            """Fetch and process a batch of requests."""
+            url = f"{self.api_url}/api/v1/request?take={batch_size}&skip={skip}"
+            response = self.session.get(url, timeout=REQUEST_TIMEOUT)
+            if response.status_code in HTTP_OK:
+                data = response.json()
+                # Check if any request matches the given tmdb_id and media_type
+                for item in data.get('results', []):
+                    if item['media']['tmdbId'] == tmdb_id and item['media']['mediaType'].lower() == media_type.lower():
+                        return True
+            return False
+
+        try:
+            # Use ThreadPoolExecutor to run requests concurrently
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                futures = [executor.submit(fetch_batch, skip) for skip in range(0, total_jellyseer_request, batch_size)]
+                for future in concurrent.futures.as_completed(futures):
+                    if future.result():  # Stop early if any batch returns True
+                        return True
+        except Exception as e:
+            self.logger.error("Error during concurrent execution: %s", str(e))
+
+        return False
+
+    def get_total_request(self):
+        """
+        Get total request made in Jellyseer.
+        """
+        url = f"{self.api_url}/api/v1/request/count"
 
         try:
             response = self.session.get(url, timeout=REQUEST_TIMEOUT)
             if response.status_code in HTTP_OK:
                 data = response.json()
-                for item in data.get('results', []):
-                    if item['media']['tmdbId'] == tmdb_id \
-                            and item['media']['mediaType'].lower() == media_type.lower():
-                        return True
-                return False
-            self.logger.error(
-                "Failed to verify %s request status: %d", media_type, response.status_code
-            )
+                return data.get('total')
+
         except requests.Timeout:
             self.logger.error("Request to check if media was already requested timed out.")
         except requests.RequestException as e:
             self.logger.error("An error occurred while checking media request: %s", str(e))
 
-        return False
+        return 0
 
     def request_media(self, media_type, media_id, tvdb_id=None):
         """

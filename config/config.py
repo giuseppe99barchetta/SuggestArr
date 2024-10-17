@@ -65,7 +65,7 @@ def save_env_vars(config_data):
     load_env_vars()
 
     # Update cron only in linux system
-    if platform.system() != 'Windows':
+    if platform.system() == 'Linux':
         update_cron_job(cron_times)
 
 

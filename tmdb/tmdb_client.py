@@ -69,7 +69,9 @@ class TMDbClient:
         except requests.Timeout:
             self.logger.error("Request to TMDb timed out.")
         except requests.RequestException as e:
-            self.logger.error("An error occurred while requesting TV show recommendations: %s", str(e))
+            self.logger.error(
+                "An error occurred while requesting TV show recommendations: %s", str(e)
+            )
         return []
 
     def find_tmdb_id_from_tvdb(self, tvdb_id):
