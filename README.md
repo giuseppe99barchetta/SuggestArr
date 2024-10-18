@@ -48,9 +48,6 @@ You can run the project using Docker Compose for easy setup and execution.
 services:
   automation:
     image: ciuse99/suggestarr:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     environment:
       TMDB_API_KEY: ${TMDB_API_KEY} # (Optional: You can configure it in the dashboard)
       JELLYFIN_API_URL: ${JELLYFIN_API_URL} # (Optional: You can configure it in the dashboard)
@@ -63,8 +60,6 @@ services:
       JELLYSEER_USER: 1 # (Optional: Id of the user you want to use. Otherwise it use the admin profile.)
       JELLYSEER_USER_NAME: your_username # (Optional: To authenticate as a specific user)
       JELLYSEER_USER_PSW: your_password # (Optional: To authenticate as a specific user)
-    volumes:
-      - .:/app
     container_name: SuggestArr
     restart: always
     ports:
