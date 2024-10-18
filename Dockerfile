@@ -3,7 +3,7 @@ FROM python:3.13-slim
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y cron supervisor && \
+    apt-get install -y cron supervisor curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
