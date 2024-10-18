@@ -78,7 +78,7 @@ class ContentAutomation:
             "Fetching recently watched content for user: %s (%s)", user['Name'], user_id
         )
 
-        recent_items = self.jellyfin_client.get_recent_items(user_id)
+        recent_items = await self.jellyfin_client.get_recent_items(user_id)
         if recent_items and 'Items' in recent_items:
             tasks = [self.process_item(user_id, item) for item in recent_items['Items']]
             await asyncio.gather(*tasks)
@@ -95,10 +95,10 @@ class ContentAutomation:
 
     async def process_movie(self, user_id, item_id):
         """Process a movie by finding similar movies via TMDb and requesting them via Jellyseer."""
-        tmdb_id = self.jellyfin_client.get_item_provider_id(user_id, item_id)
+        tmdb_id = await self.jellyfin_client.get_item_provider_id(user_id, item_id)
         self.logger.info("Processing movie: %s (TMDB id)", tmdb_id)
         if tmdb_id:
-            similar_movies = self.tmdb_client.find_similar_movies(tmdb_id)
+            similar_movies = await self.tmdb_client.find_similar_movies(tmdb_id)
             for similar_movie_id in similar_movies[:self.max_similar_movie]:
                 if not await self.jellyseer_client.check_already_requested(similar_movie_id, 'movie'):
                     await self.jellyseer_client.request_media('movie', similar_movie_id)
@@ -106,24 +106,27 @@ class ContentAutomation:
 
 
     async def process_episode(self, user_id, item):
-        """Process a TV show episode by finding similar TV shows via TMDb and requesting them via Jellyseer."""
+        """
+        Process a TV show episode by finding similar TV shows 
+        via TMDb and requesting them via Jellyseer.
+        """
         series_id = item.get('SeriesId')
         series_name = item.get('SeriesName')
         if series_id and series_id not in self.processed_series:
             self.logger.info("Processing series: %s (Series ID: %s)", series_name, series_id)
             self.processed_series.add(series_id)
 
-            tvdb_id = self.jellyfin_client.get_item_provider_id(user_id, series_id, provider='Tvdb')
+            tvdb_id = await self.jellyfin_client.get_item_provider_id(user_id, series_id, provider='Tvdb')
             if tvdb_id:
                 await self.request_similar_tv_shows(tvdb_id, series_name)
 
     async def request_similar_tv_shows(self, tvdb_id, series_name):
         """Request similar TV shows via Jellyseer after finding them through TMDb."""
         self.logger.info("TVDb ID for series '%s': %s", series_name, tvdb_id)
-        tmdb_id = self.tmdb_client.find_tmdb_id_from_tvdb(tvdb_id)
+        tmdb_id = await self.tmdb_client.find_tmdb_id_from_tvdb(tvdb_id)
 
         if tmdb_id:
-            similar_tvshows = self.tmdb_client.find_similar_tvshows(tmdb_id)
+            similar_tvshows = await self.tmdb_client.find_similar_tvshows(tmdb_id)
             if similar_tvshows:
                 self.logger.info("Found %d similar TV shows for '%s'", len(similar_tvshows), series_name)
                 for similar_tvshow_id in similar_tvshows[:self.max_similar_tv]:

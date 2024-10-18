@@ -6,8 +6,6 @@ Classes:
     - JellyfinClient: A class that handles communication with the Jellyfin API.
 """
 import aiohttp
-import requests
-
 from config.logger_manager import LoggerManager
 
 # Constants
@@ -40,18 +38,17 @@ class JellyfinClient:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200:
-                        # Ottieni il JSON in modo asincrono
-                        data = await response.json()  # 'await' qui è corretto
-                        return data  # 'data' è già un dizionario
+                        data = await response.json()  # 'await' for async json parsing
+                        return data
                     self.logger.error("Failed to retrieve users: %d", response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while retrieving users: %s", str(e))
 
         return []
 
-    def get_recent_items(self, user_id, limit=100):
+    async def get_recent_items(self, user_id, limit=100):
         """
-        Retrieves a list of recently played items for a given user.
+        Retrieves a list of recently played items for a given user asynchronously.
         :param user_id: The ID of the user whose recent items are to be retrieved.
         :param limit: The maximum number of recent items to retrieve (default is 100).
         :return: A list of recent items in JSON format if successful, otherwise None.
@@ -66,29 +63,22 @@ class JellyfinClient:
             "Limit": limit
         }
         try:
-            response = requests.get(
-                url,
-                headers=self.headers,
-                params=params,
-                timeout=REQUEST_TIMEOUT
-            )
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status == 200:
+                        return await response.json()  # 'await' for async json parsing
+                    self.logger.error(
+                        "Failed to get recent items for %s: %d", user_id, response.status)
+        except aiohttp.ClientError as e:
+            self.logger.error(
+                "An error occurred while retrieving recent items for %s: %s", user_id, str(e))
 
-            if response.status_code == 200:
-                return response.json()
-
-            self.logger.error(
-                "Failed to get recent items for %s: %d", user_id, response.status_code)
-        except requests.Timeout:
-            self.logger.error(
-                "Request to get recent items for user %s timed out.", user_id)
-        except requests.RequestException as e:
-            self.logger.error(
-                "Error while retrieving recent items for %s: %s", user_id, str(e))
         return None
 
-    def get_item_provider_id(self, user_id, item_id, provider='Tmdb'):
+    async def get_item_provider_id(self, user_id, item_id, provider='Tmdb'):
         """
-        Retrieves the provider ID (e.g., TMDb or TVDb) for a specific media item.
+        Retrieves the provider ID (e.g., TMDb or TVDb) for a specific media item asynchronously.
         :param user_id: The ID of the user.
         :param item_id: The ID of the media item.
         :param provider: The provider ID to retrieve (default is 'Tmdb').
@@ -96,18 +86,14 @@ class JellyfinClient:
         """
         url = f"{self.api_url}/Users/{user_id}/Items/{item_id}"
         try:
-            response = requests.get(
-                url, headers=self.headers, timeout=REQUEST_TIMEOUT)
-            if response.status_code == 200:
-                item_data = response.json()
-                return item_data.get('ProviderIds', {}).get(provider)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status == 200:
+                        item_data = await response.json()  # 'await' for async json parsing
+                        return item_data.get('ProviderIds', {}).get(provider)
 
-            self.logger.error(
-                "Failed to retrieve ID for item %s: %d", item_id, response.status_code)
-        except requests.Timeout:
-            self.logger.error(
-                "Request to get provider ID for item %s timed out.", item_id)
-        except requests.RequestException as e:
-            self.logger.error(
-                "An error occurred while retrieving ID for item %s: %s", item_id, str(e))
+                    self.logger.error("Failed to retrieve ID for item %s: %d", item_id, response.status)
+        except aiohttp.ClientError as e:
+            self.logger.error("An error occurred while retrieving ID for item %s: %s", item_id, str(e))
+
         return None
