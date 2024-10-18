@@ -66,7 +66,6 @@ class ContentAutomation:
         """Main entry point to start the automation process."""
         users = await self.jellyfin_client.get_all_users()
         load_dotenv(override=True)
-
         await self.jellyseer_client.init()
         tasks = [self.process_user_recent_items(user) for user in users]
         await asyncio.gather(*tasks)
@@ -137,8 +136,3 @@ class ContentAutomation:
                 self.logger.warning("No similar TV shows found for '%s'", series_name)
         else:
             self.logger.warning("Could not find TMDb ID for series '%s'", series_name)
-
-
-if __name__ == "__main__":
-    automation = ContentAutomation()
-    automation.run()

@@ -77,14 +77,14 @@ def save_env_vars(config_data):
 
 def update_cron_job(cron_time):
     """
-    Updates the cron job file in the operating system.
+    Updates the cron job file in the operating system to trigger the Flask API via curl.
     """
     try:
         logger = LoggerManager().get_logger(__name__)
-        # Command to be executed in the cron script
+
+        # Command to call the Flask endpoint using curl
         cron_command = (
-            "cd /app && "
-            "/usr/local/bin/python automate_process.py "
+            "curl -X POST http://localhost:5000/run_now "
             ">> /var/log/cron.log 2>&1"
         )
 

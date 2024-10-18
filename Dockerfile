@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Add the cron job
-RUN echo "* * * * * cd /app && /usr/local/bin/python automate_process.py >> /var/log/cron.log 2>&1" > /etc/cron.d/automation-cron
+RUN echo "0 0 * * * curl -X POST http://localhost:5000/run_now >> /var/log/cron.log 2>&1" > /etc/cron.d/automation-cron
 
 # Give execution rights to the cron job
 RUN chmod 0644 /etc/cron.d/automation-cron

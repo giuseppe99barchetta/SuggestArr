@@ -1,13 +1,20 @@
 """
 Main Flask application for managing environment variables and running processes.
 """
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
+from asgiref.wsgi import WsgiToAsgi
+
 from jellyseer.jellyseer_client import JellyseerClient
 from utils.utils import AppUtils
-from automate_process import ContentAutomation
 from config.config import load_env_vars, save_env_vars
-from asgiref.wsgi import WsgiToAsgi
+from config.logger_manager import LoggerManager
+from tasks.tasks import run_content_automation_task
+
+executor = ThreadPoolExecutor(max_workers=3)
+logger = LoggerManager().get_logger(__name__)
 
 # App Factory Pattern for modularity and testability
 def create_app():
@@ -74,10 +81,9 @@ def register_routes(app): # pylint: disable=redefined-outer-name
         Endpoint to execute the process in the background.
         """
         try:
-            automation = ContentAutomation()
-            await automation.run()
+            await run_content_automation_task() 
+            return jsonify({'status': 'success', 'message': 'Task is running in the background!'}), 202
 
-            return jsonify({'status': 'success', 'message': 'Force Run correctly completed!'}), 202
         except ValueError as ve:
             return jsonify({'status': 'error', 'message': 'Value error: ' + str(ve)}), 400
         except FileNotFoundError as fnfe:
