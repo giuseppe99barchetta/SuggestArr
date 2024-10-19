@@ -92,7 +92,7 @@ def register_routes(app): # pylint: disable=redefined-outer-name
             return jsonify({'status': 'error', 'message': 'Unexpected error: ' + str(e)}), 500
 
 
-    @app.route('/api/get_users', methods=['POST'])
+    @app.route('/api/jellyseer/get_users', methods=['POST'])
     async def get_users():
         """
         Fetch Jellyseer users using the provided API key.
@@ -119,6 +119,37 @@ def register_routes(app): # pylint: disable=redefined-outer-name
 
         except Exception as e: # pylint: disable=broad-except
             return jsonify({'message': f'Error fetching users: {str(e)}', 'type': 'error'}), 500
+
+    @app.route('/api/jellyseer/login', methods=['POST'])
+    async def login_jellyseer():
+        """
+        Endpoint to login to Jellyseer using the provided credentials.
+        """
+        try:
+            # Estrai i parametri dalla richiesta POST
+            config_data = request.json
+            api_url = config_data.get('JELLYSEER_API_URL')
+            api_key = config_data.get('JELLYSEER_TOKEN')
+            username = config_data.get('JELLYSEER_USER_NAME')
+            password = config_data.get('JELLYSEER_PASSWORD')
+
+            if not username or not password:
+                return jsonify({'message': 'Username and password are required', 'type': 'error'}), 400
+
+            # Crea una nuova istanza del client Jellyseer con le credenziali fornite
+            jellyseer_client = JellyseerClient(api_url=api_url, api_key=api_key, jellyseer_user_name=username, jellyseer_password=password)
+
+            # Effettua il login
+            await jellyseer_client.login()
+
+            # Verifica se il login ha avuto successo controllando la session_token
+            if jellyseer_client.session_token:
+                return jsonify({'message': 'Login successful', 'type': 'success'}), 200
+            else:
+                return jsonify({'message': 'Login failed', 'type': 'error'}), 401
+
+        except Exception as e:
+            return jsonify({'message': f'An error occurred: {str(e)}', 'type': 'error'}), 500
 
 app = create_app()
 asgi_app = WsgiToAsgi(app)
