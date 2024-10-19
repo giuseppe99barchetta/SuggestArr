@@ -75,7 +75,7 @@ def register_routes(app): # pylint: disable=redefined-outer-name
                 {'message': f'Error saving configuration: {str(e)}', 'status': 'error'}), 500
 
 
-    @app.route('/run_now', methods=['POST'])
+    @app.route('/api/force_run', methods=['POST'])
     async def run_now():
         """
         Endpoint to execute the process in the background.

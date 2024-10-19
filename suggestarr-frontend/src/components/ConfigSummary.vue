@@ -29,7 +29,8 @@
             </button>
             <!-- New Force Run Button -->
             <button @click="forceRun" class="bg-red-600 hover:bg-red-500 text-white font-bold py-4 px-8 rounded-lg w-full mt-4 shadow-lg transition-transform transform hover:scale-105">
-                Force Run Job
+                <i v-if="isRunning" class="fas fa-spinner fa-spin"></i>
+                <span v-else>Run Now</span>
             </button>
         </div>
     </div>
@@ -55,13 +56,16 @@ export default {
         },
         forceRun() {
             // Call backend to force run the job
-            axios.post('http://localhost:5000/api/force_run', this.config)
+            this.isRunning = true;
+            axios.post('http://localhost:5050/api/force_run', this.config)
             .then(response => {
-                alert(response.data.message);  // Success message from backend
+                console.log(response.data.message);  // Success message from backend
             })
             .catch(error => {
                 alert(`Error: ${error.response ? error.response.data.message : error.message}`);  // Handle errors
             });
+
+            this.isRunning = false;
         }
     }
 };

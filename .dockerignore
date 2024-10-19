@@ -16,3 +16,4 @@ dockerfile
 venv/
 .vscode/
 *.md
+node_modules/
