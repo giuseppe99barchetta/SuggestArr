@@ -7,6 +7,7 @@ from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from asgiref.wsgi import WsgiToAsgi
 
+from jellyfin.jellyfin_client import JellyfinClient
 from jellyseer.jellyseer_client import JellyseerClient
 from utils.utils import AppUtils
 from config.config import load_env_vars, save_env_vars
@@ -81,7 +82,7 @@ def register_routes(app): # pylint: disable=redefined-outer-name
         Endpoint to execute the process in the background.
         """
         try:
-            await run_content_automation_task() 
+            await run_content_automation_task()
             return jsonify({'status': 'success', 'message': 'Task is running in the background!'}), 202
 
         except ValueError as ve:
@@ -150,6 +151,25 @@ def register_routes(app): # pylint: disable=redefined-outer-name
 
         except Exception as e:
             return jsonify({'message': f'An error occurred: {str(e)}', 'type': 'error'}), 500
+
+    @app.route('/api/jellyfin/libraries', methods=['POST'])
+    async def get_jellyfin_library():
+        try:
+            config_data = request.json
+            api_url = config_data.get('JELLYFIN_API_URL')
+            api_key = config_data.get('JELLYFIN_TOKEN')
+
+            jellyfin_client = JellyfinClient(api_url=api_url, token=api_key)
+
+            libraries = await jellyfin_client.get_libraries()
+
+            if libraries:
+                return libraries, 200
+            else:
+                return jsonify({'message': 'No library found in Jellyfin', 'type': 'error'}), 401
+        except Exception as e:
+            return jsonify({'message': f'An error occurred: {str(e)}', 'type': 'error'}), 500
+
 
 app = create_app()
 asgi_app = WsgiToAsgi(app)

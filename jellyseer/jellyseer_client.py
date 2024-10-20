@@ -13,7 +13,7 @@ class JellyseerClient:
     A client to interact with the Jellyseer API for handling media requests and authentication.
     """
 
-    def __init__(self, api_url, api_key, jellyseer_user_id=None, jellyseer_user_name=None, jellyseer_password=None):
+    def __init__(self, api_url, api_key, jellyseer_user_name=None, jellyseer_password=None):
         """
         Initializes the JellyseerClient with the API URL and logs in the user.
         :param api_url: The URL of the Jellyseer API.
@@ -27,7 +27,6 @@ class JellyseerClient:
         self.api_key = api_key
         self.username = jellyseer_user_name
         self.password = jellyseer_password
-        self.user_id = jellyseer_user_id if jellyseer_user_id else "default"
         self.session_token = None  # Token for authenticated session
         self.requests_cache = []  # Cache to store all requests
 

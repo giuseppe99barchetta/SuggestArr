@@ -1,0 +1,162 @@
+.wizard-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #1a202c;
+    /* Dark background */
+}
+
+.wizard-content {
+    padding: 20px;
+    background-color: #2d3748;
+    border-radius: 10px;
+    max-width: 800px;
+    width: 100%;
+}
+
+.progress-bar {
+    width: 100%;
+    background-color: #4a5568;
+    border-radius: 5px;
+    height: 8px;
+    margin-bottom: 20px;
+}
+
+.progress {
+    background-color: #3182ce;
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.3s ease;
+}
+
+.steps-count {
+    text-align: center;
+    color: #cbd5e0;
+}
+
+.steps-count {
+    font-size: 1rem;
+    color: #a0aec0;
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.step-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background-color: #1a202c;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    color: #e2e8f0;
+}
+
+button {
+    background-color: #3182ce;
+    color: white;
+    font-weight: bold;
+    padding: 12px 20px;
+    border-radius: 8px;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+button:hover {
+    background-color: #2c5282;
+    transform: translateY(-2px);
+}
+
+button:disabled {
+    background-color: #a0aec0;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.wizard-content {
+    padding: 30px;
+    background-color: #2d3748;
+    border-radius: 15px;
+    max-width: 850px;
+    width: 100%;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+input {
+    color: #ffffff;
+    /* Cambia il colore del testo all'interno dell'input */
+    background-color: #2d3748;
+    /* Cambia anche il colore di sfondo dell'input */
+    border: 1px solid #4a5568;
+    /* Colore del bordo */
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 1rem;
+}
+
+input::placeholder {
+    color: #a0aec0;
+    /* Cambia il colore del placeholder */
+}
+
+/* Stili per il campo select */
+select {
+    background-color: #2d3748; /* Colore di sfondo del select */
+    color: #ffffff; /* Colore del testo selezionato */
+    border: 1px solid #4a5568; /* Colore del bordo */
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 1rem;
+    appearance: none; /* Nasconde la freccia nativa del browser */
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='292.362' height='292.362' viewBox='0 0 292.362 292.362'%3E%3Cpath fill='%23ffffff' d='M287.929 69.574c-7.614-7.611-19.978-7.611-27.586 0L146.181 183.736 32.021 69.574c-7.614-7.611-19.978-7.611-27.591 0-7.614 7.614-7.614 19.978 0 27.593l131.743 131.746c3.807 3.807 8.794 5.711 13.787 5.711 4.993 0 9.98-1.904 13.787-5.711l131.743-131.746c7.613-7.615 7.613-19.979 0-27.593z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px top 50%; /* Posiziona la freccia a destra */
+    background-size: 10px; /* Dimensione della freccia */
+  }
+  
+  /* Cambia il colore delle opzioni del dropdown */
+  select option {
+    background-color: #2d3748; /* Colore di sfondo delle opzioni */
+    color: #ffffff; /* Colore del testo delle opzioni */
+  }
+  
+  /* Aggiungi effetto hover alle opzioni */
+  select option:hover {
+    background-color: #4a5568; /* Colore di sfondo quando l'opzione è selezionata */
+    color: #ffffff; /* Colore del testo */
+  }
+  
+  /* Cambia l'aspetto del select quando è in focus */
+  select:focus {
+    outline: none; /* Rimuove il bordo di default */
+    border: 1px solid #3182ce; /* Aggiunge un bordo blu quando è in focus */
+  }
+  
+  .fade-enter-active, .fade-leave-active {
+    transition: opacity 0.3s ease;
+  }
+  .fade-enter, .fade-leave-to /* .fade-leave-active in <2.1.8 */ {
+
+    opacity: 0;
+  }
+
+
+@media (max-width: 768px) {
+    .wizard-content {
+        padding: 20px;
+        font-size: 0.9rem;
+    }
+
+    .wizard-title {
+        font-size: 1.8rem;
+    }
+
+    .steps-count {
+        font-size: 0.85rem;
+    }
+
+    button {
+        padding: 10px 15px;
+    }
+}
