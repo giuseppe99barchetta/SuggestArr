@@ -33,7 +33,7 @@
 
         <div v-if="jellyseerTestState.status === 'success'" class="mt-4">
             <label for="JELLYSEER_USER" class="block text-xs sm:text-sm font-semibold text-gray-300">Select User:</label>
-            <select v-model="selectedUser" @input="$emit('update-jellyseer-user', selectedUser)" class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2">
+            <select v-model="selectedUser" @change="$emit('update-jellyseer-user', selectedUser.name)" class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2">
                 <option v-for="user in jellyseerUsers" :key="user.id" :value="user">{{ user.name }}</option>
             </select>
 
