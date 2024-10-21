@@ -154,7 +154,8 @@ def register_routes(app): # pylint: disable=redefined-outer-name
                 return jsonify({'message': 'Login failed', 'type': 'error'}), 401
 
         except Exception as e:
-            return jsonify({'message': f'An error occurred: {str(e)}', 'type': 'error'}), 500
+            logger.error(f'An error occurred: {str(e)}')
+            return jsonify({'message': 'An internal error has occurred', 'type': 'error'}), 500
 
     @app.route('/api/jellyfin/libraries', methods=['POST'])
     async def get_jellyfin_library():
@@ -172,7 +173,8 @@ def register_routes(app): # pylint: disable=redefined-outer-name
             else:
                 return jsonify({'message': 'No library found in Jellyfin', 'type': 'error'}), 401
         except Exception as e:
-            return jsonify({'message': f'An error occurred: {str(e)}', 'type': 'error'}), 500
+            logger.error(f'An error occurred: {str(e)}')
+            return jsonify({'message': 'An internal error has occurred', 'type': 'error'}), 500
 
 
 app = create_app()
