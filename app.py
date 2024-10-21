@@ -48,11 +48,10 @@ def register_routes(app): # pylint: disable=redefined-outer-name
         """
         Serve the built frontend's index.html or any other static file.
         """
-        fullpath = os.path.normpath(os.path.join(app.static_folder, path))
-        if fullpath.startswith(app.static_folder) and os.path.exists(fullpath):
-            return send_from_directory(app.static_folder, path)
-        else:
+        if path == "" or not os.path.exists(os.path.join(app.static_folder, path)):
             return send_from_directory(app.static_folder, 'index.html')
+        else:
+            return send_from_directory(app.static_folder, path)
 
     @app.route('/api/config', methods=['GET'])
     def fetch_config():
