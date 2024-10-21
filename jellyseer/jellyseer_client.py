@@ -13,7 +13,7 @@ class JellyseerClient:
     A client to interact with the Jellyseer API for handling media requests and authentication.
     """
 
-    def __init__(self, api_url, api_key, jellyseer_user_id=None, jellyseer_user_name=None, jellyseer_password=None):
+    def __init__(self, api_url, api_key, jellyseer_user_name=None, jellyseer_password=None):
         """
         Initializes the JellyseerClient with the API URL and logs in the user.
         :param api_url: The URL of the Jellyseer API.
@@ -27,7 +27,6 @@ class JellyseerClient:
         self.api_key = api_key
         self.username = jellyseer_user_name
         self.password = jellyseer_password
-        self.user_id = jellyseer_user_id if jellyseer_user_id else "default"
         self.session_token = None  # Token for authenticated session
         self.requests_cache = []  # Cache to store all requests
 
@@ -68,21 +67,30 @@ class JellyseerClient:
 
     def _get_headers_and_cookies(self, use_cookie):
         """
-        Helper function to prepare headers and cookies based on the use_cookie flag.
+        Prepares headers and cookies based on the availability of the session token and the use_cookie flag.
+        
+        If use_cookie is True and session_token is available, the session token is included in the cookies.
+        Otherwise, API key authentication is used in the headers.
+        
+        Returns a tuple (headers, cookies). Returns None if a cookie is required but the session_token is missing.
         """
+        
+        # Return None if a cookie is required but the session_token is not available
+        if use_cookie and not self.session_token:
+            return None
+    
         headers = {
             'Content-Type': 'application/json',
             'accept': 'application/json',
         }
+        
+        # Set cookies or use API key based on the use_cookie flag
         cookies = {}
-
-        if self.session_token and use_cookie:
-            # Use session cookie if token is available and use_cookie is True
+        if use_cookie and self.session_token:
             cookies['connect.sid'] = self.session_token
         else:
-            # Fallback to API key authentication
             headers['X-Api-Key'] = self.api_key
-
+        
         return headers, cookies
 
     async def _make_request(self, method, endpoint, use_cookie=False, **kwargs):
@@ -91,7 +99,15 @@ class JellyseerClient:
         If use_cookie is True, use the session cookie for authentication.
         """
         url = f"{self.api_url}/{endpoint}"
-        headers, cookies = self._get_headers_and_cookies(use_cookie)
+        headers_and_cookies = self._get_headers_and_cookies(use_cookie)
+
+        # Check if headers_and_cookies is None (meaning no valid authentication method)
+        if headers_and_cookies is None:
+            self.logger.error("Cannot make request to %s: session token is required but not available.", url)
+            return None
+    
+        # Unpack headers and cookies
+        headers, cookies = headers_and_cookies
 
         async with aiohttp.ClientSession(headers=headers, cookies=cookies) as session:
             try:
@@ -171,9 +187,15 @@ class JellyseerClient:
         return await self._make_request("POST", "api/v1/request", json=data, use_cookie=use_cookie)
 
     async def get_all_users(self):
-        """Fetch all users from Jellyseer API, returning a list of user IDs and names."""
+        """Fetch all users from Jellyseer API, returning a list of user IDs, names, and local status."""
         data = await self._make_request("GET", "api/v1/user")
         if data:
-            return [{'id': user['id'], 'name': user.get('displayName', user.get('jellyfinUsername', 'Unknown User'))}
-                    for user in data.get('results', [])]
+            return [
+                {
+                    'id': user['id'],
+                    'name': user.get('displayName', user.get('jellyfinUsername', 'Unknown User')),
+                    'isLocal': user.get('plexUsername') is None and user.get('jellyfinUsername') is None
+                }
+                for user in data.get('results', [])
+            ]
         return []

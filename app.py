@@ -1,12 +1,13 @@
 """
 Main Flask application for managing environment variables and running processes.
 """
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, render_template, request, jsonify
+import os
+from flask import Flask, send_from_directory, request, jsonify
 from flask_cors import CORS
 from asgiref.wsgi import WsgiToAsgi
 
+from jellyfin.jellyfin_client import JellyfinClient
 from jellyseer.jellyseer_client import JellyseerClient
 from utils.utils import AppUtils
 from config.config import load_env_vars, save_env_vars
@@ -25,7 +26,7 @@ def create_app():
     if AppUtils.is_last_worker():
         AppUtils.print_welcome_message() # Print only for last worker
 
-    application = Flask(__name__)
+    application = Flask(__name__, static_folder='static', static_url_path='/')
     CORS(application)
 
     # Register routes
@@ -41,12 +42,17 @@ def register_routes(app): # pylint: disable=redefined-outer-name
     Register the application routes.
     """
 
-    @app.route('/', methods=['GET'])
-    def configure():
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_frontend(path):
         """
-        Load configuration page
+        Serve the built frontend's index.html or any other static file.
         """
-        return render_template('index.html')
+        fullpath = os.path.normpath(os.path.join(app.static_folder, path))
+        if fullpath.startswith(app.static_folder) and os.path.exists(fullpath):
+            return send_from_directory(app.static_folder, path)
+        else:
+            return send_from_directory(app.static_folder, 'index.html')
 
     @app.route('/api/config', methods=['GET'])
     def fetch_config():
@@ -75,13 +81,13 @@ def register_routes(app): # pylint: disable=redefined-outer-name
                 {'message': f'Error saving configuration: {str(e)}', 'status': 'error'}), 500
 
 
-    @app.route('/run_now', methods=['POST'])
+    @app.route('/api/force_run', methods=['POST'])
     async def run_now():
         """
         Endpoint to execute the process in the background.
         """
         try:
-            await run_content_automation_task() 
+            await run_content_automation_task()
             return jsonify({'status': 'success', 'message': 'Task is running in the background!'}), 202
 
         except ValueError as ve:
@@ -92,7 +98,7 @@ def register_routes(app): # pylint: disable=redefined-outer-name
             return jsonify({'status': 'error', 'message': 'Unexpected error: ' + str(e)}), 500
 
 
-    @app.route('/api/get_users', methods=['POST'])
+    @app.route('/api/jellyseer/get_users', methods=['POST'])
     async def get_users():
         """
         Fetch Jellyseer users using the provided API key.
@@ -119,6 +125,58 @@ def register_routes(app): # pylint: disable=redefined-outer-name
 
         except Exception as e: # pylint: disable=broad-except
             return jsonify({'message': f'Error fetching users: {str(e)}', 'type': 'error'}), 500
+
+    @app.route('/api/jellyseer/login', methods=['POST'])
+    async def login_jellyseer():
+        """
+        Endpoint to login to Jellyseer using the provided credentials.
+        """
+        try:
+            # Estrai i parametri dalla richiesta POST
+            config_data = request.json
+            api_url = config_data.get('JELLYSEER_API_URL')
+            api_key = config_data.get('JELLYSEER_TOKEN')
+            username = config_data.get('JELLYSEER_USER_NAME')
+            password = config_data.get('JELLYSEER_PASSWORD')
+
+            if not username or not password:
+                return jsonify({'message': 'Username and password are required', 'type': 'error'}), 400
+
+            # Crea una nuova istanza del client Jellyseer con le credenziali fornite
+            jellyseer_client = JellyseerClient(api_url=api_url, api_key=api_key, jellyseer_user_name=username, jellyseer_password=password)
+
+            # Effettua il login
+            await jellyseer_client.login()
+
+            # Verifica se il login ha avuto successo controllando la session_token
+            if jellyseer_client.session_token:
+                return jsonify({'message': 'Login successful', 'type': 'success'}), 200
+            else:
+                return jsonify({'message': 'Login failed', 'type': 'error'}), 401
+
+        except Exception as e:
+            logger.error(f'An error occurred: {str(e)}')
+            return jsonify({'message': 'An internal error has occurred', 'type': 'error'}), 500
+
+    @app.route('/api/jellyfin/libraries', methods=['POST'])
+    async def get_jellyfin_library():
+        try:
+            config_data = request.json
+            api_url = config_data.get('JELLYFIN_API_URL')
+            api_key = config_data.get('JELLYFIN_TOKEN')
+
+            jellyfin_client = JellyfinClient(api_url=api_url, token=api_key)
+
+            libraries = await jellyfin_client.get_libraries()
+
+            if libraries:
+                return libraries, 200
+            else:
+                return jsonify({'message': 'No library found in Jellyfin', 'type': 'error'}), 401
+        except Exception as e:
+            logger.error(f'An error occurred: {str(e)}')
+            return jsonify({'message': 'An internal error has occurred', 'type': 'error'}), 500
+
 
 app = create_app()
 asgi_app = WsgiToAsgi(app)

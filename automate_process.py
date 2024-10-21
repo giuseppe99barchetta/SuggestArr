@@ -38,18 +38,20 @@ class ContentAutomation:
         jellyseer_api_url = env_vars['JELLYSEER_API_URL']
         jellyseer_token = env_vars['JELLYSEER_TOKEN']
         tmdb_api_key = env_vars['TMDB_API_KEY']
-        jellyseer_user_id = env_vars['JELLYSEER_USER_ID']
         jellyseer_user_name = env_vars['JELLYSEER_USER_NAME']
         jellyseer_user_psw = env_vars['JELLYSEER_USER_PSW']
+        jellyfin_max_content = env_vars['MAX_CONTENT_CHECKS']
+        jellyfin_library_filter = env_vars['JELLYFIN_LIBRARIES']
 
         self.jellyfin_client = JellyfinClient(
             jellyfin_api_url,
-            jellyfin_token
+            jellyfin_token,
+            jellyfin_max_content,
+            jellyfin_library_filter
         )
         self.jellyseer_client = JellyseerClient(
             jellyseer_api_url,
             jellyseer_token,
-            jellyseer_user_id,
             jellyseer_user_name,
             jellyseer_user_psw
         )
@@ -77,9 +79,16 @@ class ContentAutomation:
             "Fetching recently watched content for user: %s (%s)", user['Name'], user_id
         )
 
-        recent_items = await self.jellyfin_client.get_recent_items(user_id)
-        if recent_items and 'Items' in recent_items:
-            tasks = [self.process_item(user_id, item) for item in recent_items['Items']]
+        recent_items_by_library = await self.jellyfin_client.get_recent_items(user_id)
+
+        if recent_items_by_library:
+            tasks = []
+
+            for library_id, items in recent_items_by_library.items():
+                self.logger.info("Processing items for library: %s", library_id)
+                for item in items:
+                    tasks.append(self.process_item(user_id, item))
+
             await asyncio.gather(*tasks)
 
     async def process_item(self, user_id, item):
