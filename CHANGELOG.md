@@ -1,4 +1,39 @@
-# Changelog  
+# Changelog
+# Changelog
+
+## [1.0.6] - 2024-10-21
+
+### 🚨 Important
+- **Frontend Migration to Vue.js**: The entire frontend has been migrated to Vue.js, allowing for a more dynamic, reactive, and modular interface. The new design enhances usability and simplifies future feature expansions.
+
+### ✨ Added
+- **Step-Based Interface**: The interface has been completely redesigned to guide users through configuration in a step-by-step wizard format, making the process more intuitive and easier to follow.
+- **API Testing**: Added API testing functionality directly in the interface, allowing users to validate TMDB, Jellyseer and Jellyfin API connections before proceeding with configuration.
+- **Library Selection for Checks**: Implemented the ability to select specific Jellyfin libraries that will be used for content checks, providing more granular control over what content gets processed.
+- **Cron Next Run Time**: Added a feature that displays the remaining time until the next scheduled cron execution, improving transparency and scheduling insights for users.
+
+### 🐛 Fixed
+- **Cron Execution**: Fixed an issue preventing the cron job from starting correctly.
+
+### 🚀 Improved.
+- **Optimized API Efficiency**: Reduced redundant API calls by improving caching mechanisms, particularly during configuration and testing phases.
+- **Jellyseer User Selection**: The user selection dropdown now displays only local users.
+
+## [1.0.5] - 2024-10-19
+### 🚨 Important
+- **Docker Compose Update**: Volume path is no longer required, and environment variables are no longer needed.
+
+### ✨ Added
+- **Asynchronous Processing**: The entire codebase has been refactored to support asynchronous operations, enhancing performance and responsiveness.
+
+### 🐛 Fixed
+- **Worker Timeout**: Resolved an issue where long-running requests caused the worker to be killed.
+- **Out of Memory**: Fixed a Docker issue that triggered out-of-memory exceptions and resulted in worker restarts.
+- **Cron Execution**: Fixed an issue preventing the cron job from starting correctly.
+
+### 🚀 Improved
+- **Docker Performance**: Optimized Docker performance for smoother operation.
+
 ## [1.0.4] - 2024-10-17
 ### Important
 - **Approve automatic request**: To have the ability to approve automatic request made by SuggestArr you need to create a new local account in Jellyseer and provide the credential in the web interface or via the docker-compose file.

@@ -187,9 +187,15 @@ class JellyseerClient:
         return await self._make_request("POST", "api/v1/request", json=data, use_cookie=use_cookie)
 
     async def get_all_users(self):
-        """Fetch all users from Jellyseer API, returning a list of user IDs and names."""
+        """Fetch all users from Jellyseer API, returning a list of user IDs, names, and local status."""
         data = await self._make_request("GET", "api/v1/user")
         if data:
-            return [{'id': user['id'], 'name': user.get('displayName', user.get('jellyfinUsername', 'Unknown User'))}
-                    for user in data.get('results', [])]
+            return [
+                {
+                    'id': user['id'],
+                    'name': user.get('displayName', user.get('jellyfinUsername', 'Unknown User')),
+                    'isLocal': user.get('plexUsername') is None and user.get('jellyfinUsername') is None
+                }
+                for user in data.get('results', [])
+            ]
         return []

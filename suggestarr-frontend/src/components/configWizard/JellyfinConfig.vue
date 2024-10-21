@@ -1,7 +1,7 @@
 <template>
     <div>
         <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Step 2: Jellyfin API Details</h3>
-        <p class="text-xs sm:text-sm text-gray-400 mb-4">Enter your Jellyfin API details and select the libraries.</p>
+        <p class="text-xs sm:text-sm text-gray-400 mb-4">To obtain your Jellyfin API Key, follow these steps: Open the Jellyfin web interface, navigate to the Control Panel, select "API Keys," create a new key, and copy it for use in this configuration.</p>
 
         <!-- Input for Jellyfin API URL -->
         <label for="JELLYFIN_API_URL" class="block text-xs sm:text-sm font-semibold text-gray-300">Jellyfin URL:</label>

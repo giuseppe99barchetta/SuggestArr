@@ -146,7 +146,7 @@ export default {
       this.config.TMDB_API_KEY = newValue;
     },
     updateJellyfinUrl(newValue) {
-      this.config.JELLYFIN_API_URL = newValue;
+      this.config.JELLYSEER_API_URL = newValue.replace(/\/+$/, '');
     },
     updateJellyfinToken(newValue) {
       this.config.JELLYFIN_TOKEN = newValue;
@@ -156,7 +156,7 @@ export default {
       this.selectedLibraryNames = names;     // Save names for display purposes
     },
     updateJellyseerUrl(newValue) {
-      this.config.JELLYSEER_API_URL = newValue;
+      this.config.JELLYSEER_API_URL = newValue.replace(/\/+$/, '');
     },
     updateJellyseerToken(newValue) {
       this.config.JELLYSEER_TOKEN = newValue;

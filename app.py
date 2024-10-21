@@ -1,9 +1,9 @@
 """
 Main Flask application for managing environment variables and running processes.
 """
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, render_template, request, jsonify
+import os
+from flask import Flask, send_from_directory, request, jsonify
 from flask_cors import CORS
 from asgiref.wsgi import WsgiToAsgi
 
@@ -26,7 +26,7 @@ def create_app():
     if AppUtils.is_last_worker():
         AppUtils.print_welcome_message() # Print only for last worker
 
-    application = Flask(__name__)
+    application = Flask(__name__, static_folder='static', static_url_path='/')
     CORS(application)
 
     # Register routes
@@ -42,12 +42,16 @@ def register_routes(app): # pylint: disable=redefined-outer-name
     Register the application routes.
     """
 
-    @app.route('/', methods=['GET'])
-    def configure():
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_frontend(path):
         """
-        Load configuration page
+        Serve the built frontend's index.html or any other static file.
         """
-        return render_template('index.html')
+        if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+            return send_from_directory(app.static_folder, path)
+        else:
+            return send_from_directory(app.static_folder, 'index.html')
 
     @app.route('/api/config', methods=['GET'])
     def fetch_config():

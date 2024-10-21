@@ -23,6 +23,10 @@
                     <label class="block text-sm font-semibold text-gray-300">Max Similar TV Shows:</label>
                     <p class="text-gray-200">{{ config.MAX_SIMILAR_TV }}</p>
                 </div>
+                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
+                    <label class="block text-sm font-semibold text-gray-300">Max Content to fetch for each content:</label>
+                    <p class="text-gray-200">{{ config.MAX_CONTENT_CHECKS }}</p>
+                </div>
                 <!-- Display Next Cron Run Time -->
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
                     <label class="block text-sm font-semibold text-gray-300">Next Cron Run in:</label>
@@ -38,6 +42,9 @@
                 <i v-if="isRunning" class="fas fa-spinner fa-spin"></i>
                 <span v-else>Run Now</span>
             </button>
+
+            <Footer />
+            
         </div>
     </div>
 </template>
@@ -45,8 +52,12 @@
 <script>
 import axios from 'axios';
 import cronParser from 'cron-parser';
+import Footer from './AppFooter.vue';
 
 export default {
+    components: {
+        Footer,
+    },
     props: {
         config: {
             type: Object,
