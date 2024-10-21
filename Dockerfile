@@ -4,7 +4,7 @@ FROM python:3.13-slim
 # Install system dependencies
 RUN apt-get update && \
     apt-get install -y curl cron supervisor && \
-    curl -sL https://deb.nodesource.com/setup_16.x | bash - && \
+    curl -sL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*

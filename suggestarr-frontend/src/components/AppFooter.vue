@@ -1,5 +1,14 @@
 <template>
     <footer class="footer">
+
+        <!-- Button to show logs -->
+        <div class="logs-button-container">
+            <button @click="toggleLogs" class="logs-button">
+                <font-awesome-icon :icon="['fas', 'file-alt']" class="logs-icon" />
+                <span class="logs-text">View Logs</span>
+            </button>
+        </div>
+
         <div class="footer-content">
             <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank" aria-label="GitHub">
                 <font-awesome-icon :icon="['fab', 'github']" class="footer-icon" />
@@ -14,24 +23,86 @@
                 <font-awesome-icon :icon="['fab', 'reddit']" class="footer-icon" />
             </a>
         </div>
+
+        <!-- Modal for logs -->
+        <div v-if="showLogs" class="modal-overlay" @click.self="toggleLogs">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2 class="modal-title">System Logs</h2>
+                    <button class="close-button" @click="toggleLogs">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <LogsComponent />
+                </div>
+            </div>
+        </div>
     </footer>
 </template>
 
 <script>
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { faGithub, faDocker, faReadme, faReddit } from '@fortawesome/free-brands-svg-icons';
+import { faFileAlt } from '@fortawesome/free-solid-svg-icons';
 import { library } from '@fortawesome/fontawesome-svg-core';
+import LogsComponent from './LogsComponent.vue'; // Import your LogsComponent
 
-library.add(faGithub, faDocker, faReadme, faReddit);
+// Add the icons to the library
+library.add(faGithub, faDocker, faReadme, faReddit, faFileAlt);
 
 export default {
     components: {
-        FontAwesomeIcon
+        FontAwesomeIcon,
+        LogsComponent
+    },
+    data() {
+        return {
+            showLogs: false // To control the modal visibility
+        };
+    },
+    methods: {
+        toggleLogs() {
+            this.showLogs = !this.showLogs; // Toggles the modal visibility
+        }
     }
 };
 </script>
 
 <style scoped>
+.logs-button-container {
+    margin-bottom: 20px; /* Separa il pulsante dalle icone */
+    display: flex;
+    justify-content: center; /* Centra il pulsante */
+}
+.logs-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: transparent;
+    color: #ffffff;
+    padding: 10px 20px;
+    font-size: 1.1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.logs-button:hover {
+    background-color: #4f46e5;
+    color: #ffffff;
+    border-color: #4f46e5;
+}
+
+/* Stili per l'icona e il testo del pulsante */
+.logs-icon {
+    margin-right: 10px;
+    font-size: 1.5rem;
+}
+
+.logs-text {
+    font-size: 1.1rem;
+}
+
+/* Footer styles */
 .footer {
     padding: 20px;
     text-align: center;
@@ -52,6 +123,64 @@ export default {
 
 .footer-icon:hover {
     color: #4f46e5;
-    /* Colore al passaggio del mouse */
 }
+
+/* Modal styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7); /* Semi-transparent background */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+}
+
+.modal {
+    background: #1f2937;
+    padding: 20px;
+    border-radius: 10px;
+    max-width: 90%;
+    max-height: 90%;
+    width: 70%;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-body {
+    flex-grow: 1;
+    margin-top: 20px;
+    overflow-y: auto;
+    max-height: 70vh;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #4b5563;
+    padding-bottom: 10px;
+}
+
+.modal-title {
+    color: #ffffff;
+    font-size: 1.5rem;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    color: #ffffff;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.close-button:hover {
+    color: #f87171;
+}
+
 </style>

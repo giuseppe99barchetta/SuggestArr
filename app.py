@@ -177,6 +177,16 @@ def register_routes(app): # pylint: disable=redefined-outer-name
             return jsonify({'message': 'An internal error has occurred', 'type': 'error'}), 500
 
 
+    @app.route('/api/logs', methods=['GET'])
+    def get_logs():
+        logs = read_logs()
+        return jsonify(logs)
+
+    def read_logs(log_file='app.log'):
+        with open(log_file, 'r', encoding='utf-8') as f:
+            logs = f.readlines()
+        return logs
+
 app = create_app()
 asgi_app = WsgiToAsgi(app)
 
