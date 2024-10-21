@@ -146,7 +146,7 @@ export default {
       this.config.TMDB_API_KEY = newValue;
     },
     updateJellyfinUrl(newValue) {
-      this.config.JELLYSEER_API_URL = newValue.replace(/\/+$/, '');
+      this.config.JELLYFIN_API_URL = newValue.replace(/\/+$/, '');
     },
     updateJellyfinToken(newValue) {
       this.config.JELLYFIN_TOKEN = newValue;
