@@ -9,6 +9,11 @@
                 <div v-if="service.comingSoon" class="coming-soon-overlay">
                     <p>Coming Soon</p>
                 </div>
+                <!-- Plex Beta Badge -->
+                <div v-if="service.value === 'plex'" class="beta-badge">
+                    ✨ Beta
+                </div>
+
             </div>
         </div>
 
@@ -30,14 +35,14 @@ export default {
                 { name: 'Jellyfin', value: 'jellyfin', logo: require('@/assets/logos/jellyfin-logo.png'), comingSoon: false },
                 { name: 'Plex', value: 'plex', logo: require('@/assets/logos/plex-logo.png'), comingSoon: false },
                 { name: 'Emby', value: 'emby', logo: require('@/assets/logos/emby-logo.png'), comingSoon: true },
-            ]
+            ],
+            showTooltip: false
         };
     },
     methods: {
         selectService(service) {
-            // Emetti l'aggiornamento del servizio selezionato
             if (!service.comingSoon) {
-                this.$emit('update-config', 'SELECTED_SERVICE', service.value); // Aggiorna la config con il servizio selezionato
+                this.$emit('update-config', 'SELECTED_SERVICE', service.value);
             }
         }
     }
@@ -103,4 +108,19 @@ export default {
     border-bottom-left-radius: 8px;
     border-bottom-right-radius: 8px;
 }
+
+.beta-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgb(79 70 229);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    z-index: 10;
+    cursor: default;
+}
+
 </style>

@@ -65,8 +65,6 @@ class PlexClient:
                 async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200:
                         data = await response.json()
-                        print(data)
-
                         return data.get('MediaContainer', {}).get('Metadata', [])
                     self.logger.error("Failed to retrieve recent items: %d", response.status)
         except aiohttp.ClientError as e:
@@ -109,17 +107,15 @@ class PlexClient:
                     if response.status == 200:
                         item_data = await response.json()
                         guids = item_data.get('MediaContainer', {}).get('Metadata', [])[0].get('Guid', [])
-                        
-                        # Cerca il guid che inizia con 'tmdb://'
+
                         for guid in guids:
                             guid_id = guid.get('id', '')
                             if guid_id.startswith('tmdb://'):
-                                # Estrai l'ID TMDB rimuovendo 'tmdb://'
                                 tmdb_id = guid_id.split('tmdb://')[-1]
                                 return tmdb_id
-    
+
                     self.logger.error("Failed to retrieve metadata for item %s: %d", item_id, response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while retrieving metadata for item %s: %s", item_id, str(e))
-    
+
         return None

@@ -1,11 +1,11 @@
 import asyncio
 
-from jellyseer.jellyseer_client import JellyseerClient
+from jellyseer.seer_client import SeerClient
 from plex.plex_client import PlexClient
 from tmdb.tmdb_client import TMDbClient
 
 class PlexHandler:
-    def __init__(self, plex_client:PlexClient, jellyseer_client:JellyseerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv):
+    def __init__(self, plex_client:PlexClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -68,7 +68,7 @@ class PlexHandler:
     async def request_similar_media(self, media_ids, media_type, max_items):
         """Request similar media (movie/TV show) via Jellyseer."""
         if media_ids:
-            for media_id in media_ids[:max_items]:
-                if not await self.jellyseer_client.check_already_requested(media_id, media_type):
-                    await self.jellyseer_client.request_media(media_type, media_id)
-                    self.logger.info(f"Requested {media_type} download for ID: {media_id}")
+            for media in media_ids[:max_items]:
+                if not await self.jellyseer_client.check_already_requested(media['id'], media_type):
+                    await self.jellyseer_client.request_media(media_type, media['id'])
+                    self.logger.info(f"Requested {media_type}: {media['title']}")

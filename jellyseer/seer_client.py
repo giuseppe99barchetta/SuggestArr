@@ -8,7 +8,7 @@ REQUEST_TIMEOUT = 10  # Timeout in seconds for HTTP requests
 BATCH_SIZE = 20  # Number of requests fetched per batch
 
 
-class JellyseerClient:
+class SeerClient:
     """
     A client to interact with the Jellyseer API for handling media requests and authentication.
     """
@@ -99,6 +99,11 @@ class JellyseerClient:
         url = f"{self.api_url}/{endpoint}"
         headers_and_cookies = self._get_headers_and_cookies(use_cookie)
 
+        # Check if use_cookie is True but no cookies are set so it doesn't make requests as admin
+        if use_cookie and (not headers_and_cookies or not headers_and_cookies[1]):
+            self.logger.error("Cannot make request to %s: use_cookie is True but no cookie is available.", url)
+            return None
+    
         # Check if headers_and_cookies is None (meaning no valid authentication method)
         if headers_and_cookies is None:
             self.logger.error("Cannot make request to %s: session token is required but not available.", url)
@@ -177,7 +182,7 @@ class JellyseerClient:
             data["seasons"] = "all"
 
         # Ensure login if necessary, use cookie-based authentication
-        if self.username and self.password and not self.session_token:
+        if (self.username and self.password) and not self.session_token:
             await self.login()
 
         use_cookie = bool(self.session_token)  # Use cookie if we have a session token

@@ -1,12 +1,13 @@
 import ast
 import os
+import asyncio
 
 from config.config import load_env_vars
 from config.logger_manager import LoggerManager
 from handler.jellyfin_handler import JellyfinHandler
 from handler.plex_handler import PlexHandler
 from jellyfin.jellyfin_client import JellyfinClient
-from jellyseer.jellyseer_client import JellyseerClient
+from jellyseer.seer_client import SeerClient
 from plex.plex_client import PlexClient
 from tmdb.tmdb_client import TMDbClient
 
@@ -30,12 +31,14 @@ class ContentAutomation:
         self.max_similar_tv = min(int(os.getenv('MAX_SIMILAR_TV', '2')), 20)
 
         # Overseer/Jellyseer client
-        jellyseer_client = JellyseerClient(
+        jellyseer_client = SeerClient(
             env_vars['SEER_API_URL'],
             env_vars['SEER_TOKEN'],
             env_vars['SEER_USER_NAME'],
             env_vars['SEER_USER_PSW']
         )
+        
+        asyncio.run(jellyseer_client.init())
 
         # TMDb client
         tmdb_client = TMDbClient(env_vars['TMDB_API_KEY'])

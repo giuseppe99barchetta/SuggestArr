@@ -1,11 +1,11 @@
 import asyncio
 
 from jellyfin.jellyfin_client import JellyfinClient
-from jellyseer.jellyseer_client import JellyseerClient
+from jellyseer.seer_client import SeerClient
 from tmdb.tmdb_client import TMDbClient
 
 class JellyfinHandler:
-    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:JellyseerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv):
+    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client
@@ -61,7 +61,7 @@ class JellyfinHandler:
         series_id = item.get('SeriesId')
         if series_id and series_id not in self.processed_series:
             self.processed_series.add(series_id)
-            tvdb_id = await self.jellyfin_client.get_item_provider_id(user_id, series_id, provider='Tvdb')
+            tvdb_id = await self.jellyfin_client.get_item_provider_id(user_id, series_id, provider='Tmdb')
             if tvdb_id:
                 similar_tvshows = await self.tmdb_client.find_similar_tvshows(tvdb_id)
                 await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv)
@@ -69,7 +69,7 @@ class JellyfinHandler:
     async def request_similar_media(self, media_ids, media_type, max_items):
         """Request similar media (movie/TV show) via Jellyseer."""
         if media_ids:
-            for media_id in media_ids[:max_items]:
-                if not await self.jellyseer_client.check_already_requested(media_id, media_type):
-                    await self.jellyseer_client.request_media(media_type, media_id)
-                    self.logger.info(f"Requested {media_type} download for ID: {media_id}")
+            for media in media_ids[:max_items]:
+                if not await self.jellyseer_client.check_already_requested(media['id'], media_type):
+                    await self.jellyseer_client.request_media(media_type, media['id'])
+                    self.logger.info(f"Requested {media_type}: {media['title']}")

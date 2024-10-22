@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from jellyseer.jellyseer_client import JellyseerClient
+from jellyseer.seer_client import SeerClient
 from config.logger_manager import LoggerManager
 
 logger = LoggerManager().get_logger(__name__)
@@ -19,7 +19,7 @@ async def get_users():
             return jsonify({'message': 'API key is required', 'type': 'error'}), 400
 
         # Initialize JellyseerClient with the provided API key
-        jellyseer_client = JellyseerClient(api_url=api_url, api_key=api_key)
+        jellyseer_client = SeerClient(api_url=api_url, api_key=api_key)
         users = await jellyseer_client.get_all_users()
 
         if not users:
@@ -46,7 +46,7 @@ async def login_seer():
             return jsonify({'message': 'Username and password are required', 'type': 'error'}), 400
 
         # Initialize the Jellyseer/Overseer client with the credentials provided
-        jellyseer_client = JellyseerClient(
+        jellyseer_client = SeerClient(
             api_url=api_url, api_key=api_key, seer_user_name=username, seer_password=password
         )
 

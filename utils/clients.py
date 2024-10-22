@@ -1,5 +1,5 @@
 from jellyfin.jellyfin_client import JellyfinClient
-from jellyseer.jellyseer_client import JellyseerClient
+from jellyseer.seer_client import SeerClient
 from plex.plex_client import PlexClient
 
 def get_client(service_type, api_url, api_key, **kwargs):
@@ -14,7 +14,7 @@ def get_client(service_type, api_url, api_key, **kwargs):
     if service_type == 'jellyfin':
         return JellyfinClient(api_url=api_url, token=api_key)
     elif service_type == 'seer':
-        return JellyseerClient(api_url=api_url, api_key=api_key, **kwargs)
+        return SeerClient(api_url=api_url, api_key=api_key, **kwargs)
     elif service_type == 'plex':
         return PlexClient(api_url=api_url, token=api_key)
     else:
