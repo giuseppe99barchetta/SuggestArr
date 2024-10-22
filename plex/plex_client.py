@@ -19,7 +19,7 @@ class PlexClient:
     and libraries.
     """
 
-    def __init__(self, api_url, token, max_content=10):
+    def __init__(self, api_url, token, max_content=10, library_ids=None):
         """
         Initializes the PlexClient with the provided API URL and token.
         :param api_url: The base URL for the Plex API.
@@ -29,6 +29,7 @@ class PlexClient:
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.max_content_fetch = max_content
         self.api_url = api_url
+        self.library_ids = library_ids
         self.headers = {"X-Plex-Token": token, "Accept": 'application/json'}
 
     async def get_all_users(self):
@@ -36,13 +37,13 @@ class PlexClient:
         Retrieves a list of all users from the Plex server asynchronously.
         :return: A list of users in JSON format if successful, otherwise an empty list.
         """
-        url = f"{self.api_url}/users"  # Plex endpoint for users
+        url = f"{self.api_url}/accounts"  # Plex endpoint for users
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200:
                         data = await response.json()
-                        return data
+                        return data.get('accounts', [])
                     self.logger.error("Failed to retrieve users: %d", response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while retrieving users: %s", str(e))

@@ -5,6 +5,7 @@ The client can retrieve users, recent items, and provider IDs for media content.
 Classes:
     - JellyfinClient: A class that handles communication with the Jellyfin API.
 """
+import re
 import aiohttp
 from config.logger_manager import LoggerManager
 

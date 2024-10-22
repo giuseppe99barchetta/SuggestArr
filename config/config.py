@@ -25,7 +25,7 @@ MAX_CONTENT_CHECKS = 'MAX_CONTENT_CHECKS'
 JELLYFIN_LIBRARIES = 'JELLYFIN_LIBRARIES'
 SELECTED_SERVICE = 'SELECTED_SERVICE'
 PLEX_TOKEN = 'PLEX_TOKEN'
-PLEX_URL = 'PLEX_URL'
+PLEX_API_URL = 'PLEX_API_URL'
 PLEX_LIBRARIES = 'PLEX_LIBRARIES'
 
 def load_env_vars():
@@ -48,7 +48,7 @@ def load_env_vars():
         MAX_CONTENT_CHECKS: os.getenv(MAX_CONTENT_CHECKS, '10'),
         JELLYFIN_LIBRARIES: os.getenv(JELLYFIN_LIBRARIES, '[]'),
         PLEX_TOKEN: os.getenv(PLEX_TOKEN, ''),
-        PLEX_URL: os.getenv(PLEX_URL, ''),
+        PLEX_API_URL: os.getenv(PLEX_API_URL, ''),
         PLEX_LIBRARIES: os.getenv(PLEX_LIBRARIES, '[]'),
         SELECTED_SERVICE: os.getenv(SELECTED_SERVICE, ''),
     }
@@ -79,7 +79,7 @@ def save_env_vars(config_data):
         PLEX_LIBRARIES: config_data.get(PLEX_LIBRARIES, '[]'),
         SELECTED_SERVICE: config_data.get(SELECTED_SERVICE, ''),
         PLEX_TOKEN: config_data.get(PLEX_TOKEN, ''),
-        PLEX_URL: config_data.get(PLEX_URL, ''),
+        PLEX_API_URL: config_data.get(PLEX_API_URL, ''),
     }
 
     # Write environment variables to .env file

@@ -81,7 +81,7 @@ export default {
             this.jellyfinTestState.status = null; // Reset status before the test
             fetchJellyfinLibraries(this.config.JELLYFIN_API_URL, this.config.JELLYFIN_TOKEN)
                 .then(response => {
-                    this.jellyfinLibraries = response.data;
+                    this.jellyfinLibraries = response.data.items;
                     this.jellyfinTestState.status = 'success';
                     this.loadSelectedLibraries();
                 })

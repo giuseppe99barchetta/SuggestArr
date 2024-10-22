@@ -81,7 +81,7 @@
             <div v-else>
                 <p class="text-xs sm:text-sm text-red-500">
                     No local users available. The administrator account will be used for requests.
-                    <a :href="`${config[`${serviceName.toUpperCase()}_API_URL`]}/users`" target="_blank" class="text-blue-400 underline">
+                    <a :href="`${config[`SEER_API_URL`]}/users`" target="_blank" class="text-blue-400 underline">
                         Create a new local user here.
                     </a>
                 </p>

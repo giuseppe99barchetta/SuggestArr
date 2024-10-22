@@ -10,21 +10,25 @@
 
         <!-- Plex Token -->
         <label for="PLEX_TOKEN" class="block text-xs sm:text-sm font-semibold text-gray-300">Plex Token:</label>
-        <input type="text" :value="config.PLEX_TOKEN" @input="$emit('update-plex-token', $event.target.value)"
-            class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2" id="PLEX_TOKEN"
-            placeholder="Enter your Plex Token">
+        <input type="text" :value="config.PLEX_TOKEN" 
+            @input="$emit('update-config', 'PLEX_TOKEN', $event.target.value)"
+            class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2" 
+            id="PLEX_TOKEN" placeholder="Enter your Plex Token">
 
         <!-- Plex URL + Test Button -->
-        <label for="PLEX_URL" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Plex URL:</label>
+        <label for="PLEX_API_URL" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Plex URL:</label>
         <div class="flex flex-col sm:flex-row items-start sm:items-center">
-            <input type="text" :value="config.PLEX_URL" @input="$emit('update-plex-url', $event.target.value)"
+            <input type="text" :value="config.PLEX_API_URL" 
+                @input="$emit('update-config', 'PLEX_API_URL', $event.target.value)"
                 class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2 mb-4 sm:mb-0 sm:mr-2"
-                id="PLEX_URL" placeholder="http://your-plex-url">
-            <button type="button" @click="testPlexApiConnection" :disabled="plexTestState.isTesting" :class="{
-                'bg-green-500 hover:bg-green-600': plexTestState.status === 'success',
-                'bg-red-500 hover:bg-red-600': plexTestState.status === 'fail',
-                'bg-blue-500 hover:bg-blue-600': plexTestState.status === null
-            }" class="text-white px-4 py-2 rounded-lg shadow-md w-full sm:w-auto">
+                id="PLEX_API_URL" placeholder="http://your-plex-url">
+            <button type="button" @click="testPlexApiConnection" :disabled="plexTestState.isTesting" 
+                :class="{
+                    'bg-green-500 hover:bg-green-600': plexTestState.status === 'success',
+                    'bg-red-500 hover:bg-red-600': plexTestState.status === 'fail',
+                    'bg-blue-500 hover:bg-blue-600': plexTestState.status === null
+                }" 
+                class="text-white px-4 py-2 rounded-lg shadow-md w-full sm:w-auto">
                 <i v-if="plexTestState.isTesting" class="fas fa-spinner fa-spin"></i>
                 <i v-else-if="plexTestState.status === 'success'" class="fas fa-check"></i>
                 <i v-else-if="plexTestState.status === 'fail'" class="fas fa-times"></i>
@@ -38,6 +42,7 @@
             <span class="block sm:inline">Failed to connect to Plex API. Check your URL and token.</span>
         </div>
 
+        <!-- Library Selection -->
         <div v-if="libraries.length > 0">
             <p class="text-sm text-gray-300 mt-4">Select the Plex libraries you want to include:</p>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
@@ -65,6 +70,7 @@
     </div>
 </template>
 
+
 <script>
 import { getPlexLibraries } from '../../api/api';
 
@@ -84,7 +90,7 @@ export default {
         testPlexApiConnection() {
         this.plexTestState.isTesting = true; // Correct the assignment
         this.plexTestState.status = null; // Reset the status before starting the test
-        getPlexLibraries(this.config.PLEX_URL, this.config.PLEX_TOKEN)
+        getPlexLibraries(this.config.PLEX_API_URL, this.config.PLEX_TOKEN)
             .then(response => {
                 if (response && response.items) {
                     this.libraries = response.items;

@@ -94,7 +94,7 @@ export default {
         CRON_TIMES: '0 0 * * *',
         JELLYFIN_LIBRARIES: [],
         SELECTED_SERVICE: '',
-        PLEX_URL: '',
+        PLEX_API_URL: '',
         PLEX_TOKEN: '',
         PLEX_LIBRARIES: [],
       };
@@ -108,7 +108,7 @@ export default {
     // Fetch the existing configuration from the backend
     async fetchConfig() {
       try {
-        const { data } = await axios.get('http://localhost:5000/api/config');
+        const { data } = await axios.get('http://localhost:5000/api/config/fetch');
         if (data) {
           this.config = data;
           if (this.config.TMDB_API_KEY || this.config.JELLYFIN_API_URL || this.config.JELLYFIN_TOKEN) {
@@ -123,7 +123,7 @@ export default {
     // Save the configuration to the backend
     async saveConfig() {
       try {
-        await axios.post('http://localhost:5000/api/save', this.config);
+        await axios.post('http://localhost:5000/api/config/save', this.config);
         this.currentStep = this.steps.length + 1; // Move to summary after saving
       } catch (error) {
         console.error('Error saving configuration:', error);
