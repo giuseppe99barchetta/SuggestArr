@@ -8,7 +8,7 @@
         <label :for="`SEER_API_URL`" class="block text-xs sm:text-sm font-semibold text-gray-300">{{ serviceName }}
             URL:</label>
         <input type="text" :value="config[`SEER_API_URL`]" 
-            @input="$emit('update-config', `SEER_API_URL`, $event.target.value)"
+            @input="updateSeerUrl($event.target.value)"
             class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2" 
             :placeholder="`http://your-${serviceName.toLowerCase()}-url`">
 
@@ -55,7 +55,7 @@
             <div v-if="users.length > 0">
                 <select v-model="selectedUser" @change="updateSeerUser"
                     class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2">
-                    <option v-for="user in users" :key="user.id" :value="user">{{ user.name }}</option>
+                    <option v-for="user in users" :key="user.name" :value="user">{{ user.name }}</option>
                 </select>
 
                 <!-- Password field -->
@@ -127,6 +127,17 @@ export default {
         }
     },
     methods: {
+        autoTestAndAuthenticate() {
+            if (this.config[`SEER_API_URL`] && this.config[`SEER_TOKEN`]) {
+                this.testApi();
+            }
+
+            if (this.config[`SEER_USER_NAME`] && this.config[`SEER_USER_PSW`]) {
+                this.userPassword = this.config[`SEER_USER_PSW`];
+                this.selectedUser = { name: this.config[`SEER_USER_NAME`] }; // Set the selected user
+                this.authenticated = true; // Mark authenticated if the credentials exist
+            }
+        },
         // Test Jellyseer or Overseer API and filter local users
         testApi() {
             this.testState.isTesting = true;
@@ -135,6 +146,7 @@ export default {
                 .then(response => {
                     this.users = response.data.users.filter(user => user.isLocal); // Filter local users
                     this.testState.status = 'success';
+                    this.loadSelectedUser();
                 })
                 .catch(() => {
                     this.testState.status = 'fail';
@@ -160,7 +172,25 @@ export default {
         updateSeerUser() {
             const userIdentifier = this.selectedUser.email ? this.selectedUser.email : this.selectedUser.name;
             this.$emit('update-config', 'SEER_USER_NAME', userIdentifier);
+        },
+        updateSeerUrl(url) {
+            // Remove trailing slash if it exists
+            const trimmedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+            this.$emit('update-config', 'SEER_API_URL', trimmedUrl);
+        },
+        loadSelectedUser() {
+            // If a user is already selected in the config, preselect it
+            if (this.config.SEER_USER_NAME) {
+                this.selectedUser = this.users.find(user => user.name === this.config.SEER_USER_NAME || user.email === this.config.SEER_USER_NAME);
+            }
+            if (this.config.SEER_USER_PSW) {
+                this.userPassword = this.config.SEER_USER_PSW;
+            }
         }
+    },
+    mounted() {
+        // Automatically test and authenticate if the configuration is already provided
+        this.autoTestAndAuthenticate();
     }
 };
 </script>

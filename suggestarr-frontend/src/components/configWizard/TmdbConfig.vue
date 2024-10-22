@@ -74,7 +74,15 @@ export default {
                 .finally(() => {
                     this.tmdbTestState.isTesting = false;
                 });
+        },
+        autoTestTmdbApi() {
+            if (this.config.TMDB_API_KEY) {
+                this.testTmdbApi(); // Automatically test the API if the key is present
+            }
         }
+    },
+    mounted() {
+        this.autoTestTmdbApi(); // Trigger auto-test on mount if the API key exists
     }
 };
 </script>

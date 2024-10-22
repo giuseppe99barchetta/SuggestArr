@@ -104,7 +104,7 @@ export default {
         },
         forceRun() {
             this.isRunning = true;
-            axios.post('http://localhost:5000/api/automation/force_run', this.config)
+            axios.post('/api/automation/force_run', this.config)
             .then(response => {
                 console.log(response.data.message); // Success message from backend
             })

@@ -19,7 +19,7 @@
         <label for="PLEX_API_URL" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Plex URL:</label>
         <div class="flex flex-col sm:flex-row items-start sm:items-center">
             <input type="text" :value="config.PLEX_API_URL" 
-                @input="$emit('update-config', 'PLEX_API_URL', $event.target.value)"
+                @input="updatePlexUrl($event.target.value)"
                 class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2 mb-4 sm:mb-0 sm:mr-2"
                 id="PLEX_API_URL" placeholder="http://your-plex-url">
             <button type="button" @click="testPlexApiConnection" :disabled="plexTestState.isTesting" 
@@ -108,7 +108,7 @@ export default {
             .finally(() => {
                 this.plexTestState.isTesting = false; // Set isTesting to false once finished
             });
-    },
+        },
         toggleLibrarySelection(library) {
             const index = this.selectedLibraries.findIndex(l => l.uuid === library.uuid);
             if (index > -1) {
@@ -133,9 +133,22 @@ export default {
                     this.config.PLEX_LIBRARIES.includes(library.uuid)
                 );
             }
+        },
+        updatePlexUrl(url) {
+            // Remove trailing slash if it exists
+            const trimmedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+            console.log('Updated URL:', trimmedUrl);
+            this.$emit('update-config', 'PLEX_API_URL', trimmedUrl);
+        },
+        // Automatically test Plex API if URL and Token exist
+        autoTestPlex() {
+            if (this.config.PLEX_API_URL && this.config.PLEX_TOKEN) {
+                this.testPlexApiConnection(); // Automatically test the connection
+            }
         }
     },
     mounted() {
+        this.autoTestPlex(); 
         if (this.config.PLEX_LIBRARIES) {
             this.selectedLibraries = this.libraries.filter(library =>
                 this.config.PLEX_LIBRARIES.includes(library.uuid)

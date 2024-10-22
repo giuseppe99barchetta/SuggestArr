@@ -1,0 +1,32 @@
+
+name: Build and Publish Docker Image to Docker Hub
+
+on:
+  push:
+    branches:
+      - nightly
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.1
+
+      - name: Log in to Docker Hub
+        run: echo ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} | docker login -u ciuse99 --password-stdin
+
+      - name: Build Docker Image
+        run: |
+          docker build . -t ciuse99/suggestarr:nightly
+      - name: Push Docker Image
+        run: |
+          docker push ciuse99/suggestarr:nightly
+          
+      # temporary keeping two images
+      - name: Build Docker Image
+        run: |
+          docker build . -t ciuse99/jellyseer_request_automation:nightly
+      - name: Push Docker Image
+        run: |
+          docker push ciuse99/jellyseer_request_automation:nightly
