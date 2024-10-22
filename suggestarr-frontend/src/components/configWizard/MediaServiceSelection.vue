@@ -3,9 +3,9 @@
         <h3 class="text-xl font-bold text-gray-200 mb-4">Select the media service you want to use:</h3>
         <div class="media-services grid grid-cols-2 gap-4">
             <div v-for="service in services" :key="service.name"
-                :class="['service-box', { 'selected': selectedService === service.value && !service.comingSoon, 'coming-soon': service.comingSoon }]"
+                :class="['service-box', { 'selected': config.SELECTED_SERVICE === service.value && !service.comingSoon, 'coming-soon': service.comingSoon }]"
                 :style="{ backgroundImage: `url(${service.logo})` }" 
-                @click="selectService(service.value)">
+                @click="selectService(service)">
                 <div v-if="service.comingSoon" class="coming-soon-overlay">
                     <p>Coming Soon</p>
                 </div>
@@ -14,20 +14,16 @@
 
         <div class="flex justify-between mt-8 space-x-4">
             <button @click="$emit('next-step')"
-                class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full">Next
-                Step</button>
+                class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full">
+                Next Step
+            </button>
         </div>
     </div>
 </template>
 
 <script>
 export default {
-    props: {
-        selectedService: {
-            type: String,
-            required: true
-        }
-    },
+    props: ['config'],
     data() {
         return {
             services: [
@@ -39,7 +35,10 @@ export default {
     },
     methods: {
         selectService(service) {
-            this.$emit('update-selected-service', service);  // Emetti il servizio selezionato al genitore
+            // Emetti l'aggiornamento del servizio selezionato
+            if (!service.comingSoon) {
+                this.$emit('update-config', 'SELECTED_SERVICE', service.value); // Aggiorna la config con il servizio selezionato
+            }
         }
     }
 };

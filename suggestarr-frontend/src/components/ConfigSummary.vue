@@ -5,7 +5,7 @@
             <div class="space-y-6">
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
                     <label class="block text-sm font-semibold text-gray-300">Selected service:</label>
-                    <p class="text-gray-200">{{ config.selectedService }}</p>
+                    <p class="text-gray-200">{{ capitalizeFirstLetter(config.SELECTED_SERVICE) }}</p>
                 </div>
                 <!-- Display Jellyfin URL -->
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
@@ -78,6 +78,10 @@ export default {
         this.calculateNextCronRun();
     },
     methods: {
+        capitalizeFirstLetter(text) {
+            if (!text) return '';
+            return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+        },
         calculateNextCronRun() {
             try {
                 const interval = cronParser.parseExpression(this.config.CRON_TIMES);

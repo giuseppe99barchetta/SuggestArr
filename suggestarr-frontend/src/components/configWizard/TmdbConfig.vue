@@ -5,9 +5,12 @@
             You can get your TMDB API Key by signing up at 
             <a href="https://www.themoviedb.org/" class="text-indigo-400">The Movie Database</a>.
         </p>
+
+        <!-- TMDB API Key Input -->
         <label for="TMDB_API_KEY" class="block text-xs sm:text-sm font-semibold text-gray-300">TMDB API Key:</label>
         <div class="flex flex-col sm:flex-row items-start sm:items-center">
-            <input type="text" :value="config.TMDB_API_KEY" @input="$emit('update-tmdb-key', $event.target.value)"
+            <input type="text" :value="config.TMDB_API_KEY" 
+                   @input="$emit('update-config', 'TMDB_API_KEY', $event.target.value)"
                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2 mb-4 sm:mb-0 sm:mr-2"
                    id="TMDB_API_KEY" placeholder="Enter your TMDB API Key">
             <button type="button" @click="testTmdbApi" :disabled="tmdbTestState.isTesting"
@@ -23,10 +26,13 @@
                 <i v-else class="fas fa-play"></i>
             </button>
         </div>
+
+        <!-- Error Message -->
         <div v-if="tmdbTestState.status === 'fail'" class="bg-gray-800 border border-red-500 text-red-500 px-4 py-3 rounded-lg mt-4" role="alert">
             <span class="block sm:inline">Failed to validate TMDB API Key.</span>
         </div>
-        
+
+        <!-- Navigation Buttons -->
         <div class="flex justify-between mt-8 space-x-4">
             <button @click="$emit('previous-step')" 
                     class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg w-full">

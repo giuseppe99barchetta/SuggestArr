@@ -83,6 +83,7 @@ export default {
                 .then(response => {
                     this.jellyfinLibraries = response.data;
                     this.jellyfinTestState.status = 'success';
+                    this.loadSelectedLibraries();
                 })
                 .catch(() => {
                     this.jellyfinTestState.status = 'fail';
@@ -107,6 +108,14 @@ export default {
         },
         isSelected(libraryId) {
             return this.selectedLibraryIds.includes(libraryId);
+        },
+        loadSelectedLibraries() {
+            if (this.config.JELLYFIN_LIBRARIES) {
+                this.selectedLibraryIds = this.jellyfinLibraries
+                    .filter(library => this.config.JELLYFIN_LIBRARIES.includes(library.ItemId))
+                    .map(library => library.ItemId);
+                    
+            }
         }
     }
 };

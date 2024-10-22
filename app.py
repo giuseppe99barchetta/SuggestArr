@@ -9,6 +9,7 @@ from asgiref.wsgi import WsgiToAsgi
 
 from jellyfin.jellyfin_client import JellyfinClient
 from jellyseer.jellyseer_client import JellyseerClient
+from plex.plex_client import PlexClient
 from utils.utils import AppUtils
 from config.config import load_env_vars, save_env_vars
 from config.logger_manager import LoggerManager
@@ -93,19 +94,20 @@ def register_routes(app): # pylint: disable=redefined-outer-name
             return jsonify({'status': 'error', 'message': 'Value error: ' + str(ve)}), 400
         except FileNotFoundError as fnfe:
             return jsonify({'status': 'error', 'message': 'File not found: ' + str(fnfe)}), 404
-        except Exception as e:
+        except Exception as e: # pylint: disable=broad-except
             return jsonify({'status': 'error', 'message': 'Unexpected error: ' + str(e)}), 500
 
 
-    @app.route('/api/jellyseer/get_users', methods=['POST'])
+    @app.route('/api/seer/get_users', methods=['POST'])
     async def get_users():
         """
         Fetch Jellyseer users using the provided API key.
         """
         try:
             config_data = request.json
-            api_url = config_data.get('JELLYSEER_API_URL')
-            api_key = config_data.get('JELLYSEER_TOKEN')
+            api_url = config_data.get('SEER_API_URL')
+            api_key = config_data.get('SEER_TOKEN')
+            print(api_url, api_key)
 
             if not api_key:
                 return jsonify({'message': 'API key is required', 'type': 'error'}), 400
@@ -125,7 +127,7 @@ def register_routes(app): # pylint: disable=redefined-outer-name
         except Exception as e: # pylint: disable=broad-except
             return jsonify({'message': f'Error fetching users: {str(e)}', 'type': 'error'}), 500
 
-    @app.route('/api/jellyseer/login', methods=['POST'])
+    @app.route('/api/seer/login', methods=['POST'])
     async def login_jellyseer():
         """
         Endpoint to login to Jellyseer using the provided credentials.
@@ -133,16 +135,18 @@ def register_routes(app): # pylint: disable=redefined-outer-name
         try:
             # Estrai i parametri dalla richiesta POST
             config_data = request.json
-            api_url = config_data.get('JELLYSEER_API_URL')
-            api_key = config_data.get('JELLYSEER_TOKEN')
-            username = config_data.get('JELLYSEER_USER_NAME')
-            password = config_data.get('JELLYSEER_PASSWORD')
+            api_url = config_data.get('SEER_API_URL')
+            api_key = config_data.get('SEER_TOKEN')
+            username = config_data.get('SEER_USER_NAME')
+            password = config_data.get('SEER_PASSWORD')
 
             if not username or not password:
                 return jsonify({'message': 'Username and password are required', 'type': 'error'}), 400
 
             # Crea una nuova istanza del client Jellyseer con le credenziali fornite
-            jellyseer_client = JellyseerClient(api_url=api_url, api_key=api_key, jellyseer_user_name=username, jellyseer_password=password)
+            jellyseer_client = JellyseerClient(
+                api_url=api_url, api_key=api_key, seer_user_name=username, seer_password=password
+            )
 
             # Effettua il login
             await jellyseer_client.login()
@@ -175,6 +179,66 @@ def register_routes(app): # pylint: disable=redefined-outer-name
         except Exception as e:
             logger.error(f'An error occurred: {str(e)}')
             return jsonify({'message': 'An internal error has occurred', 'type': 'error'}), 500
+
+    @app.route('/api/plex/recent_items', methods=['POST'])
+    async def get_plex_recent_items():
+        """
+        Fetch recent items from Plex using the provided API key and server URL.
+        """
+        try:
+            config_data = request.json
+            api_url = config_data.get('PLEX_API_URL')
+            api_token = config_data.get('PLEX_TOKEN')
+
+            if not api_token or not api_url:
+                return jsonify(
+                    {'message': 'API URL and token are required', 'type': 'error'}), 400
+
+            # Inizializza il PlexClient con i dati forniti
+            plex_client = PlexClient(api_url=api_url, token=api_token)
+
+            # Ottieni i contenuti recenti dalla libreria specificata
+            recent_items = await plex_client.get_recent_items()
+
+            if not recent_items:
+                return jsonify({'message': 'No recent items found', 'type': 'error'}), 404
+
+            return jsonify(
+                {'message': 'Recent items fetched successfully', 'items': recent_items, 'type': 'success'}), 200
+
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error(f'An error occurred while fetching recent Plex items: {str(e)}')
+            return jsonify(
+                {'message': f'Error fetching recent items: {str(e)}', 'type': 'error'}), 500
+            
+    @app.route('/api/plex/libraries', methods=['POST'])
+    async def get_plex_libraries():
+        """
+        Fetch recent items from Plex using the provided API key and server URL.
+        """
+        try:
+            config_data = request.json
+            api_url = config_data.get('PLEX_API_URL')
+            api_token = config_data.get('PLEX_TOKEN')
+
+            if not api_token or not api_url:
+                return jsonify(
+                    {'message': 'API URL and token are required', 'type': 'error'}), 400
+
+            plex_client = PlexClient(api_url=api_url, token=api_token)
+
+            libraries = await plex_client.get_libraries()
+
+            if not libraries:
+                return jsonify({'message': 'No library found', 'type': 'error'}), 404
+
+            return jsonify(
+                {'message': 'Libraries found!', 'items': libraries, 'type': 'success'}), 200
+
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error(f'An error occurred while fetching Plex libraries: {str(e)}')
+            return jsonify(
+                {'message': f'Error fetching Plex libraries: {str(e)}', 'type': 'error'}), 500
 
 
     @app.route('/api/logs', methods=['GET'])

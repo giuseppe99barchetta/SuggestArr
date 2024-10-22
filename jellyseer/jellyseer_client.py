@@ -13,7 +13,7 @@ class JellyseerClient:
     A client to interact with the Jellyseer API for handling media requests and authentication.
     """
 
-    def __init__(self, api_url, api_key, jellyseer_user_name=None, jellyseer_password=None):
+    def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None):
         """
         Initializes the JellyseerClient with the API URL and logs in the user.
         :param api_url: The URL of the Jellyseer API.
@@ -25,8 +25,8 @@ class JellyseerClient:
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.api_url = api_url
         self.api_key = api_key
-        self.username = jellyseer_user_name
-        self.password = jellyseer_password
+        self.username = seer_user_name
+        self.password = seer_password
         self.session_token = None  # Token for authenticated session
         self.requests_cache = []  # Cache to store all requests
 
@@ -68,29 +68,27 @@ class JellyseerClient:
     def _get_headers_and_cookies(self, use_cookie):
         """
         Prepares headers and cookies based on the availability of the session token and the use_cookie flag.
-        
         If use_cookie is True and session_token is available, the session token is included in the cookies.
         Otherwise, API key authentication is used in the headers.
-        
         Returns a tuple (headers, cookies). Returns None if a cookie is required but the session_token is missing.
         """
-        
+
         # Return None if a cookie is required but the session_token is not available
         if use_cookie and not self.session_token:
             return None
-    
+
         headers = {
             'Content-Type': 'application/json',
             'accept': 'application/json',
         }
-        
+
         # Set cookies or use API key based on the use_cookie flag
         cookies = {}
         if use_cookie and self.session_token:
             cookies['connect.sid'] = self.session_token
         else:
             headers['X-Api-Key'] = self.api_key
-        
+
         return headers, cookies
 
     async def _make_request(self, method, endpoint, use_cookie=False, **kwargs):
@@ -194,6 +192,7 @@ class JellyseerClient:
                 {
                     'id': user['id'],
                     'name': user.get('displayName', user.get('jellyfinUsername', 'Unknown User')),
+                    'email': user.get('email'),
                     'isLocal': user.get('plexUsername') is None and user.get('jellyfinUsername') is None
                 }
                 for user in data.get('results', [])

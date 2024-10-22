@@ -6,28 +6,32 @@
         <!-- Max Similar Movies -->
         <label for="MAX_SIMILAR_MOVIE" class="block text-xs sm:text-sm font-semibold text-gray-300">Max Similar Movies:</label>
         <p class="text-xs sm:text-sm text-gray-400 mb-2">Specify the maximum number of similar movies to fetch for each movie seen.</p>
-        <input type="number" :value="config.MAX_SIMILAR_MOVIE" @input="$emit('update-max-similar-movies', $event.target.value)"
+        <input type="number" :value="config.MAX_SIMILAR_MOVIE" 
+               @input="handleUpdate('MAX_SIMILAR_MOVIE', $event.target.value)"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
                id="MAX_SIMILAR_MOVIE" placeholder="5">
 
         <!-- Max Similar TV Shows -->
         <label for="MAX_SIMILAR_TV" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Max Similar TV Shows:</label>
         <p class="text-xs sm:text-sm text-gray-400 mb-2">Specify the maximum number of similar TV shows to fetch for each TV show seen.</p>
-        <input type="number" :value="config.MAX_SIMILAR_TV" @input="$emit('update-max-similar-tv', $event.target.value)"
+        <input type="number" :value="config.MAX_SIMILAR_TV" 
+               @input="handleUpdate('MAX_SIMILAR_TV', $event.target.value)"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
                id="MAX_SIMILAR_TV" placeholder="2">
 
         <!-- Max Content Checks -->
         <label for="MAX_CONTENT_CHECKS" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Max Content Checks:</label>
         <p class="text-xs sm:text-sm text-gray-400 mb-2">Set the maximum number of recently viewed content items to search for similar content.</p>
-        <input type="number" :value="config.MAX_CONTENT_CHECKS" @input="$emit('update-max-content-checks', $event.target.value)"
+        <input type="number" :value="config.MAX_CONTENT_CHECKS" 
+               @input="handleUpdate('MAX_CONTENT_CHECKS', $event.target.value)"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
                id="MAX_CONTENT_CHECKS" placeholder="10">
 
         <!-- Cron Times -->
         <label for="CRON_TIMES" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Cron Times:</label>
         <p class="text-xs sm:text-sm text-gray-400 mb-2">Set the schedule in cron format for content checks. (e.g., "0 0 * * *" for daily checks at midnight)</p>
-        <input type="text" :value="config.CRON_TIMES" @input="handleCronInput($event.target.value)"
+        <input type="text" :value="config.CRON_TIMES" 
+               @input="handleCronInput($event.target.value)"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
                id="CRON_TIMES" placeholder="0 0 * * *">
 
@@ -53,8 +57,11 @@ export default {
         };
     },
     methods: {
+        handleUpdate(key, value) {
+            this.$emit('update-config', key, value);  // Emetti un evento generale per l'aggiornamento della configurazione
+        },
         handleCronInput(value) {
-            this.$emit('update-cron-times', value);
+            this.handleUpdate('CRON_TIMES', value);  // Usa handleUpdate per l'input del cron
 
             try {
                 const interval = cronParser.parseExpression(value);
