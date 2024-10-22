@@ -97,10 +97,10 @@ class PlexClient:
 
     async def get_metadata_provider_id(self, item_id, provider='themoviedb'):
         """
-        Retrieves the provider ID (e.g., TheMovieDb or TVDb) for a specific media item asynchronously.
+        Retrieves the TMDB ID (or other provider ID) for a specific media item asynchronously.
         :param item_id: The ID of the media item.
         :param provider: The provider ID to retrieve (default is 'themoviedb').
-        :return: The provider ID if found, otherwise None.
+        :return: The TMDB ID if found, otherwise None.
         """
         url = f"{self.api_url}/library/metadata/{item_id}"
         try:
@@ -108,11 +108,18 @@ class PlexClient:
                 async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200:
                         item_data = await response.json()
-                        for guid in item_data.get('MediaContainer', {}).get('Metadata', [])[0].get('Guid', []):
-                            if provider in guid.get('id', ''):
-                                return guid.get('id')
+                        guids = item_data.get('MediaContainer', {}).get('Metadata', [])[0].get('Guid', [])
+                        
+                        # Cerca il guid che inizia con 'tmdb://'
+                        for guid in guids:
+                            guid_id = guid.get('id', '')
+                            if guid_id.startswith('tmdb://'):
+                                # Estrai l'ID TMDB rimuovendo 'tmdb://'
+                                tmdb_id = guid_id.split('tmdb://')[-1]
+                                return tmdb_id
+    
                     self.logger.error("Failed to retrieve metadata for item %s: %d", item_id, response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while retrieving metadata for item %s: %s", item_id, str(e))
-
+    
         return None

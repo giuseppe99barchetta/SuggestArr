@@ -1,7 +1,11 @@
 import asyncio
 
+from jellyfin.jellyfin_client import JellyfinClient
+from jellyseer.jellyseer_client import JellyseerClient
+from tmdb.tmdb_client import TMDbClient
+
 class JellyfinHandler:
-    def __init__(self, jellyfin_client, jellyseer_client, tmdb_client, logger, max_similar_movie, max_similar_tv):
+    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:JellyseerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client

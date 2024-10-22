@@ -1,7 +1,11 @@
 import asyncio
 
+from jellyseer.jellyseer_client import JellyseerClient
+from plex.plex_client import PlexClient
+from tmdb.tmdb_client import TMDbClient
+
 class PlexHandler:
-    def __init__(self, plex_client, jellyseer_client, tmdb_client, logger, max_similar_movie, max_similar_tv):
+    def __init__(self, plex_client:PlexClient, jellyseer_client:JellyseerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -41,13 +45,13 @@ class PlexHandler:
         """Process an individual item (movie or TV show episode)."""
         item_type = item['type'].lower()
         if item_type == 'movie' and self.max_similar_movie > 0:
-            await self.process_movie(user_id, item['librarySectionID'])
+            await self.process_movie(user_id, item['key'].replace('/library/metadata/', ''))
         elif item_type == 'episode' and self.max_similar_tv > 0:
             await self.process_episode(user_id, item)
 
     async def process_movie(self, user_id, item_id):
         """Find similar movies via TMDb and request them via Jellyseer."""
-        tmdb_id = await self.plex_client.get_item_provider_id(item_id)
+        tmdb_id = await self.plex_client.get_metadata_provider_id(item_id)
         if tmdb_id:
             similar_movies = await self.tmdb_client.find_similar_movies(tmdb_id)
             await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie)
