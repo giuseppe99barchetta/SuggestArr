@@ -17,3 +17,4 @@ venv/
 .vscode/
 *.md
 node_modules/
+*.log

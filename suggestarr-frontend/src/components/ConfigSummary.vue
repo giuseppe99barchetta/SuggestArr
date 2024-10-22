@@ -3,6 +3,10 @@
         <div class="p-10 space-y-8 max-w-4xl mx-auto bg-gray-800 rounded-lg shadow-lg border border-gray-700">
             <h2 class="text-3xl font-bold text-gray-200 mb-6 text-center">SuggestArr Summary</h2>
             <div class="space-y-6">
+                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
+                    <label class="block text-sm font-semibold text-gray-300">Selected service:</label>
+                    <p class="text-gray-200">{{ capitalizeFirstLetter(config.SELECTED_SERVICE) }}</p>
+                </div>
                 <!-- Display Jellyfin URL -->
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
                     <label class="block text-sm font-semibold text-gray-300">Jellyfin URL:</label>
@@ -11,7 +15,7 @@
                 <!-- Display Jellyseer URL -->
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
                     <label class="block text-sm font-semibold text-gray-300">Jellyseer URL:</label>
-                    <p class="text-gray-200">{{ config.JELLYSEER_API_URL }}</p>
+                    <p class="text-gray-200">{{ config.SEER_API_URL }}</p>
                 </div>
                 <!-- Display Max Similar Movies -->
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
@@ -74,6 +78,10 @@ export default {
         this.calculateNextCronRun();
     },
     methods: {
+        capitalizeFirstLetter(text) {
+            if (!text) return '';
+            return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+        },
         calculateNextCronRun() {
             try {
                 const interval = cronParser.parseExpression(this.config.CRON_TIMES);
@@ -96,7 +104,7 @@ export default {
         },
         forceRun() {
             this.isRunning = true;
-            axios.post('http://localhost:5000/api/force_run', this.config)
+            axios.post('/api/automation/force_run', this.config)
             .then(response => {
                 console.log(response.data.message); // Success message from backend
             })

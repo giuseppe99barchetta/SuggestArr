@@ -67,7 +67,7 @@ export default {
   computed: {
     filteredLogs() {
       return this.logs.filter(log => {
-        const matchesText = log.message.toLowerCase().includes(this.filterText.toLowerCase());
+        const matchesText = log.message && log.message.toLowerCase().includes(this.filterText.toLowerCase());
         const matchesSeverity = this.selectedSeverity === '' || log.severity === this.selectedSeverity;
         return matchesText && matchesSeverity;
       });
