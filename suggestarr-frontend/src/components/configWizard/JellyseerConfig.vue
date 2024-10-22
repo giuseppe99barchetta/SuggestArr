@@ -1,27 +1,29 @@
 <template>
     <div>
         <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Step 3: Jellyseer API Details</h3>
-        <p class="text-xs sm:text-sm text-gray-400 mb-4">To obtain your Jellyseer API Key, open the Jellyseer interface, navigate to Settings, locate the "API Key" section, and copy your key for use in this configuration.</p>
+        <p class="text-xs sm:text-sm text-gray-400 mb-4">To obtain your Jellyseer API Key, open the Jellyseer interface,
+            navigate to Settings, locate the "API Key" section, and copy your key for use in this configuration.</p>
 
         <!-- Jellyseer API URL -->
-        <label for="JELLYSEER_API_URL" class="block text-xs sm:text-sm font-semibold text-gray-300">Jellyseer URL:</label>
+        <label for="JELLYSEER_API_URL" class="block text-xs sm:text-sm font-semibold text-gray-300">Jellyseer
+            URL:</label>
         <input type="text" :value="config.JELLYSEER_API_URL" @input="$emit('update-jellyseer-url', $event.target.value)"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-               id="JELLYSEER_API_URL" placeholder="http://your-jellyseer-url">
+            class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2" id="JELLYSEER_API_URL"
+            placeholder="http://your-jellyseer-url">
 
         <!-- Jellyseer API Key -->
-        <label for="JELLYSEER_TOKEN" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Jellyseer API Key:</label>
+        <label for="JELLYSEER_TOKEN" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Jellyseer API
+            Key:</label>
         <div class="flex flex-col sm:flex-row items-start sm:items-center">
-            <input type="text" :value="config.JELLYSEER_TOKEN" @input="$emit('update-jellyseer-token', $event.target.value)"
-                   class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2 mb-4 sm:mb-0 sm:mr-2"
-                   id="JELLYSEER_TOKEN" placeholder="Enter your Jellyseer API Key">
-            <button type="button" @click="testJellyseerApi" :disabled="jellyseerTestState.isTesting"
-                    :class="{
-                        'bg-green-500 hover:bg-green-600': jellyseerTestState.status === 'success',
-                        'bg-red-500 hover:bg-red-600': jellyseerTestState.status === 'fail',
-                        'bg-blue-500 hover:bg-blue-600': jellyseerTestState.status === null
-                    }"
-                    class="text-white px-4 py-2 rounded-lg shadow-md w-full sm:w-auto">
+            <input type="text" :value="config.JELLYSEER_TOKEN"
+                @input="$emit('update-jellyseer-token', $event.target.value)"
+                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2 mb-4 sm:mb-0 sm:mr-2"
+                id="JELLYSEER_TOKEN" placeholder="Enter your Jellyseer API Key">
+            <button type="button" @click="testJellyseerApi" :disabled="jellyseerTestState.isTesting" :class="{
+                'bg-green-500 hover:bg-green-600': jellyseerTestState.status === 'success',
+                'bg-red-500 hover:bg-red-600': jellyseerTestState.status === 'fail',
+                'bg-blue-500 hover:bg-blue-600': jellyseerTestState.status === null
+            }" class="text-white px-4 py-2 rounded-lg shadow-md w-full sm:w-auto">
                 <i v-if="jellyseerTestState.isTesting" class="fas fa-spinner fa-spin"></i>
                 <i v-else-if="jellyseerTestState.status === 'success'" class="fas fa-check"></i>
                 <i v-else-if="jellyseerTestState.status === 'fail'" class="fas fa-times"></i>
@@ -30,40 +32,42 @@
         </div>
 
         <!-- Error message for failed validation -->
-        <div v-if="jellyseerTestState.status === 'fail'" class="bg-gray-800 border border-red-500 text-red-500 px-4 py-3 rounded-lg mt-4" role="alert">
+        <div v-if="jellyseerTestState.status === 'fail'"
+            class="bg-gray-800 border border-red-500 text-red-500 px-4 py-3 rounded-lg mt-4" role="alert">
             <span class="block sm:inline">Failed to validate Jellyseer Key.</span>
         </div>
 
         <!-- Jellyseer user selection -->
         <div v-if="jellyseerTestState.status === 'success'" class="mt-4">
-            <label for="JELLYSEER_USER" class="block text-xs sm:text-sm font-semibold text-gray-300">Select a local User:</label>
-            
+            <label for="JELLYSEER_USER" class="block text-xs sm:text-sm font-semibold text-gray-300">Select a local
+                User:</label>
+
             <p class="text-xs sm:text-sm text-gray-400 mb-2">
-                Only local users of Jellyseer can be selected. Selecting a specific user is useful if you want to disable automatic approval of requests and manually approve them before automatic downloading. 
+                Only local users of Jellyseer can be selected. Selecting a specific user is useful if you want to
+                disable automatic approval of requests and manually approve them before automatic downloading.
                 This step is optional. If no user is selected, the administrator account will be used to make requests.
             </p>
 
             <!-- If no local users are available, show a message and disable the select field -->
             <div v-if="jellyseerUsers.length > 0">
-                <select v-model="selectedUser" @change="$emit('update-jellyseer-user', selectedUser.name)" class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2">
+                <select v-model="selectedUser" @change="$emit('update-jellyseer-user', selectedUser.name)"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2">
                     <option v-for="user in jellyseerUsers" :key="user.id" :value="user">{{ user.name }}</option>
                 </select>
 
                 <!-- Password field -->
-                <label for="JELLYSEER_PASSWORD" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Password:</label>
-                <input type="password" v-model="userPassword" @input="$emit('update-jellyseer-password', userPassword)" class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2" id="JELLYSEER_PASSWORD" placeholder="Enter your password">
+                <label for="JELLYSEER_PASSWORD"
+                    class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Password:</label>
+                <input type="password" v-model="userPassword" @input="$emit('update-jellyseer-password', userPassword)"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+                    id="JELLYSEER_PASSWORD" placeholder="Enter your password">
 
                 <!-- Authenticate button -->
-                <button
-                    @click="authenticateUser"
-                    :disabled="isAuthenticating || authenticated"
-                    :class="{
-                        'bg-green-500 hover:bg-green-600': authenticated,
-                        'bg-indigo-600 hover:bg-indigo-500': !authenticated,
-                        'opacity-50 cursor-not-allowed': isAuthenticating
-                    }"
-                    class="text-white font-bold py-4 px-8 rounded-lg w-full mt-4"
-                >
+                <button @click="authenticateUser" :disabled="isAuthenticating || authenticated" :class="{
+                    'bg-green-500 hover:bg-green-600': authenticated,
+                    'bg-indigo-600 hover:bg-indigo-500': !authenticated,
+                    'opacity-50 cursor-not-allowed': isAuthenticating
+                }" class="text-white font-bold py-4 px-8 rounded-lg w-full mt-4">
                     <i v-if="isAuthenticating" class="fas fa-spinner fa-spin"></i>
                     <span v-else-if="authenticated">Logged In</span>
                     <span v-else>Authenticate</span>
@@ -72,7 +76,7 @@
             </div>
             <div v-else>
                 <p class="text-xs sm:text-sm text-red-500">
-                    No local users available. The administrator account will be used for requests. 
+                    No local users available. The administrator account will be used for requests.
                     <a :href="`${config.JELLYSEER_API_URL}/users`" target="_blank" class="text-blue-400 underline">
                         Create a new local user here.
                     </a>
@@ -83,8 +87,13 @@
 
         <!-- Navigation buttons -->
         <div class="flex justify-between mt-8 space-x-4">
-            <button @click="$emit('previous-step')" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg w-full">Back</button>
-            <button @click="$emit('next-step')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full">Next Step</button>
+            <button @click="$emit('previous-step')"
+                class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg w-full">Back</button>
+            <button @click="$emit('next-step')"
+                class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full"
+                :disabled="jellyseerTestState.status !== 'success'">
+                Next Step
+            </button>
         </div>
     </div>
 </template>

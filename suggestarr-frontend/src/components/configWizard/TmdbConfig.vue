@@ -26,7 +26,12 @@
         <div v-if="tmdbTestState.status === 'fail'" class="bg-gray-800 border border-red-500 text-red-500 px-4 py-3 rounded-lg mt-4" role="alert">
             <span class="block sm:inline">Failed to validate TMDB API Key.</span>
         </div>
+        
         <div class="flex justify-between mt-8 space-x-4">
+            <button @click="$emit('previous-step')" 
+                    class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg w-full">
+                Back
+            </button>
             <button @click="$emit('next-step')" :disabled="tmdbTestState.status !== 'success'" 
                     class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full"
                     :class="{ 'opacity-50 cursor-not-allowed': tmdbTestState.status !== 'success' }">

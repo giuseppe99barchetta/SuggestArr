@@ -3,6 +3,10 @@
         <div class="p-10 space-y-8 max-w-4xl mx-auto bg-gray-800 rounded-lg shadow-lg border border-gray-700">
             <h2 class="text-3xl font-bold text-gray-200 mb-6 text-center">SuggestArr Summary</h2>
             <div class="space-y-6">
+                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
+                    <label class="block text-sm font-semibold text-gray-300">Selected service:</label>
+                    <p class="text-gray-200">{{ config.selectedService }}</p>
+                </div>
                 <!-- Display Jellyfin URL -->
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
                     <label class="block text-sm font-semibold text-gray-300">Jellyfin URL:</label>

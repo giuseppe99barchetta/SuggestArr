@@ -12,8 +12,10 @@
         <transition name="fade" mode="out-in" @after-leave="showNewStep">
           <component :is="currentStepComponent"
             :config="config"
+            :selected-service="config.selectedService" 
             @next-step="nextStep"
             @previous-step="previousStep"
+            @update-selected-service="updateSelectedService"
             @update-tmdb-key="updateTmdbKey"
             @update-jellyfin-url="updateJellyfinUrl"
             @update-jellyfin-token="updateJellyfinToken"
@@ -44,23 +46,23 @@ import '@/assets/styles/wizard.css';
 import Footer from './AppFooter.vue';
 
 // Import all the wizard configuration components
+import MediaServiceSelection from './configWizard/MediaServiceSelection.vue';
 import TmdbConfig from './configWizard/TmdbConfig.vue';
 import JellyfinConfig from './configWizard/JellyfinConfig.vue';
 import JellyseerConfig from './configWizard/JellyseerConfig.vue';
 import AdditionalSettings from './configWizard/AdditionalSettings.vue';
-import SaveConfig from './configWizard/SaveConfig.vue';
 import ConfigSummary from './ConfigSummary.vue';
 import axios from 'axios';
 
 export default {
   components: {
     Footer,
-    ConfigSummary,      // Final configuration summary
-    TmdbConfig,         // Step 1: TMDB Configuration
-    JellyfinConfig,     // Step 2: Jellyfin Configuration
-    JellyseerConfig,    // Step 3: Jellyseer Configuration
-    AdditionalSettings, // Step 4: Additional Settings
-    SaveConfig          // Step 5: Save configuration
+    ConfigSummary,
+    TmdbConfig,
+    JellyfinConfig,
+    JellyseerConfig,
+    AdditionalSettings,
+    MediaServiceSelection,
   },
   data() {
     return {
@@ -78,6 +80,7 @@ export default {
         MAX_CONTENT_CHECKS: 10,
         CRON_TIMES: '0 0 * * *', // Default value
         JELLYFIN_LIBRARIES: [],
+        selectedService: '',
       }
     };
   },
@@ -88,11 +91,12 @@ export default {
     currentStepComponent() {
       // Map of components for each step
       const steps = {
-        1: 'TmdbConfig',         // Step 1
-        2: 'JellyfinConfig',     // Step 2
-        3: 'JellyseerConfig',    // Step 3
-        4: 'AdditionalSettings', // Step 4
-        5: 'SaveConfig'          // Summary and saving step
+        1: 'MediaServiceSelection',
+        2: 'TmdbConfig',
+        3: 'JellyfinConfig',
+        4: 'JellyseerConfig',
+        5: 'AdditionalSettings',
+        6: 'SaveConfig'
       };
       return steps[this.currentStep] || 'SaveConfig';
     }
@@ -178,6 +182,9 @@ export default {
     },
     updateMaxContentChecks(newValue) {
       this.config.MAX_CONTENT_CHECKS = newValue;
+    },
+    updateSelectedService(newValue) {
+      this.config.selectedService = newValue;
     },
 
     editConfig() {
