@@ -18,7 +18,7 @@ export const testJellyfinApi = (url, token) => {
 
 // Function to test the Jellyseer/Overseer configuration and fetch users
 export const testJellyseerApi = (url, token) => {
-    return axios.post('http://localhost:5000/api/seer/get_users', {
+    return axios.post('/api/seer/get_users', {
         SEER_API_URL: url,
         SEER_TOKEN: token
     });
@@ -26,7 +26,7 @@ export const testJellyseerApi = (url, token) => {
 
 // Function to authenticate a user in Jellyseer/Overseer
 export const authenticateUser = (url, token, userName, password) => {
-    return axios.post('http://localhost:5000/api/seer/login', {
+    return axios.post('/api/seer/login', {
         SEER_API_URL: url,
         SEER_TOKEN: token,
         SEER_USER_NAME: userName,
@@ -44,7 +44,7 @@ export function fetchJellyfinLibraries(apiUrl, apiKey) {
 
 // Function to fetch Plex libraries
 export async function getPlexLibraries(plexUrl, plexToken) {
-    const apiUrl = `http://localhost:5000/api/plex/libraries`;
+    const apiUrl = `/api/plex/libraries`;
     try {
         const response = await axios.post(apiUrl, {
             PLEX_API_URL: plexUrl,
