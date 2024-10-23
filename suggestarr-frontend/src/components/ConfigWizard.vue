@@ -1,6 +1,7 @@
 <template>
   <div>
-    <div v-if="currentStep <= steps.length" class="wizard-container">
+    <div v-if="currentStep <= steps.length" class="wizard-container"
+      :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }">
       <div class="wizard-content">
         <h2 class="text-3xl font-bold text-gray-200 mb-6 text-center">SuggestArr Wizard</h2>
         <div class="progress-bar">
@@ -10,10 +11,8 @@
 
         <!-- Use dynamic components for each step -->
         <transition name="fade" mode="out-in">
-          <component :is="currentStepComponent" :config="config" 
-                     @next-step="handleStepChange(1)" 
-                     @previous-step="handleStepChange(-1)"
-                     @update-config="updateConfig" />
+          <component :is="currentStepComponent" :config="config" @next-step="handleStepChange(1)"
+            @previous-step="handleStepChange(-1)" @update-config="updateConfig" />
         </transition>
         <Footer />
       </div>
@@ -54,6 +53,8 @@ export default {
     return {
       currentStep: 1,  // Current step of the wizard
       config: this.getInitialConfig(),  // Load initial configuration
+      backgroundImageUrl: '',
+      intervalId: null,
     };
   },
   computed: {
@@ -76,11 +77,7 @@ export default {
   mounted() {
     // Fetch the saved configuration when component mounts
     this.fetchConfig();
-    if (this.$toast) {
-      console.log('Toast is available');
-    } else {
-      console.error('Toast is not available in this component');
-    }
+    this.startBackgroundImageRotation();
   },
   methods: {
     // Initialize the configuration with default values
@@ -93,8 +90,8 @@ export default {
         SEER_TOKEN: '',      // Unified for Jellyseer/Overseer
         SEER_USER_NAME: '',  // Unified for Jellyseer/Overseer
         SEER_USER_PSW: '',   // Unified for Jellyseer/Overseer
-        MAX_SIMILAR_MOVIE: 5,  
-        MAX_SIMILAR_TV: 2,    
+        MAX_SIMILAR_MOVIE: 5,
+        MAX_SIMILAR_TV: 2,
         MAX_CONTENT_CHECKS: 10,
         CRON_TIMES: '0 0 * * *',
         JELLYFIN_LIBRARIES: [],
@@ -148,6 +145,52 @@ export default {
     editConfig() {
       this.currentStep = 1;
     },
-  },
+    async fetchRandomMovieImage() {
+      const apiKey = this.config.TMDB_API_KEY;
+      if (!apiKey){
+        return
+      }
+      const randomPage = Math.floor(Math.random() * 100) + 1;
+
+      try {
+        const response = await axios.get(`https://api.themoviedb.org/3/movie/popular`, {
+          params: {
+            api_key: apiKey,
+            page: randomPage
+          }
+        });
+
+        const movies = response.data.results;
+        const randomMovie = movies[Math.floor(Math.random() * movies.length)];
+        const imageUrl = `https://image.tmdb.org/t/p/w1280${randomMovie.backdrop_path}`;
+
+        // Pre-caricamento dell'immagine
+        const img = new Image();
+        img.src = imageUrl;
+
+        img.onload = () => {
+          this.backgroundImageUrl = imageUrl; // Cambia lo sfondo solo dopo che l'immagine è stata caricata
+        };
+
+      } catch (error) {
+        console.error('Failed to fetch movie image:', error);
+      }
+    },
+    startBackgroundImageRotation() {
+      this.fetchRandomMovieImage();
+
+      this.intervalId = setInterval(() => {
+        this.fetchRandomMovieImage();
+      }, 10000);
+    },
+    stopBackgroundImageRotation() {
+      if (this.intervalId) {
+        clearInterval(this.intervalId);
+      }
+    }
+
+  }, beforeUnmount() {
+    this.stopBackgroundImageRotation();
+  }
 };
 </script>

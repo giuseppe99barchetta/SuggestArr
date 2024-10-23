@@ -41,22 +41,3 @@ export function fetchJellyfinLibraries(apiUrl, apiKey) {
         JELLYFIN_TOKEN: apiKey
     });
 }
-
-// Function to fetch Plex libraries
-export async function getPlexLibraries(plexUrl, plexToken) {
-    const apiUrl = `/api/plex/libraries`;
-    try {
-        const response = await axios.post(apiUrl, {
-            PLEX_API_URL: plexUrl,
-            PLEX_TOKEN: plexToken,
-        });
-        
-        if (response.status === 200) {
-            return response.data;
-        }
-    } catch (error) {
-        console.error('Error fetching Plex libraries:', error);
-    }
-
-    return { items: [] };
-}

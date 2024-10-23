@@ -1,17 +1,15 @@
 <template>
     <div>
-        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Step 3: Plex Client Details</h3>
+        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Step 2: Plex Configuration</h3>
         <p class="text-xs sm:text-sm text-gray-400 mb-4">
             Login using your Plex account.
         </p>
-        <!-- Error message for failed validation -->
-        <div v-if="plexTestState.status === 'fail'"
-            class="bg-gray-800 border border-red-500 text-red-500 px-4 py-3 rounded-lg mt-4" role="alert">
-            <span class="block sm:inline">Failed to connect to Plex API. Check your URL and token.</span>
-        </div>
 
         <div v-if="!isLoggedIn">
-            <button @click="loginWithPlex">Login with Plex</button>
+            <button @click="loginWithPlex" class="w-full">
+                <i v-if="loading" class="fas fa-spinner fa-spin mr-2"></i>
+                Login with Plex
+            </button>
         </div>
 
         <div v-if="servers.length > 0" class="mt-6">
@@ -33,7 +31,8 @@
                 <!-- Button with refresh icon -->
                 <button v-if="!manualConfiguration" @click="fetchLibraries"
                     class="ml-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
-                    <i class="fas fa-sync-alt"></i> <!-- Font Awesome icon for refresh -->
+                    <i v-if="loadingLibraries" class="fas fa-spinner fa-spin"></i>
+                    <i v-else class="fas fa-sync-alt"></i> <!-- Font Awesome icon for refresh -->
                 </button>
             </div>
         </div>
@@ -42,7 +41,9 @@
             <h3 class="text-md text-gray-300 mb-4">Manual Server Configuration</h3>
 
             <label for="manual-address" class="block text-xs sm:text-sm font-semibold text-gray-300">Server
-                Address:</label>
+                Address:
+                <span class="text-gray-400">(e.g., http://192.168.1.10:32400)</span>
+            </label>
 
             <!-- Wrapping input and button in a flex container -->
             <div class="flex items-center">
@@ -90,9 +91,9 @@
 
 
 <script>
-import plexClientLogic from '../../api/PlexApi';
+import plexApi from '../../api/PlexApi';
 
 export default {
-    ...plexClientLogic,
+    ...plexApi,
 };
 </script>

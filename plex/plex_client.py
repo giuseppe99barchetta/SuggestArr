@@ -35,6 +35,7 @@ class PlexClient:
             "X-Plex-Token": token, 
             "Accept": 'application/json'
         }
+        
         if client_id:
             self.headers['X-Plex-Client-Identifier'] = client_id
 
