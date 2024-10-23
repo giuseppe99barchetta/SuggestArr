@@ -104,7 +104,10 @@ export default {
                 this.selectedLibraryNames.splice(this.selectedLibraryNames.indexOf(library.Name), 1);
             }
             // Emit both the IDs and names of the selected libraries
-            this.$emit('update-jellyfin-libraries', { ids: this.selectedLibraryIds, names: this.selectedLibraryNames });
+            this.$emit('updateConfig', 'JELLYFIN_LIBRARIES', {
+                ids: this.selectedLibraryIds,
+                names: this.selectedLibraryNames
+            });
         },
         isSelected(libraryId) {
             return this.selectedLibraryIds.includes(libraryId);

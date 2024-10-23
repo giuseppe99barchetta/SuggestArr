@@ -18,3 +18,4 @@ venv/
 *.md
 node_modules/
 *.log
+app.log

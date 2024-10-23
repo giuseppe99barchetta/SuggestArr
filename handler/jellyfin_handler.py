@@ -22,12 +22,14 @@ class JellyfinHandler:
         self.max_similar_movie = max_similar_movie
         self.max_similar_tv = max_similar_tv
         self.processed_series = set()
+        self.request_count = 0
 
     async def process_recent_items(self):
         """Process recently watched items for all Jellyfin users."""
         users = await self.jellyfin_client.get_all_users()
         tasks = [self.process_user_recent_items(user) for user in users]
         await asyncio.gather(*tasks)
+        self.logger.info(f"Total media requested: {self.request_count}")
 
     async def process_user_recent_items(self, user):
         """Process recently watched items for a specific Jellyfin user."""
@@ -72,4 +74,5 @@ class JellyfinHandler:
             for media in media_ids[:max_items]:
                 if not await self.jellyseer_client.check_already_requested(media['id'], media_type):
                     await self.jellyseer_client.request_media(media_type, media['id'])
+                    self.request_count += 1
                     self.logger.info(f"Requested {media_type}: {media['title']}")

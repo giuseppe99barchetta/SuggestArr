@@ -21,6 +21,7 @@ class PlexHandler:
         self.logger = logger
         self.max_similar_movie = max_similar_movie
         self.max_similar_tv = max_similar_tv
+        self.request_count = 0
 
     async def process_recent_items(self):
         """Process recently watched items for Plex (without user context)."""
@@ -30,12 +31,13 @@ class PlexHandler:
         if isinstance(recent_items_response, list):
             tasks = []
             for response_item in recent_items_response:
-                title = response_item.get('title')
+                title = response_item.get('title', response_item.get('grandparentTitle'))
                 self.logger.info(f"Processing item: {title}")
                 tasks.append(self.process_item(None, response_item))  # No user context needed for Plex
 
             if tasks:
                 await asyncio.gather(*tasks)
+                self.logger.info(f"Total media requested: {self.request_count}")
             else:
                 self.logger.warning("No recent items found in Plex response")
         else:
@@ -58,9 +60,9 @@ class PlexHandler:
 
     async def process_episode(self, user_id, item):
         """Process a TV show episode by finding similar TV shows via TMDb."""
-        series_id = item.get('librarySectionID')
+        series_id = item.get('grandparentKey').replace('/library/metadata/', '')
         if series_id:
-            tvdb_id = await self.plex_client.get_item_provider_id(series_id, provider='Tvdb')
+            tvdb_id = await self.plex_client.get_metadata_provider_id(series_id)
             if tvdb_id:
                 similar_tvshows = await self.tmdb_client.find_similar_tvshows(tvdb_id)
                 await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv)
@@ -71,4 +73,7 @@ class PlexHandler:
             for media in media_ids[:max_items]:
                 if not await self.jellyseer_client.check_already_requested(media['id'], media_type):
                     await self.jellyseer_client.request_media(media_type, media['id'])
+                    self.request_count += 1
                     self.logger.info(f"Requested {media_type}: {media['title']}")
+                else:
+                    self.logger.info(f"Skipping [{media_type}, {media['title']}]: already requested.")

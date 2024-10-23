@@ -67,7 +67,7 @@
                     :placeholder="`Enter your password`">
 
                 <!-- Authenticate button -->
-                <button @click="authenticateUser" :disabled="isAuthenticating || authenticated" :class="{
+                <button @click="authenticateUser" :disabled="isAuthenticating" :class="{
                     'bg-green-500 hover:bg-green-600': authenticated,
                     'bg-indigo-600 hover:bg-indigo-500': !authenticated,
                     'opacity-50 cursor-not-allowed': isAuthenticating

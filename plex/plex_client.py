@@ -93,7 +93,7 @@ class PlexClient:
 
         return []
 
-    async def get_metadata_provider_id(self, item_id, provider='themoviedb'):
+    async def get_metadata_provider_id(self, item_id, provider='tmdb'):
         """
         Retrieves the TMDB ID (or other provider ID) for a specific media item asynchronously.
         :param item_id: The ID of the media item.
@@ -110,8 +110,8 @@ class PlexClient:
 
                         for guid in guids:
                             guid_id = guid.get('id', '')
-                            if guid_id.startswith('tmdb://'):
-                                tmdb_id = guid_id.split('tmdb://')[-1]
+                            if guid_id.startswith(f'{provider}://'):
+                                tmdb_id = guid_id.split(f'{provider}://')[-1]
                                 return tmdb_id
 
                     self.logger.error("Failed to retrieve metadata for item %s: %d", item_id, response.status)

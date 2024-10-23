@@ -7,13 +7,21 @@
                     <label class="block text-sm font-semibold text-gray-300">Selected service:</label>
                     <p class="text-gray-200">{{ capitalizeFirstLetter(config.SELECTED_SERVICE) }}</p>
                 </div>
-                <!-- Display Jellyfin URL -->
-                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
+                <!-- Display Plex or Jellyfin URL based on selected service -->
+                <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-if="config.SELECTED_SERVICE === 'plex'">
+                    <label class="block text-sm font-semibold text-gray-300">Plex URL:</label>
+                    <p class="text-gray-200">{{ config.PLEX_API_URL }}</p>
+                </div>
+                <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-else>
                     <label class="block text-sm font-semibold text-gray-300">Jellyfin URL:</label>
                     <p class="text-gray-200">{{ config.JELLYFIN_API_URL }}</p>
                 </div>
-                <!-- Display Jellyseer URL -->
-                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
+                <!-- Display Overseer or Jellyseer URL based on selected service -->
+                <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-if="config.SELECTED_SERVICE === 'plex'">
+                    <label class="block text-sm font-semibold text-gray-300">Overseer URL:</label>
+                    <p class="text-gray-200">{{ config.SEER_API_URL }}</p>
+                </div>
+                <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-else>
                     <label class="block text-sm font-semibold text-gray-300">Jellyseer URL:</label>
                     <p class="text-gray-200">{{ config.SEER_API_URL }}</p>
                 </div>
@@ -37,21 +45,40 @@
                     <p class="text-gray-200">{{ nextCronRun }}</p>
                 </div>
             </div>
-            <!-- Edit Configuration Button -->
-            <button @click="editConfig" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full mt-8 shadow-lg transition-transform transform hover:scale-105">
-                Edit Configuration
-            </button>
+            <!-- Edit Configuration and Reset Buttons -->
+            <div class="flex space-x-4 mt-8">
+                <button @click="editConfig"
+                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                    Edit Configuration
+                </button>
+                <button @click="showResetPopup = true"
+                    class="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                    Reset Configuration
+                </button>
+            </div>
             <!-- Force Run Button -->
-            <button @click="forceRun" class="bg-red-600 hover:bg-red-500 text-white font-bold py-4 px-8 rounded-lg w-full mt-4 shadow-lg transition-transform transform hover:scale-105">
+            <button @click="forceRun"
+                class="bg-red-600 hover:bg-red-500 text-white font-bold py-4 px-8 rounded-lg w-full mt-4 shadow-lg transition-transform transform hover:scale-105">
                 <i v-if="isRunning" class="fas fa-spinner fa-spin"></i>
                 <span v-else>Run Now</span>
             </button>
 
+            <!-- Reset Confirmation Modal -->
+            <div v-if="showResetPopup" class="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75 z-50">
+                <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 max-w-md w-full">
+                    <h3 class="text-xl font-semibold text-gray-200">Confirm Reset</h3>
+                    <p class="mt-4 text-gray-400">Are you sure you want to reset the configuration? This action cannot be undone.</p>
+                    <div class="flex justify-end mt-6 space-x-4">
+                        <button @click="showResetPopup = false" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Cancel</button>
+                        <button @click="confirmReset" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg">Confirm</button>
+                    </div>
+                </div>
+            </div>
             <Footer />
-            
         </div>
     </div>
 </template>
+
 
 <script>
 import axios from 'axios';
@@ -71,7 +98,8 @@ export default {
     data() {
         return {
             isRunning: false, // Track the running state for the 'Run Now' button
-            nextCronRun: ''   // To store the time remaining until next cron run
+            nextCronRun: '',   // To store the time remaining until next cron run
+            showResetPopup: false,
         };
     },
     mounted() {
@@ -104,21 +132,28 @@ export default {
         },
         forceRun() {
             this.isRunning = true;
-            axios.post('/api/automation/force_run', this.config)
-            .then(response => {
-                console.log(response.data.message); // Success message from backend
-            })
-            .catch(error => {
-                alert(`Error: ${error.response ? error.response.data.message : error.message}`); // Handle errors
-            })
-            .finally(() => {
-                this.isRunning = false; // Reset running state after completion
-            });
+            axios.post('http://localhost:5000/api/automation/force_run', this.config)
+                .then(response => {
+                    console.log(response.data.message); // Success message from backend
+                })
+                .catch(error => {
+                    alert(`Error: ${error.response ? error.response.data.message : error.message}`); // Handle errors
+                })
+                .finally(() => {
+                    this.isRunning = false; // Reset running state after completion
+                });
+        },
+        confirmReset() {
+            this.showResetPopup = false;
+            axios.post('/api/config/reset')
+                .then(window.location.reload())
+                .catch(error => {
+                    alert(`Error resetting configuration: ${error.response ? error.response.data.message : error.message}`);
+                });
         }
     }
 };
 
 </script>
 
-<style scoped>
-</style>
+<style scoped></style>

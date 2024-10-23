@@ -124,7 +124,7 @@ export default {
         },
         updateSelectedLibraries() {
             const libraryIds = this.selectedLibraries.map(library => library.uuid);
-            this.$emit('update-plex-libraries', libraryIds);  // Emetti l'array degli ID delle librerie selezionate
+            this.$emit('updateConfig', 'PLEX_LIBRARIES', libraryIds);
         },
         loadSelectedLibraries() {
             if (this.config.PLEX_LIBRARIES) {

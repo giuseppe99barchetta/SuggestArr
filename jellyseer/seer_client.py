@@ -184,6 +184,10 @@ class SeerClient:
         # Ensure login if necessary, use cookie-based authentication
         if (self.username and self.password) and not self.session_token:
             await self.login()
+            
+        if not self.session_token:
+            self.logger.error('Error during login to Seer.')
+            return {'message': 'Error during login to Seer.'}, 404
 
         use_cookie = bool(self.session_token)  # Use cookie if we have a session token
 

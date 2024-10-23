@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from config.config import load_env_vars, save_env_vars
+from config.config import load_env_vars, save_env_vars, clear_env_vars
 from config.logger_manager import LoggerManager
 
 logger = LoggerManager().get_logger(__name__)
@@ -29,3 +29,15 @@ def save_config():
     except Exception as e:
         logger.error(f'Error saving configuration: {str(e)}')
         return jsonify({'message': f'Error saving configuration: {str(e)}', 'status': 'error'}), 500
+
+@config_bp.route('/reset', methods=['POST'])
+def reset_config():
+    """
+    Reset environment variables.
+    """
+    try:
+        clear_env_vars()
+        return jsonify({'message': 'Configuration cleared successfully!', 'status': 'success'}), 200
+    except Exception as e:
+        logger.error(f'Error clearing configuration: {str(e)}')
+        return jsonify({'message': f'Error clearing configuration: {str(e)}', 'status': 'error'}), 500

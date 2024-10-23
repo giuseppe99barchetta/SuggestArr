@@ -58,9 +58,11 @@ def register_routes(app): # pylint: disable=redefined-outer-name
         """
         Serve the built frontend's index.html or any other static file.
         """
+        app.static_folder = './suggestarr-frontend/dist'
         if path == "" or not os.path.exists(os.path.join(app.static_folder, path)):
             return send_from_directory(app.static_folder, 'index.html')
         else:
+            # Serve the requested file (static assets like JS, CSS, images, etc.)
             return send_from_directory(app.static_folder, path)
 
 app = create_app()
