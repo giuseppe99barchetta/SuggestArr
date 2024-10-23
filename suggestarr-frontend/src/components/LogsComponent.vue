@@ -81,7 +81,7 @@ export default {
   },
   methods: {
     fetchLogs() {
-      axios.get('http://localhost:5000/api/logs')
+      axios.get('/api/logs')
         .then(response => {
           this.logs = this.parseLogs(response.data).reverse();
         })

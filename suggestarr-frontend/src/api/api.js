@@ -18,7 +18,7 @@ export const testJellyfinApi = (url, token) => {
 
 // Funzione per testare la configurazione Jellyseer e ottenere gli utenti
 export const testJellyseerApi = (url, token) => {
-    return axios.post('http://localhost:5000/api/jellyseer/get_users', {
+    return axios.post('/api/jellyseer/get_users', {
         JELLYSEER_API_URL: url,
         JELLYSEER_TOKEN: token
     });
@@ -26,7 +26,7 @@ export const testJellyseerApi = (url, token) => {
 
 // Funzione per autenticare un utente in Jellyseer
 export const authenticateUser = (url, token, userName, password) => {
-    return axios.post('http://localhost:5000/api/jellyseer/login', {
+    return axios.post('/api/jellyseer/login', {
         JELLYSEER_API_URL: url,
         JELLYSEER_TOKEN: token,
         JELLYSEER_USER_NAME: userName,
@@ -35,7 +35,7 @@ export const authenticateUser = (url, token, userName, password) => {
 };
 
 export function fetchJellyfinLibraries(apiUrl, apiKey) {
-    return axios.post(`http://localhost:5000/api/jellyfin/libraries`, {
+    return axios.post(`api/jellyfin/libraries`, {
         JELLYFIN_API_URL: apiUrl,
         JELLYFIN_TOKEN: apiKey
     });

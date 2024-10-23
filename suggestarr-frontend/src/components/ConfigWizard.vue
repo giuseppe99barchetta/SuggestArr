@@ -104,7 +104,7 @@ export default {
   methods: {
     // Method to fetch the existing configuration
     fetchConfig() {
-      axios.get('http://localhost:5000/api/config')
+      axios.get('/api/config')
         .then(response => {
           if (response.data && Object.keys(response.data).length > 0) {
             this.config = response.data; // Load saved configuration
@@ -185,7 +185,7 @@ export default {
     },
     // Method to save the configuration
     saveConfig() {
-      axios.post('http://localhost:5000/api/save', this.config)
+      axios.post('/api/save', this.config)
         .then(response => {
           console.log('Configuration saved:', response);
         })
