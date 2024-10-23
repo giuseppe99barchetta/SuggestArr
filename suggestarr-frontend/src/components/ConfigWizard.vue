@@ -76,6 +76,11 @@ export default {
   mounted() {
     // Fetch the saved configuration when component mounts
     this.fetchConfig();
+    if (this.$toast) {
+      console.log('Toast is available');
+    } else {
+      console.error('Toast is not available in this component');
+    }
   },
   methods: {
     // Initialize the configuration with default values

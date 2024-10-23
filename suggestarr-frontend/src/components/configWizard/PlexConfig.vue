@@ -2,44 +2,62 @@
     <div>
         <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Step 3: Plex Client Details</h3>
         <p class="text-xs sm:text-sm text-gray-400 mb-4">
-            To get your Plex token follow this guide:
-            <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/">
-                How to get Plex Token.
-            </a>
+            Login using your Plex account.
         </p>
-
-        <!-- Plex Token -->
-        <label for="PLEX_TOKEN" class="block text-xs sm:text-sm font-semibold text-gray-300">Plex Token:</label>
-        <input type="text" :value="config.PLEX_TOKEN" 
-            @input="$emit('update-config', 'PLEX_TOKEN', $event.target.value)"
-            class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2" 
-            id="PLEX_TOKEN" placeholder="Enter your Plex Token">
-
-        <!-- Plex URL + Test Button -->
-        <label for="PLEX_API_URL" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Plex URL:</label>
-        <div class="flex flex-col sm:flex-row items-start sm:items-center">
-            <input type="text" :value="config.PLEX_API_URL" 
-                @input="updatePlexUrl($event.target.value)"
-                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2 mb-4 sm:mb-0 sm:mr-2"
-                id="PLEX_API_URL" placeholder="http://your-plex-url">
-            <button type="button" @click="testPlexApiConnection" :disabled="plexTestState.isTesting" 
-                :class="{
-                    'bg-green-500 hover:bg-green-600': plexTestState.status === 'success',
-                    'bg-red-500 hover:bg-red-600': plexTestState.status === 'fail',
-                    'bg-blue-500 hover:bg-blue-600': plexTestState.status === null
-                }" 
-                class="text-white px-4 py-2 rounded-lg shadow-md w-full sm:w-auto">
-                <i v-if="plexTestState.isTesting" class="fas fa-spinner fa-spin"></i>
-                <i v-else-if="plexTestState.status === 'success'" class="fas fa-check"></i>
-                <i v-else-if="plexTestState.status === 'fail'" class="fas fa-times"></i>
-                <i v-else class="fas fa-play"></i>
-            </button>
-        </div>
-
         <!-- Error message for failed validation -->
         <div v-if="plexTestState.status === 'fail'"
             class="bg-gray-800 border border-red-500 text-red-500 px-4 py-3 rounded-lg mt-4" role="alert">
             <span class="block sm:inline">Failed to connect to Plex API. Check your URL and token.</span>
+        </div>
+
+        <div v-if="!isLoggedIn">
+            <button @click="loginWithPlex">Login with Plex</button>
+        </div>
+
+        <div v-if="servers.length > 0" class="mt-6">
+            <label for="server-selection" class="block text-xs sm:text-sm font-semibold text-gray-300">Select a Plex
+                Server and Connection:</label>
+            <div class="flex items-center">
+                <!-- Select for Plex Server and Connection -->
+                <select v-model="selectedServerConnection" @change="updateSelectedServer"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+                    id="server-selection">
+                    <option v-for="(connection, index) in getServerConnections()" :key="index"
+                        :value="{ address: connection.address, port: connection.port, protocol: connection.protocol }">
+                        {{ connection.serverName }} - {{ connection.address }}:{{ connection.port }} ({{
+                            connection.protocol }}) {{ connection.secure ? '[Secure]' : '[Insecure]' }}
+                    </option>
+                    <option value="manual">Manual Configuration</option>
+                </select>
+
+                <!-- Button with refresh icon -->
+                <button v-if="!manualConfiguration" @click="fetchLibraries"
+                    class="ml-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
+                    <i class="fas fa-sync-alt"></i> <!-- Font Awesome icon for refresh -->
+                </button>
+            </div>
+        </div>
+
+        <div v-if="manualConfiguration || selectedServer === 'manual'" class="mt-6">
+            <h3 class="text-md text-gray-300 mb-4">Manual Server Configuration</h3>
+
+            <label for="manual-address" class="block text-xs sm:text-sm font-semibold text-gray-300">Server
+                Address:</label>
+
+            <!-- Wrapping input and button in a flex container -->
+            <div class="flex items-center">
+                <!-- Input for manual server address -->
+                <input type="text" v-model="manualServerAddress"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2" id="manual-address"
+                    placeholder="Enter server address"
+                    @input="this.$emit('update-config', 'PLEX_API_URL', $event.target.value)">
+
+                <!-- Button for refreshing libraries next to the input -->
+                <button @click="fetchLibraries"
+                    class="ml-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
+                    <i class="fas fa-sync-alt"></i> <!-- Font Awesome icon for refresh -->
+                </button>
+            </div>
         </div>
 
         <!-- Library Selection -->
@@ -63,7 +81,7 @@
             </button>
             <button @click="$emit('next-step')"
                 class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full"
-                :disabled="plexTestState.status !== 'success'">
+                :disabled="libraries.length <= 0">
                 Next Step
             </button>
         </div>
@@ -72,88 +90,9 @@
 
 
 <script>
-import { getPlexLibraries } from '../../api/api';
+import plexClientLogic from '../../api/PlexApi';
 
 export default {
-    props: ['config'],
-    data() {
-        return {
-            plexTestState: {
-                status: null, // 'success', 'fail', or null (non testato)
-                isTesting: false
-            },
-            libraries: [],
-            selectedLibraries: []
-        };
-    },
-    methods: {
-        testPlexApiConnection() {
-        this.plexTestState.isTesting = true; // Correct the assignment
-        this.plexTestState.status = null; // Reset the status before starting the test
-        getPlexLibraries(this.config.PLEX_API_URL, this.config.PLEX_TOKEN)
-            .then(response => {
-                if (response && response.items) {
-                    this.libraries = response.items;
-                    this.loadSelectedLibraries();
-                    this.plexTestState.status = 'success'; // Mark success
-                } else {
-                    this.libraries = [];
-                    this.plexTestState.status = 'fail'; // Mark failure
-                }
-            })
-            .catch(() => {
-                this.libraries = [];
-                this.plexTestState.status = 'fail'; // Mark failure
-            })
-            .finally(() => {
-                this.plexTestState.isTesting = false; // Set isTesting to false once finished
-            });
-        },
-        toggleLibrarySelection(library) {
-            const index = this.selectedLibraries.findIndex(l => l.uuid === library.uuid);
-            if (index > -1) {
-                this.selectedLibraries.splice(index, 1);
-            } else {
-                this.selectedLibraries.push(library);
-            }
-
-            this.updateSelectedLibraries();
-        },
-        isSelected(libraryId) {
-            return this.selectedLibraries.some(library => library.uuid === libraryId);
-        },
-        updateSelectedLibraries() {
-            const libraryIds = this.selectedLibraries.map(library => library.uuid);
-            this.$emit('updateConfig', 'PLEX_LIBRARIES', libraryIds);
-        },
-        loadSelectedLibraries() {
-            if (this.config.PLEX_LIBRARIES) {
-                console.log(this.config.PLEX_LIBRARIES)
-                this.selectedLibraries = this.libraries.filter(library => 
-                    this.config.PLEX_LIBRARIES.includes(library.uuid)
-                );
-            }
-        },
-        updatePlexUrl(url) {
-            // Remove trailing slash if it exists
-            const trimmedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
-            console.log('Updated URL:', trimmedUrl);
-            this.$emit('update-config', 'PLEX_API_URL', trimmedUrl);
-        },
-        // Automatically test Plex API if URL and Token exist
-        autoTestPlex() {
-            if (this.config.PLEX_API_URL && this.config.PLEX_TOKEN) {
-                this.testPlexApiConnection(); // Automatically test the connection
-            }
-        }
-    },
-    mounted() {
-        this.autoTestPlex(); 
-        if (this.config.PLEX_LIBRARIES) {
-            this.selectedLibraries = this.libraries.filter(library =>
-                this.config.PLEX_LIBRARIES.includes(library.uuid)
-            );
-        }
-    }
+    ...plexClientLogic,
 };
 </script>

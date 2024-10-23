@@ -30,6 +30,8 @@ RUN cp -R /app/suggestarr-frontend/dist/* /app/static/
 # Return to the /app directory for backend work
 WORKDIR /app
 
+RUN touch .env
+
 # Copy the Supervisor configuration file
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 

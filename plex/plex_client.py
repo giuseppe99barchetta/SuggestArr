@@ -19,7 +19,7 @@ class PlexClient:
     and libraries.
     """
 
-    def __init__(self, api_url, token, max_content=10, library_ids=None):
+    def __init__(self, token, api_url=None, max_content=10, library_ids=None, client_id=None):
         """
         Initializes the PlexClient with the provided API URL and token.
         :param api_url: The base URL for the Plex API.
@@ -30,7 +30,13 @@ class PlexClient:
         self.max_content_fetch = max_content
         self.api_url = api_url
         self.library_ids = library_ids
-        self.headers = {"X-Plex-Token": token, "Accept": 'application/json'}
+        self.base_url = 'https://plex.tv/api/v2'
+        self.headers = {
+            "X-Plex-Token": token, 
+            "Accept": 'application/json'
+        }
+        if client_id:
+            self.headers['X-Plex-Client-Identifier'] = client_id
 
     async def get_all_users(self):
         """
@@ -119,3 +125,22 @@ class PlexClient:
             self.logger.error("An error occurred while retrieving metadata for item %s: %s", item_id, str(e))
 
         return None
+    
+    async def get_servers(self):
+        """
+        obtain available Plex server for current user
+        :return: Lista di server Plex se trovati, altrimenti None.
+        """
+        url = f"{self.base_url}/resources"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=self.headers, timeout=10) as response:
+                    if response.status == 200:
+                        servers = await response.json()
+                        return servers
+                    else:
+                        print(f"Errore durante il recupero dei server Plex: {response.status}")
+                        return None
+        except aiohttp.ClientError as e:
+            print(f"Errore durante il recupero dei server Plex: {str(e)}")
+            return None

@@ -104,10 +104,20 @@ export default {
                 this.selectedLibraryNames.splice(this.selectedLibraryNames.indexOf(library.Name), 1);
             }
             // Emit both the IDs and names of the selected libraries
-            this.$emit('updateConfig', 'JELLYFIN_LIBRARIES', {
-                ids: this.selectedLibraryIds,
-                names: this.selectedLibraryNames
-            });
+            this.$emit('update-config', 'JELLYFIN_LIBRARIES', this.combineLibraryData(this.selectedLibraryIds, this.selectedLibraryNames));
+            console.log(this.config.JELLYFIN_LIBRARIES)
+
+        },
+        combineLibraryData(ids, names) {
+            if (ids.length !== names.length) {
+                console.error("Mismatch between number of ids and names");
+                return [];
+            }
+
+            return ids.map((id, index) => ({
+                id: id,
+                name: names[index]
+            }));
         },
         isSelected(libraryId) {
             return this.selectedLibraryIds.includes(libraryId);

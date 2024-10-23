@@ -3,13 +3,13 @@ This script loads and saves environment variables for connecting to TMDb, Jellyf
 It uses the dotenv library to load variables from a .env file and ensures that valid cron expressions are provided.
 """
 
-import ast
 import os
 import subprocess
 import platform
 from dotenv import load_dotenv
 from croniter import croniter
 from config.logger_manager import LoggerManager
+logger = LoggerManager().get_logger(__name__)
 
 # Constants for environment variables
 ENV_VARS = {
@@ -107,6 +107,8 @@ def clear_env_vars():
             os.remove(env_file_path)
         except OSError as e:
             print(f"Error deleting {env_file_path}: {e}")
+            
+    logger.info("Saved configuration cleared successfully.")
         
 def update_cron_job(cron_time):
     """
@@ -114,7 +116,6 @@ def update_cron_job(cron_time):
     This function is specific to Linux systems.
     """
     try:
-        logger = LoggerManager().get_logger(__name__)
 
         # Command to call the Flask endpoint using curl
         cron_command = "curl -X POST http://localhost:5000/run_now >> /var/log/cron.log 2>&1"
@@ -136,6 +137,5 @@ def update_cron_job(cron_time):
         logger.info("Cron job updated with: %s", cron_time)
 
     except subprocess.CalledProcessError as e:
-        logger = LoggerManager().get_logger(__name__)
         logger.error(f"Failed to update cron job: {e}")
         raise RuntimeError(f"Failed to update cron job: {e}")

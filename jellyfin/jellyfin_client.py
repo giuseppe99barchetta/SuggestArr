@@ -28,7 +28,7 @@ class JellyfinClient:
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.max_content_fetch = max_content
         self.api_url = api_url
-        self.library_ids = library_ids
+        self.libraries = library_ids
         self.headers = {"X-Emby-Token": token}
 
     async def get_all_users(self):
@@ -53,7 +53,6 @@ class JellyfinClient:
         """
         Retrieves a list of recently played items for a given user from specific libraries asynchronously.
         :param user_id: The ID of the user whose recent items are to be retrieved.
-        :param library_ids: A list of library IDs to filter the results.
         :return: A combined list of recent items from all specified libraries.
         """
         self.logger.info("Searching for last %s viewed content for user: %s.", self.max_content_fetch, user_id)
@@ -62,7 +61,7 @@ class JellyfinClient:
 
         url = f"{self.api_url}/Users/{user_id}/Items"
 
-        for library_id in self.library_ids:
+        for library in self.libraries:
             params = {
                 "SortBy": "DatePlayed",
                 "SortOrder": "Descending",
@@ -70,7 +69,7 @@ class JellyfinClient:
                 "Recursive": "true",
                 "IncludeItemTypes": "Movie,Episode",
                 "Limit": self.max_content_fetch,
-                "ParentID": library_id
+                "ParentID": library.get('id')
             }
 
             try:
@@ -78,13 +77,13 @@ class JellyfinClient:
                     async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
                         if response.status == 200:
                             library_items = await response.json()
-                            results_by_library[library_id] = library_items.get('Items', [])
+                            results_by_library[library.get('name')] = library_items.get('Items', [])
                         else:
                             self.logger.error(
-                                "Failed to get recent items for library %s (user %s): %d", library_id, user_id, response.status)
+                                "Failed to get recent items for library %s (user %s): %d", library.get('name'), user_id, response.status)
             except aiohttp.ClientError as e:
                 self.logger.error(
-                    "An error occurred while retrieving recent items for library %s (user %s): %s", library_id, user_id, str(e))
+                    "An error occurred while retrieving recent items for library %s (user %s): %s", library.get('name'), user_id, str(e))
 
         return results_by_library if results_by_library else None
     

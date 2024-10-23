@@ -38,8 +38,8 @@ class JellyfinHandler:
 
         if recent_items_by_library:
             tasks = []
-            for library_id, items in recent_items_by_library.items():
-                self.logger.info(f"Processing items for library: {library_id}")
+            for library_name, items in recent_items_by_library.items():
+                self.logger.info(f"Processing items for library: {library_name}")
                 tasks.extend([self.process_item(user['Id'], item) for item in items])
             await asyncio.gather(*tasks)
 
