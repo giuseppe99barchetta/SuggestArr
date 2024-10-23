@@ -36,7 +36,7 @@ export const authenticateUser = (url, token, userName, password) => {
 
 // Function to fetch Jellyfin libraries
 export function fetchJellyfinLibraries(apiUrl, apiKey) {
-    return axios.post(`http://localhost:5000/api/jellyfin/libraries`, {
+    return axios.post(`/api/jellyfin/libraries`, {
         JELLYFIN_API_URL: apiUrl,
         JELLYFIN_TOKEN: apiKey
     });
