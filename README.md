@@ -29,13 +29,14 @@ You can run the project using Docker Compose for easy setup and execution.
 
 ```yaml
 services:
-  automation:
+  suggestarr:
     image: ciuse99/suggestarr:latest
-    environment:
     container_name: SuggestArr
     restart: always
     ports:
       - "5000:5000"
+    volumes:
+      - ./config_files:/app/config/config_files
 ```
 To start the container with Docker Compose:
 
