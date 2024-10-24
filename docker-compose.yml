@@ -1,7 +1,10 @@
 services:
-  automation:
-    image: ciuse99/suggestarr:latest
+  suggestarr:
+    #image: ciuse99/suggestarr:latest
+    build: .
     container_name: SuggestArr
     restart: always
     ports:
       - "5000:5000"
+    volumes:
+      - ./config_files:/app/config/config_files

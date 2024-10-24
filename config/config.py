@@ -1,17 +1,16 @@
-"""
-This script loads and saves environment variables for connecting to TMDb, Jellyfin, Plex, and Seer APIs.
-It uses the dotenv library to load variables from a .env file and ensures that valid cron expressions are provided.
-"""
-
 import os
 import subprocess
 import platform
-from dotenv import load_dotenv
+import yaml
 from croniter import croniter
 from config.logger_manager import LoggerManager
+
 logger = LoggerManager().get_logger(__name__)
 
 # Constants for environment variables
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(BASE_DIR, 'config_files', 'config.yaml')
+
 ENV_VARS = {
     'TMDB_API_KEY': 'TMDB_API_KEY',
     'JELLYFIN_API_URL': 'JELLYFIN_API_URL',
@@ -33,11 +32,16 @@ ENV_VARS = {
 
 def load_env_vars():
     """
-    Load variables from the .env file, if it exists, and return them as a dictionary.
+    Load variables from the config.yaml file and return them as a dictionary.
     """
-    load_dotenv(override=True)
+    if not os.path.exists(CONFIG_PATH):
+        logger.warning(f"{CONFIG_PATH} not found. Creating a new one with default values.")
+        return get_default_values()
 
-    return {key: os.getenv(key, default_value()) for key, default_value in get_default_values().items()}
+    with open(CONFIG_PATH, 'r', encoding='utf-8') as file:
+        config_data = yaml.safe_load(file)
+        return {key: config_data.get(key, default_value()) for key, default_value in get_default_values().items()}
+
 
 def get_default_values():
     """
@@ -55,16 +59,17 @@ def get_default_values():
         ENV_VARS['MAX_SIMILAR_TV']: lambda: '2',
         ENV_VARS['CRON_TIMES']: lambda: '0 0 * * *',
         ENV_VARS['MAX_CONTENT_CHECKS']: lambda: '10',
-        ENV_VARS['JELLYFIN_LIBRARIES']: lambda: '[]',
+        ENV_VARS['JELLYFIN_LIBRARIES']: lambda: [],
         ENV_VARS['PLEX_TOKEN']: lambda: '',
         ENV_VARS['PLEX_API_URL']: lambda: '',
-        ENV_VARS['PLEX_LIBRARIES']: lambda: '[]',
+        ENV_VARS['PLEX_LIBRARIES']: lambda: [],
         ENV_VARS['SELECTED_SERVICE']: lambda: '',
     }
 
+
 def save_env_vars(config_data):
     """
-    Save environment variables from the web interface to the .env file. 
+    Save environment variables from the web interface to the config.yaml file.
     Also validates cron times and updates them if needed.
     """
     cron_times = config_data.get(ENV_VARS['CRON_TIMES'], '0 0 * * *')
@@ -75,10 +80,9 @@ def save_env_vars(config_data):
     # Prepare environment variables to be saved
     env_vars = {key: config_data.get(key, default_value()) for key, default_value in get_default_values().items()}
     
-    # Write environment variables to the .env file
-    with open('.env', 'w', encoding='utf-8') as f:
-        for key, value in env_vars.items():
-            f.write(f'{key}="{value}"\n')
+    # Write environment variables to the config.yaml file
+    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+        yaml.safe_dump(env_vars, f)
 
     # Reload environment variables after saving
     load_env_vars()
@@ -90,33 +94,23 @@ def save_env_vars(config_data):
 
 def clear_env_vars():
     """
-    Remove environment variables from memory and delete the .env file if it exists.
+    Remove environment variables from memory and delete the config.yaml file if it exists.
     """
-    # List of environment variables to remove
-    env_vars_to_remove = list(ENV_VARS.values())
-
-    # Remove environment variables from memory
-    for var in env_vars_to_remove:
-        if var in os.environ:
-            os.environ.pop(var, None)  # Remove variable if exists, no error if missing
-
-    # Delete the .env file if it exists
-    env_file_path = '.env'
-    if os.path.exists(env_file_path):
+    # Delete the config.yaml file if it exists
+    if os.path.exists(CONFIG_PATH):
         try:
-            os.remove(env_file_path)
+            os.remove(CONFIG_PATH)
+            logger.info("Configuration cleared successfully.")
         except OSError as e:
-            print(f"Error deleting {env_file_path}: {e}")
-            
-    logger.info("Saved configuration cleared successfully.")
+            print(f"Error deleting {CONFIG_PATH}: {e}")
+
         
 def update_cron_job(cron_time):
     """
-    Updates the cron job to trigger the Flask API using curl. 
+    Updates the cron job to trigger the Flask API using curl.
     This function is specific to Linux systems.
     """
     try:
-
         # Command to call the Flask endpoint using curl
         cron_command = "curl -X POST http://localhost:5000/run_now >> /var/log/cron.log 2>&1"
 

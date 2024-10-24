@@ -23,6 +23,5 @@ class PlexAuth:
         response = requests.get(f"{self.base_url}/pins/{pin_id}", headers=self.headers)
         data = response.json()
         if 'authToken' in data:
-            print(data)
             return data['authToken']
         return None
