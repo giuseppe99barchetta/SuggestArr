@@ -33,7 +33,7 @@ class PlexHandler:
             for response_item in recent_items_response:
                 title = response_item.get('title', response_item.get('grandparentTitle'))
                 self.logger.info(f"Processing item: {title}")
-                tasks.append(self.process_item(None, response_item))  # No user context needed for Plex
+                tasks.append(self.process_item(None, response_item, title))  # No user context needed for Plex
 
             if tasks:
                 await asyncio.gather(*tasks)
@@ -43,26 +43,40 @@ class PlexHandler:
         else:
             self.logger.warning("Unexpected response format: expected a list")
 
-    async def process_item(self, user_id, item):
+    async def process_item(self, user_id, item, title):
         """Process an individual item (movie or TV show episode)."""
-        item_type = item['type'].lower()
-        if item_type == 'movie' and self.max_similar_movie > 0:
-            await self.process_movie(user_id, item['key'].replace('/library/metadata/', ''))
-        elif item_type == 'episode' and self.max_similar_tv > 0:
-            await self.process_episode(user_id, item)
 
-    async def process_movie(self, user_id, item_id):
+        item_type = item['type'].lower()
+
+        if (item_type == 'movie' and self.max_similar_movie > 0) or (item_type == 'episode' and self.max_similar_tv > 0):
+            try:
+                key = self.extract_rating_key(item, item_type)
+                if key:
+                    if item_type == 'movie':
+                        await self.process_movie(user_id, key)
+                    elif item_type == 'episode':
+                        await self.process_episode(user_id, key)
+                else:
+                    raise ValueError(f"Missing key for {item_type} '{title}'. Cannot process this item. Skipping")   
+            except Exception as e:
+                self.logger.warning(f"Error while processing item: {str(e)}")
+                
+    def extract_rating_key(self, item, item_type):
+        """Extract the appropriate key depending on the item type."""
+        key = item.get('key') if item_type == 'movie' else item.get('grandparentKey') if item_type == 'episode' else None
+        return key.replace('/library/metadata/', '') if key else None
+
+    async def process_movie(self, user_id, movie_key):
         """Find similar movies via TMDb and request them via Jellyseer."""
-        tmdb_id = await self.plex_client.get_metadata_provider_id(item_id)
+        tmdb_id = await self.plex_client.get_metadata_provider_id(movie_key)
         if tmdb_id:
             similar_movies = await self.tmdb_client.find_similar_movies(tmdb_id)
             await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie)
 
-    async def process_episode(self, user_id, item):
+    async def process_episode(self, user_id, series_key):
         """Process a TV show episode by finding similar TV shows via TMDb."""
-        series_id = item.get('grandparentKey').replace('/library/metadata/', '')
-        if series_id:
-            tvdb_id = await self.plex_client.get_metadata_provider_id(series_id)
+        if series_key:
+            tvdb_id = await self.plex_client.get_metadata_provider_id(series_key)
             if tvdb_id:
                 similar_tvshows = await self.tmdb_client.find_similar_tvshows(tvdb_id)
                 await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv)
