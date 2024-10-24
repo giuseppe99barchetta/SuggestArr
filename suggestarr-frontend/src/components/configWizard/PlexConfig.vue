@@ -91,7 +91,7 @@
 
 
 <script>
-import plexApi from '../../api/PlexApi';
+import plexApi from '../../api/plexApi';
 
 export default {
     ...plexApi,

@@ -1,15 +1,21 @@
 # Changelog
 
-## [1.0.7] - 2024-10-23
+## [1.0.7] - 2024-10-24
 
 ### 🚨 Important
-- **Plex Support Integration**: Added support for Plex as a media server, allowing users to configure and test Plex API connections, retrieve libraries, and integrate content requests.
+- **Plex Support Integration**: Added support for Plex! Allowing users to login directly with their Plex account, retrieve server and libraries, and integrate content requests.
+
+### ⚠️ Breaking Changes
+- **Edited environment variables name**:  Some environment variables have been renamed. Please review your configuration to ensure it remains valid. If any issues arise, it's recommended to reset your configuration and start fresh with the new variable names.
 
 ### ✨ Added
+- **New step for select the media Service**: The first step now allows user to select which media server want to use (Plex or Jellyfin).
 - **Real-Time Log Panel with Filters**: Added a real-time log viewing panel with multiple filters (e.g., `INFO`, `ERROR`, `DEBUG`), allowing users to filter and view application logs directly from the UI for better diagnostics.
-- **Plex API Token and URL Validation**: Implemented UI for testing Plex API connections directly from the configuration page.
+- **Implemented **: Implemented UI for testing Plex API connections directly from the configuration page.
 - **Trailing Slash Handling**: Automatically removes trailing slashes from URLs in Jellyfin, Jellyseer and Plex configurations to ensure consistency and avoid API errors.
 - **Unified Seer Management**: Implemented support for both Jellyseer and Overseer under unified variables for easier configuration (`SEER_API_URL`, `SEER_TOKEN`, etc.).
+- **Background Image Rotation**: Added dynamic background image rotation in the configuration wizard to improve visual experience.
+- **Default Background Images**: Added fallback background images in the wizard until a valid TMDB API Key is provided.
 - **Configuration Pre-testing and Pre-authentication**: Automatically checks if configuration (e.g., API keys, URLs) already exists and marks them as validated and authenticated, skipping manual re-testing steps if previously successful.
   
 ### 🚀 Improved

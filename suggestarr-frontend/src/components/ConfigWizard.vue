@@ -27,6 +27,9 @@
 <script>
 import '@/assets/styles/wizard.css';
 import Footer from './AppFooter.vue';
+import axios from 'axios';
+import { fetchRandomMovieImage } from '@/api/tmdbApi';
+
 
 // Import wizard components
 import MediaServiceSelection from './configWizard/MediaServiceSelection.vue';
@@ -36,7 +39,6 @@ import SeerConfig from './configWizard/SeerConfig.vue';
 import AdditionalSettings from './configWizard/AdditionalSettings.vue';
 import PlexConfig from './configWizard/PlexConfig.vue';
 import ConfigSummary from './ConfigSummary.vue';
-import axios from 'axios';
 
 export default {
   components: {
@@ -51,18 +53,18 @@ export default {
   },
   data() {
     return {
-      currentStep: 1,  // Current step of the wizard
-      config: this.getInitialConfig(),  // Load initial configuration
+      currentStep: 1,
+      config: this.getInitialConfig(),
       backgroundImageUrl: '',
       intervalId: null,
+      defaultImages: ['/images/default1.jpg', '/images/default2.jpg', '/images/default3.jpg'],
+      currentDefaultImageIndex: 0,
     };
   },
   computed: {
-    // Calculate progress bar width
     progressBarWidth() {
       return `${(this.currentStep / this.steps.length) * 100}%`;
     },
-    // Determine steps dynamically based on the selected service
     steps() {
       const serviceSteps = {
         jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'AdditionalSettings'],
@@ -74,22 +76,30 @@ export default {
       return this.steps[this.currentStep - 1] || 'SaveConfig';
     },
   },
+  watch: {
+    'config.TMDB_API_KEY': function (newApiKey) {
+      if (newApiKey) {
+        this.stopBackgroundImageRotation();
+        this.startBackgroundImageRotation();
+      }
+    },
+  },
   mounted() {
-    // Fetch the saved configuration when component mounts
     this.fetchConfig();
-    this.startBackgroundImageRotation();
+    if (!this.config.TMDB_API_KEY) {
+      this.startDefaultImageRotation();
+    }
   },
   methods: {
-    // Initialize the configuration with default values
     getInitialConfig() {
       return {
         TMDB_API_KEY: '',
         JELLYFIN_API_URL: '',
         JELLYFIN_TOKEN: '',
-        SEER_API_URL: '',    // Unified for Jellyseer/Overseer
-        SEER_TOKEN: '',      // Unified for Jellyseer/Overseer
-        SEER_USER_NAME: '',  // Unified for Jellyseer/Overseer
-        SEER_USER_PSW: '',   // Unified for Jellyseer/Overseer
+        SEER_API_URL: '',
+        SEER_TOKEN: '',
+        SEER_USER_NAME: '',
+        SEER_USER_PSW: '',
         MAX_SIMILAR_MOVIE: 5,
         MAX_SIMILAR_TV: 2,
         MAX_CONTENT_CHECKS: 10,
@@ -101,84 +111,62 @@ export default {
         PLEX_LIBRARIES: [],
       };
     },
-
-    // Generic method to update configuration values
-    updateConfig(key, value) {
-      this.config[key] = value;
-    },
-
-    // Fetch the existing configuration from the backend
     async fetchConfig() {
       try {
         const { data } = await axios.get('/api/config/fetch');
         if (data) {
           this.config = data;
-          if (this.config.TMDB_API_KEY || this.config.JELLYFIN_API_URL || this.config.JELLYFIN_TOKEN) {
-            this.currentStep = this.steps.length + 1; // Skip to summary
+          if (this.config.TMDB_API_KEY) {
+            this.currentStep = this.steps.length + 1;
           }
         }
       } catch (error) {
         console.error('Error fetching configuration:', error);
       }
     },
-
-    // Save the configuration to the backend
     async saveConfig() {
       try {
         await axios.post('/api/config/save', this.config);
-        this.currentStep = this.steps.length + 1; // Move to summary after saving
+        this.currentStep = this.steps.length + 1;
       } catch (error) {
         console.error('Error saving configuration:', error);
       }
     },
-
-    // Handle step navigation
+    updateConfig(key, value) {
+      this.config[key] = value;
+    },
+    editConfig() {
+      this.currentStep = 1;
+    },
+    
     handleStepChange(stepChange) {
       if (this.currentStep + stepChange > 0 && this.currentStep + stepChange <= this.steps.length) {
         this.currentStep += stepChange;
       } else if (this.currentStep + stepChange > this.steps.length) {
-        this.saveConfig();  // Save when reaching the last step
+        this.saveConfig();
       }
     },
 
-    // Method to reset to first step when editing config
-    editConfig() {
-      this.currentStep = 1;
+    startDefaultImageRotation() {
+      this.backgroundImageUrl = this.defaultImages[this.currentDefaultImageIndex];
+
+      this.intervalId = setInterval(() => {
+        this.currentDefaultImageIndex = (this.currentDefaultImageIndex + 1) % this.defaultImages.length;
+        this.backgroundImageUrl = this.defaultImages[this.currentDefaultImageIndex];
+      }, 10000);
     },
     async fetchRandomMovieImage() {
-      const apiKey = this.config.TMDB_API_KEY;
-      if (!apiKey){
-        return
-      }
-      const randomPage = Math.floor(Math.random() * 100) + 1;
-
-      try {
-        const response = await axios.get(`https://api.themoviedb.org/3/movie/popular`, {
-          params: {
-            api_key: apiKey,
-            page: randomPage
-          }
-        });
-
-        const movies = response.data.results;
-        const randomMovie = movies[Math.floor(Math.random() * movies.length)];
-        const imageUrl = `https://image.tmdb.org/t/p/w1280${randomMovie.backdrop_path}`;
-
-        // Pre-caricamento dell'immagine
+      const imageUrl = await fetchRandomMovieImage(this.config.TMDB_API_KEY);
+      if (imageUrl) {
         const img = new Image();
         img.src = imageUrl;
-
         img.onload = () => {
-          this.backgroundImageUrl = imageUrl; // Cambia lo sfondo solo dopo che l'immagine è stata caricata
+          this.backgroundImageUrl = imageUrl;
         };
-
-      } catch (error) {
-        console.error('Failed to fetch movie image:', error);
       }
     },
     startBackgroundImageRotation() {
       this.fetchRandomMovieImage();
-
       this.intervalId = setInterval(() => {
         this.fetchRandomMovieImage();
       }, 10000);
@@ -187,10 +175,11 @@ export default {
       if (this.intervalId) {
         clearInterval(this.intervalId);
       }
-    }
-
-  }, beforeUnmount() {
+    },
+  },
+  beforeUnmount() {
     this.stopBackgroundImageRotation();
-  }
+  },
 };
 </script>
+
