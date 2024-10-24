@@ -1,25 +1,24 @@
 
 # SuggestArr
-![jellyfin github](https://github.com/user-attachments/assets/78c0616b-f7d2-49f6-9ff6-2c1f9969aae9)
+![image](https://github.com/user-attachments/assets/b9296eb8-f264-45d5-a8df-c03783af7bb9)
 
-SuggestArr is a project designed to automate media content recommendations and download requests based on user activity in media servers like **Jellyfin** and **Plex**. It retrieves recently watched content, searches for similar titles using the TMDb API, and sends automated download requests to **Jellyseer** or **Overseer**.
+SuggestArr is a project designed to automate media content recommendations and download requests based on user activity in media servers like **Jellyfin**, **Plex**, and now **Emby**. It retrieves recently watched content, searches for similar titles using the TMDb API, and sends automated download requests to **Jellyseer** or **Overseer**.
 
 ## Features
-- **Multi-Media Server Support**: Now supports both Jellyfin and Plex for retrieving media content.
+- **Multi-Media Server Support**: Supports Jellyfin, Plex, and Emby for retrieving media content.
 - **TMDb Integration**: Searches for similar movies and TV shows on TMDb.
 - **Automated Requests**: Sends download requests for recommended content to Jellyseer or Overseer.
 - **Web Interface**: A user-friendly interface for configuration and management.
 - **Real-Time Logs**: View and filter logs in real time (e.g., `INFO`, `ERROR`, `DEBUG`).
 - **User Selection**: Choose specific users to initiate requests, allowing management and approval of auto-requested content.
 - **Cron Job Management**: Update the cron job schedule directly from the web interface.
-- **Plex Support**: Full Plex integration, allowing login, retrieval of servers and libraries, and content requests.
 - **Configuration Pre-testing**: Automatically validates API keys and URLs during setup.
 
 ## Prerequisites
 - **Python 3.x** or **Docker**
 - **[TMDb API Key](https://www.themoviedb.org/documentation/api)**
-- Configured **[Jellyfin](https://jellyfin.org/)** or **[Plex](https://www.plex.tv/)** media server
-- Access to **[Jellyseer](https://github.com/Fallenbagel/jellyseerr)** or **[Overseer](https://github.com/sct/overseerr)** APIs
+- Configured **[Jellyfin](https://jellyfin.org/)**, **[Plex](https://www.plex.tv/)**, or **[Emby](https://emby.media/)**
+- Configured **[Jellyseer](https://github.com/Fallenbagel/jellyseerr)** or **[Overseer](https://github.com/sct/overseerr)**
 
 ## Docker Usage
 

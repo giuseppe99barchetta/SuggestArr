@@ -1,19 +1,19 @@
 <template>
     <div>
-        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Step 3: {{ serviceName }} API Details</h3>
-        <p class="text-xs sm:text-sm text-gray-400 mb-4">To obtain your {{ serviceName }} API Key, open the {{ serviceName }} interface,
+        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Step 3: Overseer/Jellyfin API Details</h3>
+        <p class="text-xs sm:text-sm text-gray-400 mb-4">To obtain your Overseer/Jellyfin API Key, open the Overseer/Jellyfin interface,
             navigate to Settings, locate the "API Key" section, and copy your key for use in this configuration.</p>
 
-        <!-- {{ serviceName }} API URL -->
-        <label :for="`SEER_API_URL`" class="block text-xs sm:text-sm font-semibold text-gray-300">{{ serviceName }}
+        <!-- Overseer/Jellyfin API URL -->
+        <label :for="`SEER_API_URL`" class="block text-xs sm:text-sm font-semibold text-gray-300">Overseer/Jellyfin
             URL:</label>
         <input type="text" :value="config[`SEER_API_URL`]" 
             @input="updateSeerUrl($event.target.value)"
             class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2" 
-            :placeholder="`http://your-${serviceName.toLowerCase()}-url`">
+            :placeholder="`http://your-Overseer-or-Jellyfin-url`">
 
-        <!-- {{ serviceName }} API Key -->
-        <label :for="`SEER_TOKEN`" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">{{ serviceName }} API
+        <!-- Overseer/Jellyfin API Key -->
+        <label :for="`SEER_TOKEN`" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Overseer/Jellyfin API
             Key:</label>
         <div class="flex flex-col sm:flex-row items-start sm:items-center">
             <input type="text" :value="config[`SEER_TOKEN`]"
@@ -37,16 +37,16 @@
         <!-- Error message for failed validation -->
         <div v-if="testState.status === 'fail'"
             class="bg-gray-800 border border-red-500 text-red-500 px-4 py-3 rounded-lg mt-4" role="alert">
-            <span class="block sm:inline">Failed to validate {{ serviceName }} Key.</span>
+            <span class="block sm:inline">Failed to validate Overseer/Jellyfin Key.</span>
         </div>
 
-        <!-- {{ serviceName }} user selection -->
+        <!-- Overseer/Jellyfin user selection -->
         <div v-if="testState.status === 'success'" class="mt-4">
             <label :for="`SEER_USER_NAME`" class="block text-xs sm:text-sm font-semibold text-gray-300">Select a local
                 User:</label>
 
             <p class="text-xs sm:text-sm text-gray-400 mb-2">
-                Only local users of {{ serviceName }} can be selected. Selecting a specific user is useful if you want to
+                Only local users of Overseer/Jellyfin can be selected. Selecting a specific user is useful if you want to
                 disable automatic approval of requests and manually approve them before automatic downloading.
                 This step is optional. If no user is selected, the administrator account will be used to make requests.
             </p>
@@ -119,12 +119,6 @@ export default {
                 isTesting: false
             }
         };
-    },
-    computed: {
-        serviceName() {
-            // Determine if it's Jellyseer or Overseer based on the selected media server
-            return this.config.SELECTED_SERVICE === 'plex' ? 'Overseer' : 'Jellyseer';
-        }
     },
     methods: {
         autoTestAndAuthenticate() {

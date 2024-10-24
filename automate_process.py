@@ -42,7 +42,7 @@ class ContentAutomation:
         tmdb_client = TMDbClient(env_vars['TMDB_API_KEY'])
 
         # Initialize media service handler (Jellyfin or Plex)
-        if self.selected_service == 'jellyfin':
+        if self.selected_service in ('jellyfin', 'emby') :
             jellyfin_client = JellyfinClient(
                 env_vars['JELLYFIN_API_URL'],
                 env_vars['JELLYFIN_TOKEN'],
