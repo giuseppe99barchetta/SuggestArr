@@ -1,41 +1,42 @@
 import axios from 'axios';
 
-// Funzione per testare la chiave API di TMDB
+// Function to test the TMDB API key
 export const testTmdbApi = (apiKey) => {
-    const tmdbApiUrl = `https://api.themoviedb.org/3/movie/550?api_key=${apiKey}`; // ID 550 è Fight Club
+    const tmdbApiUrl = `https://api.themoviedb.org/3/movie/550?api_key=${apiKey}`; // Movie ID 550 is Fight Club
     return axios.get(tmdbApiUrl);
 };
 
-// Funzione per testare la configurazione Jellyfin
+// Function to test Jellyfin configuration
 export const testJellyfinApi = (url, token) => {
-    const jellyfinApiUrl = `${url}/Users`; // Endpoint per ottenere gli utenti Jellyfin
+    const jellyfinApiUrl = `${url}/Users`; // Endpoint to retrieve Jellyfin users
     return axios.get(jellyfinApiUrl, {
         headers: {
-            'X-Emby-Token': token // Invia la chiave API di Jellyfin nell'header
+            'X-Emby-Token': token // Send Jellyfin API token in the header
         }
     });
 };
 
-// Funzione per testare la configurazione Jellyseer e ottenere gli utenti
+// Function to test the Jellyseer/Overseer configuration and fetch users
 export const testJellyseerApi = (url, token) => {
-    return axios.post('/api/jellyseer/get_users', {
-        JELLYSEER_API_URL: url,
-        JELLYSEER_TOKEN: token
+    return axios.post('/api/seer/get_users', {
+        SEER_API_URL: url,
+        SEER_TOKEN: token
     });
 };
 
-// Funzione per autenticare un utente in Jellyseer
+// Function to authenticate a user in Jellyseer/Overseer
 export const authenticateUser = (url, token, userName, password) => {
-    return axios.post('/api/jellyseer/login', {
-        JELLYSEER_API_URL: url,
-        JELLYSEER_TOKEN: token,
-        JELLYSEER_USER_NAME: userName,
-        JELLYSEER_PASSWORD: password
+    return axios.post('/api/seer/login', {
+        SEER_API_URL: url,
+        SEER_TOKEN: token,
+        SEER_USER_NAME: userName,
+        SEER_PASSWORD: password
     });
 };
 
+// Function to fetch Jellyfin libraries
 export function fetchJellyfinLibraries(apiUrl, apiKey) {
-    return axios.post(`api/jellyfin/libraries`, {
+    return axios.post(`/api/jellyfin/libraries`, {
         JELLYFIN_API_URL: apiUrl,
         JELLYFIN_TOKEN: apiKey
     });

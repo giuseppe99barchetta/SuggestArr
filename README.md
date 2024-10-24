@@ -2,27 +2,24 @@
 # SuggestArr
 ![jellyfin github](https://github.com/user-attachments/assets/78c0616b-f7d2-49f6-9ff6-2c1f9969aae9)
 
-This project is designed to fully automate the process of managing media content recommendations and downloads based on user activity within Jellyfin. Specifically, it focuses on retrieving recently watched movies and TV shows from Jellyfin, searching for similar titles using the TMDb API, and sending automated download requests for the recommended content directly to Jellyseer.
+SuggestArr is a project designed to automate media content recommendations and download requests based on user activity in media servers like **Jellyfin** and **Plex**. It retrieves recently watched content, searches for similar titles using the TMDb API, and sends automated download requests to **Jellyseer** or **Overseer**.
 
 ## Features
-- Fetches recently watched movies and TV shows from Jellyfin for all users.
-- Searches for similar movies and TV shows on TMDb.
-- Sends download requests for similar content to Jellyseer.
-- Web Interface: A user-friendly web interface for configuration management.
-- User Selection: Choose a specific Jellyseer user to initiate requests, enabling you to manage and approve auto-requested content.
-- Cron Job Management: Easily update the cron job schedule directly from the web interface.
+- **Multi-Media Server Support**: Now supports both Jellyfin and Plex for retrieving media content.
+- **TMDb Integration**: Searches for similar movies and TV shows on TMDb.
+- **Automated Requests**: Sends download requests for recommended content to Jellyseer or Overseer.
+- **Web Interface**: A user-friendly interface for configuration and management.
+- **Real-Time Logs**: View and filter logs in real time (e.g., `INFO`, `ERROR`, `DEBUG`).
+- **User Selection**: Choose specific users to initiate requests, allowing management and approval of auto-requested content.
+- **Cron Job Management**: Update the cron job schedule directly from the web interface.
+- **Plex Support**: Full Plex integration, allowing login, retrieval of servers and libraries, and content requests.
+- **Configuration Pre-testing**: Automatically validates API keys and URLs during setup.
 
 ## Prerequisites
-- Python 3.x or Docker
-- Python packages: `requests`
-- Virtual Python environment (optional but recommended)
-- Configured Jellyfin instance with users
-- Access to TMDb and Jellyseer APIs
-
-## Links to required tools:
-- **[Jellyfin](https://jellyfin.org/)**: An open-source media server that helps you organize, watch, and share your media.
-- **[Jellyseer](https://github.com/Fallenbagel/jellyseerr)**: A companion tool to help automate media requests for Jellyfin.
-- **[TMDb API](https://www.themoviedb.org/documentation/api)**: A popular API for retrieving movie and TV show information.
+- **Python 3.x** or **Docker**
+- **[TMDb API Key](https://www.themoviedb.org/documentation/api)**
+- Configured **[Jellyfin](https://jellyfin.org/)** or **[Plex](https://www.plex.tv/)** media server
+- Access to **[Jellyseer](https://github.com/Fallenbagel/jellyseerr)** or **[Overseer](https://github.com/sct/overseerr)** APIs
 
 ## Docker Usage
 
@@ -32,13 +29,14 @@ You can run the project using Docker Compose for easy setup and execution.
 
 ```yaml
 services:
-  automation:
+  suggestarr:
     image: ciuse99/suggestarr:latest
-    environment:
     container_name: SuggestArr
     restart: always
     ports:
       - "5000:5000"
+    volumes:
+      - ./config_files:/app/config/config_files
 ```
 To start the container with Docker Compose:
 
@@ -48,11 +46,11 @@ docker-compose up
 
 ## Web Interface
 
-The web interface will be available at: [http://localhost:5000](http://localhost:5000). This interface allows you to manage the automation process more efficiently and specify custom cron schedules. It also provides the ability to select a specific Jellyseer user to make requests on their behalf.
+Access the web interface at: http://localhost:5000. Use this interface to configure the application, select your media service, and manage cron schedules.
 
 Make sure your environment is set up correctly and that the application is running to access the web interface.
 
-### Using a Specific Jellyseer User for Requests
+### Using a Specific Jellyseer/Overseer User for Requests
 If you'd like to use a specific Jellyseer user to make media requests, follow these steps:
 
 1. In the web interface, enable the user selection option by checking the corresponding box.

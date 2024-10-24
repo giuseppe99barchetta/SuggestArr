@@ -5,7 +5,7 @@
 
         <!-- Input for Jellyfin API URL -->
         <label for="JELLYFIN_API_URL" class="block text-xs sm:text-sm font-semibold text-gray-300">Jellyfin URL:</label>
-        <input type="text" :value="config.JELLYFIN_API_URL" @input="$emit('update-jellyfin-url', $event.target.value)"
+        <input type="text" :value="config.JELLYFIN_API_URL" @input="updateJellyfinUrl($event.target.value)"
             class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
             placeholder="http://your-jellyfin-url">
 
@@ -13,7 +13,7 @@
         <label for="JELLYFIN_TOKEN" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Jellyfin API Key:</label>
         <div class="flex flex-col sm:flex-row items-start sm:items-center">
             <input type="text" :value="config.JELLYFIN_TOKEN"
-                @input="$emit('update-jellyfin-token', $event.target.value)"
+                @input="$emit('update-config', 'JELLYFIN_TOKEN', $event.target.value)"
                 class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2 mb-4 sm:mb-0 sm:mr-2"
                 placeholder="Your Jellyfin API Key">
             <button type="button" @click="fetchJellyfinLibraries" :disabled="jellyfinTestState.isTesting" :class="{
@@ -81,8 +81,9 @@ export default {
             this.jellyfinTestState.status = null; // Reset status before the test
             fetchJellyfinLibraries(this.config.JELLYFIN_API_URL, this.config.JELLYFIN_TOKEN)
                 .then(response => {
-                    this.jellyfinLibraries = response.data;
+                    this.jellyfinLibraries = response.data.items;
                     this.jellyfinTestState.status = 'success';
+                    this.loadSelectedLibraries();
                 })
                 .catch(() => {
                     this.jellyfinTestState.status = 'fail';
@@ -103,11 +104,45 @@ export default {
                 this.selectedLibraryNames.splice(this.selectedLibraryNames.indexOf(library.Name), 1);
             }
             // Emit both the IDs and names of the selected libraries
-            this.$emit('update-jellyfin-libraries', { ids: this.selectedLibraryIds, names: this.selectedLibraryNames });
+            this.$emit('update-config', 'JELLYFIN_LIBRARIES', this.combineLibraryData(this.selectedLibraryIds, this.selectedLibraryNames));
+            console.log(this.config.JELLYFIN_LIBRARIES)
+
+        },
+        combineLibraryData(ids, names) {
+            if (ids.length !== names.length) {
+                console.error("Mismatch between number of ids and names");
+                return [];
+            }
+
+            return ids.map((id, index) => ({
+                id: id,
+                name: names[index]
+            }));
         },
         isSelected(libraryId) {
             return this.selectedLibraryIds.includes(libraryId);
+        },
+        loadSelectedLibraries() {
+            if (this.config.JELLYFIN_LIBRARIES) {
+                this.selectedLibraryIds = this.jellyfinLibraries
+                    .filter(library => this.config.JELLYFIN_LIBRARIES.includes(library.ItemId))
+                    .map(library => library.ItemId);
+                    
+            }
+        },
+        updateJellyfinUrl(url) {
+            // Remove trailing slash if it exists
+            const trimmedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+            this.$emit('update-config', 'JELLYFIN_API_URL', trimmedUrl);
+        },
+        autoTestJellyfin() {
+            if (this.config.JELLYFIN_API_URL && this.config.JELLYFIN_TOKEN) {
+                this.fetchJellyfinLibraries(); // Automatically test Jellyfin API if the details exist
+            }
         }
+    },
+    mounted() {
+        this.autoTestJellyfin(); // Auto test Jellyfin API on mount if details are present
     }
 };
 

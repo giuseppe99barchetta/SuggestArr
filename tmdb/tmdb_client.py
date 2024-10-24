@@ -41,7 +41,7 @@ class TMDbClient:
                 async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
                     if response.status in HTTP_OK:
                         data = await response.json()  # Asynchronously get JSON response
-                        return [movie['id'] for movie in data['results']]
+                        return [{'id': movie['id'], 'title': movie['title']} for movie in data['results']]
                     self.logger.error("Error retrieving movie recommendations: %d", response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while requesting movie recommendations: %s", str(e))
@@ -60,7 +60,7 @@ class TMDbClient:
                 async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
                     if response.status in HTTP_OK:
                         data = await response.json()
-                        return [tvshow['id'] for tvshow in data['results']]
+                        return [{'id': tvshow['id'], 'title': tvshow['name']} for tvshow in data['results']]
                     self.logger.error("Error retrieving TV show recommendations: %d", response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while requesting TV show recommendations: %s", str(e))

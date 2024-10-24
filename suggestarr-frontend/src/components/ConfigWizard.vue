@@ -1,198 +1,185 @@
 <template>
   <div>
-    <div v-if="currentStep <= 5" class="wizard-container">
+    <div v-if="currentStep <= steps.length" class="wizard-container"
+      :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }">
       <div class="wizard-content">
         <h2 class="text-3xl font-bold text-gray-200 mb-6 text-center">SuggestArr Wizard</h2>
         <div class="progress-bar">
           <div class="progress" :style="{ width: progressBarWidth }"></div>
         </div>
-        <p class="steps-count">{{ currentStep }} / 5 Steps Complete</p>
+        <p class="steps-count">{{ currentStep }} / {{ steps.length }} Steps Complete</p>
 
         <!-- Use dynamic components for each step -->
-        <transition name="fade" mode="out-in" @after-leave="showNewStep">
-          <component :is="currentStepComponent"
-            :config="config"
-            @next-step="nextStep"
-            @previous-step="previousStep"
-            @update-tmdb-key="updateTmdbKey"
-            @update-jellyfin-url="updateJellyfinUrl"
-            @update-jellyfin-token="updateJellyfinToken"
-            @update-jellyfin-libraries="updateJellyfinLibraries"
-            @update-jellyseer-url="updateJellyseerUrl"
-            @update-jellyseer-token="updateJellyseerToken"
-            @update-jellyseer-user="updateJellyseerUser"
-            @update-jellyseer-password="updateJellyseerPassword"
-            @update-max-similar-movies="updateMaxSimilarMovies"
-            @update-max-similar-tv="updateMaxSimilarTV"
-            @update-cron-times="updateCronTimes"
-            @update-max-content-checks="updateMaxContentChecks"
-          />
+        <transition name="fade" mode="out-in">
+          <component :is="currentStepComponent" :config="config" @next-step="handleStepChange(1)"
+            @previous-step="handleStepChange(-1)" @update-config="updateConfig" />
         </transition>
         <Footer />
       </div>
     </div>
 
-    <div v-if="currentStep === 6">
+    <div v-if="currentStep === steps.length + 1">
       <ConfigSummary :config="config" @edit-config="editConfig" />
     </div>
-
   </div>
 </template>
 
 <script>
 import '@/assets/styles/wizard.css';
 import Footer from './AppFooter.vue';
+import axios from 'axios';
+import { fetchRandomMovieImage } from '@/api/tmdbApi';
 
-// Import all the wizard configuration components
+
+// Import wizard components
+import MediaServiceSelection from './configWizard/MediaServiceSelection.vue';
 import TmdbConfig from './configWizard/TmdbConfig.vue';
 import JellyfinConfig from './configWizard/JellyfinConfig.vue';
-import JellyseerConfig from './configWizard/JellyseerConfig.vue';
+import SeerConfig from './configWizard/SeerConfig.vue';
 import AdditionalSettings from './configWizard/AdditionalSettings.vue';
-import SaveConfig from './configWizard/SaveConfig.vue';
+import PlexConfig from './configWizard/PlexConfig.vue';
 import ConfigSummary from './ConfigSummary.vue';
-import axios from 'axios';
 
 export default {
   components: {
     Footer,
-    ConfigSummary,      // Final configuration summary
-    TmdbConfig,         // Step 1: TMDB Configuration
-    JellyfinConfig,     // Step 2: Jellyfin Configuration
-    JellyseerConfig,    // Step 3: Jellyseer Configuration
-    AdditionalSettings, // Step 4: Additional Settings
-    SaveConfig          // Step 5: Save configuration
+    ConfigSummary,
+    TmdbConfig,
+    JellyfinConfig,
+    SeerConfig,
+    AdditionalSettings,
+    MediaServiceSelection,
+    PlexConfig,
   },
   data() {
     return {
-      currentStep: 1,  // Current step of the wizard
-      config: {
-        TMDB_API_KEY: '',
-        JELLYFIN_API_URL: '',
-        JELLYFIN_TOKEN: '',
-        JELLYSEER_API_URL: '',
-        JELLYSEER_TOKEN: '',
-        JELLYSEER_USER_NAME: '',
-        JELLYSEER_USER_PSW: '',
-        MAX_SIMILAR_MOVIE: 5,  // Default values
-        MAX_SIMILAR_TV: 2,     // Default values
-        MAX_CONTENT_CHECKS: 10,
-        CRON_TIMES: '0 0 * * *', // Default value
-        JELLYFIN_LIBRARIES: [],
-      }
+      currentStep: 1,
+      config: this.getInitialConfig(),
+      backgroundImageUrl: '',
+      intervalId: null,
+      defaultImages: ['/images/default1.jpg', '/images/default2.jpg', '/images/default3.jpg'],
+      currentDefaultImageIndex: 0,
     };
   },
   computed: {
     progressBarWidth() {
-      return `${(this.currentStep / 5) * 100}%`;
+      return `${(this.currentStep / this.steps.length) * 100}%`;
+    },
+    steps() {
+      const serviceSteps = {
+        jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'AdditionalSettings'],
+        plex: ['MediaServiceSelection', 'TmdbConfig', 'PlexConfig', 'SeerConfig', 'AdditionalSettings'],
+      };
+      return serviceSteps[this.config.SELECTED_SERVICE || 'jellyfin'];
     },
     currentStepComponent() {
-      // Map of components for each step
-      const steps = {
-        1: 'TmdbConfig',         // Step 1
-        2: 'JellyfinConfig',     // Step 2
-        3: 'JellyseerConfig',    // Step 3
-        4: 'AdditionalSettings', // Step 4
-        5: 'SaveConfig'          // Summary and saving step
-      };
-      return steps[this.currentStep] || 'SaveConfig';
-    }
+      return this.steps[this.currentStep - 1] || 'SaveConfig';
+    },
+  },
+  watch: {
+    'config.TMDB_API_KEY': function (newApiKey) {
+      if (newApiKey) {
+        this.stopBackgroundImageRotation();
+        this.startBackgroundImageRotation();
+      }
+    },
   },
   mounted() {
-    // Fetch the saved configuration
     this.fetchConfig();
+    if (!this.config.TMDB_API_KEY) {
+      this.startDefaultImageRotation();
+    }
   },
   methods: {
-    // Method to fetch the existing configuration
-    fetchConfig() {
-      axios.get('/api/config')
-        .then(response => {
-          if (response.data && Object.keys(response.data).length > 0) {
-            this.config = response.data; // Load saved configuration
-            // Check if any keys are already set in the config, and if so, jump to summary step
-            if (this.config.TMDB_API_KEY || this.config.JELLYFIN_API_URL || this.config.JELLYFIN_TOKEN) {
-              this.currentStep = 6; // Go directly to the summary if the configuration exists
-            }
+    getInitialConfig() {
+      return {
+        TMDB_API_KEY: '',
+        JELLYFIN_API_URL: '',
+        JELLYFIN_TOKEN: '',
+        SEER_API_URL: '',
+        SEER_TOKEN: '',
+        SEER_USER_NAME: '',
+        SEER_USER_PSW: '',
+        MAX_SIMILAR_MOVIE: 5,
+        MAX_SIMILAR_TV: 2,
+        MAX_CONTENT_CHECKS: 10,
+        CRON_TIMES: '0 0 * * *',
+        JELLYFIN_LIBRARIES: [],
+        SELECTED_SERVICE: '',
+        PLEX_API_URL: '',
+        PLEX_TOKEN: '',
+        PLEX_LIBRARIES: [],
+      };
+    },
+    async fetchConfig() {
+      try {
+        const { data } = await axios.get('/api/config/fetch');
+        if (data) {
+          this.config = data;
+          if (this.config.TMDB_API_KEY) {
+            this.currentStep = this.steps.length + 1;
           }
-        })
-        .catch(error => {
-          console.error('Error fetching configuration:', error);
-        })
-        .finally(() => {
-          this.loading = false; // Remove loading state
-        });
-    },
-    // Method to go to the next step
-    nextStep() {
-      this.showStep = false;
-        if (this.currentStep < 6) {
-          this.currentStep++;
         }
-        if (this.currentStep == 6) {
-          this.saveConfig();
-        }
-        this.showStep = true;
+      } catch (error) {
+        console.error('Error fetching configuration:', error);
+      }
     },
-    // Method to go back to the previous step
-    previousStep() {
-        this.showStep = false;
-        if (this.currentStep > 1) {
-          this.currentStep--;
-        }
-        this.showStep = true;
+    async saveConfig() {
+      try {
+        await axios.post('/api/config/save', this.config);
+        this.currentStep = this.steps.length + 1;
+      } catch (error) {
+        console.error('Error saving configuration:', error);
+      }
     },
-
-    // Methods to update configuration from child component props
-    updateTmdbKey(newValue) {
-      this.config.TMDB_API_KEY = newValue;
+    updateConfig(key, value) {
+      this.config[key] = value;
     },
-    updateJellyfinUrl(newValue) {
-      this.config.JELLYFIN_API_URL = newValue.replace(/\/+$/, '');
-    },
-    updateJellyfinToken(newValue) {
-      this.config.JELLYFIN_TOKEN = newValue;
-    },
-    updateJellyfinLibraries({ ids, names }) {
-      this.config.JELLYFIN_LIBRARIES = ids;  // Save only the IDs for persistence
-      this.selectedLibraryNames = names;     // Save names for display purposes
-    },
-    updateJellyseerUrl(newValue) {
-      this.config.JELLYSEER_API_URL = newValue.replace(/\/+$/, '');
-    },
-    updateJellyseerToken(newValue) {
-      this.config.JELLYSEER_TOKEN = newValue;
-    },
-    updateJellyseerUser(newValue) {
-      this.config.JELLYSEER_USER_NAME = newValue; // Store Jellyseer user
-    },
-    updateJellyseerPassword(newValue) {
-      this.config.JELLYSEER_USER_PSW = newValue; // Store Jellyseer password
-    },
-    updateMaxSimilarMovies(newValue) {
-      this.config.MAX_SIMILAR_MOVIE = newValue;
-    },
-    updateMaxSimilarTV(newValue) {
-      this.config.MAX_SIMILAR_TV = newValue;
-    },
-    updateCronTimes(newValue) {
-      this.config.CRON_TIMES = newValue;
-    },
-    updateMaxContentChecks(newValue) {
-      this.config.MAX_CONTENT_CHECKS = newValue;
-    },
-
     editConfig() {
       this.currentStep = 1;
     },
-    // Method to save the configuration
-    saveConfig() {
-      axios.post('/api/save', this.config)
-        .then(response => {
-          console.log('Configuration saved:', response);
-        })
-        .catch(error => {
-          console.error('Error saving configuration:', error);
-        });
+    
+    handleStepChange(stepChange) {
+      if (this.currentStep + stepChange > 0 && this.currentStep + stepChange <= this.steps.length) {
+        this.currentStep += stepChange;
+      } else if (this.currentStep + stepChange > this.steps.length) {
+        this.saveConfig();
+      }
     },
-  }
+
+    startDefaultImageRotation() {
+      this.backgroundImageUrl = this.defaultImages[this.currentDefaultImageIndex];
+
+      this.intervalId = setInterval(() => {
+        this.currentDefaultImageIndex = (this.currentDefaultImageIndex + 1) % this.defaultImages.length;
+        this.backgroundImageUrl = this.defaultImages[this.currentDefaultImageIndex];
+      }, 10000);
+    },
+    async fetchRandomMovieImage() {
+      const imageUrl = await fetchRandomMovieImage(this.config.TMDB_API_KEY);
+      if (imageUrl) {
+        const img = new Image();
+        img.src = imageUrl;
+        img.onload = () => {
+          this.backgroundImageUrl = imageUrl;
+        };
+      }
+    },
+    startBackgroundImageRotation() {
+      this.fetchRandomMovieImage();
+      this.intervalId = setInterval(() => {
+        this.fetchRandomMovieImage();
+      }, 10000);
+    },
+    stopBackgroundImageRotation() {
+      if (this.intervalId) {
+        clearInterval(this.intervalId);
+      }
+    },
+  },
+  beforeUnmount() {
+    this.stopBackgroundImageRotation();
+  },
 };
 </script>
+

@@ -1,15 +1,32 @@
 .wizard-container {
+    background-color: #1a202c;
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background-color: #1a202c;
-    /* Dark background */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    transition: background-image 0.7s ease-in-out;
+    /* Dark overlay for better text contrast */
+    position: relative;
+    z-index: 1;
+}
+
+.wizard-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: -1;
 }
 
 .wizard-content {
     padding: 20px;
-    background-color: #2d3748;
+    background-color: #2d3748e7 !important; 
     border-radius: 10px;
     max-width: 800px;
     width: 100%;
