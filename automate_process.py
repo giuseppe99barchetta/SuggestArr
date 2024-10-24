@@ -1,5 +1,3 @@
-import ast
-import os
 import asyncio
 
 from config.config import load_env_vars
@@ -27,8 +25,8 @@ class ContentAutomation:
         
         self.selected_service = env_vars['SELECTED_SERVICE']
         self.max_content = env_vars.get('MAX_CONTENT_CHECKS', 10)
-        self.max_similar_movie = min(int(os.getenv('MAX_SIMILAR_MOVIE', '3')), 20)
-        self.max_similar_tv = min(int(os.getenv('MAX_SIMILAR_TV', '2')), 20)
+        self.max_similar_movie = min(int(env_vars.get('MAX_SIMILAR_MOVIE', '3')), 20)
+        self.max_similar_tv = min(int(env_vars.get('MAX_SIMILAR_TV', '2')), 20)
 
         # Overseer/Jellyseer client
         jellyseer_client = SeerClient(
