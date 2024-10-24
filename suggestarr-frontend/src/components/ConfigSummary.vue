@@ -143,9 +143,13 @@ export default {
         forceRun() {
             this.isRunning = true;
             axios.post('/api/automation/force_run', this.config)
-                .then(response => {
-                    console.log(response.data.message); // Success message from backend
-                })
+                .then(
+                    this.$toast.open({
+                        message: 'Process started in background!',
+                        pauseOnHover: true,
+                        duration:5000
+                    })
+                )
                 .catch(error => {
                     alert(`Error: ${error.response ? error.response.data.message : error.message}`); // Handle errors
                 })
