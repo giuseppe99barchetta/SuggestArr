@@ -17,6 +17,7 @@
                 Server and Connection:</label>
             <div class="flex items-center">
                 <!-- Select for Plex Server and Connection -->
+
                 <select v-model="selectedServerConnection" @change="updateSelectedServer"
                     class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
                     id="server-selection">
