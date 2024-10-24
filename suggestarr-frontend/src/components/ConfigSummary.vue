@@ -1,6 +1,6 @@
 <template>
-    <div class="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
-        <div class="p-10 space-y-8 max-w-4xl mx-auto bg-gray-800 rounded-lg shadow-lg border border-gray-700">
+    <div class="wizard-container" :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }">
+        <div class="wizard-content custom-width">
             <h2 class="text-3xl font-bold text-gray-200 mb-6 text-center">SuggestArr Summary</h2>
             <div class="space-y-6">
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
@@ -48,11 +48,11 @@
             <!-- Edit Configuration and Reset Buttons -->
             <div class="flex space-x-4 mt-8">
                 <button @click="editConfig"
-                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                    class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">
                     Edit Configuration
                 </button>
                 <button @click="showResetPopup = true"
-                    class="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                    class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">
                     Reset Configuration
                 </button>
             </div>
@@ -84,11 +84,14 @@
 import axios from 'axios';
 import cronParser from 'cron-parser';
 import Footer from './AppFooter.vue';
+import backgroundManager from '@/api/backgroundManager';
+import { fetchRandomMovieImage } from '@/api/tmdbApi';
 
 export default {
     components: {
         Footer,
     },
+    mixins: [backgroundManager],
     props: {
         config: {
             type: Object,
@@ -100,10 +103,17 @@ export default {
             isRunning: false, // Track the running state for the 'Run Now' button
             nextCronRun: '',   // To store the time remaining until next cron run
             showResetPopup: false,
+            backgroundImageUrl: '',
+
         };
     },
     mounted() {
         this.calculateNextCronRun();
+        if (!this.config.TMDB_API_KEY) {
+            this.startDefaultImageRotation();
+        } else {
+            this.startBackgroundImageRotation(fetchRandomMovieImage, this.config.TMDB_API_KEY);
+        }
     },
     methods: {
         capitalizeFirstLetter(text) {
@@ -150,10 +160,19 @@ export default {
                 .catch(error => {
                     alert(`Error resetting configuration: ${error.response ? error.response.data.message : error.message}`);
                 });
-        }
-    }
+        },
+        
+    },
+    beforeUnmount() {
+        this.stopBackgroundImageRotation();
+    },
 };
 
 </script>
 
-<style scoped></style>
+<style scoped>
+.custom-width {
+    max-width: 600px; /* Puoi modificare questa larghezza in base alle tue esigenze */
+    margin: 0 auto;   /* Per centrare il contenuto */
+}
+</style>
