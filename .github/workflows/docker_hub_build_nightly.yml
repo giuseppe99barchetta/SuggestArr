@@ -13,20 +13,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4.2.1
 
+      - name: Set up Docker Buildx
+        run: |
+          docker run --privileged --rm tonistiigi/binfmt --install all
+          docker buildx create --use
+          docker buildx inspect --bootstrap
+
       - name: Log in to Docker Hub
         run: echo ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} | docker login -u ciuse99 --password-stdin
 
       - name: Build Docker Image
         run: |
-          docker build . -t ciuse99/suggestarr:nightly --no-cache
+          docker buildx build --platform linux/amd64,linux/arm64 -t ciuse99/suggestarr:nightly --push .
       - name: Push Docker Image
         run: |
           docker push ciuse99/suggestarr:nightly
-          
-      # temporary keeping two images
-      - name: Build Docker Image
-        run: |
-          docker build . -t ciuse99/jellyseer_request_automation:nightly
-      - name: Push Docker Image
-        run: |
-          docker push ciuse99/jellyseer_request_automation:nightly
