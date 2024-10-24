@@ -1,6 +1,6 @@
 
 # SuggestArr
-![jellyfin github](https://github.com/user-attachments/assets/78c0616b-f7d2-49f6-9ff6-2c1f9969aae9)
+![image](https://github.com/user-attachments/assets/b9296eb8-f264-45d5-a8df-c03783af7bb9)
 
 SuggestArr is a project designed to automate media content recommendations and download requests based on user activity in media servers like **Jellyfin** and **Plex**. It retrieves recently watched content, searches for similar titles using the TMDb API, and sends automated download requests to **Jellyseer** or **Overseer**.
 
