@@ -69,6 +69,7 @@ export default {
       const serviceSteps = {
         jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'AdditionalSettings'],
         plex: ['MediaServiceSelection', 'TmdbConfig', 'PlexConfig', 'SeerConfig', 'AdditionalSettings'],
+        emby: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'AdditionalSettings'],
       };
       return serviceSteps[this.config.SELECTED_SERVICE || 'jellyfin'];
     },

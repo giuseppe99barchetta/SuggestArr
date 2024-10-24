@@ -13,16 +13,12 @@
                     <p class="text-gray-200">{{ config.PLEX_API_URL }}</p>
                 </div>
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-else>
-                    <label class="block text-sm font-semibold text-gray-300">Jellyfin URL:</label>
+                    <label class="block text-sm font-semibold text-gray-300">{{ capitalizeFirstLetter(config.SELECTED_SERVICE) }} URL:</label>
                     <p class="text-gray-200">{{ config.JELLYFIN_API_URL }}</p>
                 </div>
-                <!-- Display Overseer or Jellyseer URL based on selected service -->
-                <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-if="config.SELECTED_SERVICE === 'plex'">
-                    <label class="block text-sm font-semibold text-gray-300">Overseer URL:</label>
-                    <p class="text-gray-200">{{ config.SEER_API_URL }}</p>
-                </div>
-                <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-else>
-                    <label class="block text-sm font-semibold text-gray-300">Jellyseer URL:</label>
+                <!-- Display Overseer or Jellyseer URL -->
+                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
+                    <label class="block text-sm font-semibold text-gray-300">Jellyseer/Overseer URL:</label>
                     <p class="text-gray-200">{{ config.SEER_API_URL }}</p>
                 </div>
                 <!-- Display Max Similar Movies -->

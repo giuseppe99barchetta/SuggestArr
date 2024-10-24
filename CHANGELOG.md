@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.8] - 2024-10-24
+
+### 🚨 Important
+- **Emby Support Integration**: Added full support for Emby! Users can now log in with their Emby account, retrieve server and libraries, and integrate content requests seamlessly alongside Jellyfin and Plex.
+  
+### ✨ Added
+- **Support for Emby**: Expanded media server options to include Emby, providing users with the ability to request content and retrieve viewing history from Emby.
+- **Improved Media Server Selection Step**: Updated the initial step in the wizard to support choosing between Jellyfin, Plex, and Emby.
+- **New API Connection Tests**: Added functionality to test Emby API connections from the configuration page, similar to the existing tests for Plex and Jellyfin.
+
+### 🚀 Improved
+- **Unified Media Server Handling**: Refactored backend logic to better handle multiple media server configurations (Jellyfin, Plex, Emby), simplifying code and improving performance.
+- **Smoother Background Image Transition**: Improved the background image rotation mechanism, ensuring smoother transitions and preloading for better performance.
+
 ## [1.0.7] - 2024-10-24
 
 ### 🚨 Important

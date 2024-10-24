@@ -9,9 +9,9 @@
                 <div v-if="service.comingSoon" class="coming-soon-overlay">
                     <p>Coming Soon</p>
                 </div>
-                <!-- Plex Beta Badge -->
-                <div v-if="service.value === 'plex'" class="beta-badge">
-                    ✨ Beta
+                <!-- Plex New Badge -->
+                <div v-if="service.isNew" class="new-badge">
+                    ✨ NEW
                 </div>
 
             </div>
@@ -32,9 +32,9 @@ export default {
     data() {
         return {
             services: [
-                { name: 'Jellyfin', value: 'jellyfin', logo: require('@/assets/logos/jellyfin-logo.png'), comingSoon: false },
-                { name: 'Plex', value: 'plex', logo: require('@/assets/logos/plex-logo.png'), comingSoon: false },
-                { name: 'Emby', value: 'emby', logo: require('@/assets/logos/emby-logo.png'), comingSoon: true },
+                { name: 'Jellyfin', value: 'jellyfin', logo: require('@/assets/logos/jellyfin-logo.png'), comingSoon: false, isNew: false },
+                { name: 'Plex', value: 'plex', logo: require('@/assets/logos/plex-logo.png'), comingSoon: false, isNew: true },
+                { name: 'Emby', value: 'emby', logo: require('@/assets/logos/emby-logo.png'), comingSoon: false, isNew: true },
             ],
             showTooltip: false
         };
@@ -109,7 +109,7 @@ export default {
     border-bottom-right-radius: 8px;
 }
 
-.beta-badge {
+.new-badge {
     position: absolute;
     top: 10px;
     right: 10px;
