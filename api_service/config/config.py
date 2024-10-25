@@ -79,7 +79,11 @@ def save_env_vars(config_data):
 
     # Prepare environment variables to be saved
     env_vars = {key: config_data.get(key, default_value()) for key, default_value in get_default_values().items()}
-    
+
+    # Create config.yaml file if it does not exist
+    if not os.path.exists(CONFIG_PATH):
+        open(CONFIG_PATH, 'w').close()  # Create an empty file
+
     # Write environment variables to the config.yaml file
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         yaml.safe_dump(env_vars, f)
