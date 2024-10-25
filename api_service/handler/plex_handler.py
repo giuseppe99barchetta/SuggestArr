@@ -1,8 +1,8 @@
 import asyncio
 
-from jellyseer.seer_client import SeerClient
-from plex.plex_client import PlexClient
-from tmdb.tmdb_client import TMDbClient
+from services.jellyseer.seer_client import SeerClient
+from services.plex.plex_client import PlexClient
+from services.tmdb.tmdb_client import TMDbClient
 
 class PlexHandler:
     def __init__(self, plex_client:PlexClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv):

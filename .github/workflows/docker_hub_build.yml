@@ -26,4 +26,5 @@ jobs:
             --platform linux/amd64,linux/arm64 \
             --cache-from type=registry,ref=ciuse99/suggestarr:cache \
             --cache-to type=registry,ref=ciuse99/suggestarr:cache,mode=max \
-            -t ciuse99/suggestarr:latest --push .
+            -t ciuse99/suggestarr:latest \
+            -f docker/Dockerfile . --push

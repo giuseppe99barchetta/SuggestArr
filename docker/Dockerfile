@@ -1,9 +1,9 @@
 # Stage 1: Build the frontend
 FROM node:20 AS frontend-builder
-WORKDIR /app/suggestarr-frontend
-COPY suggestarr-frontend/package*.json ./
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
 RUN npm install
-COPY suggestarr-frontend/ /app/suggestarr-frontend/
+COPY frontend/ .
 RUN npm run build
 
 # Stage 2: Create the final image
@@ -17,21 +17,21 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Set the working directory
-WORKDIR /app
+# Set the working directory for the backend
+WORKDIR /app/backend
 
 # Copy and install Python dependencies
-COPY requirements.txt /app
+COPY backend/requirements.txt /app/backend/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the frontend build files from the previous stage
-COPY --from=frontend-builder /app/suggestarr-frontend/dist /app/static
+COPY --from=frontend-builder /app/frontend/dist /app/static
 
-# Copy the source code
-COPY . /app
+# Copy the backend source code
+COPY backend/ /app/backend/
 
-# Copy the Supervisor configuration file
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# Copy Supervisor configuration
+COPY ../config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Add and configure the cron job
 RUN echo "0 0 * * * curl -X POST http://localhost:5000/api/automation/force_run >> /var/log/cron.log 2>&1" > /etc/cron.d/automation-cron && \

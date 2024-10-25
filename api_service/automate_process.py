@@ -4,10 +4,10 @@ from config.config import load_env_vars
 from config.logger_manager import LoggerManager
 from handler.jellyfin_handler import JellyfinHandler
 from handler.plex_handler import PlexHandler
-from jellyfin.jellyfin_client import JellyfinClient
-from jellyseer.seer_client import SeerClient
-from plex.plex_client import PlexClient
-from tmdb.tmdb_client import TMDbClient
+from services.jellyfin.jellyfin_client import JellyfinClient
+from services.jellyseer.seer_client import SeerClient
+from services.plex.plex_client import PlexClient
+from services.tmdb.tmdb_client import TMDbClient
 
 
 class ContentAutomation:

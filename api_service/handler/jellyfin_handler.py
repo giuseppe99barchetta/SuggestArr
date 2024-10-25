@@ -1,8 +1,8 @@
 import asyncio
 
-from jellyfin.jellyfin_client import JellyfinClient
-from jellyseer.seer_client import SeerClient
-from tmdb.tmdb_client import TMDbClient
+from services.jellyfin.jellyfin_client import JellyfinClient
+from services.jellyseer.seer_client import SeerClient
+from services.tmdb.tmdb_client import TMDbClient
 
 class JellyfinHandler:
     def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv):

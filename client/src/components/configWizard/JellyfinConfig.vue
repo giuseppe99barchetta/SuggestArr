@@ -7,7 +7,7 @@
 
         <!-- Input for API URL -->
         <label :for="`JELLYFIN_API_URL`" class="block text-xs sm:text-sm font-semibold text-gray-300">{{ serviceName }} URL:</label>
-        <input type="text" :value="config[`JELLYFIN_API_URL`]" @input="updateApiUrl($event.target.value)"
+        <input type="text" :value="config[`JELLYFIN_API_URL`]" @focusout="updateApiUrl($event.target.value)"
             class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
             :placeholder="`http://your-${serviceName.toLowerCase()}-url`">
 

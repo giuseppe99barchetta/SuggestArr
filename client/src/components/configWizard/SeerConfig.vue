@@ -8,7 +8,7 @@
         <label :for="`SEER_API_URL`" class="block text-xs sm:text-sm font-semibold text-gray-300">Overseer/Jellyseer
             URL:</label>
         <input type="text" :value="config[`SEER_API_URL`]" 
-            @input="updateSeerUrl($event.target.value)"
+            @focusout="updateSeerUrl($event.target.value)"
             class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2" 
             :placeholder="`http://your-Overseer-or-Jellyfin-url`">
 
