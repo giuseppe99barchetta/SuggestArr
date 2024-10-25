@@ -203,9 +203,9 @@ class SeerClient:
         self.logger.error(f"Failed to request {media_type} with ID {media_id} after {retries} attempts.")
         return {'message': f"Failed to request {media_type} with ID {media_id} after {retries} attempts."}, 500
 
-    async def get_all_users(self):
+    async def get_all_users(self, max_users=100):
         """Fetch all users from Jellyseer API, returning a list of user IDs, names, and local status."""
-        data = await self._make_request("GET", "api/v1/user")
+        data = await self._make_request("GET", f"api/v1/user?take={max_users}")
         if data:
             return [
                 {
