@@ -66,9 +66,9 @@
         <div v-if="libraries.length > 0">
             <p class="text-sm text-gray-300 mt-4">Select the Plex libraries you want to include:</p>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
-                <div v-for="library in libraries" :key="library.uuid" @click="toggleLibrarySelection(library)" :class="{
-                    'bg-indigo-600 border-indigo-600': isSelected(library.uuid),
-                    'bg-gray-700 border-gray-600': !isSelected(library.uuid)
+                <div v-for="library in libraries" :key="library.key" @click="toggleLibrarySelection(library)" :class="{
+                    'bg-indigo-600 border-indigo-600': isSelected(library.key),
+                    'bg-gray-700 border-gray-600': !isSelected(library.key)
                 }" class="cursor-pointer p-4 border rounded-lg text-center text-white hover:bg-indigo-500">
                     {{ library.title }}
                 </div>

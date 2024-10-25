@@ -63,8 +63,11 @@ class PlexClient:
         """
         url = f"{self.api_url}/status/sessions/history/all"
         params = {
-            "sort": "viewedAt:desc"
+            "sort": "viewedAt:desc",
         }
+        
+        if self.library_ids:
+            params["librarySectionIDs"] = ','.join(self.library_ids)
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -93,12 +96,16 @@ class PlexClient:
         seen_series = set()
         filtered_items = []
         total_items = 0  # Counter for total filtered items
-
+    
         for item in metadata:
+            # Check if the item's librarySectionID is in the selected libraries
+            if self.library_ids and item.get('librarySectionID') not in self.library_ids:
+                continue  # Skip items not in the selected libraries
+            
             # Check if we've reached the max content fetch limit
             if total_items >= int(self.max_content_fetch):
                 break
-
+            
             if item['type'] == 'episode':
                 # Check if the series has already been counted
                 series_title = item['grandparentTitle']
@@ -109,11 +116,11 @@ class PlexClient:
             else:
                 filtered_items.append(item)
                 total_items += 1  # Increment total_items for movies
-
+    
             # Allow fetching more content if we've only seen episodes from one series
             if total_items < int(self.max_content_fetch) and len(seen_series) == 1:
                 continue  # Keep looking for more items
-
+            
         return filtered_items
 
     async def get_libraries(self):
