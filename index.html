@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <title>SuggestArr</title>
+    <style>
+        body {
+            background-color: #2d3748; /* Dark background color */
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        .hero-content {
+            backdrop-filter: blur(5px);
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 4rem;
+            border-radius: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .feature-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .release-item {
+            padding: 1.5rem;
+            background-color: #3b3f47; /* Darker background for release items */
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s;
+            margin-bottom: 1.5rem; /* Increased space between release items */
+        }
+
+        .release-item:hover {
+            transform: scale(1.05);
+        }
+
+        h3 {
+            font-size: 1.1rem;
+        }
+
+        .release-title {
+            font-size: 1.5rem; /* Increased font size for titles */
+            color: #3b82f6; /* Tailwind color for blue */
+        }
+
+        .release-body {
+            color: #d1fae5; /* Tailwind color for light text */
+            margin-top: 0.5rem; /* Space above the body text */
+            font-size: 0.875rem; /* Smaller font size for body */
+        }
+
+        .spacer {
+            margin-bottom: 1.5rem; /* Adds spacing between sections */
+        }
+    </style>
+</head>
+
+<body>
+    <header class="text-center py-20 hero-content">
+        <h1 class="text-6xl font-bold text-white animate__animated animate__fadeInDown">Welcome to SuggestArr</h1>
+        <p class="text-lg mt-4 text-gray-300 animate__animated animate__fadeIn">Automate your media content requests effortlessly!</p>
+        <a href="https://github.com/giuseppe99barchetta/SuggestArr"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full mt-5 inline-block transition duration-300 ease-in-out transform hover:scale-105">Get Started</a>
+    </header>
+
+    <section class="max-w-6xl mx-auto text-center my-10 bg-gray-800 p-10 rounded-lg shadow-lg">
+        <h2 class="text-4xl font-bold mb-6 text-blue-500">✨ Features</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-5">
+            <div class="p-5 feature-card bg-gray-700 rounded-lg text-gray-200">
+                <h3 class="text-xl font-semibold">🎥 Multi-Media Support</h3>
+                <p>Integrates seamlessly with Plex, Emby, and Jellyfin for a unified experience.</p>
+            </div>
+            <div class="p-5 feature-card bg-gray-700 rounded-lg text-gray-200">
+                <h3 class="text-xl font-semibold">🔄 Automated Requests</h3>
+                <p>Set and forget—let SuggestArr handle the rest automatically.</p>
+            </div>
+            <div class="p-5 feature-card bg-gray-700 rounded-lg text-gray-200">
+                <h3 class="text-xl font-semibold">📊 Real-Time Logs</h3>
+                <p>Monitor your requests with live updates and comprehensive logs.</p>
+            </div>
+            <div class="p-5 feature-card bg-gray-700 rounded-lg text-gray-200">
+                <h3 class="text-xl font-semibold">👨‍👩‍👧‍👦 Multi-User Support</h3>
+                <p>Manage requests for different users on your media server seamlessly.</p>
+            </div>
+            <div class="p-5 feature-card bg-gray-700 rounded-lg text-gray-200">
+                <h3 class="text-xl font-semibold">🛠️ Cron Job Management</h3>
+                <p>Easily configure and manage your request schedule from the web interface.</p>
+            </div>
+            <div class="p-5 feature-card bg-gray-700 rounded-lg text-gray-200">
+                <h3 class="text-xl font-semibold">🔍 Configuration Pre-testing</h3>
+                <p>Automatically validate your API keys and URLs before proceeding.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="max-w-6xl mx-auto text-center my-10 bg-gray-800 p-10 rounded-lg shadow-lg">
+        <h2 class="text-4xl font-bold mb-6 text-blue-500">🔧 How It Works</h2>
+        <p class="mb-4 text-gray-300">With SuggestArr, you can automate your media requests in just a few simple steps:</p>
+        <ol class="list-decimal list-inside text-left mx-auto max-w-xl mb-6 text-gray-300">
+            <li class="mb-2">Connect your media server (Plex, Emby, Jellyfin).</li>
+            <li class="mb-2">Set your preferences for requests.</li>
+            <li class="mb-2">Let SuggestArr do the work for you!</li>
+        </ol>
+    </section>
+
+    <section class="max-w-6xl mx-auto text-center my-10 bg-gray-800 p-10 rounded-lg shadow-lg">
+        <h2 class="text-4xl font-bold mb-6 text-blue-500">📜 Latest Releases</h2>
+        <ul id="releases-list" class="space-y-4 text-left"></ul>
+    </section>
+    
+    <footer class="text-center py-5 bg-black bg-opacity-60">
+        <p class="text-gray-300">&copy; 2024 SuggestArr. All rights reserved.</p>
+        <a href="https://github.com/giuseppe99barchetta/SuggestArr" class="text-blue-400 underline">Contribute on GitHub</a>
+    </footer>
+    
+    <script>
+        async function fetchReleases() {
+            const response = await fetch('https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases');
+            const releases = await response.json();
+    
+            // Limit to the last two releases
+            const lastTwoReleases = releases.slice(0, 2);
+    
+            lastTwoReleases.forEach(release => {
+                const releasesList = document.getElementById('releases-list'); // Define releasesList here
+                const li = document.createElement('li');
+                li.className = 'release-item p-4 bg-gray-900 rounded-lg shadow-lg transition-transform duration-300 ease-in-out hover:shadow-xl mb-4'; // Terminal style
+                
+                const title = document.createElement('h3');
+                title.className = 'release-title text-green-300 font-mono text-xl'; // Increased size for title
+                title.innerHTML = `<span class="text-yellow-400">➜</span> - <a href="${release.html_url}" target="_blank" class="text-green-300">${release.name}</a> - ${new Date(release.published_at).toLocaleDateString()}`; // Added hyphen before title
+                
+                const body = document.createElement('div');
+                body.className = 'release-body text-gray-400 font-mono text-sm'; // Terminal style for body
+                body.innerHTML = marked.parse(release.body || 'No description provided for this release.'); 
+                
+                li.appendChild(title);
+                li.appendChild(body);
+                releasesList.appendChild(li);
+            });
+        }
+    
+        fetchReleases();
+    </script>
+</body>
+
+</html>
