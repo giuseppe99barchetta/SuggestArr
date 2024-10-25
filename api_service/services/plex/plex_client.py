@@ -63,21 +63,58 @@ class PlexClient:
         """
         url = f"{self.api_url}/status/sessions/history/all"
         params = {
-            "sort": "viewedAt:desc",
-            "limit": self.max_content_fetch
+            "sort": "viewedAt:desc"
         }
-    
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200:
                         data = await response.json()
-                        return data.get('MediaContainer', {}).get('Metadata', [])
+                        metadata = data.get('MediaContainer', {}).get('Metadata', [])
+                        # Filter the items while respecting the max content fetch limit
+                        filtered_items = await self.filter_recent_items(metadata)
+                        self.logger.info(f"Returning {len(filtered_items)} filtered recent items.")
+                        return filtered_items
+
                     self.logger.error("Failed to retrieve recent items: %d", response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while retrieving recent items: %s", str(e))
 
         return []
+
+
+    async def filter_recent_items(self, metadata):
+        """
+        Filters recent items to avoid duplicates and respects the max content fetch limit.
+        :param metadata: List of items to filter.
+        :return: Filtered list of items.
+        """
+        seen_series = set()
+        filtered_items = []
+        total_items = 0  # Counter for total filtered items
+
+        for item in metadata:
+            # Check if we've reached the max content fetch limit
+            if total_items >= int(self.max_content_fetch):
+                break
+
+            if item['type'] == 'episode':
+                # Check if the series has already been counted
+                series_title = item['grandparentTitle']
+                if series_title not in seen_series:
+                    seen_series.add(series_title)
+                    filtered_items.append(item)
+                    total_items += 1  # Increment total_items for series
+            else:
+                filtered_items.append(item)
+                total_items += 1  # Increment total_items for movies
+
+            # Allow fetching more content if we've only seen episodes from one series
+            if total_items < int(self.max_content_fetch) and len(seen_series) == 1:
+                continue  # Keep looking for more items
+
+        return filtered_items
 
     async def get_libraries(self):
         """
