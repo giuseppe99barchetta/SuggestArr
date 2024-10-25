@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,20 +14,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4.2.1
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Log in to Docker Hub
         run: echo ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} | docker login -u ciuse99 --password-stdin
 
-      - name: Build Docker Image
+      - name: Build and Push Docker Image (SuggestArr)
         run: |
-          docker build . -t ciuse99/suggestarr:latest
-      - name: Push Docker Image
-        run: |
-          docker push ciuse99/suggestarr:latest
-          
-      # temporary keeping two images
-      - name: Build Docker Image
-        run: |
-          docker build . -t ciuse99/jellyseer_request_automation:latest
-      - name: Push Docker Image
-        run: |
-          docker push ciuse99/jellyseer_request_automation:latest
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --cache-from type=registry,ref=ciuse99/suggestarr:cache \
+            --cache-to type=registry,ref=ciuse99/suggestarr:cache,mode=max \
+            -t ciuse99/suggestarr:latest \
+            -f docker/Dockerfile . --push
