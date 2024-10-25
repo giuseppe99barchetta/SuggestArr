@@ -6,8 +6,7 @@ Classes:
     - PlexClient: A class that handles communication with the Plex API.
 """
 import aiohttp
-import xmltodict
-from config.logger_manager import LoggerManager
+from api_service.config.logger_manager import LoggerManager
 
 # Constants
 REQUEST_TIMEOUT = 10  # Timeout in seconds for HTTP requests

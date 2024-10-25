@@ -3,7 +3,7 @@ import subprocess
 import platform
 import yaml
 from croniter import croniter
-from config.logger_manager import LoggerManager
+from api_service.config.logger_manager import LoggerManager
 
 logger = LoggerManager().get_logger(__name__)
 

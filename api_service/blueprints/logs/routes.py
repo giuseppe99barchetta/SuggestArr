@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from config.logger_manager import LoggerManager
+from api_service.config.logger_manager import LoggerManager
 
 logger = LoggerManager().get_logger(__name__)
 logs_bp = Blueprint('logs', __name__)

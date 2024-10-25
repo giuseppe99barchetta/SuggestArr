@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from config.config import load_env_vars, save_env_vars, clear_env_vars
-from config.logger_manager import LoggerManager
+from api_service.config.config import load_env_vars, save_env_vars, clear_env_vars
+from api_service.config.logger_manager import LoggerManager
 
 logger = LoggerManager().get_logger(__name__)
 config_bp = Blueprint('config', __name__)

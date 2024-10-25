@@ -1,6 +1,6 @@
 import aiohttp
 import asyncio
-from config.logger_manager import LoggerManager
+from api_service.config.logger_manager import LoggerManager
 
 # Constants for HTTP status codes and request timeout
 HTTP_OK = {200, 201, 202}

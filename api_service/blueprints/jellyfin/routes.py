@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from services.jellyfin.jellyfin_client import JellyfinClient
-from config.logger_manager import LoggerManager
+from api_service.services.jellyfin.jellyfin_client import JellyfinClient
+from api_service.config.logger_manager import LoggerManager
 
 logger = LoggerManager().get_logger(__name__)
 jellyfin_bp = Blueprint('jellyfin', __name__)

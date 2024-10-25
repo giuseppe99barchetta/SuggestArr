@@ -7,15 +7,16 @@ from flask import Flask, send_from_directory, request, jsonify
 from flask_cors import CORS
 from asgiref.wsgi import WsgiToAsgi
 
-from utils.utils import AppUtils
-from config.logger_manager import LoggerManager
 
-from blueprints.jellyfin.routes import jellyfin_bp
-from blueprints.seer.routes import seer_bp
-from blueprints.plex.routes import plex_bp
-from blueprints.automation.routes import automation_bp
-from blueprints.logs.routes import logs_bp
-from blueprints.config.routes import config_bp
+from api_service.utils.utils import AppUtils
+from api_service.config.logger_manager import LoggerManager
+
+from api_service.blueprints.jellyfin.routes import jellyfin_bp
+from api_service.blueprints.seer.routes import seer_bp
+from api_service.blueprints.plex.routes import plex_bp
+from api_service.blueprints.automation.routes import automation_bp
+from api_service.blueprints.logs.routes import logs_bp
+from api_service.blueprints.config.routes import config_bp
 
 executor = ThreadPoolExecutor(max_workers=3)
 logger = LoggerManager().get_logger(__name__)
@@ -29,7 +30,7 @@ def create_app():
     if AppUtils.is_last_worker():
         AppUtils.print_welcome_message() # Print only for last worker
 
-    application = Flask(__name__, static_folder='static', static_url_path='/')
+    application = Flask(__name__, static_folder='../static', static_url_path='/')
     CORS(application)
 
     application.register_blueprint(jellyfin_bp, url_prefix='/api/jellyfin')
@@ -58,7 +59,7 @@ def register_routes(app): # pylint: disable=redefined-outer-name
         """
         Serve the built frontend's index.html or any other static file.
         """
-        app.static_folder = './suggestarr-frontend/dist'
+        app.static_folder = '../static'
         if path == "" or not os.path.exists(os.path.join(app.static_folder, path)):
             return send_from_directory(app.static_folder, 'index.html')
         else:

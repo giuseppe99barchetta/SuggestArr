@@ -1,9 +1,9 @@
 import os
 import uuid
 from flask import Blueprint, request, jsonify
-from services.plex.plex_auth import PlexAuth
-from services.plex.plex_client import PlexClient
-from config.logger_manager import LoggerManager
+from api_service.services.plex.plex_auth import PlexAuth
+from api_service.services.plex.plex_client import PlexClient
+from api_service.config.logger_manager import LoggerManager
 
 logger = LoggerManager().get_logger(__name__)
 plex_bp = Blueprint('plex', __name__)

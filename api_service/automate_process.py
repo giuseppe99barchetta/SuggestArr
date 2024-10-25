@@ -1,13 +1,13 @@
 import asyncio
 
-from config.config import load_env_vars
-from config.logger_manager import LoggerManager
-from handler.jellyfin_handler import JellyfinHandler
-from handler.plex_handler import PlexHandler
-from services.jellyfin.jellyfin_client import JellyfinClient
-from services.jellyseer.seer_client import SeerClient
-from services.plex.plex_client import PlexClient
-from services.tmdb.tmdb_client import TMDbClient
+from api_service.config.config import load_env_vars
+from api_service.config.logger_manager import LoggerManager
+from api_service.handler.jellyfin_handler import JellyfinHandler
+from api_service.handler.plex_handler import PlexHandler
+from api_service.services.jellyfin.jellyfin_client import JellyfinClient
+from api_service.services.jellyseer.seer_client import SeerClient
+from api_service.services.plex.plex_client import PlexClient
+from api_service.services.tmdb.tmdb_client import TMDbClient
 
 
 class ContentAutomation:

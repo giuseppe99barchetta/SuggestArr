@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from services.jellyseer.seer_client import SeerClient
-from config.logger_manager import LoggerManager
+from api_service.services.jellyseer.seer_client import SeerClient
+from api_service.config.logger_manager import LoggerManager
 
 logger = LoggerManager().get_logger(__name__)
 seer_bp = Blueprint('seer', __name__)

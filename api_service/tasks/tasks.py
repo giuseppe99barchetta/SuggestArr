@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
 
-from automate_process import ContentAutomation
+from api_service.automate_process import ContentAutomation
 
 executor = ThreadPoolExecutor(max_workers=2)
 

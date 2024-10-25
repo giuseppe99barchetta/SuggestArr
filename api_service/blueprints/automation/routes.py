@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
-from tasks.tasks import run_content_automation_task
-from config.logger_manager import LoggerManager
+from api_service.tasks.tasks import run_content_automation_task
+from api_service.config.logger_manager import LoggerManager
 
 logger = LoggerManager().get_logger(__name__)
 automation_bp = Blueprint('automation', __name__)

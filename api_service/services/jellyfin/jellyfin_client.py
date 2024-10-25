@@ -7,7 +7,7 @@ Classes:
 """
 import re
 import aiohttp
-from config.logger_manager import LoggerManager
+from api_service.config.logger_manager import LoggerManager
 
 # Constants
 REQUEST_TIMEOUT = 10  # Timeout in seconds for HTTP requests

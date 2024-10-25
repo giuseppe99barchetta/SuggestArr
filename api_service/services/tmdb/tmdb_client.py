@@ -8,7 +8,7 @@ Classes:
 """
 
 import aiohttp
-from config.logger_manager import LoggerManager
+from api_service.config.logger_manager import LoggerManager
 
 # Constants for HTTP status codes and timeout
 HTTP_OK = {200, 201}

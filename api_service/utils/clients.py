@@ -1,6 +1,6 @@
-from services.jellyfin.jellyfin_client import JellyfinClient
-from services.jellyseer.seer_client import SeerClient
-from services.plex.plex_client import PlexClient
+from api_service.services.jellyfin.jellyfin_client import JellyfinClient
+from api_service.services.jellyseer.seer_client import SeerClient
+from api_service.services.plex.plex_client import PlexClient
 
 def get_client(service_type, api_url, api_key, **kwargs):
     """
