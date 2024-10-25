@@ -107,7 +107,7 @@ class PlexClient:
         :param provider: The provider ID to retrieve (default is 'themoviedb').
         :return: The TMDB ID if found, otherwise None.
         """
-        url = f"{self.api_url}/library/metadata/{item_id}"
+        url = f"{self.api_url}{item_id}"
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:

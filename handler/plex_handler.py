@@ -57,14 +57,14 @@ class PlexHandler:
                     elif item_type == 'episode':
                         await self.process_episode(user_id, key)
                 else:
-                    raise ValueError(f"Missing key for {item_type} '{title}'. Cannot process this item. Skipping")   
+                    raise ValueError(f"Missing key for {item_type} '{title}'. Cannot process this item. Skipping.")   
             except Exception as e:
                 self.logger.warning(f"Error while processing item: {str(e)}")
                 
     def extract_rating_key(self, item, item_type):
         """Extract the appropriate key depending on the item type."""
         key = item.get('key') if item_type == 'movie' else item.get('grandparentKey') if item_type == 'episode' else None
-        return key.replace('/library/metadata/', '') if key else None
+        return key if key else None
 
     async def process_movie(self, user_id, movie_key):
         """Find similar movies via TMDb and request them via Jellyseer."""
