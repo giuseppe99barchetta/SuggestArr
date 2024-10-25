@@ -35,6 +35,10 @@
                     <label class="block text-sm font-semibold text-gray-300">Max Content to fetch for each content:</label>
                     <p class="text-gray-200">{{ config.MAX_CONTENT_CHECKS }}</p>
                 </div>
+                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
+                    <label class="block text-sm font-semibold text-gray-300">Search Size:</label>
+                    <p class="text-gray-200">{{ config.SEARCH_SIZE }}</p>
+                </div>
                 <!-- Display Next Cron Run Time -->
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
                     <label class="block text-sm font-semibold text-gray-300">Next Cron Run in:</label>

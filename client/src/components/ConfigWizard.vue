@@ -104,6 +104,7 @@ export default {
         MAX_SIMILAR_MOVIE: 5,
         MAX_SIMILAR_TV: 2,
         MAX_CONTENT_CHECKS: 10,
+        SEARCH_SIZE: 20,
         CRON_TIMES: '0 0 * * *',
         JELLYFIN_LIBRARIES: [],
         SELECTED_SERVICE: '',
