@@ -22,9 +22,6 @@ jobs:
       - name: Log in to Docker Hub
         run: echo ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} | docker login -u ciuse99 --password-stdin
 
-      - name: Build Docker Image
+      - name: Build and Push Docker Image
         run: |
           docker buildx build --platform linux/amd64,linux/arm64 -t ciuse99/suggestarr:nightly --push .
-      - name: Push Docker Image
-        run: |
-          docker push ciuse99/suggestarr:nightly
