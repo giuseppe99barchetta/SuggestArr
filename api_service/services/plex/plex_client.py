@@ -63,9 +63,10 @@ class PlexClient:
         """
         url = f"{self.api_url}/status/sessions/history/all"
         params = {
-            "sort": "viewedAt:desc"
+            "sort": "viewedAt:desc",
+            "limit": self.max_content_fetch
         }
-
+    
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
