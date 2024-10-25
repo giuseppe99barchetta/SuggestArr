@@ -8,8 +8,8 @@ from api_service.config.logger_manager import LoggerManager
 logger = LoggerManager().get_logger(__name__)
 
 # Constants for environment variables
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(BASE_DIR, 'config_files', 'config.yaml')
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+CONFIG_PATH = os.path.join(BASE_DIR, 'config', 'config_files', 'config.yaml')
 
 ENV_VARS = {
     'TMDB_API_KEY': 'TMDB_API_KEY',
@@ -82,6 +82,7 @@ def save_env_vars(config_data):
 
     # Create config.yaml file if it does not exist
     if not os.path.exists(CONFIG_PATH):
+        logger.info(f'Creating new file for config at {CONFIG_PATH}')
         open(CONFIG_PATH, 'w').close()  # Create an empty file
 
     # Write environment variables to the config.yaml file
@@ -106,7 +107,7 @@ def clear_env_vars():
             os.remove(CONFIG_PATH)
             logger.info("Configuration cleared successfully.")
         except OSError as e:
-            print(f"Error deleting {CONFIG_PATH}: {e}")
+            logger.error(f"Error deleting {CONFIG_PATH}: {e}")
 
         
 def update_cron_job(cron_time):
