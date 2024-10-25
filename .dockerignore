@@ -1,22 +1,62 @@
-.env
+# Ignore Git files and folders
 .git
 .gitattributes
 .gitignore
-.github
-docker-compose.yml
-dockerfile
+
+# Ignore Docker-specific files and folders
 .docker
+docker-compose.yml
+docker-compose.override.yml
+docker-compose-debug.yml
+dockerfile
 .dockerignore
+
+# Ignore environment and config files
+.env
+.env.local
+.env.development
+.env.production
+.env.example
+*.config
+*.yaml
+
+# Ignore Python cache and environment folders
 **/__pycache__/
 **/*.py[cod]
 .Python
-*.manifest
-*.spec
 .venv/
 venv/
-.vscode/
-*.md
+
+# Ignore Node modules
 node_modules/
+
+# Ignore IDE and editor configurations and temporary files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.iml
+
+# Ignore temporary and backup files
+*.swp
+*.swo
+*.bak
+*.tmp
+*.temp
+*.DS_Store
+
+# Ignore log files
 *.log
 app.log
-*.yaml
+
+# Ignore build and distribution folders
+build/
+dist/
+out/
+
+# Ignore documentation and markdown files
+*.md
+
+# Ignore config and config files folders
+/config_files
+/config/config_files
