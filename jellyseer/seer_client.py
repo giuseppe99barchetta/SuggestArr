@@ -119,8 +119,7 @@ class SeerClient:
                         return await response.json()
 
                     error_response = await response.json()
-                    self.logger.error("API call to %s failed with status %d", url, response.status)
-                    self.logger.error("Error details: %s", error_response)
+                    self.logger.error("API call to %s failed with message: %s", url, error_response.get('error', 'Unknown error.'))
                     return error_response
 
             except asyncio.TimeoutError:
@@ -164,7 +163,7 @@ class SeerClient:
         data = await self._make_request("GET", "api/v1/request/count")
         return data.get('total', 0) if data else 0
 
-    async def request_media(self, media_type, media_id, tvdb_id=None):
+    async def request_media(self, media_type, media_id, tvdb_id=None, retries=3, delay=2):
         """
         Requests a media item (movie or TV show) from Jellyseer.
         :param media_type: The type of media ('movie' or 'tv').
@@ -184,18 +183,29 @@ class SeerClient:
         # Ensure login if necessary, use cookie-based authentication
         if (self.username and self.password) and not self.session_token:
             await self.login()
+        
+        use_cookie = bool(self.session_token) 
             
-        if not self.session_token:
-            self.logger.error('Error during login to Seer.')
-            return {'message': 'Error during login to Seer.'}, 404
+        # Retry logic
+        for attempt in range(retries):
+            try:
+                response = await self._make_request("POST", "api/v1/request", json=data, use_cookie=use_cookie)
+                if 'error' not in response:
+                    return response
+                else:
+                    self.logger.warning(f"Attempt {attempt + 1} failed: Received error response for {media_type.upper()} with ID {media_id}")
+            except Exception as e:
+                self.logger.warning(f"Attempt {attempt + 1} failed for {media_type.upper()} with ID {media_id} - {e}")
+            if attempt < retries - 1:
+                await asyncio.sleep(delay)
 
-        use_cookie = bool(self.session_token)  # Use cookie if we have a session token
+        # Log final failure after all retries
+        self.logger.error(f"Failed to request {media_type} with ID {media_id} after {retries} attempts.")
+        return {'message': f"Failed to request {media_type} with ID {media_id} after {retries} attempts."}, 500
 
-        return await self._make_request("POST", "api/v1/request", json=data, use_cookie=use_cookie)
-
-    async def get_all_users(self):
+    async def get_all_users(self, max_users=100):
         """Fetch all users from Jellyseer API, returning a list of user IDs, names, and local status."""
-        data = await self._make_request("GET", "api/v1/user")
+        data = await self._make_request("GET", f"api/v1/user?take={max_users}")
         if data:
             return [
                 {
