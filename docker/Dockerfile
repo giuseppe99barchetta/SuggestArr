@@ -1,9 +1,9 @@
-# Stage 1: Build the frontend
-FROM node:20 AS frontend-builder
-WORKDIR /app/frontend
-COPY frontend/package*.json ./
+# Stage 1: Build the client
+FROM node:20 AS client-builder
+WORKDIR /app/client
+COPY client/package*.json ./
 RUN npm install
-COPY frontend/ .
+COPY client/ .
 RUN npm run build
 
 # Stage 2: Create the final image
@@ -17,18 +17,18 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Set the working directory for the backend
-WORKDIR /app/backend
+# Set the working directory for the api_service
+WORKDIR /app/api_service
 
 # Copy and install Python dependencies
-COPY backend/requirements.txt /app/backend/
+COPY api_service/requirements.txt /app/api_service/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the frontend build files from the previous stage
-COPY --from=frontend-builder /app/frontend/dist /app/static
+# Copy the client build files from the previous stage
+COPY --from=client-builder /app/client/dist /app/static
 
-# Copy the backend source code
-COPY backend/ /app/backend/
+# Copy the api_service source code
+COPY api_service/ /app/api_service/
 
 # Copy Supervisor configuration
 COPY ../config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
