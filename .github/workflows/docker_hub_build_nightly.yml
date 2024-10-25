@@ -1,27 +1,28 @@
-
 name: Build and Publish Docker Image to Docker Hub
 
 on:
   push:
     branches:
       - nightly
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4.2.1
+        uses: actions/checkout@v4.2.2
 
       - name: Set up Docker Buildx
-        run: |
-          docker run --privileged --rm tonistiigi/binfmt --install all
-          docker buildx create --use
-          docker buildx inspect --bootstrap
+        uses: docker/setup-buildx-action@v3.7.1
 
       - name: Log in to Docker Hub
         run: echo ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} | docker login -u ciuse99 --password-stdin
 
       - name: Build and Push Docker Image
         run: |
-          docker buildx build --platform linux/amd64,linux/arm64 -t ciuse99/suggestarr:nightly --push .
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --cache-from type=registry,ref=ciuse99/suggestarr:cache \
+            --cache-to type=registry,ref=ciuse99/suggestarr:cache,mode=max \
+            -t ciuse99/suggestarr:nightly --push .
