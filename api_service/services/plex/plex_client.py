@@ -65,6 +65,9 @@ class PlexClient:
         params = {
             "sort": "viewedAt:desc",
         }
+        
+        if self.library_ids:
+            params["librarySectionIDs"] = ','.join(self.library_ids)
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -76,11 +79,13 @@ class PlexClient:
                         filtered_items = await self.filter_recent_items(metadata)
                         self.logger.info(f"Returning {len(filtered_items)} filtered recent items.")
                         return filtered_items
+
                     self.logger.error("Failed to retrieve recent items: %d", response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while retrieving recent items: %s", str(e))
 
         return []
+
 
     async def filter_recent_items(self, metadata):
         """

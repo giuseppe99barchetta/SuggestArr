@@ -18,21 +18,21 @@ export default {
   },
   methods: {
     toggleLibrarySelection(library) {
-      const index = this.selectedLibraries.findIndex(l => l.uuid === library.uuid);
+      const index = this.selectedLibraries.findIndex(l => l.key === library.key);
       index > -1 ? this.selectedLibraries.splice(index, 1) : this.selectedLibraries.push(library);
       this.updateSelectedLibraries();
     },
     isSelected(libraryId) {
-      return this.selectedLibraries.some(library => library.uuid === libraryId);
+      return this.selectedLibraries.some(library => library.key === libraryId);
     },
     updateSelectedLibraries() {
-      const libraryIds = this.selectedLibraries.map(library => library.uuid);
+      const libraryIds = this.selectedLibraries.map(library => library.key);
       this.$emit('update-config', 'PLEX_LIBRARIES', libraryIds);
     },
     loadSelectedLibraries() {
       if (this.config.PLEX_LIBRARIES) {
         this.selectedLibraries = this.libraries.filter(library =>
-          this.config.PLEX_LIBRARIES.includes(library.uuid)
+          this.config.PLEX_LIBRARIES.includes(library.key)
         );
       }
     },
