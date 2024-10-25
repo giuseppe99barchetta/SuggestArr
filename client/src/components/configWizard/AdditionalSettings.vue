@@ -27,6 +27,14 @@
                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
                id="MAX_CONTENT_CHECKS" placeholder="10">
 
+        <!-- Search Size -->
+        <label for="SEARCH_SIZE" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Search Size:</label>
+        <p class="text-xs sm:text-sm text-gray-400 mb-2">Set the number of pieces of content to consider when searching for suggestions.</p>
+        <input type="number" :value="config.SEARCH_SIZE" 
+               @input="handleUpdate('SEARCH_SIZE', $event.target.value)"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+               id="SEARCH_SIZE" placeholder="20">
+
         <!-- Cron Times -->
         <label for="CRON_TIMES" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Cron Times:</label>
         <p class="text-xs sm:text-sm text-gray-400 mb-2">Set the schedule in cron format for content checks. (e.g., "0 0 * * *" for daily checks at midnight)</p>

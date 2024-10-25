@@ -27,6 +27,7 @@ class ContentAutomation:
         self.max_content = env_vars.get('MAX_CONTENT_CHECKS', 10)
         self.max_similar_movie = min(int(env_vars.get('MAX_SIMILAR_MOVIE', '3')), 20)
         self.max_similar_tv = min(int(env_vars.get('MAX_SIMILAR_TV', '2')), 20)
+        self.search_size = min(int(env_vars.get('SEARCH_SIZE', '20')), 100)
 
         # Overseer/Jellyseer client
         jellyseer_client = SeerClient(
@@ -39,7 +40,7 @@ class ContentAutomation:
         asyncio.run(jellyseer_client.init())
 
         # TMDb client
-        tmdb_client = TMDbClient(env_vars['TMDB_API_KEY'])
+        tmdb_client = TMDbClient(env_vars['TMDB_API_KEY'], self.search_size)
 
         # Initialize media service handler (Jellyfin or Plex)
         if self.selected_service in ('jellyfin', 'emby') :
