@@ -14,12 +14,13 @@ async def get_users():
         config_data = request.json
         api_url = config_data.get('SEER_API_URL')
         api_key = config_data.get('SEER_TOKEN')
+        session_token = config_data.get('SEER_SESSION_TOKEN')
 
         if not api_key:
             return jsonify({'message': 'API key is required', 'type': 'error'}), 400
 
         # Initialize JellyseerClient with the provided API key
-        jellyseer_client = SeerClient(api_url=api_url, api_key=api_key)
+        jellyseer_client = SeerClient(api_url=api_url, api_key=api_key, session_token=session_token)
         users = await jellyseer_client.get_all_users()
 
         if not users:
@@ -55,7 +56,11 @@ async def login_seer():
 
         # Check if the login was successful by verifying the session token
         if jellyseer_client.session_token:
-            return jsonify({'message': 'Login successful', 'type': 'success'}), 200
+            return jsonify({
+                'message': 'Login successful',
+                'type': 'success',
+                'session_token': jellyseer_client.session_token
+            }), 200
         else:
             return jsonify({'message': 'Login failed', 'type': 'error'}), 401
 

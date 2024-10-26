@@ -34,7 +34,8 @@ class ContentAutomation:
             env_vars['SEER_API_URL'],
             env_vars['SEER_TOKEN'],
             env_vars['SEER_USER_NAME'],
-            env_vars['SEER_USER_PSW']
+            env_vars['SEER_USER_PSW'],
+            env_vars['SEER_SESSION_TOKEN']
         )
         
         asyncio.run(jellyseer_client.init())

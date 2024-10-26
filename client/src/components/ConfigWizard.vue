@@ -111,6 +111,7 @@ export default {
         PLEX_API_URL: '',
         PLEX_TOKEN: '',
         PLEX_LIBRARIES: [],
+        SEER_SESSION_TOKEN: '',
       };
     },
     async fetchConfig() {

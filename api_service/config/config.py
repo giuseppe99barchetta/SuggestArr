@@ -29,6 +29,7 @@ ENV_VARS = {
     'PLEX_TOKEN': 'PLEX_TOKEN',
     'PLEX_API_URL': 'PLEX_API_URL',
     'PLEX_LIBRARIES': 'PLEX_LIBRARIES',
+    'SEER_SESSION_TOKEN': 'SEER_SESSION_TOKEN',
 }
 
 def load_env_vars():
@@ -56,6 +57,7 @@ def get_default_values():
         ENV_VARS['SEER_TOKEN']: lambda: '',
         ENV_VARS['SEER_USER_NAME']: lambda: None,
         ENV_VARS['SEER_USER_PSW']: lambda: None,
+        ENV_VARS['SEER_SESSION_TOKEN']: lambda: None,
         ENV_VARS['MAX_SIMILAR_MOVIE']: lambda: '5',
         ENV_VARS['MAX_SIMILAR_TV']: lambda: '2',
         ENV_VARS['CRON_TIMES']: lambda: '0 0 * * *',
@@ -111,6 +113,14 @@ def clear_env_vars():
         except OSError as e:
             logger.error(f"Error deleting {CONFIG_PATH}: {e}")
 
+def save_session_token(token):
+    """Save session token of Seer client."""
+    with open(CONFIG_PATH, 'r+', encoding='utf-8') as file:
+        config_data = yaml.safe_load(file) or {}
+        config_data['SEER_SESSION_TOKEN'] = token
+        file.seek(0)
+        yaml.dump(config_data, file)
+        file.truncate()
         
 def update_cron_job(cron_time):
     """
