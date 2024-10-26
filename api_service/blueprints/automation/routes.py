@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from api_service.tasks.tasks import run_content_automation_task
+from api_service.automate_process import ContentAutomation
 from api_service.config.logger_manager import LoggerManager
 
 logger = LoggerManager().get_logger(__name__)
@@ -11,7 +11,8 @@ async def run_now():
     Endpoint to execute the process in the background.
     """
     try:
-        await run_content_automation_task()
+        content_automation = await ContentAutomation.create()
+        await content_automation.run()
         return jsonify({'status': 'success', 'message': 'Task is running in the background!'}), 202
     except ValueError as ve:
         logger.error(f'Value error: {str(ve)}')

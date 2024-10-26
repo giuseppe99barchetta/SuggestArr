@@ -30,6 +30,8 @@ class SeerClient:
         self.username = seer_user_name
         self.password = seer_password
         self.session_token = session_token
+        self.is_logged_in = False
+        self._login_lock = asyncio.Lock()
         self.requests_cache = []  # Cache to store all requests
         
     async def init(self):
@@ -42,17 +44,15 @@ class SeerClient:
 
     async def login(self):
         """Authenticate with Jellyseer and obtain a session token."""
-        if not self.username or not self.password:
-            self.logger.error("Login failed: Username or password not provided.")
-            return
+        async with self._login_lock:
+            if self.is_logged_in:
+                return
 
         login_url = f"{self.api_url}/api/v1/auth/local"
         async with aiohttp.ClientSession() as session:
             try:
-                login_data = {
-                    "email": self.username,
-                    "password": self.password
-                }
+                login_data = {"email": self.username, "password": self.password}
+                
                 async with session.post(login_url, json=login_data, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200 and 'connect.sid' in response.cookies:
                         self.session_token = response.cookies['connect.sid'].value
@@ -64,6 +64,18 @@ class SeerClient:
                 self.logger.error("Login request to %s timed out.", login_url)
             except aiohttp.ClientError as e:
                 self.logger.error("An error occurred during login: %s", str(e))
+                
+    def _get_auth(self, use_cookie):
+        """
+        Prepare headers and cookies based on `use_cookie` flag.
+        """
+        if use_cookie and not self.session_token:
+            return None
+        headers = {'Content-Type': 'application/json', 'accept': 'application/json'}
+        cookies = {'connect.sid': self.session_token} if use_cookie and self.session_token else {}
+        if not use_cookie:
+            headers['X-Api-Key'] = self.api_key
+        return headers, cookies
 
     def _get_headers_and_cookies(self, use_cookie):
         """
@@ -91,41 +103,34 @@ class SeerClient:
 
         return headers, cookies
 
-    async def _make_request(self, method, endpoint, use_cookie=False, **kwargs):
-        """
-        Helper function to handle API requests asynchronously.
-        If use_cookie is True, use the session cookie for authentication.
-        """
+    async def _make_request(self, method, endpoint, use_cookie=False, retry_login=True, **kwargs):
+        """Unified API request handling with error handling."""
         url = f"{self.api_url}/{endpoint}"
-        headers_and_cookies = self._get_headers_and_cookies(use_cookie)
-
-        # Check if use_cookie is True but no cookies are set so it doesn't make requests as admin
-        if use_cookie and (not headers_and_cookies or not headers_and_cookies[1]):
-            self.logger.error("Cannot make request to %s: use_cookie is True but no cookie is available.", url)
+        headers, cookies = self._get_auth(use_cookie) or (None, None)
+        if headers is None:
+            self.logger.error("Authentication missing for %s", url)
             return None
-    
-        # Check if headers_and_cookies is None (meaning no valid authentication method)
-        if headers_and_cookies is None:
-            self.logger.error("Cannot make request to %s: session token is required but not available.", url)
-            return None
-    
-        # Unpack headers and cookies
-        headers, cookies = headers_and_cookies
 
         async with aiohttp.ClientSession(headers=headers, cookies=cookies) as session:
             try:
                 async with session.request(method, url, timeout=REQUEST_TIMEOUT, **kwargs) as response:
-                    if response.status in HTTP_OK:
-                        return await response.json()
-
-                    error_response = await response.json()
-                    self.logger.error("API call to %s failed with message: %s", url, error_response.get('error', 'Unknown error.'))
-                    return error_response
-
+                    if response.status in (403, 404) and retry_login:
+                        self.is_logged_in = False
+                        await self.login()
+                        return await self._make_request(method, endpoint, use_cookie, retry_login=False, **kwargs)
+                    return await self._process_response(response, url)
             except asyncio.TimeoutError:
                 self.logger.error("Request to %s timed out.", url)
             except aiohttp.ClientError as e:
-                self.logger.error("An error occurred while calling %s: %s", url, str(e))
+                self.logger.error("Error during request to %s: %s", url, str(e))
+        return None
+    
+    async def _process_response(self, response, url):
+        """Handle API response, logging errors if necessary."""
+        if response.status in HTTP_OK:
+            return await response.json()
+        error = await response.json()
+        self.logger.error("Request to %s failed: %s", url, error.get("error", "Unknown error"))
         return None
 
     async def fetch_all_requests(self):
@@ -149,11 +154,18 @@ class SeerClient:
     async def check_already_requested(self, tmdb_id, media_type):
         """
         Checks if a media item has already been requested 
-        in Jellyseer by checking the cached requests.
+        in Jellyseer/Overseer by checking the cached requests.
         """
         return any(item['media']['tmdbId'] == tmdb_id and \
                 item['media']['mediaType'].lower() == media_type.lower()
                 for item in self.requests_cache)
+        
+    async def check_already_downloaded(self, tmdb_id, media_type, local_content={}):
+        """
+        Checks if a media item has already been downloaded 
+        by checking the cached local content.
+        """
+        return any(item['tmdb_id'] == str(tmdb_id) for item in local_content.get(media_type))
 
     async def get_total_request(self):
         """
@@ -163,7 +175,7 @@ class SeerClient:
         data = await self._make_request("GET", "api/v1/request/count")
         return data.get('total', 0) if data else 0
 
-    async def request_media(self, media_type, media_id, tvdb_id=None, retries=3, delay=2):
+    async def request_media(self, media_type, media_id, tvdb_id=None, retries=3, delay=2, local_content=None):
         """
         Requests a media item (movie or TV show) from Jellyseer.
         :param media_type: The type of media ('movie' or 'tv').
@@ -185,21 +197,9 @@ class SeerClient:
         # Retry logic
         for attempt in range(retries):
             try:
-                # Check if we need to log in
-                if not self.session_token:
-                    await self.login()
-
                 response = await self._make_request("POST", "api/v1/request", json=data, use_cookie=use_cookie)
-
                 if response and 'error' not in response:
                     return response
-                else:
-                    self.logger.warning(f"Attempt {attempt + 1} failed: Received error response for {media_type.upper()} with ID {media_id}")
-
-                    # Check if the error indicates a session issue
-                    if response and response.get('error') == 'session expired':
-                        self.logger.info("Session expired, attempting to log in again.")
-                        await self.login()  # Riprova il login se la sessione è scaduta
 
             except Exception as e:
                 self.logger.warning(f"Attempt {attempt + 1} failed for {media_type.upper()} with ID {media_id} - {e}")

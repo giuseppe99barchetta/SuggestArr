@@ -23,6 +23,7 @@ class JellyfinHandler:
         self.max_similar_tv = max_similar_tv
         self.processed_series = set()
         self.request_count = 0
+        self.existing_content = jellyfin_client.existing_content
 
     async def process_recent_items(self):
         """Process recently watched items for all Jellyfin users."""
@@ -70,9 +71,13 @@ class JellyfinHandler:
 
     async def request_similar_media(self, media_ids, media_type, max_items):
         """Request similar media (movie/TV show) via Jellyseer."""
-        if media_ids:
-            for media in media_ids[:max_items]:
-                if not await self.jellyseer_client.check_already_requested(media['id'], media_type):
-                    await self.jellyseer_client.request_media(media_type, media['id'])
-                    self.request_count += 1
-                    self.logger.info(f"Requested {media_type}: {media['title']}")
+        for media in media_ids[:max_items]:
+            # Check if already requested or downloaded
+            if await self.jellyseer_client.check_already_requested(media['id'], media_type) or \
+               await self.jellyseer_client.check_already_downloaded(media['id'], media_type, self.existing_content):
+                continue
+            
+            # Request media if not already requested or downloaded
+            await self.jellyseer_client.request_media(media_type, media['id'])
+            self.request_count += 1
+            self.logger.info(f"New request made for {media_type}: {media['title']}!")
