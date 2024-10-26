@@ -34,7 +34,7 @@ class JellyfinHandler:
     async def process_user_recent_items(self, user):
         """Process recently watched items for a specific Jellyfin user."""
         self.logger.info(f"Fetching content for user: {user['Name']} ({user['Id']})")
-        recent_items_by_library = await self.jellyfin_client.get_recent_items(user['Id'])
+        recent_items_by_library = await self.jellyfin_client.get_recent_items(user)
 
         if recent_items_by_library:
             tasks = []

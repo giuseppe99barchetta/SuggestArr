@@ -1,6 +1,8 @@
+import os
 import aiohttp
 import asyncio
 from api_service.config.logger_manager import LoggerManager
+from api_service.config.config import save_session_token
 
 # Constants for HTTP status codes and request timeout
 HTTP_OK = {200, 201, 202}
@@ -13,7 +15,7 @@ class SeerClient:
     A client to interact with the Jellyseer API for handling media requests and authentication.
     """
 
-    def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None):
+    def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None, session_token=None):
         """
         Initializes the JellyseerClient with the API URL and logs in the user.
         :param api_url: The URL of the Jellyseer API.
@@ -27,9 +29,9 @@ class SeerClient:
         self.api_key = api_key
         self.username = seer_user_name
         self.password = seer_password
-        self.session_token = None  # Token for authenticated session
+        self.session_token = session_token
         self.requests_cache = []  # Cache to store all requests
-
+        
     async def init(self):
         """
         Asynchronous initialization method to fetch all requests.
@@ -39,9 +41,7 @@ class SeerClient:
         await self.fetch_all_requests()
 
     async def login(self):
-        """
-        Authenticate with Jellyseer and obtain a session token.
-        """
+        """Authenticate with Jellyseer and obtain a session token."""
         if not self.username or not self.password:
             self.logger.error("Login failed: Username or password not provided.")
             return
@@ -180,22 +180,30 @@ class SeerClient:
             data["tvdbId"] = tvdb_id or media_id
             data["seasons"] = "all"
 
-        # Ensure login if necessary, use cookie-based authentication
-        if (self.username and self.password) and not self.session_token:
-            await self.login()
-        
-        use_cookie = bool(self.session_token) 
-            
+        use_cookie = bool(self.session_token)
+
         # Retry logic
         for attempt in range(retries):
             try:
+                # Check if we need to log in
+                if not self.session_token:
+                    await self.login()
+
                 response = await self._make_request("POST", "api/v1/request", json=data, use_cookie=use_cookie)
-                if 'error' not in response:
+
+                if response and 'error' not in response:
                     return response
                 else:
                     self.logger.warning(f"Attempt {attempt + 1} failed: Received error response for {media_type.upper()} with ID {media_id}")
+
+                    # Check if the error indicates a session issue
+                    if response and response.get('error') == 'session expired':
+                        self.logger.info("Session expired, attempting to log in again.")
+                        await self.login()  # Riprova il login se la sessione è scaduta
+
             except Exception as e:
                 self.logger.warning(f"Attempt {attempt + 1} failed for {media_type.upper()} with ID {media_id} - {e}")
+
             if attempt < retries - 1:
                 await asyncio.sleep(delay)
 

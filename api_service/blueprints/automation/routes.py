@@ -14,8 +14,10 @@ async def run_now():
         await run_content_automation_task()
         return jsonify({'status': 'success', 'message': 'Task is running in the background!'}), 202
     except ValueError as ve:
+        logger.error(f'Value error: {str(ve)}')
         return jsonify({'status': 'error', 'message': 'Value error: ' + str(ve)}), 400
     except FileNotFoundError as fnfe:
+        logger.error(f'File not found: {str(fnfe)}')
         return jsonify({'status': 'error', 'message': 'File not found: ' + str(fnfe)}), 404
     except Exception as e:
         logger.error(f'Unexpected error: {str(e)}')

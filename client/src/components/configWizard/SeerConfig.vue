@@ -153,8 +153,9 @@ export default {
         authenticateUser() {
             this.isAuthenticating = true;
             authenticateUser(this.config[`SEER_API_URL`], this.config[`SEER_TOKEN`], this.config[`SEER_USER_NAME`], this.userPassword)
-                .then(() => {
+                .then((response) => {
                     this.authenticated = true;
+                    this.$emit('update-config', 'SEER_SESSION_TOKEN', response.data.session_token);
                 })
                 .catch(() => {
                     this.authenticated = false;
