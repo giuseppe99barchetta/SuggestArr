@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Maintainer>
+    <Icon>https://raw.githubusercontent.com/giuseppe99barchetta/SuggestArr/master/unraid/logo.png</Icon>
+    <Profile>
+        The Official SuggestArr Repository
+    </Profile>
+    <DonateLink>https://buymeacoffee.com/suggestarr</DonateLink>
+    <DonateText>If you appreciate our work, please consider supporting us by buying us a coffee!</DonateText>
+</Maintainer>
