@@ -1,6 +1,6 @@
 
 # SuggestArr
-![image](https://github.com/user-attachments/assets/73da2f66-3792-4b63-9897-92ab10f61d28)
+![SuggestArr-16 9](https://github.com/user-attachments/assets/f59a7a03-130a-449a-8c8d-adf7c4b4a020)
 
 SuggestArr is a project designed to automate media content recommendations and download requests based on user activity in media servers like **Jellyfin**, **Plex**, and now **Emby**. It retrieves recently watched content, searches for similar titles using the TMDb API, and sends automated download requests to **Jellyseer** or **Overseer**.
 
