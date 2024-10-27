@@ -5,6 +5,7 @@ The client can retrieve users, recent items, and libraries.
 Classes:
     - PlexClient: A class that handles communication with the Plex API.
 """
+import asyncio
 import aiohttp
 from api_service.config.logger_manager import LoggerManager
 
@@ -189,3 +190,73 @@ class PlexClient:
         except aiohttp.ClientError as e:
             print(f"Errore durante il recupero dei server Plex: {str(e)}")
             return None
+        
+    async def init_existing_content(self):
+        self.logger.info('Searching all content in Plex')
+        self.existing_content = await self.get_all_library_items()
+        
+    async def get_all_library_items(self):
+        """
+        Retrieves all items from the specified libraries or all libraries if no specific IDs are provided.
+        :return: A dictionary of items organized by library name.
+        """
+        results_by_library = {}
+        libraries = await self.get_libraries()
+    
+        if not libraries:
+            self.logger.error("No libraries found.")
+            return None
+    
+        async with aiohttp.ClientSession() as session:
+            tasks = [
+                self._fetch_library_items(session, library, results_by_library)
+                for library in libraries
+            ]
+            await asyncio.gather(*tasks)
+    
+        return results_by_library if results_by_library else None
+    
+    async def _fetch_library_items(self, session, library, results_by_library):
+        """
+        Fetch items for a single library and update results_by_library.
+        """
+        library_id = library.get('key')
+        library_name = library.get('title')
+    
+        if not isinstance(library_id, str) or not isinstance(library_name, str):
+            self.logger.error(f"Invalid library data - ID: {library_id}, Name: {library_name}")
+            return
+    
+        url = f"{self.api_url}/library/sections/{library_id}/all"
+
+        try:
+            self.logger.debug(f"Requesting URL: {url} with headers: {self.headers} and timeout: {REQUEST_TIMEOUT}")
+            async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
+                if response.status == 200:
+                    library_items = await response.json()
+                    items = library_items.get('MediaContainer', {}).get('Metadata', [])
+
+                    if isinstance(items, list):
+                        # Extract TMDB ID for each element in list
+                        processed_items = []
+                        for item in items:
+                            library_type = 'tv' if item.get('type') == 'show' else 'movie'
+                            item_id = item.get('key').replace('/children', '')
+                            tmdb_id = await self.get_metadata_provider_id(item_id)
+                            if tmdb_id:
+                                item['tmdb_id'] = tmdb_id
+                            processed_items.append(item)
+
+                        results_by_library[library_type] = processed_items
+                        self.logger.info(f"Retrieved {len(processed_items)} items in {library_name} with TMDB IDs")
+                    else:
+                        self.logger.error(f"Expected list for items, got {type(items)}")
+                else:
+                    self.logger.error("Failed to get items for library %s: %d", library_name, response.status)
+
+        except aiohttp.ClientError as e:
+            self.logger.error(f"Client error for library {library_name}: {e}")
+        except asyncio.TimeoutError:
+            self.logger.error(f"Timeout error for library {library_name}")
+        except Exception as e:
+            self.logger.error(f"An unexpected error occurred for library {library_name}: {e}")
