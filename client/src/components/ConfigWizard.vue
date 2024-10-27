@@ -2,8 +2,11 @@
   <div>
     <div v-if="currentStep <= steps.length" class="wizard-container"
       :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }">
+
       <div class="wizard-content">
-        <h2 class="text-3xl font-bold text-gray-200 mb-6 text-center">SuggestArr Wizard</h2>
+        <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank">
+          <img src="@/assets/logo.png" alt="SuggestArr Logo" class="attached-logo mb-6 text-center">
+        </a>
         <div class="progress-bar">
           <div class="progress" :style="{ width: progressBarWidth }"></div>
         </div>

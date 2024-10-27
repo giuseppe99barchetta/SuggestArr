@@ -1,7 +1,9 @@
 <template>
     <div class="wizard-container" :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }">
         <div class="wizard-content custom-width">
-            <h2 class="text-3xl font-bold text-gray-200 mb-6 text-center">SuggestArr Summary</h2>
+            <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank">
+                <img src="@/assets/logo.png" alt="SuggestArr Logo" class="attached-logo mb-6 text-center">
+            </a>
             <div class="space-y-6">
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
                     <label class="block text-sm font-semibold text-gray-300">Selected service:</label>
@@ -179,4 +181,12 @@ export default {
     max-width: 600px; /* Puoi modificare questa larghezza in base alle tue esigenze */
     margin: 0 auto;   /* Per centrare il contenuto */
 }
+
+.attached-logo {
+    width: 100px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    margin-bottom: 30px;
+  }
 </style>

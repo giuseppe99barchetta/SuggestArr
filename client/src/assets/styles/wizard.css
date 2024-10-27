@@ -158,6 +158,13 @@ select {
     opacity: 0;
   }
 
+  .attached-logo {
+    width: 100px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    margin-bottom: 30px;
+  }
 
 @media (max-width: 768px) {
     .wizard-content {
