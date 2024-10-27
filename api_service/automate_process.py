@@ -16,18 +16,23 @@ class ContentAutomation:
     finding similar content via TMDb, and requesting content via Jellyseer/Overseer.
     """
 
-    def __init__(self):
-        """
-        Initialize clients for Jellyfin/Plex, TMDb, and Jellyseer/Overseer based on the selected service.
-        """
-        self.logger = LoggerManager.get_logger(self.__class__.__name__)
+    def __new__(cls):
+        """Override to prevent direct instantiation and enforce use of `create`."""
+        instance = super(ContentAutomation, cls).__new__(cls)
+        instance.logger = LoggerManager.get_logger(cls.__name__)
+        return instance
+
+    @classmethod
+    async def create(cls):
+        """Async factory method to initialize ContentAutomation asynchronously."""
+        instance = cls.__new__(cls)
         env_vars = load_env_vars()
-        
-        self.selected_service = env_vars['SELECTED_SERVICE']
-        self.max_content = env_vars.get('MAX_CONTENT_CHECKS', 10)
-        self.max_similar_movie = min(int(env_vars.get('MAX_SIMILAR_MOVIE', '3')), 20)
-        self.max_similar_tv = min(int(env_vars.get('MAX_SIMILAR_TV', '2')), 20)
-        self.search_size = min(int(env_vars.get('SEARCH_SIZE', '20')), 100)
+
+        instance.selected_service = env_vars['SELECTED_SERVICE']
+        instance.max_content = env_vars.get('MAX_CONTENT_CHECKS', 10)
+        instance.max_similar_movie = min(int(env_vars.get('MAX_SIMILAR_MOVIE', '3')), 20)
+        instance.max_similar_tv = min(int(env_vars.get('MAX_SIMILAR_TV', '2')), 20)
+        instance.search_size = min(int(env_vars.get('SEARCH_SIZE', '20')), 100)
 
         # Overseer/Jellyseer client
         jellyseer_client = SeerClient(
@@ -37,30 +42,33 @@ class ContentAutomation:
             env_vars['SEER_USER_PSW'],
             env_vars['SEER_SESSION_TOKEN']
         )
-        
-        asyncio.run(jellyseer_client.init())
+        await jellyseer_client.init()
 
         # TMDb client
-        tmdb_client = TMDbClient(env_vars['TMDB_API_KEY'], self.search_size)
+        tmdb_client = TMDbClient(env_vars['TMDB_API_KEY'], instance.search_size)
 
         # Initialize media service handler (Jellyfin or Plex)
-        if self.selected_service in ('jellyfin', 'emby') :
+        if instance.selected_service in ('jellyfin', 'emby'):
             jellyfin_client = JellyfinClient(
                 env_vars['JELLYFIN_API_URL'],
                 env_vars['JELLYFIN_TOKEN'],
-                self.max_content,
+                instance.max_content,
                 env_vars.get('JELLYFIN_LIBRARIES')
             )
-            self.media_handler = JellyfinHandler(jellyfin_client, jellyseer_client, tmdb_client, self.logger, self.max_similar_movie, self.max_similar_tv)
+            await jellyfin_client.init_existing_content()
+            instance.media_handler = JellyfinHandler(jellyfin_client, jellyseer_client, tmdb_client, instance.logger, instance.max_similar_movie, instance.max_similar_tv)
 
-        elif self.selected_service == 'plex':
+        elif instance.selected_service == 'plex':
             plex_client = PlexClient(
                 api_url=env_vars['PLEX_API_URL'],
                 token=env_vars['PLEX_TOKEN'],
-                max_content=self.max_content,
+                max_content=instance.max_content,
                 library_ids=env_vars.get('PLEX_LIBRARIES')
             )
-            self.media_handler = PlexHandler(plex_client, jellyseer_client, tmdb_client, self.logger, self.max_similar_movie, self.max_similar_tv)
+            await plex_client.init_existing_content()
+            instance.media_handler = PlexHandler(plex_client, jellyseer_client, tmdb_client, instance.logger, instance.max_similar_movie, instance.max_similar_tv)
+
+        return instance
 
     async def run(self):
         """Main entry point to start the automation process."""

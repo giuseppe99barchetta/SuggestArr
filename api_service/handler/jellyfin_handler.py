@@ -23,6 +23,7 @@ class JellyfinHandler:
         self.max_similar_tv = max_similar_tv
         self.processed_series = set()
         self.request_count = 0
+        self.existing_content = jellyfin_client.existing_content
 
     async def process_recent_items(self):
         """Process recently watched items for all Jellyfin users."""
@@ -70,9 +71,28 @@ class JellyfinHandler:
 
     async def request_similar_media(self, media_ids, media_type, max_items):
         """Request similar media (movie/TV show) via Jellyseer."""
-        if media_ids:
-            for media in media_ids[:max_items]:
-                if not await self.jellyseer_client.check_already_requested(media['id'], media_type):
-                    await self.jellyseer_client.request_media(media_type, media['id'])
-                    self.request_count += 1
-                    self.logger.info(f"Requested {media_type}: {media['title']}")
+        if not media_ids:
+            self.logger.info("No media IDs provided for similar media request.")
+            return
+
+        tasks = []
+        for media in media_ids[:max_items]:
+            media_id = media['id']
+            media_title = media['title']
+
+            # Check if already downloaded or requested
+            already_requested = await self.jellyseer_client.check_already_requested(media_id, media_type)
+            already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content)
+
+            if not already_requested and not already_downloaded:
+                tasks.append(self._request_media_and_log(media_type, media_id, media_title))
+            else:
+                self.logger.info(f"Skipping [{media_type}, {media_title}]: already requested or downloaded.")
+
+        await asyncio.gather(*tasks)
+
+    async def _request_media_and_log(self, media_type, media_id, media_title):
+        """Helper method to request media and log the result."""
+        await self.jellyseer_client.request_media(media_type, media_id)
+        self.request_count += 1
+        self.logger.info(f"Requested {media_type}: {media_title}")
