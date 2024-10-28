@@ -22,6 +22,7 @@ class PlexHandler:
         self.max_similar_movie = max_similar_movie
         self.max_similar_tv = max_similar_tv
         self.request_count = 0
+        self.existing_content = plex_client.existing_content
 
     async def process_recent_items(self):
         """Process recently watched items for Plex (without user context)."""
@@ -33,7 +34,7 @@ class PlexHandler:
             for response_item in recent_items_response:
                 title = response_item.get('title', response_item.get('grandparentTitle'))
                 self.logger.info(f"Processing item: {title}")
-                tasks.append(self.process_item(None, response_item, title))  # No user context needed for Plex
+                tasks.append(self.process_item(response_item, title))  # No user context needed for Plex
 
             if tasks:
                 await asyncio.gather(*tasks)
@@ -43,7 +44,7 @@ class PlexHandler:
         else:
             self.logger.warning("Unexpected response format: expected a list")
 
-    async def process_item(self, user_id, item, title):
+    async def process_item(self, item, title):
         """Process an individual item (movie or TV show episode)."""
 
         item_type = item['type'].lower()
@@ -53,9 +54,9 @@ class PlexHandler:
                 key = self.extract_rating_key(item, item_type)
                 if key:
                     if item_type == 'movie':
-                        await self.process_movie(user_id, key)
+                        await self.process_movie(key)
                     elif item_type == 'episode':
-                        await self.process_episode(user_id, key)
+                        await self.process_episode(key)
                 else:
                     raise ValueError(f"Missing key for {item_type} '{title}'. Cannot process this item. Skipping.")   
             except Exception as e:
@@ -66,14 +67,14 @@ class PlexHandler:
         key = item.get('key') if item_type == 'movie' else item.get('grandparentKey') if item_type == 'episode' else None
         return key if key else None
 
-    async def process_movie(self, user_id, movie_key):
+    async def process_movie(self, movie_key):
         """Find similar movies via TMDb and request them via Jellyseer."""
         tmdb_id = await self.plex_client.get_metadata_provider_id(movie_key)
         if tmdb_id:
             similar_movies = await self.tmdb_client.find_similar_movies(tmdb_id)
             await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie)
 
-    async def process_episode(self, user_id, series_key):
+    async def process_episode(self, series_key):
         """Process a TV show episode by finding similar TV shows via TMDb."""
         if series_key:
             tvdb_id = await self.plex_client.get_metadata_provider_id(series_key)
@@ -83,11 +84,29 @@ class PlexHandler:
 
     async def request_similar_media(self, media_ids, media_type, max_items):
         """Request similar media (movie/TV show) via Jellyseer."""
-        if media_ids:
-            for media in media_ids[:max_items]:
-                if not await self.jellyseer_client.check_already_requested(media['id'], media_type):
-                    await self.jellyseer_client.request_media(media_type, media['id'])
-                    self.request_count += 1
-                    self.logger.info(f"Requested {media_type}: {media['title']}")
-                else:
-                    self.logger.info(f"Skipping [{media_type}, {media['title']}]: already requested.")
+        if not media_ids:
+            self.logger.info("No media IDs provided for similar media request.")
+            return
+
+        tasks = []
+        for media in media_ids[:max_items]:
+            media_id = media['id']
+            media_title = media['title']
+
+            # Check if already download or requested
+            already_requested = await self.jellyseer_client.check_already_requested(media_id, media_type)
+            already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content)
+
+            if not already_requested and not already_downloaded:
+                tasks.append(self._request_media_and_log(media_type, media_id, media_title))
+            else:
+                self.logger.info(f"Skipping [{media_type}, {media_title}]: already requested or downloaded.")
+
+        await asyncio.gather(*tasks)
+
+    async def _request_media_and_log(self, media_type, media_id, media_title):
+        """Helper method to request media and log the result."""
+        await self.jellyseer_client.request_media(media_type, media_id)
+        self.request_count += 1
+        self.logger.info(f"Requested {media_type}: {media_title}")
+

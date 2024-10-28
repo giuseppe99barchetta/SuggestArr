@@ -107,6 +107,7 @@ class SeerClient:
         """Unified API request handling with error handling."""
         url = f"{self.api_url}/{endpoint}"
         headers, cookies = self._get_auth(use_cookie) or (None, None)
+
         if headers is None:
             self.logger.error("Authentication missing for %s", url)
             return None

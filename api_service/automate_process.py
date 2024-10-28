@@ -42,7 +42,7 @@ class ContentAutomation:
             env_vars['SEER_USER_PSW'],
             env_vars['SEER_SESSION_TOKEN']
         )
-        await jellyseer_client.init()  # Inizializzazione asincrona
+        await jellyseer_client.init()
 
         # TMDb client
         tmdb_client = TMDbClient(env_vars['TMDB_API_KEY'], instance.search_size)
@@ -55,7 +55,7 @@ class ContentAutomation:
                 instance.max_content,
                 env_vars.get('JELLYFIN_LIBRARIES')
             )
-            await jellyfin_client.init_existing_content()  # Inizializzazione asincrona per JellyfinClient
+            await jellyfin_client.init_existing_content()
             instance.media_handler = JellyfinHandler(jellyfin_client, jellyseer_client, tmdb_client, instance.logger, instance.max_similar_movie, instance.max_similar_tv)
 
         elif instance.selected_service == 'plex':
@@ -65,9 +65,10 @@ class ContentAutomation:
                 max_content=instance.max_content,
                 library_ids=env_vars.get('PLEX_LIBRARIES')
             )
+            await plex_client.init_existing_content()
             instance.media_handler = PlexHandler(plex_client, jellyseer_client, tmdb_client, instance.logger, instance.max_similar_movie, instance.max_similar_tv)
 
-        return instance  # Restituisce un'istanza completamente inizializzata
+        return instance
 
     async def run(self):
         """Main entry point to start the automation process."""
