@@ -1,7 +1,23 @@
+<div align="center">
 
-# SuggestArr
+## 🚀 SuggestArr - Media Automation Made Simple
+
 ![ezgif com-optimize (2)](https://github.com/user-attachments/assets/d5c48bdb-3c11-4f35-bb55-849297d521e7)
 
+![Build Status](https://img.shields.io/github/actions/workflow/status/giuseppe99barchetta/suggestarr/docker_hub_build.yml?branch=main&label=Build&logo=github)
+![Latest Release](https://img.shields.io/github/v/release/giuseppe99barchetta/suggestarr?include_prereleases&label=Latest%20Release&logo=github)
+[![Documentation](https://img.shields.io/badge/Docs-Available-blue?logo=readthedocs)](https://github.com/giuseppe99barchetta/SuggestArr/wiki)
+![Platform Support](https://img.shields.io/badge/platforms-linux%2Famd64%20|%20linux%2Farm64-blue?logo=linux)
+![Docker Pulls](https://img.shields.io/docker/pulls/ciuse99/suggestarr?label=Docker%20Pulls&logo=docker)
+
+[![GitHub Discussions](https://img.shields.io/badge/Community-GitHub%20Discussions-blue?logo=github)](https://github.com/giuseppe99barchetta/suggestarr/discussions)
+![GitHub Stars](https://img.shields.io/github/stars/giuseppe99barchetta/suggestarr?label=Stars&logo=github)
+![Contributors](https://img.shields.io/github/contributors/giuseppe99barchetta/suggestarr?label=Contributors&logo=github)
+[![Buy Me a Coffee](https://img.shields.io/badge/Donate-Buy%20Me%20a%20Coffee-orange?logo=buy-me-a-coffee)](https://buymeacoffee.com/suggestarr)
+[![Reddit Upvotes](https://img.shields.io/badge/Reddit-Upvotes-ff4500?logo=reddit)](https://www.reddit.com/r/selfhosted/comments/1gb4swg/release_major_update_for_suggestarr_now/)
+![Last Commit](https://img.shields.io/github/last-commit/giuseppe99barchetta/suggestarr?label=Last%20Commit&logo=github)
+
+</div>
 
 SuggestArr is a project designed to automate media content recommendations and download requests based on user activity in media servers like **Jellyfin**, **Plex**, and now **Emby**. It retrieves recently watched content, searches for similar titles using the TMDb API, and sends automated download requests to **Jellyseer** or **Overseer**.
 
