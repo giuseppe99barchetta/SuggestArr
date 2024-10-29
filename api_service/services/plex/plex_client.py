@@ -252,7 +252,7 @@ class PlexClient:
                             processed_items.append(item)
 
                         results_by_library[library_type] = processed_items
-                        self.logger.info(f"Retrieved {len(processed_items)} items in {library_name} with TMDB IDs")
+                        self.logger.info(f"Retrieved {len(processed_items)} items in {library_type} with TMDB IDs")
                     else:
                         self.logger.error(f"Expected list for items, got {type(items)}")
                 else:
