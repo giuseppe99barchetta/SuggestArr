@@ -6,10 +6,7 @@ import axios from 'axios';
 
 const app = createApp(App);
 
-axios.defaults.baseURL = 'http://localhost:5000'; // Replace with your backend URL
 
-// Example usage of axios in components
-app.config.globalProperties.$axios = axios; 
 
 const options = {
     position: 'top-right',
