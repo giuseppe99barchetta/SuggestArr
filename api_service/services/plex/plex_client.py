@@ -201,7 +201,11 @@ class PlexClient:
         :return: A dictionary of items organized by library name.
         """
         results_by_library = {}
-        libraries = await self.get_libraries()
+        
+        if self.library_ids:
+            libraries = [{'key': library_id, 'title': f'Library {index}'} for index, library_id in enumerate(self.library_ids)]
+        else:
+            libraries = await self.get_libraries()
     
         if not libraries:
             self.logger.error("No libraries found.")
