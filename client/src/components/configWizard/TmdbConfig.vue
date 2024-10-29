@@ -1,6 +1,6 @@
 <template>
     <div>
-        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Step 1: TMDB API Key</h3>
+        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">TMDB Configuration</h3>
         <p class="text-xs sm:text-sm text-gray-400 mb-4">
             You can get your TMDB API Key by signing up at 
             <a href="https://www.themoviedb.org/" class="text-indigo-400">The Movie Database</a>.

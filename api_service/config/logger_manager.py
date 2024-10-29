@@ -40,7 +40,7 @@ class LoggerManager:
             console_handler.setLevel(level)
 
             # Create a file handler to save logs to a file
-            file_handler = logging.FileHandler(log_file)
+            file_handler = logging.FileHandler(log_file, encoding='utf-8')
             file_handler.setLevel(level)
 
             # Create a logging format

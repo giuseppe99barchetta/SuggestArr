@@ -1,6 +1,6 @@
 <template>
     <div>
-        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Step 3: Overseer/Jellyseer API Details</h3>
+        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Overseer/Jellyseer API Configuration</h3>
         <p class="text-xs sm:text-sm text-gray-400 mb-4">To obtain your Overseer/Jellyseer API Key, open the Overseer/Jellyseer interface,
             navigate to Settings, locate the "API Key" section, and copy your key for use in this configuration.</p>
 

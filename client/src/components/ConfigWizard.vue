@@ -42,6 +42,7 @@ import SeerConfig from './configWizard/SeerConfig.vue';
 import AdditionalSettings from './configWizard/AdditionalSettings.vue';
 import PlexConfig from './configWizard/PlexConfig.vue';
 import ConfigSummary from './ConfigSummary.vue';
+import ContentFilterSettings from './configWizard/ContentFilterSettings.vue';
 
 export default {
   components: {
@@ -53,6 +54,7 @@ export default {
     AdditionalSettings,
     MediaServiceSelection,
     PlexConfig,
+    ContentFilterSettings,
   },
   data() {
     return {
@@ -70,9 +72,9 @@ export default {
     },
     steps() {
       const serviceSteps = {
-        jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'AdditionalSettings'],
-        plex: ['MediaServiceSelection', 'TmdbConfig', 'PlexConfig', 'SeerConfig', 'AdditionalSettings'],
-        emby: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'AdditionalSettings'],
+        jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'ContentFilterSettings', 'AdditionalSettings'],
+        plex: ['MediaServiceSelection', 'TmdbConfig', 'PlexConfig', 'SeerConfig', 'ContentFilterSettings', 'AdditionalSettings'],
+        emby: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'ContentFilterSettings', 'AdditionalSettings'],
       };
       return serviceSteps[this.config.SELECTED_SERVICE || 'jellyfin'];
     },

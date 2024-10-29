@@ -23,7 +23,7 @@ class TMDbClient:
     related to movies, TV shows, and external IDs.
     """
 
-    def __init__(self, api_key, search_size):
+    def __init__(self, api_key, search_size, tmdb_threshold, tmdb_min_votes, include_no_ratings, filter_release_year, filter_country, filter_genre):
         """
         Initializes the TMDbClient with the provided API key.
         :param api_key: API key to authenticate requests to TMDb.
@@ -31,40 +31,112 @@ class TMDbClient:
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.api_key = api_key
         self.search_size = search_size
+        self.tmdb_threshold = tmdb_threshold
+        self.tmdb_min_votes = tmdb_min_votes
+        self.include_no_ratings = include_no_ratings
+        self.country_filter = filter_country
+        self.release_year_filter = filter_release_year
+        self.genre_filter = filter_genre
         self.pages = (self.search_size + CONTENT_PER_PAGE - 1) // CONTENT_PER_PAGE
         self.tmdb_api_url = "https://api.themoviedb.org/3"
 
     async def _fetch_recommendations(self, content_id, content_type):
         """
-        Helper method to fetch recommendations for either movies or TV shows.
-        :param content_id: The ID of the movie or TV show.
-        :param content_type: 'movie' or 'tv' to specify the type of content.
-        :return: A list of recommendations with IDs and titles.
+        Fetches recommendations for a specific movie or TV show by applying filters.
         """
         search = []
         for page in range(1, self.pages + 1):
-            url = f"{self.tmdb_api_url}/{content_type}/{content_id}/recommendations?api_key={self.api_key}&page={page}"
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                        if response.status in HTTP_OK:
-                            data = await response.json()
-                            search.extend([
-                                {'id': item['id'], 'title': item['title' if content_type == 'movie' else 'name']}
-                                for item in data['results']
-                            ])
-                            if data['total_pages'] == page:
-                                break
-                        else:
-                            self.logger.error("Error retrieving %s recommendations: %d", content_type, response.status)
-            except aiohttp.ClientError as e:
-                self.logger.error("An error occurred while requesting %s recommendations: %s", content_type, str(e))
+            data = await self._fetch_page_data(content_id, content_type, page)
+            if not data:
+                break
 
-            # Sleep to avoid rate limiting, except on the last request
+            for item in data['results']:
+                if self._apply_filters(item, content_type):
+                    search.append(self._format_result(item, content_type))
+
+                # Stop if we reach the search size limit
+                if len(search) >= self.search_size:
+                    break
+
+            if len(search) >= self.search_size:
+                break
+
+            # Sleep to avoid rate limiting
             if page < self.pages:
                 await asyncio.sleep(RATE_LIMIT_SLEEP)
-        
+
         return search[:self.search_size]
+
+    async def _fetch_page_data(self, content_id, content_type, page):
+        """
+        Fetches a single page of recommendations from TMDb API.
+        """
+        url = f"{self.tmdb_api_url}/{content_type}/{content_id}/recommendations?api_key={self.api_key}&page={page}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status in HTTP_OK:
+                        return await response.json()
+                    else:
+                        self.logger.error("Error retrieving %s recommendations: %d", content_type, response.status)
+        except aiohttp.ClientError as e:
+            self.logger.error("An error occurred while requesting %s recommendations: %s", content_type, str(e))
+        return None
+
+    def _apply_filters(self, item, content_type):
+        """
+        Applies rating, country, release year, and genre filters to a content item.
+        Returns True if the item passes all filters, False otherwise.
+        """
+        rating = item.get('vote_average')
+        votes = item.get('vote_count')
+
+        if self.include_no_ratings and (rating is None or votes is None):
+            self._log_exclusion_reason(item, "missing rating or votes", content_type)
+            return False
+
+        if rating is not None and rating < self.tmdb_threshold / 10:
+            self._log_exclusion_reason(item, f"rating below threshold of {int(self.tmdb_threshold)}%", content_type)
+            return False
+
+        if votes is not None and votes < self.tmdb_min_votes:
+            self._log_exclusion_reason(item, f"votes below minimum threshold of {self.tmdb_min_votes}", content_type)
+            return False
+
+        release_date = item.get('release_date') if content_type == 'movie' else item.get('first_air_date')
+        if release_date and int(release_date[:4]) < self.release_year_filter:
+            self._log_exclusion_reason(item, f"release year {release_date[:4]} before {self.release_year_filter}", content_type)
+            return False
+
+        item_genres = item.get('genre_ids', [])
+        genre_ids_to_exclude = [genre['id'] for genre in self.genre_filter]
+        if any(genre_id in item_genres for genre_id in genre_ids_to_exclude):
+            excluded_genres = [genre['name'] for genre in self.genre_filter if genre['id'] in item_genres]
+            self._log_exclusion_reason(item, f"excluded genres: {', '.join(excluded_genres)}", content_type)
+            return False
+
+        return True
+
+    def _log_exclusion_reason(self, item, reason, content_type):
+        """
+        Logs the reason for excluding a content item.
+        """
+        title = item.get('title' if content_type == 'movie' else 'name')
+        self.logger.info(f"Excluding {title} due to {reason}.")
+
+    def _format_result(self, item, content_type):
+        """
+        Formats a content item for the final search result.
+        """
+        return {
+            'id': item['id'],
+            'title': item['title' if content_type == 'movie' else 'name'],
+            'rating': item.get('vote_average'),
+            'votes': item.get('vote_count'),
+            'release_date': item.get('release_date') if content_type == 'movie' else item.get('first_air_date'),
+            'origin_country': item.get('origin_country', [])
+        }
+
 
     async def find_similar_movies(self, movie_id):
         """

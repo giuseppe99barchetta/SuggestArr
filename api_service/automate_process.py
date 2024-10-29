@@ -33,6 +33,14 @@ class ContentAutomation:
         instance.max_similar_movie = min(int(env_vars.get('MAX_SIMILAR_MOVIE', '3')), 20)
         instance.max_similar_tv = min(int(env_vars.get('MAX_SIMILAR_TV', '2')), 20)
         instance.search_size = min(int(env_vars.get('SEARCH_SIZE', '20')), 100)
+        
+        # TMDB filters
+        tmdb_threshold = float(env_vars.get('FILTER_TMDB_THRESHOLD', '7.5'))
+        tmdb_min_votes = int(env_vars.get('FILTER_TMDB_MIN_VOTES', '100'))
+        include_no_ratings = env_vars.get('FILTER_INCLUDE_NO_RATING', 'true').lower() == 'true'
+        filter_release_year = int(env_vars.get('FILTER_RELEASE_YEAR', '0'))
+        filter_country = env_vars.get('FILTER_COUNTRY', '0')
+        filter_genre = env_vars.get('FILTER_GENRES_EXCLUDE', [])
 
         # Overseer/Jellyseer client
         jellyseer_client = SeerClient(
@@ -45,7 +53,16 @@ class ContentAutomation:
         await jellyseer_client.init()
 
         # TMDb client
-        tmdb_client = TMDbClient(env_vars['TMDB_API_KEY'], instance.search_size)
+        tmdb_client = TMDbClient(
+            env_vars['TMDB_API_KEY'],
+            instance.search_size,
+            tmdb_threshold,
+            tmdb_min_votes,
+            include_no_ratings,
+            filter_release_year,
+            filter_country,
+            filter_genre
+        )
 
         # Initialize media service handler (Jellyfin or Plex)
         if instance.selected_service in ('jellyfin', 'emby'):
