@@ -158,13 +158,27 @@ select {
     opacity: 0;
   }
 
-  .attached-logo {
+  .update-notification {
+    background-color: #2d3748; /* Darker gray for contrast */
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    margin-top: 0.5rem;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease-in-out;
+}
+
+.update-notification:hover {
+    transform: scale(1.05); /* Small scale effect on hover */
+}
+
+.attached-logo {
     width: 100px;
     height: auto;
     display: block;
     margin: 0 auto;
     margin-bottom: 30px;
-  }
+}
 
 @media (max-width: 768px) {
     .wizard-content {
@@ -182,5 +196,14 @@ select {
 
     button {
         padding: 10px 15px;
+    }
+
+    .attached-logo {
+        width: 80px;
+    }
+    .version-tag {
+        width: 35px;
+        height: 35px;
+        font-size: 0.75rem;
     }
 }

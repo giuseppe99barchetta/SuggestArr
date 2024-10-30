@@ -5,10 +5,6 @@
                 <img src="@/assets/logo.png" alt="SuggestArr Logo" class="attached-logo mb-6 text-center">
             </a>
             <div class="space-y-6">
-                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
-                    <label class="block text-sm font-semibold text-gray-300">Selected service:</label>
-                    <p class="text-gray-200">{{ capitalizeFirstLetter(config.SELECTED_SERVICE) }}</p>
-                </div>
                 <!-- Display Plex or Jellyfin URL based on selected service -->
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-if="config.SELECTED_SERVICE === 'plex'">
                     <label class="block text-sm font-semibold text-gray-300">Plex URL:</label>
@@ -23,28 +19,41 @@
                     <label class="block text-sm font-semibold text-gray-300">Jellyseer/Overseer URL:</label>
                     <p class="text-gray-200">{{ config.SEER_API_URL }}</p>
                 </div>
-                <!-- Display Max Similar Movies -->
-                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
-                    <label class="block text-sm font-semibold text-gray-300">Max Similar Movies:</label>
-                    <p class="text-gray-200">{{ config.MAX_SIMILAR_MOVIE }}</p>
+                <div class="flex flex-col sm:flex-row sm:space-x-4">
+                    <!-- Max Similar Movies and TV Shows -->
+                    <div class="bg-gray-700 p-4 rounded-lg shadow-md w-full sm:w-1/2">
+                        <label class="block text-sm font-semibold text-gray-300">Max Similar Movies:</label>
+                        <p class="text-gray-200">{{ config.MAX_SIMILAR_MOVIE }}</p>
+                    </div>
+                    <div class="bg-gray-700 p-4 rounded-lg shadow-md w-full sm:w-1/2">
+                        <label class="block text-sm font-semibold text-gray-300">Max Similar TV Shows:</label>
+                        <p class="text-gray-200">{{ config.MAX_SIMILAR_TV }}</p>
+                    </div>
                 </div>
-                <!-- Display Max Similar TV Shows -->
-                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
-                    <label class="block text-sm font-semibold text-gray-300">Max Similar TV Shows:</label>
-                    <p class="text-gray-200">{{ config.MAX_SIMILAR_TV }}</p>
-                </div>
-                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
-                    <label class="block text-sm font-semibold text-gray-300">Max Content to fetch for each content:</label>
-                    <p class="text-gray-200">{{ config.MAX_CONTENT_CHECKS }}</p>
-                </div>
-                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
-                    <label class="block text-sm font-semibold text-gray-300">Search Size:</label>
-                    <p class="text-gray-200">{{ config.SEARCH_SIZE }}</p>
+                <div class="flex flex-col sm:flex-row sm:space-x-4 mt-4">
+                    <!-- Max Content to Fetch and Search Size -->
+                    <div class="bg-gray-700 p-4 rounded-lg shadow-md w-full sm:w-1/2">
+                        <label class="block text-sm font-semibold text-gray-300">Max new Content for each content:</label>
+                        <p class="text-gray-200">{{ config.MAX_CONTENT_CHECKS }}</p>
+                    </div>
+                    <div class="bg-gray-700 p-4 rounded-lg shadow-md w-full sm:w-1/2">
+                        <label class="block text-sm font-semibold text-gray-300">Search Size:</label>
+                        <p class="text-gray-200">{{ config.SEARCH_SIZE }}</p>
+                    </div>
                 </div>
                 <!-- Display Next Cron Run Time -->
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
                     <label class="block text-sm font-semibold text-gray-300">Next Cron Run in:</label>
                     <p class="text-gray-200">{{ nextCronRun }}</p>
+                </div>
+                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
+                    <label class="block text-sm font-semibold text-gray-300">Current SuggestArr Version:</label>
+                    <p class="text-gray-200">{{ currentVersion }}</p>
+                    <div v-if="isUpdateAvailable" class="update-notification">
+                        <span class="text-yellow-400 font-semibold">New Version Available: {{ latestVersion }}</span>
+                        <a href="https://github.com/giuseppe99barchetta/SuggestArr/releases/latest" target="_blank"
+                           class="text-blue-400 hover:underline ml-2">Update Now</a>
+                    </div>
                 </div>
             </div>
             <!-- Edit Configuration and Reset Buttons -->
@@ -88,6 +97,7 @@ import cronParser from 'cron-parser';
 import Footer from './AppFooter.vue';
 import backgroundManager from '@/api/backgroundManager';
 import { fetchRandomMovieImage } from '@/api/tmdbApi';
+import packageInfo from '../../package.json';
 
 export default {
     components: {
@@ -106,10 +116,14 @@ export default {
             nextCronRun: '',   // To store the time remaining until next cron run
             showResetPopup: false,
             backgroundImageUrl: '',
+            currentVersion: packageInfo.version,
+            latestVersion: '',
+            isUpdateAvailable: false
 
         };
     },
     mounted() {
+        this.checkForUpdates();
         this.calculateNextCronRun();
         if (!this.config.TMDB_API_KEY) {
             this.startDefaultImageRotation();
@@ -118,6 +132,22 @@ export default {
         }
     },
     methods: {
+        async checkForUpdates() {
+            try {
+                const response = await axios.get('https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases/latest');
+                this.latestVersion = response.data.tag_name;
+                this.isUpdateAvailable = this.currentVersion < this.latestVersion;
+                if (this.isUpdateAvailable){
+                    this.$toast.open({
+                            message: 'New version of SuggestArr available!',
+                            pauseOnHover: true,
+                            duration:5000
+                        })
+                }
+            } catch (error) {
+                console.error('Failed to check for updates:', error);
+            }
+        },
         capitalizeFirstLetter(text) {
             if (!text) return '';
             return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
@@ -188,5 +218,5 @@ export default {
     display: block;
     margin: 0 auto;
     margin-bottom: 30px;
-  }
+}
 </style>

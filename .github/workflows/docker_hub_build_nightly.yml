@@ -1,4 +1,4 @@
-name: Build and Publish Docker Image to Docker Hub
+name: Bump Version, Build and Publish Docker Image
 
 on:
   push:
@@ -6,7 +6,39 @@ on:
       - nightly
 
 jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4.1.0
+        with:
+          node-version: '16'
+
+      - name: Bump version in package.json
+        id: bump_version
+        run: |
+          current_version=$(jq -r '.version' package.json)
+          new_version=$(npx semver $current_version -i patch) # Change to minor/major as needed
+          echo "Bumping version from $current_version to $new_version"
+          jq ".version = \"$new_version\"" package.json > package_tmp.json && mv package_tmp.json package.json
+          echo "new_version=$new_version" >> $GITHUB_ENV
+          
+      - name: Commit and push new version
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git commit -m "chore: bump version to ${{ env.new_version }}"
+          git tag -a "v${{ env.new_version }}" -m "Release ${{ env.new_version }}"
+          git push origin nightly
+          git push origin "v${{ env.new_version }}" 
+
   build:
+    needs: bump-version
     runs-on: ubuntu-latest
 
     steps:
@@ -26,4 +58,5 @@ jobs:
             --cache-from type=registry,ref=ciuse99/suggestarr:cache \
             --cache-to type=registry,ref=ciuse99/suggestarr:cache,mode=max \
             -t ciuse99/suggestarr:nightly \
+            -t ciuse99/suggestarr:${{ env.new_version }} \
             -f docker/Dockerfile . --push
