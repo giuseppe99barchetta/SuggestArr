@@ -48,7 +48,7 @@
                 </div>
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
                     <label class="block text-sm font-semibold text-gray-300">Current SuggestArr Version:</label>
-                    <p class="text-gray-200">{{ currentVersion }}</p>
+                    <p class="text-gray-200">v{{ currentVersion }}</p>
                     <div v-if="isUpdateAvailable" class="update-notification">
                         <span class="text-yellow-400 font-semibold">New Version Available: {{ latestVersion }}</span>
                         <a href="https://github.com/giuseppe99barchetta/SuggestArr/releases/latest" target="_blank"
@@ -136,7 +136,7 @@ export default {
             try {
                 const response = await axios.get('https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases/latest');
                 this.latestVersion = response.data.tag_name;
-                this.isUpdateAvailable = this.currentVersion < this.latestVersion;
+                this.isUpdateAvailable = this.currentVersion < this.latestVersion.replace('v', '');
                 if (this.isUpdateAvailable){
                     this.$toast.open({
                             message: 'New version of SuggestArr available!',
