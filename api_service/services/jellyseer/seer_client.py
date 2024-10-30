@@ -193,7 +193,7 @@ class SeerClient:
         if media_type == 'tv':
             data["tvdbId"] = tvdb_id or media_id
             
-            if self.number_of_seasons.isdigit():
+            if self.number_of_seasons.isdigit() and self.number_of_seasons is not '0':
                 data["seasons"] = list(range(1, int(self.number_of_seasons) + 1))  # List of seasons from 1 to the total number
             else:
                 data["seasons"] = "all"

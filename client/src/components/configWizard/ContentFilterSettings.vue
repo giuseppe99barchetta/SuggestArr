@@ -75,7 +75,7 @@
                 <input type="number" :value="config.FILTER_NUM_SEASONS"
                     @input="validateNumSeasons($event.target.value)"
                     class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                    id="FILTER_NUM_SEASONS" placeholder="1">
+                    id="FILTER_NUM_SEASONS" placeholder="0">
                 <span v-if="errors.FILTER_NUM_SEASONS" class="text-red-500 text-xs">{{ errors.FILTER_NUM_SEASONS }}</span>
             </div>
         </div>
