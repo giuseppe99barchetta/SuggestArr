@@ -150,7 +150,7 @@ def update_cron_job(cron_time):
     """
     try:
         # Command to call the Flask endpoint using curl
-        cron_command = "curl -X POST http://localhost:5000/force_run >> /var/log/cron.log 2>&1"
+        cron_command = "curl -X POST http://localhost:5000/api/automation >> /var/log/cron.log 2>&1"
 
         # Create the cron job entry
         cron_entry = f"{cron_time} {cron_command}\n"
