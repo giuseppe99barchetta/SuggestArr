@@ -1,6 +1,6 @@
 {
   "name": "SuggestArr",
-  "version": "1.0.10",
+  "version": "v1.0.9",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
