@@ -16,11 +16,12 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4.1.0
         with:
-          node-version: '16'
+          node-version: '20'
 
       - name: Strip 'v' prefix and bump version in package.json
         id: bump_version
         run: |
+          cd client || exit 1
           # Remove 'v' prefix and save temporary file
           current_version=$(jq -r '.version' package.json | sed 's/^v//')
           # Increment the version (adjust patch to minor/major as needed)
