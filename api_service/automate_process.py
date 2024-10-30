@@ -38,7 +38,7 @@ class ContentAutomation:
         # TMDB filters
         tmdb_threshold = int(env_vars.get('FILTER_TMDB_THRESHOLD') or 60)
         tmdb_min_votes = int(env_vars.get('FILTER_TMDB_MIN_VOTES') or 20)
-        include_no_ratings = env_vars.get('FILTER_INCLUDE_NO_RATING', 'true').lower() == 'true'
+        include_no_ratings = env_vars.get('FILTER_INCLUDE_NO_RATING', True) == True
         filter_release_year = int(env_vars.get('FILTER_RELEASE_YEAR') or 0)
         filter_language = env_vars.get('FILTER_LANGUAGE', [])
         filter_genre = env_vars.get('FILTER_GENRES_EXCLUDE', [])

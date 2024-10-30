@@ -79,9 +79,9 @@ def get_default_values():
         ENV_VARS['FILTER_TMDB_THRESHOLD']: lambda: None,
         ENV_VARS['FILTER_TMDB_MIN_VOTES']: lambda: None,
         ENV_VARS['FILTER_GENRES_EXCLUDE']: lambda: [],
-        ENV_VARS['HONOR_JELLYSEER_DISCOVERY']: lambda: 'false',
+        ENV_VARS['HONOR_JELLYSEER_DISCOVERY']: lambda: False,
         ENV_VARS['FILTER_RELEASE_YEAR']: lambda: None,
-        ENV_VARS['FILTER_INCLUDE_NO_RATING']: lambda: 'true',
+        ENV_VARS['FILTER_INCLUDE_NO_RATING']: lambda: True,
         ENV_VARS['FILTER_LANGUAGE']: lambda: None,
         ENV_VARS['FILTER_NUM_SEASONS']: lambda: None,
     }
