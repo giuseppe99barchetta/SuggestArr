@@ -30,7 +30,11 @@ def create_app():
     if AppUtils.is_last_worker():
         AppUtils.print_welcome_message() # Print only for last worker
 
-    application = Flask(__name__, static_folder='../static', static_url_path='/')
+    application = Flask(
+        __name__,
+        static_folder=os.path.join(os.path.dirname(__file__), '../client/dist'),
+        static_url_path='/'
+    )
     CORS(application)
 
     application.register_blueprint(jellyfin_bp, url_prefix='/api/jellyfin')
@@ -59,7 +63,9 @@ def register_routes(app): # pylint: disable=redefined-outer-name
         """
         Serve the built frontend's index.html or any other static file.
         """
-        app.static_folder = '../static'
+        app.static_folder = os.path.join(os.path.dirname(__file__), '../client/dist')
+        full_path = os.path.join(app.static_folder, path or 'index.html')
+        print(f"Trying to serve: {full_path}")  # Log del percorso effettivo
         if path == "" or not os.path.exists(os.path.join(app.static_folder, path)):
             return send_from_directory(app.static_folder, 'index.html')
         else:

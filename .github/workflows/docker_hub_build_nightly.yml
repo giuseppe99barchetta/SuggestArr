@@ -21,6 +21,7 @@ jobs:
       - name: Strip 'v' prefix and bump version in package.json
         id: bump_version
         run: |
+          cd client/
           # Remove 'v' prefix and save temporary file
           current_version=$(jq -r '.version' package.json | sed 's/^v//')
           # Increment the version (adjust patch to minor/major as needed)
