@@ -64,6 +64,22 @@
             id="FILTER_GENRES_EXCLUDE">
         </vue-multiselect>
 
+        <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mt-4">
+            <div class="w-full">
+                <label for="FILTER_NUM_SEASONS" class="block text-xs sm:text-sm font-semibold text-gray-300">
+                    Number of Seasons:
+                </label>
+                <p class="text-xs text-gray-400 mb-2">
+                    Limit the maximum number of seasons to request for a series. ('0' to select all seasons)
+                </p>
+                <input type="number" :value="config.FILTER_NUM_SEASONS"
+                    @input="validateNumSeasons($event.target.value)"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+                    id="FILTER_NUM_SEASONS" placeholder="1">
+                <span v-if="errors.FILTER_NUM_SEASONS" class="text-red-500 text-xs">{{ errors.FILTER_NUM_SEASONS }}</span>
+            </div>
+        </div>
+
         <!-- Country and Release Year Filters -->
         <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mt-4">
             <div class="w-full sm:w-1/2">
@@ -188,6 +204,14 @@ export default {
             } else {
                 this.errors.FILTER_RELEASE_YEAR = "";
                 this.handleUpdate('FILTER_RELEASE_YEAR', value);
+            }
+        },
+        validateNumSeasons(value) {
+            if (value < 0) {
+                this.errors.FILTER_NUM_SEASONS = "Seasons count must be at least 0 to select all seasons.";
+            } else {
+                this.errors.FILTER_NUM_SEASONS = "";
+                this.handleUpdate('FILTER_NUM_SEASONS', value);
             }
         },
         submit() {

@@ -37,6 +37,7 @@ ENV_VARS = {
     'HONOR_JELLYSEER_DISCOVERY': 'HONOR_JELLYSEER_DISCOVERY',
     'FILTER_INCLUDE_NO_RATING': 'FILTER_INCLUDE_NO_RATING',
     'FILTER_LANGUAGE':'FILTER_LANGUAGE',
+    'FILTER_NUM_SEASONS':'FILTER_NUM_SEASONS',
 }
 
 def load_env_vars():
@@ -82,6 +83,7 @@ def get_default_values():
         ENV_VARS['FILTER_RELEASE_YEAR']: lambda: None,
         ENV_VARS['FILTER_INCLUDE_NO_RATING']: lambda: 'true',
         ENV_VARS['FILTER_LANGUAGE']: lambda: None,
+        ENV_VARS['FILTER_NUM_SEASONS']: lambda: None,
     }
 
 

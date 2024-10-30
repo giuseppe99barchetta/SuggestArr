@@ -33,6 +33,7 @@ class ContentAutomation:
         instance.max_similar_movie = min(int(env_vars.get('MAX_SIMILAR_MOVIE', '3')), 20)
         instance.max_similar_tv = min(int(env_vars.get('MAX_SIMILAR_TV', '2')), 20)
         instance.search_size = min(int(env_vars.get('SEARCH_SIZE', '20')), 100)
+        instance.number_of_seasons = env_vars.get('FILTER_NUM_SEASONS') or "all"
         
         # TMDB filters
         tmdb_threshold = int(env_vars.get('FILTER_TMDB_THRESHOLD') or 60)
@@ -48,7 +49,8 @@ class ContentAutomation:
             env_vars['SEER_TOKEN'],
             env_vars['SEER_USER_NAME'],
             env_vars['SEER_USER_PSW'],
-            env_vars['SEER_SESSION_TOKEN']
+            env_vars['SEER_SESSION_TOKEN'],
+            instance.number_of_seasons
         )
         await jellyseer_client.init()
 

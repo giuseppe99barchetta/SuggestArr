@@ -15,7 +15,7 @@ class SeerClient:
     A client to interact with the Jellyseer API for handling media requests and authentication.
     """
 
-    def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None, session_token=None):
+    def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None, session_token=None, number_of_seasons="all"):
         """
         Initializes the JellyseerClient with the API URL and logs in the user.
         :param api_url: The URL of the Jellyseer API.
@@ -33,6 +33,7 @@ class SeerClient:
         self.is_logged_in = False
         self._login_lock = asyncio.Lock()
         self.requests_cache = []  # Cache to store all requests
+        self.number_of_seasons = number_of_seasons
         
     async def init(self):
         """
@@ -176,7 +177,7 @@ class SeerClient:
         data = await self._make_request("GET", "api/v1/request/count")
         return data.get('total', 0) if data else 0
 
-    async def request_media(self, media_type, media_id, tvdb_id=None, retries=3, delay=2, local_content=None):
+    async def request_media(self, media_type, media_id, tvdb_id=None, retries=3, delay=2):
         """
         Requests a media item (movie or TV show) from Jellyseer.
         :param media_type: The type of media ('movie' or 'tv').
@@ -191,7 +192,11 @@ class SeerClient:
 
         if media_type == 'tv':
             data["tvdbId"] = tvdb_id or media_id
-            data["seasons"] = "all"
+            
+            if self.number_of_seasons.isdigit():
+                data["seasons"] = list(range(1, int(self.number_of_seasons) + 1))  # List of seasons from 1 to the total number
+            else:
+                data["seasons"] = "all"
 
         use_cookie = bool(self.session_token)
 
