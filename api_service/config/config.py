@@ -106,6 +106,7 @@ def save_env_vars(config_data):
 
     # Create config.yaml file if it does not exist
     if not os.path.exists(CONFIG_PATH):
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
         logger.info(f'Creating new file for config at {CONFIG_PATH}')
         open(CONFIG_PATH, 'w').close()  # Create an empty file
 
@@ -141,7 +142,7 @@ def save_session_token(token):
         file.seek(0)
         yaml.dump(config_data, file)
         file.truncate()
-        
+
 def update_cron_job(cron_time):
     """
     Updates the cron job to trigger the Flask API using curl.
