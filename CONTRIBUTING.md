@@ -13,3 +13,9 @@ Thank you for considering contributing to this project! Here's how you can get s
 2. If you've added code that should be tested, add tests.
 3. Ensure the code is well-documented.
 4. Open a pull request and provide a clear explanation of the changes.
+
+## Building the Docker Image
+To build the Docker image for development, run the following commands:
+```bash
+docker build . -f ./docker/Dockerfile --target dev --tag suggestarr:nightly
+```
