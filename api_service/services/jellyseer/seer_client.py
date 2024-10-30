@@ -34,6 +34,7 @@ class SeerClient:
         self._login_lock = asyncio.Lock()
         self.requests_cache = []  # Cache to store all requests
         self.number_of_seasons = number_of_seasons
+        self.cycle_request_cache = set()
         
     async def init(self):
         """
@@ -42,7 +43,7 @@ class SeerClient:
         to ensure that the requests cache is populated.
         """
         await self.fetch_all_requests()
-
+        
     async def login(self):
         """Authenticate with Jellyseer and obtain a session token."""
         async with self._login_lock:
@@ -154,14 +155,16 @@ class SeerClient:
         self.logger.info("Fetched %d total requests from Jellyseer.", len(self.requests_cache))
 
     async def check_already_requested(self, tmdb_id, media_type):
-        """
-        Checks if a media item has already been requested 
-        in Jellyseer/Overseer by checking the cached requests.
-        """
-        return any(item['media']['tmdbId'] == tmdb_id and \
-                item['media']['mediaType'].lower() == media_type.lower()
-                for item in self.requests_cache)
+        if (tmdb_id, media_type) in self.cycle_request_cache:
+            return True
+
+        is_requested = any(
+            item['media']['tmdbId'] == tmdb_id and item['media']['mediaType'].lower() == media_type.lower()
+            for item in self.requests_cache
+        )
         
+        return is_requested
+
     async def check_already_downloaded(self, tmdb_id, media_type, local_content={}):
         """
         Checks if a media item has already been downloaded 
@@ -199,12 +202,18 @@ class SeerClient:
                 data["seasons"] = "all"
 
         use_cookie = bool(self.session_token)
+        
+        # Check if already requested in current loop
+        if (media_id, media_type) in self.cycle_request_cache:
+            return None
 
         # Retry logic
         for attempt in range(retries):
             try:
                 response = await self._make_request("POST", "api/v1/request", json=data, use_cookie=use_cookie)
                 if response and 'error' not in response:
+                    # Add to the cache of current loop to prevent multiple request due to different user
+                    self.cycle_request_cache.add((media_id, media_type))
                     return response
 
             except Exception as e:
@@ -231,3 +240,6 @@ class SeerClient:
                 for user in data.get('results', [])
             ]
         return []
+    
+    async def reset_cycle_cache(self):
+        self.cycle_request_cache.clear()
