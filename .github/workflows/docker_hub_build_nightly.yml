@@ -54,7 +54,7 @@ jobs:
         uses: actions/checkout@v4.2.2
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v3.7.1
 
       - name: Log in to Docker Hub
         run: echo ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} | docker login -u ciuse99 --password-stdin
@@ -66,5 +66,4 @@ jobs:
             --cache-from type=registry,ref=ciuse99/suggestarr:cache \
             --cache-to type=registry,ref=ciuse99/suggestarr:cache,mode=max \
             -t ciuse99/suggestarr:nightly \
-            -t ciuse99/suggestarr:${{ env.new_version }} \
             -f docker/Dockerfile . --push
