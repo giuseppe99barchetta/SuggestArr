@@ -9,12 +9,13 @@ class TestConfig(unittest.TestCase):
     # This should be kept in sync with mock data for save/load config structure.
     config_data = {
         "CRON_TIMES": "0 4 * * *",
-        "FILTER_COUNTRY": "US",
+        "FILTER_LANGUAGE": [{"id": "en", "english_name": "English"}],
         "FILTER_GENRES_EXCLUDE": [{"id": 27, "name": "Horror"}, {"id": 10752, "name": "War"}],
         "FILTER_INCLUDE_NO_RATING": "false",
         "FILTER_RELEASE_YEAR": "2000",
         "FILTER_TMDB_MIN_VOTES": "50",
         "FILTER_TMDB_THRESHOLD": "75",
+        "FILTER_NUM_SEASONS": 0,
         "HONOR_JELLYSEER_DISCOVERY": "false",
         "JELLYFIN_API_URL": "",
         "JELLYFIN_LIBRARIES": [],
@@ -36,10 +37,11 @@ class TestConfig(unittest.TestCase):
     }
 
     def test_save_default_env_vars(self):
-        """The default values should be saved/loaded correctly."""
-        save_env_vars(get_default_values())
+        """The default values should be able to be saved/loaded."""
+        default_config = {key: default_value() for key, default_value in get_default_values().items()}
+        save_env_vars(default_config)
         loaded_config = load_env_vars()
-        _verbose_dict_compare(get_default_values(), loaded_config, self.assertEqual)
+        _verbose_dict_compare(default_config, loaded_config, self.assertEqual)
 
     def test_save_env_vars(self):
         """Confirms that the backend save and load functions retain the correct types, values, and
