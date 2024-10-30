@@ -38,7 +38,7 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json
+          git add client/package.json
           git commit -m "chore: bump version to ${{ env.new_version }}"
           # Tag the new version with the v-prefixed format
           git tag -a "${{ env.new_version }}" -m "Release ${{ env.new_version }}"
