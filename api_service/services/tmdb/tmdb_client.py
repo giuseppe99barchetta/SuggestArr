@@ -23,7 +23,7 @@ class TMDbClient:
     related to movies, TV shows, and external IDs.
     """
 
-    def __init__(self, api_key, search_size, tmdb_threshold, tmdb_min_votes, include_no_ratings, filter_release_year, filter_country, filter_genre):
+    def __init__(self, api_key, search_size, tmdb_threshold, tmdb_min_votes, include_no_ratings, filter_release_year, filter_language, filter_genre):
         """
         Initializes the TMDbClient with the provided API key.
         :param api_key: API key to authenticate requests to TMDb.
@@ -34,7 +34,7 @@ class TMDbClient:
         self.tmdb_threshold = tmdb_threshold
         self.tmdb_min_votes = tmdb_min_votes
         self.include_no_ratings = include_no_ratings
-        self.country_filter = filter_country
+        self.language_filter = filter_language
         self.release_year_filter = filter_release_year
         self.genre_filter = filter_genre
         self.pages = (self.search_size + CONTENT_PER_PAGE - 1) // CONTENT_PER_PAGE
@@ -93,6 +93,17 @@ class TMDbClient:
 
         if self.include_no_ratings and (rating is None or votes is None):
             self._log_exclusion_reason(item, "missing rating or votes", content_type)
+            return False
+        
+        original_language = item.get('original_language')
+        selected_language_ids = [lang['id'] for lang in self.language_filter]
+        if self.language_filter and original_language not in selected_language_ids:
+            selected_language_names = ', '.join([lang['english_name'] for lang in self.language_filter])
+            self._log_exclusion_reason(
+                item,
+                f"language '{original_language}' not in selected languages: {selected_language_names}",
+                content_type
+            )
             return False
 
         if rating is not None and rating < self.tmdb_threshold / 10:

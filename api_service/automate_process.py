@@ -35,11 +35,11 @@ class ContentAutomation:
         instance.search_size = min(int(env_vars.get('SEARCH_SIZE', '20')), 100)
         
         # TMDB filters
-        tmdb_threshold = float(env_vars.get('FILTER_TMDB_THRESHOLD', '7.5'))
-        tmdb_min_votes = int(env_vars.get('FILTER_TMDB_MIN_VOTES', '100'))
+        tmdb_threshold = int(env_vars.get('FILTER_TMDB_THRESHOLD') or 60)
+        tmdb_min_votes = int(env_vars.get('FILTER_TMDB_MIN_VOTES') or 20)
         include_no_ratings = env_vars.get('FILTER_INCLUDE_NO_RATING', 'true').lower() == 'true'
-        filter_release_year = int(env_vars.get('FILTER_RELEASE_YEAR', '0'))
-        filter_country = env_vars.get('FILTER_COUNTRY', '0')
+        filter_release_year = int(env_vars.get('FILTER_RELEASE_YEAR') or 0)
+        filter_language = env_vars.get('FILTER_LANGUAGE', [])
         filter_genre = env_vars.get('FILTER_GENRES_EXCLUDE', [])
 
         # Overseer/Jellyseer client
@@ -60,7 +60,7 @@ class ContentAutomation:
             tmdb_min_votes,
             include_no_ratings,
             filter_release_year,
-            filter_country,
+            filter_language,
             filter_genre
         )
 
