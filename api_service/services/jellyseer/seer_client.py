@@ -35,7 +35,7 @@ class SeerClient:
         self.requests_cache = []  # Cache to store all requests
         self.number_of_seasons = number_of_seasons
         self.cycle_request_cache = set()
-        
+
     async def init(self):
         """
         Asynchronous initialization method to fetch all requests.
@@ -43,7 +43,7 @@ class SeerClient:
         to ensure that the requests cache is populated.
         """
         await self.fetch_all_requests()
-        
+
     async def login(self):
         """Authenticate with Jellyseer and obtain a session token."""
         async with self._login_lock:
@@ -54,7 +54,7 @@ class SeerClient:
         async with aiohttp.ClientSession() as session:
             try:
                 login_data = {"email": self.username, "password": self.password}
-                
+
                 async with session.post(login_url, json=login_data, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200 and 'connect.sid' in response.cookies:
                         self.session_token = response.cookies['connect.sid'].value
@@ -66,7 +66,7 @@ class SeerClient:
                 self.logger.error("Login request to %s timed out.", login_url)
             except aiohttp.ClientError as e:
                 self.logger.error("An error occurred during login: %s", str(e))
-                
+
     def _get_auth(self, use_cookie):
         """
         Prepare headers and cookies based on `use_cookie` flag.
@@ -127,7 +127,7 @@ class SeerClient:
             except aiohttp.ClientError as e:
                 self.logger.error("Error during request to %s: %s", url, str(e))
         return None
-    
+
     async def _process_response(self, response, url):
         """Handle API response, logging errors if necessary."""
         if response.status in HTTP_OK:
@@ -162,7 +162,7 @@ class SeerClient:
             item['media']['tmdbId'] == tmdb_id and item['media']['mediaType'].lower() == media_type.lower()
             for item in self.requests_cache
         )
-        
+
         return is_requested
 
     async def check_already_downloaded(self, tmdb_id, media_type, local_content={}):
@@ -195,14 +195,14 @@ class SeerClient:
 
         if media_type == 'tv':
             data["tvdbId"] = tvdb_id or media_id
-            
-            if self.number_of_seasons.isdigit() and self.number_of_seasons is not '0':
+
+            if self.number_of_seasons.isdigit() and self.number_of_seasons != "0":
                 data["seasons"] = list(range(1, int(self.number_of_seasons) + 1))  # List of seasons from 1 to the total number
             else:
                 data["seasons"] = "all"
 
         use_cookie = bool(self.session_token)
-        
+
         # Check if already requested in current loop
         if (media_id, media_type) in self.cycle_request_cache:
             return None
@@ -240,6 +240,6 @@ class SeerClient:
                 for user in data.get('results', [])
             ]
         return []
-    
+
     async def reset_cycle_cache(self):
         self.cycle_request_cache.clear()
