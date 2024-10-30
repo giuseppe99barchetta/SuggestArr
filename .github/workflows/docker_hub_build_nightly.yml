@@ -18,6 +18,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install dependencies
+        run: npm install semver@7.6.3
+
       - name: Strip 'v' prefix and bump version in package.json
         id: bump_version
         run: |
