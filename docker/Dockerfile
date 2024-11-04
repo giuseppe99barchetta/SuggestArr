@@ -7,7 +7,7 @@ COPY client/ .
 RUN npm run build
 
 # Stage 2: Create the final image
-FROM python:3.13-slim
+FROM python:3.13-slim AS prod
 
 # Install system dependencies
 RUN apt-get update && \
@@ -46,3 +46,7 @@ EXPOSE 5000
 
 # Start Supervisor to manage Gunicorn and cron
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+
+FROM prod AS dev
+RUN pip install --no-cache-dir -r requirements.dev.txt
+RUN python -m pytest .

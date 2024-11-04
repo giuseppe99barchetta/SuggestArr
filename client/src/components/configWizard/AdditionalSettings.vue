@@ -1,6 +1,6 @@
 <template>
     <div>
-        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Step 4: Additional Settings</h3>
+        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Additional Configuration</h3>
         <p class="text-xs sm:text-sm text-gray-400 mb-4">Configure additional settings for similar media, content checks, and schedule times.</p>
 
         <!-- Max Similar Movies -->
@@ -66,10 +66,10 @@ export default {
     },
     methods: {
         handleUpdate(key, value) {
-            this.$emit('update-config', key, value);  // Emetti un evento generale per l'aggiornamento della configurazione
+            this.$emit('update-config', key, value); 
         },
         handleCronInput(value) {
-            this.handleUpdate('CRON_TIMES', value);  // Usa handleUpdate per l'input del cron
+            this.handleUpdate('CRON_TIMES', value);
 
             try {
                 const interval = cronParser.parseExpression(value);

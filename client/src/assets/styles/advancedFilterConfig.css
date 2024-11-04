@@ -1,0 +1,114 @@
+.relative input:checked~.dot {
+    transform: translateX(100%);
+    background-color: #34d399;
+    /* Green color when checked */
+}
+
+
+/* Styling for vue-multiselect */
+.multiselect {
+    border: 1px solid #4a5568;
+    /* Match border-gray-600 */
+    border-radius: 0.5rem;
+    /* Match rounded-lg */
+    padding: 0.0rem;
+    color: #e5e7eb;
+    width: 100%;
+}
+
+.multiselect__tag {
+    background-color: #b84141;
+    /* Red for excluded tags */
+    color: #caced8 !important;
+    margin: 2px;
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+}
+
+.multiselect__input {
+    background-color: transparent !important;
+    color: #ffffff !important;
+    /* Force light text color */
+}
+
+/* Target selected single items */
+.multiselect__single {
+    color: #e5e7eb !important;
+    background-color: transparent !important;
+}
+
+.multiselect__placeholder {
+    color: #9ca3af;
+}
+
+.multiselect__content-wrapper {
+    background-color: #1f2937;
+    border: 0px solid #4b5563;
+    border-radius: 0.5rem;
+}
+
+.multiselect__option--highlight {
+    color: #e5e7eb;
+}
+
+.multiselect__option--selected {
+    background-color: #b84141;
+    color: #ffffff;
+}
+
+.multiselect__select,
+.multiselect__clear {
+    color: #9ca3af;
+}
+
+.multiselect__tags {
+    min-height: 40px;
+    display: block;
+    padding: 8px 40px 0 8px;
+    border-radius: 5px;
+    --tw-bg-opacity: 1;
+    background-color: rgba(55, 65, 81, var(--tw-bg-opacity));
+    font-size: 14px;
+    border: 0;
+}
+
+.multiselect-genres .multiselect__tag {
+    background-color: #b84141; /* Rosso per i tag dei generi esclusi */
+    color: #ffffff !important;
+}
+
+/* Tag verde per il multiselect delle lingue */
+.multiselect-languages .multiselect__tag {
+    background-color: #34d399; /* Verde per i tag delle lingue preferite */
+    color: #ffffff !important;
+}
+.multiselect__content-wrapper::-webkit-scrollbar {
+    width: 8px;
+    /* Width of the scrollbar */
+}
+
+.multiselect__content-wrapper::-webkit-scrollbar-track {
+    background: #1f2937;
+    /* Background of the scrollbar track */
+    border-radius: 8px;
+}
+
+.multiselect__content-wrapper::-webkit-scrollbar-thumb {
+    background-color: #4b5563;
+    /* Color of the scrollbar thumb */
+    border-radius: 8px;
+    border: 2px solid #1f2937;
+    /* Adds padding around the thumb */
+}
+
+.multiselect__content-wrapper::-webkit-scrollbar-thumb:hover {
+    background-color: #6b7280;
+    /* Color on hover */
+}
+
+/* Firefox scrollbar styling */
+.multiselect__content-wrapper {
+    scrollbar-width: thin;
+    scrollbar-color: #4b5563 #1f2937;
+    /* Thumb color and track color */
+}

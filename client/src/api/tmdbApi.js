@@ -6,7 +6,7 @@ export const fetchRandomMovieImage = async (apiKey) => {
   const randomPage = Math.floor(Math.random() * 100) + 1;
   try {
     const response = await axios.get('https://api.themoviedb.org/3/movie/popular', {
-      params: { api_key: apiKey, page: randomPage },
+      params: { api_key: apiKey, page: randomPage , include_adult: false},
     });
 
     const movies = response.data.results;

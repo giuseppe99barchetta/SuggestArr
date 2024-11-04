@@ -33,6 +33,15 @@ class ContentAutomation:
         instance.max_similar_movie = min(int(env_vars.get('MAX_SIMILAR_MOVIE', '3')), 20)
         instance.max_similar_tv = min(int(env_vars.get('MAX_SIMILAR_TV', '2')), 20)
         instance.search_size = min(int(env_vars.get('SEARCH_SIZE', '20')), 100)
+        instance.number_of_seasons = env_vars.get('FILTER_NUM_SEASONS') or "all"
+        
+        # TMDB filters
+        tmdb_threshold = int(env_vars.get('FILTER_TMDB_THRESHOLD') or 60)
+        tmdb_min_votes = int(env_vars.get('FILTER_TMDB_MIN_VOTES') or 20)
+        include_no_ratings = env_vars.get('FILTER_INCLUDE_NO_RATING', True) == True
+        filter_release_year = int(env_vars.get('FILTER_RELEASE_YEAR') or 0)
+        filter_language = env_vars.get('FILTER_LANGUAGE', [])
+        filter_genre = env_vars.get('FILTER_GENRES_EXCLUDE', [])
 
         # Overseer/Jellyseer client
         jellyseer_client = SeerClient(
@@ -40,12 +49,23 @@ class ContentAutomation:
             env_vars['SEER_TOKEN'],
             env_vars['SEER_USER_NAME'],
             env_vars['SEER_USER_PSW'],
-            env_vars['SEER_SESSION_TOKEN']
+            env_vars['SEER_SESSION_TOKEN'],
+            instance.number_of_seasons
         )
+        await jellyseer_client.reset_cycle_cache()
         await jellyseer_client.init()
 
         # TMDb client
-        tmdb_client = TMDbClient(env_vars['TMDB_API_KEY'], instance.search_size)
+        tmdb_client = TMDbClient(
+            env_vars['TMDB_API_KEY'],
+            instance.search_size,
+            tmdb_threshold,
+            tmdb_min_votes,
+            include_no_ratings,
+            filter_release_year,
+            filter_language,
+            filter_genre
+        )
 
         # Initialize media service handler (Jellyfin or Plex)
         if instance.selected_service in ('jellyfin', 'emby'):

@@ -30,6 +30,14 @@ ENV_VARS = {
     'PLEX_API_URL': 'PLEX_API_URL',
     'PLEX_LIBRARIES': 'PLEX_LIBRARIES',
     'SEER_SESSION_TOKEN': 'SEER_SESSION_TOKEN',
+    'FILTER_TMDB_THRESHOLD': 'FILTER_TMDB_THRESHOLD',
+    'FILTER_TMDB_MIN_VOTES': 'FILTER_TMDB_MIN_VOTES',
+    'FILTER_GENRES_EXCLUDE': 'FILTER_GENRES_EXCLUDE',
+    'FILTER_RELEASE_YEAR': 'FILTER_RELEASE_YEAR',
+    'HONOR_JELLYSEER_DISCOVERY': 'HONOR_JELLYSEER_DISCOVERY',
+    'FILTER_INCLUDE_NO_RATING': 'FILTER_INCLUDE_NO_RATING',
+    'FILTER_LANGUAGE':'FILTER_LANGUAGE',
+    'FILTER_NUM_SEASONS':'FILTER_NUM_SEASONS',
 }
 
 def load_env_vars():
@@ -68,6 +76,14 @@ def get_default_values():
         ENV_VARS['PLEX_API_URL']: lambda: '',
         ENV_VARS['PLEX_LIBRARIES']: lambda: [],
         ENV_VARS['SELECTED_SERVICE']: lambda: '',
+        ENV_VARS['FILTER_TMDB_THRESHOLD']: lambda: None,
+        ENV_VARS['FILTER_TMDB_MIN_VOTES']: lambda: None,
+        ENV_VARS['FILTER_GENRES_EXCLUDE']: lambda: [],
+        ENV_VARS['HONOR_JELLYSEER_DISCOVERY']: lambda: False,
+        ENV_VARS['FILTER_RELEASE_YEAR']: lambda: None,
+        ENV_VARS['FILTER_INCLUDE_NO_RATING']: lambda: True,
+        ENV_VARS['FILTER_LANGUAGE']: lambda: None,
+        ENV_VARS['FILTER_NUM_SEASONS']: lambda: None,
     }
 
 
@@ -82,10 +98,15 @@ def save_env_vars(config_data):
         raise ValueError("Invalid cron time provided.")
 
     # Prepare environment variables to be saved
-    env_vars = {key: config_data.get(key, default_value()) for key, default_value in get_default_values().items()}
+    env_vars = {
+        key: value for key, value in {
+            key: config_data.get(key, default_value()) for key, default_value in get_default_values().items()
+        }.items() if value not in [None, '']
+    }
 
     # Create config.yaml file if it does not exist
     if not os.path.exists(CONFIG_PATH):
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
         logger.info(f'Creating new file for config at {CONFIG_PATH}')
         open(CONFIG_PATH, 'w').close()  # Create an empty file
 
@@ -121,7 +142,7 @@ def save_session_token(token):
         file.seek(0)
         yaml.dump(config_data, file)
         file.truncate()
-        
+
 def update_cron_job(cron_time):
     """
     Updates the cron job to trigger the Flask API using curl.
@@ -129,7 +150,7 @@ def update_cron_job(cron_time):
     """
     try:
         # Command to call the Flask endpoint using curl
-        cron_command = "curl -X POST http://localhost:5000/run_now >> /var/log/cron.log 2>&1"
+        cron_command = "curl -X POST http://localhost:5000/api/automation/force_run >> /var/log/cron.log 2>&1"
 
         # Create the cron job entry
         cron_entry = f"{cron_time} {cron_command}\n"

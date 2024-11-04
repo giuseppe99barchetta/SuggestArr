@@ -1,6 +1,6 @@
 <template>
     <div>
-        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Step 2: {{ serviceName }} API Details</h3>
+        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">{{ serviceName }} Configuration</h3>
         <p class="text-xs sm:text-sm text-gray-400 mb-4">
             To obtain your {{ serviceName }} API Key, follow these steps: Open the {{ serviceName }} web interface, navigate to the Control Panel, select "API Keys," create a new key, and copy it for use in this configuration.
         </p>

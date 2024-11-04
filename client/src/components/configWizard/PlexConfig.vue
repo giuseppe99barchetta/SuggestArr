@@ -1,6 +1,6 @@
 <template>
     <div>
-        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Step 2: Plex Configuration</h3>
+        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Plex Configuration</h3>
         <p class="text-xs sm:text-sm text-gray-400 mb-4">
             Login using your Plex account.
         </p>
