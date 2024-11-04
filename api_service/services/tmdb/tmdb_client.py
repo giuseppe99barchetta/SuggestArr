@@ -96,7 +96,7 @@ class TMDbClient:
             return False
         
         original_language = item.get('original_language')
-        selected_language_ids = [lang['id'] for lang in self.language_filter]
+        selected_language_ids = [lang['id'] for lang in self.language_filter] if self.language_filter else []
         if self.language_filter and original_language not in selected_language_ids:
             selected_language_names = ', '.join([lang['english_name'] for lang in self.language_filter])
             self._log_exclusion_reason(
