@@ -40,6 +40,7 @@ jobs:
           jq ".version = \"$prefixed_version\"" package.json > package_tmp.json && mv package_tmp.json package.json
           # Save new version in GitHub Actions environment
           echo "new_version=$prefixed_version" >> $GITHUB_ENV
+          echo "::set-output name=new_version::$prefixed_version"
 
       - name: Commit and push new version
         run: |
