@@ -8,6 +8,8 @@ on:
 jobs:
   bump-version:
     runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.bump_version.outputs.new_version }}
 
     steps:
       - name: Checkout code
@@ -66,11 +68,14 @@ jobs:
         run: echo ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} | docker login -u ciuse99 --password-stdin
 
       - name: Build and Push Docker Image
+        env:
+          new_version: ${{ needs.bump-version.outputs.new_version }}
         run: |
+          echo "New version tag: ${{ env.new_version }}"
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --cache-from type=registry,ref=ciuse99/suggestarr:cache \
             --cache-to type=registry,ref=ciuse99/suggestarr:cache,mode=max \
             -t ciuse99/suggestarr:latest \
-            -t ciuse99/suggestarr:${{ env.new_version }} \
+            -t ciuse99/suggestarr:$new_version \
             -f docker/Dockerfile . --push
