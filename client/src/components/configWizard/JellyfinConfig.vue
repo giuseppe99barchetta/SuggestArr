@@ -141,7 +141,7 @@ export default {
             this.$emit('update-config', `JELLYFIN_LIBRARIES`, this.combineLibraryData(this.selectedLibraryIds, this.selectedLibraryNames));
         },
         toggleUserSelection(user) {
-            console.log(user)
+            console.log(user);
             const index = this.selectedUserIds.indexOf(user.id);
             if (index === -1) {
                 this.selectedUserIds.push(user.id);
@@ -150,8 +150,13 @@ export default {
                 this.selectedUserIds.splice(index, 1);
                 this.selectedUserName.splice(index, 1);
             }
-            console.log(this.selectedUserName)
-            this.$emit('update-config', `SELECTED_USERS`, this.combineLibraryData(this.selectedUserIds, this.selectedUserName));
+        
+            const cleanedIds = this.selectedUserIds.filter(id => id);
+            const cleanedNames = this.selectedUserName.filter(name => name);
+            const cleanSelectedUsers = this.combineLibraryData(cleanedIds, cleanedNames);
+            console.log("Selected users to be saved:", cleanSelectedUsers);
+        
+            this.$emit('update-config', `SELECTED_USERS`, cleanSelectedUsers);
         },
         isUserSelected(userId) {
             return this.selectedUserIds.includes(userId);
@@ -177,10 +182,9 @@ export default {
                 return [];
             }
 
-            return ids.map((id, index) => ({
-                id: id,
-                name: names[index]
-            }));
+            return ids
+                .map((id, index) => ({ id: id, name: names[index] }))
+                .filter(user => user.id && user.name);  // Rimuove oggetti senza `id` o `name`
         },
         updateApiUrl(url) {
             const trimmedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
