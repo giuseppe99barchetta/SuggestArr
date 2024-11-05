@@ -69,24 +69,24 @@ class PlexHandler:
 
     async def process_movie(self, movie_key, title):
         """Find similar movies via TMDb and request them via Jellyseer."""
-        tmdb_id = await self.plex_client.get_metadata_provider_id(movie_key)
-        if tmdb_id:
-            similar_movies = await self.tmdb_client.find_similar_movies(tmdb_id)
-            await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie)
+        source_tmbd_id = await self.plex_client.get_metadata_provider_id(movie_key)
+        if source_tmbd_id:
+            similar_movies = await self.tmdb_client.find_similar_movies(source_tmbd_id)
+            await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie, source_tmbd_id)
         else:
             self.logger.warning(f"Error while processing item: 'tmdb_id' not found for movie '{title}'. Skipping.")
 
     async def process_episode(self, series_key, title):
         """Process a TV show episode by finding similar TV shows via TMDb."""
         if series_key:
-            tmdb_id = await self.plex_client.get_metadata_provider_id(series_key)
-            if tmdb_id:
-                similar_tvshows = await self.tmdb_client.find_similar_tvshows(tmdb_id)
-                await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv)
+            source_tmbd_id = await self.plex_client.get_metadata_provider_id(series_key)
+            if source_tmbd_id:
+                similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmbd_id)
+                await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv, source_tmbd_id)
             else:
                 self.logger.warning(f"Error while processing item: 'tmdb_id' not found for tv show '{title}'. Skipping.")
 
-    async def request_similar_media(self, media_ids, media_type, max_items):
+    async def request_similar_media(self, media_ids, media_type, max_items, source_tmbd_id):
         """Request similar media (movie/TV show) via Jellyseer."""
         if not media_ids:
             self.logger.info("No media IDs provided for similar media request.")
@@ -102,15 +102,15 @@ class PlexHandler:
             already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content)
 
             if not already_requested and not already_downloaded:
-                tasks.append(self._request_media_and_log(media_type, media_id, media_title))
+                tasks.append(self._request_media_and_log(media_type, media, source_tmbd_id))
             else:
                 self.logger.info(f"Skipping [{media_type}, {media_title}]: already requested or downloaded.")
 
         await asyncio.gather(*tasks)
 
-    async def _request_media_and_log(self, media_type, media_id, media_title):
+    async def _request_media_and_log(self, media_type, media, source_tmbd_id):
         """Helper method to request media and log the result."""
-        await self.jellyseer_client.request_media(media_type, media_id)
+        await self.jellyseer_client.request_media(media_type, media, source_tmbd_id)
         self.request_count += 1
-        self.logger.info(f"Requested {media_type}: {media_title}")
+        self.logger.info(f"Requested {media_type}: {media['title']}")
 

@@ -145,7 +145,11 @@ class TMDbClient:
             'rating': item.get('vote_average'),
             'votes': item.get('vote_count'),
             'release_date': item.get('release_date') if content_type == 'movie' else item.get('first_air_date'),
-            'origin_country': item.get('origin_country', [])
+            'origin_country': item.get('origin_country', []),
+            'original_language': item.get('original_language', ''),
+            'poster_path': f"https://image.tmdb.org/t/p/w500{item.get('poster_path', 0)}",
+            'overview': item.get('overview'),
+            'genre_ids': item.get('genre_ids', [])
         }
 
 

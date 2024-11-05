@@ -55,22 +55,22 @@ class JellyfinHandler:
 
     async def process_movie(self, user_id, item_id):
         """Find similar movies via TMDb and request them via Jellyseer."""
-        tmdb_id = await self.jellyfin_client.get_item_provider_id(user_id, item_id)
-        if tmdb_id:
-            similar_movies = await self.tmdb_client.find_similar_movies(tmdb_id)
-            await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie)
+        source_tmbd_id = await self.jellyfin_client.get_item_provider_id(user_id, item_id)
+        if source_tmbd_id:
+            similar_movies = await self.tmdb_client.find_similar_movies(source_tmbd_id)
+            await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie, source_tmbd_id)
 
     async def process_episode(self, user_id, item):
         """Process a TV show episode by finding similar TV shows via TMDb."""
         series_id = item.get('SeriesId')
         if series_id and series_id not in self.processed_series:
             self.processed_series.add(series_id)
-            tvdb_id = await self.jellyfin_client.get_item_provider_id(user_id, series_id, provider='Tmdb')
-            if tvdb_id:
-                similar_tvshows = await self.tmdb_client.find_similar_tvshows(tvdb_id)
-                await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv)
+            source_tmbd_id = await self.jellyfin_client.get_item_provider_id(user_id, series_id, provider='Tmdb')
+            if source_tmbd_id:
+                similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmbd_id)
+                await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv, source_tmbd_id)
 
-    async def request_similar_media(self, media_ids, media_type, max_items):
+    async def request_similar_media(self, media_ids, media_type, max_items, source_tmbd_id):
         """Request similar media (movie/TV show) via Jellyseer."""
         if not media_ids:
             self.logger.info("No media IDs provided for similar media request.")
@@ -86,14 +86,14 @@ class JellyfinHandler:
             already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content)
 
             if not already_requested and not already_downloaded:
-                tasks.append(self._request_media_and_log(media_type, media_id, media_title))
+                tasks.append(self._request_media_and_log(media_type, media, source_tmbd_id))
             else:
                 self.logger.info(f"Skipping [{media_type}, {media_title}]: already requested or downloaded.")
 
         await asyncio.gather(*tasks)
 
-    async def _request_media_and_log(self, media_type, media_id, media_title):
+    async def _request_media_and_log(self, media_type, media, source_tmbd_id):
         """Helper method to request media and log the result."""
-        await self.jellyseer_client.request_media(media_type, media_id)
+        await self.jellyseer_client.request_media(media_type, media, source_tmbd_id)
         self.request_count += 1
-        self.logger.info(f"Requested {media_type}: {media_title}")
+        self.logger.info(f"Requested {media_type}: {media['title']}")
