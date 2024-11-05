@@ -34,6 +34,7 @@ class TestConfig(unittest.TestCase):
         "SEER_USER_PSW": "Y.M8d*HUkpds8PXCeMZM",
         "SELECTED_SERVICE": "plex",
         "TMDB_API_KEY": "123abc",
+        "SELECTED_USERS": ["1", "2"],
     }
 
     def test_save_default_env_vars(self):

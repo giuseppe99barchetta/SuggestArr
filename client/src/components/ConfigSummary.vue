@@ -8,16 +8,31 @@
                 <!-- Display Plex or Jellyfin URL based on selected service -->
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-if="config.SELECTED_SERVICE === 'plex'">
                     <label class="block text-sm font-semibold text-gray-300">Plex URL:</label>
-                    <p class="text-gray-200">{{ config.PLEX_API_URL }}</p>
+                    <p class="text-gray-200">
+                        {{ config.PLEX_API_URL }}
+                        <a :href="config.PLEX_API_URL" target="_blank" class="text-blue-400 hover:underline ml-1">
+                            <i class="fas fa-external-link-alt"></i>
+                        </a>
+                    </p>
                 </div>
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-else>
                     <label class="block text-sm font-semibold text-gray-300">{{ capitalizeFirstLetter(config.SELECTED_SERVICE) }} URL:</label>
-                    <p class="text-gray-200">{{ config.JELLYFIN_API_URL }}</p>
+                    <p class="text-gray-200">
+                        {{ config.JELLYFIN_API_URL }}
+                        <a :href="config.JELLYFIN_API_URL" target="_blank" class="text-blue-400 hover:underline ml-1">
+                            <i class="fas fa-external-link-alt"></i>
+                        </a>
+                    </p>
                 </div>
                 <!-- Display Overseer or Jellyseer URL -->
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
                     <label class="block text-sm font-semibold text-gray-300">Jellyseer/Overseer URL:</label>
-                    <p class="text-gray-200">{{ config.SEER_API_URL }}</p>
+                    <p class="text-gray-200">
+                        {{ config.SEER_API_URL }}
+                        <a :href="config.SEER_API_URL" target="_blank" class="text-blue-400 hover:underline ml-1">
+                            <i class="fas fa-external-link-alt"></i>
+                        </a>
+                    </p>
                 </div>
                 <div class="flex flex-col sm:flex-row sm:space-x-4">
                     <!-- Max Similar Movies and TV Shows -->
@@ -216,8 +231,8 @@ export default {
 
 <style scoped>
 .custom-width {
-    max-width: 600px; /* Puoi modificare questa larghezza in base alle tue esigenze */
-    margin: 0 auto;   /* Per centrare il contenuto */
+    max-width: 600px;
+    margin: 0 auto;
 }
 
 .attached-logo {

@@ -3,10 +3,11 @@ Main Flask application for managing environment variables and running processes.
 """
 from concurrent.futures import ThreadPoolExecutor
 import os
-from flask import Flask, send_from_directory, request, jsonify
+from flask import Flask, send_from_directory
 from flask_cors import CORS
 from asgiref.wsgi import WsgiToAsgi
-
+import logging
+import atexit
 
 from api_service.utils.utils import AppUtils
 from api_service.config.logger_manager import LoggerManager
@@ -68,6 +69,12 @@ def register_routes(app): # pylint: disable=redefined-outer-name
 
 app = create_app()
 asgi_app = WsgiToAsgi(app)
+
+def close_log_handlers():
+    for handler in logging.root.handlers[:]:
+        handler.close()
+        logging.root.removeHandler(handler)
+atexit.register(close_log_handlers)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

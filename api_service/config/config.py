@@ -38,6 +38,7 @@ ENV_VARS = {
     'FILTER_INCLUDE_NO_RATING': 'FILTER_INCLUDE_NO_RATING',
     'FILTER_LANGUAGE':'FILTER_LANGUAGE',
     'FILTER_NUM_SEASONS':'FILTER_NUM_SEASONS',
+    'SELECTED_USERS': 'SELECTED_USERS',
 }
 
 def load_env_vars():
@@ -84,6 +85,7 @@ def get_default_values():
         ENV_VARS['FILTER_INCLUDE_NO_RATING']: lambda: True,
         ENV_VARS['FILTER_LANGUAGE']: lambda: None,
         ENV_VARS['FILTER_NUM_SEASONS']: lambda: None,
+        ENV_VARS['SELECTED_USERS']: lambda: [],
     }
 
 

@@ -41,3 +41,11 @@ export function fetchJellyfinLibraries(apiUrl, apiKey) {
         JELLYFIN_TOKEN: apiKey
     });
 }
+
+// Function to fetch Jellyfin Users
+export function fetchJellyfinUsers(apiUrl, apiKey) {
+    return axios.post(`/api/jellyfin/users`, {
+        JELLYFIN_API_URL: apiUrl,
+        JELLYFIN_TOKEN: apiKey
+    });
+}

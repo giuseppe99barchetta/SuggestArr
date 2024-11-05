@@ -19,7 +19,7 @@ class PlexClient:
     and libraries.
     """
 
-    def __init__(self, token, api_url=None, max_content=10, library_ids=None, client_id=None):
+    def __init__(self, token, api_url=None, max_content=10, library_ids=None, client_id=None, user_ids=None):
         """
         Initializes the PlexClient with the provided API URL and token.
         :param api_url: The base URL for the Plex API.
@@ -30,6 +30,7 @@ class PlexClient:
         self.max_content_fetch = max_content
         self.api_url = api_url
         self.library_ids = library_ids
+        self.user_ids = user_ids
         self.base_url = 'https://plex.tv/api/v2'
         self.headers = {
             "X-Plex-Token": token, 
@@ -41,51 +42,87 @@ class PlexClient:
 
     async def get_all_users(self):
         """
-        Retrieves a list of all users from the Plex server asynchronously.
-        :return: A list of users in JSON format if successful, otherwise an empty list.
+        Retrieves a combined list of all users (both friends and local accounts) from the Plex server asynchronously.
+        Only includes 'id' and 'name' for each user.
+        :return: A list of users with 'id' and 'name' if successful, otherwise an empty list.
         """
-        url = f"{self.api_url}/accounts"  # Plex endpoint for users
+        friends_url = f"{self.base_url}/friends"
+        accounts_url = f"{self.api_url}/accounts"
+        users = []
+
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data.get('accounts', [])
-                    self.logger.error("Failed to retrieve users: %d", response.status)
+                # Request for friends
+                async with session.get(friends_url, headers=self.headers, timeout=REQUEST_TIMEOUT) as friends_response:
+                    if friends_response.status == 200:
+                        friends = await friends_response.json()
+                        # Extract 'id' and 'name' from each friend
+                        users.extend({'id': friend['id'], 'name': friend['title']} for friend in friends)
+                    else:
+                        self.logger.error("Failed to retrieve friends: %d", friends_response.status)
+
+                # Request for local accounts
+                async with session.get(accounts_url, headers=self.headers, timeout=REQUEST_TIMEOUT) as accounts_response:
+                    if accounts_response.status == 200:
+                        accounts_data = await accounts_response.json()
+                        accounts = accounts_data.get('MediaContainer', {}).get('Account', [])
+                        # Extract 'id' and 'name' from each local account
+                        users.extend({'id': account['id'], 'name': account['name']} for account in accounts)
+                    else:
+                        self.logger.error("Failed to retrieve local accounts: %d", accounts_response.status)
+            
+            unique_users = {user['id']: user for user in users}.values()
+            sorted_users = sorted(unique_users, key=lambda x: x['id'])
+            
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while retrieving users: %s", str(e))
 
-        return []
+        return list(sorted_users)
 
     async def get_recent_items(self):
         """
         Retrieves a list of recently viewed items asynchronously.
         :return: A list of recent items in JSON format if successful, otherwise an empty list.
         """
-        url = f"{self.api_url}/status/sessions/history/all"
-        params = {
-            "sort": "viewedAt:desc",
-        }
+        all_filtered_items = []
+        user_ids = self.user_ids if self.user_ids else [None]  # Use None if no specific user is selected
+    
+        for user_id in user_ids:
+            url = f"{self.api_url}/status/sessions/history/all"
+            params = {
+                "sort": "viewedAt:desc",
+            }
+    
+            # If a specific user is selected, add the accountID parameter
+            if user_id:
+                params["accountID"] = user_id
+    
+            # Add library filtering if libraries are specified
+            if self.library_ids:
+                params["librarySectionIDs"] = ','.join(self.library_ids)
+    
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            metadata = data.get('MediaContainer', {}).get('Metadata', [])
+    
+                            # Filter items for this specific user (or all users) and add to the combined list
+                            filtered_items = await self.filter_recent_items(metadata)
+                            all_filtered_items.extend(filtered_items)
+                            if user_id:
+                                self.logger.info(f"User {user_id}: Returning {len(filtered_items)} filtered recent items.")
+                            else:
+                                self.logger.info(f"All users: Returning {len(filtered_items)} filtered recent items.")
+                        else:
+                            self.logger.error("Failed to retrieve recent items for user %s: %d", user_id or "all", response.status)
+            except aiohttp.ClientError as e:
+                self.logger.error("An error occurred while retrieving recent items for user %s: %s", user_id or "all", str(e))
+    
+        self.logger.info(f"Total filtered items across all users: {len(all_filtered_items)}")
         
-        if self.library_ids:
-            params["librarySectionIDs"] = ','.join(self.library_ids)
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        metadata = data.get('MediaContainer', {}).get('Metadata', [])
-                        # Filter the items while respecting the max content fetch limit
-                        filtered_items = await self.filter_recent_items(metadata)
-                        self.logger.info(f"Returning {len(filtered_items)} filtered recent items.")
-                        return filtered_items
-
-                    self.logger.error("Failed to retrieve recent items: %d", response.status)
-        except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while retrieving recent items: %s", str(e))
-
-        return []
+        return all_filtered_items
 
 
     async def filter_recent_items(self, metadata):

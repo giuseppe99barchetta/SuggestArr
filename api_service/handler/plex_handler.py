@@ -54,9 +54,9 @@ class PlexHandler:
                 key = self.extract_rating_key(item, item_type)
                 if key:
                     if item_type == 'movie':
-                        await self.process_movie(key)
+                        await self.process_movie(key, title)
                     elif item_type == 'episode':
-                        await self.process_episode(key)
+                        await self.process_episode(key, title)
                 else:
                     raise ValueError(f"Missing key for {item_type} '{title}'. Cannot process this item. Skipping.")   
             except Exception as e:
@@ -67,20 +67,24 @@ class PlexHandler:
         key = item.get('key') if item_type == 'movie' else item.get('grandparentKey') if item_type == 'episode' else None
         return key if key else None
 
-    async def process_movie(self, movie_key):
+    async def process_movie(self, movie_key, title):
         """Find similar movies via TMDb and request them via Jellyseer."""
         tmdb_id = await self.plex_client.get_metadata_provider_id(movie_key)
         if tmdb_id:
             similar_movies = await self.tmdb_client.find_similar_movies(tmdb_id)
             await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie)
+        else:
+            self.logger.warning(f"Error while processing item: 'tmdb_id' not found for movie '{title}'. Skipping.")
 
-    async def process_episode(self, series_key):
+    async def process_episode(self, series_key, title):
         """Process a TV show episode by finding similar TV shows via TMDb."""
         if series_key:
-            tvdb_id = await self.plex_client.get_metadata_provider_id(series_key)
-            if tvdb_id:
-                similar_tvshows = await self.tmdb_client.find_similar_tvshows(tvdb_id)
+            tmdb_id = await self.plex_client.get_metadata_provider_id(series_key)
+            if tmdb_id:
+                similar_tvshows = await self.tmdb_client.find_similar_tvshows(tmdb_id)
                 await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv)
+            else:
+                self.logger.warning(f"Error while processing item: 'tmdb_id' not found for tv show '{title}'. Skipping.")
 
     async def request_similar_media(self, media_ids, media_type, max_items):
         """Request similar media (movie/TV show) via Jellyseer."""
