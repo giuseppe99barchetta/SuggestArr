@@ -33,6 +33,7 @@
         <!-- Display Libraries -->
         <div v-if="libraries.length > 0">
             <p class="text-sm text-gray-300 mt-4">Select the {{ serviceName }} libraries you want to include:</p>
+            <span class="text-gray-400 text-xs">(If no libraries are selected, all libraries will be included.)</span>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                 <div v-for="library in libraries" :key="library.ItemId" @click="toggleLibrarySelection(library)"
                     :class="{
@@ -40,6 +41,21 @@
                         'bg-gray-700 border-gray-600': !isSelected(library.ItemId)
                     }" class="cursor-pointer p-4 border rounded-lg text-center text-white hover:bg-indigo-500">
                     {{ library.Name }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Display Users -->
+        <div v-if="users.length > 0">
+            <p class="text-sm text-gray-300 mt-4">Select the {{ serviceName }} users you want to include:</p>
+            <span class="text-gray-400 text-xs">(If no users are selected, all users will be included.)</span>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                <div v-for="user in users" :key="user.id" @click="toggleUserSelection(user)"
+                    :class="{
+                        'bg-indigo-600 border-indigo-600': isUserSelected(user.id),
+                        'bg-gray-700 border-gray-600': !isUserSelected(user.id)
+                    }" class="cursor-pointer p-4 border rounded-lg text-center text-white hover:bg-indigo-500">
+                    {{ user.name }}
                 </div>
             </div>
         </div>
@@ -62,7 +78,7 @@
 </template>
 
 <script>
-import { fetchJellyfinLibraries } from '../../api/api';
+import { fetchJellyfinLibraries, fetchJellyfinUsers } from '../../api/api';
 
 export default {
     props: ['config'],
@@ -72,9 +88,12 @@ export default {
                 status: null, // 'success', 'fail', or null (not tested)
                 isTesting: false
             },
-            libraries: [],      // Contains the retrieved libraries
+            libraries: [],              // Contains the retrieved libraries
             selectedLibraryIds: [],     // Contains the IDs of the selected libraries
-            selectedLibraryNames: []    // Contains the names of the selected libraries
+            selectedLibraryNames: [],   // Contains the names of the selected libraries
+            users: [],                  // Contains the retrieved users
+            selectedUserIds: [],        // Contains the IDs of the selected users
+            selectedUserName: [],       // Contains the names of the selected users
         };
     },
     computed: {
@@ -91,6 +110,7 @@ export default {
                     this.libraries = response.data.items;
                     this.testState.status = 'success';
                     this.loadSelectedLibraries();
+                    this.fetchUsers();
                 })
                 .catch(() => {
                     this.testState.status = 'fail';
@@ -98,6 +118,16 @@ export default {
                 .finally(() => {
                     this.testState.isTesting = false;
                 });
+        },
+        fetchUsers() {
+            fetchJellyfinUsers(this.config[`JELLYFIN_API_URL`], this.config[`JELLYFIN_TOKEN`])
+                .then(response => {
+                    this.users = response.data.users;
+                    this.loadSelectedUsers();
+                })
+                .catch(() => {
+                    console.log('error while fetching users.');
+                })
         },
         toggleLibrarySelection(library) {
             const index = this.selectedLibraryIds.indexOf(library.ItemId);
@@ -110,14 +140,40 @@ export default {
             }
             this.$emit('update-config', `JELLYFIN_LIBRARIES`, this.combineLibraryData(this.selectedLibraryIds, this.selectedLibraryNames));
         },
+        toggleUserSelection(user) {
+            console.log(user);
+            const index = this.selectedUserIds.indexOf(user.id);
+            if (index === -1) {
+                this.selectedUserIds.push(user.id);
+                this.selectedUserName.push(user.name);
+            } else {
+                this.selectedUserIds.splice(index, 1);
+                this.selectedUserName.splice(index, 1);
+            }
+        
+            const cleanedIds = this.selectedUserIds.filter(id => id);
+            const cleanedNames = this.selectedUserName.filter(name => name);
+            const cleanSelectedUsers = this.combineLibraryData(cleanedIds, cleanedNames);
+            console.log("Selected users to be saved:", cleanSelectedUsers);
+        
+            this.$emit('update-config', `SELECTED_USERS`, cleanSelectedUsers);
+        },
+        isUserSelected(userId) {
+            return this.selectedUserIds.includes(userId);
+        },
         isSelected(libraryId) {
             return this.selectedLibraryIds.includes(libraryId);
         },
         loadSelectedLibraries() {
             if (this.config[`JELLYFIN_LIBRARIES`]) {
-                this.selectedLibraryIds = this.libraries
-                    .filter(library => this.config[`JELLYFIN_LIBRARIES`].includes(library.ItemId))
-                    .map(library => library.ItemId);
+                this.selectedLibraryIds = this.config[`JELLYFIN_LIBRARIES`].map(lib => lib.id);
+                this.selectedLibraryNames = this.config[`JELLYFIN_LIBRARIES`].map(lib => lib.name);
+            }
+        },
+        loadSelectedUsers() {
+            if (this.config[`SELECTED_USERS`]) {
+                this.selectedUserIds = this.config[`SELECTED_USERS`].map(user => user.id);
+                this.selectedUserName = this.config[`SELECTED_USERS`].map(user => user.name);
             }
         },
         combineLibraryData(ids, names) {
@@ -126,10 +182,9 @@ export default {
                 return [];
             }
 
-            return ids.map((id, index) => ({
-                id: id,
-                name: names[index]
-            }));
+            return ids
+                .map((id, index) => ({ id: id, name: names[index] }))
+                .filter(user => user.id && user.name);  // Rimuove oggetti senza `id` o `name`
         },
         updateApiUrl(url) {
             const trimmedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
@@ -146,4 +201,3 @@ export default {
     }
 };
 </script>
-

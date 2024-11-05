@@ -8,6 +8,7 @@ from api_service.config.logger_manager import LoggerManager
 logger = LoggerManager().get_logger(__name__)
 plex_bp = Blueprint('plex', __name__)
 client_id = os.getenv('PLEX_CLIENT_ID', str(uuid.uuid4()))
+
 @plex_bp.route('/libraries', methods=['POST'])
 async def get_plex_libraries():
     """
@@ -56,8 +57,6 @@ def login_with_plex():
     auth_token = request.json.get('authToken')
     
     if auth_token:
-        # Verifica se il token è valido
-        # Salva il token e autentica l'utente nella tua app
         return jsonify({'message': 'Login success', 'auth_token': auth_token})
     else:
         return jsonify({'error': 'Invalid token'}), 401
@@ -76,7 +75,7 @@ def check_plex_auth(pin_id):
 @plex_bp.route('/servers', methods=['POST'])
 async def get_plex_servers_async_route():
     """
-    Route asincrona per ottenere i server Plex disponibili usando un auth_token.
+    Find all available Plex servers.
     """
     try:
         auth_token = request.json.get('auth_token')
@@ -95,3 +94,27 @@ async def get_plex_servers_async_route():
     except Exception as e:
         print(f"Errore durante il recupero dei server Plex: {str(e)}")
         return jsonify({'message': f'Error fetching Plex servers: {str(e)}', 'type': 'error'}), 500
+    
+@plex_bp.route('/users', methods=['POST'])
+async def get_plex_users():
+    """
+    Fetch Plex users using the provided API token.
+    """
+    try:
+        config_data = request.json
+        api_token = config_data.get('PLEX_TOKEN')
+        api_url = config_data.get('PLEX_API_URL')
+
+        if not api_token:
+            return jsonify({'message': 'API token is required', 'type': 'error'}), 400
+
+        plex_client = PlexClient(token=api_token, client_id=client_id, api_url=api_url)
+        users = await plex_client.get_all_users()
+
+        if not users:
+            return jsonify({'message': 'No users found', 'type': 'error'}), 404
+
+        return jsonify({'message': 'Users fetched successfully', 'users': users}), 200
+    except Exception as e:
+        logger.error(f'Error fetching Plex users: {str(e)}')
+        return jsonify({'message': f'Error fetching Plex users: {str(e)}', 'type': 'error'}), 500

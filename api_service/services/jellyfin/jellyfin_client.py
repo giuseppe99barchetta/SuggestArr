@@ -46,7 +46,7 @@ class JellyfinClient:
                 async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200:
                         data = await response.json()
-                        return data
+                        return [{"id": user["Id"], "name": user["Name"], "policy": user["Policy"]} for user in data]
                     self.logger.error("Failed to retrieve users: %d", response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while retrieving users: %s", str(e))
@@ -60,7 +60,7 @@ class JellyfinClient:
         """
         results_by_library = {}
         users = await self.get_all_users()
-        admin_user = next((user for user in users if user.get('Policy', {}).get('IsAdministrator')), None)
+        admin_user = next((user for user in users if user.get('policy', {}).get('IsAdministrator')), None)
         libraries = self.libraries if self.libraries else await self.get_libraries()
 
         if not libraries:
@@ -89,8 +89,8 @@ class JellyfinClient:
                                 item_id = item.get('Id')
                                 library_type = 'tv' if item.get('Type') == 'Series' else 'movie'
                                 if item_id:
-                                    tmdb_id = await self.get_item_provider_id(admin_user['Id'], item_id, provider='Tmdb')
-                                    item['tmdb_id'] = tmdb_id  # Aggiunge il tmdb_id all'item
+                                    tmdb_id = await self.get_item_provider_id(admin_user['id'], item_id, provider='Tmdb')
+                                    item['tmdb_id'] = tmdb_id
                                 
                             results_by_library[library_type] = items
                             self.logger.info(f"Retrieved {len(items)} items in {library_name}")
@@ -128,7 +128,7 @@ class JellyfinClient:
                 'isPlayed': "true",
                 "Recursive": "true",
                 "IncludeItemTypes": "Movie,Episode",
-                "userId": user['Id'],
+                "userId": user['id'],
                 "Limit": self.max_content_fetch,
                 "ParentID": library_id
             }
@@ -157,14 +157,14 @@ class JellyfinClient:
                                     filtered_items.append(item)  # Add movies directly
 
                             results_by_library[library.get('name')] = filtered_items  # Add filtered items to the results by library
-                            self.logger.info(f"Retrieved {len(filtered_items)} watched items in {library.get('name')}. for user {user['Name']}")
+                            self.logger.info(f"Retrieved {len(filtered_items)} watched items in {library.get('name')}. for user {user['name']}")
 
                         else:
                             self.logger.error(
-                                "Failed to get recent items for library %s (user %s): %d", library.get('name'), user['Name'], response.status)
+                                "Failed to get recent items for library %s (user %s): %d", library.get('name'), user['name'], response.status)
             except aiohttp.ClientError as e:
                 self.logger.error(
-                    "An error occurred while retrieving recent items for library %s (user %s): %s", library.get('name'), user['Name'], str(e))
+                    "An error occurred while retrieving recent items for library %s (user %s): %s", library.get('name'), user['name'], str(e))
             except Exception as e:
                 self.logger.error(e)
 

@@ -14,9 +14,12 @@ export default {
       manualConfiguration: false,
       manualServerAddress: '',
       isLoggedIn: false,
+      users: [],                  // Contains the retrieved users
+      selectedUsers: [],          // Stores the selected users
     };
   },
   methods: {
+    // Toggle and update selected libraries
     toggleLibrarySelection(library) {
       const index = this.selectedLibraries.findIndex(l => l.key === library.key);
       index > -1 ? this.selectedLibraries.splice(index, 1) : this.selectedLibraries.push(library);
@@ -36,6 +39,47 @@ export default {
         );
       }
     },
+
+    // Toggle and update selected users
+    toggleUserSelection(user) {
+      const index = this.selectedUsers.findIndex(u => u.id === user.id);
+      index > -1 ? this.selectedUsers.splice(index, 1) : this.selectedUsers.push(user);
+      this.updateSelectedUsers();
+    },
+    isUserSelected(userId) {
+      return this.selectedUsers.some(user => user.id === userId);
+    },
+    updateSelectedUsers() {
+      const userIds = this.selectedUsers.map(user => user.id);
+      this.$emit('update-config', 'SELECTED_USERS', userIds);
+    },
+    loadSelectedUsers() {
+      if (this.config.SELECTED_USERS) {
+        this.selectedUsers = this.users.filter(user =>
+          this.config.SELECTED_USERS.includes(user.id)
+        );
+      }
+    },
+
+    // Fetch users from the server
+    async fetchUsers() {
+      try {
+        const response = await this.apiRequest('/api/plex/users', 'post', {
+          PLEX_API_URL: this.config.PLEX_API_URL,
+          PLEX_TOKEN: this.config.PLEX_TOKEN,
+        });
+
+        if (response.status === 200 && response.data.users) {
+          this.users = response.data.users;
+          this.loadSelectedUsers();
+        } else {
+          this.$toast.error('Failed to fetch users.');
+        }
+      } catch (error) {
+        this.$toast.error('Error fetching users.');
+      }
+    },
+
     async apiRequest(url, method = 'get', data = null) {
       try {
         const response = await axios({
@@ -98,6 +142,7 @@ export default {
     },
     updateSelectedServer() {
       this.libraries = []; // Reset libraries if a new server is selected
+      this.users = []
       if (this.selectedServerConnection === 'manual') {
         this.manualConfiguration = true;
       } else {
@@ -108,15 +153,17 @@ export default {
     },
     getServerConnections() {
       return this.servers.reduce((connections, server) => {
-        server.connections.forEach(connection => {
-          connections.push({
-            serverName: server.name,
-            address: connection.address,
-            port: connection.port,
-            protocol: connection.protocol,
-            secure: connection.protocol === 'https',
+        if (server.connections) {
+          server.connections.forEach(connection => {
+            connections.push({
+              serverName: server.name,
+              address: connection.address,
+              port: connection.port,
+              protocol: connection.protocol,
+              secure: connection.protocol === 'https',
+            });
           });
-        });
+        }
         return connections;
       }, []);
     },
@@ -130,6 +177,7 @@ export default {
 
         if (response.status === 200 && response.data.items) {
           this.libraries = response.data.items;
+          this.loadSelectedLibraries();
         } else {
           this.$toast.error('Failed to fetch libraries.');
         }
@@ -137,6 +185,7 @@ export default {
         this.$toast.error('Error fetching libraries.');
       } finally {
         this.loadingLibraries = false;
+        this.fetchUsers();
       }
     },
   },
@@ -145,6 +194,8 @@ export default {
     if (authToken) {
       this.isLoggedIn = true;
       this.fetchPlexServers(authToken);
+      this.fetchUsers();       // Fetch users on component mount
+      this.fetchLibraries();    // Fetch libraries on component mount
     }
   },
 };

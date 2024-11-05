@@ -5,7 +5,7 @@ from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 
 class JellyfinHandler:
-    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv):
+    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client
@@ -24,23 +24,25 @@ class JellyfinHandler:
         self.processed_series = set()
         self.request_count = 0
         self.existing_content = jellyfin_client.existing_content
+        self.selected_users = selected_users
+
 
     async def process_recent_items(self):
         """Process recently watched items for all Jellyfin users."""
-        users = await self.jellyfin_client.get_all_users()
+        users = self.selected_users if len(self.selected_users) > 0 else await self.jellyfin_client.get_all_users() 
         tasks = [self.process_user_recent_items(user) for user in users]
         await asyncio.gather(*tasks)
         self.logger.info(f"Total media requested: {self.request_count}")
 
     async def process_user_recent_items(self, user):
         """Process recently watched items for a specific Jellyfin user."""
-        self.logger.info(f"Fetching content for user: {user['Name']} ({user['Id']})")
+        self.logger.info(f"Fetching content for user: {user['name']}")
         recent_items_by_library = await self.jellyfin_client.get_recent_items(user)
 
         if recent_items_by_library:
             tasks = []
             for library_name, items in recent_items_by_library.items():
-                tasks.extend([self.process_item(user['Id'], item) for item in items])
+                tasks.extend([self.process_item(user['id'], item) for item in items])
             await asyncio.gather(*tasks)
 
     async def process_item(self, user_id, item):

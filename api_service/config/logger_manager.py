@@ -13,6 +13,7 @@ Example:
 
 import logging
 import sys
+from concurrent_log_handler import ConcurrentRotatingFileHandler
 
 class LoggerManager:
     """
@@ -21,13 +22,15 @@ class LoggerManager:
     """
 
     @staticmethod
-    def get_logger(name: str, level=logging.INFO, log_file='app.log'):
+    def get_logger(name: str, level=logging.INFO, log_file='app.log', max_bytes=5 * 1024 * 1024, backup_count=5):
         """
         Returns a logger with the specified name and log level.
         
         :param name: The name of the logger (usually the module name).
         :param level: The logging level (e.g., logging.INFO, logging.DEBUG).
         :param log_file: The path to the file where logs will be saved.
+        :param max_bytes: The maximum file size (in bytes) before rotating.
+        :param backup_count: The number of backup files to keep.
         :return: Configured logger instance.
         """
         logger = logging.getLogger(name)
@@ -40,7 +43,7 @@ class LoggerManager:
             console_handler.setLevel(level)
 
             # Create a file handler to save logs to a file
-            file_handler = logging.FileHandler(log_file, encoding='utf-8')
+            file_handler = ConcurrentRotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count, encoding='utf-8')
             file_handler.setLevel(level)
 
             # Create a logging format
