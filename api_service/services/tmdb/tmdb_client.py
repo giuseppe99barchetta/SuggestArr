@@ -91,14 +91,31 @@ class TMDbClient:
         :return: A dictionary with metadata details or None if not found.
         """
         url = f"{self.tmdb_api_url}/{content_type}/{tmdb_id}?api_key={self.api_key}"
+        images_url = f"{self.tmdb_api_url}/{content_type}/{tmdb_id}/images?api_key={self.api_key}&include_image_language=en,null"
+        
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        data = await response.json()
-                        return self._format_result(data, content_type)
+                async with session.get(url, timeout=REQUEST_TIMEOUT) as details_response:
+                    if details_response.status in HTTP_OK:
+                        data = await details_response.json()
+                        metadata = self._format_result(data, content_type)
                     else:
-                        self.logger.error("Failed to retrieve metadata for TMDb ID %s: %d", tmdb_id, response.status)
+                        self.logger.error("Failed to retrieve metadata for TMDb ID %s: %d", tmdb_id, details_response.status)
+                        return None
+
+                # Fetch images for logo
+                async with session.get(images_url, timeout=REQUEST_TIMEOUT) as images_response:
+                    if images_response.status in HTTP_OK:
+                        images_data = await images_response.json()
+                        logos = images_data.get("logos", [])
+                        logo_path = logos[0]["file_path"] if logos else None
+                        metadata["logo_path"] = f"https://image.tmdb.org/t/p/w500{logo_path}"
+                    else:
+                        self.logger.warning("Failed to retrieve logos for TMDb ID %s: %d", tmdb_id, images_response.status)
+                        metadata["logo_path"] = None
+
+            return metadata
+
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while fetching metadata for TMDb ID %s: %s", tmdb_id, str(e))
         
@@ -170,7 +187,8 @@ class TMDbClient:
             'original_language': item.get('original_language', ''),
             'poster_path': f"https://image.tmdb.org/t/p/w500{item.get('poster_path', 0)}",
             'overview': item.get('overview'),
-            'genre_ids': item.get('genre_ids', [])
+            'genre_ids': item.get('genre_ids', []),
+            'backdrop_path': f"https://image.tmdb.org/t/p/w1280/{item.get('backdrop_path', 0)}" if item.get('backdrop_path') else None
         }
 
 
