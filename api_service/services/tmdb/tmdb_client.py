@@ -82,6 +82,27 @@ class TMDbClient:
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while requesting %s recommendations: %s", content_type, str(e))
         return None
+    
+    async def get_metadata(self, tmdb_id, content_type):
+        """
+        Fetch metadata for a movie or TV show by its TMDb ID.
+        :param tmdb_id: The TMDb ID of the movie or TV show.
+        :param content_type: The type of content ('movie' or 'tv').
+        :return: A dictionary with metadata details or None if not found.
+        """
+        url = f"{self.tmdb_api_url}/{content_type}/{tmdb_id}?api_key={self.api_key}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status in HTTP_OK:
+                        data = await response.json()
+                        return self._format_result(data, content_type)
+                    else:
+                        self.logger.error("Failed to retrieve metadata for TMDb ID %s: %d", tmdb_id, response.status)
+        except aiohttp.ClientError as e:
+            self.logger.error("An error occurred while fetching metadata for TMDb ID %s: %s", tmdb_id, str(e))
+        
+        return None
 
     def _apply_filters(self, item, content_type):
         """
@@ -145,7 +166,11 @@ class TMDbClient:
             'rating': item.get('vote_average'),
             'votes': item.get('vote_count'),
             'release_date': item.get('release_date') if content_type == 'movie' else item.get('first_air_date'),
-            'origin_country': item.get('origin_country', [])
+            'origin_country': item.get('origin_country', []),
+            'original_language': item.get('original_language', ''),
+            'poster_path': f"https://image.tmdb.org/t/p/w500{item.get('poster_path', 0)}",
+            'overview': item.get('overview'),
+            'genre_ids': item.get('genre_ids', [])
         }
 
 

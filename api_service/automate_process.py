@@ -53,7 +53,6 @@ class ContentAutomation:
             env_vars['SEER_SESSION_TOKEN'],
             instance.number_of_seasons
         )
-        await jellyseer_client.reset_cycle_cache()
         await jellyseer_client.init()
 
         # TMDb client
