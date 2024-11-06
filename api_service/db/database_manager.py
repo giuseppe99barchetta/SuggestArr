@@ -123,3 +123,59 @@ class DatabaseManager:
                 except sqlite3.Error as e:
                     raise Exception(f"Failed to save request to database: {e}")
             conn.commit()
+            
+    def get_all_requests_grouped_by_source(self, page=1, per_page=8):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT 
+                    s.media_id AS source_id, s.title AS source_title, s.overview AS source_overview, 
+                    s.release_date AS source_release_date, s.poster_path AS source_poster_path, s.rating as rating,
+                    r.tmdb_request_id, r.media_type, r.requested_at,
+                    m.title AS request_title, m.overview AS request_overview, 
+                    m.release_date AS request_release_date, m.poster_path AS request_poster_path, m.rating as rating
+                FROM requests r
+                JOIN metadata m ON r.tmdb_request_id = m.media_id
+                JOIN metadata s ON r.tmdb_source_id = s.media_id
+                WHERE r.requested_by = 'SuggestArr'
+                ORDER BY s.media_id, r.requested_at
+            """)
+            rows = cursor.fetchall()
+            
+            # Group requests by source_id
+            sources = {}
+            for row in rows:
+                source_id = row[0]
+                if source_id not in sources:
+                    sources[source_id] = {
+                        "source_id": source_id,
+                        "source_title": row[1],
+                        "source_overview": row[2],
+                        "source_release_date": row[3],
+                        "source_poster_path": row[4],
+                        "rating": row[5],
+                        "requests": []
+                    }
+                
+                # Add the individual request to the source's list of requests
+                sources[source_id]["requests"].append({
+                    "request_id": row[6],
+                    "media_type": row[7],
+                    "requested_at": row[8],
+                    "title": row[9],
+                    "overview": row[10],
+                    "release_date": row[11],
+                    "poster_path": row[12],
+                    "rating": row[13],
+                })
+            
+            # Paginate the sources
+            source_list = list(sources.values())
+            total_items = len(source_list)
+            total_pages = (total_items + per_page - 1) // per_page  # Calculate total pages
+            paginated_data = source_list[(page - 1) * per_page: page * per_page]
+
+            return {
+                "data": paginated_data,
+                "total_pages": total_pages
+            }

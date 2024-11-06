@@ -140,7 +140,8 @@ class SeerClient:
 
         response = await self._make_request("POST", "api/v1/request", data=data, use_cookie=bool(self.session_token))
         if response and 'error' not in response:
-            self.db_manager.save_request(media_type, media['id'], source)
+            self.db_manager.save_request(media_type, media['id'], source['id'])
+            self.db_manager.save_metadata(source, media_type)
             self.db_manager.save_metadata(media, media_type)
             
     async def check_already_requested(self, tmdb_id, media_type):

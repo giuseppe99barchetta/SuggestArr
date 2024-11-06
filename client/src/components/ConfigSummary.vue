@@ -88,6 +88,11 @@
                 <i v-if="isRunning" class="fas fa-spinner fa-spin"></i>
                 <span v-else>Run Now</span>
             </button>
+            <button @click="goToRequestsPage"
+                class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-8 rounded-lg w-full mt-4 shadow-lg transition-transform transform hover:scale-105">
+                <i class="fas fa-list-alt mr-2"></i>
+                View All Requests
+            </button>
 
             <!-- Reset Confirmation Modal -->
             <div v-if="showResetPopup" class="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-75 z-50">
@@ -219,6 +224,12 @@ export default {
                 .catch(error => {
                     alert(`Error resetting configuration: ${error.response ? error.response.data.message : error.message}`);
                 });
+        },
+        goToRequestsPage() {
+            this.$router.push({ 
+                name: 'RequestsPage',
+                query: { tmdbApiKey: this.config.TMDB_API_KEY } 
+            });
         },
         
     },
