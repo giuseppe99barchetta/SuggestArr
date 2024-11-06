@@ -38,10 +38,24 @@ class DatabaseManager:
                     votes INTEGER,
                     origin_country TEXT,
                     genre_ids TEXT,
+                    logo_path TEXT,
+                    backdrop_path TEXT,
                     UNIQUE(media_id, media_type)
                 )
             """)
-
+            
+            # Check and add new columns if they don't exist
+            cursor.execute("PRAGMA table_info(metadata)")
+            existing_columns = [row[1] for row in cursor.fetchall()]
+    
+            if "logo_path" not in existing_columns:
+                cursor.execute("ALTER TABLE metadata ADD COLUMN logo_path TEXT")
+                print("Added column 'logo_path' to 'metadata' table.")
+    
+            if "backdrop_path" not in existing_columns:
+                cursor.execute("ALTER TABLE metadata ADD COLUMN backdrop_path TEXT")
+                print("Added column 'backdrop_path' to 'metadata' table.")
+    
             conn.commit()
 
     def save_request(self, media_type, media_id, source):
@@ -77,15 +91,17 @@ class DatabaseManager:
         votes = media.get('votes', None)
         origin_country = ','.join(media.get('origin_country', []))
         genre_ids = ','.join(map(str, media.get('genre_ids', [])))
+        logo_path = media.get('logo_path', '')
+        backdrop_path = media.get('backdrop_path', '')
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             try:
                 cursor.execute("""
                     INSERT OR REPLACE INTO metadata (media_id, media_type, title, overview, release_date, 
-                                                     poster_path, rating, votes, origin_country, genre_ids)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (media_id, media_type, title, overview, release_date, poster_path, rating, votes, origin_country, genre_ids))
+                                                     poster_path, rating, votes, origin_country, genre_ids, logo_path, backdrop_path)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (media_id, media_type, title, overview, release_date, poster_path, rating, votes, origin_country, genre_ids, logo_path, backdrop_path))
                 conn.commit()
             except sqlite3.Error as e:
                 raise Exception(f"Failed to save metadata: {e}")
@@ -131,9 +147,10 @@ class DatabaseManager:
                 SELECT 
                     s.media_id AS source_id, s.title AS source_title, s.overview AS source_overview, 
                     s.release_date AS source_release_date, s.poster_path AS source_poster_path, s.rating as rating,
-                    r.tmdb_request_id, r.media_type, r.requested_at,
+                    r.tmdb_request_id, r.media_type, r.requested_at, s.logo_path, s.backdrop_path,
                     m.title AS request_title, m.overview AS request_overview, 
-                    m.release_date AS request_release_date, m.poster_path AS request_poster_path, m.rating as rating
+                    m.release_date AS request_release_date, m.poster_path AS request_poster_path, m.rating as rating,
+                    m.logo_path, m.backdrop_path
                 FROM requests r
                 JOIN metadata m ON r.tmdb_request_id = m.media_id
                 JOIN metadata s ON r.tmdb_source_id = s.media_id
@@ -153,20 +170,25 @@ class DatabaseManager:
                         "source_overview": row[2],
                         "source_release_date": row[3],
                         "source_poster_path": row[4],
-                        "rating": row[5],
+                        "rating": round(row[5], 2) if row[5] is not None else None,
+                        "media_type": row[7],
+                        "logo_path": row[9],
+                        "backdrop_path": row[10],  # Added backdrop_path
                         "requests": []
                     }
-                
+
                 # Add the individual request to the source's list of requests
                 sources[source_id]["requests"].append({
                     "request_id": row[6],
                     "media_type": row[7],
                     "requested_at": row[8],
-                    "title": row[9],
-                    "overview": row[10],
-                    "release_date": row[11],
-                    "poster_path": row[12],
-                    "rating": row[13],
+                    "title": row[11],
+                    "overview": row[12],
+                    "release_date": row[13],
+                    "poster_path": row[14],
+                    "backdrop_path": row[17],  # Added backdrop_path for request
+                    "rating": round(row[15], 2) if row[15] is not None else None,
+                    "logo_path": row[16],
                 })
             
             # Paginate the sources

@@ -77,3 +77,18 @@ jobs:
             -t ciuse99/suggestarr:latest \
             -t ciuse99/suggestarr:$new_version \
             -f docker/Dockerfile . --push
+
+  recreate-nightly:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Recreate nightly branch
+        run: |
+          git fetch origin
+          git branch -D nightly || true
+          git push origin --delete nightly || true
+          git checkout -b nightly
+          git push origin nightly
