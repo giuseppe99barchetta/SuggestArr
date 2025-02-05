@@ -1,11 +1,11 @@
 <template>
     <div>
         <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Additional Configuration</h3>
-        <p class="text-xs sm:text-sm text-gray-400 mb-4">Configure additional settings for similar media, content checks, and schedule times.</p>
+        <p class="text-xs sm:text-sm text-gray-400 mb-4">Suggestarr scans your recent viewing history and finds similar content based on the settings below. Adjust these options to control the number and type of suggestions generated.</p>
 
         <!-- Max Similar Movies -->
         <label for="MAX_SIMILAR_MOVIE" class="block text-xs sm:text-sm font-semibold text-gray-300">Max Similar Movies:</label>
-        <p class="text-xs sm:text-sm text-gray-400 mb-2">Specify the maximum number of similar movies to fetch for each movie seen.</p>
+        <p class="text-xs sm:text-sm text-gray-400 mb-2">Define how many similar movies Suggestarr should find for each movie viewed. For example, if set to 1, Suggestarr will suggest one similar movie for every movie in the recent viewing history.</p>
         <input type="number" :value="config.MAX_SIMILAR_MOVIE" 
                @input="handleUpdate('MAX_SIMILAR_MOVIE', $event.target.value)"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
@@ -13,7 +13,7 @@
 
         <!-- Max Similar TV Shows -->
         <label for="MAX_SIMILAR_TV" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Max Similar TV Shows:</label>
-        <p class="text-xs sm:text-sm text-gray-400 mb-2">Specify the maximum number of similar TV shows to fetch for each TV show seen.</p>
+        <p class="text-xs sm:text-sm text-gray-400 mb-2">Define how many similar TV shows Suggestarr should find for each show in the viewing history. For example, if set to 2, it will suggest up to two similar shows for every recently viewed show.</p>
         <input type="number" :value="config.MAX_SIMILAR_TV" 
                @input="handleUpdate('MAX_SIMILAR_TV', $event.target.value)"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
@@ -21,7 +21,7 @@
 
         <!-- Max Content Checks -->
         <label for="MAX_CONTENT_CHECKS" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Max Content Checks:</label>
-        <p class="text-xs sm:text-sm text-gray-400 mb-2">Set the maximum number of recently viewed content items to search for similar content.</p>
+        <p class="text-xs sm:text-sm text-gray-400 mb-2">Set the maximum number of items from your recent viewing history Suggestarr should analyze. For instance, if set to 3, it will look for similar items based on the last three movies or shows viewed.</p>
         <input type="number" :value="config.MAX_CONTENT_CHECKS" 
                @input="handleUpdate('MAX_CONTENT_CHECKS', $event.target.value)"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
@@ -29,7 +29,7 @@
 
         <!-- Search Size -->
         <label for="SEARCH_SIZE" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Search Size:</label>
-        <p class="text-xs sm:text-sm text-gray-400 mb-2">Set the number of pieces of content to consider when searching for suggestions.</p>
+        <p class="text-xs sm:text-sm text-gray-400 mb-2">Specify how many suggestions Suggestarr should generate for each item it analyzes. For example, if set to 5, Suggestarr will find up to 5 possible suggestions for each movie or show it checks.</p>
         <input type="number" :value="config.SEARCH_SIZE" 
                @input="handleUpdate('SEARCH_SIZE', $event.target.value)"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
@@ -37,7 +37,7 @@
 
         <!-- Cron Times -->
         <label for="CRON_TIMES" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Cron Times:</label>
-        <p class="text-xs sm:text-sm text-gray-400 mb-2">Set the schedule in cron format for content checks. (e.g., "0 0 * * *" for daily checks at midnight)</p>
+        <p class="text-xs sm:text-sm text-gray-400 mb-2">Define when Suggestarr should run searches using a cron schedule. For example, "0 0 * * *" means checks will occur every day at midnight. Incorrect cron formats will show an error.</p>
         <input type="text" :value="config.CRON_TIMES" 
                @input="handleCronInput($event.target.value)"
                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
