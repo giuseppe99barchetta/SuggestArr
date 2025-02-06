@@ -81,6 +81,38 @@
             </div>
         </div>
 
+        <!-- Exclude Streaming Services -->
+        <div class="mt-4 flex flex-wrap items-center">
+            <div class="w-full sm:w-1/2 pr-2">
+                <label for="FILTER_REGION_PROVIDER" class="block text-xs sm:text-sm font-semibold text-gray-300">
+                    Select Region:
+                </label>
+                <p class="text-xs text-gray-400 mb-2">
+                    Choose the region to filter streaming services available in that area.
+                </p>
+                <vue-multiselect v-model="selectedRegion" :options="regions" track-by="iso_3166_1" label="english_name"
+                    placeholder="Select a region" @update:modelValue="updateRegion"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md multiselect-region"
+                    id="FILTER_REGION_PROVIDER">
+                </vue-multiselect>
+            </div>
+        
+            <div class="w-full sm:w-1/2 pl-2 mt-4 sm:mt-0">
+                <label for="FILTER_STREAMING_SERVICES" class="block text-xs sm:text-sm font-semibold text-gray-300">
+                    Exclude Streaming Services:
+                </label>
+                <p class="text-xs text-gray-400 mb-2">
+                    Select streaming services to exclude from your recommendations.
+                </p>
+                <vue-multiselect v-model="selectedStreamingServices" :options="streamingServices" track-by="provider_id"
+                    label="provider_name" multiple placeholder="No excluded service"
+                    @update:modelValue="updateStreamingServices"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md multiselect-services"
+                    id="FILTER_STREAMING_SERVICES">
+                </vue-multiselect>
+            </div>
+        </div>
+
         <!-- Country and Release Year Filters -->
         <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mt-4">
             <div class="w-full sm:w-1/2">
@@ -139,6 +171,10 @@ export default {
             selectedGenres: this.config.FILTER_GENRES_EXCLUDE || [],
             languages: [],
             selectedLanguages: this.config.FILTER_LANGUAGE || [],
+            regions: [],
+            selectedRegion: this.config.FILTER_REGION_PROVIDER || null,
+            streamingServices: [],
+            selectedStreamingServices: this.config.FILTER_STREAMING_SERVICES || [],
             errors: {
                 FILTER_TMDB_THRESHOLD: '',
                 FILTER_TMDB_MIN_VOTES: '',
@@ -172,6 +208,26 @@ export default {
                 console.error("Error fetching languages:", error);
             }
         },
+        async fetchRegions() {
+            try {
+                const response = await axios.get(`https://api.themoviedb.org/3/watch/providers/regions?api_key=${this.config.TMDB_API_KEY}`);
+                this.regions = response.data.results;
+            } catch (error) {
+                console.error("Error fetching regions:", error);
+            }
+        },
+        async fetchStreamingServices() {
+            if (!this.selectedRegion) return;
+
+            const region_code = this.selectedRegion?.iso_3166_1;
+
+            try {
+                const response = await axios.get(`https://api.themoviedb.org/3/watch/providers/movie?api_key=${this.config.TMDB_API_KEY}&watch_region=${region_code}`);
+                this.streamingServices = response.data.results;
+            } catch (error) {
+                console.error("Error fetching streaming services:", error);
+            }
+        },
         updateLanguages(selected) {
             this.handleUpdate(
                 'FILTER_LANGUAGE',
@@ -182,6 +238,12 @@ export default {
         },
         updateGenres(selected) {
             this.handleUpdate('FILTER_GENRES_EXCLUDE', selected.map(genre => ({ id: genre.id, name: genre.name })));
+        },
+        updateRegion(selected) {
+            this.handleUpdate('FILTER_REGION_PROVIDER', selected ? selected.iso_3166_1 : null); 
+        },
+        updateStreamingServices(selected) {
+            this.handleUpdate('FILTER_STREAMING_SERVICES', selected.map(service => ({ provider_id: service.provider_id, provider_name: service.provider_name })));
         },
         validateThreshold(value) {
             if (value < 0 || value > 100) {
@@ -224,9 +286,23 @@ export default {
             }
         }
     },
+    watch: {
+        regions(newRegions) {
+            const matchedRegion = newRegions.find(region => region.iso_3166_1 === this.config.FILTER_REGION_PROVIDER);
+            if (matchedRegion) {
+                this.selectedRegion = matchedRegion;
+            } else {
+                this.selectedRegion = null;
+            }
+        },
+        selectedRegion() {
+            this.fetchStreamingServices();
+        }
+    },
     mounted() {
         this.fetchGenres();
         this.fetchLanguages();
+        this.fetchRegions();
     }
 };
 </script>

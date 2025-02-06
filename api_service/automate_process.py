@@ -43,6 +43,8 @@ class ContentAutomation:
         filter_release_year = int(env_vars.get('FILTER_RELEASE_YEAR') or 0)
         filter_language = env_vars.get('FILTER_LANGUAGE', [])
         filter_genre = env_vars.get('FILTER_GENRES_EXCLUDE', [])
+        filter_region_provider = env_vars.get('FILTER_REGION_PROVIDER', None)
+        filter_streaming_services = env_vars.get('FILTER_STREAMING_SERVICES', [])
 
         # Overseer/Jellyseer client
         jellyseer_client = SeerClient(
@@ -64,7 +66,9 @@ class ContentAutomation:
             include_no_ratings,
             filter_release_year,
             filter_language,
-            filter_genre
+            filter_genre,
+            filter_region_provider,
+            filter_streaming_services
         )
 
         # Initialize media service handler (Jellyfin or Plex)

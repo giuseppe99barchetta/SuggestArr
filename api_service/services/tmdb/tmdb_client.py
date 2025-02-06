@@ -23,7 +23,10 @@ class TMDbClient:
     related to movies, TV shows, and external IDs.
     """
 
-    def __init__(self, api_key, search_size, tmdb_threshold, tmdb_min_votes, include_no_ratings, filter_release_year, filter_language, filter_genre):
+    def __init__(self, api_key, search_size, tmdb_threshold, tmdb_min_votes, 
+                include_no_ratings, filter_release_year, filter_language, filter_genre,
+                filter_region_provider, filter_streaming_services
+                ):
         """
         Initializes the TMDbClient with the provided API key.
         :param api_key: API key to authenticate requests to TMDb.
@@ -38,6 +41,8 @@ class TMDbClient:
         self.release_year_filter = filter_release_year
         self.genre_filter = filter_genre
         self.pages = (self.search_size + CONTENT_PER_PAGE - 1) // CONTENT_PER_PAGE
+        self.region_provider = filter_region_provider
+        self.excluded_streaming_services = filter_streaming_services
         self.tmdb_api_url = "https://api.themoviedb.org/3"
 
     async def _fetch_recommendations(self, content_id, content_type):
@@ -225,3 +230,41 @@ class TMDbClient:
             self.logger.error("An error occurred while converting TVDb ID: %s", str(e))
 
         return None
+    
+    async def get_watch_providers(self, content_id, content_type):
+        """
+        Retrieves the streaming providers for a specific movie or TV show.
+
+        :param content_id: The TMDb ID of the movie or TV show.
+        :param content_type: The type of content ('movie' or 'tv').
+        :return: A tuple (is_excluded, provider_name), where:
+                 - is_excluded: True if the content is in an excluded streaming service, False otherwise.
+                 - provider_name: The name of the excluded streaming provider, or None if not excluded.
+        """
+        # Check if region_provider and excluded_streaming_services are set
+        if not self.region_provider or not self.excluded_streaming_services:
+            self.logger.debug("Skipping watch providers check: region_provider or excluded_streaming_services not set.")
+            return False, None
+        
+        url = f"{self.tmdb_api_url}/{content_type}/{content_id}/watch/providers?api_key={self.api_key}"
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status in HTTP_OK:
+                        data = await response.json()
+                        if "results" in data and self.region_provider in data["results"]:
+                            providers = data["results"][self.region_provider]['flatrate']
+                            for provider in providers:
+                                if any(provider['provider_id'] == excluded['provider_id'] for excluded in self.excluded_streaming_services):
+                                    return True, provider['provider_name']
+                        else:
+                            self.logger.debug("No watch providers found for content ID %s in region %s.", content_id, self.region_provider)
+                            return False, None
+                    else:
+                        self.logger.error("Failed to retrieve watch providers for content ID %s: %d", content_id, response.status)
+        except aiohttp.ClientError as e:
+            self.logger.error("An error occurred while fetching watch providers: %s", str(e))
+
+        return False, None
+
