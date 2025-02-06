@@ -136,6 +136,7 @@ export default {
       try {
         await axios.post('/api/config/save', this.config);
         this.currentStep = this.steps.length + 1;
+        window.location.href = this.config.SUBPATH || '/';
       } catch (error) {
         console.error('Error saving configuration:', error);
       }
