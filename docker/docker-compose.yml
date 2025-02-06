@@ -7,3 +7,6 @@ services:
       - "5000:5000"
     volumes:
       - ./config_files:/app/config/config_files
+    environment:
+      - PUID=1000 # Replace with your user id or keep it as is
+      - PGID=1000 # Replace with your group id or keep it as is
