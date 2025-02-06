@@ -35,6 +35,8 @@ class TestConfig(unittest.TestCase):
         "SELECTED_SERVICE": "plex",
         "TMDB_API_KEY": "123abc",
         "SELECTED_USERS": ["1", "2"],
+        "FILTER_STREAMING_SERVICES": [{"provider_id": "8", "provider_name": "Netflix"}],
+        "FILTER_REGION_PROVIDER": "US",
     }
 
     def test_save_default_env_vars(self):

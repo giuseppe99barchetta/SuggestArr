@@ -10,7 +10,7 @@
         <input type="text" :value="config[`SEER_API_URL`]" 
             @focusout="updateSeerUrl($event.target.value)"
             class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2" 
-            :placeholder="`http://your-Overseer-or-Jellyfin-url`">
+            :placeholder="`http://your-overseer-or-jellySeer-url`">
 
         <!-- Overseer/Jellyseer API Key -->
         <label :for="`SEER_TOKEN`" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Overseer/Jellyseer API
@@ -19,7 +19,7 @@
             <input type="text" :value="config[`SEER_TOKEN`]"
                 @input="$emit('update-config', `SEER_TOKEN`, $event.target.value)"
                 class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2 mb-4 sm:mb-0 sm:mr-2"
-                :placeholder="`Enter your ${serviceName} API Key`">
+                :placeholder="`Enter your Overseer/Jellyseer API Key`">
             <button type="button" @click="testApi" :disabled="testState.isTesting" 
                 :class="{
                     'bg-green-500 hover:bg-green-600': testState.status === 'success',

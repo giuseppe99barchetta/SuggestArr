@@ -89,7 +89,7 @@ class PlexHandler:
                 self.logger.warning(f"Error while processing item: 'tmdb_id' not found for tv show '{title}'. Skipping.")
 
     async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj):
-        """Request similar media (movie/TV show) via Jellyseer."""
+        """Request similar media (movie/TV show) via Overseer."""
         if not media_ids:
             self.logger.info("No media IDs provided for similar media request.")
             return
@@ -99,14 +99,24 @@ class PlexHandler:
             media_id = media['id']
             media_title = media['title']
 
-            # Check if already download or requested
+            # Check if already downloaded, requested, or in an excluded streaming service
             already_requested = await self.jellyseer_client.check_already_requested(media_id, media_type)
+            if already_requested:
+                self.logger.info(f"Skipping [{media_type}, {media_title}]: already requested.")
+                continue
+            
             already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content)
-
-            if not already_requested and not already_downloaded:
-                tasks.append(self._request_media_and_log(media_type, media, source_tmdb_obj))
-            else:
-                self.logger.info(f"Skipping [{media_type}, {media_title}]: already requested or downloaded.")
+            if already_downloaded:
+                self.logger.info(f"Skipping [{media_type}, {media_title}]: already downloaded.")
+                continue
+            
+            in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
+            if in_excluded_streaming_service:
+                self.logger.info(f"Skipping [{media_type}, {media_title}]: excluded by streaming service: {provider}")
+                continue
+            
+            # Add to tasks if it passes all checks
+            tasks.append(self._request_media_and_log(media_type, media, source_tmdb_obj))
 
         await asyncio.gather(*tasks)
 
