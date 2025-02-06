@@ -21,8 +21,8 @@ RUN apt-get update && \
 WORKDIR /app/api_service
 
 # Use environment variables for PUID and PGID
-ARG PUID
-ARG PGID
+ARG PUID=1000
+ARG PGID=1000
 
 # Create a group and user with the specified PUID and PGID
 RUN groupadd -g ${PGID} appgroup && \
