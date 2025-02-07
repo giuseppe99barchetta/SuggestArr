@@ -7,19 +7,3 @@ services:
       - "5000:5000"
     volumes:
       - ./config_files:/app/config/config_files
-
-## if you want to run the container with custom user/group
-#services:
-#  suggestarr:
-#    build:
-#      context: .
-#      dockerfile: docker/Dockerfile
-#      args:
-#        PUID: 1000 # Replace with user id of the user you want to run the container as
-#        PGID: 1000 # Replace with group id of the group you want to run the container as
-#    container_name: SuggestArr-Custom
-#    restart: always
-#    ports:
-#      - "5000:5000"
-#    volumes:
-#      - ./config_files:/app/config/config_files

@@ -20,14 +20,6 @@ RUN apt-get update && \
 # Set the working directory for the api_service
 WORKDIR /app/api_service
 
-# Use environment variables for PUID and PGID
-ARG PUID=1000
-ARG PGID=1000
-
-# Create a group and user with the specified PUID and PGID
-RUN groupadd -g ${PGID} appgroup && \
-    useradd -u ${PUID} -g appgroup -m appuser
-
 # Copy and install Python dependencies
 COPY api_service/requirements.txt /app/api_service/
 RUN pip install --no-cache-dir -r requirements.txt
