@@ -43,7 +43,6 @@ import AdditionalSettings from './configWizard/AdditionalSettings.vue';
 import PlexConfig from './configWizard/PlexConfig.vue';
 import ConfigSummary from './ConfigSummary.vue';
 import ContentFilterSettings from './configWizard/ContentFilterSettings.vue';
-import { useToast } from 'vue-toast-notification';
 
 export default {
   components: {
@@ -134,42 +133,30 @@ export default {
       }
     },
     async saveConfig() {
-      const toast = useToast();
       try {
         await axios.post('/api/config/save', this.config);
 
         if (this.config.SUBPATH && this.config.SUBPATH !== window.location.pathname) {
-          toast.open({
+          console.log(this.config.SUBPATH, window.location.pathname)
+          this.$toast.open({
             message: 'Configuration saved successfully! You will be redirected in a few seconds...',
             type: 'success',
             duration: 3000,
             position: 'top-right',
           });
-        
-          setTimeout(() => {
-            window.location.href = this.config.SUBPATH;
-          }, 3000);
-        } else if (!this.config.SUBPATH && window.location.pathname !== '/') {
-          toast.open({
-            message: 'Configuration saved successfully! You will be redirected in a few seconds...',
-            type: 'success',
-            duration: 3000,
-            position: 'top-right',
-          });
-        
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 3000);
-        } else {
-          console.log('No redirection needed. You are already on the target page.');
         }
 
-        this.currentStep = this.steps.length + 1;
+        setTimeout(() => {
+          this.currentStep = this.steps.length + 1;
+          window.location.href = this.config.SUBPATH || '/';
+        }, 3000); // 3000ms = 3 secondi
+
       } catch (error) {
         this.$toast.open({
             message: 'Error saving configuration. Please try again!',
           type: 'error',
           duration: 5000,
+          position: 'top-right',
         });
         console.error('Error saving configuration:', error);
       }
