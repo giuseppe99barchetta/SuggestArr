@@ -1,9 +1,9 @@
 # Stage 1: Build the client
 FROM node:20 AS client-builder
 WORKDIR /app/client
-COPY client/package*.json ./
-RUN npm install
-COPY client/ .
+COPY client/package*.json ./ 
+RUN npm install --production && npm cache clean --force
+COPY client/ . 
 RUN npm run build
 
 # Stage 2: Create the final image
@@ -11,7 +11,7 @@ FROM python:3.13-slim AS prod
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y curl cron supervisor && \
+    apt-get install -y curl supervisor && \
     curl -sL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     apt-get clean && \
@@ -20,7 +20,7 @@ RUN apt-get update && \
 # Set the working directory for the api_service
 WORKDIR /app/api_service
 
-# Copy and install Python dependencies
+# Copy and install Python dependencies first (use cache efficiently)
 COPY api_service/requirements.txt /app/api_service/
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -33,20 +33,16 @@ COPY api_service/ /app/api_service/
 # Copy Supervisor configuration
 COPY ../config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Add and configure the cron job
-RUN echo "0 0 * * * curl -X POST http://localhost:5000/api/automation/force_run >> /var/log/cron.log 2>&1" > /etc/cron.d/automation-cron && \
-    chmod 0644 /etc/cron.d/automation-cron && \
-    crontab /etc/cron.d/automation-cron
-
-# Create log files for cron and Gunicorn
-RUN touch /var/log/cron.log /var/log/gunicorn.log /var/log/gunicorn_error.log
+# Create log files for Gunicorn
+RUN touch /var/log/gunicorn.log /var/log/gunicorn_error.log
 
 # Expose the port used by Gunicorn
 EXPOSE 5000
 
-# Start Supervisor to manage Gunicorn and cron
+# Start Supervisor to manage Gunicorn
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
+# Dev stage
 FROM prod AS dev
 RUN pip install --no-cache-dir -r requirements.dev.txt
 RUN python -m pytest .

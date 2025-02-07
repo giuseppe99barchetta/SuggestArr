@@ -4,6 +4,7 @@ import platform
 import yaml
 from croniter import croniter
 from api_service.config.logger_manager import LoggerManager
+from api_service.config.cron_jobs import start_cron_job
 
 logger = LoggerManager().get_logger(__name__)
 
@@ -146,8 +147,10 @@ def save_env_vars(config_data):
     load_env_vars()
 
     # Update cron job if on Linux
-    if platform.system() == 'Linux':
-        update_cron_job(cron_times)
+    #if platform.system() == 'Linux':
+    #    update_cron_job(cron_times)
+        
+    start_cron_job(env_vars)
 
 
 def clear_env_vars():

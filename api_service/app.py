@@ -11,6 +11,7 @@ import atexit
 
 from api_service.utils.utils import AppUtils
 from api_service.config.logger_manager import LoggerManager
+from api_service.config.config import load_env_vars
 
 from api_service.blueprints.jellyfin.routes import jellyfin_bp
 from api_service.blueprints.seer.routes import seer_bp
@@ -69,6 +70,10 @@ def register_routes(app): # pylint: disable=redefined-outer-name
 
 app = create_app()
 asgi_app = WsgiToAsgi(app)
+env_vars = load_env_vars()
+if env_vars.get('CRON_TIMES'):
+    from api_service.config.cron_jobs import start_cron_job
+    start_cron_job(env_vars)
 
 def close_log_handlers():
     for handler in logging.root.handlers[:]:
