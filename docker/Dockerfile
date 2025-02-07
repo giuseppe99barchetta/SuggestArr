@@ -44,9 +44,6 @@ RUN touch /var/log/cron.log /var/log/gunicorn.log /var/log/gunicorn_error.log
 # Expose the port used by Gunicorn
 EXPOSE 5000
 
-# Switch to the created user
-USER appuser
-
 # Start Supervisor to manage Gunicorn and cron
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
