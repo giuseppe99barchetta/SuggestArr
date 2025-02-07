@@ -24,3 +24,4 @@ const options = {
 };
 
 app.use(ToastPlugin, options);
+app.mount('#app');
