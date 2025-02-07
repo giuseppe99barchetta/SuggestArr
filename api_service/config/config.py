@@ -42,6 +42,12 @@ ENV_VARS = {
     'FILTER_REGION_PROVIDER': 'FILTER_REGION_PROVIDER',
     'FILTER_STREAMING_SERVICES': 'FILTER_STREAMING_SERVICES',
     'SUBPATH': 'SUBPATH',
+    'DB_TYPE': 'DB_TYPE',
+    'DB_HOST': 'DB_HOST',
+    'DB_PORT': 'DB_PORT',
+    'DB_USER': 'DB_USER',
+    'DB_PASSWORD': 'DB_PASSWORD',
+    'DB_NAME': 'DB_NAME',
 }
 
 def load_env_vars():
@@ -92,6 +98,12 @@ def get_default_values():
         ENV_VARS['FILTER_STREAMING_SERVICES']: lambda: [],
         ENV_VARS['FILTER_REGION_PROVIDER']: lambda: None,
         ENV_VARS['SUBPATH']: lambda: None,
+        ENV_VARS['DB_TYPE']: lambda: 'sqlite',
+        ENV_VARS['DB_HOST']: lambda: None,
+        ENV_VARS['DB_PORT']: lambda: None,
+        ENV_VARS['DB_USER']: lambda: None,
+        ENV_VARS['DB_PASSWORD']: lambda: None,
+        ENV_VARS['DB_NAME']: lambda: None,
     }
 
 

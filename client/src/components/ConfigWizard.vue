@@ -43,6 +43,7 @@ import AdditionalSettings from './configWizard/AdditionalSettings.vue';
 import PlexConfig from './configWizard/PlexConfig.vue';
 import ConfigSummary from './ConfigSummary.vue';
 import ContentFilterSettings from './configWizard/ContentFilterSettings.vue';
+import DbConfig from './configWizard/DbConfig.vue';
 
 export default {
   components: {
@@ -55,6 +56,7 @@ export default {
     MediaServiceSelection,
     PlexConfig,
     ContentFilterSettings,
+    DbConfig
   },
   data() {
     return {
@@ -72,9 +74,9 @@ export default {
     },
     steps() {
       const serviceSteps = {
-        jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'ContentFilterSettings', 'AdditionalSettings'],
-        plex: ['MediaServiceSelection', 'TmdbConfig', 'PlexConfig', 'SeerConfig', 'ContentFilterSettings', 'AdditionalSettings'],
-        emby: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'ContentFilterSettings', 'AdditionalSettings'],
+        jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
+        plex: ['MediaServiceSelection', 'TmdbConfig', 'PlexConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
+        emby: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
       };
       return serviceSteps[this.config.SELECTED_SERVICE || 'jellyfin'];
     },
@@ -117,6 +119,7 @@ export default {
         PLEX_TOKEN: '',
         PLEX_LIBRARIES: [],
         SEER_SESSION_TOKEN: '',
+        SUBPATH: '',
       };
     },
     async fetchConfig() {

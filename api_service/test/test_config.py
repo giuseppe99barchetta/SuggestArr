@@ -38,6 +38,7 @@ class TestConfig(unittest.TestCase):
         "FILTER_STREAMING_SERVICES": [{"provider_id": "8", "provider_name": "Netflix"}],
         "FILTER_REGION_PROVIDER": "US",
         "SUBPATH": "/suggestarr",
+        "DB_TYPE": "sqlite",
     }
 
     def test_save_default_env_vars(self):
