@@ -50,7 +50,7 @@ def load_env_vars():
     """
     if not os.path.exists(CONFIG_PATH):
         logger.warning(f"{CONFIG_PATH} not found. Creating a new one with default values.")
-        return get_default_values()
+        return get_config_values()
 
     with open(CONFIG_PATH, 'r', encoding='utf-8') as file:
         config_data = yaml.safe_load(file)
@@ -94,6 +94,14 @@ def get_default_values():
         ENV_VARS['SUBPATH']: lambda: None,
     }
 
+
+def get_config_values():
+    """
+    Executes the lambdas and returns the actual values for JSON serialization.
+    """
+    default_values = get_default_values()
+    resolved_values = {key: value() if callable(value) else value for key, value in default_values.items()}
+    return resolved_values
 
 def save_env_vars(config_data):
     """

@@ -148,7 +148,7 @@ export default {
 
         setTimeout(() => {
           this.currentStep = this.steps.length + 1;
-          window.location.href = this.config.SUBPATH || '/';
+          window.location.href = '/';
         }, 3000); // 3000ms = 3 secondi
 
       } catch (error) {
