@@ -136,7 +136,7 @@ export default {
       try {
         await axios.post('/api/config/save', this.config);
 
-        if (this.config.SUBPATH && this.config.SUBPATH !== window.location.pathname) {
+        if (this.config.SUBPATH && this.config.SUBPATH !== window.location.pathname || (window.location.pathname !== '/' && !this.config.SUBPATH)) {
           console.log(this.config.SUBPATH, window.location.pathname)
           this.$toast.open({
             message: 'Configuration saved successfully! You will be redirected in a few seconds...',
@@ -144,12 +144,15 @@ export default {
             duration: 3000,
             position: 'top-right',
           });
+
+          setTimeout(() => {
+            this.currentStep = this.steps.length + 1;
+            window.location.href = '/';
+          }, 3000);
+        } else {
+          this.currentStep = this.steps.length + 1;
         }
 
-        setTimeout(() => {
-          this.currentStep = this.steps.length + 1;
-          window.location.href = '/';
-        }, 3000); // 3000ms = 3 secondi
 
       } catch (error) {
         this.$toast.open({
