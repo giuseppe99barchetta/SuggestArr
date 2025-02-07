@@ -39,6 +39,11 @@ class TestConfig(unittest.TestCase):
         "FILTER_REGION_PROVIDER": "US",
         "SUBPATH": "/suggestarr",
         "DB_TYPE": "sqlite",
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_USER": "postgres",
+        "DB_PASS": "password",
+        "DB_NAME": "suggestarr",
     }
 
     def test_save_default_env_vars(self):

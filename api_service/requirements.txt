@@ -52,3 +52,5 @@ Werkzeug==3.0.4
 xmltodict==0.14.2
 yarl==1.16.0
 concurrent_log_handler==0.9.25
+mysql-connector-python==9.2.0
+psycopg2==2.9.10
