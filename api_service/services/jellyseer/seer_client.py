@@ -27,9 +27,6 @@ class SeerClient:
         self._login_lock = asyncio.Lock()
         self.number_of_seasons = number_of_seasons
         
-        # Initialize database manager
-        self.db_manager = DatabaseManager()
-        
     async def init(self):
         """
         Asynchronous initialization method to fetch all requests.
@@ -121,7 +118,7 @@ class SeerClient:
             data = await self._make_request("GET", f"api/v1/request?take={BATCH_SIZE}&skip={skip}")
             if data:
                 requests = data.get('results', [])
-                self.db_manager.save_requests_batch(requests)
+                DatabaseManager().save_requests_batch(requests)
         except Exception as e:
             self.logger.error(f"Failed to fetch batch at skip {skip}: {e}")
 
@@ -139,13 +136,14 @@ class SeerClient:
 
         response = await self._make_request("POST", "api/v1/request", data=data, use_cookie=bool(self.session_token))
         if response and 'error' not in response:
-            self.db_manager.save_request(media_type, media['id'], source['id'])
-            self.db_manager.save_metadata(source, media_type)
-            self.db_manager.save_metadata(media, media_type)
+            databaseManager = DatabaseManager()
+            databaseManager.save_request(media_type, media['id'], source['id'])
+            databaseManager.save_metadata(source, media_type)
+            databaseManager.save_metadata(media, media_type)
             
     async def check_already_requested(self, tmdb_id, media_type):
         """Check if a media request is cached in the current cycle."""
-        return self.db_manager.check_request_exists(media_type, tmdb_id)
+        return DatabaseManager().check_request_exists(media_type, tmdb_id)
 
     async def check_already_downloaded(self, tmdb_id, media_type, local_content={}):
         """Check if a media item has already been downloaded based on local content."""
@@ -153,4 +151,4 @@ class SeerClient:
 
     async def get_metadata(self, media_id, media_type):
         """Retrieve metadata for a specific media item."""
-        return self.db_manager.get_metadata(media_id, media_type)
+        return DatabaseManager().get_metadata(media_id, media_type)

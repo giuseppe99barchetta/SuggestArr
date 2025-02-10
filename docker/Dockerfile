@@ -40,6 +40,7 @@ RUN touch /var/log/gunicorn.log /var/log/gunicorn_error.log
 EXPOSE 5000
 
 # Start Supervisor to manage Gunicorn
+ENV LOG_LEVEL=info
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
 # Dev stage

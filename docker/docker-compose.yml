@@ -7,3 +7,5 @@ services:
       - "5000:5000"
     volumes:
       - ./config_files:/app/config/config_files
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}

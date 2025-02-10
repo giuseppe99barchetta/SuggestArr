@@ -78,8 +78,15 @@ class DatabaseManager:
             )
         """
         
-        self.execute_query(query_requests, commit=True)
-        self.execute_query(query_metadata, commit=True)
+        if self.execute_query(query_requests, commit=True):
+            self.logger.debug("Requests table created successfully.")
+        else:
+            self.logger.debug("Requests table already exists.")
+
+        if self.execute_query(query_metadata, commit=True):
+            self.logger.debug("Metadata table created successfully.")
+        else:
+            self.logger.debug("Metadata table already exists.")
             
     def ensure_connection(self):
         """Check and reopen the database connection if necessary."""
@@ -280,6 +287,10 @@ class DatabaseManager:
                 # Commit if specified
                 if commit:
                     conn.commit()
+                    
+                # Check if the query is a CREATE TABLE statement and return True if the table was created successfully
+                if 'CREATE TABLE' in query.upper():
+                    return cursor.rowcount != -1
 
                 if 'select' in query.lower():
                     return cursor.fetchall()  # For SELECT queries

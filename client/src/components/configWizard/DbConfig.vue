@@ -13,56 +13,62 @@
             <option value="mysql">MySQL/MariaDB</option>
         </select>
 
-        <!-- Host -->
-        <label v-if="config.DB_TYPE !== 'sqlite'" for="DB_HOST" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Host:</label>
-        <p v-if="config.DB_TYPE !== 'sqlite'" class="text-xs sm:text-sm text-gray-400 mb-2">Enter the database host address</p>
-        <input v-if="config.DB_TYPE !== 'sqlite'" type="text" :value="config.DB_HOST"
-               @input="handleUpdate('DB_HOST', $event.target.value)"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-               id="DB_HOST" placeholder="localhost">
+        <div v-if="config.DB_TYPE !== 'sqlite'">
+            <!-- Host -->
+            <label for="DB_HOST" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Host:</label>
+            <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the database host address</p>
+            <input type="text" :value="config.DB_HOST"
+                   @input="handleUpdate('DB_HOST', $event.target.value)"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+                   id="DB_HOST" placeholder="localhost">
 
-        <!-- Port -->
-        <label v-if="config.DB_TYPE !== 'sqlite'" for="DB_PORT" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Port:</label>
-        <p v-if="config.DB_TYPE !== 'sqlite'" class="text-xs sm:text-sm text-gray-400 mb-2">Enter the port number for the database. Default for PostgreSQL is 5432, MySQL/MariaDB is 3306.</p>
-        <input v-if="config.DB_TYPE !== 'sqlite'" type="number" :value="config.DB_PORT"
-               @input="handleUpdate('DB_PORT', $event.target.value)"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-               id="DB_PORT" placeholder="5432">
+            <!-- Port -->
+            <label for="DB_PORT" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Port:</label>
+            <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the port number for the database. Default for PostgreSQL is 5432, MySQL/MariaDB is 3306.</p>
+            <input type="number" :value="config.DB_PORT"
+                   @input="handleUpdate('DB_PORT', $event.target.value)"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+                   id="DB_PORT" placeholder="5432">
 
-        <!-- User -->
-        <label v-if="config.DB_TYPE !== 'sqlite'" for="DB_USER" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database User:</label>
-        <p v-if="config.DB_TYPE !== 'sqlite'" class="text-xs sm:text-sm text-gray-400 mb-2">Enter the username used to connect to your database.</p>
-        <input v-if="config.DB_TYPE !== 'sqlite'" type="text" :value="config.DB_USER"
-               @input="handleUpdate('DB_USER', $event.target.value)"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-               id="DB_USER" placeholder="root">
+            <!-- User -->
+            <label for="DB_USER" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database User:</label>
+            <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the username used to connect to your database.</p>
+            <input type="text" :value="config.DB_USER"
+                   @input="handleUpdate('DB_USER', $event.target.value)"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+                   id="DB_USER" placeholder="root">
 
-        <!-- Password -->
-        <label v-if="config.DB_TYPE !== 'sqlite'" for="DB_PASSWORD" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Password:</label>
-        <p v-if="config.DB_TYPE !== 'sqlite'" class="text-xs sm:text-sm text-gray-400 mb-2">Enter the password for your database user.</p>
-        <input v-if="config.DB_TYPE !== 'sqlite'" type="password" :value="config.DB_PASSWORD"
-               @input="handleUpdate('DB_PASSWORD', $event.target.value)"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-               id="DB_PASSWORD" placeholder="password">
+            <!-- Password -->
+            <label for="DB_PASSWORD" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Password:</label>
+            <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the password for your database user.</p>
+            <input type="password" :value="config.DB_PASSWORD"
+                   @input="handleUpdate('DB_PASSWORD', $event.target.value)"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+                   id="DB_PASSWORD" placeholder="password">
 
-        <!-- Database Name -->
-        <label v-if="config.DB_TYPE !== 'sqlite'" for="DB_NAME" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Name:</label>
-        <p v-if="config.DB_TYPE !== 'sqlite'" class="text-xs sm:text-sm text-gray-400 mb-2">Enter the name of the database you wish to connect to.</p>
-        <input v-if="config.DB_TYPE !== 'sqlite'" type="text" :value="config.DB_NAME"
-               @input="handleUpdate('DB_NAME', $event.target.value)"
-               class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-               id="DB_NAME" placeholder="suggestarr">
+            <!-- Database Name -->
+            <label for="DB_NAME" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Name:</label>
+            <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the name of the database you wish to connect to.</p>
+            <p class="text-xs sm:text-sm font-bold text-yellow-400 mb-2">
+                <strong>Important:</strong> The database must be created before connecting.
+            </p>
+            <input type="text" :value="config.DB_NAME"
+                   @input="handleUpdate('DB_NAME', $event.target.value)"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+                   id="DB_NAME" placeholder="suggestarr">
 
-        <!-- Error Message -->
-        <p class="text-xs sm:text-sm text-red-500 mt-2" v-if="dbError">{{ dbError }}</p>
-        <p class="text-xs sm:text-sm text-green-500 mt-2" v-if="dbSuccess">{{ dbSuccess }}</p>
+            <!-- Error Message -->
+            <p class="text-xs sm:text-sm text-red-500 mt-2" v-if="dbError">{{ dbError }}</p>
+            <p class="text-xs sm:text-sm text-green-500 mt-2" v-if="dbSuccess">{{ dbSuccess }}</p>
 
-        <!-- Test Connection Button -->
-        <div v-if="config.DB_TYPE !== 'sqlite'" class="flex justify-between mt-4">
-            <button @click="testConnection" 
-                    class="bg-green-600 hover:bg-green-500 text-white font-bold py-4 px-8 rounded-lg w-full">
-                    {{ buttonText }}
-            </button>
+            <!-- Test Connection Button -->
+            <div class="flex justify-between mt-4">
+                <button @click="testConnection" 
+                        class="bg-green-600 hover:bg-green-500 text-white font-bold py-4 px-8 rounded-lg w-full">
+                        {{ buttonText }}
+                </button>
+            </div>
+
         </div>
 
         <div class="flex justify-between mt-8 space-x-4">
