@@ -10,9 +10,6 @@
 ![Platform Support](https://img.shields.io/badge/platforms-linux%2Famd64%20|%20linux%2Farm64-blue?logo=linux)
 ![Docker Pulls](https://img.shields.io/docker/pulls/ciuse99/suggestarr?label=Docker%20Pulls&logo=docker)
 
-[![GitHub Discussions](https://img.shields.io/badge/Community-GitHub%20Discussions-blue?logo=github)](https://github.com/giuseppe99barchetta/suggestarr/discussions)
-![GitHub Stars](https://img.shields.io/github/stars/giuseppe99barchetta/suggestarr?label=Stars&logo=github)
-![Contributors](https://img.shields.io/github/contributors/giuseppe99barchetta/suggestarr?label=Contributors&logo=github)
 [![Buy Me a Coffee](https://img.shields.io/badge/Donate-Buy%20Me%20a%20Coffee-orange?logo=buy-me-a-coffee)](https://buymeacoffee.com/suggestarr)
 [![Reddit Upvotes](https://img.shields.io/badge/Reddit-Upvotes-ff4500?logo=reddit)](https://www.reddit.com/r/selfhosted/comments/1gb4swg/release_major_update_for_suggestarr_now/)
 ![Last Commit](https://img.shields.io/github/last-commit/giuseppe99barchetta/suggestarr?label=Last%20Commit&logo=github)
@@ -30,12 +27,15 @@ SuggestArr is a project designed to automate media content recommendations and d
 - **User Selection**: Choose specific users to initiate requests, allowing management and approval of auto-requested content.
 - **Cron Job Management**: Update the cron job schedule directly from the web interface.
 - **Configuration Pre-testing**: Automatically validates API keys and URLs during setup.
+- **Content Filtering**: Exclude requests for content already available on streaming platforms in your country.
+- **External Database Support**: Use external databases (PostgreSQL, MySQL) in addition to SQLite for improved scalability and performance.
 
 ## Prerequisites
 - **Python 3.x** or **Docker**
 - **[TMDb API Key](https://www.themoviedb.org/documentation/api)**
 - Configured **[Jellyfin](https://jellyfin.org/)**, **[Plex](https://www.plex.tv/)**, or **[Emby](https://emby.media/)**
 - Configured **[Jellyseer](https://github.com/Fallenbagel/jellyseerr)** or **[Overseer](https://github.com/sct/overseerr)**
+- (Optional) External database (PostgreSQL or MySQL) for improved performance
 
 ## Docker Usage
 
@@ -77,22 +77,7 @@ If you'd like to use a specific Jellyseer user to make media requests, follow th
 Note: Currently, only local Jellyseer users are supported.
 
 ## Running Without Docker
-You can also run the project locally by installing the dependencies and setting the environment variables.
-
-### Steps:
-1. Install Python dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-2. Run the project:
-
-```bash
-python app.py
-```
-
-3. Access to the web interface
-The web interface will be available at: [http://localhost:5000](http://localhost:5000).
+For detailed instructions on setting up SuggestArr withouth Docker or as a system service, please refer to our [Installation Guide](https://github.com/giuseppe99barchetta/SuggestArr/wiki/Installation#documentation-to-run-the-project-without-docker).
 
 ## Contribute
 Contributions are highly welcome! Feel free to open issues, submit pull requests, or provide any feedback that can improve the project. Whether you're fixing bugs, improving documentation, or adding new features, all contributions are greatly appreciated.
