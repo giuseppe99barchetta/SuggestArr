@@ -51,21 +51,21 @@ def test_db_connection():
     Test database connection.
     """
     try:
-        # Estrai i dati della configurazione del DB dalla richiesta
+        # Extract DB configuration data from the request
         db_config = request.json
 
-        # Verifica se i dati necessari sono stati forniti
+        # Check if the necessary data has been provided
         required_keys = ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME']
         if any(key not in db_config for key in required_keys):
             return jsonify({'message': 'Missing required database configuration parameters.', 'status': 'error'}), 400
 
-        # Crea un'istanza del DatabaseManager
+        # Create an instance of the DatabaseManager
         db_manager = DatabaseManager()
 
-        # Chiamata al metodo di test della connessione
+        # Call the connection test method
         result = db_manager.test_connection(db_config)
 
-        # Risponde con il risultato del test
+        # Respond with the test result
         return jsonify(result), 200 if result['status'] == 'success' else 500
 
     except Exception as e:

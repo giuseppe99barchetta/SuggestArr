@@ -1,10 +1,12 @@
 import os
+import re
 import sqlite3
 import psycopg2
 import mysql.connector
 
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
+from api_service.exceptions.database_exceptions import DatabaseError
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 DB_PATH = os.path.join(BASE_DIR, 'config', 'config_files', 'requests.db')
@@ -47,49 +49,48 @@ class DatabaseManager:
 
     def _initialize_db(self):
         """Initialize the SQLite database and create the requests table if it doesn't exist."""
-        with self.db_connection as conn:
             
-            query_requests ="""
-                CREATE TABLE IF NOT EXISTS requests (
-                    tmdb_request_id TEXT NOT NULL PRIMARY KEY,
-                    media_type TEXT NOT NULL,
-                    tmdb_source_id TEXT,
-                    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    requested_by TEXT,
-                    UNIQUE(media_type, tmdb_request_id, tmdb_source_id)
-                )
-            """            
-            query_metadata = """
-                CREATE TABLE IF NOT EXISTS metadata (
-                    media_id TEXT PRIMARY KEY,
-                    media_type TEXT NOT NULL,
-                    title TEXT,
-                    overview TEXT,
-                    release_date TEXT,
-                    poster_path TEXT,
-                    rating REAL,
-                    votes INTEGER,
-                    origin_country TEXT,
-                    genre_ids TEXT,
-                    logo_path TEXT,
-                    backdrop_path TEXT,
-                    UNIQUE(media_id, media_type)
-                )
-            """
-            
-            self.execute_query(query_requests, commit=True)
-            self.execute_query(query_metadata, commit=True)
+        query_requests ="""
+            CREATE TABLE IF NOT EXISTS requests (
+                tmdb_request_id TEXT NOT NULL PRIMARY KEY,
+                media_type TEXT NOT NULL,
+                tmdb_source_id TEXT,
+                requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                requested_by TEXT,
+                UNIQUE(media_type, tmdb_request_id, tmdb_source_id)
+            )
+        """            
+        query_metadata = """
+            CREATE TABLE IF NOT EXISTS metadata (
+                media_id TEXT PRIMARY KEY,
+                media_type TEXT NOT NULL,
+                title TEXT,
+                overview TEXT,
+                release_date TEXT,
+                poster_path TEXT,
+                rating REAL,
+                votes INTEGER,
+                origin_country TEXT,
+                genre_ids TEXT,
+                logo_path TEXT,
+                backdrop_path TEXT,
+                UNIQUE(media_id, media_type)
+            )
+        """
+        
+        self.execute_query(query_requests, commit=True)
+        self.execute_query(query_metadata, commit=True)
             
     def ensure_connection(self):
         """Check and reopen the database connection if necessary."""
-        if self.db_type != 'sqlite' and not self.db_connection.is_connected():
+        if self.db_type == 'mysql' and not self.db_connection.is_connected():
             self.logger.debug("Re-opening the database connection...")
             self.db_connection = self._initialize_db_connection()
         
     def save_request(self, media_type, media_id, source):
         """Save a new media request to the database, ignoring duplicates."""
         query = """
-            INSERT INTO requests (media_type, tmdb_request_id, tmdb_source_id, requested_by)
+            INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, tmdb_source_id, requested_by)
             VALUES (?, ?, ?, ?)
         """
         params = (media_type, media_id, source, 'SuggestArr')
@@ -100,7 +101,7 @@ class DatabaseManager:
         query = """
             SELECT 1 FROM requests WHERE tmdb_request_id = ? AND media_type = ?
         """
-        params = (media_id, media_type)
+        params = (str(media_id), media_type)
         result = self.execute_query(query, params)
         return result is not None and len(result) > 0
         
@@ -119,7 +120,7 @@ class DatabaseManager:
         backdrop_path = media.get('backdrop_path', '')
 
         query = """
-            INSERT OR REPLACE INTO metadata (media_id, media_type, title, overview, release_date, 
+            INSERT OR IGNORE INTO metadata (media_id, media_type, title, overview, release_date, 
                                              poster_path, rating, votes, origin_country, genre_ids, logo_path, backdrop_path)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
@@ -151,7 +152,7 @@ class DatabaseManager:
             media_type = request['media']['mediaType']
             media_id = request['media']['tmdbId']
             query = """
-                INSERT INTO requests (media_type, tmdb_request_id, requested_by)
+                INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, requested_by)
                 VALUES (?, ?, ?)
             """
             params = (media_type, media_id, 'Seer')
@@ -249,19 +250,6 @@ class DatabaseManager:
             self.logger.error(f"Error testing database connection: {str(e)}")
             return {'status': 'error', 'message': f"Error testing database connection: {str(e)}"}
         
-    def handle_sql_error(self, error, db_type):
-        """Centralized error handling for SQL operations."""
-        if db_type == 'sqlite':
-            error_msg = f"SQLite error: {str(error)}"
-        elif db_type == 'postgres':
-            error_msg = f"PostgreSQL error: {str(error)}"
-        elif db_type in ['mysql', 'mariadb']:
-            error_msg = f"MySQL error: {str(error)}"
-        else:
-            error_msg = f"Unknown DB error: {str(error)}"
-
-        raise Exception(error_msg)
-    
     def execute_query(self, query, params=None, commit=False):
         """Execute a query on the database, handling different DB types."""
         self.ensure_connection()
@@ -277,12 +265,11 @@ class DatabaseManager:
                 cursor = conn.cursor()
 
                 if db_type == 'mysql':
-                    query = query.replace("INSERT", "INSERT IGNORE", 1)
+                    query = query.replace("INSERT OR IGNORE", "INSERT IGNORE", 1)
                     query = query.replace("?", "%s")
                     query = query.replace("TEXT", "VARCHAR(255)")
-                elif db_type == 'sqlite':
-                    query = query.replace("INSERT", "INSERT OR IGNORE", 1)
                 elif db_type == 'postgres':
+                    query = query.replace("INSERT OR IGNORE", "INSERT")
                     if "INSERT INTO" in query and "ON CONFLICT" not in query:
                         query = query.rstrip() + " ON CONFLICT DO NOTHING"
                     query = query.replace("?", "%s")  
@@ -294,8 +281,8 @@ class DatabaseManager:
                 if commit:
                     conn.commit()
 
-                return cursor.fetchall()  # For SELECT queries
+                if 'select' in query.lower():
+                    return cursor.fetchall()  # For SELECT queries
 
         except (sqlite3.Error, psycopg2.Error, mysql.connector.Error) as e:
-            self.handle_sql_error(f"Error executing query: {e}", db_type, query)
-            return None
+            raise DatabaseError(error=f"Error executing query. Details: {str(e)}", db_type=db_type)

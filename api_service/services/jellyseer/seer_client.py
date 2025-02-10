@@ -1,7 +1,6 @@
 import aiohttp
 import asyncio
 from api_service.config.logger_manager import LoggerManager
-from api_service.config.config import save_session_token
 from api_service.db.database_manager import DatabaseManager
 
 # Constants for HTTP status codes and request timeout
