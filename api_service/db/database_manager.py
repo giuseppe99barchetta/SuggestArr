@@ -7,17 +7,18 @@ import mysql.connector
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.database_exceptions import DatabaseError
-
+ 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 DB_PATH = os.path.join(BASE_DIR, 'config', 'config_files', 'requests.db')
-ENV_VARS = load_env_vars()
+
 class DatabaseManager:
     """Helper class for managing SQLite database interactions for media requests."""
     def __init__(self):
         """Initialize the connection based on the DB_TYPE."""
         self.logger = LoggerManager.get_logger(self.__class__.__name__) 
         self.db_path = DB_PATH
-        self.db_type = ENV_VARS.get('DB_TYPE', 'sqlite')
+        self.env_vars = load_env_vars()
+        self.db_type = self.env_vars.get('DB_TYPE', 'sqlite')
         self.db_connection = self._initialize_db_connection()
         
     def _initialize_db_connection(self):
@@ -25,28 +26,27 @@ class DatabaseManager:
 
         if self.db_type == 'postgres':
             return psycopg2.connect(
-                host=ENV_VARS['DB_HOST'],
-                port=ENV_VARS['DB_PORT'],
-                user=ENV_VARS['DB_USER'],
-                password=ENV_VARS['DB_PASSWORD'],
-                dbname=ENV_VARS['DB_NAME']
+                host=self.env_vars['DB_HOST'],
+                port=self.env_vars['DB_PORT'],
+                user=self.env_vars['DB_USER'],
+                password=self.env_vars['DB_PASSWORD'],
+                dbname=self.env_vars['DB_NAME']
             )
         elif self.db_type in ['mysql', 'mariadb']:
             return mysql.connector.connect(
-                host=ENV_VARS['DB_HOST'],
-                port=ENV_VARS['DB_PORT'],
-                user=ENV_VARS['DB_USER'],
-                password=ENV_VARS['DB_PASSWORD'],
-                database=ENV_VARS['DB_NAME']
+                host=self.env_vars['DB_HOST'],
+                port=self.env_vars['DB_PORT'],
+                user=self.env_vars['DB_USER'],
+                password=self.env_vars['DB_PASSWORD'],
+                database=self.env_vars['DB_NAME']
             )
         else:
             # Default to SQLite if DB_TYPE is not specified or is sqlite
             return sqlite3.connect(self.db_path)
 
-    def initialize_db(self, db_type):
+    def initialize_db(self):
         """Initialize the SQLite database and create the requests table if it doesn't exist."""
-        self.logger.info(f"Initializing {db_type} database.")
-        self.db_type = db_type
+        self.logger.info(f"Initializing {self.db_type} database.")
             
         query_requests ="""
             CREATE TABLE IF NOT EXISTS requests (

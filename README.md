@@ -53,6 +53,9 @@ services:
       - "5000:5000"
     volumes:
       - ./config_files:/app/config/config_files
+    environment:
+      # Optional: Only needed if something goes wrong and you need to inspect deeper
+      - LOG_LEVEL=${LOG_LEVEL:-info}
 ```
 To start the container with Docker Compose:
 
