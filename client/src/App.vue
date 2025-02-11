@@ -1,9 +1,8 @@
 <template>
   <div id="app">
-    <!-- The transition wrapper for routes -->
-    <transition name="fade" mode="out-in">
-      <router-view />
-    </transition>
+    <router-view v-slot="{ Component }">
+        <component :is="Component" />
+    </router-view>
   </div>
 </template>
 

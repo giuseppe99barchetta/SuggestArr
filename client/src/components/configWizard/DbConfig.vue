@@ -30,21 +30,23 @@
                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
                    id="DB_PORT" placeholder="5432">
 
-            <!-- User -->
-            <label for="DB_USER" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database User:</label>
-            <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the username used to connect to your database.</p>
-            <input type="text" :value="config.DB_USER"
-                   @input="handleUpdate('DB_USER', $event.target.value)"
-                   class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                   id="DB_USER" placeholder="root">
+            <form @submit.prevent="handleSubmit">
+                <!-- User -->
+                <label for="DB_USER" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database User:</label>
+                <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the username used to connect to your database.</p>
+                <input type="text" :value="config.DB_USER"
+                       @input="handleUpdate('DB_USER', $event.target.value)"
+                       class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+                       id="DB_USER" placeholder="root" autocomplete="username">
 
-            <!-- Password -->
-            <label for="DB_PASSWORD" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Password:</label>
-            <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the password for your database user.</p>
-            <input type="password" :value="config.DB_PASSWORD"
-                   @input="handleUpdate('DB_PASSWORD', $event.target.value)"
-                   class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                   id="DB_PASSWORD" placeholder="password">
+                <!-- Password -->
+                <label for="DB_PASSWORD" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Password:</label>
+                <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the password for your database user.</p>
+                <input type="password" :value="config.DB_PASSWORD"
+                       @input="handleUpdate('DB_PASSWORD', $event.target.value)"
+                       class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+                       id="DB_PASSWORD" placeholder="password"  autocomplete="new-password">
+            </form>
 
             <!-- Database Name -->
             <label for="DB_NAME" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Name:</label>
@@ -88,6 +90,7 @@ export default {
     data() {
         return {
             dbError: '',
+            dbSuccess: '',
             buttonText: 'Test Connection',
             isTestSuccessful: true,
         };
