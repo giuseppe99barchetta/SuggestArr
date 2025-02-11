@@ -35,7 +35,7 @@ class LoggerManager:
         :return: Configured logger instance.
         """
         logger = logging.getLogger(name)
-        log_level = os.getenv('LOG_LEVEL', 'error').upper()
+        log_level = os.getenv('LOG_LEVEL', 'info').upper()
         logger.setLevel(log_level)
 
         # Check if the logger already has handlers to avoid duplicate handlers

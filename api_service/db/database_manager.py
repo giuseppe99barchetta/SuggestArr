@@ -19,13 +19,11 @@ class DatabaseManager:
         self.db_path = DB_PATH
         self.db_type = ENV_VARS.get('DB_TYPE', 'sqlite')
         self.db_connection = self._initialize_db_connection()
-        self._initialize_db()
         
     def _initialize_db_connection(self):
         """Initialize the database connection based on the configured DB type."""
 
         if self.db_type == 'postgres':
-            self.logger.debug("Using PostgreSQL database.")
             return psycopg2.connect(
                 host=ENV_VARS['DB_HOST'],
                 port=ENV_VARS['DB_PORT'],
@@ -34,7 +32,6 @@ class DatabaseManager:
                 dbname=ENV_VARS['DB_NAME']
             )
         elif self.db_type in ['mysql', 'mariadb']:
-            self.logger.debug("Using MySQL database.")
             return mysql.connector.connect(
                 host=ENV_VARS['DB_HOST'],
                 port=ENV_VARS['DB_PORT'],
@@ -44,11 +41,11 @@ class DatabaseManager:
             )
         else:
             # Default to SQLite if DB_TYPE is not specified or is sqlite
-            self.logger.debug("Using SQLite database.")
             return sqlite3.connect(self.db_path)
 
-    def _initialize_db(self):
+    def initialize_db(self):
         """Initialize the SQLite database and create the requests table if it doesn't exist."""
+        self.logger.info(f"Initializing {self.db_type} database.")
             
         query_requests ="""
             CREATE TABLE IF NOT EXISTS requests (
@@ -79,14 +76,14 @@ class DatabaseManager:
         """
         
         if self.execute_query(query_requests, commit=True):
-            self.logger.debug("Requests table created successfully.")
+            self.logger.info("Requests table created successfully.")
         else:
-            self.logger.debug("Requests table already exists.")
+            self.logger.info("Requests table already exists. Skipping creation.")
 
         if self.execute_query(query_metadata, commit=True):
-            self.logger.debug("Metadata table created successfully.")
+            self.logger.info("Metadata table created successfully.")
         else:
-            self.logger.debug("Metadata table already exists.")
+            self.logger.info("Metadata table already exists. Skipping creation.")
             
     def ensure_connection(self):
         """Check and reopen the database connection if necessary."""
@@ -96,6 +93,8 @@ class DatabaseManager:
         
     def save_request(self, media_type, media_id, source):
         """Save a new media request to the database, ignoring duplicates."""
+        self.logger.debug(f"Saving request: {media_type} {media_id} from {source}")
+        
         query = """
             INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, tmdb_source_id, requested_by)
             VALUES (?, ?, ?, ?)
@@ -105,6 +104,8 @@ class DatabaseManager:
 
     def check_request_exists(self, media_type, media_id):
         """Check if a media request already exists in the database."""
+        self.logger.debug(f"Checking if request exists: {media_type} {media_id}")
+        
         query = """
             SELECT 1 FROM requests WHERE tmdb_request_id = ? AND media_type = ?
         """
@@ -114,6 +115,8 @@ class DatabaseManager:
         
     def save_metadata(self, media, media_type):
         """Save metadata for a media item."""
+        self.logger.debug(f"Saving metadata: {media_type} {media_id}")
+        
         media_id = media['id']
         title = media['title']
         overview = media.get('overview', '')
@@ -136,6 +139,8 @@ class DatabaseManager:
             
     def get_metadata(self, media_id, media_type):
         """Retrieve metadata for a media item if it exists in the database."""
+        self.logger.debug(f"Retrieving metadata: {media_type} {media_id}")
+        
         query = """
             SELECT title, overview, release_date, poster_path FROM metadata
             WHERE media_id = ? AND media_type = ?
@@ -155,6 +160,8 @@ class DatabaseManager:
 
     def save_requests_batch(self, requests):
         """Save a batch of media requests to the database."""
+        self.logger.debug(f"Saving batch of requests: {len(requests)} requests")
+
         for request in requests:
             media_type = request['media']['mediaType']
             media_id = request['media']['tmdbId']
@@ -167,6 +174,8 @@ class DatabaseManager:
             
     def get_all_requests_grouped_by_source(self, page=1, per_page=8):
         """Retrieve all requests grouped by source."""
+        self.logger.debug(f"Retrieving all requests grouped by source: page={page}, per_page={per_page}")
+        
         query = """
             SELECT 
                 s.media_id AS source_id, s.title AS source_title, s.overview AS source_overview, 
@@ -228,6 +237,8 @@ class DatabaseManager:
 
     def test_connection(self, db_config):
         """Test the database connection based on the provided db_config."""
+        self.logger.debug(f"Testing database connection with config: {db_config}")
+        
         try:
             db_type = db_config.get('DB_TYPE', 'sqlite')
 
@@ -265,17 +276,15 @@ class DatabaseManager:
         if params is None:
             params = ()
 
-        db_type = ENV_VARS.get('DB_TYPE', 'sqlite')
-
         try:
             with self.db_connection as conn:
                 cursor = conn.cursor()
 
-                if db_type == 'mysql':
+                if self.db_type == 'mysql':
                     query = query.replace("INSERT OR IGNORE", "INSERT IGNORE", 1)
                     query = query.replace("?", "%s")
                     query = query.replace("TEXT", "VARCHAR(255)")
-                elif db_type == 'postgres':
+                elif self.db_type == 'postgres':
                     query = query.replace("INSERT OR IGNORE", "INSERT")
                     if "INSERT INTO" in query and "ON CONFLICT" not in query:
                         query = query.rstrip() + " ON CONFLICT DO NOTHING"
@@ -296,4 +305,4 @@ class DatabaseManager:
                     return cursor.fetchall()  # For SELECT queries
 
         except (sqlite3.Error, psycopg2.Error, mysql.connector.Error) as e:
-            raise DatabaseError(error=f"Error executing query. Details: {str(e)}", db_type=db_type)
+            raise DatabaseError(error=f"Error executing query. Details: {str(e)}", db_type=self.db_type)
