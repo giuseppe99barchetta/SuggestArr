@@ -21,7 +21,7 @@ from api_service.blueprints.logs.routes import logs_bp
 from api_service.blueprints.config.routes import config_bp
 
 executor = ThreadPoolExecutor(max_workers=3)
-logger = LoggerManager().get_logger(__name__)
+logger = LoggerManager.get_logger("APP") 
 logger.info(f"Current log level: {logging.getLevelName(logger.getEffectiveLevel())}")
 
 # App Factory Pattern for modularity and testability

@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify
 from api_service.config.logger_manager import LoggerManager
 
-logger = LoggerManager().get_logger(__name__)
+logger = LoggerManager().get_logger("LogsRoute")
 logs_bp = Blueprint('logs', __name__)
 
 @logs_bp.route('/logs', methods=['GET'])

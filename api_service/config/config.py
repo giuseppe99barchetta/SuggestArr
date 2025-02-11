@@ -5,7 +5,7 @@ from croniter import croniter
 from api_service.config.logger_manager import LoggerManager
 from api_service.config.cron_jobs import start_cron_job
 
-logger = LoggerManager().get_logger(__name__)
+logger = LoggerManager().get_logger("Config")
 
 # Constants for environment variables
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))

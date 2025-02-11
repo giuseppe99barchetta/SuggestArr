@@ -3,7 +3,7 @@ from api_service.config.logger_manager import LoggerManager
 import requests
 
 # Logging configuration
-logger = LoggerManager().get_logger(__name__)
+logger = LoggerManager().get_logger("CronJobs")
 
 # Function to be executed periodically
 def force_run_job():

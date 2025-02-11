@@ -5,7 +5,7 @@ from api_service.config.config import load_env_vars, save_env_vars, clear_env_va
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 
-logger = LoggerManager().get_logger(__name__)
+logger = LoggerManager().get_logger("ConfigRoute")
 config_bp = Blueprint('config', __name__)
 
 @config_bp.route('/fetch', methods=['GET'])

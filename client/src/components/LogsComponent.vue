@@ -41,6 +41,9 @@
           </tr>
         </tbody>
       </table>
+      <div v-if="loadingMore" class="loading-spinner">
+            <font-awesome-icon icon="spinner" spin />
+      </div>
     </div>
   </div>
 </template>
@@ -48,7 +51,7 @@
 <script>
 import axios from 'axios';
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
-import { faPlay, faPause } from '@fortawesome/free-solid-svg-icons';
+import { faPlay, faPause, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { library } from '@fortawesome/fontawesome-svg-core';
 
 export default {
@@ -58,15 +61,20 @@ export default {
   data() {
     return {
       logs: [],
+      displayedLogs: [], 
       filterText: '',
       selectedSeverity: '',
       autoUpdate: true,
       updateInterval: null,
+      batchSize: 100,
+      loadingMore: false,
     };
   },
   computed: {
     filteredLogs() {
-      return this.logs.filter(log => {
+      const logsToFilter = this.filterText || this.selectedSeverity ? this.logs : this.displayedLogs;
+
+      return logsToFilter.filter(log => {
         const matchesText = log.message && log.message.toLowerCase().includes(this.filterText.toLowerCase());
         const matchesSeverity = this.selectedSeverity === '' || log.severity === this.selectedSeverity;
         return matchesText && matchesSeverity;
@@ -75,19 +83,48 @@ export default {
   },
   mounted() {
     this.startAutoUpdate();
+    const container = this.$el.querySelector('.logs-table-container');
+    container.addEventListener('scroll', this.handleScroll);
   },
   beforeUnmount() {
     this.stopAutoUpdate();
+    const container = this.$el.querySelector('.logs-table-container');
+    container.removeEventListener('scroll', this.handleScroll);
   },
   methods: {
     fetchLogs() {
       axios.get('/api/logs')
         .then(response => {
           this.logs = this.parseLogs(response.data).reverse();
+          this.displayedLogs = this.logs.slice(0, this.batchSize)
         })
         .catch(error => {
           console.error('Error fetching logs:', error);
         });
+    },
+    loadMoreLogs() {
+      const logsToLoadFrom = this.selectedSeverity || this.filterText ? this.filteredLogs : this.logs;
+      if (this.loadingMore || this.displayedLogs.length >= logsToLoadFrom.length) return;
+
+      this.loadingMore = true;
+      setTimeout(() => {
+        const nextBatch = this.logs.slice(
+          this.displayedLogs.length,
+          this.displayedLogs.length + this.batchSize
+        );
+        this.displayedLogs = [...this.displayedLogs, ...nextBatch];
+        this.loadingMore = false;
+      }, 500);
+    },
+    handleScroll() {
+      const container = this.$el.querySelector('.logs-table-container');
+      const scrollPosition = container.scrollTop + container.clientHeight;
+      const bottomPosition = container.scrollHeight;
+      const logsToLoadFrom = this.selectedSeverity || this.filterText ? this.filteredLogs : this.logs;
+
+      if (scrollPosition >= bottomPosition * 0.9 && this.displayedLogs.length < logsToLoadFrom.length) {
+        this.loadMoreLogs();
+      }
     },
     parseLogs(logData) {
       return logData.map(logLine => {
@@ -109,7 +146,6 @@ export default {
       this.updateInterval = setInterval(this.fetchLogs, 5000);
       this.autoUpdate = true;
     },
-    // Ferma l'auto-aggiornamento
     stopAutoUpdate() {
       if (this.updateInterval) {
         clearInterval(this.updateInterval);
@@ -126,7 +162,7 @@ export default {
     }
   },
   created() {
-    library.add(faPlay, faPause);
+    library.add(faPlay, faPause, faSpinner);
   }
 };
 </script>
@@ -274,4 +310,11 @@ export default {
   color: white;
   width: 30%;
 }
+
+.loading-spinner {
+  text-align: center;
+  margin: 10px 0;
+  color: #3b82f6;
+}
+
 </style>

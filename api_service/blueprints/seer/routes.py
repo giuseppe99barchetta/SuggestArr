@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.config.logger_manager import LoggerManager
 
-logger = LoggerManager().get_logger(__name__)
+logger = LoggerManager().get_logger("SeerRoute")
 seer_bp = Blueprint('seer', __name__)
 
 @seer_bp.route('/get_users', methods=['POST'])
