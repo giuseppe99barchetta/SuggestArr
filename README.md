@@ -13,7 +13,7 @@
 [![Buy Me a Coffee](https://img.shields.io/badge/Donate-Buy%20Me%20a%20Coffee-orange?logo=buy-me-a-coffee)](https://buymeacoffee.com/suggestarr)
 [![Reddit Upvotes](https://img.shields.io/badge/Reddit-Upvotes-ff4500?logo=reddit)](https://www.reddit.com/r/selfhosted/comments/1gb4swg/release_major_update_for_suggestarr_now/)
 ![Last Commit](https://img.shields.io/github/last-commit/giuseppe99barchetta/suggestarr?label=Last%20Commit&logo=github)
-
+[![](https://dcbadge.limes.pink/api/server/https://discord.gg/JXwFd3PnXY?style=flat)](https://discord.gg/JXwFd3PnXY)
 </div>
 
 SuggestArr is a project designed to automate media content recommendations and download requests based on user activity in media servers like **Jellyfin**, **Plex**, and now **Emby**. It retrieves recently watched content, searches for similar titles using the TMDb API, and sends automated download requests to **Jellyseer** or **Overseer**.
@@ -81,6 +81,9 @@ Note: Currently, only local Jellyseer users are supported.
 
 ## Running Without Docker
 For detailed instructions on setting up SuggestArr withouth Docker or as a system service, please refer to our [Installation Guide](https://github.com/giuseppe99barchetta/SuggestArr/wiki/Installation#documentation-to-run-the-project-without-docker).
+
+## Join Our Discord Community
+Feel free to join our Discord community to share ideas, ask questions, or get help with SuggestArr: [Join here](https://discord.gg/cpjBJ5sK).
 
 ## Contribute
 Contributions are highly welcome! Feel free to open issues, submit pull requests, or provide any feedback that can improve the project. Whether you're fixing bugs, improving documentation, or adding new features, all contributions are greatly appreciated.
