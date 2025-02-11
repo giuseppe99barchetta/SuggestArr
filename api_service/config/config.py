@@ -124,33 +124,36 @@ def save_env_vars(config_data):
     cron_times = config_data.get(ENV_VARS['CRON_TIMES'], '0 0 * * *')
 
     if not croniter.is_valid(cron_times):
+        logger.error("Invalid cron time provided.")
         raise ValueError("Invalid cron time provided.")
 
-    # Prepare environment variables to be saved
-    env_vars = {
-        key: value for key, value in {
-            key: config_data.get(key, default_value()) for key, default_value in get_default_values().items()
-        }.items() if value not in [None, '']
-    }
+    try:
+        # Prepare environment variables to be saved
+        env_vars = {
+            key: value for key, value in {
+                key: config_data.get(key, default_value()) for key, default_value in get_default_values().items()
+            }.items() if value not in [None, '']
+        }
 
-    # Create config.yaml file if it does not exist
-    if not os.path.exists(CONFIG_PATH):
-        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-        logger.info(f'Creating new file for config at {CONFIG_PATH}')
-        open(CONFIG_PATH, 'w').close()  # Create an empty file
+        # Create config.yaml file if it does not exist
+        if not os.path.exists(CONFIG_PATH):
+            os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+            logger.info(f'Creating new file for config at {CONFIG_PATH}')
+            open(CONFIG_PATH, 'w').close()  # Create an empty file
 
-    # Write environment variables to the config.yaml file
-    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-        yaml.safe_dump(env_vars, f)
+        # Write environment variables to the config.yaml file
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            yaml.safe_dump(env_vars, f)
 
-    # Reload environment variables after saving
-    load_env_vars()
-
-    # Update cron job if on Linux
-    #if platform.system() == 'Linux':
-    #    update_cron_job(cron_times)
+        # Reload environment variables after saving
+        load_env_vars()
         
-    start_cron_job(env_vars)
+        # Update the cron job
+        start_cron_job(env_vars)
+        
+    except Exception as e:
+        logger.error(f"Error saving environment variables: {e}")
+        raise
 
 
 def clear_env_vars():
