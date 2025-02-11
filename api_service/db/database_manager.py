@@ -43,9 +43,10 @@ class DatabaseManager:
             # Default to SQLite if DB_TYPE is not specified or is sqlite
             return sqlite3.connect(self.db_path)
 
-    def initialize_db(self):
+    def initialize_db(self, db_type):
         """Initialize the SQLite database and create the requests table if it doesn't exist."""
-        self.logger.info(f"Initializing {self.db_type} database.")
+        self.logger.info(f"Initializing {db_type} database.")
+        self.db_type = db_type
             
         query_requests ="""
             CREATE TABLE IF NOT EXISTS requests (
