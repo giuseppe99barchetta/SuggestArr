@@ -103,7 +103,7 @@
             <button @click="$emit('next-step')"
                 class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full"
                 :disabled="testState.status !== 'success'">
-                Next Step
+                Next
             </button>
         </div>
     </div>
@@ -166,6 +166,12 @@ export default {
                 })
                 .catch(() => {
                     this.authenticated = false;
+                    this.$toast.open({
+                        message: 'Incorrect User/Password!',
+                        pauseOnHover: true,
+                        duration:5000,
+                        type: 'error',
+                    })
                 })
                 .finally(() => {
                     this.isAuthenticating = false;
