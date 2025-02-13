@@ -44,15 +44,19 @@ class TMDbClient:
         self.region_provider = filter_region_provider
         self.excluded_streaming_services = filter_streaming_services
         self.tmdb_api_url = "https://api.themoviedb.org/3"
+        self.logger.debug("TMDbClient initialized with API key: %s", api_key)
 
     async def _fetch_recommendations(self, content_id, content_type):
         """
         Fetches recommendations for a specific movie or TV show by applying filters.
         """
+        self.logger.debug("Fetching recommendations for %s with ID %s", content_type, content_id)
         search = []
         for page in range(1, self.pages + 1):
+            self.logger.debug("Fetching page %d of recommendations", page)
             data = await self._fetch_page_data(content_id, content_type, page)
             if not data:
+                self.logger.debug("No data returned for page %d", page)
                 break
 
             for item in data['results']:
@@ -61,6 +65,7 @@ class TMDbClient:
 
                 # Stop if we reach the search size limit
                 if len(search) >= self.search_size:
+                    self.logger.debug("Reached search size limit of %d", self.search_size)
                     break
 
             if len(search) >= self.search_size:
@@ -68,8 +73,10 @@ class TMDbClient:
 
             # Sleep to avoid rate limiting
             if page < self.pages:
+                self.logger.debug("Sleeping for %f seconds to avoid rate limiting", RATE_LIMIT_SLEEP)
                 await asyncio.sleep(RATE_LIMIT_SLEEP)
 
+        self.logger.debug("Returning %d recommendations", len(search))
         return search[:self.search_size]
 
     async def _fetch_page_data(self, content_id, content_type, page):
@@ -77,10 +84,12 @@ class TMDbClient:
         Fetches a single page of recommendations from TMDb API.
         """
         url = f"{self.tmdb_api_url}/{content_type}/{content_id}/recommendations?api_key={self.api_key}&page={page}"
+        self.logger.debug("Fetching data from URL: %s", url)
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
                     if response.status in HTTP_OK:
+                        self.logger.debug("Successfully fetched data for page %d", page)
                         return await response.json()
                     else:
                         self.logger.error("Error retrieving %s recommendations: %d", content_type, response.status)
@@ -97,6 +106,7 @@ class TMDbClient:
         """
         url = f"{self.tmdb_api_url}/{content_type}/{tmdb_id}?api_key={self.api_key}"
         images_url = f"{self.tmdb_api_url}/{content_type}/{tmdb_id}/images?api_key={self.api_key}&include_image_language=en,null"
+        self.logger.debug("Fetching metadata for %s with ID %s", content_type, tmdb_id)
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -104,6 +114,7 @@ class TMDbClient:
                     if details_response.status in HTTP_OK:
                         data = await details_response.json()
                         metadata = self._format_result(data, content_type)
+                        self.logger.debug("Successfully fetched metadata for %s with ID %s", content_type, tmdb_id)
                     else:
                         self.logger.error("Failed to retrieve metadata for TMDb ID %s: %d", tmdb_id, details_response.status)
                         return None
@@ -115,6 +126,7 @@ class TMDbClient:
                         logos = images_data.get("logos", [])
                         logo_path = logos[0]["file_path"] if logos else None
                         metadata["logo_path"] = f"https://image.tmdb.org/t/p/w500{logo_path}"
+                        self.logger.debug("Successfully fetched logo for %s with ID %s", content_type, tmdb_id)
                     else:
                         self.logger.warning("Failed to retrieve logos for TMDb ID %s: %d", tmdb_id, images_response.status)
                         metadata["logo_path"] = None
@@ -201,12 +213,14 @@ class TMDbClient:
         """
         Finds movies similar to the one with the given movie_id.
         """
+        self.logger.debug("Finding similar movies for movie ID %s", movie_id)
         return await self._fetch_recommendations(movie_id, 'movie')
 
     async def find_similar_tvshows(self, tvshow_id):
         """
         Finds TV shows similar to the one with the given tvshow_id.
         """
+        self.logger.debug("Finding similar TV shows for TV show ID %s", tvshow_id)
         return await self._fetch_recommendations(tvshow_id, 'tv')
 
     async def find_tmdb_id_from_tvdb(self, tvdb_id):
@@ -216,12 +230,14 @@ class TMDbClient:
         :return: The TMDb ID corresponding to the provided TVDb ID, or None if not found.
         """
         url = f"{self.tmdb_api_url}/find/{tvdb_id}?api_key={self.api_key}&external_source=tvdb_id"
+        self.logger.debug("Finding TMDb ID for TVDb ID %s", tvdb_id)
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
                     if response.status in HTTP_OK:
                         data = await response.json()
                         if 'tv_results' in data and data['tv_results']:
+                            self.logger.debug("Found TMDb ID %s for TVDb ID %s", data['tv_results'][0]['id'], tvdb_id)
                             return data['tv_results'][0]['id']
                         self.logger.warning("No results found on TMDb for TVDb ID: %s", tvdb_id)
                     else:
@@ -247,6 +263,7 @@ class TMDbClient:
             return False, None
         
         url = f"{self.tmdb_api_url}/{content_type}/{content_id}/watch/providers?api_key={self.api_key}"
+        self.logger.debug("Fetching watch providers for %s with ID %s", content_type, content_id)
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -257,6 +274,7 @@ class TMDbClient:
                             providers = data["results"][self.region_provider]['flatrate']
                             for provider in providers:
                                 if any(provider['provider_id'] == excluded['provider_id'] for excluded in self.excluded_streaming_services):
+                                    self.logger.debug("Content ID %s is in excluded streaming service: %s", content_id, provider['provider_name'])
                                     return True, provider['provider_name']
                         else:
                             self.logger.debug("No watch providers found for content ID %s in region %s.", content_id, self.region_provider)
@@ -267,4 +285,3 @@ class TMDbClient:
             self.logger.error("An error occurred while fetching watch providers: %s", str(e))
 
         return False, None
-

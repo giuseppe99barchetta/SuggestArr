@@ -1,5 +1,3 @@
-import asyncio
-
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.handler.jellyfin_handler import JellyfinHandler

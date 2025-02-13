@@ -49,7 +49,7 @@ class LoggerManager:
             file_handler.setLevel(log_level)
 
             # Create a logging format
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            formatter = logging.Formatter('%(asctime)s - %(name)-20s - %(levelname)-5s - %(message)s')
             console_handler.setFormatter(formatter)
             file_handler.setFormatter(formatter)
 

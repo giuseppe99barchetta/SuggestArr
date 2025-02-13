@@ -1,5 +1,4 @@
 import os
-import subprocess
 import yaml
 from croniter import croniter
 from api_service.config.logger_manager import LoggerManager
@@ -15,6 +14,7 @@ def load_env_vars():
     """
     Load variables from the config.yaml file and return them as a dictionary.
     """
+    logger.debug("Loading environment variables from config.yaml")
     if not os.path.exists(CONFIG_PATH):
         logger.warning(f"{CONFIG_PATH} not found. Creating a new one with default values.")
         return get_config_values()
@@ -29,6 +29,7 @@ def get_default_values():
     """
     Returns a dictionary of default values for the environment variables.
     """
+    logger.debug("Getting default values for environment variables")
     return {
         'TMDB_API_KEY': lambda: '',
         'JELLYFIN_API_URL': lambda: '',
@@ -72,8 +73,10 @@ def get_config_values():
     """
     Executes the lambdas and returns the actual values for JSON serialization.
     """
+    logger.debug("Resolving default values for configuration")
     default_values = get_default_values()
     resolved_values = {key: value() if callable(value) else value for key, value in default_values.items()}
+    logger.debug(f"Resolved configuration values: {resolved_values}")
     return resolved_values
 
 def save_env_vars(config_data):
@@ -81,6 +84,7 @@ def save_env_vars(config_data):
     Save environment variables from the web interface to the config.yaml file.
     Also validates cron times and updates them if needed.
     """
+    logger.debug("Saving environment variables to config.yaml")
     cron_times = config_data.get('CRON_TIMES', '0 0 * * *')
 
     if not croniter.is_valid(cron_times):
@@ -104,6 +108,7 @@ def save_env_vars(config_data):
         # Write environment variables to the config.yaml file
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             yaml.safe_dump(env_vars, f)
+            logger.debug(f"Environment variables saved: {env_vars}")
 
         # Reload environment variables after saving
         load_env_vars()
@@ -120,6 +125,7 @@ def clear_env_vars():
     """
     Remove environment variables from memory and delete the config.yaml file if it exists.
     """
+    logger.debug("Clearing environment variables and deleting config.yaml if it exists")
     # Delete the config.yaml file if it exists
     if os.path.exists(CONFIG_PATH):
         try:
@@ -130,10 +136,11 @@ def clear_env_vars():
 
 def save_session_token(token):
     """Save session token of Seer client."""
+    logger.debug(f"Saving session token: {token}")
     with open(CONFIG_PATH, 'r+', encoding='utf-8') as file:
         config_data = yaml.safe_load(file) or {}
         config_data['SEER_SESSION_TOKEN'] = token
         file.seek(0)
         yaml.dump(config_data, file)
         file.truncate()
-
+        logger.debug("Session token saved successfully")
