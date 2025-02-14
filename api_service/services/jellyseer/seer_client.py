@@ -164,12 +164,39 @@ class SeerClient:
     async def check_already_requested(self, tmdb_id, media_type):
         """Check if a media request is cached in the current cycle."""
         self.logger.debug("Checking if media already requested: tmdb_id=%s, media_type=%s", tmdb_id, media_type)
-        return DatabaseManager().check_request_exists(media_type, tmdb_id)
+
+        try:
+            result = DatabaseManager().check_request_exists(media_type, tmdb_id)
+
+            if not isinstance(result, bool):
+                self.logger.warning("Unexpected return value from check_request_exists: %s", result)
+                return False
+
+            return result
+        except Exception as e:
+            self.logger.error("Error checking if media already requested: %s", e, exc_info=True)
+            return False
 
     async def check_already_downloaded(self, tmdb_id, media_type, local_content={}):
         """Check if a media item has already been downloaded based on local content."""
         self.logger.debug("Checking if media already downloaded: tmdb_id=%s, media_type=%s", tmdb_id, media_type)
-        return any(item['tmdb_id'] == str(tmdb_id) for item in local_content.get(media_type, []))
+
+        items = local_content.get(media_type, [])
+        if not isinstance(items, list):
+            self.logger.warning("Expected list for media_type '%s', but got %s", media_type, type(items))
+            return False
+
+        for item in items:
+            if not isinstance(item, dict):
+                self.logger.warning("Skipping invalid item in local_content: %s", item)
+                continue
+            if 'tmdb_id' not in item:
+                self.logger.warning("Skipping item without 'tmdb_id': %s", item)
+                continue
+            if item['tmdb_id'] == str(tmdb_id):
+                return True
+
+        return False
 
     async def get_metadata(self, media_id, media_type):
         """Retrieve metadata for a specific media item."""
