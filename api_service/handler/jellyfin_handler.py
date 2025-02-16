@@ -123,6 +123,6 @@ class JellyfinHandler:
     async def _request_media_and_log(self, media_type, media, source_tmdb_obj):
         """Helper method to request media and log the result."""
         self.logger.debug(f"Requesting media: {media}")
-        await self.jellyseer_client.request_media(media_type, media, source_tmdb_obj)
-        self.request_count += 1
-        self.logger.info(f"Requested {media_type}: {media['title']}")
+        if await self.jellyseer_client.request_media(media_type, media, source_tmdb_obj):
+            self.request_count += 1
+            self.logger.info(f"Requested {media_type}: {media['title']}")

@@ -26,6 +26,7 @@ class SeerClient:
         self.is_logged_in = False
         self._login_lock = asyncio.Lock()
         self.number_of_seasons = number_of_seasons
+        self.pending_requests = set()
         self.logger.debug("SeerClient initialized with API URL: %s", api_url)
         
     async def init(self):
@@ -145,8 +146,16 @@ class SeerClient:
 
     async def request_media(self, media_type, media, source=None, tvdb_id=None):
         """Request media and save it to the database if successful."""
+        
+        # Avoid duplicate requests
+        if (media_type, media['id']) in self.pending_requests:
+            self.logger.debug("Skipping duplicate request for %s (ID: %s)", media_type, media['id'])
+            return False
+        
+        self.pending_requests.add((media_type, media['id']))
         self.logger.debug("Requesting media: %s, media_type: %s", media, media_type)
         data = {"mediaType": media_type, "mediaId": media['id']}
+        
         if media_type == 'tv':
             data["tvdbId"] = tvdb_id or media['id']
             data["seasons"] = "all" if self.number_of_seasons == "all" else list(range(1, int(self.number_of_seasons) + 1))
@@ -158,8 +167,10 @@ class SeerClient:
             databaseManager.save_request(media_type, media['id'], source['id'])
             databaseManager.save_metadata(source, media_type)
             databaseManager.save_metadata(media, media_type)
+            return True
         else:
             self.logger.error("Media request failed: %s", response)
+            return False
             
     async def check_already_requested(self, tmdb_id, media_type):
         """Check if a media request is cached in the current cycle."""
