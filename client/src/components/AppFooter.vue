@@ -16,11 +16,11 @@
             <a href="https://hub.docker.com/repository/docker/ciuse99/suggestarr/" target="_blank" aria-label="Docker">
                 <font-awesome-icon :icon="['fab', 'docker']" class="footer-icon" />
             </a>
-            <a href="https://github.com/giuseppe99barchetta/SuggestArr/wiki" target="_blank" aria-label="Wiki">
-                <font-awesome-icon :icon="['fab', 'readme']" class="footer-icon" />
-            </a>
             <a href="https://www.reddit.com/r/selfhosted/comments/1g3dn1t/automate_media_recommendations_and_downloads_with/" target="_blank" aria-label="Reddit">
                 <font-awesome-icon :icon="['fab', 'reddit']" class="footer-icon" />
+            </a>
+            <a href="https://discord.gg/JXwFd3PnXY" target="_blank" aria-label="Discord">
+                <font-awesome-icon :icon="['fab', 'discord']" class="footer-icon" />
             </a>
         </div>
 
@@ -41,13 +41,13 @@
 
 <script>
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
-import { faGithub, faDocker, faReadme, faReddit } from '@fortawesome/free-brands-svg-icons';
+import { faGithub, faDocker, faReadme, faReddit, faDiscord } from '@fortawesome/free-brands-svg-icons';
 import { faFileAlt } from '@fortawesome/free-solid-svg-icons';
 import { library } from '@fortawesome/fontawesome-svg-core';
 import LogsComponent from './LogsComponent.vue'; // Import your LogsComponent
 
 // Add the icons to the library
-library.add(faGithub, faDocker, faReadme, faReddit, faFileAlt);
+library.add(faGithub, faDocker, faReadme, faReddit, faFileAlt, faDiscord);
 
 export default {
     components: {
