@@ -116,7 +116,7 @@ class DatabaseManager:
         
     def save_metadata(self, media, media_type):
         """Save metadata for a media item."""
-        self.logger.debug(f"Saving metadata: {media_type} {media_id}")
+        self.logger.debug(f"Saving metadata: {media_type} {media['id']}")
         
         media_id = media['id']
         title = media['title']
