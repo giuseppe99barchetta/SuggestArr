@@ -56,6 +56,12 @@
                         <p class="text-gray-200">{{ config.SEARCH_SIZE }}</p>
                     </div>
                 </div>
+                <!-- Display DB Type -->
+                <div class="bg-gray-700 p-4 rounded-lg shadow-md">
+                    <label class="block text-sm font-semibold text-gray-300">Current Database Type:</label>
+                    <p class="text-gray-200">{{ db_type }}</p>
+                </div>
+                
                 <!-- Display Next Cron Run Time -->
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
                     <label class="block text-sm font-semibold text-gray-300">Next Cron Run in:</label>
@@ -70,6 +76,7 @@
                            class="text-blue-400 hover:underline ml-2">Update Now</a>
                     </div>
                 </div>
+
             </div>
             <!-- Edit Configuration and Reset Buttons -->
             <div class="flex space-x-4 mt-8">
@@ -138,7 +145,8 @@ export default {
             backgroundImageUrl: '',
             currentVersion: packageInfo.version,
             latestVersion: '',
-            isUpdateAvailable: false
+            isUpdateAvailable: false,
+            db_type: this.config.DB_TYPE === 'mysql' ? 'MySQL' : this.config.DB_TYPE === 'postgres' ? 'PostgreSQL' : 'SQLite'
 
         };
     },

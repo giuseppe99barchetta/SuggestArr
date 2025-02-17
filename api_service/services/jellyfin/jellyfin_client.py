@@ -32,8 +32,9 @@ class JellyfinClient:
         self.existing_content = {}
         
     async def init_existing_content(self):
-        self.logger.info('Searching all content in Jellyfin')
+        self.logger.info('Initializing existing content.')
         self.existing_content = await self.get_all_library_items()
+        self.logger.debug(f'Existing content initialized: {self.existing_content}')
 
     async def get_all_users(self):
         """
@@ -41,11 +42,13 @@ class JellyfinClient:
         :return: A list of users in JSON format if successful, otherwise an empty list.
         """
         url = f"{self.api_url}/Users"
+        self.logger.debug(f'Requesting all users from {url}')
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200:
                         data = await response.json()
+                        self.logger.debug(f'Users retrieved: {data}')
                         return [{"id": user["Id"], "name": user["Name"], "policy": user["Policy"]} for user in data]
                     self.logger.error("Failed to retrieve users: %d", response.status)
         except aiohttp.ClientError as e:
@@ -61,7 +64,9 @@ class JellyfinClient:
         results_by_library = {}
         users = await self.get_all_users()
         admin_user = next((user for user in users if user.get('policy', {}).get('IsAdministrator')), None)
+        self.logger.debug(f'Admin user: {admin_user}')
         libraries = self.libraries if self.libraries else await self.get_libraries()
+        self.logger.debug(f'Libraries to fetch items from: {libraries}')
 
         if not libraries:
             self.logger.error("No libraries found.")
@@ -77,6 +82,7 @@ class JellyfinClient:
                 "IncludeItemTypes": "Movie,Series",
                 "ParentID": library_id
             }
+            self.logger.debug(f'Requesting items for library {library_name} with params: {params}')
 
             try:
                 async with aiohttp.ClientSession() as session:
@@ -84,6 +90,7 @@ class JellyfinClient:
                         if response.status == 200:
                             library_items = await response.json()
                             items = library_items.get('Items', [])
+                            self.logger.debug(f'Items retrieved for library {library_name}: {items}')
                             
                             for item in items:
                                 item_id = item.get('Id')
@@ -91,6 +98,7 @@ class JellyfinClient:
                                 if item_id:
                                     tmdb_id = await self.get_item_provider_id(admin_user['id'], item_id, provider='Tmdb')
                                     item['tmdb_id'] = tmdb_id
+                                    self.logger.debug(f'Item {item_id} TMDb ID: {tmdb_id}')
                                 
                             results_by_library[library_type] = items
                             self.logger.info(f"Retrieved {len(items)} items in {library_name}")
@@ -118,6 +126,7 @@ class JellyfinClient:
         seen_series = set()  # Track seen series to avoid duplicates
 
         url = f"{self.api_url}/Items"
+        self.logger.debug(f'Requesting recent items for user {user["name"]} from {url}')
 
         for library in self.libraries:
             library_id = library.get('id')
@@ -132,6 +141,7 @@ class JellyfinClient:
                 "Limit": self.max_content_fetch,
                 "ParentID": library_id
             }
+            self.logger.debug(f'Requesting recent items for library {library.get("name")} with params: {params}')
 
             try:
                 async with aiohttp.ClientSession() as session:
@@ -139,6 +149,7 @@ class JellyfinClient:
                         if response.status == 200:
                             library_items = await response.json()
                             items = library_items.get('Items', [])
+                            self.logger.debug(f'Recent items retrieved for library {library.get("name")}: {items}')
 
                             filtered_items = []  # Store the filtered items for this library
 
@@ -178,13 +189,16 @@ class JellyfinClient:
         self.logger.info("Searching Jellyfin libraries.")
 
         url = f"{self.api_url}/Library/VirtualFolders"
+        self.logger.debug(f'Requesting libraries from {url}')
 
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200:
-                        return await response.json()
+                        libraries = await response.json()
+                        self.logger.debug(f'Libraries retrieved: {libraries}')
+                        return libraries
                     self.logger.error(
                         "Failed to get libraries %d", response.status)
         except aiohttp.ClientError as e:
@@ -200,12 +214,15 @@ class JellyfinClient:
         :return: The provider ID if found, otherwise None.
         """
         url = f"{self.api_url}/Users/{user_id}/Items/{item_id}"
+        self.logger.debug(f'Requesting provider ID for item {item_id} from {url}')
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200:
                         item_data = await response.json()
-                        return item_data.get('ProviderIds', {}).get(provider)
+                        provider_id = item_data.get('ProviderIds', {}).get(provider)
+                        self.logger.debug(f'Provider ID for item {item_id}: {provider_id}')
+                        return provider_id
 
                     self.logger.error("Failed to retrieve ID for item %s: %d", item_id, response.status)
         except aiohttp.ClientError as e:

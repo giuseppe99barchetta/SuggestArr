@@ -50,42 +50,49 @@
                 disable automatic approval of requests and manually approve them before automatic downloading.
                 This step is optional. If no user is selected, the administrator account will be used to make requests.
             </p>
+            <form @submit.prevent="authenticateUser">
 
-            <!-- If no local users are available, show a message and disable the select field -->
-            <div v-if="users.length > 0">
-                <select v-model="selectedUser" @change="updateSeerUser"
-                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2">
-                    <option v-for="user in users" :key="user.name" :value="user">{{ user.name }}</option>
-                </select>
+                <!-- If no local users are available, show a message and disable the select field -->
+                <div v-if="users.length > 0">
+                    <!-- Select per la selezione dell'utente -->
+                    <select v-model="selectedUser" @change="updateSeerUser"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2">
+                        <option v-for="user in users" :key="user.name" :value="user">{{ user.name }}</option>
+                    </select>
 
-                <!-- Password field -->
-                <label :for="`SEER_USER_PSW`"
-                    class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Password:</label>
-                <input type="password" v-model="userPassword" 
-                    @input="$emit('update-config', `SEER_USER_PSW`, userPassword)"
-                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                    :placeholder="`Enter your password`">
+                    <input type="text" autocomplete="username" class="hidden">
 
-                <!-- Authenticate button -->
-                <button @click="authenticateUser" :disabled="isAuthenticating" :class="{
-                    'bg-green-500 hover:bg-green-600': authenticated,
-                    'bg-indigo-600 hover:bg-indigo-500': !authenticated,
-                    'opacity-50 cursor-not-allowed': isAuthenticating
-                }" class="text-white font-bold py-4 px-8 rounded-lg w-full mt-4">
-                    <i v-if="isAuthenticating" class="fas fa-spinner fa-spin"></i>
-                    <span v-else-if="authenticated">Logged In</span>
-                    <span v-else>Authenticate</span>
-                </button>
+                    <!-- Password field -->
+                    <label :for="`SEER_USER_PSW`"
+                        class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Password:</label>
+                    <input type="password" v-model="userPassword" 
+                        @input="$emit('update-config', `SEER_USER_PSW`, userPassword)"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+                        :placeholder="`Enter your password`" 
+                        autocomplete="new-password">
 
-            </div>
-            <div v-else>
-                <p class="text-xs sm:text-sm text-red-500">
-                    No local users available. The administrator account will be used for requests.
-                    <a :href="`${config[`SEER_API_URL`]}/users`" target="_blank" class="text-blue-400 underline">
-                        Create a new local user here.
-                    </a>
-                </p>
-            </div>
+                    <!-- Authenticate button -->
+                    <button @click="authenticateUser" :disabled="isAuthenticating" :class="{
+                        'bg-green-500 hover:bg-green-600': authenticated,
+                        'bg-indigo-600 hover:bg-indigo-500': !authenticated,
+                        'opacity-50 cursor-not-allowed': isAuthenticating
+                    }" class="text-white font-bold py-4 px-8 rounded-lg w-full mt-4">
+                        <i v-if="isAuthenticating" class="fas fa-spinner fa-spin"></i>
+                        <span v-else-if="authenticated">Logged In</span>
+                        <span v-else>Authenticate</span>
+                    </button>
+
+                </div>
+
+                <div v-else>
+                    <p class="text-xs sm:text-sm text-red-500">
+                        No local users available. The administrator account will be used for requests.
+                        <a :href="`${config[`SEER_API_URL`]}/users`" target="_blank" class="text-blue-400 underline">
+                            Create a new local user here.
+                        </a>
+                    </p>
+                </div>
+            </form>
 
         </div>
 
@@ -96,7 +103,7 @@
             <button @click="$emit('next-step')"
                 class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full"
                 :disabled="testState.status !== 'success'">
-                Next Step
+                Next
             </button>
         </div>
     </div>
@@ -159,6 +166,12 @@ export default {
                 })
                 .catch(() => {
                     this.authenticated = false;
+                    this.$toast.open({
+                        message: 'Incorrect User/Password!',
+                        pauseOnHover: true,
+                        duration:5000,
+                        type: 'error',
+                    })
                 })
                 .finally(() => {
                     this.isAuthenticating = false;

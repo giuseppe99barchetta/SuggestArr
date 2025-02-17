@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.config.logger_manager import LoggerManager
 
-logger = LoggerManager().get_logger(__name__)
+logger = LoggerManager().get_logger("JellyfinRoute")
 jellyfin_bp = Blueprint('jellyfin', __name__)
 
 @jellyfin_bp.route('/libraries', methods=['POST'])

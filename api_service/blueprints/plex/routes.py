@@ -5,7 +5,7 @@ from api_service.services.plex.plex_auth import PlexAuth
 from api_service.services.plex.plex_client import PlexClient
 from api_service.config.logger_manager import LoggerManager
 
-logger = LoggerManager().get_logger(__name__)
+logger = LoggerManager().get_logger("PlexRoute")
 plex_bp = Blueprint('plex', __name__)
 client_id = os.getenv('PLEX_CLIENT_ID', str(uuid.uuid4()))
 

@@ -3,7 +3,7 @@ from api_service.automate_process import ContentAutomation
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 
-logger = LoggerManager().get_logger(__name__)
+logger = LoggerManager().get_logger("AutomationRoute")
 automation_bp = Blueprint('automation', __name__)
 
 @automation_bp.route('/force_run', methods=['POST'])

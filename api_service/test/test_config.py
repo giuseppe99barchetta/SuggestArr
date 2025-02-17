@@ -37,6 +37,13 @@ class TestConfig(unittest.TestCase):
         "SELECTED_USERS": ["1", "2"],
         "FILTER_STREAMING_SERVICES": [{"provider_id": "8", "provider_name": "Netflix"}],
         "FILTER_REGION_PROVIDER": "US",
+        "SUBPATH": "/suggestarr",
+        "DB_TYPE": "sqlite",
+        "DB_HOST": "localhost",
+        "DB_PORT": "5432",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "password",
+        "DB_NAME": "suggestarr",
     }
 
     def test_save_default_env_vars(self):

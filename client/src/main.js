@@ -24,4 +24,3 @@ const options = {
 };
 
 app.use(ToastPlugin, options);
-app.use(router).mount('#app');

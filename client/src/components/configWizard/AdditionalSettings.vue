@@ -46,6 +46,13 @@
         <p class="text-xs sm:text-sm text-green-400 mt-2" v-if="cronDescription">{{ cronDescription }}</p>
         <p class="text-xs sm:text-sm text-red-500 mt-2" v-if="cronError">{{ cronError }}</p>
 
+        <label for="SUBPATH" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Base URL Subpath:</label>
+        <p class="text-xs sm:text-sm text-gray-400 mb-2">Specify the subpath where Suggestarr will be accessed. For example, "/suggestarr" would make Suggestarr accessible at "yourdomain.com/suggestarr". If left empty, it defaults to the root path.</p>
+        <input type="text" :value="config.SUBPATH" 
+               @input="handleUpdate('SUBPATH', $event.target.value)"
+               class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
+               id="SUBPATH" placeholder="/suggestarr">
+
         <div class="flex justify-between mt-8 space-x-4">
             <button @click="$emit('previous-step')" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg w-full">Back</button>
             <button @click="$emit('next-step')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full">Save</button>
