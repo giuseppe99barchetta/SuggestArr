@@ -144,7 +144,7 @@ class SeerClient:
         self.logger.debug("Total requests count: %d", total)
         return total
 
-    async def request_media(self, media_type, media, source=None, tvdb_id=None):
+    async def request_media(self, media_type, media, source=None, tvdb_id=None, user=None):
         """Request media and save it to the database if successful."""
         
         # Avoid duplicate requests
@@ -157,14 +157,15 @@ class SeerClient:
         data = {"mediaType": media_type, "mediaId": media['id']}
         
         if media_type == 'tv':
-            data["tvdbId"] = tvdb_id or media['id']
+            data["tvdbId"] = media['id']
             data["seasons"] = "all" if self.number_of_seasons == "all" else list(range(1, int(self.number_of_seasons) + 1))
 
         response = await self._make_request("POST", "api/v1/request", data=data, use_cookie=bool(self.session_token))
         if response and 'error' not in response:
             self.logger.debug("Media request successful: %s", response)
             databaseManager = DatabaseManager()
-            databaseManager.save_request(media_type, media['id'], source['id'])
+            databaseManager.save_user(user)
+            databaseManager.save_request(media_type, media['id'], source['id'], user['id'])
             databaseManager.save_metadata(source, media_type)
             databaseManager.save_metadata(media, media_type)
             return True
