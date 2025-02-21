@@ -24,6 +24,7 @@ COPY api_service/ /app/api_service/
 
 # Copy docker entrypoint script
 COPY docker/docker_entrypoint.sh /app/
+RUN chmod +x /app/docker_entrypoint.sh
 
 # Create log files for Gunicorn
 RUN touch /var/log/gunicorn.log /var/log/gunicorn_error.log
