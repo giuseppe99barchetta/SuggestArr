@@ -36,7 +36,7 @@ class LoggerManager:
         """
         
         if log_file is None:
-            base_dir = os.path.join(os.path.dirname(__file__), '../../config/config_files')
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config/config_files'))
             os.makedirs(base_dir, exist_ok=True)  # Ensure directory exists
             log_file = os.path.join(base_dir, 'app.log')
         

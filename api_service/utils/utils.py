@@ -22,6 +22,9 @@ class AppUtils:
         """
         Check if the current process is the last worker based on the highest PID.
         """
+        if os.name == 'nt':  # Skip on Windows
+            return True
+        
         current_pid = os.getpid()
         try:
             # Run the ps command to list all process IDs, one per line.
