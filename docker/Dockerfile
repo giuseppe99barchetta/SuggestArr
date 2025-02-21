@@ -9,18 +9,12 @@ RUN npm run build
 # Stage 2: Create the final image
 FROM python:3.13-alpine AS prod
 
-# Install tzdata for timezone support
-RUN apk add --no-cache tzdata
-
-# Set the timezone
-ENV TZ=UTC
-
 # Set the working directory for the api_service
 WORKDIR /app/api_service
 
 # Set PUID and PGID (with default values)
-ENV PUID=2000
-ENV PGID=2000
+ENV PUID=1000
+ENV PGID=1000
 
 # Create a user and group with the provided PUID/PGID
 RUN addgroup -g ${PGID} appgroup && \
