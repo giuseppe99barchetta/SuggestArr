@@ -9,6 +9,4 @@ services:
       - ./config_files:/app/config/config_files
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
       - TZ=Europe/Rome
