@@ -38,11 +38,12 @@ class AppUtils:
         """
         Log the welcome message.
         """
-        welcome_message = """
+        port = os.environ.get('SUGGESTARR_PORT', '5000')
+        welcome_message = f"""
         
         =====================================================================================
         |   Welcome to the SuggestArr Application!                                          |
-        |   Manage your settings through the web interface at: http://localhost:5000        |
+        |   Manage your settings through the web interface at: http://localhost:{port}        |
         |   Fill in the input fields with your data and let the cron job handle the rest!   |
         |   To run the automation process immediately, click the 'Force Run' button.        |
         |   The 'Force Run' button will appear only after you save your settings.           |
