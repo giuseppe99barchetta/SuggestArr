@@ -37,10 +37,12 @@ COPY ../config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 RUN touch /var/log/gunicorn.log /var/log/gunicorn_error.log
 
 # Expose the port used by Gunicorn
-EXPOSE 5000
+ARG SUGGESTARR_PORT=5000
+EXPOSE ${SUGGESTARR_PORT}
 
 # Start Supervisor to manage Gunicorn
 ENV LOG_LEVEL=info
+ENV SUGGESTARR_PORT=${SUGGESTARR_PORT}
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
 # Dev stage
