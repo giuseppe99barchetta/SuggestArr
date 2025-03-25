@@ -16,6 +16,7 @@
     <Maintainer>
         <WebPage>https://github.com/giuseppe99barchetta/SuggestArr</WebPage>
     </Maintainer>
-    <Config Name="Web UI Port" Target="5000" Default="" Mode="tcp" Description="" Type="Port" Display="always" Required="true" Mask="false">5155</Config>
+    <Config Name="Web UI Port" Target="5000" Default="5000" Mode="tcp" Description="Port for SuggestArr Web UI" Type="Port" Display="always" Required="true" Mask="false">5155</Config>
+    <Config Name="SUGGESTARR_PORT" Target="SUGGESTARR_PORT" Default="5000" Mode="" Description="Internal port for SuggestArr (should match Web UI Port)" Type="Variable" Display="advanced" Required="false" Mask="false">5000</Config>
     <Config Name="config" Target="/app/config/config_files" Default="" Mode="rw" Description="" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/suggestarr</Config>
 </Container>

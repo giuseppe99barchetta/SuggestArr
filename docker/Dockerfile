@@ -30,9 +30,14 @@ RUN chmod +x /app/docker_entrypoint.sh
 RUN touch /var/log/gunicorn.log /var/log/gunicorn_error.log
 
 # Expose the port used by Gunicorn
-EXPOSE 5000
+ARG SUGGESTARR_PORT=5000
+EXPOSE ${SUGGESTARR_PORT}
 
 # Start Supervisor to manage Gunicorn
 ENV LOG_LEVEL=info
+# Set the port dynamically
+ENV SUGGESTARR_PORT=${SUGGESTARR_PORT}
+
+# Use the custom port in the entrypoint command
 ENTRYPOINT ["/app/docker_entrypoint.sh"]
-CMD ["--host", "0.0.0.0", "--port", "5000", "--log-level", "info"]
+CMD ["--host", "0.0.0.0", "--port", "${SUGGESTARR_PORT}", "--log-level", "info"]
