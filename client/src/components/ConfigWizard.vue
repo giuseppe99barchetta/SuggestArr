@@ -13,10 +13,15 @@
         <p class="steps-count">{{ currentStep }} / {{ steps.length }} Steps Complete</p>
 
         <!-- Use dynamic components for each step -->
-        <transition name="fade" mode="out-in">
-          <component :is="currentStepComponent" :config="config" @next-step="handleStepChange(1)"
-            @previous-step="handleStepChange(-1)" @update-config="updateConfig" />
-        </transition>
+        <div class="wizard-step-container">
+          <transition name="fade" mode="out-in">
+            <component :is="currentStepComponent" :config="config" 
+              @next-step="handleStepChange(1)" 
+              @previous-step="handleStepChange(-1)" 
+              @update-config="updateConfig" />
+          </transition>
+        </div>
+
         <Footer />
       </div>
     </div>

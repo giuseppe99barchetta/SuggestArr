@@ -25,11 +25,12 @@
 }
 
 .wizard-content {
-    padding: 20px;
-    background-color: #2d3748e7 !important; 
-    border-radius: 10px;
-    max-width: 800px;
+    padding: 30px;
+    background-color: #2d3748e7;
+    border-radius: 15px;
+    max-width: 85vh;
     width: 100%;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
 .progress-bar {
@@ -89,15 +90,6 @@ button:disabled {
     background-color: #a0aec0;
     cursor: not-allowed;
     box-shadow: none;
-}
-
-.wizard-content {
-    padding: 30px;
-    background-color: #2d3748;
-    border-radius: 15px;
-    max-width: 850px;
-    width: 100%;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
 input {

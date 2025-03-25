@@ -13,7 +13,8 @@ class SeerClient:
     A client to interact with the Jellyseer API for handling media requests and authentication.
     """
 
-    def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None, session_token=None, number_of_seasons="all"):
+    def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None, session_token=None, 
+                number_of_seasons="all", exclude_downloaded=True, exclude_watched=True):
         """
         Initializes the JellyseerClient with the API URL and logs in the user.
         """
@@ -27,6 +28,8 @@ class SeerClient:
         self._login_lock = asyncio.Lock()
         self.number_of_seasons = number_of_seasons
         self.pending_requests = set()
+        self.exclude_downloaded = exclude_downloaded
+        self.exclude_requested = exclude_watched
         self.logger.debug("SeerClient initialized with API URL: %s", api_url)
         
     async def init(self):
@@ -175,39 +178,46 @@ class SeerClient:
             
     async def check_already_requested(self, tmdb_id, media_type):
         """Check if a media request is cached in the current cycle."""
-        self.logger.debug("Checking if media already requested: tmdb_id=%s, media_type=%s", tmdb_id, media_type)
+        if self.exclude_requested:
+            self.logger.debug("Checking if media already requested: tmdb_id=%s, media_type=%s", tmdb_id, media_type)
 
-        try:
-            result = DatabaseManager().check_request_exists(media_type, tmdb_id)
+            try:
+                result = DatabaseManager().check_request_exists(media_type, tmdb_id)
 
-            if not isinstance(result, bool):
-                self.logger.warning("Unexpected return value from check_request_exists: %s", result)
-                return False
+                if not isinstance(result, bool):
+                    self.logger.warning("Unexpected return value from check_request_exists: %s", result)
+                    return False
 
-            return result
-        except Exception as e:
-            self.logger.error("Error checking if media already requested: %s", e, exc_info=True)
-            return False
+                return result
+            except Exception as e:
+                self.logger.error("Error checking if media already requested: %s", e, exc_info=True)
+        else:
+            self.logger.info("Skipping check for already requested media.")
+        
+        return False
 
     async def check_already_downloaded(self, tmdb_id, media_type, local_content={}):
         """Check if a media item has already been downloaded based on local content."""
-        self.logger.debug("Checking if media already downloaded: tmdb_id=%s, media_type=%s", tmdb_id, media_type)
+        if self.exclude_downloaded:
+            self.logger.debug("Checking if media already downloaded: tmdb_id=%s, media_type=%s", tmdb_id, media_type)
 
-        items = local_content.get(media_type, [])
-        if not isinstance(items, list):
-            self.logger.warning("Expected list for media_type '%s', but got %s", media_type, type(items))
-            return False
+            items = local_content.get(media_type, [])
+            if not isinstance(items, list):
+                self.logger.warning("Expected list for media_type '%s', but got %s", media_type, type(items))
+                return False
 
-        for item in items:
-            if not isinstance(item, dict):
-                self.logger.warning("Skipping invalid item in local_content: %s", item)
-                continue
-            if 'tmdb_id' not in item:
-                self.logger.warning("Skipping item without 'tmdb_id': %s", item)
-                continue
-            if item['tmdb_id'] == str(tmdb_id):
-                return True
-
+            for item in items:
+                if not isinstance(item, dict):
+                    self.logger.warning("Skipping invalid item in local_content: %s", item)
+                    continue
+                if 'tmdb_id' not in item:
+                    self.logger.warning("Skipping item without 'tmdb_id': %s", item)
+                    continue
+                if item['tmdb_id'] == str(tmdb_id):
+                    return True
+        else:
+            self.logger.info("Skipping check for already downloaded media.")
+        
         return False
 
     async def get_metadata(self, media_id, media_type):

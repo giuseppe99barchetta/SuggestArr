@@ -67,6 +67,8 @@ def get_default_values():
         'DB_USER': lambda: None,
         'DB_PASSWORD': lambda: None,
         'DB_NAME': lambda: None,
+        'EXCLUDE_DOWNLOADED': lambda: True,
+        'EXCLUDE_REQUESTED': lambda: True,
     }
 
 def get_config_values():

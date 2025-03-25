@@ -43,6 +43,8 @@ class ContentAutomation:
         filter_genre = env_vars.get('FILTER_GENRES_EXCLUDE', [])
         filter_region_provider = env_vars.get('FILTER_REGION_PROVIDER', None)
         filter_streaming_services = env_vars.get('FILTER_STREAMING_SERVICES', [])
+        exclude_downloaded = env_vars.get('EXCLUDE_DOWNLOADED', True)
+        exclude_requested = env_vars.get('EXCLUDE_REQUESTED', True)
 
         # Overseer/Jellyseer client
         jellyseer_client = SeerClient(
@@ -51,7 +53,9 @@ class ContentAutomation:
             env_vars['SEER_USER_NAME'],
             env_vars['SEER_USER_PSW'],
             env_vars['SEER_SESSION_TOKEN'],
-            instance.number_of_seasons
+            instance.number_of_seasons,
+            exclude_downloaded,
+            exclude_requested
         )
         await jellyseer_client.init()
 

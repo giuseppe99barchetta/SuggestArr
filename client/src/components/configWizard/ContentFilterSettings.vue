@@ -35,21 +35,50 @@
             </div>
         </div>
 
-        <!-- Checkbox for Missing Ratings -->
-        <div class="flex items-center mt-4">
-            <label for="FILTER_INCLUDE_NO_RATING" class="flex items-center cursor-pointer">
-                <span class="text-xs sm:text-sm font-semibold text-gray-300 mr-3">
-                    Include content with missing ratings or votes:
-                </span>
-                <div class="relative inline-flex items-center">
-                    <input type="checkbox" :checked="config.FILTER_INCLUDE_NO_RATING"
-                        @change="handleUpdate('FILTER_INCLUDE_NO_RATING', $event.target.checked)"
-                        id="FILTER_INCLUDE_NO_RATING" class="sr-only">
-                    <div class="w-10 h-5 bg-gray-600 rounded-full shadow-inner"></div>
-                    <div class="dot absolute left-0 top-0 w-5 h-5 bg-red-600 rounded-full transition-transform transform translate-x-0">
+        <div>
+            <div class="space-y-4 mt-4 pt-4">
+                <!-- Include content with missing ratings or votes -->
+                <div class="flex items-center justify-between bg-gray-800 p-4 rounded-lg">
+                    <div class="flex-grow pr-4">
+                        <h4 class="text-sm font-semibold text-gray-200">Include content with missing ratings or votes</h4>
+                        <p class="text-xs text-gray-400 mt-1">Show recommendations even without rating information</p>
                     </div>
+                    <label class="switch">
+                        <input type="checkbox" 
+                            :checked="config.FILTER_INCLUDE_NO_RATING"
+                            @change="handleUpdate('FILTER_INCLUDE_NO_RATING', $event.target.checked)">
+                        <span class="slider round"></span>
+                    </label>
                 </div>
-            </label>
+
+                <!-- Exclude already downloaded content -->
+                <div class="flex items-center justify-between bg-gray-800 p-4 rounded-lg">
+                    <div class="flex-grow pr-4">
+                        <h4 class="text-sm font-semibold text-gray-200">Exclude downloaded content</h4>
+                        <p class="text-xs text-gray-400 mt-1">Skip suggesting items already in your library</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" 
+                            :checked="config.EXCLUDE_DOWNLOADED"
+                            @change="handleUpdate('EXCLUDE_DOWNLOADED', $event.target.checked)">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+
+                <!-- Exclude already watched content -->
+                <div class="flex items-center justify-between bg-gray-800 p-4 rounded-lg">
+                    <div class="flex-grow pr-4">
+                        <h4 class="text-sm font-semibold text-gray-200">Exclude watched content</h4>
+                        <p class="text-xs text-gray-400 mt-1">Avoid recommending shows or movies you've already requested</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" 
+                            :checked="config.EXCLUDE_REQUESTED"
+                            @change="handleUpdate('EXCLUDE_REQUESTED', $event.target.checked)">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
         </div>
 
         <!-- Genre Exclusion Filter with Vue Multiselect -->
