@@ -50,12 +50,14 @@ services:
     container_name: SuggestArr
     restart: always
     ports:
-      - "5000:5000"
+      - "${SUGGESTARR_PORT:-5000}:${SUGGESTARR_PORT:-5000}"
     volumes:
       - ./config_files:/app/config/config_files
     environment:
       # Optional: Only needed if something goes wrong and you need to inspect deeper
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Optional: Customize the port (defaults to 5000 if not set)
+      - SUGGESTARR_PORT=${SUGGESTARR_PORT:-5000}
 ```
 To start the container with Docker Compose:
 
@@ -65,7 +67,7 @@ docker-compose up
 
 ## Web Interface
 
-Access the web interface at: http://localhost:5000. Use this interface to configure the application, select your media service, and manage cron schedules.
+Access the web interface at: http://localhost:5000 (or your custom port if configured with SUGGESTARR_PORT). Use this interface to configure the application, select your media service, and manage cron schedules.
 
 Make sure your environment is set up correctly and that the application is running to access the web interface.
 

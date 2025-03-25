@@ -23,7 +23,7 @@ class LoggerManager:
     """
 
     @staticmethod
-    def get_logger(name: str, log_file='app.log', max_bytes=5 * 1024 * 1024, backup_count=5):
+    def get_logger(name: str, max_bytes=5 * 1024 * 1024, backup_count=5, log_file=None):
         """
         Returns a logger with the specified name and log level.
         
@@ -34,6 +34,12 @@ class LoggerManager:
         :param backup_count: The number of backup files to keep.
         :return: Configured logger instance.
         """
+        
+        if log_file is None:
+            base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../config/config_files'))
+            os.makedirs(base_dir, exist_ok=True)  # Ensure directory exists
+            log_file = os.path.join(base_dir, 'app.log')
+        
         logger = logging.getLogger(name)
         log_level = os.getenv('LOG_LEVEL', 'info').upper()
         logger.setLevel(log_level)

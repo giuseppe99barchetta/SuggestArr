@@ -7,7 +7,7 @@ import mysql.connector
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.database_exceptions import DatabaseError
- 
+
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 DB_PATH = os.path.join(BASE_DIR, 'config', 'config_files', 'requests.db')
 
@@ -45,9 +45,15 @@ class DatabaseManager:
             return sqlite3.connect(self.db_path)
 
     def initialize_db(self):
-        """Initialize the SQLite database and create the requests table if it doesn't exist."""
+        """Initialize the database and create the requests table if it doesn't exist."""
         self.logger.info(f"Initializing {self.db_type} database.")
             
+        query_users = """
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY,
+                user_name TEXT
+            )
+        """
         query_requests ="""
             CREATE TABLE IF NOT EXISTS requests (
                 tmdb_request_id TEXT NOT NULL PRIMARY KEY,
@@ -55,7 +61,9 @@ class DatabaseManager:
                 tmdb_source_id TEXT,
                 requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 requested_by TEXT,
-                UNIQUE(media_type, tmdb_request_id, tmdb_source_id)
+                user_id TEXT,
+                UNIQUE(media_type, tmdb_request_id, tmdb_source_id),
+                FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
             )
         """            
         query_metadata = """
@@ -76,6 +84,11 @@ class DatabaseManager:
             )
         """
         
+        if self.execute_query(query_users, commit=True):
+            self.logger.info("User table created successfully.")
+        else:
+            self.logger.info("User table already exists. Skipping creation.")
+        
         if self.execute_query(query_requests, commit=True):
             self.logger.info("Requests table created successfully.")
         else:
@@ -86,21 +99,59 @@ class DatabaseManager:
         else:
             self.logger.info("Metadata table already exists. Skipping creation.")
             
+        self.add_missing_columns()
+        
+                
+    def add_missing_columns(self):
+        """Check and add missing columns to the requests table."""
+        self.logger.info("Checking for missing columns in requests table...")
+
+        if self.db_type == 'sqlite':
+            query = "PRAGMA table_info(requests);"
+            existing_columns = {row[1] for row in self.execute_query(query)}
+        elif self.db_type == 'postgres':
+            query = """
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'requests';
+            """
+            existing_columns = {row[0] for row in self.execute_query(query)}
+        elif self.db_type in ['mysql', 'mariadb']:
+            query = "SHOW COLUMNS FROM requests;"
+            existing_columns = {row[0] for row in self.execute_query(query)}
+        else:
+            self.logger.warning(f"Unsupported DB type: {self.db_type}")
+            return
+
+        if 'user_id' not in existing_columns:
+            self.logger.info("Adding column user_id...")
+            self.execute_query("ALTER TABLE requests ADD COLUMN user_id TEXT;", commit=True)
+            
     def ensure_connection(self):
         """Check and reopen the database connection if necessary."""
         if self.db_type == 'mysql' and not self.db_connection.is_connected():
             self.logger.debug("Re-opening the database connection...")
             self.db_connection = self._initialize_db_connection()
         
-    def save_request(self, media_type, media_id, source):
+    def save_request(self, media_type, media_id, source, user_id=None):
         """Save a new media request to the database, ignoring duplicates."""
         self.logger.debug(f"Saving request: {media_type} {media_id} from {source}")
         
         query = """
-            INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, tmdb_source_id, requested_by)
-            VALUES (?, ?, ?, ?)
+            INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, tmdb_source_id, requested_by, user_id)
+            VALUES (?, ?, ?, ?, ?)
         """
-        params = (media_type, media_id, source, 'SuggestArr')
+        params = (media_type, media_id, source, 'SuggestArr', user_id)
+        self.execute_query(query, params, commit=True)
+        
+    def save_user(self, user):
+        """Save a new user to the database, ignoring duplicates."""
+        self.logger.debug(f"Saving user: {user['id']} {user['name']}")
+        
+        query = """
+            INSERT OR IGNORE INTO users (user_id, user_name)
+            VALUES (?, ?)
+        """
+        params = (user['id'], user['name'])
         self.execute_query(query, params, commit=True)
 
     def check_request_exists(self, media_type, media_id):
@@ -280,7 +331,10 @@ class DatabaseManager:
         try:
             with self.db_connection as conn:
                 cursor = conn.cursor()
-
+                
+                if self.db_type == 'sqlite':
+                    cursor.execute("PRAGMA foreign_keys = ON;") # Enable foreign key constraints
+                    
                 if self.db_type == 'mysql':
                     query = query.replace("INSERT OR IGNORE", "INSERT IGNORE", 1)
                     query = query.replace("?", "%s")
@@ -302,8 +356,8 @@ class DatabaseManager:
                 if 'CREATE TABLE' in query.upper():
                     return cursor.rowcount != -1
 
-                if 'select' in query.lower():
-                    return cursor.fetchall()  # For SELECT queries
+                if 'SELECT' in query.upper() or 'PRAGMA' in query.upper() or 'SHOW' in query.upper():
+                    return cursor.fetchall() or []
 
         except (sqlite3.Error, psycopg2.Error, mysql.connector.Error) as e:
             raise DatabaseError(error=f"Error executing query. Details: {str(e)}", db_type=self.db_type)
