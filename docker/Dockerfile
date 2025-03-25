@@ -1,5 +1,5 @@
 # Stage 1: Build the client
-FROM node:20 AS client-builder
+FROM node:22 AS client-builder
 WORKDIR /app/client
 COPY client/package*.json ./ 
 RUN npm install && npm cache clean --force
@@ -7,15 +7,7 @@ COPY client/ .
 RUN npm run build
 
 # Stage 2: Create the final image
-FROM python:3.13-slim AS prod
-
-# Install system dependencies
-RUN apt-get update && \
-    apt-get install -y curl supervisor && \
-    curl -sL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+FROM python:3.13-alpine AS prod
 
 # Set the working directory for the api_service
 WORKDIR /app/api_service
@@ -30,8 +22,9 @@ COPY --from=client-builder /app/client/dist /app/static
 # Copy the api_service source code
 COPY api_service/ /app/api_service/
 
-# Copy Supervisor configuration
-COPY ../config/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# Copy docker entrypoint script
+COPY docker/docker_entrypoint.sh /app/
+RUN chmod +x /app/docker_entrypoint.sh
 
 # Create log files for Gunicorn
 RUN touch /var/log/gunicorn.log /var/log/gunicorn_error.log
@@ -42,10 +35,9 @@ EXPOSE ${SUGGESTARR_PORT}
 
 # Start Supervisor to manage Gunicorn
 ENV LOG_LEVEL=info
+# Set the port dynamically
 ENV SUGGESTARR_PORT=${SUGGESTARR_PORT}
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
-# Dev stage
-FROM prod AS dev
-RUN pip install --no-cache-dir -r requirements.dev.txt
-RUN python -m pytest .
+# Use the custom port in the entrypoint command
+ENTRYPOINT ["/app/docker_entrypoint.sh"]
+CMD ["--host", "0.0.0.0", "--port", "${SUGGESTARR_PORT}", "--log-level", "info"]

@@ -45,44 +45,44 @@ class JellyfinHandler:
             tasks = []
             for library_name, items in recent_items_by_library.items():
                 self.logger.debug(f"Processing library: {library_name} with items: {items}")
-                tasks.extend([self.process_item(user['id'], item) for item in items])
+                tasks.extend([self.process_item(user, item) for item in items])
             await asyncio.gather(*tasks)
 
-    async def process_item(self, user_id, item):
+    async def process_item(self, user, item):
         """Process an individual item (movie or TV show episode)."""
         self.logger.debug(f"Processing item: {item}")
         item_type = item['Type'].lower()
         if item_type == 'movie' and self.max_similar_movie > 0:
-            await self.process_movie(user_id, item['Id'])
+            await self.process_movie(user, item['Id'])
         elif item_type == 'episode' and self.max_similar_tv > 0:
-            await self.process_episode(user_id, item)
+            await self.process_episode(user, item)
 
-    async def process_movie(self, user_id, item_id):
+    async def process_movie(self, user, item_id):
         """Find similar movies via TMDb and request them via Jellyseer."""
         self.logger.debug(f"Processing movie with ID: {item_id}")
-        source_tmbd_id = await self.jellyfin_client.get_item_provider_id(user_id, item_id)
+        source_tmbd_id = await self.jellyfin_client.get_item_provider_id(user['id'], item_id)
         self.logger.debug(f"TMDb ID for movie: {source_tmbd_id}")
         source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmbd_id, 'movie')
         if source_tmbd_id:
             similar_movies = await self.tmdb_client.find_similar_movies(source_tmbd_id)
             self.logger.debug(f"Similar movies found: {similar_movies}")
-            await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie, source_tmdb_obj)
+            await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie, source_tmdb_obj, user)
 
-    async def process_episode(self, user_id, item):
+    async def process_episode(self, user, item):
         """Process a TV show episode by finding similar TV shows via TMDb."""
         self.logger.debug(f"Processing episode: {item}")
         series_id = item.get('SeriesId')
         if series_id and series_id not in self.processed_series:
             self.processed_series.add(series_id)
-            source_tmbd_id = await self.jellyfin_client.get_item_provider_id(user_id, series_id, provider='Tmdb')
+            source_tmbd_id = await self.jellyfin_client.get_item_provider_id(user['id'], series_id, provider='Tmdb')
             self.logger.debug(f"TMDb ID for series: {source_tmbd_id}")
             source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmbd_id, 'tv')
             if source_tmbd_id:
                 similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmbd_id)
                 self.logger.debug(f"Similar TV shows found: {similar_tvshows}")
-                await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv, source_tmdb_obj)
+                await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv, source_tmdb_obj, user)
 
-    async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj):
+    async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj, user):
         """Request similar media (movie/TV show) via Jellyseer."""
         self.logger.debug(f"Requesting {max_items} similar media")
         if not media_ids:
@@ -116,13 +116,13 @@ class JellyfinHandler:
                 continue
             
             # Add to tasks if it passes all checks
-            tasks.append(self._request_media_and_log(media_type, media, source_tmdb_obj))
+            tasks.append(self._request_media_and_log(media_type, media, source_tmdb_obj, user))
 
         await asyncio.gather(*tasks)
 
-    async def _request_media_and_log(self, media_type, media, source_tmdb_obj):
+    async def _request_media_and_log(self, media_type, media, source_tmdb_obj, user):
         """Helper method to request media and log the result."""
         self.logger.debug(f"Requesting media: {media}")
-        if await self.jellyseer_client.request_media(media_type, media, source_tmdb_obj):
+        if await self.jellyseer_client.request_media(media_type=media_type, media=media, source=source_tmdb_obj, user=user):
             self.request_count += 1
             self.logger.info(f"Requested {media_type}: {media['title']}")

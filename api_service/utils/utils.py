@@ -3,8 +3,10 @@ Utility functions for managing environment and worker processes.
 """
 
 import os
-import psutil
+import subprocess
+
 from dotenv import load_dotenv
+
 from api_service.config.logger_manager import LoggerManager
 
 logger = LoggerManager.get_logger(__name__)
@@ -20,10 +22,25 @@ class AppUtils:
         """
         Check if the current process is the last worker based on the highest PID.
         """
+        if os.name == 'nt':  # Skip on Windows
+            return True
+        
         current_pid = os.getpid()
-        pids = [p.pid for p in psutil.process_iter()]
-        max_pid = max(pids)
-        return current_pid == max_pid
+        try:
+            # Run the ps command to list all process IDs, one per line.
+            result = subprocess.run(
+                ['ps', '-e', '-o', 'pid='],
+                stdout=subprocess.PIPE,
+                text=True,
+                check=True
+            )
+            # Parse the output and convert each PID to an integer.
+            pids = [int(pid) for pid in result.stdout.strip().splitlines()]
+            return current_pid == max(pids)
+        except Exception as e:
+            # Handle potential errors (for example, if the ps command fails)
+            logger.error(f"Error obtaining process list: {e}")
+            return False
 
     @staticmethod
     def load_environment():
