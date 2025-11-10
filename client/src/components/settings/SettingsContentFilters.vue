@@ -129,30 +129,14 @@
           Language & Rating
         </h3>
 
-        <div class="form-group">
-          <label for="filterLanguage">Preferred Language</label>
-          <select
-            id="filterLanguage"
-            v-model="localConfig.FILTER_LANGUAGE"
-            class="form-control"
-            :disabled="isLoading"
-          >
-            <option value="">All Languages</option>
-            <option value="en">English</option>
-            <option value="es">Spanish</option>
-            <option value="fr">French</option>
-            <option value="de">German</option>
-            <option value="it">Italian</option>
-            <option value="ja">Japanese</option>
-            <option value="ko">Korean</option>
-            <option value="zh">Chinese</option>
-            <option value="pt">Portuguese</option>
-            <option value="ru">Russian</option>
-          </select>
-          <small class="form-help">
-            Preferred language for content (2-letter language code)
-          </small>
-        </div>
+        <BaseDropdown
+          v-model="localConfig.FILTER_LANGUAGE"
+          :options="languageOptions"
+          label="Preferred Language"
+          help-text="Preferred language for content (2-letter language code)"
+          :disabled="isLoading"
+          id="filterLanguage"
+        />
 
         <div class="form-group">
           <label class="checkbox-label">
@@ -202,32 +186,14 @@
           </small>
         </div>
 
-        <div class="form-group">
-          <label for="regionProvider">Region Provider</label>
-          <select
-            id="regionProvider"
-            v-model="localConfig.FILTER_REGION_PROVIDER"
-            class="form-control"
-            :disabled="isLoading"
-          >
-            <option value="">All Regions</option>
-            <option value="US">United States</option>
-            <option value="GB">United Kingdom</option>
-            <option value="CA">Canada</option>
-            <option value="AU">Australia</option>
-            <option value="DE">Germany</option>
-            <option value="FR">France</option>
-            <option value="IT">Italy</option>
-            <option value="ES">Spain</option>
-            <option value="JP">Japan</option>
-            <option value="BR">Brazil</option>
-            <option value="MX">Mexico</option>
-            <option value="IN">India</option>
-          </select>
-          <small class="form-help">
-            Region for streaming service availability
-          </small>
-        </div>
+        <BaseDropdown
+          v-model="localConfig.FILTER_REGION_PROVIDER"
+          :options="regionOptions"
+          label="Region Provider"
+          help-text="Region for streaming service availability"
+          :disabled="isLoading"
+          id="regionProvider"
+        />
       </div>
 
       <!-- Request & Download Filters -->
@@ -305,8 +271,13 @@
 </template>
 
 <script>
+import BaseDropdown from '@/components/common/BaseDropdown.vue';
+
 export default {
   name: 'SettingsContentFilters',
+  components: {
+    BaseDropdown
+  },
   props: {
     config: {
       type: Object,
@@ -355,6 +326,34 @@ export default {
         { id: 'starz', name: 'STARZ' },
         { id: 'showtime', name: 'Showtime' },
       ],
+      languageOptions: [
+        { value: '', label: 'All Languages' },
+        { value: 'en', label: 'English' },
+        { value: 'es', label: 'Spanish' },
+        { value: 'fr', label: 'French' },
+        { value: 'de', label: 'German' },
+        { value: 'it', label: 'Italian' },
+        { value: 'ja', label: 'Japanese' },
+        { value: 'ko', label: 'Korean' },
+        { value: 'zh', label: 'Chinese' },
+        { value: 'pt', label: 'Portuguese' },
+        { value: 'ru', label: 'Russian' }
+      ],
+      regionOptions: [
+        { value: '', label: 'All Regions' },
+        { value: 'US', label: 'United States' },
+        { value: 'GB', label: 'United Kingdom' },
+        { value: 'CA', label: 'Canada' },
+        { value: 'AU', label: 'Australia' },
+        { value: 'DE', label: 'Germany' },
+        { value: 'FR', label: 'France' },
+        { value: 'IT', label: 'Italy' },
+        { value: 'ES', label: 'Spain' },
+        { value: 'JP', label: 'Japan' },
+        { value: 'BR', label: 'Brazil' },
+        { value: 'MX', label: 'Mexico' },
+        { value: 'IN', label: 'India' }
+      ]
     };
   },
   computed: {

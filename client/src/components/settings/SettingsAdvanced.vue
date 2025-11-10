@@ -129,23 +129,14 @@
           Debug Settings
         </h3>
 
-        <div class="form-group">
-          <label for="logLevel">Log Level</label>
-          <select
-            id="logLevel"
+        <BaseDropdown
             v-model="localConfig.LOG_LEVEL"
-            class="form-control"
+          :options="logLevelOptions"
+          label="Log Level"
+          help-text="Set the verbosity of application logs"
             :disabled="isLoading"
-          >
-            <option value="ERROR">Error</option>
-            <option value="WARNING">Warning</option>
-            <option value="INFO">Info</option>
-            <option value="DEBUG">Debug</option>
-          </select>
-          <small class="form-help">
-            Set the verbosity of application logs
-          </small>
-        </div>
+          id="logLevel"
+        />
 
         <div class="form-group">
           <label class="checkbox-label">
@@ -314,9 +305,13 @@
 
 <script>
 import axios from 'axios';
+import BaseDropdown from '@/components/common/BaseDropdown.vue';
 
 export default {
   name: 'SettingsAdvanced',
+  components: {
+    BaseDropdown
+  },
   props: {
     config: {
       type: Object,
@@ -334,6 +329,12 @@ export default {
       originalConfig: {},
       availableUsers: [],
       isLoadingUsers: false,
+      logLevelOptions: [
+        { value: 'ERROR', label: 'Error' },
+        { value: 'WARNING', label: 'Warning' },
+        { value: 'INFO', label: 'Info' },
+        { value: 'DEBUG', label: 'Debug' }
+      ]
     };
   },
   computed: {

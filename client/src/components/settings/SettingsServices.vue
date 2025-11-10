@@ -59,21 +59,15 @@
           Media Server
         </h3>
 
-        <div class="form-group">
-          <label for="selectedService">Selected Service</label>
-          <select
-            id="selectedService"
-            v-model="localConfig.SELECTED_SERVICE"
-            class="form-control"
-            :disabled="isLoading"
-          >
-            <option value="">Select a service</option>
-            <option value="plex">Plex</option>
-            <option value="jellyfin">Jellyfin</option>
-            <option value="emby">Emby (Experimental)</option>
-          </select>
-          <small class="form-help">Choose your media server</small>
-        </div>
+        <BaseDropdown
+          v-model="localConfig.SELECTED_SERVICE"
+          :options="serviceOptions"
+          label="Selected Service"
+          placeholder="Select a service"
+          help-text="Choose your media server"
+          :disabled="isLoading"
+          id="selectedService"
+        />
 
         <!-- Plex Configuration -->
         <div v-if="localConfig.SELECTED_SERVICE === 'plex'" class="service-config">
@@ -267,8 +261,13 @@
 </template>
 
 <script>
+import BaseDropdown from '@/components/common/BaseDropdown.vue';
+
 export default {
   name: 'SettingsServices',
+  components: {
+    BaseDropdown
+  },
   props: {
     config: {
       type: Object,
@@ -292,6 +291,11 @@ export default {
       showPlexToken: false,
       showJellyfinToken: false,
       showSeerToken: false,
+      serviceOptions: [
+        { value: 'plex', label: 'Plex' },
+        { value: 'jellyfin', label: 'Jellyfin' },
+        { value: 'emby', label: 'Emby (Experimental)' }
+      ]
     };
   },
   computed: {
@@ -522,6 +526,35 @@ export default {
 
 .input-group .form-control {
   flex: 1;
+}
+
+.select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.select-wrapper .form-control {
+  padding-right: 2.5rem;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.chevron-indicator {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #9ca3af;
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+}
+
+.select-wrapper:focus-within .chevron-indicator {
+  transform: translateY(-50%) rotate(180deg);
+  color: #3b82f6;
 }
 
 .form-help {

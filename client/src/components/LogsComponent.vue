@@ -5,13 +5,13 @@
       <div class="filter-container">
         <input type="text" v-model="filterText" placeholder="Filter logs..." class="filter-input" />
 
-        <select v-model="selectedSeverity" class="severity-dropdown">
-          <option value="">All Severities</option>
-          <option value="DEBUG">DEBUG</option>
-          <option value="INFO">INFO</option>
-          <option value="WARNING">WARNING</option>
-          <option value="ERROR">ERROR</option>
-        </select>
+        <BaseDropdown
+          v-model="selectedSeverity"
+          :options="severityOptions"
+          placeholder="All Severities"
+          id="severity-filter"
+          class="severity-dropdown-wrapper"
+        />
 
         <button @click="toggleAutoUpdate" class="toggle-button">
           <font-awesome-icon :icon="[autoUpdate ? 'fas' : 'fas', autoUpdate ? 'pause' : 'play']" />
@@ -53,21 +53,30 @@ import axios from 'axios';
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { faPlay, faPause, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { library } from '@fortawesome/fontawesome-svg-core';
+import BaseDropdown from '@/components/common/BaseDropdown.vue';
 
 export default {
   components: {
-    FontAwesomeIcon
+    FontAwesomeIcon,
+    BaseDropdown
   },
   data() {
     return {
       logs: [],
-      displayedLogs: [], 
+      displayedLogs: [],
       filterText: '',
       selectedSeverity: '',
       autoUpdate: true,
       updateInterval: null,
       batchSize: 100,
       loadingMore: false,
+      severityOptions: [
+        { value: '', label: 'All Severities' },
+        { value: 'DEBUG', label: 'DEBUG' },
+        { value: 'INFO', label: 'INFO' },
+        { value: 'WARNING', label: 'WARNING' },
+        { value: 'ERROR', label: 'ERROR' }
+      ]
     };
   },
   computed: {
@@ -302,13 +311,26 @@ export default {
   width: 70%;
 }
 
-.severity-dropdown {
+.severity-dropdown-wrapper {
+  width: 30%;
+}
+
+.severity-dropdown-wrapper :deep(.form-group) {
+  margin-bottom: 0;
+}
+
+.severity-dropdown-wrapper :deep(.form-control) {
   padding: 8px;
   border: 1px solid #374151;
   border-radius: 4px;
   background-color: #1f2937;
   color: white;
-  width: 30%;
+  width: 100%;
+  margin: 0;
+}
+
+.severity-dropdown-wrapper :deep(.select-wrapper) {
+  width: 100%;
 }
 
 .loading-spinner {

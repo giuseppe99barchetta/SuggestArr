@@ -13,23 +13,16 @@
           Database Type
         </h3>
 
-        <div class="form-group">
-          <label for="dbType">Database Type</label>
-          <select
-            id="dbType"
-            v-model="localConfig.DB_TYPE"
-            class="form-control"
-            :disabled="isLoading"
-            @change="onDbTypeChange"
-          >
-            <option value="sqlite">SQLite (Default)</option>
-            <option value="postgres">PostgreSQL</option>
-            <option value="mysql">MySQL/MariaDB</option>
-          </select>
-          <small class="form-help">
-            SQLite is suitable for most users. PostgreSQL or MySQL recommended for production environments.
-          </small>
-        </div>
+        <BaseDropdown
+          v-model="localConfig.DB_TYPE"
+          :options="databaseOptions"
+          label="Database Type"
+          placeholder="Select database type"
+          :help-text="'SQLite is suitable for most users. PostgreSQL or MySQL recommended for production environments.'"
+          :disabled="isLoading"
+          id="dbType"
+          @change="onDbTypeChange"
+        />
 
         <!-- SQLite Info -->
         <div v-if="localConfig.DB_TYPE === 'sqlite'" class="db-info">
@@ -275,8 +268,13 @@
 </template>
 
 <script>
+import BaseDropdown from '@/components/common/BaseDropdown.vue';
+
 export default {
   name: 'SettingsDatabase',
+  components: {
+    BaseDropdown
+  },
   props: {
     config: {
       type: Object,
@@ -300,6 +298,11 @@ export default {
       originalConfig: {},
       showPostgresPassword: false,
       showMysqlPassword: false,
+      databaseOptions: [
+        { value: 'sqlite', label: 'SQLite (Default)' },
+        { value: 'postgres', label: 'PostgreSQL' },
+        { value: 'mysql', label: 'MySQL/MariaDB' }
+      ]
     };
   },
   computed: {
@@ -517,6 +520,35 @@ export default {
 
 .input-group .form-control {
   flex: 1;
+}
+
+.select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.select-wrapper .form-control {
+  padding-right: 2.5rem;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.chevron-indicator {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #9ca3af;
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+}
+
+.select-wrapper:focus-within .chevron-indicator {
+  transform: translateY(-50%) rotate(180deg);
+  color: #3b82f6;
 }
 
 .form-help {
