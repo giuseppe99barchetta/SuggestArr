@@ -3,11 +3,19 @@
     <div class="settings-content">
       <!-- Header -->
       <div class="settings-header">
-        <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank">
-          <img src="@/assets/logo.png" alt="SuggestArr Logo" class="logo">
-        </a>
-        <h1 class="settings-title">Settings</h1>
-        <p class="settings-subtitle">Manage your SuggestArr configuration</p>
+        <!-- Back Button -->
+        <button @click="goToDashboard" class="back-button">
+          <i class="fas fa-arrow-left"></i>
+          Back to Home
+        </button>
+
+        <div class="header-content">
+          <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank">
+            <img src="@/assets/logo.png" alt="SuggestArr Logo" class="logo">
+          </a>
+          <h1 class="settings-title">Settings</h1>
+          <p class="settings-subtitle">Manage your SuggestArr configuration</p>
+        </div>
       </div>
 
       <!-- Navigation Tabs -->
@@ -37,13 +45,6 @@
 
       <!-- Save Button -->
       <div class="settings-footer">
-        <button
-          @click="goToDashboard"
-          class="btn btn-secondary"
-        >
-          <i class="fas fa-arrow-left"></i>
-          Back to Dashboard
-        </button>
         <div class="footer-spacer"></div>
         <button
           @click="exportConfig"
@@ -339,8 +340,35 @@ export default {
 }
 
 .settings-header {
-  text-align: center;
   margin-bottom: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.header-content {
+  text-align: center;
+}
+
+.back-button {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background-color: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: var(--transition-base);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.back-button:hover {
+  background-color: var(--color-bg-interactive);
+  color: var(--color-text-primary);
 }
 
 .logo {
@@ -536,6 +564,11 @@ export default {
 @media (max-width: 768px) {
   .settings-content {
     padding: 1rem;
+  }
+
+  .back-button {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
   }
 
   .tabs-navigation {
