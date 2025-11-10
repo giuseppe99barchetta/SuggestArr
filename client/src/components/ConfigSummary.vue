@@ -163,15 +163,29 @@ export default {
                    config.DB_TYPE === 'postgres' ? 'PostgreSQL' : 'SQLite';
         }
     },
-    mounted() {
-        this.loadConfigIfNeeded();
-        this.checkForUpdates();
-        this.calculateNextCronRun();
-        if (!this.effectiveConfig.TMDB_API_KEY) {
-            this.startDefaultImageRotation();
-        } else {
-            this.startBackgroundImageRotation(fetchRandomMovieImage, this.effectiveConfig.TMDB_API_KEY);
+    watch: {
+        effectiveConfig: {
+            handler(newConfig) {
+                // Recalculate cron run when config changes
+                if (newConfig && Object.keys(newConfig).length > 0) {
+                    this.calculateNextCronRun();
+                }
+            },
+            deep: true
         }
+    },
+    mounted() {
+        this.loadConfigIfNeeded().then(() => {
+            // Only calculate cron run after config is loaded
+            this.calculateNextCronRun();
+            // Start background rotation after config is loaded
+            if (!this.effectiveConfig.TMDB_API_KEY) {
+                this.startDefaultImageRotation();
+            } else {
+                this.startBackgroundImageRotation(fetchRandomMovieImage, this.effectiveConfig.TMDB_API_KEY);
+            }
+        });
+        this.checkForUpdates();
     },
     methods: {
         async loadConfigIfNeeded() {
@@ -215,7 +229,14 @@ export default {
         },
         calculateNextCronRun() {
             try {
-                const interval = cronParser.parseExpression(this.effectiveConfig.CRON_TIMES);
+                // Check if CRON_TIMES is undefined, null, or empty
+                const cronExpression = this.effectiveConfig.CRON_TIMES;
+                if (!cronExpression || cronExpression.trim() === '') {
+                    this.nextCronRun = 'No cron schedule configured';
+                    return;
+                }
+
+                const interval = cronParser.parseExpression(cronExpression);
                 const nextRun = interval.next();
                 const now = new Date();
                 const timeDiff = nextRun.getTime() - now.getTime(); // Get difference in milliseconds
