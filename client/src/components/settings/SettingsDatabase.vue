@@ -128,11 +128,11 @@
           <button
             @click="testDatabaseConnection"
             class="btn btn-outline"
-            :disabled="isLoading || !isPostgresConfigured || testingConnections.database"
+            :disabled="isLoading || !isPostgresConfigured || isTestingDatabase"
           >
-            <i v-if="testingConnections.database" class="fas fa-spinner fa-spin"></i>
+            <i v-if="isTestingDatabase" class="fas fa-spinner fa-spin"></i>
             <i v-else class="fas fa-plug"></i>
-            {{ testingConnections.database ? 'Testing...' : 'Test Connection' }}
+            {{ isTestingDatabase ? 'Testing...' : 'Test Connection' }}
           </button>
         </div>
       </div>
@@ -219,11 +219,11 @@
           <button
             @click="testDatabaseConnection"
             class="btn btn-outline"
-            :disabled="isLoading || !isMysqlConfigured || testingConnections.database"
+            :disabled="isLoading || !isMysqlConfigured || isTestingDatabase"
           >
-            <i v-if="testingConnections.database" class="fas fa-spinner fa-spin"></i>
+            <i v-if="isTestingDatabase" class="fas fa-spinner fa-spin"></i>
             <i v-else class="fas fa-plug"></i>
-            {{ testingConnections.database ? 'Testing...' : 'Test Connection' }}
+            {{ isTestingDatabase ? 'Testing...' : 'Test Connection' }}
           </button>
         </div>
       </div>
@@ -286,6 +286,12 @@ export default {
       type: Boolean,
       default: false,
     },
+    testingConnections: {
+      type: Object,
+      default: () => ({
+        database: false,
+      }),
+    },
   },
   emits: ['save-section', 'test-connection'],
   data() {
@@ -320,6 +326,9 @@ export default {
         this.localConfig.DB_USER &&
         this.localConfig.DB_PASSWORD
       );
+    },
+    isTestingDatabase() {
+      return this.testingConnections?.database || false;
     },
   },
   watch: {
