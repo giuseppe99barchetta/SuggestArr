@@ -34,7 +34,7 @@
                         </a>
                     </p>
                 </div>
-                <div class="flex flex-col sm:flex-row sm:space-x-4">
+                <div class="flex flex-row sm:flex-row sm:space-x-4">
                     <!-- Max Similar Movies and TV Shows -->
                     <div class="bg-gray-700 p-4 rounded-lg shadow-md w-full sm:w-1/2">
                         <label class="block text-sm font-semibold text-gray-300">Max Similar Movies:</label>
@@ -45,7 +45,7 @@
                         <p class="text-gray-200">{{ effectiveConfig.MAX_SIMILAR_TV }}</p>
                     </div>
                 </div>
-                <div class="flex flex-col sm:flex-row sm:space-x-4 mt-4">
+                <div class="flex flex-row sm:flex-row sm:space-x-4 mt-4">
                     <!-- Max Content to Fetch and Search Size -->
                     <div class="bg-gray-700 p-4 rounded-lg shadow-md w-full sm:w-1/2">
                         <label class="block text-sm font-semibold text-gray-300">Max new Content for each content:</label>

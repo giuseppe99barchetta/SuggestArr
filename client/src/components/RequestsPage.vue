@@ -6,7 +6,7 @@
         class="request-content p-4 sm:p-6 bg-gray-800 bg-opacity-90 rounded-lg shadow-lg w-full max-w-3xl lg:max-w-4xl">
         <!-- Back Button -->
         <button @click="goHome"
-          class="p-0 bg-transparent border-none text-gray-300 hover:text-gray-400 focus:outline-none mb-4 sm:mb-6 flex items-center">
+          class="p-2 bg-transparent border-none text-gray-300 hover:text-gray-400 focus:outline-none mb-4 sm:mb-6 flex items-center">
           <i class="fas fa-arrow-left mr-2 text-xl"></i>
           <span class="text-sm">Back to Home</span>
         </button>
@@ -298,7 +298,7 @@ export default {
 }
 
 .request-container {
-  background-color: #1a202c;
+  background-color: var(--color-bg-primary);
   position: relative;
   background-size: cover;
   background-position: center;
@@ -312,22 +312,22 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--color-bg-overlay-light);
   z-index: -1;
 }
 
 .request-content {
   padding: 30px;
-  background-color: #2d3748e7;
+  background-color: var(--color-bg-content);
   border-radius: 15px;
   max-width: 850px;
   width: 100%;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-base);
   min-width: 80%;
 }
 
 .search-input {
-  color: #ffffff;
+  color: var(--color-text-primary);
   background-color: #2d3748;
   border: 1px solid #4a5568;
   padding: 10px;
@@ -336,8 +336,8 @@ export default {
 }
 
 .source-box {
-  background-color: #1a202c;
-  color: #e2e8f0;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-secondary);
   transition: transform 0.3s ease;
 }
 
@@ -382,14 +382,14 @@ export default {
 }
 
 .modal-overlay {
-  background: rgba(0, 0, 0, 0.75);
+  background: var(--color-bg-overlay-heavy);
 }
 
 .modal-content {
   max-height: 90vh;
   overflow-y: auto;
-  transition: all 0.3s ease-in-out;
-  background-color: #2d3748e7;
+  transition: var(--transition-base)-in-out;
+  background-color: var(--color-bg-content);
 }
 
 ul {
@@ -411,7 +411,7 @@ ul {
 }
 
 .modal-separator {
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  border-top: 1px solid var(--color-border-light);
   margin: 16px 0;
 }
 

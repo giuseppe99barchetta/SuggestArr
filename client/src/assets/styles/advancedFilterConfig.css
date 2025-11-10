@@ -1,34 +1,33 @@
 .relative input:checked~.dot {
     transform: translateX(100%);
-    background-color: #34d399;
     /* Green color when checked */
+    background-color: #34d399;
 }
-
 
 /* Styling for vue-multiselect */
 .multiselect {
-    border: 1px solid #4a5568;
     /* Match border-gray-600 */
-    border-radius: 0.5rem;
-    /* Match rounded-lg */
+    border: 1px solid #4a5568;
+        /* Match rounded-lg */
+    border-radius: var(--border-radius-sm);
     padding: 0.0rem;
     color: #e5e7eb;
     width: 100%;
 }
 
 .multiselect__tag {
-    background-color: #b84141;
     /* Red for excluded tags */
+    background-color: #b84141;
     color: #caced8 !important;
     margin: 2px;
     font-size: 0.875rem;
-    border-radius: 0.5rem;
+    border-radius: var(--border-radius-sm);
 }
 
 .multiselect__input {
     background-color: transparent !important;
-    color: #ffffff !important;
     /* Force light text color */
+    color: var(--color-text-primary) !important;
 }
 
 /* Target selected single items */
@@ -38,13 +37,13 @@
 }
 
 .multiselect__placeholder {
-    color: #9ca3af;
+    color: var(--color-text-muted);
 }
 
 .multiselect__content-wrapper {
     background-color: #1f2937;
     border: 0px solid #4b5563;
-    border-radius: 0.5rem;
+    border-radius: var(--border-radius-sm);
 }
 
 .multiselect__option--highlight {
@@ -53,12 +52,12 @@
 
 .multiselect__option--selected {
     background-color: #b84141;
-    color: #ffffff;
+    color: var(--color-text-primary);
 }
 
 .multiselect__select,
 .multiselect__clear {
-    color: #9ca3af;
+    color: var(--color-text-muted);
 }
 
 .multiselect__tags {
@@ -73,44 +72,47 @@
 }
 
 .multiselect-genres .multiselect__tag {
-    background-color: #b84141; /* Rosso per i tag dei generi esclusi */
-    color: #ffffff !important;
+    background-color: #b84141;
+    /* Rosso per i tag dei generi esclusi */
+    color: var(--color-text-primary) !important;
 }
 
 /* Tag verde per il multiselect delle lingue */
 .multiselect-languages .multiselect__tag {
-    background-color: #34d399; /* Verde per i tag delle lingue preferite */
-    color: #ffffff !important;
+    background-color: #34d399;
+    /* Verde per i tag delle lingue preferite */
+    color: var(--color-text-primary) !important;
 }
+
 .multiselect__content-wrapper::-webkit-scrollbar {
-    width: 8px;
     /* Width of the scrollbar */
+    width: 8px;
 }
 
 .multiselect__content-wrapper::-webkit-scrollbar-track {
-    background: #1f2937;
     /* Background of the scrollbar track */
+    background: #1f2937;
     border-radius: 8px;
 }
 
 .multiselect__content-wrapper::-webkit-scrollbar-thumb {
-    background-color: #4b5563;
     /* Color of the scrollbar thumb */
+    background-color: #4b5563;
     border-radius: 8px;
-    border: 2px solid #1f2937;
     /* Adds padding around the thumb */
+    border: 2px solid #1f2937;
 }
 
 .multiselect__content-wrapper::-webkit-scrollbar-thumb:hover {
-    background-color: #6b7280;
     /* Color on hover */
+    background-color: #6b7280;
 }
 
 /* Firefox scrollbar styling */
 .multiselect__content-wrapper {
     scrollbar-width: thin;
-    scrollbar-color: #4b5563 #1f2937;
     /* Thumb color and track color */
+    scrollbar-color: #4b5563 #1f2937;
 }
 
 .switch {
@@ -133,7 +135,8 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: #475569; /* Slate-600 */
+    /* Slate-600 */
+    background-color: #475569;
     transition: .4s;
 }
 
@@ -148,11 +151,12 @@
     transition: .4s;
 }
 
-input:checked + .slider {
-    background-color: #6366f1; /* Indigo-500 */
+input:checked+.slider {
+    /* Indigo-500 */
+    background-color: #6366f1;
 }
 
-input:checked + .slider:before {
+input:checked+.slider:before {
     transform: translateX(26px);
 }
 

@@ -423,7 +423,7 @@ export default {
 
 <style scoped>
 .settings-database {
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .section-header {
@@ -433,11 +433,11 @@ export default {
 .section-header h2 {
   font-size: 1.8rem;
   margin-bottom: 0.5rem;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .section-header p {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 1rem;
 }
 
@@ -451,19 +451,19 @@ export default {
 .settings-group {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.75rem;
+  border-radius: var(--border-radius-md);
   padding: 1.5rem;
 }
 
 .settings-group.warning {
-  border-color: #f59e0b;
+  border-color: var(--color-warning);
   background: rgba(245, 158, 11, 0.1);
 }
 
 .settings-group h3 {
   font-size: 1.2rem;
   margin-bottom: 1rem;
-  color: #fff;
+  color: var(--color-text-primary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -485,7 +485,7 @@ export default {
 
 .form-group label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-top: 0.5rem;
   font-weight: 500;
   color: #e5e7eb;
 }
@@ -493,18 +493,18 @@ export default {
 .form-control {
   width: 100%;
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 0.5rem;
-  color: #fff;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
   font-size: 1rem;
-  transition: all 0.3s ease;
+  transition: var(--transition-base);
 }
 
 .form-control:focus {
   outline: none;
-  border-color: #3b82f6;
-  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--color-primary);
+  background: var(--color-bg-active);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
@@ -541,21 +541,21 @@ export default {
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 0.75rem;
   transition: transform 0.2s ease;
 }
 
 .select-wrapper:focus-within .chevron-indicator {
   transform: translateY(-50%) rotate(180deg);
-  color: #3b82f6;
+  color: var(--color-primary);
 }
 
 .form-help {
   display: block;
   margin-top: 0.25rem;
   font-size: 0.875rem;
-  color: #9ca3af;
+  color: var(--color-text-muted);
   line-height: 1.4;
 }
 
@@ -566,7 +566,7 @@ export default {
 .info-box {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius-sm);
   padding: 1rem;
   display: flex;
   align-items: flex-start;
@@ -574,12 +574,12 @@ export default {
 }
 
 .info-box i {
-  color: #3b82f6;
+  color: var(--color-primary);
   margin-top: 0.25rem;
 }
 
 .info-box strong {
-  color: #3b82f6;
+  color: var(--color-primary);
   margin-bottom: 0.5rem;
   display: block;
 }
@@ -617,10 +617,10 @@ export default {
 
 .btn {
   padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: var(--transition-base);
   border: none;
   display: inline-flex;
   align-items: center;
@@ -635,22 +635,22 @@ export default {
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: var(--color-primary);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--color-primary-hover);
 }
 
 .btn-outline {
   background: transparent;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-medium);
 }
 
 .btn-outline:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-interactive);
   border-color: rgba(255, 255, 255, 0.5);
 }
 

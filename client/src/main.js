@@ -4,6 +4,7 @@ import ToastPlugin from 'vue-toast-notification';
 import 'vue-toast-notification/dist/theme-bootstrap.css';
 import axios from 'axios';
 import router from './router';
+import '@/assets/styles/theme.css';
 
 const app = createApp(App);
 

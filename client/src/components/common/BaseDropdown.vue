@@ -139,13 +139,13 @@ export default {
 
 .form-group label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-top: 0.5rem;
   font-weight: 500;
   color: #e5e7eb;
 }
 
 .required-indicator {
-  color: #ef4444;
+  color: var(--color-danger);
   margin-left: 0.25rem;
 }
 
@@ -159,12 +159,12 @@ export default {
   width: 100%;
   padding: 0.75rem;
   padding-right: 2.5rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 0.5rem;
-  color: #fff;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
   font-size: 1rem;
-  transition: all 0.3s ease;
+  transition: var(--transition-base);
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -172,8 +172,8 @@ export default {
 
 .select-wrapper .form-control:focus {
   outline: none;
-  border-color: #3b82f6;
-  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--color-primary);
+  background: var(--color-bg-active);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
@@ -193,21 +193,21 @@ export default {
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 0.75rem;
   transition: transform 0.2s ease;
 }
 
 .select-wrapper:focus-within .chevron-indicator {
   transform: translateY(-50%) rotate(180deg);
-  color: #3b82f6;
+  color: var(--color-primary);
 }
 
 .form-help {
   display: block;
   margin-top: 0.25rem;
   font-size: 0.875rem;
-  color: #9ca3af;
+  color: var(--color-text-muted);
   line-height: 1.4;
 }
 
@@ -215,7 +215,7 @@ export default {
   display: block;
   margin-top: 0.25rem;
   font-size: 0.875rem;
-  color: #ef4444;
+  color: var(--color-danger);
   line-height: 1.4;
 }
 

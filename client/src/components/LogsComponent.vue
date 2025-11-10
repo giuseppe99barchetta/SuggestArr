@@ -203,7 +203,7 @@ export default {
 
 .logs-table th {
   background-color: #1f2937;
-  color: #9ca3af;
+  color: var(--color-text-muted);
   border-bottom: 1px solid #374151;
 }
 
@@ -226,27 +226,27 @@ export default {
 }
 
 .severity-label.debug {
-  background-color: #3b82f6;
-  color: #fff;
+  background-color: var(--color-primary);
+  color: var(--color-text-primary);
 }
 
 .severity-label.info {
-  background-color: #10b981;
-  color: #fff;
+  background-color: var(--color-success);
+  color: var(--color-text-primary);
 }
 
 .severity-label.warning {
   background-color: #ffcc00;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .severity-label.error {
-  background-color: #ef4444;
-  color: #fff;
+  background-color: var(--color-danger);
+  color: var(--color-text-primary);
 }
 
 .copy-button {
-  background-color: #3b82f6;
+  background-color: var(--color-primary);
   color: white;
   border: none;
   padding: 5px 10px;
@@ -257,7 +257,7 @@ export default {
 }
 
 .copy-button:hover {
-  background-color: #2563eb;
+  background-color: var(--color-primary-hover);
 }
 
 .logs-table-container {
@@ -287,13 +287,13 @@ export default {
 }
 
 .logs-table-container::-webkit-scrollbar-thumb {
-  background-color: #3b82f6;
+  background-color: var(--color-primary);
   border-radius: 10px;
   border: 2px solid #1f2937;
 }
 
 .logs-table-container::-webkit-scrollbar-thumb:hover {
-  background-color: #2563eb;
+  background-color: var(--color-primary-hover);
 }
 
 .filter-container {
@@ -336,7 +336,7 @@ export default {
 .loading-spinner {
   text-align: center;
   margin: 10px 0;
-  color: #3b82f6;
+  color: var(--color-primary);
 }
 
 </style>

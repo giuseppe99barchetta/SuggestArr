@@ -330,10 +330,12 @@ export default {
 
 .settings-content {
   min-height: 100vh;
-  background: rgba(0, 0, 0, 0.85);
+  background-color: var(--color-bg-content);
+  backdrop-filter: blur(10px);
   padding: 2rem;
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--color-border-light);
 }
 
 .settings-header {
@@ -350,12 +352,12 @@ export default {
 .settings-title {
   font-size: 2.5rem;
   font-weight: bold;
-  color: #fff;
+  color: var(--color-text-primary);
   margin-bottom: 0.5rem;
 }
 
 .settings-subtitle {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 1.1rem;
 }
 
@@ -368,13 +370,13 @@ export default {
 }
 
 .tab-button {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #9ca3af;
+  background-color: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-light);
+  color: var(--color-text-muted);
   padding: 0.75rem 1.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius-sm);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: var(--transition-base);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -382,23 +384,23 @@ export default {
 }
 
 .tab-button:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background-color: var(--color-bg-active);
+  color: var(--color-text-primary);
 }
 
 .tab-button.active {
-  background: #3b82f6;
-  color: #fff;
-  border-color: #3b82f6;
+  background-color: var(--color-primary);
+  color: var(--color-text-primary);
+  border-color: var(--color-primary);
 }
 
 .tab-content {
   flex: 1;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 1rem;
+  background-color: var(--color-bg-content-secondary);
+  border-radius: var(--border-radius-lg);
   padding: 2rem;
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--color-border-light);
 }
 
 .settings-footer {
@@ -407,7 +409,7 @@ export default {
   align-items: center;
   margin-top: 2rem;
   padding-top: 2rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--color-border-light);
 }
 
 .footer-spacer {
@@ -416,10 +418,10 @@ export default {
 
 .btn {
   padding: 0.75rem 1.5rem;
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: var(--transition-base);
   border: none;
   display: inline-flex;
   align-items: center;
@@ -432,31 +434,31 @@ export default {
 }
 
 .btn-secondary {
-  background: #6b7280;
-  color: white;
+  background-color: #6b7280;
+  color: var(--color-text-primary);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: #4b5563;
+  background-color: #4b5563;
 }
 
 .btn-outline {
-  background: transparent;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background-color: transparent;
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-medium);
 }
 
 .btn-outline:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
+  background-color: var(--color-bg-interactive);
 }
 
 .btn-danger {
-  background: #dc2626;
-  color: white;
+  background-color: var(--color-danger);
+  color: var(--color-text-primary);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #b91c1c;
+  background-color: #dc2626;
 }
 
 .loading-overlay {
@@ -465,7 +467,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background-color: var(--color-bg-overlay-heavy);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -476,8 +478,8 @@ export default {
 .spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid rgba(255, 255, 255, 0.3);
-  border-top: 4px solid #3b82f6;
+  border: 4px solid var(--color-border-medium)m);
+  border-top: 4px solid var(--color-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 1rem;
@@ -494,7 +496,7 @@ export default {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background-color: var(--color-bg-overlay-heavy);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -502,21 +504,22 @@ export default {
 }
 
 .modal-content {
-  background: #1f2937;
+  background-color: var(--color-bg-content);
+  backdrop-filter: blur(10px);
   padding: 2rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border-light);
   max-width: 500px;
   width: 90%;
 }
 
 .modal-content h3 {
-  color: #fff;
+  color: var(--color-text-primary);
   margin-bottom: 1rem;
 }
 
 .modal-content p {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   margin-bottom: 2rem;
 }
 

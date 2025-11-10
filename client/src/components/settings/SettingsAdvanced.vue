@@ -509,7 +509,7 @@ export default {
 
 <style scoped>
 .settings-advanced {
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .section-header {
@@ -519,11 +519,11 @@ export default {
 .section-header h2 {
   font-size: 1.8rem;
   margin-bottom: 0.5rem;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .section-header p {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 1rem;
 }
 
@@ -537,19 +537,19 @@ export default {
 .settings-group {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.75rem;
+  border-radius: var(--border-radius-md);
   padding: 1.5rem;
 }
 
 .settings-group.experimental {
-  border-color: #f59e0b;
+  border-color: var(--color-warning);
   background: rgba(245, 158, 11, 0.05);
 }
 
 .settings-group h3 {
   font-size: 1.2rem;
   margin-bottom: 1rem;
-  color: #fff;
+  color: var(--color-text-primary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -565,7 +565,7 @@ export default {
 
 .form-group label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-top: 0.5rem;
   font-weight: 500;
   color: #e5e7eb;
 }
@@ -579,12 +579,15 @@ export default {
 }
 
 .checkbox-label input[type="checkbox"] {
+  vertical-align: middle;
   width: 1.25rem;
   height: 1.25rem;
-  accent-color: #3b82f6;
+  accent-color: var(--color-primary);
 }
 
 .checkbox-text {
+  vertical-align: middle;
+  margin-left: 0.5rem;
   color: #e5e7eb;
   font-weight: 500;
 }
@@ -592,18 +595,18 @@ export default {
 .form-control {
   width: 100%;
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 0.5rem;
-  color: #fff;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
   font-size: 1rem;
-  transition: all 0.3s ease;
+  transition: var(--transition-base);
 }
 
 .form-control:focus {
   outline: none;
-  border-color: #3b82f6;
-  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--color-primary);
+  background: var(--color-bg-active);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
@@ -616,14 +619,14 @@ export default {
   display: block;
   margin-top: 0.25rem;
   font-size: 0.875rem;
-  color: #9ca3af;
+  color: var(--color-text-muted);
   line-height: 1.4;
 }
 
 .warning-box {
   background: rgba(245, 158, 11, 0.1);
   border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius-sm);
   padding: 1rem;
   display: flex;
   align-items: flex-start;
@@ -632,13 +635,13 @@ export default {
 }
 
 .warning-box i {
-  color: #f59e0b;
+  color: var(--color-warning);
   margin-top: 0.25rem;
   flex-shrink: 0;
 }
 
 .warning-box strong {
-  color: #f59e0b;
+  color: var(--color-warning);
   display: block;
   margin-bottom: 0.5rem;
 }
@@ -653,7 +656,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #9ca3af;
+  color: var(--color-text-muted);
   padding: 1rem;
   text-align: center;
 }
@@ -666,7 +669,7 @@ export default {
   max-height: 400px;
   overflow-y: auto;
   background: rgba(0, 0, 0, 0.2);
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius-sm);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -678,28 +681,28 @@ export default {
   padding: 1.25rem 1rem;
   background: rgba(255, 255, 255, 0.05);
   border: 2px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.75rem;
+  border-radius: var(--border-radius-md);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: var(--transition-base);
   position: relative;
   overflow: hidden;
 }
 
 .user-card:hover {
   background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: var(--color-border-light);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .user-card.selected {
   background: rgba(59, 130, 246, 0.2);
-  border-color: #3b82f6;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .user-card.selected .user-avatar {
-  border-color: #3b82f6;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
 }
 
@@ -712,12 +715,12 @@ export default {
   height: 48px;
   border-radius: 50%;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-interactive);
   display: flex;
   align-items: center;
   justify-content: center;
   border: 2px solid transparent;
-  transition: all 0.3s ease;
+  transition: var(--transition-base);
 }
 
 .user-avatar img {
@@ -727,7 +730,7 @@ export default {
 }
 
 .user-avatar i {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 1.25rem;
 }
 
@@ -749,7 +752,7 @@ export default {
 }
 
 .user-type {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.025em;
@@ -762,14 +765,14 @@ export default {
   right: 0.5rem;
   width: 24px;
   height: 24px;
-  background: #3b82f6;
+  background: var(--color-primary);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   transform: scale(0.8);
-  transition: all 0.3s ease;
+  transition: var(--transition-base);
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
 }
 
@@ -790,7 +793,7 @@ export default {
   align-items: center;
   justify-content: center;
   padding: 3rem 2rem;
-  color: #9ca3af;
+  color: var(--color-text-muted);
   text-align: center;
 }
 
@@ -813,10 +816,10 @@ export default {
 
 .btn {
   padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: var(--transition-base);
   border: none;
   display: inline-flex;
   align-items: center;
@@ -831,22 +834,22 @@ export default {
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: var(--color-primary);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--color-primary-hover);
 }
 
 .btn-outline {
   background: transparent;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-medium)m);
 }
 
 .btn-outline:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-interactive);
   border-color: rgba(255, 255, 255, 0.5);
 }
 

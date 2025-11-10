@@ -78,7 +78,7 @@ export default {
     align-items: center;
     justify-content: center;
     background-color: transparent;
-    color: #ffffff;
+    color: var(--color-text-primary);
     padding: 10px 20px;
     font-size: 1.1rem;
     font-weight: 500;
@@ -88,7 +88,7 @@ export default {
 
 .logs-button:hover {
     background-color: #4f46e5;
-    color: #ffffff;
+    color: var(--color-text-primary);
     border-color: #4f46e5;
 }
 
@@ -117,7 +117,7 @@ export default {
 
 .footer-icon {
     font-size: 1.5rem;
-    color: #ffffff;
+    color: var(--color-text-primary);
     transition: color 0.3s ease;
 }
 
@@ -167,14 +167,14 @@ export default {
 }
 
 .modal-title {
-    color: #ffffff;
+    color: var(--color-text-primary);
     font-size: 1.5rem;
 }
 
 .close-button {
     background: none;
     border: none;
-    color: #ffffff;
+    color: var(--color-text-primary);
     font-size: 1.5rem;
     cursor: pointer;
 }

@@ -373,7 +373,7 @@ export default {
 <style scoped>
 .welcome-card {
   background: rgba(0, 0, 0, 0.8);
-  border-radius: 1rem;
+  border-radius: var(--border-radius-lg);
   padding: 2rem;
   text-align: center;
   max-width: 600px;
@@ -383,14 +383,14 @@ export default {
 }
 
 .welcome-card h1 {
-  color: #fff;
+  color: var(--color-text-primary);
   font-size: 2.5rem;
   margin-bottom: 1rem;
   font-weight: bold;
 }
 
 .welcome-subtitle {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 1.2rem;
   margin-bottom: 2rem;
   line-height: 1.6;
@@ -404,13 +404,13 @@ export default {
 }
 
 .setup-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 1rem;
+  background: var(--color-bg-interactive);
+  border: 2px solid var(--color-border-light);
+  border-radius: var(--border-radius-lg);
   padding: 2rem 1.5rem;
   cursor: pointer;
-  transition: all 0.3s ease;
-  color: #fff;
+  transition: var(--transition-base);
+  color: var(--color-text-primary);
   text-align: center;
   backdrop-filter: blur(10px);
 }
@@ -421,17 +421,17 @@ export default {
 }
 
 .setup-btn.primary {
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-  border-color: #3b82f6;
+  background: linear-gradient(135deg, var(--color-primary), #1d4ed8);
+  border-color: var(--color-primary);
 }
 
 .setup-btn.primary:hover {
-  background: linear-gradient(135deg, #2563eb, #1e40af);
+  background: linear-gradient(135deg, var(--color-primary-hover), #1e40af);
 }
 
 .setup-btn.secondary {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: var(--color-bg-active);
+  border-color: var(--color-border-medium);
 }
 
 .setup-btn.secondary:hover {
@@ -453,14 +453,14 @@ export default {
 }
 
 .setup-btn small {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 0.9rem;
 }
 
 .existing-config {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius-sm);
   padding: 1rem;
   margin-top: 1rem;
 }
@@ -474,7 +474,7 @@ export default {
 }
 
 .settings-link {
-  color: #3b82f6;
+  color: var(--color-primary);
   text-decoration: none;
   font-weight: 500;
 }
@@ -488,13 +488,13 @@ export default {
 }
 
 .back-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
   padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius-sm);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: var(--transition-base);
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -507,7 +507,7 @@ export default {
 
 .completion-card {
   background: rgba(0, 0, 0, 0.8);
-  border-radius: 1rem;
+  border-radius: var(--border-radius-lg);
   padding: 2rem;
   text-align: center;
   max-width: 600px;
@@ -517,7 +517,7 @@ export default {
 }
 
 .success-icon {
-  color: #10b981;
+  color: var(--color-success);
   font-size: 4rem;
   margin-bottom: 1rem;
 }
@@ -533,14 +533,14 @@ export default {
 }
 
 .completion-card h1 {
-  color: #fff;
+  color: var(--color-text-primary);
   font-size: 2.5rem;
   margin-bottom: 1rem;
   font-weight: bold;
 }
 
 .completion-subtitle {
-  color: #9ca3af;
+  color: var(--color-text-muted);
   font-size: 1.2rem;
   margin-bottom: 2rem;
   line-height: 1.6;
@@ -549,13 +549,13 @@ export default {
 .next-steps {
   text-align: left;
   background: rgba(255, 255, 255, 0.05);
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius-sm);
   padding: 1.5rem;
   margin-bottom: 2rem;
 }
 
 .next-steps h3 {
-  color: #fff;
+  color: var(--color-text-primary);
   margin-bottom: 1rem;
   font-size: 1.2rem;
 }
@@ -579,10 +579,10 @@ export default {
 
 .action-btn {
   padding: 1rem 2rem;
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius-sm);
   font-weight: bold;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: var(--transition-base);
   border: none;
   display: inline-flex;
   align-items: center;
@@ -594,7 +594,7 @@ export default {
 }
 
 .action-btn.primary {
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: linear-gradient(135deg, var(--color-success), #059669);
   color: white;
 }
 
@@ -605,9 +605,9 @@ export default {
 }
 
 .action-btn.secondary {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: var(--color-bg-interactive);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-medium);
 }
 
 .action-btn.secondary:hover {
