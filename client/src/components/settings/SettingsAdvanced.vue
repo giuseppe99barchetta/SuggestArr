@@ -19,34 +19,33 @@
             <i class="fas fa-spinner fa-spin"></i>
             Loading users...
           </div>
-          <div v-else class="user-selector">
+          <div v-else class="user-grid">
             <div
               v-for="user in availableUsers"
               :key="user.id"
-              class="user-item"
+              :class="['user-card', { 'selected': isUserSelected(user.id) }]"
+              @click="toggleUserSelection(user.id)"
             >
-              <input
-                :id="`user-${user.id}`"
-                v-model="localConfig.SELECTED_USERS"
-                :value="user.id"
-                type="checkbox"
-                class="user-checkbox"
-                :disabled="isLoading"
-              />
-              <label :for="`user-${user.id}`" class="user-label">
-                <div class="user-avatar">
-                  <img v-if="user.avatar" :src="user.avatar" :alt="user.name" />
-                  <i v-else class="fas fa-user"></i>
-                </div>
-                <div class="user-info">
-                  <div class="user-name">{{ user.name }}</div>
-                  <div class="user-type">{{ user.type || 'User' }}</div>
-                </div>
-              </label>
+              <div class="user-avatar">
+                <img v-if="user.avatar" :src="user.avatar" :alt="user.name" />
+                <i v-else class="fas fa-user"></i>
+              </div>
+              <div class="user-info">
+                <div class="user-name">{{ user.name }}</div>
+                <div class="user-type">{{ user.type || 'User' }}</div>
+              </div>
+              <div class="user-selection-indicator">
+                <i class="fas fa-check"></i>
+              </div>
+            </div>
+            <div v-if="availableUsers.length === 0" class="no-users">
+              <i class="fas fa-users-slash"></i>
+              <p>No users available</p>
+              <small>Please configure your media service first</small>
             </div>
           </div>
           <small class="form-help">
-            Select users for whom to generate suggestions. Leave empty to include all users.
+            Click on users to select/deselect them for suggestion generation. Leave empty to include all users.
           </small>
         </div>
 
@@ -130,11 +129,11 @@
         </h3>
 
         <BaseDropdown
-            v-model="localConfig.LOG_LEVEL"
+          v-model="localConfig.LOG_LEVEL"
           :options="logLevelOptions"
           label="Log Level"
           help-text="Set the verbosity of application logs"
-            :disabled="isLoading"
+          :disabled="isLoading"
           id="logLevel"
         />
 
@@ -381,6 +380,25 @@ export default {
     this.loadUsers();
   },
   methods: {
+    isUserSelected(userId) {
+      return Array.isArray(this.localConfig.SELECTED_USERS) && this.localConfig.SELECTED_USERS.includes(userId);
+    },
+
+    toggleUserSelection(userId) {
+      if (!Array.isArray(this.localConfig.SELECTED_USERS)) {
+        this.localConfig.SELECTED_USERS = [];
+      }
+
+      const index = this.localConfig.SELECTED_USERS.indexOf(userId);
+      if (index > -1) {
+        // Remove user from selection
+        this.localConfig.SELECTED_USERS.splice(index, 1);
+      } else {
+        // Add user to selection
+        this.localConfig.SELECTED_USERS.push(userId);
+      }
+    },
+
     async loadUsers() {
       this.isLoadingUsers = true;
       try {
@@ -640,53 +658,66 @@ export default {
   text-align: center;
 }
 
-.user-selector {
-  max-height: 300px;
-  overflow-y: auto;
+.user-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
   padding: 0.5rem;
+  max-height: 400px;
+  overflow-y: auto;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 0.5rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.user-item {
+.user-card {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 0.25rem;
-  transition: background-color 0.2s ease;
-}
-
-.user-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.user-checkbox {
-  width: 1rem;
-  height: 1rem;
-  accent-color: #3b82f6;
-}
-
-.user-label {
-  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 0.75rem;
+  padding: 1.25rem 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
   cursor: pointer;
-  flex: 1;
-  margin: 0;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.user-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.user-card.selected {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.user-card.selected .user-avatar {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.user-card.selected .user-name {
+  color: #60a5fa;
 }
 
 .user-avatar {
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
 }
 
 .user-avatar img {
@@ -697,22 +728,87 @@ export default {
 
 .user-avatar i {
   color: #9ca3af;
-  font-size: 0.875rem;
+  font-size: 1.25rem;
 }
 
 .user-info {
+  text-align: center;
   flex: 1;
+  width: 100%;
 }
 
 .user-name {
   color: #e5e7eb;
   font-weight: 500;
   font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+  word-wrap: break-word;
+  white-space: normal;
+  line-height: 1.2;
+  transition: color 0.3s ease;
 }
 
 .user-type {
   color: #9ca3af;
   font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  font-weight: 500;
+}
+
+.user-selection-indicator {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 24px;
+  height: 24px;
+  background: #3b82f6;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+.user-card.selected .user-selection-indicator {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.user-selection-indicator i {
+  color: white;
+  font-size: 0.75rem;
+}
+
+.no-users {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.no-users i {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.no-users p {
+  margin: 0 0 0.5rem 0;
+  font-weight: 500;
+  color: #e5e7eb;
+}
+
+.no-users small {
+  font-size: 0.875rem;
+  opacity: 0.8;
 }
 
 .btn {
@@ -782,8 +878,32 @@ export default {
     text-align: center;
   }
 
-  .user-selector {
-    max-height: 250px;
+  .user-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    padding: 0.25rem;
+    max-height: 300px;
+  }
+
+  .user-card {
+    padding: 1rem 0.75rem;
+  }
+
+  .user-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .user-avatar i {
+    font-size: 1rem;
+  }
+
+  .user-name {
+    font-size: 0.8125rem;
+  }
+
+  .user-type {
+    font-size: 0.6875rem;
   }
 
   .settings-actions {
