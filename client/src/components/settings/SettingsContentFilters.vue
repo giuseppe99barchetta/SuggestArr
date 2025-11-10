@@ -494,8 +494,8 @@ export default {
 }
 
 .form-group label {
+  vertical-align: middle;
   display: block;
-  margin-top: 0.5rem;
   font-weight: 500;
   color: #e5e7eb;
 }
@@ -575,6 +575,7 @@ export default {
 
 .genre-checkbox,
 .streaming-checkbox {
+  vertical-align: middle;
   width: 1rem;
   height: 1rem;
   accent-color: var(--color-primary);
