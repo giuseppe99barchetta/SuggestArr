@@ -663,7 +663,7 @@ export default {
 
 .user-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 1rem;
   padding: 0.5rem;
   max-height: 400px;
