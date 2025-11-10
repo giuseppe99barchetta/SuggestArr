@@ -95,15 +95,75 @@ async def get_plex_servers_async_route():
         print(f"Errore durante il recupero dei server Plex: {str(e)}")
         return jsonify({'message': f'Error fetching Plex servers: {str(e)}', 'type': 'error'}), 500
     
-@plex_bp.route('/users', methods=['POST'])
-async def get_plex_users():
+@plex_bp.route('/test', methods=['POST'])
+async def test_plex_connection():
     """
-    Fetch Plex users using the provided API token.
+    Test Plex server connection using the provided API token and URL.
     """
     try:
         config_data = request.json
-        api_token = config_data.get('PLEX_TOKEN')
-        api_url = config_data.get('PLEX_API_URL')
+        api_token = config_data.get('token')
+        api_url = config_data.get('api_url')
+
+        if not api_token or not api_url:
+            return jsonify({
+                'message': 'API token and URL are required',
+                'status': 'error'
+            }), 400
+
+        plex_client = PlexClient(token=api_token, client_id=client_id, api_url=api_url)
+
+        # Test connection by fetching basic server info
+        try:
+            # Try to get server information or libraries as a connection test
+            libraries = await plex_client.get_libraries()
+
+            # Check if we got a valid response with actual libraries data
+            if libraries and isinstance(libraries, list):
+                return jsonify({
+                    'message': 'Plex connection successful!',
+                    'status': 'success',
+                    'data': {
+                        'libraries_count': len(libraries),
+                        'server_url': api_url
+                    }
+                }), 200
+            else:
+                # None or invalid response means connection failed
+                return jsonify({
+                    'message': 'Failed to connect to Plex server - invalid token or server unreachable',
+                    'status': 'error'
+                }), 400
+
+        except Exception as conn_error:
+            logger.error(f'Plex connection test failed: {str(conn_error)}')
+            return jsonify({
+                'message': f'Plex connection failed: {str(conn_error)}',
+                'status': 'error'
+            }), 400
+
+    except Exception as e:
+        logger.error(f'Error testing Plex connection: {str(e)}')
+        return jsonify({
+            'message': f'Error testing Plex connection: {str(e)}',
+            'status': 'error'
+        }), 500
+
+@plex_bp.route('/users', methods=['GET', 'POST'])
+async def get_plex_users():
+    """
+    Fetch Plex users using the provided API token.
+    Accepts both GET and POST methods for flexibility.
+    """
+    try:
+        # Handle both GET and POST request data
+        if request.method == 'POST':
+            config_data = request.json
+            api_token = config_data.get('PLEX_TOKEN')
+            api_url = config_data.get('PLEX_API_URL')
+        else:  # GET method
+            api_token = request.args.get('PLEX_TOKEN')
+            api_url = request.args.get('PLEX_API_URL')
 
         if not api_token:
             return jsonify({'message': 'API token is required', 'type': 'error'}), 400

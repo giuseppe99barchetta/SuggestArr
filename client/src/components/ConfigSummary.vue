@@ -6,20 +6,20 @@
             </a>
             <div class="space-y-6">
                 <!-- Display Plex or Jellyfin URL based on selected service -->
-                <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-if="config.SELECTED_SERVICE === 'plex'">
+                <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-if="effectiveConfig.SELECTED_SERVICE === 'plex'">
                     <label class="block text-sm font-semibold text-gray-300">Plex URL:</label>
                     <p class="text-gray-200">
-                        {{ config.PLEX_API_URL }}
-                        <a :href="config.PLEX_API_URL" target="_blank" class="text-blue-400 hover:underline ml-1">
+                        {{ effectiveConfig.PLEX_API_URL }}
+                        <a :href="effectiveConfig.PLEX_API_URL" target="_blank" class="text-blue-400 hover:underline ml-1">
                             <i class="fas fa-external-link-alt"></i>
                         </a>
                     </p>
                 </div>
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md" v-else>
-                    <label class="block text-sm font-semibold text-gray-300">{{ capitalizeFirstLetter(config.SELECTED_SERVICE) }} URL:</label>
+                    <label class="block text-sm font-semibold text-gray-300">{{ capitalizeFirstLetter(effectiveConfig.SELECTED_SERVICE) }} URL:</label>
                     <p class="text-gray-200">
-                        {{ config.JELLYFIN_API_URL }}
-                        <a :href="config.JELLYFIN_API_URL" target="_blank" class="text-blue-400 hover:underline ml-1">
+                        {{ effectiveConfig.JELLYFIN_API_URL }}
+                        <a :href="effectiveConfig.JELLYFIN_API_URL" target="_blank" class="text-blue-400 hover:underline ml-1">
                             <i class="fas fa-external-link-alt"></i>
                         </a>
                     </p>
@@ -28,8 +28,8 @@
                 <div class="bg-gray-700 p-4 rounded-lg shadow-md">
                     <label class="block text-sm font-semibold text-gray-300">Jellyseer/Overseer URL:</label>
                     <p class="text-gray-200">
-                        {{ config.SEER_API_URL }}
-                        <a :href="config.SEER_API_URL" target="_blank" class="text-blue-400 hover:underline ml-1">
+                        {{ effectiveConfig.SEER_API_URL }}
+                        <a :href="effectiveConfig.SEER_API_URL" target="_blank" class="text-blue-400 hover:underline ml-1">
                             <i class="fas fa-external-link-alt"></i>
                         </a>
                     </p>
@@ -38,22 +38,22 @@
                     <!-- Max Similar Movies and TV Shows -->
                     <div class="bg-gray-700 p-4 rounded-lg shadow-md w-full sm:w-1/2">
                         <label class="block text-sm font-semibold text-gray-300">Max Similar Movies:</label>
-                        <p class="text-gray-200">{{ config.MAX_SIMILAR_MOVIE }}</p>
+                        <p class="text-gray-200">{{ effectiveConfig.MAX_SIMILAR_MOVIE }}</p>
                     </div>
                     <div class="bg-gray-700 p-4 rounded-lg shadow-md w-full sm:w-1/2">
                         <label class="block text-sm font-semibold text-gray-300">Max Similar TV Shows:</label>
-                        <p class="text-gray-200">{{ config.MAX_SIMILAR_TV }}</p>
+                        <p class="text-gray-200">{{ effectiveConfig.MAX_SIMILAR_TV }}</p>
                     </div>
                 </div>
                 <div class="flex flex-col sm:flex-row sm:space-x-4 mt-4">
                     <!-- Max Content to Fetch and Search Size -->
                     <div class="bg-gray-700 p-4 rounded-lg shadow-md w-full sm:w-1/2">
                         <label class="block text-sm font-semibold text-gray-300">Max new Content for each content:</label>
-                        <p class="text-gray-200">{{ config.MAX_CONTENT_CHECKS }}</p>
+                        <p class="text-gray-200">{{ effectiveConfig.MAX_CONTENT_CHECKS }}</p>
                     </div>
                     <div class="bg-gray-700 p-4 rounded-lg shadow-md w-full sm:w-1/2">
                         <label class="block text-sm font-semibold text-gray-300">Search Size:</label>
-                        <p class="text-gray-200">{{ config.SEARCH_SIZE }}</p>
+                        <p class="text-gray-200">{{ effectiveConfig.SEARCH_SIZE }}</p>
                     </div>
                 </div>
                 <!-- Display DB Type -->
@@ -78,14 +78,16 @@
                 </div>
 
             </div>
-            <!-- Edit Configuration and Reset Buttons -->
+            <!-- Configuration Actions -->
             <div class="flex space-x-4 mt-8">
-                <button @click="editConfig"
+                <button @click="goToSettings"
                     class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">
-                    Edit Configuration
+                    <i class="fas fa-cog mr-2"></i>
+                    Go to Settings
                 </button>
                 <button @click="showResetPopup = true"
                     class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-transform transform hover:scale-105">
+                    <i class="fas fa-trash mr-2"></i>
                     Reset Configuration
                 </button>
             </div>
@@ -134,7 +136,7 @@ export default {
     props: {
         config: {
             type: Object,
-            required: true
+            default: () => ({})
         }
     },
     data() {
@@ -146,20 +148,43 @@ export default {
             currentVersion: packageInfo.version,
             latestVersion: '',
             isUpdateAvailable: false,
-            db_type: this.config.DB_TYPE === 'mysql' ? 'MySQL' : this.config.DB_TYPE === 'postgres' ? 'PostgreSQL' : 'SQLite'
+            localConfig: {}, // Store fetched config when not provided as prop
 
         };
     },
+    computed: {
+        effectiveConfig() {
+            return Object.keys(this.config).length > 0 ? this.config : this.localConfig;
+        },
+        db_type() {
+            const config = this.effectiveConfig;
+            if (!config || !config.DB_TYPE) return 'SQLite';
+            return config.DB_TYPE === 'mysql' ? 'MySQL' :
+                   config.DB_TYPE === 'postgres' ? 'PostgreSQL' : 'SQLite';
+        }
+    },
     mounted() {
+        this.loadConfigIfNeeded();
         this.checkForUpdates();
         this.calculateNextCronRun();
-        if (!this.config.TMDB_API_KEY) {
+        if (!this.effectiveConfig.TMDB_API_KEY) {
             this.startDefaultImageRotation();
         } else {
-            this.startBackgroundImageRotation(fetchRandomMovieImage, this.config.TMDB_API_KEY);
+            this.startBackgroundImageRotation(fetchRandomMovieImage, this.effectiveConfig.TMDB_API_KEY);
         }
     },
     methods: {
+        async loadConfigIfNeeded() {
+            // Only load config if not provided as prop
+            if (Object.keys(this.config).length === 0) {
+                try {
+                    const response = await axios.get('/api/config/fetch');
+                    this.localConfig = response.data;
+                } catch (error) {
+                    console.error('Error loading configuration:', error);
+                }
+            }
+        },
         async checkForUpdates() {
             try {
                 const response = await axios.get('https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases/latest');
@@ -190,7 +215,7 @@ export default {
         },
         calculateNextCronRun() {
             try {
-                const interval = cronParser.parseExpression(this.config.CRON_TIMES);
+                const interval = cronParser.parseExpression(this.effectiveConfig.CRON_TIMES);
                 const nextRun = interval.next();
                 const now = new Date();
                 const timeDiff = nextRun.getTime() - now.getTime(); // Get difference in milliseconds
@@ -205,12 +230,12 @@ export default {
                 this.nextCronRun = 'Error calculating next run time';
             }
         },
-        editConfig() {
-            this.$emit('edit-config');
+        goToSettings() {
+            this.$router.push({ name: 'Settings' });
         },
         forceRun() {
             this.isRunning = true;
-            axios.post('/api/automation/force_run', this.config)
+            axios.post('/api/automation/force_run', this.effectiveConfig)
                 .then(
                     this.$toast.open({
                         message: 'Process started in background!',
@@ -236,7 +261,7 @@ export default {
         goToRequestsPage() {
             this.$router.push({ 
                 name: 'RequestsPage',
-                query: { tmdbApiKey: this.config.TMDB_API_KEY } 
+                query: { tmdbApiKey: this.effectiveConfig.TMDB_API_KEY } 
             });
         },
         
