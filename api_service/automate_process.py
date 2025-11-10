@@ -24,6 +24,7 @@ class ContentAutomation:
     async def create(cls):
         """Async factory method to initialize ContentAutomation asynchronously."""
         instance = cls.__new__(cls)
+        instance.logger.info("Initializing ContentAutomation")
         env_vars = load_env_vars()
 
         instance.selected_service = env_vars['SELECTED_SERVICE']
@@ -33,6 +34,10 @@ class ContentAutomation:
         instance.search_size = min(int(env_vars.get('SEARCH_SIZE', '20')), 100)
         instance.number_of_seasons = env_vars.get('FILTER_NUM_SEASONS') or "all"
         instance.selected_users = env_vars.get('SELECTED_USERS') or []
+
+        instance.logger.info(f"Configuration: service={instance.selected_service}, max_content={instance.max_content}, "
+                           f"max_similar_movie={instance.max_similar_movie}, max_similar_tv={instance.max_similar_tv}")
+        instance.logger.debug(f"Selected users: {instance.selected_users}")
         
         # TMDB filters
         tmdb_threshold = int(env_vars.get('FILTER_TMDB_THRESHOLD') or 60)
@@ -47,6 +52,7 @@ class ContentAutomation:
         exclude_requested = env_vars.get('EXCLUDE_REQUESTED', True)
 
         # Overseer/Jellyseer client
+        instance.logger.info("Initializing Jellyseer client")
         jellyseer_client = SeerClient(
             env_vars['SEER_API_URL'],
             env_vars['SEER_TOKEN'],
@@ -58,8 +64,10 @@ class ContentAutomation:
             exclude_requested
         )
         await jellyseer_client.init()
+        instance.logger.info("Jellyseer client initialized successfully")
 
         # TMDb client
+        instance.logger.info("Initializing TMDb client")
         tmdb_client = TMDbClient(
             env_vars['TMDB_API_KEY'],
             instance.search_size,
@@ -72,9 +80,11 @@ class ContentAutomation:
             filter_region_provider,
             filter_streaming_services
         )
+        instance.logger.info("TMDb client initialized successfully")
 
         # Initialize media service handler (Jellyfin or Plex)
         if instance.selected_service in ('jellyfin', 'emby'):
+            instance.logger.info(f"Initializing {instance.selected_service.upper()} client")
             jellyfin_client = JellyfinClient(
                 env_vars['JELLYFIN_API_URL'],
                 env_vars['JELLYFIN_TOKEN'],
@@ -85,8 +95,10 @@ class ContentAutomation:
             instance.media_handler = JellyfinHandler(
                 jellyfin_client, jellyseer_client, tmdb_client, instance.logger, instance.max_similar_movie, instance.max_similar_tv, instance.selected_users
             )
+            instance.logger.info(f"{instance.selected_service.upper()} client initialized successfully")
 
         elif instance.selected_service == 'plex':
+            instance.logger.info("Initializing Plex client")
             plex_client = PlexClient(
                 api_url=env_vars['PLEX_API_URL'],
                 token=env_vars['PLEX_TOKEN'],
@@ -96,9 +108,19 @@ class ContentAutomation:
             )
             await plex_client.init_existing_content()
             instance.media_handler = PlexHandler(plex_client, jellyseer_client, tmdb_client, instance.logger, instance.max_similar_movie, instance.max_similar_tv)
+            instance.logger.info("Plex client initialized successfully")
+        else:
+            instance.logger.warning(f"Unknown selected service: {instance.selected_service}")
+            raise ValueError(f"Unsupported service: {instance.selected_service}")
 
         return instance
 
     async def run(self):
         """Main entry point to start the automation process."""
-        await self.media_handler.process_recent_items()
+        self.logger.info("Starting content automation process")
+        try:
+            await self.media_handler.process_recent_items()
+            self.logger.info("Content automation process completed successfully")
+        except Exception as e:
+            self.logger.error(f"Content automation process failed: {str(e)}")
+            raise

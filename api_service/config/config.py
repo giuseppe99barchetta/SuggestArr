@@ -4,7 +4,7 @@ from croniter import croniter
 from api_service.config.logger_manager import LoggerManager
 from api_service.config.cron_jobs import start_cron_job
 
-logger = LoggerManager().get_logger("Config")
+logger = LoggerManager.get_logger("Config")
 
 # Constants for environment variables
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -70,6 +70,7 @@ def get_default_values():
         'EXCLUDE_DOWNLOADED': lambda: True,
         'EXCLUDE_REQUESTED': lambda: True,
         'SETUP_COMPLETED': lambda: False,
+        'LOG_LEVEL': lambda: 'INFO',
     }
 
 def get_config_values():
@@ -154,7 +155,7 @@ def get_config_sections():
     """
     return {
         'general': ['MAX_SIMILAR_MOVIE', 'MAX_SIMILAR_TV', 'CRON_TIMES', 'MAX_CONTENT_CHECKS',
-                   'SEARCH_SIZE', 'SUBPATH'],
+                   'SEARCH_SIZE', 'SUBPATH', 'LOG_LEVEL'],
         'services': ['TMDB_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL',
                     'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
                     'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_SESSION_TOKEN'],
@@ -163,7 +164,7 @@ def get_config_sections():
                            'HONOR_JELLYSEER_DISCOVERY', 'FILTER_RELEASE_YEAR', 'FILTER_INCLUDE_NO_RATING',
                            'FILTER_LANGUAGE', 'FILTER_NUM_SEASONS', 'FILTER_STREAMING_SERVICES',
                            'FILTER_REGION_PROVIDER', 'EXCLUDE_DOWNLOADED', 'EXCLUDE_REQUESTED'],
-        'advanced': ['SELECTED_USERS']
+        'advanced': ['SELECTED_USERS', 'LOG_LEVEL']
     }
 
 def get_config_section(section_name):

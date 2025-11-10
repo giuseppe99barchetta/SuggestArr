@@ -46,6 +46,7 @@ class PlexClient:
         Only includes 'id' and 'name' for each user.
         :return: A list of users with 'id' and 'name' if successful, otherwise an empty list.
         """
+        self.logger.info("Fetching all users from Plex server")
         friends_url = f"{self.base_url}/friends"
         accounts_url = f"{self.api_url}/accounts"
         users = []
@@ -53,29 +54,36 @@ class PlexClient:
         try:
             async with aiohttp.ClientSession() as session:
                 # Request for friends
+                self.logger.debug(f"Fetching friends from: {friends_url}")
                 async with session.get(friends_url, headers=self.headers, timeout=REQUEST_TIMEOUT) as friends_response:
                     if friends_response.status == 200:
                         friends = await friends_response.json()
+                        self.logger.debug(f"Retrieved {len(friends)} friends from Plex")
                         # Extract 'id' and 'name' from each friend
                         users.extend({'id': friend['id'], 'name': friend['title']} for friend in friends)
                     else:
-                        self.logger.error("Failed to retrieve friends: %d", friends_response.status)
+                        self.logger.error("Failed to retrieve friends: HTTP %d", friends_response.status)
 
                 # Request for local accounts
+                self.logger.debug(f"Fetching local accounts from: {accounts_url}")
                 async with session.get(accounts_url, headers=self.headers, timeout=REQUEST_TIMEOUT) as accounts_response:
                     if accounts_response.status == 200:
                         accounts_data = await accounts_response.json()
                         accounts = accounts_data.get('MediaContainer', {}).get('Account', [])
+                        self.logger.debug(f"Retrieved {len(accounts)} local accounts from Plex")
                         # Extract 'id' and 'name' from each local account
                         users.extend({'id': account['id'], 'name': account['name']} for account in accounts)
                     else:
-                        self.logger.error("Failed to retrieve local accounts: %d", accounts_response.status)
-            
+                        self.logger.error("Failed to retrieve local accounts: HTTP %d", accounts_response.status)
+
             unique_users = {user['id']: user for user in users}.values()
             sorted_users = sorted(unique_users, key=lambda x: x['id'])
-            
+            self.logger.info(f"Successfully retrieved {len(sorted_users)} unique users from Plex")
+
         except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while retrieving users: %s", str(e))
+            self.logger.error("Network error occurred while retrieving users: %s", str(e))
+        except Exception as e:
+            self.logger.error("Unexpected error occurred while retrieving users: %s", str(e))
 
         return list(sorted_users)
 

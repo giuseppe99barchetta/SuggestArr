@@ -9,7 +9,7 @@ from api_service.config.config import (
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 
-logger = LoggerManager().get_logger("ConfigRoute")
+logger = LoggerManager.get_logger("ConfigRoute")
 config_bp = Blueprint('config', __name__)
 
 @config_bp.route('/fetch', methods=['GET'])
@@ -186,3 +186,47 @@ def complete_setup():
     except Exception as e:
         logger.error(f'Error completing setup: {str(e)}')
         return jsonify({'message': f'Error completing setup: {str(e)}', 'status': 'error'}), 500
+
+@config_bp.route('/log-level', methods=['GET'])
+def get_log_level():
+    """
+    Get current log level.
+    """
+    try:
+        current_level = LoggerManager.get_current_log_level()
+        return jsonify({
+            'log_level': current_level,
+            'available_levels': ['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+            'status': 'success'
+        }), 200
+    except Exception as e:
+        logger.error(f'Error getting log level: {str(e)}')
+        return jsonify({'message': f'Error getting log level: {str(e)}', 'status': 'error'}), 500
+
+@config_bp.route('/log-level', methods=['POST'])
+def set_log_level():
+    """
+    Set log level.
+    """
+    try:
+        data = request.json
+        if not data or 'level' not in data:
+            return jsonify({'message': 'Log level is required', 'status': 'error'}), 400
+
+        level = data['level'].upper()
+        old_level = LoggerManager.get_current_log_level()
+        LoggerManager.set_log_level(level)
+        logger.info(f'Log level changed from {old_level} to {level}')
+
+        return jsonify({
+            'message': f'Log level set to {level} successfully!',
+            'log_level': level,
+            'previous_level': old_level,
+            'status': 'success'
+        }), 200
+    except ValueError as e:
+        logger.error(f'Invalid log level: {str(e)}')
+        return jsonify({'message': str(e), 'status': 'error'}), 400
+    except Exception as e:
+        logger.error(f'Error setting log level: {str(e)}')
+        return jsonify({'message': f'Error setting log level: {str(e)}', 'status': 'error'}), 500
