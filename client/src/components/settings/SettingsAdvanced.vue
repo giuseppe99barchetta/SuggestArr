@@ -843,13 +843,12 @@ export default {
 }
 
 .btn-outline {
-  background: transparent;
+  background: var(--color-bg-interactive);
   color: var(--color-text-primary);
   border: 1px solid var(--color-border-medium)m);
 }
 
 .btn-outline:hover:not(:disabled) {
-  background: var(--color-bg-interactive);
   border-color: rgba(255, 255, 255, 0.5);
 }
 
