@@ -1,13 +1,13 @@
 <?xml version="1.0"?>
 <Container version="2">
     <Name>SuggestArr</Name>
-    <Repository>ciuse99/suggestarr:latest</Repository>
-    <Registry>https://hub.docker.com/r/ciuse99/suggestarr</Registry>
+    <Repository>ghcr.io/todd2982/suggestarr:latest</Repository>
+    <Registry>https://github.com/todd2982/SuggestArr/pkgs/container/suggestarr</Registry>
     <Network>host</Network>
     <Shell>bash</Shell>
     <Privileged>false</Privileged>
-    <Support>https://github.com/giuseppe99barchetta/suggestarr/issues</Support>
-    <Project>https://github.com/giuseppe99barchetta/suggestarr</Project>
+    <Support>https://github.com/todd2982/SuggestArr/issues</Support>
+    <Project>https://github.com/todd2982/SuggestArr</Project>
     <Overview>Automatically request suggested movies and TV shows to Jellyseerr based on recently watched. </Overview>
     <Category>Downloaders: MediaApp:Video</Category>
     <WebUI>http://[IP]:[PORT:5000]</WebUI>

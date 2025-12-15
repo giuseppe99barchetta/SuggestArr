@@ -35,7 +35,7 @@ You can run the project using Docker Compose for easy setup and execution.
 ```yaml
 services:
   suggestarr:
-    image: ciuse99/suggestarr:latest
+    image: ghcr.io/todd2982/suggestarr:latest
     container_name: SuggestArr
     restart: always
     ports:
