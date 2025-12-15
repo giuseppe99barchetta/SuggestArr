@@ -51,6 +51,9 @@ jobs:
   build:
     needs: bump-version
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout code
@@ -62,20 +65,30 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3.7.1
 
-      - name: Log in to Docker Hub
-        run: echo ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} | docker login -u ciuse99 --password-stdin
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Convert repository name to lowercase
+        id: repo_name
+        run: |
+          echo "repo_owner=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
       - name: Build and Push Docker Image
         env:
           new_version: ${{ needs.bump-version.outputs.new_version }}
+          IMAGE_NAME: ghcr.io/${{ steps.repo_name.outputs.repo_owner }}/suggestarr
         run: |
           echo "New version tag: $new_version"
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
-            --cache-from type=registry,ref=ciuse99/suggestarr:cache \
-            --cache-to type=registry,ref=ciuse99/suggestarr:cache,mode=max \
-            -t ciuse99/suggestarr:latest \
-            -t ciuse99/suggestarr:$new_version \
+            --cache-from type=registry,ref=$IMAGE_NAME:cache \
+            --cache-to type=registry,ref=$IMAGE_NAME:cache,mode=max \
+            -t $IMAGE_NAME:latest \
+            -t $IMAGE_NAME:$new_version \
             -f docker/Dockerfile . --push
 
   recreate-nightly:

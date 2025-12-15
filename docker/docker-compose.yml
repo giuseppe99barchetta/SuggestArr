@@ -1,6 +1,6 @@
 services:
   suggestarr:
-    image: ciuse99/suggestarr:latest
+    image: ghcr.io/todd2982/suggestarr:latest
     container_name: SuggestArr
     restart: always
     ports:

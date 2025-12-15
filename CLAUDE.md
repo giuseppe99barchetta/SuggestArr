@@ -1,23 +1,169 @@
-# SuggestArr Development Guide
+# CLAUDE.md
 
-## Build & Run Commands
-- Backend: `docker build . -f ./docker/Dockerfile --target dev --tag suggestarr:nightly`
-- Frontend serve: `cd client && npm run serve`
-- Frontend build: `cd client && npm run build --skip-plugins @vue/cli-plugin-eslint`
-- Frontend lint: `cd client && npm run lint`
-- Run tests: `cd api_service && python -m pytest`
-- Run single test: `cd api_service && python -m pytest test/test_file.py::TestClass::test_function -v`
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Code Style Guidelines
-- Python: PEP 8, docstrings with detailed param/return descriptions
-- Vue: ESLint with Vue3-essential and ESLint recommended configs
-- Python naming: snake_case for functions/variables, PascalCase for classes
-- JavaScript naming: camelCase for variables/functions, PascalCase for components
-- Error handling: Use custom exceptions from exceptions/ directory
-- Logging: Use `logger = LoggerManager.get_logger(__name__)` pattern
+## Project Overview
 
-## Architecture Notes
-- Backend: Flask-based API with RESTful endpoints in blueprints/
-- Frontend: Vue.js 3 with component-based architecture
-- Testing: pytest for backend, unit tests with detailed assertions
-- Documentation: Include docstrings for all functions/classes
+SuggestArr automates media content recommendations and download requests for media servers (Jellyfin, Plex, Emby). It retrieves recently watched content, finds similar titles via TMDb API, and sends automated requests to Jellyseer/Overseerr.
+
+This is a **Flask + Vue 3** full-stack application with a Python backend and a Vue 3 frontend.
+
+## Architecture
+
+### Backend (Python/Flask)
+
+The backend follows a **modular blueprint pattern**:
+
+- **`api_service/app.py`**: Flask application factory with blueprint registration
+- **`api_service/automate_process.py`**: `ContentAutomation` class orchestrates the main automation workflow
+- **`api_service/blueprints/`**: Flask blueprints for API routes organized by domain:
+  - `automation/` - Force run and automation control
+  - `config/` - Configuration management
+  - `jellyfin/` - Jellyfin/Emby API endpoints
+  - `plex/` - Plex API endpoints
+  - `seer/` - Jellyseer/Overseerr API endpoints
+  - `logs/` - Application logs access
+- **`api_service/services/`**: External API clients (Jellyfin, Plex, TMDb, Jellyseer/Overseerr)
+- **`api_service/handler/`**: Business logic handlers (`jellyfin_handler.py`, `plex_handler.py`) that coordinate between services
+- **`api_service/db/`**: Database layer with support for SQLite, PostgreSQL, and MySQL/MariaDB
+- **`api_service/config/`**: Configuration management, cron jobs (APScheduler), and logger
+- **`api_service/utils/`**: Shared utilities
+- **`api_service/exceptions/`**: Custom exception classes
+
+### Frontend (Vue 3)
+
+- **`client/src/`**: Vue 3 application with Vue Router
+- **`client/src/components/`**: Vue components including ConfigWizard, LogsComponent, RequestsPage
+- Build output goes to `client/dist/` → copied to `static/` for Flask to serve
+
+### Configuration
+
+All configuration is stored in YAML format:
+- **`config/config_files/config.yaml`**: Main configuration file (created at runtime if missing)
+- Configuration is loaded via `api_service/config/config.py`
+- Database file (if using SQLite): `config/config_files/requests.db`
+
+### Automation Flow
+
+1. **Cron Job**: APScheduler triggers automation based on `CRON_TIMES` config
+2. **ContentAutomation**: Factory pattern async initialization
+3. **Media Handlers**: `JellyfinHandler` or `PlexHandler` process recent items
+4. **TMDb Search**: Find similar content based on watch history
+5. **Jellyseer Request**: Submit filtered requests to Jellyseer/Overseerr
+
+## Development Commands
+
+### Backend (Python)
+
+```bash
+# Install dependencies
+cd api_service
+pip install -r requirements.txt
+pip install -r requirements.dev.txt  # For testing
+
+# Run Flask app directly (development)
+python -m api_service.app
+
+# Run with uvicorn (production-like)
+cd ..  # Back to project root
+uvicorn api_service.app:asgi_app --host 0.0.0.0 --port 5000
+
+# Run tests
+cd api_service
+pytest
+pytest api_service/test/test_config.py  # Run specific test file
+```
+
+### Frontend (Vue)
+
+```bash
+cd client
+
+# Install dependencies
+npm install
+
+# Development server with hot reload
+npm run serve
+
+# Build for production
+npm run build
+
+# Lint
+npm run lint
+```
+
+### Docker
+
+```bash
+# Build development image
+docker build . -f ./docker/Dockerfile --target dev --tag suggestarr:nightly
+
+# Build production image
+docker build . -f ./docker/Dockerfile --tag suggestarr:latest
+
+# Run with docker-compose
+docker-compose up
+
+# Pull from GitHub Container Registry
+docker pull ghcr.io/todd2982/suggestarr:latest
+```
+
+## Key Configuration Variables
+
+Configuration is managed through `config/config_files/config.yaml`:
+
+- **Media Server**: `SELECTED_SERVICE` (jellyfin/plex/emby), API URLs and tokens
+- **TMDb**: `TMDB_API_KEY` for content discovery
+- **Jellyseer/Overseerr**: `SEER_API_URL`, `SEER_TOKEN`, optional user credentials
+- **Automation**: `CRON_TIMES` (cron expression), `MAX_CONTENT_CHECKS`, `MAX_SIMILAR_MOVIE`, `MAX_SIMILAR_TV`
+- **Database**: `DB_TYPE` (sqlite/postgres/mysql/mariadb) with connection params
+- **Filtering**: TMDB thresholds, genre exclusions, streaming service filters, language filters
+
+## Testing Strategy
+
+- Tests are in `api_service/test/`
+- `conftest.py` sets up pytest fixtures
+- Run tests before committing changes: `cd api_service && pytest`
+
+## CI/CD and Automation
+
+### GitHub Actions Workflows
+
+**`.github/workflows/ghcr_build.yml`** (triggers on push to `main`):
+1. Bumps version in `client/package.json` (patch increment)
+2. Creates a git tag with the new version
+3. Builds multi-platform Docker image (amd64, arm64)
+4. Pushes to GitHub Container Registry as `:latest` and `:vX.Y.Z`
+5. Recreates the `nightly` branch
+
+**`.github/workflows/ghcr_build_nightly.yml`** (triggers on push to `nightly`):
+- Builds and pushes Docker image tagged as `:nightly`
+
+**`.github/workflows/stale.yml`**:
+- Manages stale issues and pull requests
+
+### GitHub Container Registry
+
+- Images are published to `ghcr.io/todd2982/suggestarr`
+- Authentication uses built-in `GITHUB_TOKEN` (no manual secrets needed)
+- Workflow permissions must be set to "Read and write" in Settings → Actions → General
+
+### Dependabot
+
+**`.github/dependabot.yml`** manages automated dependency updates:
+- **Python** (`/api_service`): Weekly checks for pip packages
+- **Node.js** (`/client`): Weekly checks, ignores patch updates
+- **GitHub Actions**: Weekly checks for action version updates
+- **Docker**: Weekly checks for base image updates
+
+All updates run on Mondays and create labeled PRs with conventional commit messages.
+
+## Important Notes
+
+- The Flask app serves the built Vue frontend from `static/` directory
+- The app uses ASGI via `WsgiToAsgi` wrapper for async support (required for async clients)
+- Cron jobs are managed by APScheduler, configured at startup if `CRON_TIMES` is set
+- Database manager supports multiple backends via `DB_TYPE` environment variable
+- Handlers use async/await pattern extensively - ensure to use `await` when calling service methods
+- Port defaults to 5000 but can be customized via `SUGGESTARR_PORT` environment variable
+- Version bumping is automated on merge to `main` - manual version changes are not needed
