@@ -14,7 +14,7 @@
     "@fortawesome/free-solid-svg-icons": "^7.1.0",
     "@fortawesome/vue-fontawesome": "^3.1.2",
     "axios": "^1.13.2",
-    "core-js": "^3.8.3",
+    "core-js": "^3.47.0",
     "cron-parser": "^4.9.0",
     "vue": "^3.2.13",
     "vue-multiselect": "^3.1.0",
