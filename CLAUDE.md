@@ -103,6 +103,9 @@ docker build . -f ./docker/Dockerfile --tag suggestarr:latest
 
 # Run with docker-compose
 docker-compose up
+
+# Pull from GitHub Container Registry
+docker pull ghcr.io/todd2982/suggestarr:latest
 ```
 
 ## Key Configuration Variables
@@ -122,6 +125,39 @@ Configuration is managed through `config/config_files/config.yaml`:
 - `conftest.py` sets up pytest fixtures
 - Run tests before committing changes: `cd api_service && pytest`
 
+## CI/CD and Automation
+
+### GitHub Actions Workflows
+
+**`.github/workflows/ghcr_build.yml`** (triggers on push to `main`):
+1. Bumps version in `client/package.json` (patch increment)
+2. Creates a git tag with the new version
+3. Builds multi-platform Docker image (amd64, arm64)
+4. Pushes to GitHub Container Registry as `:latest` and `:vX.Y.Z`
+5. Recreates the `nightly` branch
+
+**`.github/workflows/ghcr_build_nightly.yml`** (triggers on push to `nightly`):
+- Builds and pushes Docker image tagged as `:nightly`
+
+**`.github/workflows/stale.yml`**:
+- Manages stale issues and pull requests
+
+### GitHub Container Registry
+
+- Images are published to `ghcr.io/todd2982/suggestarr`
+- Authentication uses built-in `GITHUB_TOKEN` (no manual secrets needed)
+- Workflow permissions must be set to "Read and write" in Settings → Actions → General
+
+### Dependabot
+
+**`.github/dependabot.yml`** manages automated dependency updates:
+- **Python** (`/api_service`): Weekly checks for pip packages
+- **Node.js** (`/client`): Weekly checks, ignores patch updates
+- **GitHub Actions**: Weekly checks for action version updates
+- **Docker**: Weekly checks for base image updates
+
+All updates run on Mondays and create labeled PRs with conventional commit messages.
+
 ## Important Notes
 
 - The Flask app serves the built Vue frontend from `static/` directory
@@ -130,3 +166,4 @@ Configuration is managed through `config/config_files/config.yaml`:
 - Database manager supports multiple backends via `DB_TYPE` environment variable
 - Handlers use async/await pattern extensively - ensure to use `await` when calling service methods
 - Port defaults to 5000 but can be customized via `SUGGESTARR_PORT` environment variable
+- Version bumping is automated on merge to `main` - manual version changes are not needed
