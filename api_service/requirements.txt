@@ -19,7 +19,7 @@ concurrent-log-handler==0.9.25
 croniter==3.0.3
 Flask==3.0.3
 Flask-Cors==6.0.0
-frozenlist==1.4.1
+frozenlist==1.8.0
 gunicorn==23.0.0
 h11==0.16.0
 httpcore==1.0.7
