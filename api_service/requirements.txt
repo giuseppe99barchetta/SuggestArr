@@ -16,7 +16,7 @@ click-repl==0.3.0
 colorama==0.4.6
 coloredlogs==15.0.1
 concurrent-log-handler==0.9.25
-croniter==3.0.3
+croniter==6.0.0
 Flask==3.0.3
 Flask-Cors==6.0.0
 frozenlist==1.8.0
