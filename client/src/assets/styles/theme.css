@@ -1,7 +1,7 @@
 :root {
   /* Background Colors - Blueish Theme */
-  --color-bg-primary: #1a202c;
-  --color-bg-content: #2d3748e7;
+  --color-bg-primary: rgba(0, 0, 0, 0.6);
+  --color-bg-content: #222224e7;
   --color-bg-content-secondary: rgba(45, 55, 72, 0.8);
   --color-bg-overlay-light: rgba(0, 0, 0, 0.6);
   --color-bg-overlay-heavy: rgba(0, 0, 0, 0.75);
@@ -12,8 +12,8 @@
   --color-text-muted: #9ca3af;
 
   /* Accent Colors */
-  --color-primary: #3b82f6;
-  --color-primary-hover: #2563eb;
+  --color-primary: #939597;
+  --color-primary-hover: #b0b2b6;
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
@@ -193,40 +193,6 @@
   border-color: var(--color-primary);
 }
 
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--color-bg-overlay-heavy);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background-color: var(--color-bg-content);
-  backdrop-filter: blur(10px);
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--color-border-light);
-  box-shadow: var(--shadow-base);
-  max-width: 500px;
-  width: 90%;
-  padding: 2rem;
-}
-
-.modal-content h3 {
-  color: var(--color-text-primary);
-  margin-bottom: 1rem;
-}
-
-.modal-content p {
-  color: var(--color-text-muted);
-  margin-bottom: 2rem;
-}
 
 /* Loading States */
 .loading-overlay {

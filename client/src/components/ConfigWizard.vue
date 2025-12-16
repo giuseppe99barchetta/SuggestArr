@@ -372,14 +372,10 @@ export default {
 
 <style scoped>
 .welcome-card {
-  background: rgba(0, 0, 0, 0.8);
-  border-radius: var(--border-radius-lg);
   padding: 2rem;
   text-align: center;
   max-width: 600px;
   margin: 0 auto;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .welcome-card h1 {

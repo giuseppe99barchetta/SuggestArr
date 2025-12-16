@@ -208,11 +208,15 @@ export default {
 }
 
 .logs-table tr:nth-child(even) {
-  background-color: #1f2937;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .logs-table tr:nth-child(odd) {
-  background-color: #2d3748;
+  background: rgba(26, 26, 26, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .severity-label {
@@ -264,16 +268,9 @@ export default {
   overflow-x: auto;
   overflow-y: scroll;
   max-height: 500px;
-  background-color: #111827;
-  border-radius: 8px;
-  border: 1px solid #374151;
-}
-
-.logs-table-container {
-  overflow-x: auto;
-  overflow-y: scroll;
-  max-height: 400px;
-  background-color: #111827;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   border: 1px solid #374151;
 }
@@ -306,7 +303,9 @@ export default {
   padding: 8px;
   border: 1px solid #374151;
   border-radius: 4px;
-  background-color: #1f2937;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: white;
   width: 70%;
 }

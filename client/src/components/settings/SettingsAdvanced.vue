@@ -407,33 +407,36 @@ export default {
           this.availableUsers = [];
           return;
         }
-
+      
         let endpoint;
+        let requestBody = {};
+      
         if (service === 'plex') {
           endpoint = '/api/plex/users';
-        } else if (service === 'jellyfin') {
+          requestBody = {
+            PLEX_TOKEN: this.localConfig.PLEX_TOKEN,
+            PLEX_API_URL: this.localConfig.PLEX_API_URL
+          };
+        } else if (service === 'jellyfin' || service === 'emby') {
           endpoint = '/api/jellyfin/users';
-        } else if (service === 'seer') {
-          endpoint = '/api/seer/users';
-        }
-
+          requestBody = {
+            JELLYFIN_TOKEN: this.localConfig.JELLYFIN_TOKEN,
+            JELLYFIN_API_URL: this.localConfig.JELLYFIN_API_URL
+          };
+        } 
+      
         if (endpoint) {
-          let url = endpoint;
-          let params = {};
-
-          // Add required parameters for Plex
-          if (service === 'plex') {
-            params.PLEX_TOKEN = this.localConfig.PLEX_TOKEN;
-            if (this.localConfig.PLEX_API_URL) {
-              params.PLEX_API_URL = this.localConfig.PLEX_API_URL;
-            }
-          }
-
-          const response = await axios.get(url, { params });
+          const response = await axios.post(endpoint, requestBody);
           this.availableUsers = response.data.users || response.data || [];
         }
       } catch (error) {
         console.error('Error loading users:', error);
+        this.$toast.open({
+          message: 'Failed to load users',
+          type: 'error',
+          duration: 5000,
+          position: 'top-right'
+        });
         this.availableUsers = [];
       } finally {
         this.isLoadingUsers = false;
@@ -845,7 +848,7 @@ export default {
 .btn-outline {
   background: var(--color-bg-interactive);
   color: var(--color-text-primary);
-  border: 1px solid var(--color-border-medium)m);
+  border: 1px solid var(--color-border-medium);
 }
 
 .btn-outline:hover:not(:disabled) {

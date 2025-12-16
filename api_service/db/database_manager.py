@@ -224,11 +224,38 @@ class DatabaseManager:
             params = (media_type, media_id, 'Seer')
             self.execute_query(query, params, commit=True)
             
-    def get_all_requests_grouped_by_source(self, page=1, per_page=8):
-        """Retrieve all requests grouped by source."""
-        self.logger.debug(f"Retrieving all requests grouped by source: page={page}, per_page={per_page}")
-        
-        query = """
+    def get_all_requests_grouped_by_source(self, page=1, per_page=8, sort_by='date-desc'):
+        """Retrieve all requests grouped by source with dynamic sorting."""
+        self.logger.debug(f"Retrieving all requests grouped by source: page={page}, per_page={per_page}, sort_by={sort_by}")
+
+        count_query = """
+            SELECT 
+                COUNT(DISTINCT s.media_id) as total_sources,
+                COUNT(r.tmdb_request_id) as total_requests
+            FROM requests r
+            JOIN metadata m ON r.tmdb_request_id = m.media_id
+            JOIN metadata s ON r.tmdb_source_id = s.media_id
+            WHERE r.requested_by = 'SuggestArr'
+        """
+
+        count_result = self.execute_query(count_query)
+        total_sources = count_result[0][0] if count_result else 0
+        total_requests = count_result[0][1] if count_result else 0
+
+        # Map sort_by to SQL ORDER BY clause
+        sort_mapping = {
+            'date-desc': 's.media_id DESC, r.requested_at DESC',
+            'date-asc': 's.media_id ASC, r.requested_at ASC',
+            'title-asc': 's.title ASC, r.requested_at DESC',
+            'title-desc': 's.title DESC, r.requested_at DESC',
+            'rating-desc': 's.rating DESC NULLS LAST, r.requested_at DESC',
+            'rating-asc': 's.rating ASC NULLS LAST, r.requested_at DESC'
+        }
+
+        # Get the ORDER BY clause, default to date-desc if invalid
+        order_by_clause = sort_mapping.get(sort_by, sort_mapping['date-desc'])
+
+        query = f"""
             SELECT 
                 s.media_id AS source_id, s.title AS source_title, s.overview AS source_overview, 
                 s.release_date AS source_release_date, s.poster_path AS source_poster_path, s.rating as rating,
@@ -240,8 +267,9 @@ class DatabaseManager:
             JOIN metadata m ON r.tmdb_request_id = m.media_id
             JOIN metadata s ON r.tmdb_source_id = s.media_id
             WHERE r.requested_by = 'SuggestArr'
-            ORDER BY s.media_id, r.requested_at
+            ORDER BY {order_by_clause}
         """
+
         result = self.execute_query(query)
 
         # Group requests by source_id
@@ -276,16 +304,36 @@ class DatabaseManager:
                 "logo_path": row[16],
             })
 
-        # Paginate the sources
+        # Sort the sources list based on sort_by BEFORE pagination
         source_list = list(sources.values())
-        total_items = len(source_list)
-        total_pages = (total_items + per_page - 1) // per_page  # Calculate total pages
+
+        # Apply sorting to the source_list
+        if sort_by == 'date-desc':
+            source_list.sort(key=lambda x: x['source_id'], reverse=True)
+        elif sort_by == 'date-asc':
+            source_list.sort(key=lambda x: x['source_id'])
+        elif sort_by == 'title-asc':
+            source_list.sort(key=lambda x: (x['source_title'] or '').lower())
+        elif sort_by == 'title-desc':
+            source_list.sort(key=lambda x: (x['source_title'] or '').lower(), reverse=True)
+        elif sort_by == 'rating-desc':
+            source_list.sort(key=lambda x: (x['rating'] if x['rating'] is not None else -1), reverse=True)
+        elif sort_by == 'rating-asc':
+            source_list.sort(key=lambda x: (x['rating'] if x['rating'] is not None else float('inf')))
+
+        # Paginate the sources AFTER sorting
+        total_pages = (total_sources + per_page - 1) // per_page  
         paginated_data = source_list[(page - 1) * per_page: page * per_page]
 
         return {
             "data": paginated_data,
-            "total_pages": total_pages
+            "total_pages": total_pages,
+            "total_sources": total_sources,
+            "total_requests": total_requests,
+            "current_page": page,
+            "per_page": per_page
         }
+
 
     def test_connection(self, db_config):
         """Test the database connection based on the provided db_config."""

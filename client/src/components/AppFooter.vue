@@ -132,15 +132,18 @@ export default {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.7); /* Semi-transparent background */
+    background: rgba(0, 0, 0, 0.9); /* Semi-transparent background */
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     display: flex;
     justify-content: center;
     align-items: center;
+    border-radius: 10px;
     z-index: 999;
 }
 
 .modal {
-    background: #1f2937;
+    background: rgba(0, 0, 0, 0.8);
     padding: 20px;
     border-radius: 10px;
     max-width: 90%;
@@ -149,6 +152,8 @@ export default {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
     display: flex;
     flex-direction: column;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .modal-body {

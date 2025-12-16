@@ -133,7 +133,7 @@
           v-model="localConfig.FILTER_LANGUAGE"
           :options="languageOptions"
           label="Preferred Language"
-          help-text="Preferred language for content (2-letter language code)"
+          help-text="Preferred language for content"
           :disabled="isLoading"
           id="filterLanguage"
         />

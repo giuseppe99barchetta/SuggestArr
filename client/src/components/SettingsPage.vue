@@ -3,18 +3,29 @@
     <div class="settings-content">
       <!-- Header -->
       <div class="settings-header">
-        <!-- Back Button -->
-        <button @click="goToDashboard" class="back-button">
-          <i class="fas fa-arrow-left"></i>
-          Back to Home
-        </button>
 
         <div class="header-content">
-          <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank">
+          <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank" rel="noopener noreferrer">
             <img src="@/assets/logo.png" alt="SuggestArr Logo" class="logo">
           </a>
-          <h1 class="settings-title">Settings</h1>
+          <h1 class="settings-title">Dashboard</h1>
           <p class="settings-subtitle">Manage your SuggestArr configuration</p>
+          
+          <!-- Quick Status Indicators -->
+          <div class="status-indicators">
+            <div class="status-badge" :class="config.TMDB_API_KEY ? 'status-connected' : 'status-disconnected'">
+              <i class="fas fa-film"></i>
+              <span>TMDB</span>
+            </div>
+            <div class="status-badge" :class="getServiceStatus()">
+              <i :class="getServiceIcon()"></i>
+              <span>{{ config.SELECTED_SERVICE || 'No Service' }}</span>
+            </div>
+            <div class="status-badge" :class="config.SEER_API_URL ? 'status-connected' : 'status-disconnected'">
+              <i class="fas fa-magic"></i>
+              <span>Seer</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -27,56 +38,71 @@
           :class="['tab-button', { active: activeTab === tab.id }]"
         >
           <i :class="tab.icon"></i>
-          {{ tab.name }}
+          <span>{{ tab.name }}</span>
         </button>
       </div>
 
       <!-- Tab Content -->
       <div class="tab-content">
-        <component
-          :is="activeTabComponent"
-          :config="config"
-          :isLoading="isLoading"
-          :testingConnections="testingConnections"
-          @save-section="saveSection"
-          @test-connection="testConnection"
-        />
+        <transition name="fade-slide" mode="out-in">
+          <component
+            :key="activeTab"
+            :is="activeTabComponent"
+            :config="config"
+            :isLoading="isLoading"
+            :testingConnections="testingConnections"
+            @save-section="saveSection"
+            @test-connection="testConnection"
+          />
+        </transition>
       </div>
 
-      <!-- Save Button -->
+      <!-- Action Footer -->
       <div class="settings-footer">
-        <div class="footer-spacer"></div>
-        <button
-          @click="exportConfig"
-          class="btn btn-outline mr-2"
-          :disabled="isLoading"
-        >
-          <i class="fas fa-download"></i>
-          Export
-        </button>
-        <button
-          @click="importConfig"
-          class="btn btn-outline mr-2"
-          :disabled="isLoading"
-        >
-          <i class="fas fa-upload"></i>
-          Import
-        </button>
-        <button
-          @click="resetConfig"
-          class="btn btn-danger"
-          :disabled="isLoading"
-        >
-          <i class="fas fa-trash"></i>
-          Reset All
-        </button>
+        <div class="footer-info">
+          <i class="fas fa-info-circle"></i>
+          <span>Changes are saved per section automatically</span>
+        </div>
+        
+        <div class="footer-actions">
+          <button
+            @click="exportConfig"
+            class="btn btn-outline"
+            :disabled="isLoading"
+            title="Export configuration to JSON file">
+            <i class="fas fa-download"></i>
+            <span>Export</span>
+          </button>
+          
+          <button
+            @click="importConfig"
+            class="btn btn-outline"
+            :disabled="isLoading"
+            title="Import configuration from JSON file">
+            <i class="fas fa-upload"></i>
+            <span>Import</span>
+          </button>
+          
+          <button
+            @click="resetConfig"
+            class="btn btn-danger"
+            :disabled="isLoading"
+            title="Reset all settings to default">
+            <i class="fas fa-trash-alt"></i>
+            <span>Reset All</span>
+          </button>
+        </div>
       </div>
 
       <!-- Loading Overlay -->
-      <div v-if="isLoading" class="loading-overlay">
-        <div class="spinner"></div>
-        <p>Saving configuration...</p>
-      </div>
+      <transition name="fade">
+        <div v-if="isLoading" class="loading-overlay">
+          <div class="loading-content">
+            <div class="spinner"></div>
+            <p>{{ loadingMessage }}</p>
+          </div>
+        </div>
+      </transition>
 
       <!-- Hidden file input for import -->
       <input
@@ -88,16 +114,39 @@
       />
 
       <!-- Reset Confirmation Modal -->
-      <div v-if="showResetModal" class="modal-overlay">
-        <div class="modal-content">
-          <h3>Confirm Reset</h3>
-          <p>Are you sure you want to reset all settings? This action cannot be undone.</p>
-          <div class="modal-actions">
-            <button @click="showResetModal = false" class="btn btn-secondary">Cancel</button>
-            <button @click="confirmReset" class="btn btn-danger">Reset All Settings</button>
+      <transition name="fade">
+        <div v-if="showResetModal" class="modal-overlay" @click.self="showResetModal = false">
+          <div class="modal-content">
+            <div class="modal-header">
+              <i class="fas fa-exclamation-triangle warning-icon"></i>
+              <h3>Confirm Reset</h3>
+            </div>
+            
+            <p class="modal-body">
+              Are you sure you want to reset all settings to default? 
+              <strong>This action cannot be undone</strong> and will:
+            </p>
+            
+            <ul class="reset-warning-list">
+              <li><i class="fas fa-times-circle"></i> Clear all service connections</li>
+              <li><i class="fas fa-times-circle"></i> Remove all custom filters</li>
+              <li><i class="fas fa-times-circle"></i> Reset scheduling preferences</li>
+              <li><i class="fas fa-times-circle"></i> Clear database configuration</li>
+            </ul>
+            
+            <div class="modal-actions">
+              <button @click="showResetModal = false" class="btn btn-secondary">
+                <i class="fas fa-times"></i>
+                Cancel
+              </button>
+              <button @click="confirmReset" class="btn btn-danger">
+                <i class="fas fa-exclamation-triangle"></i>
+                Yes, Reset Everything
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </transition>
 
       <Footer />
     </div>
@@ -132,6 +181,7 @@ export default {
     return {
       config: {},
       isLoading: false,
+      loadingMessage: 'Processing...',
       activeTab: 'general',
       showResetModal: false,
       backgroundImageUrl: '',
@@ -172,26 +222,44 @@ export default {
   },
   methods: {
     async loadConfig() {
+      this.loadingMessage = 'Loading configuration...';
+      this.isLoading = true;
       try {
         const response = await axios.get('/api/config/fetch');
         this.config = response.data;
       } catch (error) {
-        this.$toast.error('Failed to load configuration');
+        this.$toast.open({
+          message: 'Failed to load configuration',
+          type: 'error',
+          duration: 5000,
+          position: 'top-right'
+        });
         console.error('Error loading config:', error);
+      } finally {
+        this.isLoading = false;
       }
     },
 
     async saveSection({ section, data }) {
+      this.loadingMessage = `Saving ${section} settings...`;
       this.isLoading = true;
       try {
         await axios.post(`/api/config/section/${section}`, data);
-
-        // Update local config with saved data
         Object.assign(this.config, data);
 
-        this.$toast.success(`${section} settings saved successfully!`);
+        this.$toast.open({
+          message: `✅ ${section} settings saved successfully!`,
+          type: 'success',
+          duration: 3000,
+          position: 'top-right'
+        });
       } catch (error) {
-        this.$toast.error(`Failed to save ${section} settings: ${error.response?.data?.message || error.message}`);
+        this.$toast.open({
+          message: `❌ Failed to save ${section} settings`,
+          type: 'error',
+          duration: 5000,
+          position: 'top-right'
+        });
         console.error('Error saving section:', error);
       } finally {
         this.isLoading = false;
@@ -200,44 +268,67 @@ export default {
 
     async testConnection(type, data) {
       try {
-        // Set loading state
         this.testingConnections[type] = true;
 
-        let endpoint;
-        switch (type) {
-          case 'tmdb':
-            endpoint = '/api/tmdb/test';
-            break;
-          case 'jellyfin':
-            endpoint = '/api/jellyfin/test';
-            break;
-          case 'plex':
-            endpoint = '/api/plex/test';
-            break;
-          case 'seer':
-            endpoint = '/api/seer/test';
-            break;
-          case 'database':
-            endpoint = '/api/config/test-db-connection';
-            break;
-          default:
-            throw new Error(`Unknown connection type: ${type}`);
-        }
+        const endpoints = {
+          tmdb: '/api/tmdb/test',
+          jellyfin: '/api/jellyfin/test',
+          plex: '/api/plex/test',
+          seer: '/api/seer/test',
+          database: '/api/config/test-db-connection',
+        };
+
+        const endpoint = endpoints[type];
+        if (!endpoint) throw new Error(`Unknown connection type: ${type}`);
 
         const response = await axios.post(endpoint, data);
+        
         if (response.data.status === 'success') {
-          this.$toast.success(`${type} connection test successful!`);
+          this.$toast.open({
+            message: `✅ ${type.toUpperCase()} connection successful!`,
+            type: 'success',
+            duration: 3000,
+            position: 'top-right'
+          });
         } else {
-          this.$toast.error(`${type} connection test failed: ${response.data.message}`);
+          this.$toast.open({
+            message: `❌ ${type.toUpperCase()} connection failed`,
+            type: 'error',
+            duration: 5000,
+            position: 'top-right'
+          });
         }
         return response.data;
       } catch (error) {
-        this.$toast.error(`${type} connection test failed: ${error.response?.data?.message || error.message}`);
+        this.$toast.open({
+          message: `❌ ${type.toUpperCase()} connection test failed`,
+          type: 'error',
+          duration: 5000,
+          position: 'top-right'
+        });
         throw error;
       } finally {
-        // Clear loading state
         this.testingConnections[type] = false;
       }
+    },
+
+    getServiceStatus() {
+      const service = this.config.SELECTED_SERVICE;
+      if (!service) return 'status-disconnected';
+      
+      if (service === 'plex' && this.config.PLEX_TOKEN) return 'status-connected';
+      if ((service === 'jellyfin' || service === 'emby') && this.config.JELLYFIN_TOKEN) return 'status-connected';
+      
+      return 'status-warning';
+    },
+
+    getServiceIcon() {
+      const icons = {
+        plex: 'fas fa-play-circle',
+        jellyfin: 'fas fa-server',
+        emby: 'fas fa-server'
+      };
+      return icons[this.config.SELECTED_SERVICE] || 'fas fa-question-circle';
     },
 
     goToDashboard() {
@@ -245,6 +336,8 @@ export default {
     },
 
     async exportConfig() {
+      this.loadingMessage = 'Exporting configuration...';
+      this.isLoading = true;
       try {
         const response = await axios.get('/api/config/fetch');
         const configData = response.data;
@@ -259,10 +352,22 @@ export default {
         link.click();
         URL.revokeObjectURL(url);
 
-        this.$toast.success('Configuration exported successfully!');
+        this.$toast.open({
+          message: '✅ Configuration exported successfully!',
+          type: 'success',
+          duration: 3000,
+          position: 'top-right'
+        });
       } catch (error) {
-        this.$toast.error('Failed to export configuration');
+        this.$toast.open({
+          message: '❌ Failed to export configuration',
+          type: 'error',
+          duration: 5000,
+          position: 'top-right'
+        });
         console.error('Error exporting config:', error);
+      } finally {
+        this.isLoading = false;
       }
     },
 
@@ -274,21 +379,32 @@ export default {
       const file = event.target.files[0];
       if (!file) return;
 
+      this.loadingMessage = 'Importing configuration...';
+      this.isLoading = true;
+      
       try {
         const text = await file.text();
         const configData = JSON.parse(text);
 
-        this.isLoading = true;
         await axios.post('/api/config/save', configData);
         await this.loadConfig();
 
-        this.$toast.success('Configuration imported successfully!');
+        this.$toast.open({
+          message: '✅ Configuration imported successfully!',
+          type: 'success',
+          duration: 3000,
+          position: 'top-right'
+        });
       } catch (error) {
-        this.$toast.error('Failed to import configuration: Invalid file format');
+        this.$toast.open({
+          message: '❌ Failed to import: Invalid file format',
+          type: 'error',
+          duration: 5000,
+          position: 'top-right'
+        });
         console.error('Error importing config:', error);
       } finally {
         this.isLoading = false;
-        // Reset file input
         event.target.value = '';
       }
     },
@@ -299,16 +415,28 @@ export default {
 
     async confirmReset() {
       this.showResetModal = false;
+      this.loadingMessage = 'Resetting configuration...';
       this.isLoading = true;
 
       try {
         await axios.post('/api/config/reset');
-        this.$toast.success('Configuration reset successfully!');
+        this.$toast.open({
+          message: '✅ Configuration reset successfully!',
+          type: 'success',
+          duration: 3000,
+          position: 'top-right'
+        });
 
-        // Redirect to setup wizard
-        this.$router.push({ name: 'Home' });
+        setTimeout(() => {
+          this.$router.push({ name: 'Home' });
+        }, 1000);
       } catch (error) {
-        this.$toast.error('Failed to reset configuration');
+        this.$toast.open({
+          message: '❌ Failed to reset configuration',
+          type: 'error',
+          duration: 5000,
+          position: 'top-right'
+        });
         console.error('Error resetting config:', error);
       } finally {
         this.isLoading = false;
@@ -331,7 +459,7 @@ export default {
 
 .settings-content {
   min-height: 100vh;
-  background-color: var(--color-bg-content);
+  background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(10px);
   padding: 2rem;
   display: flex;
@@ -343,7 +471,6 @@ export default {
   margin-bottom: 2rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
 }
 
 .header-content {
@@ -355,8 +482,8 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background-color: transparent;
+  padding: 0.75rem 1.25rem;
+  background-color: var(--color-bg-interactive);
   color: var(--color-text-muted);
   border: 1px solid var(--color-border-light);
   border-radius: var(--border-radius-sm);
@@ -367,14 +494,20 @@ export default {
 }
 
 .back-button:hover {
-  background-color: var(--color-bg-interactive);
+  background-color: var(--color-bg-active);
   color: var(--color-text-primary);
+  transform: translateX(-4px);
 }
 
 .logo {
-  width: 80px;
+  width: 100px;
   height: auto;
   margin-bottom: 1rem;
+  transition: transform 0.3s ease;
+}
+
+.logo:hover {
+  transform: scale(1.05);
 }
 
 .settings-title {
@@ -387,50 +520,112 @@ export default {
 .settings-subtitle {
   color: var(--color-text-muted);
   font-size: 1.1rem;
+  margin-bottom: 1.5rem;
 }
 
+/* Status Indicators */
+.status-indicators {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 2px solid;
+  transition: var(--transition-base);
+}
+
+.status-connected {
+  background-color: rgba(16, 185, 129, 0.1);
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.status-disconnected {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.status-warning {
+  background-color: rgba(245, 158, 11, 0.1);
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+/* Tabs */
 .tabs-navigation {
   display: flex;
   justify-content: center;
   margin-bottom: 2rem;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .tab-button {
   background-color: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
+  border: 2px solid var(--color-border-light);
   color: var(--color-text-muted);
   padding: 0.75rem 1.5rem;
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--border-radius-md);
   cursor: pointer;
   transition: var(--transition-base);
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.9rem;
+  font-weight: 500;
 }
 
 .tab-button:hover {
   background-color: var(--color-bg-active);
   color: var(--color-text-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .tab-button.active {
   background-color: var(--color-primary);
-  color: var(--color-text-primary);
+  color: white;
   border-color: var(--color-primary);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
+/* Content */
 .tab-content {
   flex: 1;
-  background-color: var(--color-bg-content-secondary);
   border-radius: var(--border-radius-lg);
   padding: 2rem;
   backdrop-filter: blur(10px);
   border: 1px solid var(--color-border-light);
+  min-height: 400px;
 }
 
+/* Transitions */
+.fade-slide-enter-active, .fade-slide-leave-active {
+  transition: all 0.3s ease;
+}
+
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
+/* Footer */
 .settings-footer {
   display: flex;
   justify-content: space-between;
@@ -438,22 +633,40 @@ export default {
   margin-top: 2rem;
   padding-top: 2rem;
   border-top: 1px solid var(--color-border-light);
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
-.footer-spacer {
-  flex: 1;
+.footer-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .btn {
   padding: 0.75rem 1.5rem;
   border-radius: var(--border-radius-sm);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: var(--transition-base);
   border: none;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .btn:disabled {
@@ -463,7 +676,7 @@ export default {
 
 .btn-secondary {
   background-color: #6b7280;
-  color: var(--color-text-primary);
+  color: white;
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -473,22 +686,25 @@ export default {
 .btn-outline {
   background: var(--color-bg-interactive);
   color: var(--color-text-primary);
-  border: 1px solid var(--color-border-medium);
+  border: 2px solid var(--color-border-medium);
 }
 
 .btn-outline:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.5);
+  background-color: var(--color-bg-active);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .btn-danger {
   background-color: var(--color-danger);
-  color: var(--color-text-primary);
+  color: white;
 }
 
 .btn-danger:hover:not(:disabled) {
   background-color: #dc2626;
 }
 
+/* Loading Overlay */
 .loading-overlay {
   position: fixed;
   top: 0;
@@ -497,20 +713,24 @@ export default {
   bottom: 0;
   background-color: var(--color-bg-overlay-heavy);
   display: flex;
-  flex-direction: column;
   justify-content: center;
   align-items: center;
   z-index: 1000;
 }
 
+.loading-content {
+  text-align: center;
+  color: var(--color-text-primary);
+}
+
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid var(--color-border-medium)m);
+  width: 50px;
+  height: 50px;
+  border: 4px solid var(--color-border-medium);
   border-top: 4px solid var(--color-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin-bottom: 1rem;
+  margin: 0 auto 1rem;
 }
 
 @keyframes spin {
@@ -518,6 +738,7 @@ export default {
   100% { transform: rotate(360deg); }
 }
 
+/* Modal */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -529,6 +750,7 @@ export default {
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  padding: 1rem;
 }
 
 .modal-content {
@@ -538,17 +760,55 @@ export default {
   border-radius: var(--border-radius-lg);
   border: 1px solid var(--color-border-light);
   max-width: 500px;
-  width: 90%;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.warning-icon {
+  font-size: 2rem;
+  color: var(--color-warning);
 }
 
 .modal-content h3 {
   color: var(--color-text-primary);
-  margin-bottom: 1rem;
+  margin: 0;
+  font-size: 1.5rem;
 }
 
-.modal-content p {
+.modal-body {
   color: var(--color-text-muted);
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.reset-warning-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 2rem 0;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--border-radius-sm);
+  padding: 1rem;
+}
+
+.reset-warning-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--color-danger);
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.reset-warning-list li i {
+  font-size: 1rem;
 }
 
 .modal-actions {
@@ -557,18 +817,36 @@ export default {
   gap: 1rem;
 }
 
-.mr-2 {
-  margin-right: 0.5rem;
+/* Fade Transition */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
 }
 
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+/* Mobile Responsive */
 @media (max-width: 768px) {
   .settings-content {
     padding: 1rem;
   }
 
-  .back-button {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.8rem;
+  .settings-title {
+    font-size: 2rem;
+  }
+
+  .back-button span {
+    display: none;
+  }
+
+  .status-indicators {
+    gap: 0.5rem;
+  }
+
+  .status-badge {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.8rem;
   }
 
   .tabs-navigation {
@@ -580,7 +858,11 @@ export default {
   .tab-button {
     flex-shrink: 0;
     font-size: 0.8rem;
-    padding: 0.5rem 1rem;
+    padding: 0.6rem 1rem;
+  }
+
+  .tab-button span {
+    display: none;
   }
 
   .tab-content {
@@ -589,12 +871,34 @@ export default {
 
   .settings-footer {
     flex-direction: column;
-    gap: 1rem;
     align-items: stretch;
   }
 
-  .footer-spacer {
-    display: none;
+  .footer-info {
+    order: 2;
+    justify-content: center;
+  }
+
+  .footer-actions {
+    order: 1;
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .modal-content {
+    padding: 1.5rem;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+  }
+
+  .modal-actions .btn {
+    width: 100%;
   }
 }
 </style>

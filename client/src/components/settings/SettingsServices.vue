@@ -448,7 +448,7 @@ export default {
 }
 
 .settings-group {
-  background-color: var(--color-bg-content-secondary);
+  background-color: rgba(255, 255, 255, 0.05);;
   border: 1px solid var(--color-border-light);
   border-radius: var(--border-radius-md);
   padding: 1.5rem;
