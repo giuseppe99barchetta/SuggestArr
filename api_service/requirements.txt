@@ -24,7 +24,7 @@ Jinja2==3.1.5
 MarkupSafe==3.0.3
 multidict==6.7.0
 mysql-connector-python==9.2.0
-packaging==24.1
+packaging==25.0
 pluggy==1.6.0
 portalocker==3.2.0
 propcache==0.4.1
