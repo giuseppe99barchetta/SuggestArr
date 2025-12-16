@@ -13,7 +13,7 @@ colorama==0.4.6
 coloredlogs==15.0.1
 concurrent-log-handler==0.9.28
 croniter==6.0.0
-Flask==3.0.3
+Flask==3.1.2
 Flask-Cors==6.0.0
 frozenlist==1.8.0
 gunicorn==23.0.0
