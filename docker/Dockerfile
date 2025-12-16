@@ -1,5 +1,5 @@
 # Stage 1: Build the client
-FROM node:22 AS client-builder
+FROM node:24 AS client-builder
 WORKDIR /app/client
 COPY client/package*.json ./ 
 RUN npm install && npm cache clean --force
