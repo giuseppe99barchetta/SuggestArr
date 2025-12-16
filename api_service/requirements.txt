@@ -34,7 +34,7 @@ PlexAPI==4.15.16
 pluggy==1.6.0
 portalocker==3.2.0
 prompt_toolkit==3.0.52
-propcache==0.2.0
+propcache==0.4.1
 psycopg2-binary==2.9.11
 pyreadline3==3.5.4
 pytest==9.0.2
