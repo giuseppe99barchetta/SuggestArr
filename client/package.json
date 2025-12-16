@@ -1,6 +1,6 @@
 {
   "name": "suggestarr",
-  "version": "v1.0.72",
+  "version": "v1.0.73",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
