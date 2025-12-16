@@ -1,13 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import RequestsPage from '@/components/RequestsPage.vue';
 import ConfigWizard from '@/components/ConfigWizard.vue';
-import SettingsPage from '@/components/SettingsPage.vue';
+import SettingsPage from '@/components/DashboardPage.vue';
 import ConfigSummary from '@/components/ConfigSummary.vue';
 import axios from 'axios';
 import { createApp } from 'vue';
 import App from '../App.vue';
 import 'vue-toast-notification/dist/theme-bootstrap.css';
 import ToastPlugin from 'vue-toast-notification';
+import DashboardPage from '@/components/DashboardPage.vue';
 
 async function loadConfig() {
     if (process.env.NODE_ENV === 'development') {
@@ -56,15 +57,15 @@ async function createAppRouter() {
             meta: { setupOnly: true }
         },
         {
-            path: `/settings`,
-            name: 'Settings',
-            component: SettingsPage,
+            path: `/dashboard`,
+            name: 'Dashboard',
+            component: DashboardPage,
             meta: { requiresSetup: true }
         },
         {
-            path: `/settings/:tab?`,
-            name: 'SettingsTab',
-            component: SettingsPage,
+            path: `/dashboard/:tab?`,
+            name: 'DashboardTab',
+            component: DashboardPage,
             meta: { requiresSetup: true }
         },
         // Redirect legacy routes

@@ -316,7 +316,7 @@ export default {
     },
 
     goToSettings() {
-      this.$router.push('/settings');
+      this.$router.push('/dashboard');
     },
 
     goToRequests() {

@@ -39,6 +39,10 @@
         >
           <i :class="tab.icon"></i>
           <span>{{ tab.name }}</span>
+          <!-- Badge per Requests -->
+          <span v-if="tab.id === 'requests' && requestCount > 0" class="tab-badge">
+            {{ requestCount }}
+          </span>
         </button>
       </div>
 
@@ -165,6 +169,7 @@ import SettingsServices from './settings/SettingsServices.vue';
 import SettingsDatabase from './settings/SettingsDatabase.vue';
 import SettingsContentFilters from './settings/SettingsContentFilters.vue';
 import SettingsAdvanced from './settings/SettingsAdvanced.vue';
+import SettingsRequests from './settings/SettingsRequests.vue';
 
 export default {
   name: 'SettingsPage',
@@ -175,6 +180,7 @@ export default {
     SettingsDatabase,
     SettingsContentFilters,
     SettingsAdvanced,
+    SettingsRequests,
   },
   mixins: [backgroundManager],
   data() {
@@ -185,6 +191,7 @@ export default {
       activeTab: 'general',
       showResetModal: false,
       backgroundImageUrl: '',
+      requestCount: 0,
       testingConnections: {
         tmdb: false,
         plex: false,
@@ -193,6 +200,7 @@ export default {
         database: false,
       },
       tabs: [
+        { id: 'requests', name: 'Requests', icon: 'fas fa-paper-plane' },
         { id: 'general', name: 'General', icon: 'fas fa-cog' },
         { id: 'services', name: 'Services', icon: 'fas fa-plug' },
         { id: 'database', name: 'Database', icon: 'fas fa-database' },
@@ -204,6 +212,7 @@ export default {
   computed: {
     activeTabComponent() {
       const componentMap = {
+        requests: 'SettingsRequests',
         general: 'SettingsGeneral',
         services: 'SettingsServices',
         database: 'SettingsDatabase',
@@ -215,6 +224,7 @@ export default {
   },
   async mounted() {
     await this.loadConfig();
+    await this.loadRequestCount();
     this.startBackgroundImageRotation(
       this.config.TMDB_API_KEY ? fetchRandomMovieImage : null,
       this.config.TMDB_API_KEY
@@ -237,6 +247,15 @@ export default {
         console.error('Error loading config:', error);
       } finally {
         this.isLoading = false;
+      }
+    },
+
+    async loadRequestCount() {
+      try {
+        const response = await axios.get('/api/automation/requests/stats');
+        this.requestCount = response.data.today || 0;
+      } catch (error) {
+        console.error('Error loading request count:', error);
       }
     },
 
@@ -702,6 +721,31 @@ export default {
 
 .btn-danger:hover:not(:disabled) {
   background-color: #dc2626;
+}
+
+.tab-badge {
+  background: #ef4444;
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 12px;
+  font-weight: 700;
+  margin-left: 0.5rem;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.tab-button.active .tab-badge {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
 }
 
 /* Loading Overlay */

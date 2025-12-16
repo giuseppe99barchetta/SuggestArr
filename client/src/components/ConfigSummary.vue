@@ -252,7 +252,7 @@ export default {
             }
         },
         goToSettings() {
-            this.$router.push({ name: 'Settings' });
+            this.$router.push({ name: 'Dashboard' });
         },
         forceRun() {
             this.isRunning = true;
