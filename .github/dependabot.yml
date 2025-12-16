@@ -6,7 +6,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
+    # open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "python"
@@ -20,7 +20,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 10
+    # open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "javascript"
@@ -38,7 +38,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    # open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "github-actions"
@@ -52,7 +52,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
+    # open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "docker"
