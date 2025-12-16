@@ -3,7 +3,7 @@ aiohttp==3.13.2
 aiosignal==1.4.0
 anyio==4.8.0
 asgiref==3.8.1
-attrs==24.2.0
+attrs==25.4.0
 blinker==1.9.0
 certifi==2024.8.30
 charset-normalizer==3.4.0
