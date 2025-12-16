@@ -59,5 +59,5 @@ vine==5.1.0
 wcwidth==0.2.13
 Werkzeug==3.1.4
 xmltodict==0.14.2
-yarl==1.18.3
+yarl==1.22.0
 APScheduler==3.11.0
