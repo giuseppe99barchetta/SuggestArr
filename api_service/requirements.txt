@@ -30,7 +30,7 @@ MarkupSafe==3.0.3
 multidict==6.7.0
 mysql-connector-python==9.2.0
 packaging==24.1
-PlexAPI==4.15.16
+PlexAPI==4.17.2
 pluggy==1.6.0
 portalocker==3.2.0
 prompt_toolkit==3.0.52
