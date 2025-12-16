@@ -5,7 +5,7 @@ amqp==5.2.0
 anyio==4.8.0
 asgiref==3.8.1
 attrs==24.2.0
-billiard==4.2.1
+billiard==4.2.4
 blinker==1.8.2
 certifi==2024.8.30
 charset-normalizer==3.4.0
