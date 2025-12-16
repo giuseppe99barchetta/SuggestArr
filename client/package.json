@@ -31,7 +31,7 @@
     "eslint": "^9.39.2",
     "eslint-plugin-vue": "^10.6.2",
     "vue-loader": "^17.4.2",
-    "webpack": "^5.103.0"
+    "webpack": "^5.104.0"
   },
   "eslintConfig": {
     "root": true,
