@@ -29,8 +29,10 @@
     "@vue/compiler-sfc": "^3.5.13",
     "eslint": "^9.39.2",
     "eslint-plugin-vue": "^10.6.2",
+    "postcss": "^8.4.31",
     "vue-loader": "^17.4.2",
-    "webpack": "^5.104.0"
+    "webpack": "^5.104.0",
+    "webpack-dev-server": "^5.2.1"
   },
   "eslintConfig": {
     "root": true,
