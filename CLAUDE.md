@@ -95,9 +95,6 @@ npm run lint
 ### Docker
 
 ```bash
-# Build development image
-docker build . -f ./docker/Dockerfile --target dev --tag suggestarr:nightly
-
 # Build production image
 docker build . -f ./docker/Dockerfile --tag suggestarr:latest
 
@@ -134,10 +131,10 @@ Configuration is managed through `config/config_files/config.yaml`:
 2. Creates a git tag with the new version
 3. Builds multi-platform Docker image (amd64, arm64)
 4. Pushes to GitHub Container Registry as `:latest` and `:vX.Y.Z`
-5. Recreates the `nightly` branch
 
-**`.github/workflows/ghcr_build_nightly.yml`** (triggers on push to `nightly`):
-- Builds and pushes Docker image tagged as `:nightly`
+**`.github/workflows/pr_build.yml`** (triggers on pull requests to `main`):
+- Builds multi-platform Docker image (amd64, arm64) to verify it builds successfully
+- Does NOT push to any registry (build verification only)
 
 **`.github/workflows/stale.yml`**:
 - Manages stale issues and pull requests
