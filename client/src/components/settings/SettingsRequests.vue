@@ -13,26 +13,6 @@
       </div>
 
       <div class="stat-card-mini">
-        <div class="stat-icon success">
-          <i class="fas fa-check-circle"></i>
-        </div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.approved || 0 }}</div>
-          <div class="stat-label">Approved</div>
-        </div>
-      </div>
-
-      <div class="stat-card-mini">
-        <div class="stat-icon pending">
-          <i class="fas fa-clock"></i>
-        </div>
-        <div class="stat-info">
-          <div class="stat-value">{{ stats.pending || 0 }}</div>
-          <div class="stat-label">Pending</div>
-        </div>
-      </div>
-
-      <div class="stat-card-mini">
         <div class="stat-icon today">
           <i class="fas fa-calendar-day"></i>
         </div>
@@ -41,14 +21,6 @@
           <div class="stat-label">Today</div>
         </div>
       </div>
-    </div>
-
-    <!-- View Full Page Button -->
-    <div class="full-page-action">
-      <router-link to="/requests" class="btn-view-full">
-        <i class="fas fa-external-link-alt"></i>
-        <span>Open Full Request Page</span>
-      </router-link>
     </div>
 
     <!-- Quick Preview: Recent Requests -->
@@ -124,8 +96,6 @@ export default {
     return {
       stats: {
         total: 0,
-        approved: 0,
-        pending: 0,
         today: 0
       },
       recentRequests: [],
@@ -158,7 +128,6 @@ export default {
           }
         });
 
-        // Flatten first 10 requests
         const allRequests = response.data.data.flatMap(source => 
           source.requests.map(req => ({
             ...req,
@@ -235,14 +204,6 @@ export default {
   flex-shrink: 0;
 }
 
-.stat-icon.success {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(16, 185, 129, 0.15) 100%);
-}
-
-.stat-icon.pending {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.15) 100%);
-}
-
 .stat-icon.today {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%);
 }
@@ -250,14 +211,6 @@ export default {
 .stat-icon i {
   font-size: 1.25rem;
   color: #e5e7eb;
-}
-
-.stat-icon.success i {
-  color: #6ee7b7;
-}
-
-.stat-icon.pending i {
-  color: #fbbf24;
 }
 
 .stat-icon.today i {
@@ -280,32 +233,6 @@ export default {
   font-size: 0.8125rem;
   color: #9ca3af;
   font-weight: 500;
-}
-
-/* Full Page Action */
-.full-page-action {
-  margin-bottom: 1.5rem;
-}
-
-.btn-view-full {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1.5rem;
-  background: linear-gradient(135deg, rgba(100, 116, 139, 0.3) 0%, rgba(71, 85, 105, 0.2) 100%);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
-  color: #e5e7eb;
-  text-decoration: none;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.btn-view-full:hover {
-  background: linear-gradient(135deg, rgba(100, 116, 139, 0.4) 0%, rgba(71, 85, 105, 0.3) 100%);
-  border-color: rgba(148, 163, 184, 0.5);
-  transform: translateX(4px);
-  color: #ffffff;
 }
 
 /* Recent Requests Preview */

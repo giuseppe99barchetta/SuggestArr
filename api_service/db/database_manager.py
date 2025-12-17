@@ -409,3 +409,48 @@ class DatabaseManager:
 
         except (sqlite3.Error, psycopg2.Error, mysql.connector.Error) as e:
             raise DatabaseError(error=f"Error executing query. Details: {str(e)}", db_type=self.db_type)
+
+    def get_requests_stats(self):
+        """Get statistics about requests: total and today's count."""
+        self.logger.debug("Retrieving request statistics")
+        
+        # Query for total requests
+        total_query = """
+            SELECT COUNT(*) FROM requests
+            WHERE requested_by = 'SuggestArr'
+        """
+        total_result = self.execute_query(total_query)
+        total = total_result[0][0] if total_result else 0
+        
+        # Query for today's requests
+        if self.db_type == 'sqlite':
+            today_query = """
+                SELECT COUNT(*) FROM requests
+                WHERE requested_by = 'SuggestArr'
+                AND DATE(requested_at) = DATE('now')
+            """
+        elif self.db_type == 'postgres':
+            today_query = """
+                SELECT COUNT(*) FROM requests
+                WHERE requested_by = 'SuggestArr'
+                AND DATE(requested_at) = CURRENT_DATE
+            """
+        elif self.db_type in ['mysql', 'mariadb']:
+            today_query = """
+                SELECT COUNT(*) FROM requests
+                WHERE requested_by = 'SuggestArr'
+                AND DATE(requested_at) = CURDATE()
+            """
+        else:
+            today_query = total_query
+            
+        today_result = self.execute_query(today_query)
+        today = today_result[0][0] if today_result else 0
+        
+        return {
+            "total": total,
+            "approved": 0,  # Non gestito lato tuo
+            "pending": 0,   # Non gestito lato tuo
+            "today": today
+        }
+    

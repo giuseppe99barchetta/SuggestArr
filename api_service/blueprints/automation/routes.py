@@ -49,3 +49,14 @@ def get_requests():
     except Exception as e:
         logger.error(f"Error retrieving requests: {e}")
         return jsonify({"error": str(e)}), 500
+    
+@automation_bp.route('/requests/stats', methods=['GET'])
+def get_requests_stats():
+    """Get statistics for automation requests."""
+    try:
+        db_manager = DatabaseManager()
+        stats = db_manager.get_requests_stats()
+        return jsonify(stats), 200
+    except Exception as e:
+        logger.error(f"Error retrieving request stats: {e}")
+        return jsonify({"error": str(e)}), 500
