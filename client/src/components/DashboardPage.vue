@@ -154,6 +154,7 @@ import SettingsDatabase from './settings/SettingsDatabase.vue';
 import SettingsContentFilters from './settings/SettingsContentFilters.vue';
 import SettingsAdvanced from './settings/SettingsAdvanced.vue';
 import SettingsRequests from './settings/SettingsRequests.vue';
+import LogsComponent from './LogsComponent.vue';
 
 export default {
   name: 'SettingsPage',
@@ -165,6 +166,7 @@ export default {
     SettingsContentFilters,
     SettingsAdvanced,
     SettingsRequests,
+    LogsComponent,
   },
   mixins: [backgroundManager],
   data() {
@@ -190,6 +192,7 @@ export default {
         { id: 'database', name: 'Database', icon: 'fas fa-database' },
         { id: 'content_filters', name: 'Content Filters', icon: 'fas fa-filter' },
         { id: 'advanced', name: 'Advanced', icon: 'fas fa-sliders-h' },
+        { id: 'logs', name: 'Logs', icon: 'fas fa-file-alt' },
       ],
     };
   },
@@ -202,6 +205,7 @@ export default {
         database: 'SettingsDatabase',
         content_filters: 'SettingsContentFilters',
         advanced: 'SettingsAdvanced',
+        logs: 'LogsComponent',
       };
       return componentMap[this.activeTab];
     },
@@ -765,39 +769,6 @@ export default {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
-}
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--color-bg-overlay-heavy);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
-.modal-content {
-  background-color: var(--color-bg-content);
-  backdrop-filter: blur(10px);
-  padding: 2rem;
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--color-border-light);
-  max-width: 500px;
-  width: 100%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
 }
 
 .warning-icon {

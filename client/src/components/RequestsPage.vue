@@ -509,19 +509,16 @@ export default {
     resetAndReload() {
       console.log('🔄 Sorting changed, reloading data...');
       
-      // Disconnetti observer
       if (this.observer) {
         this.observer.disconnect();
         this.observer = null;
       }
       
-      // Reset dati
       this.sources = [];
       this.currentPage = 0;
       this.totalPages = 1;
       this.retryCount = 0;
       
-      // Ricarica da pagina 1
       this.fetchRequests(1);
     },
 
@@ -612,7 +609,6 @@ export default {
       this.loading = true;
       
       try {
-        // 👇 PASSA sort_by come query param
         const params = {
           page: page,
           sort_by: this.sortBy,

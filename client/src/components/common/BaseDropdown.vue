@@ -224,7 +224,6 @@ export default {
 <style scoped>
 /* Form Group */
 .form-group-modern {
-  margin-bottom: 1.5rem;
   position: relative;
 }
 
