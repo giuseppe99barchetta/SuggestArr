@@ -312,7 +312,7 @@ export default {
       serviceOptions: [
         { value: 'plex', label: 'Plex' },
         { value: 'jellyfin', label: 'Jellyfin' },
-        { value: 'emby', label: 'Emby (Experimental)' }
+        { value: 'emby', label: 'Emby' }
       ]
     };
   },
@@ -385,37 +385,143 @@ export default {
       }
     },
 
-    async testPlexConnection() {
-      try {
-        await this.$emit('test-connection', 'plex', {
-          token: this.localConfig.PLEX_TOKEN,
-          api_url: this.localConfig.PLEX_API_URL,
-        });
-      } catch (error) {
-        console.error('Error testing Plex connection:', error);
+    async testJellyfinConnection() {
+      if (!this.localConfig.JELLYFIN_API_URL) {
+        if (this.$toast) {
+          this.$toast.warning('Please enter a Jellyfin API URL', {
+            position: 'top-right',
+            duration: 3000
+          });
+        }
+        return;
       }
+    
+      if (!this.localConfig.JELLYFIN_TOKEN) {
+        if (this.$toast) {
+          this.$toast.warning('Please enter a Jellyfin API token', {
+            position: 'top-right',
+            duration: 3000
+          });
+        }
+        return;
+      }
+    
+      try {
+        const url = this.localConfig.JELLYFIN_API_URL.trim();
+        const testUrl = url.startsWith('http') ? url : `http://${url}`;
+        new URL(testUrl);
+      } catch (e) {
+        if (this.$toast) {
+          this.$toast.error('Invalid URL format. Example: http://localhost:8096', {
+            position: 'top-right',
+            duration: 4000
+          });
+        }
+        return;
+      }
+    
+      await this.$emit('test-connection', 'jellyfin', {
+        api_url: this.localConfig.JELLYFIN_API_URL.trim(),
+        token: this.localConfig.JELLYFIN_TOKEN.trim(),
+      });
     },
 
-    async testJellyfinConnection() {
-      try {
-        await this.$emit('test-connection', 'jellyfin', {
-          api_url: this.localConfig.JELLYFIN_API_URL,
-          token: this.localConfig.JELLYFIN_TOKEN,
-        });
-      } catch (error) {
-        console.error('Error testing Jellyfin connection:', error);
+    async testPlexConnection() {
+      if (!this.localConfig.PLEX_API_URL) {
+        if (this.$toast) {
+          this.$toast.warning('Please enter a Plex API URL', {
+            position: 'top-right',
+            duration: 3000
+          });
+        }
+        return;
       }
+    
+      if (!this.localConfig.PLEX_TOKEN) {
+        if (this.$toast) {
+          this.$toast.warning('Please enter a Plex token', {
+            position: 'top-right',
+            duration: 3000
+          });
+        }
+        return;
+      }
+    
+      try {
+        const url = this.localConfig.PLEX_API_URL.trim();
+        const testUrl = url.startsWith('http') ? url : `http://${url}`;
+        new URL(testUrl);
+      } catch (e) {
+        if (this.$toast) {
+          this.$toast.error('Invalid URL format. Example: http://localhost:32400', {
+            position: 'top-right',
+            duration: 4000
+          });
+        }
+        return;
+      }
+    
+      await this.$emit('test-connection', 'plex', {
+        token: this.localConfig.PLEX_TOKEN.trim(),
+        api_url: this.localConfig.PLEX_API_URL.trim(),
+      });
+    },
+
+    async testTmdbConnection() {
+      if (!this.localConfig.TMDB_API_KEY) {
+        if (this.$toast) {
+          this.$toast.warning('Please enter a TMDB API key', {
+            position: 'top-right',
+            duration: 3000
+          });
+        }
+        return;
+      }
+    
+      await this.$emit('test-connection', 'tmdb', {
+        api_key: this.localConfig.TMDB_API_KEY.trim(),
+      });
     },
 
     async testSeerConnection() {
-      try {
-        await this.$emit('test-connection', 'seer', {
-          api_url: this.localConfig.SEER_API_URL,
-          token: this.localConfig.SEER_TOKEN,
-        });
-      } catch (error) {
-        console.error('Error testing Seer connection:', error);
+      if (!this.localConfig.SEER_API_URL) {
+        if (this.$toast) {
+          this.$toast.warning('Please enter an API URL', {
+            position: 'top-right',
+            duration: 3000
+          });
+        }
+        return;
       }
+    
+      if (!this.localConfig.SEER_TOKEN) {
+        if (this.$toast) {
+          this.$toast.warning('Please enter an API token', {
+            position: 'top-right',
+            duration: 3000
+          });
+        }
+        return;
+      }
+    
+      try {
+        const url = this.localConfig.SEER_API_URL.trim();
+        const testUrl = url.startsWith('http') ? url : `http://${url}`;
+        new URL(testUrl);
+      } catch (e) {
+        if (this.$toast) {
+          this.$toast.error('Invalid URL format. Example: http://localhost:5055', {
+            position: 'top-right',
+            duration: 4000
+          });
+        }
+        return;
+      }
+    
+      await this.$emit('test-connection', 'seer', {
+        api_url: this.localConfig.SEER_API_URL.trim(),
+        token: this.localConfig.SEER_TOKEN.trim(),
+      });
     },
 
     async saveSettings() {

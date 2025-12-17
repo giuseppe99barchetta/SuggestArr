@@ -273,49 +273,100 @@ export default {
       }
     },
 
-    async testConnection(type, data) {
+    async testConnection(service, config) {
+      this.testingConnections[service] = true;
+
       try {
-        this.testingConnections[type] = true;
+        let endpoint = '';
+        let payload = {};
+      
+        switch (service) {
+          case 'tmdb':
+            endpoint = '/api/tmdb/test';
+            payload = { api_key: config.api_key };
+            break;
+          case 'plex':
+            endpoint = '/api/plex/test';
+            payload = { token: config.token, api_url: config.api_url };
+            break;
+          case 'jellyfin':
+            endpoint = '/api/jellyfin/test';
+            payload = { 
+              api_url: config.api_url,
+              token: config.token 
+            };
+            break;
+          case 'seer':
+            endpoint = '/api/overseerr/test';
+            payload = { 
+              api_url: config.api_url, 
+              token: config.token 
+            };
+            break;
+          default:
+            throw new Error('Unknown service');
+        }
+      
+        const response = await axios.post(endpoint, payload);
 
-        const endpoints = {
-          tmdb: '/api/tmdb/test',
-          jellyfin: '/api/jellyfin/test',
-          plex: '/api/plex/test',
-          seer: '/api/seer/test',
-          database: '/api/config/test-db-connection',
-        };
+        if (this.$toast) {
+          this.$toast.success(
+            response.data.message || `${service.toUpperCase()} connection successful!`,
+            {
+              position: 'top-right',
+              duration: 3000
+            }
+          );
+        } else {
+          alert(response.data.message || `${service.toUpperCase()} connection successful!`);
+        }
+      
+        return response.data;
+      
+      } catch (error) {
+        console.error(`${service} connection test failed:`, error);
 
-        const endpoint = endpoints[type];
-        if (!endpoint) throw new Error(`Unknown connection type: ${type}`);
+        let errorMessage = 'Connection test failed';
 
-        const response = await axios.post(endpoint, data);
-        
-        if (response.data.status === 'success') {
-          this.$toast.open({
-            message: `${type.toUpperCase()} connection successful!`,
-            type: 'success',
-            duration: 3000,
-            position: 'top-right'
+        if (error.response) {
+          const status = error.response.status;
+          const data = error.response.data;
+
+          if (status === 400) {
+            errorMessage = data?.message || 'Invalid credentials or server unreachable. Please check your URL and token.';
+          } else if (status === 401) {
+            errorMessage = 'Invalid authentication token. Please check your API token.';
+          } else if (status === 404) {
+            errorMessage = 'Server not found. Please check your URL.';
+          } else if (status === 500) {
+            errorMessage = 'Server error. Please check server logs.';
+          } else if (status === 503) {
+            errorMessage = 'Service unavailable. The server might be down.';
+          } else {
+            errorMessage = data?.message || `Error ${status}: Connection failed`;
+          }
+        } else if (error.request) {
+          errorMessage = 'No response from server. Check your network connection and server URL.';
+        } else {
+          errorMessage = error.message || 'Request configuration error';
+        }
+      
+        if (this.$toast) {
+          this.$toast.error(errorMessage, {
+            position: 'top-right',
+            duration: 5000
           });
         } else {
-          this.$toast.open({
-            message: `${type.toUpperCase()} connection failed`,
-            type: 'error',
-            duration: 5000,
-            position: 'top-right'
-          });
+          alert(`Error: ${errorMessage}`);
         }
-        return response.data;
-      } catch (error) {
-        this.$toast.open({
-          message: `${type.toUpperCase()} connection test failed`,
-          type: 'error',
-          duration: 5000,
-          position: 'top-right'
-        });
-        throw error;
+      
+        return {
+          status: 'error',
+          message: errorMessage
+        };
+      
       } finally {
-        this.testingConnections[type] = false;
+        this.testingConnections[service] = false;
       }
     },
 
