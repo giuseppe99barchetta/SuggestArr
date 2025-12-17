@@ -1,8 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import RequestsPage from '@/components/RequestsPage.vue';
 import ConfigWizard from '@/components/ConfigWizard.vue';
-import SettingsPage from '@/components/DashboardPage.vue';
-import ConfigSummary from '@/components/ConfigSummary.vue';
 import axios from 'axios';
 import { createApp } from 'vue';
 import App from '../App.vue';
@@ -47,7 +45,7 @@ async function createAppRouter() {
         {
             path: `/`,
             name: 'Home',
-            component: ConfigSummary,
+            component: DashboardPage,
             meta: { requiresSetup: true }
         },
         {

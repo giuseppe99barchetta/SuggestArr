@@ -8,24 +8,6 @@
           <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank" rel="noopener noreferrer">
             <img src="@/assets/logo.png" alt="SuggestArr Logo" class="logo">
           </a>
-          <h1 class="settings-title">Dashboard</h1>
-          <p class="settings-subtitle">Manage your SuggestArr configuration</p>
-          
-          <!-- Quick Status Indicators -->
-          <div class="status-indicators">
-            <div class="status-badge" :class="config.TMDB_API_KEY ? 'status-connected' : 'status-disconnected'">
-              <i class="fas fa-film"></i>
-              <span>TMDB</span>
-            </div>
-            <div class="status-badge" :class="getServiceStatus()">
-              <i :class="getServiceIcon()"></i>
-              <span>{{ config.SELECTED_SERVICE || 'No Service' }}</span>
-            </div>
-            <div class="status-badge" :class="config.SEER_API_URL ? 'status-connected' : 'status-disconnected'">
-              <i class="fas fa-magic"></i>
-              <span>Seer</span>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -55,6 +37,8 @@
             :config="config"
             :isLoading="isLoading"
             :testingConnections="testingConnections"
+            :getServiceStatus="getServiceStatus"
+            :getServiceIcon="getServiceIcon"
             @save-section="saveSection"
             @test-connection="testConnection"
           />
@@ -188,7 +172,7 @@ export default {
       config: {},
       isLoading: false,
       loadingMessage: 'Processing...',
-      activeTab: 'general',
+      activeTab: 'requests',
       showResetModal: false,
       backgroundImageUrl: '',
       requestCount: 0,
@@ -521,7 +505,8 @@ export default {
 .logo {
   width: 100px;
   height: auto;
-  margin-bottom: 1rem;
+  margin: 0 auto 1rem auto; /* Center horizontally */
+  display: block; /* Ensure block-level element */
   transition: transform 0.3s ease;
 }
 

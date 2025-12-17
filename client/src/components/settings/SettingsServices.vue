@@ -8,10 +8,16 @@
     <div class="settings-grid">
       <!-- TMDB Configuration -->
       <div class="settings-group">
-        <h3>
-          <i class="fas fa-film"></i>
-          TMDB API
-        </h3>
+        <div class="group-header">
+          <h3>
+            <i class="fas fa-film"></i>
+            TMDB API
+          </h3>
+          <span class="status-badge" :class="getTmdbStatus">
+            <span class="status-dot"></span>
+            {{ getTmdbStatusText }}
+          </span>
+        </div>
 
         <div class="form-group">
           <label for="tmdbApiKey">TMDB API Key</label>
@@ -54,10 +60,16 @@
 
       <!-- Media Server Configuration -->
       <div class="settings-group">
-        <h3>
-          <i class="fas fa-server"></i>
-          Media Server
-        </h3>
+        <div class="group-header">
+          <h3>
+            <i class="fas fa-server"></i>
+            Media Server
+          </h3>
+          <span class="status-badge" :class="getMediaServerStatus">
+            <span class="status-dot"></span>
+            {{ getMediaServerStatusText }}
+          </span>
+        </div>
 
         <BaseDropdown
           v-model="localConfig.SELECTED_SERVICE"
@@ -170,10 +182,16 @@
 
       <!-- Overseer/Jellyseer Configuration -->
       <div class="settings-group">
-        <h3>
-          <i class="fas fa-list-alt"></i>
-          Overseer/Jellyseer
-        </h3>
+        <div class="group-header">
+          <h3>
+            <i class="fas fa-list-alt"></i>
+            Overseer/Jellyseer
+          </h3>
+          <span class="status-badge" :class="getSeerStatus">
+            <span class="status-dot"></span>
+            {{ getSeerStatusText }}
+          </span>
+        </div>
 
         <div class="form-group">
           <label for="seerApiUrl">API URL</label>
@@ -301,6 +319,50 @@ export default {
   computed: {
     hasChanges() {
       return JSON.stringify(this.localConfig) !== JSON.stringify(this.originalConfig);
+    },
+    getTmdbStatus() {
+      return this.localConfig.TMDB_API_KEY ? 'status-connected' : 'status-disconnected';
+    },
+    getTmdbStatusText() {
+      return this.localConfig.TMDB_API_KEY ? 'Connected' : 'Disconnected';
+    },
+    getMediaServerStatus() {
+      const service = this.localConfig.SELECTED_SERVICE;
+      if (!service) return 'status-disconnected';
+      
+      if (service === 'plex' && this.localConfig.PLEX_TOKEN && this.localConfig.PLEX_API_URL) {
+        return 'status-connected';
+      }
+      if ((service === 'jellyfin' || service === 'emby') && 
+          this.localConfig.JELLYFIN_TOKEN && this.localConfig.JELLYFIN_API_URL) {
+        return 'status-connected';
+      }
+      
+      return 'status-warning';
+    },
+    getMediaServerStatusText() {
+      const service = this.localConfig.SELECTED_SERVICE;
+      if (!service) return 'No Service Selected';
+      
+      if (service === 'plex' && this.localConfig.PLEX_TOKEN && this.localConfig.PLEX_API_URL) {
+        return 'Connected';
+      }
+      if ((service === 'jellyfin' || service === 'emby') && 
+          this.localConfig.JELLYFIN_TOKEN && this.localConfig.JELLYFIN_API_URL) {
+        return 'Connected';
+      }
+      
+      return 'Incomplete Configuration';
+    },
+    getSeerStatus() {
+      return (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN) 
+        ? 'status-connected' 
+        : 'status-disconnected';
+    },
+    getSeerStatusText() {
+      return (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN) 
+        ? 'Connected' 
+        : 'Disconnected';
     },
   },
   watch: {
@@ -448,19 +510,92 @@ export default {
 }
 
 .settings-group {
-  background-color: rgba(255, 255, 255, 0.05);;
+  background-color: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--color-border-light);
   border-radius: var(--border-radius-md);
   padding: 1.5rem;
 }
 
+/* Group Header with Status Badge */
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
 .settings-group h3 {
   font-size: 1.2rem;
-  margin-bottom: 1rem;
+  margin: 0;
   color: var(--color-text-primary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+/* Status Badge Styles */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 2px solid;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.status-connected {
+  background-color: rgba(16, 185, 129, 0.15);
+  border-color: #10b981;
+  color: #10b981;
+}
+
+.status-connected .status-dot {
+  background-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+}
+
+.status-disconnected {
+  background-color: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.status-disconnected .status-dot {
+  background-color: #ef4444;
+  animation: none;
+}
+
+.status-warning {
+  background-color: rgba(245, 158, 11, 0.15);
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.status-warning .status-dot {
+  background-color: #f59e0b;
 }
 
 .service-config {
@@ -637,6 +772,16 @@ export default {
 
   .settings-group {
     padding: 1rem;
+  }
+
+  .group-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .status-badge {
+    align-self: flex-start;
   }
 
   .input-group {

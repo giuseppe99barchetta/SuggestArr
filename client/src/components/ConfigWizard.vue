@@ -143,14 +143,14 @@ import JellyfinConfig from './configWizard/JellyfinConfig.vue';
 import SeerConfig from './configWizard/SeerConfig.vue';
 import AdditionalSettings from './configWizard/AdditionalSettings.vue';
 import PlexConfig from './configWizard/PlexConfig.vue';
-import ConfigSummary from './ConfigSummary.vue';
+import DashboardPage from './DashboardPage.vue';
 import ContentFilterSettings from './configWizard/ContentFilterSettings.vue';
 import DbConfig from './configWizard/DbConfig.vue';
 
 export default {
   components: {
     Footer,
-    ConfigSummary,
+    DashboardPage,
     TmdbConfig,
     JellyfinConfig,
     SeerConfig,
