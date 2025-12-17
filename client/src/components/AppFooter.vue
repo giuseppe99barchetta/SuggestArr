@@ -1,15 +1,13 @@
 <template>
   <footer class="footer">
-    <!-- Logs Button -->
+    <!-- Logs Button 
     <div v-if="!isDashboardPage" class="logs-button-container">
       <button @click="toggleLogs" class="btn-logs">
         <font-awesome-icon icon="file-alt" class="logs-icon" />
         <span class="logs-text">View Logs</span>
-        <span class="logs-badge" v-if="hasNewLogs">
-          <font-awesome-icon icon="circle" class="pulse" />
-        </span>
       </button>
     </div>
+    -->
 
     <!-- Social Links -->
     <div class="footer-content">

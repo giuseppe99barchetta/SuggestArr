@@ -12,11 +12,12 @@
   --color-text-muted: #9ca3af;
 
   /* Accent Colors */
-  --color-primary: #939597;
-  --color-primary-hover: #b0b2b6;
+  --color-primary: #4f46e5;
+  --color-primary-hover: #3430aa;
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
+
 
   /* Border & UI Elements */
   --color-border-light: rgba(255, 255, 255, 0.2);

@@ -36,7 +36,6 @@
           </div>
         </div>
 
-        <Footer />
       </div>
     </div>
 
@@ -49,17 +48,6 @@
           <img src="@/assets/logo.png" alt="SuggestArr Logo" class="attached-logo mb-6 text-center">
         </a>
 
-        <div class="setup-header">
-          <button @click="goBack" class="back-btn" v-if="currentStep > 1">
-            <i class="fas fa-arrow-left"></i>
-            Back
-          </button>
-          <button @click="showWelcome = true" class="back-btn" v-else>
-            <i class="fas fa-arrow-left"></i>
-            Back to Setup Options
-          </button>
-        </div>
-
         <div class="progress-bar">
           <div class="progress" :style="{ width: progressBarWidth }"></div>
         </div>
@@ -67,13 +55,13 @@
           {{ setupMode === 'quick' ? 'Quick Setup' : 'Advanced Setup' }} - Step {{ currentStep }} of {{ steps.length }}
         </p>
 
-        <!-- Use dynamic components for each step -->
         <div class="wizard-step-container">
           <transition name="fade" mode="out-in">
             <component
               :is="currentStepComponent"
               :config="config"
               :isQuickSetup="setupMode === 'quick'"
+              :isFirstStep="currentStep === 1"
               @next-step="handleStepChange(1)"
               @previous-step="handleStepChange(-1)"
               @update-config="updateConfig"
@@ -87,12 +75,8 @@
 
     <!-- Completion Screen -->
     <div v-else-if="currentStep === steps.length + 1" class="wizard-container" :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }">
-      <div class="wizard-content">
-        <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank">
-          <img src="@/assets/logo.png" alt="SuggestArr Logo" class="attached-logo mb-6 text-center">
-        </a>
+      <div class="completion-card">
 
-        <div class="completion-card">
           <div class="success-icon">
             <i class="fas fa-check-circle"></i>
           </div>
@@ -121,7 +105,6 @@
               View Suggestions
             </button>
           </div>
-        </div>
 
         <Footer />
       </div>
@@ -134,7 +117,6 @@ import '@/assets/styles/wizard.css';
 import Footer from './AppFooter.vue';
 import axios from 'axios';
 import { fetchRandomMovieImage } from '@/api/tmdbApi';
-
 
 // Import wizard components
 import MediaServiceSelection from './configWizard/MediaServiceSelection.vue';
@@ -163,7 +145,7 @@ export default {
   data() {
     return {
       showWelcome: true,
-      setupMode: 'quick', // 'quick' or 'advanced'
+      setupMode: 'quick',
       currentStep: 1,
       config: this.getInitialConfig(),
       backgroundImageUrl: '',
@@ -213,6 +195,9 @@ export default {
       this.hasExistingConfig = true;
     }
   },
+  beforeUnmount() {
+    this.stopBackgroundImageRotation();
+  },
   methods: {
     getInitialConfig() {
       return {
@@ -250,7 +235,6 @@ export default {
     },
     async saveConfig() {
       try {
-        // Set default values for quick setup if they weren't configured
         if (this.setupMode === 'quick') {
           const defaults = {
             DB_TYPE: 'sqlite',
@@ -266,8 +250,6 @@ export default {
         }
 
         await axios.post('/api/config/save', this.config);
-
-        // Mark setup as completed
         await axios.post('/api/config/complete-setup');
 
         this.$toast.open({
@@ -289,51 +271,42 @@ export default {
         console.error('Error saving configuration:', error);
       }
     },
-
-    // New setup flow methods
     startQuickSetup() {
       this.setupMode = 'quick';
       this.showWelcome = false;
       this.currentStep = 1;
     },
-
     startAdvancedSetup() {
       this.setupMode = 'advanced';
       this.showWelcome = false;
       this.currentStep = 1;
     },
-
-    goBack() {
-      if (this.currentStep > 1) {
-        this.currentStep--;
-      }
-    },
-
     skipStep() {
       if (this.currentStep < this.steps.length) {
         this.currentStep++;
       }
     },
-
     goToSettings() {
       this.$router.push('/dashboard');
     },
-
     goToRequests() {
       this.$router.push('/requests');
     },
     updateConfig(key, value) {
       this.config[key] = value;
     },
-        
     handleStepChange(stepChange) {
+      if (stepChange < 0 && this.currentStep === 1) {
+        this.showWelcome = true;
+        return;
+      }
+
       if (this.currentStep + stepChange > 0 && this.currentStep + stepChange <= this.steps.length) {
         this.currentStep += stepChange;
       } else if (this.currentStep + stepChange > this.steps.length) {
         this.saveConfig();
       }
     },
-
     startDefaultImageRotation() {
       this.backgroundImageUrl = this.defaultImages[this.currentDefaultImageIndex];
 
@@ -363,9 +336,6 @@ export default {
         clearInterval(this.intervalId);
       }
     },
-  },
-  beforeUnmount() {
-    this.stopBackgroundImageRotation();
   },
 };
 </script>
@@ -479,28 +449,6 @@ export default {
   text-decoration: underline;
 }
 
-.setup-header {
-  margin-bottom: 1rem;
-}
-
-.back-btn {
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  color: var(--color-text-primary);
-  padding: 0.5rem 1rem;
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  transition: var(--transition-base);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.back-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
 .completion-card {
   background: rgba(0, 0, 0, 0.8);
   border-radius: var(--border-radius-lg);
@@ -612,7 +560,6 @@ export default {
   transform: translateY(-2px);
 }
 
-/* Responsive Design */
 @media (max-width: 768px) {
   .welcome-card,
   .completion-card {
@@ -657,4 +604,3 @@ export default {
   }
 }
 </style>
-

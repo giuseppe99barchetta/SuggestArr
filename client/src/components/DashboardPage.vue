@@ -868,6 +868,94 @@ export default {
   gap: 1rem;
 }
 
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--color-bg-overlay-heavy);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-content {
+  background-color: var(--color-bg-content);
+  backdrop-filter: blur(10px);
+  padding: 2rem;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border-light);
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.warning-icon {
+  font-size: 2rem;
+  color: var(--color-warning);
+}
+
+.modal-content h3 {
+  color: var(--color-text-primary);
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.modal-body {
+  color: var(--color-text-muted);
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.reset-warning-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 2rem 0;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--border-radius-sm);
+  padding: 1rem;
+}
+
+.reset-warning-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--color-danger);
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.reset-warning-list li i {
+  font-size: 1rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+/* Fade Transition */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
 /* Fade Transition */
 .fade-enter-active, .fade-leave-active {
   transition: opacity 0.3s ease;
@@ -952,4 +1040,5 @@ export default {
     width: 100%;
   }
 }
+
 </style>
