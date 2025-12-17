@@ -242,16 +242,28 @@ class DatabaseManager:
         total_sources = count_result[0][0] if count_result else 0
         total_requests = count_result[0][1] if count_result else 0
     
-        # Map sort_by to SQL ORDER BY clause - ORDER BY requested_at for date sorting
-        sort_mapping = {
-            'date-desc': 'r.requested_at DESC, s.media_id DESC',
-            'date-asc': 'r.requested_at ASC, s.media_id ASC',
-            'title-asc': 's.title ASC, r.requested_at DESC',
-            'title-desc': 's.title DESC, r.requested_at DESC',
-            'rating-desc': 's.rating DESC NULLS LAST, r.requested_at DESC',
-            'rating-asc': 's.rating ASC NULLS LAST, r.requested_at DESC'
-        }
-    
+        # Handle NULLS LAST differently for MySQL/MariaDB vs PostgreSQL/SQLite
+        if self.db_type in ['mysql', 'mariadb']:
+            # MySQL/MariaDB: Use COALESCE or IS NULL ordering
+            sort_mapping = {
+                'date-desc': 'r.requested_at DESC, s.media_id DESC',
+                'date-asc': 'r.requested_at ASC, s.media_id ASC',
+                'title-asc': 's.title ASC, r.requested_at DESC',
+                'title-desc': 's.title DESC, r.requested_at DESC',
+                'rating-desc': 's.rating IS NULL, s.rating DESC, r.requested_at DESC',
+                'rating-asc': 's.rating IS NULL, s.rating ASC, r.requested_at DESC'
+            }
+        else:
+            # PostgreSQL and SQLite support NULLS LAST
+            sort_mapping = {
+                'date-desc': 'r.requested_at DESC, s.media_id DESC',
+                'date-asc': 'r.requested_at ASC, s.media_id ASC',
+                'title-asc': 's.title ASC, r.requested_at DESC',
+                'title-desc': 's.title DESC, r.requested_at DESC',
+                'rating-desc': 's.rating DESC NULLS LAST, r.requested_at DESC',
+                'rating-asc': 's.rating ASC NULLS LAST, r.requested_at DESC'
+            }
+
         # Get the ORDER BY clause, default to date-desc if invalid
         order_by_clause = sort_mapping.get(sort_by, sort_mapping['date-desc'])
     
