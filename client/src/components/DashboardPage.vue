@@ -292,14 +292,14 @@ export default {
         
         if (response.data.status === 'success') {
           this.$toast.open({
-            message: `✅ ${type.toUpperCase()} connection successful!`,
+            message: `${type.toUpperCase()} connection successful!`,
             type: 'success',
             duration: 3000,
             position: 'top-right'
           });
         } else {
           this.$toast.open({
-            message: `❌ ${type.toUpperCase()} connection failed`,
+            message: `${type.toUpperCase()} connection failed`,
             type: 'error',
             duration: 5000,
             position: 'top-right'
@@ -308,7 +308,7 @@ export default {
         return response.data;
       } catch (error) {
         this.$toast.open({
-          message: `❌ ${type.toUpperCase()} connection test failed`,
+          message: `${type.toUpperCase()} connection test failed`,
           type: 'error',
           duration: 5000,
           position: 'top-right'
@@ -360,14 +360,14 @@ export default {
         URL.revokeObjectURL(url);
 
         this.$toast.open({
-          message: '✅ Configuration exported successfully!',
+          message: 'Configuration exported successfully!',
           type: 'success',
           duration: 3000,
           position: 'top-right'
         });
       } catch (error) {
         this.$toast.open({
-          message: '❌ Failed to export configuration',
+          message: 'Failed to export configuration',
           type: 'error',
           duration: 5000,
           position: 'top-right'
@@ -397,14 +397,14 @@ export default {
         await this.loadConfig();
 
         this.$toast.open({
-          message: '✅ Configuration imported successfully!',
+          message: 'Configuration imported successfully!',
           type: 'success',
           duration: 3000,
           position: 'top-right'
         });
       } catch (error) {
         this.$toast.open({
-          message: '❌ Failed to import: Invalid file format',
+          message: 'Failed to import: Invalid file format',
           type: 'error',
           duration: 5000,
           position: 'top-right'
@@ -428,7 +428,7 @@ export default {
       try {
         await axios.post('/api/config/reset');
         this.$toast.open({
-          message: '✅ Configuration reset successfully!',
+          message: 'Configuration reset successfully!',
           type: 'success',
           duration: 3000,
           position: 'top-right'
@@ -439,7 +439,7 @@ export default {
         }, 1000);
       } catch (error) {
         this.$toast.open({
-          message: '❌ Failed to reset configuration',
+          message: 'Failed to reset configuration',
           type: 'error',
           duration: 5000,
           position: 'top-right'

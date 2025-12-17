@@ -172,7 +172,6 @@ export default {
   },
   watch: {
     selectedSeverity(newVal, oldVal) {
-      console.log('Severity changed:', { oldVal, newVal, type: typeof newVal });
 
       if (newVal === 'All Severities') {
         this.selectedSeverity = '';

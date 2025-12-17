@@ -231,24 +231,12 @@ export default {
 .modern-label {
   display: inline-flex;
   align-items: center;
-  margin-bottom: 0.625rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.label-content {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
 }
 
 .label-text {
-  background: linear-gradient(135deg, #e5e7eb 0%, #9ca3af 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--color-text-secondary);
   background-clip: text;
 }
 

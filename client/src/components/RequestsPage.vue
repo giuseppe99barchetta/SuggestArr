@@ -589,7 +589,6 @@ export default {
             threshold: 0,
           });
           this.observer.observe(triggerRef);
-          console.log('✅ Observer initialized');
         } else {
           console.warn('⚠️ Trigger ref not found, retrying...');
           setTimeout(() => {
@@ -605,7 +604,6 @@ export default {
         return;
       }
       
-      console.log('📡 Fetching page:', page, 'with sort:', this.sortBy);
       this.loading = true;
       
       try {
@@ -650,8 +648,6 @@ export default {
         this.sources = [...this.sources, ...newSources];
         this.totalPages = total_pages;
         this.currentPage = page;
-
-        console.log('✅ Loaded page:', page, 'Total sources:', this.sources.length);
 
         this.$nextTick(() => {
           setTimeout(() => {

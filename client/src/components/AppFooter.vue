@@ -1,7 +1,7 @@
 <template>
   <footer class="footer">
     <!-- Logs Button -->
-    <div class="logs-button-container">
+    <div v-if="!isDashboardPage" class="logs-button-container">
       <button @click="toggleLogs" class="btn-logs">
         <font-awesome-icon icon="file-alt" class="logs-icon" />
         <span class="logs-text">View Logs</span>
@@ -31,15 +31,7 @@
       >
         <font-awesome-icon :icon="['fab', 'docker']" />
       </a>
-      <a 
-        href="https://www.reddit.com/r/selfhosted/comments/1g3dn1t/automate_media_recommendations_and_downloads_with/" 
-        target="_blank" 
-        rel="noopener noreferrer"
-        aria-label="Reddit"
-        class="footer-link"
-      >
-        <font-awesome-icon :icon="['fab', 'reddit']" />
-      </a>
+
       <a 
         href="https://discord.gg/JXwFd3PnXY" 
         target="_blank" 
@@ -108,6 +100,11 @@ export default {
       showLogs: false,
       hasNewLogs: false // Set to true when new logs arrive
     };
+  },
+  computed: {
+    isDashboardPage() {
+      return this.$route.name === 'Dashboard' || this.$route.path === '/dashboard' || this.$route.path === '/';
+    }
   },
   methods: {
     toggleLogs() {
