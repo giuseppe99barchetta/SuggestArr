@@ -1,4 +1,10 @@
 <template>
+  <!-- Floating Log Button -->
+  <button v-if="!showWelcome" @click="toggleLogs" class="floating-log-btn" 
+          title="View Setup Logs">
+    <i class="fas fa-clipboard-list"></i>
+  </button>
+
   <div>
     <!-- Welcome Screen -->
     <div v-if="showWelcome" class="wizard-container" :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }">
@@ -31,11 +37,10 @@
             <p>
               <i class="fas fa-info-circle"></i>
               Existing configuration detected. You can also go directly to
-              <router-link to="/settings" class="settings-link">Settings</router-link>.
+              <router-link to="/" class="settings-link">Settings</router-link>.
             </p>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -74,8 +79,12 @@
     </div>
 
     <!-- Completion Screen -->
-    <div v-else-if="currentStep === steps.length + 1" class="wizard-container" :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }">
-      <div class="completion-card">
+    <div v-else-if="currentStep === steps.length + 1" class="wizard-container" 
+         :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }">
+      <div class="wizard-content">
+        <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank">
+          <img src="@/assets/logo.png" alt="SuggestArr Logo" class="attached-logo mb-6 text-center">
+        </a>
 
           <div class="success-icon">
             <i class="fas fa-check-circle"></i>
@@ -106,45 +115,91 @@
             </button>
           </div>
 
-        <Footer />
+          <Footer />
       </div>
     </div>
   </div>
+
+  <!-- Logs Modal -->
+  <Transition name="modal">
+    <div v-if="showLogs" class="modal-overlay" @click.self="toggleLogs">
+      <div class="modal-container" @click.stop>
+        <!-- Modal Header -->
+        <div class="modal-header">
+          <div class="modal-header-left">
+            <div class="modal-icon">
+              <i class="fas fa-file-alt"></i>
+            </div>
+            <h2 class="modal-title">System Logs</h2>
+          </div>
+          
+          <button @click="toggleLogs" class="btn-close" aria-label="Close modal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="modal-body">
+          <LogsComponent />
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="modal-footer">
+          <button @click="toggleLogs" class="btn-modal-action">
+            <i class="fas fa-times"></i>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </Transition>
 </template>
 
 <script>
 import '@/assets/styles/wizard.css';
 import Footer from './AppFooter.vue';
+import LogsComponent from './LogsComponent.vue';
 import axios from 'axios';
 import { fetchRandomMovieImage } from '@/api/tmdbApi';
 
-// Import wizard components
+// Wizard step components
 import MediaServiceSelection from './configWizard/MediaServiceSelection.vue';
 import TmdbConfig from './configWizard/TmdbConfig.vue';
 import JellyfinConfig from './configWizard/JellyfinConfig.vue';
-import SeerConfig from './configWizard/SeerConfig.vue';
-import AdditionalSettings from './configWizard/AdditionalSettings.vue';
 import PlexConfig from './configWizard/PlexConfig.vue';
-import DashboardPage from './DashboardPage.vue';
-import ContentFilterSettings from './configWizard/ContentFilterSettings.vue';
+import SeerConfig from './configWizard/SeerConfig.vue';
 import DbConfig from './configWizard/DbConfig.vue';
+import ContentFilterSettings from './configWizard/ContentFilterSettings.vue';
+import AdditionalSettings from './configWizard/AdditionalSettings.vue';
+
+const QUICK_SETUP_DEFAULTS = {
+  DB_TYPE: 'sqlite',
+  MAX_SIMILAR_MOVIE: 5,
+  MAX_SIMILAR_TV: 2,
+  MAX_CONTENT_CHECKS: 10,
+  SEARCH_SIZE: 20,
+  CRON_TIMES: '0 0 * * *',
+  EXCLUDE_DOWNLOADED: true,
+  EXCLUDE_REQUESTED: true,
+};
 
 export default {
   components: {
     Footer,
-    DashboardPage,
+    LogsComponent,
+    MediaServiceSelection,
     TmdbConfig,
     JellyfinConfig,
-    SeerConfig,
-    AdditionalSettings,
-    MediaServiceSelection,
     PlexConfig,
+    SeerConfig,
+    DbConfig,
     ContentFilterSettings,
-    DbConfig
+    AdditionalSettings,
   },
   data() {
     return {
       showWelcome: true,
+      showLogs: false,
       setupMode: 'quick',
       currentStep: 1,
       config: this.getInitialConfig(),
@@ -160,27 +215,29 @@ export default {
       return `${(this.currentStep / this.steps.length) * 100}%`;
     },
     steps() {
-      const quickSteps = {
-        jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig'],
-        plex: ['MediaServiceSelection', 'TmdbConfig', 'PlexConfig', 'SeerConfig'],
-        emby: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig'],
+      const stepsByService = {
+        quick: {
+          jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig'],
+          plex: ['MediaServiceSelection', 'TmdbConfig', 'PlexConfig', 'SeerConfig'],
+          emby: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig'],
+        },
+        advanced: {
+          jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
+          plex: ['MediaServiceSelection', 'TmdbConfig', 'PlexConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
+          emby: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
+        }
       };
 
-      const advancedSteps = {
-        jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
-        plex: ['MediaServiceSelection', 'TmdbConfig', 'PlexConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
-        emby: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
-      };
-
-      const steps = this.setupMode === 'quick' ? quickSteps : advancedSteps;
-      return steps[this.config.SELECTED_SERVICE || 'jellyfin'];
+      const mode = stepsByService[this.setupMode];
+      const service = this.config.SELECTED_SERVICE || 'jellyfin';
+      return mode[service];
     },
     currentStepComponent() {
-      return this.steps[this.currentStep - 1] || 'SaveConfig';
+      return this.steps[this.currentStep - 1];
     },
   },
   watch: {
-    'config.TMDB_API_KEY': function (newApiKey) {
+    'config.TMDB_API_KEY'(newApiKey) {
       if (newApiKey) {
         this.stopBackgroundImageRotation();
         this.startBackgroundImageRotation();
@@ -197,6 +254,9 @@ export default {
   },
   beforeUnmount() {
     this.stopBackgroundImageRotation();
+    if (this.showLogs) {
+      document.body.style.overflow = '';
+    }
   },
   methods: {
     getInitialConfig() {
@@ -204,21 +264,21 @@ export default {
         TMDB_API_KEY: '',
         JELLYFIN_API_URL: '',
         JELLYFIN_TOKEN: '',
+        JELLYFIN_LIBRARIES: [],
+        PLEX_API_URL: '',
+        PLEX_TOKEN: '',
+        PLEX_LIBRARIES: [],
         SEER_API_URL: '',
         SEER_TOKEN: '',
         SEER_USER_NAME: '',
         SEER_USER_PSW: '',
+        SEER_SESSION_TOKEN: '',
+        SELECTED_SERVICE: '',
         MAX_SIMILAR_MOVIE: 5,
         MAX_SIMILAR_TV: 2,
         MAX_CONTENT_CHECKS: 10,
         SEARCH_SIZE: 20,
         CRON_TIMES: '0 0 * * *',
-        JELLYFIN_LIBRARIES: [],
-        SELECTED_SERVICE: '',
-        PLEX_API_URL: '',
-        PLEX_TOKEN: '',
-        PLEX_LIBRARIES: [],
-        SEER_SESSION_TOKEN: '',
         SUBPATH: '',
       };
     },
@@ -236,17 +296,7 @@ export default {
     async saveConfig() {
       try {
         if (this.setupMode === 'quick') {
-          const defaults = {
-            DB_TYPE: 'sqlite',
-            MAX_SIMILAR_MOVIE: 5,
-            MAX_SIMILAR_TV: 2,
-            MAX_CONTENT_CHECKS: 10,
-            SEARCH_SIZE: 20,
-            CRON_TIMES: '0 0 * * *',
-            EXCLUDE_DOWNLOADED: true,
-            EXCLUDE_REQUESTED: true,
-          };
-          this.config = { ...defaults, ...this.config };
+          this.config = { ...QUICK_SETUP_DEFAULTS, ...this.config };
         }
 
         await axios.post('/api/config/save', this.config);
@@ -260,7 +310,6 @@ export default {
         });
 
         this.currentStep = this.steps.length + 1;
-
       } catch (error) {
         this.$toast.open({
           message: 'Error saving configuration. Please try again!',
@@ -281,11 +330,6 @@ export default {
       this.showWelcome = false;
       this.currentStep = 1;
     },
-    skipStep() {
-      if (this.currentStep < this.steps.length) {
-        this.currentStep++;
-      }
-    },
     goToSettings() {
       this.$router.push('/dashboard');
     },
@@ -294,6 +338,11 @@ export default {
     },
     updateConfig(key, value) {
       this.config[key] = value;
+    },
+    skipStep() {
+      if (this.currentStep < this.steps.length) {
+        this.currentStep++;
+      }
     },
     handleStepChange(stepChange) {
       if (stepChange < 0 && this.currentStep === 1) {
@@ -307,9 +356,19 @@ export default {
         this.saveConfig();
       }
     },
+    toggleLogs() {
+      this.showLogs = !this.showLogs;
+      document.body.style.overflow = this.showLogs ? 'hidden' : '';
+      
+      if (this.showLogs) {
+        this.$nextTick(() => {
+          const overlay = document.querySelector('.modal-overlay');
+          if (overlay) overlay.scrollTop = 0;
+        });
+      }
+    },
     startDefaultImageRotation() {
       this.backgroundImageUrl = this.defaultImages[this.currentDefaultImageIndex];
-
       this.intervalId = setInterval(() => {
         this.currentDefaultImageIndex = (this.currentDefaultImageIndex + 1) % this.defaultImages.length;
         this.backgroundImageUrl = this.defaultImages[this.currentDefaultImageIndex];
@@ -327,13 +386,12 @@ export default {
     },
     startBackgroundImageRotation() {
       this.fetchRandomMovieImage();
-      this.intervalId = setInterval(() => {
-        this.fetchRandomMovieImage();
-      }, 10000);
+      this.intervalId = setInterval(() => this.fetchRandomMovieImage(), 10000);
     },
     stopBackgroundImageRotation() {
       if (this.intervalId) {
         clearInterval(this.intervalId);
+        this.intervalId = null;
       }
     },
   },
@@ -341,6 +399,7 @@ export default {
 </script>
 
 <style scoped>
+/* Welcome Card */
 .welcome-card {
   padding: 2rem;
   text-align: center;
@@ -362,6 +421,7 @@ export default {
   line-height: 1.6;
 }
 
+/* Setup Options */
 .setup-options {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -423,6 +483,7 @@ export default {
   font-size: 0.9rem;
 }
 
+/* Existing Config */
 .existing-config {
   background: rgba(59, 130, 246, 0.1);
   border: 1px solid rgba(59, 130, 246, 0.3);
@@ -449,6 +510,7 @@ export default {
   text-decoration: underline;
 }
 
+/* Completion Card */
 .completion-card {
   background: rgba(0, 0, 0, 0.8);
   border-radius: var(--border-radius-lg);
@@ -515,6 +577,7 @@ export default {
   margin-bottom: 0.5rem;
 }
 
+/* Action Buttons */
 .completion-actions {
   display: flex;
   gap: 1rem;
@@ -531,7 +594,6 @@ export default {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  text-decoration: none;
   font-size: 1rem;
   min-width: 150px;
   justify-content: center;
@@ -560,6 +622,192 @@ export default {
   transform: translateY(-2px);
 }
 
+/* Floating Log Button */
+.floating-log-btn {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 56px;
+  height: 56px;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-medium);
+  border-radius: 50%;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: var(--transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  box-shadow: var(--shadow-base);
+  z-index: 1000;
+  backdrop-filter: blur(10px);
+}
+
+.floating-log-btn:hover {
+  background: var(--color-bg-active);
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-bg-overlay-heavy);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  padding: 1rem;
+}
+
+.modal-container {
+  background: var(--color-bg-content);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-xl);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  max-width: 1200px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-bg-overlay-light);
+}
+
+.modal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.modal-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-secondary);
+  font-size: 1.25rem;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.btn-close {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.btn-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+  transform: rotate(90deg);
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 2rem;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: var(--color-bg-overlay-light);
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: var(--color-primary);
+  border-radius: var(--border-radius-sm);
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-hover);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.25rem 2rem;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg-overlay-light);
+}
+
+.btn-modal-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-primary);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.btn-modal-action:hover {
+  background: var(--color-bg-active);
+  border-color: var(--color-primary);
+}
+
+/* Modal Transitions */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-enter-active .modal-container,
+.modal-leave-active .modal-container {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-from .modal-container,
+.modal-leave-to .modal-container {
+  transform: scale(0.9) translateY(20px);
+  opacity: 0;
+}
+
+/* Responsive */
 @media (max-width: 768px) {
   .welcome-card,
   .completion-card {
@@ -601,6 +849,36 @@ export default {
 
   .action-btn {
     min-width: auto;
+  }
+
+  .floating-log-btn {
+    bottom: 1rem;
+    right: 1rem;
+    width: 48px;
+    height: 48px;
+    font-size: 1rem;
+  }
+
+  .modal-container {
+    max-width: 100%;
+    max-height: 95vh;
+    border-radius: var(--border-radius-lg);
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding: 1rem 1.25rem;
+  }
+
+  .modal-title {
+    font-size: 1.25rem;
+  }
+
+  .modal-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
   }
 }
 </style>

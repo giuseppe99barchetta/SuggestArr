@@ -448,3 +448,36 @@ class DatabaseManager:
             "pending": 0,   # Non gestito lato tuo
             "today": today
         }
+
+    def test_connection(self, db_config):
+        """Test the database connection based on the provided db_config."""
+        self.logger.debug(f"Testing database connection with config: {db_config}")
+        
+        try:
+            db_type = db_config.get('DB_TYPE', 'sqlite')
+
+            if db_type == 'postgres':
+                # Test PostgreSQL connection
+                connection = psycopg2.connect(
+                    host=db_config['DB_HOST'],
+                    port=db_config['DB_PORT'],
+                    user=db_config['DB_USER'],
+                    password=db_config['DB_PASSWORD'],
+                    dbname=db_config['DB_NAME']
+                )
+                connection.close()
+            elif db_type in ['mysql', 'mariadb']:
+                # Test MySQL/MariaDB connection
+                connection = mysql.connector.connect(
+                    host=db_config['DB_HOST'],
+                    port=db_config['DB_PORT'],
+                    user=db_config['DB_USER'],
+                    password=db_config['DB_PASSWORD'],
+                    database=db_config['DB_NAME']
+                )
+                connection.close()
+
+            return {'status': 'success', 'message': 'Database connection successful!'}
+        except Exception as e:
+            self.logger.error(f"Error testing database connection: {str(e)}")
+            return {'status': 'error', 'message': f"Error testing database connection: {str(e)}"}

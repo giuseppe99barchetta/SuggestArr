@@ -94,7 +94,7 @@ async function createAppRouter() {
 
         // If setup is completed and route is setup-only, redirect to settings
         if (to.meta.setupOnly && currentStatus.setup_completed) {
-            return next('/settings');
+            return next('/dashboard');
         }
 
         next();

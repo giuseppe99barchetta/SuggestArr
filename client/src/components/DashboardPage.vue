@@ -272,10 +272,9 @@ export default {
         this.isLoading = false;
       }
     },
-
     async testConnection(service, config) {
       this.testingConnections[service] = true;
-
+    
       try {
         let endpoint = '';
         let payload = {};
@@ -296,11 +295,29 @@ export default {
               token: config.token 
             };
             break;
+          case 'emby':
+            endpoint = '/api/jellyfin/test';
+            payload = { 
+              api_url: config.api_url,
+              token: config.token 
+            };
+            break;
           case 'seer':
-            endpoint = '/api/overseerr/test';
+            endpoint = '/api/seer/test';
             payload = { 
               api_url: config.api_url, 
               token: config.token 
+            };
+            break;
+          case 'database':
+            endpoint = '/api/config/test-db-connection';
+            payload = {
+              DB_TYPE: config.DB_TYPE,
+              DB_HOST: config.DB_HOST,
+              DB_PORT: config.DB_PORT,
+              DB_NAME: config.DB_NAME,
+              DB_USER: config.DB_USER,
+              DB_PASSWORD: config.DB_PASSWORD,
             };
             break;
           default:
@@ -308,7 +325,7 @@ export default {
         }
       
         const response = await axios.post(endpoint, payload);
-
+      
         if (this.$toast) {
           this.$toast.success(
             response.data.message || `${service.toUpperCase()} connection successful!`,
@@ -325,13 +342,13 @@ export default {
       
       } catch (error) {
         console.error(`${service} connection test failed:`, error);
-
+      
         let errorMessage = 'Connection test failed';
-
+      
         if (error.response) {
           const status = error.response.status;
           const data = error.response.data;
-
+        
           if (status === 400) {
             errorMessage = data?.message || 'Invalid credentials or server unreachable. Please check your URL and token.';
           } else if (status === 401) {
@@ -369,7 +386,6 @@ export default {
         this.testingConnections[service] = false;
       }
     },
-
     getServiceStatus() {
       const service = this.config.SELECTED_SERVICE;
       if (!service) return 'status-disconnected';
