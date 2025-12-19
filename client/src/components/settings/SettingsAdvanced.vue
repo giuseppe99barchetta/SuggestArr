@@ -67,7 +67,7 @@
           <i class="fas fa-flask"></i>
           Experimental Features
         </h3>
-
+      
         <div class="warning-box">
           <i class="fas fa-exclamation-triangle"></i>
           <div>
@@ -77,7 +77,7 @@
             </p>
           </div>
         </div>
-
+      
         <div class="form-group">
           <label class="checkbox-label">
             <input
@@ -91,13 +91,17 @@
             Enable experimental features that are still in development
           </small>
         </div>
-
-        <div class="form-group">
+      
+        <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES }">
+          <div v-if="!localConfig.ENABLE_BETA_FEATURES" class="development-badge">
+            <i class="fas fa-code"></i>
+            In Development
+          </div>
           <label class="checkbox-label">
             <input
               v-model="localConfig.ENABLE_ADVANCED_ALGORITHM"
               type="checkbox"
-              :disabled="isLoading"
+              :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES"
             />
             <span class="checkbox-text">Use advanced suggestion algorithm</span>
           </label>
@@ -105,13 +109,17 @@
             Use an enhanced algorithm for better content suggestions (may be slower)
           </small>
         </div>
-
-        <div class="form-group">
+      
+        <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES }">
+          <div v-if="!localConfig.ENABLE_BETA_FEATURES" class="development-badge">
+            <i class="fas fa-code"></i>
+            In Development
+          </div>
           <label class="checkbox-label">
             <input
               v-model="localConfig.ENABLE_SOCIAL_FEATURES"
               type="checkbox"
-              :disabled="isLoading"
+              :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES"
             />
             <span class="checkbox-text">Enable social features</span>
           </label>
@@ -407,36 +415,33 @@ export default {
           this.availableUsers = [];
           return;
         }
-      
+
         let endpoint;
-        let requestBody = {};
-      
         if (service === 'plex') {
           endpoint = '/api/plex/users';
-          requestBody = {
-            PLEX_TOKEN: this.localConfig.PLEX_TOKEN,
-            PLEX_API_URL: this.localConfig.PLEX_API_URL
-          };
-        } else if (service === 'jellyfin' || service === 'emby') {
+        } else if (service === 'jellyfin') {
           endpoint = '/api/jellyfin/users';
-          requestBody = {
-            JELLYFIN_TOKEN: this.localConfig.JELLYFIN_TOKEN,
-            JELLYFIN_API_URL: this.localConfig.JELLYFIN_API_URL
-          };
-        } 
-      
+        } else if (service === 'seer') {
+          endpoint = '/api/seer/users';
+        }
+
         if (endpoint) {
-          const response = await axios.post(endpoint, requestBody);
+          let url = endpoint;
+          let params = {};
+
+          // Add required parameters for Plex
+          if (service === 'plex') {
+            params.PLEX_TOKEN = this.localConfig.PLEX_TOKEN;
+            if (this.localConfig.PLEX_API_URL) {
+              params.PLEX_API_URL = this.localConfig.PLEX_API_URL;
+            }
+          }
+
+          const response = await axios.get(url, { params });
           this.availableUsers = response.data.users || response.data || [];
         }
       } catch (error) {
         console.error('Error loading users:', error);
-        this.$toast.open({
-          message: 'Failed to load users',
-          type: 'error',
-          duration: 5000,
-          position: 'top-right'
-        });
         this.availableUsers = [];
       } finally {
         this.isLoadingUsers = false;
@@ -849,6 +854,56 @@ export default {
   background: var(--color-bg-interactive);
   color: var(--color-text-primary);
   border: 1px solid var(--color-border-medium);
+}
+
+/* Disabled feature styling with blur effect */
+.feature-disabled {
+  opacity: 0.5;
+  filter: blur(0.8px);
+  pointer-events: none;
+  transition: all 0.3s ease;
+}
+
+.feature-disabled .checkbox-label {
+  cursor: not-allowed;
+}
+
+.feature-disabled input[type="checkbox"] {
+  opacity: 0.4;
+}
+
+.feature-disabled .checkbox-text,
+.feature-disabled .form-help {
+  color: var(--color-text-muted);
+}
+
+/* Feature wrapper for positioning */
+.feature-wrapper {
+  position: relative;
+}
+
+/* Development badge */
+.development-badge {
+  position: absolute;
+  top: -8px;
+  right: 0;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  z-index: 1;
+}
+
+.development-badge i {
+  font-size: 0.625rem;
 }
 
 .btn-outline:hover:not(:disabled) {
