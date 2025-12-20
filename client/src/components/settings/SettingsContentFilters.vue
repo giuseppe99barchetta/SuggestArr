@@ -613,13 +613,9 @@ export default {
   cursor: not-allowed;
 }
 
-.btn-primary {
-  background: var(--color-primary);
-  color: white;
-}
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
+  background: var(--button-primary-bg-hover);
 }
 
 .btn-outline {

@@ -12,12 +12,15 @@
   --color-text-muted: #9ca3af;
 
   /* Accent Colors */
-  --color-primary: #4f46e5;
+  --color-primary: #99999b94;
   --color-primary-hover: #3430aa;
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
 
+  --button-primary-bg: #42424286;
+  --button-primary-bg-hover: #61616862;
+  --button-active-bg: #99999b94;
 
   /* Border & UI Elements */
   --color-border-light: rgba(255, 255, 255, 0.2);
@@ -74,7 +77,7 @@
 
 /* Interactive Elements */
 .btn-primary {
-  background-color: var(--color-primary);
+  background-color: var(--button-primary-bg);
   color: var(--color-text-primary);
   border-radius: var(--border-radius-sm);
   transition: var(--transition-base);
@@ -189,11 +192,11 @@
 }
 
 .tab-button.active {
-  background-color: var(--color-primary);
   color: var(--color-text-primary);
-  border-color: var(--color-primary);
+  border-color: var(--button-active-bg);
+  background-color: var(--button-active-bg);
+  backdrop-filter: blur(200px);
 }
-
 
 /* Loading States */
 .loading-overlay {

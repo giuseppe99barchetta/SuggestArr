@@ -637,43 +637,6 @@ export default {
   color: var(--color-warning);
 }
 
-/* Tabs */
-.tabs-navigation {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 2rem;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.tab-button {
-  background-color: var(--color-bg-interactive);
-  border: 2px solid var(--color-border-light);
-  color: var(--color-text-muted);
-  padding: 0.75rem 1.5rem;
-  border-radius: var(--border-radius-md);
-  cursor: pointer;
-  transition: var(--transition-base);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.tab-button:hover {
-  background-color: var(--color-bg-active);
-  color: var(--color-text-primary);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.tab-button.active {
-  background-color: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
 
 /* Content */
 .tab-content {

@@ -106,7 +106,7 @@
       <button 
         v-if="recentRequests.length > 0" 
         @click="goToRequestsPage" 
-        class="btn-view-all">
+        class="tab-button btn-view-all">
         <span>View All {{ totalRequests }} Requests</span>
         <i class="fas fa-arrow-right"></i>
       </button>
@@ -464,7 +464,6 @@ export default {
   top: 0;
   height: 100%;
   width: 3px;
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.5), rgba(37, 99, 235, 0.5));
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -565,7 +564,7 @@ export default {
 }
 
 .request-card-preview:hover .request-arrow {
-  color: #93c5fd;
+  color: var(--color-primary);
   transform: translateX(4px);
 }
 
@@ -577,22 +576,12 @@ export default {
   gap: 0.625rem;
   width: 100%;
   padding: 1rem;
-  background: rgba(148, 163, 184, 0.12);
-  border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 10px;
   color: #cbd5e1;
   font-weight: 600;
   font-size: 0.9375rem;
   cursor: pointer;
   transition: all 0.3s ease;
-}
-
-.btn-view-all:hover {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
 .btn-view-all i {

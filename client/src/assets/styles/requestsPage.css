@@ -855,13 +855,12 @@
   min-width: 160px;
 }
 .filter-select:hover {
-  border-color: var(--color-primary);
-  background-color: var(--color-bg-active);
+  border-color: var(--btn-primary-bg-hover);
 }
 
 .filter-select:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: var(--btn-primary-bg-hover);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
