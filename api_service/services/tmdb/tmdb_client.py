@@ -44,7 +44,7 @@ class TMDbClient:
         self.region_provider = filter_region_provider
         self.excluded_streaming_services = filter_streaming_services
         self.tmdb_api_url = "https://api.themoviedb.org/3"
-        self.logger.debug("TMDbClient initialized with API key: %s", api_key)
+        self.logger.debug("TMDbClient initialized with API key: ***")
 
     async def _fetch_recommendations(self, content_id, content_type):
         """

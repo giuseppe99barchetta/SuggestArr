@@ -140,7 +140,7 @@ def clear_env_vars():
 
 def save_session_token(token):
     """Save session token of Seer client."""
-    logger.debug(f"Saving session token: {token}")
+    logger.debug("Saving session token")
     with open(CONFIG_PATH, 'r+', encoding='utf-8') as file:
         config_data = yaml.safe_load(file) or {}
         config_data['SEER_SESSION_TOKEN'] = token

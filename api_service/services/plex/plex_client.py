@@ -8,6 +8,7 @@ Classes:
 import asyncio
 import aiohttp
 from api_service.config.logger_manager import LoggerManager
+from api_service.exceptions.api_exceptions import PlexConnectionError, PlexClientError
 
 # Constants
 REQUEST_TIMEOUT = 10  # Timeout in seconds for HTTP requests
@@ -82,8 +83,10 @@ class PlexClient:
 
         except aiohttp.ClientError as e:
             self.logger.error("Network error occurred while retrieving users: %s", str(e))
+            raise PlexConnectionError(f"Failed to connect to Plex server: {str(e)}")
         except Exception as e:
             self.logger.error("Unexpected error occurred while retrieving users: %s", str(e))
+            raise PlexClientError(f"Unexpected error while retrieving users: {str(e)}")
 
         return list(sorted_users)
 
@@ -127,6 +130,10 @@ class PlexClient:
                             self.logger.error("Failed to retrieve recent items for user %s: %d", user_id or "all", response.status)
             except aiohttp.ClientError as e:
                 self.logger.error("An error occurred while retrieving recent items for user %s: %s", user_id or "all", str(e))
+                raise PlexConnectionError(f"Failed to retrieve recent items from Plex: {str(e)}")
+            except Exception as e:
+                self.logger.error("Unexpected error occurred while retrieving recent items for user %s: %s", user_id or "all", str(e))
+                raise PlexClientError(f"Unexpected error while retrieving recent items: {str(e)}")
     
         self.logger.info(f"Total filtered items across all users: {len(all_filtered_items)}")
         
