@@ -53,7 +53,7 @@ class ContentAutomation:
 
         # Overseer/Jellyseer client
         instance.logger.info("Initializing Jellyseer client")
-        jellyseer_client = SeerClient(
+        seer_client = SeerClient(
             env_vars['SEER_API_URL'],
             env_vars['SEER_TOKEN'],
             env_vars['SEER_USER_NAME'],
@@ -63,7 +63,7 @@ class ContentAutomation:
             exclude_downloaded,
             exclude_requested
         )
-        await jellyseer_client.init()
+        await seer_client.init()
         instance.logger.info("Jellyseer client initialized successfully")
 
         # TMDb client
@@ -93,7 +93,7 @@ class ContentAutomation:
             )
             await jellyfin_client.init_existing_content()
             instance.media_handler = JellyfinHandler(
-                jellyfin_client, jellyseer_client, tmdb_client, instance.logger, instance.max_similar_movie, instance.max_similar_tv, instance.selected_users
+                jellyfin_client, seer_client, tmdb_client, instance.logger, instance.max_similar_movie, instance.max_similar_tv, instance.selected_users
             )
             instance.logger.info(f"{instance.selected_service.upper()} client initialized successfully")
 
@@ -107,7 +107,7 @@ class ContentAutomation:
                 user_ids=instance.selected_users
             )
             await plex_client.init_existing_content()
-            instance.media_handler = PlexHandler(plex_client, jellyseer_client, tmdb_client, instance.logger, instance.max_similar_movie, instance.max_similar_tv)
+            instance.media_handler = PlexHandler(plex_client, seer_client, tmdb_client, instance.logger, instance.max_similar_movie, instance.max_similar_tv)
             instance.logger.info("Plex client initialized successfully")
         else:
             instance.logger.warning(f"Unknown selected service: {instance.selected_service}")

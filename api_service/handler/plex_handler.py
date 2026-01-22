@@ -1,22 +1,33 @@
 import asyncio
+import unicodedata
 
 from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 
+def to_ascii(value):
+    """
+    Apply Unicode NFKD normalization and handle None.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return value
+    return unicodedata.normalize('NFKD', value)
+
 class PlexHandler:
-    def __init__(self, plex_client: PlexClient, jellyseer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv):
+    def __init__(self, plex_client: PlexClient, seer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
-        :param jellyseer_client: Jellyseer API client
+        :param seer_client: Seer API client
         :param tmdb_client: TMDb API client
         :param logger: Logger instance
         :param max_similar_movie: Max number of similar movies to request
         :param max_similar_tv: Max number of similar TV shows to request
         """
         self.plex_client = plex_client
-        self.jellyseer_client = jellyseer_client
+        self.seer_client = seer_client
         self.tmdb_client = tmdb_client
         self.logger = logger
         self.max_similar_movie = max_similar_movie
@@ -33,6 +44,8 @@ class PlexHandler:
             tasks = []
             for response_item in recent_items_response:
                 title = response_item.get('title', response_item.get('grandparentTitle'))
+                if title is not None and isinstance(title, str):
+                    title = to_ascii(title)
                 self.logger.info(f"Processing item: {title}")
                 tasks.append(self.process_item(response_item, title))  # No user context needed for Plex
 
@@ -71,7 +84,7 @@ class PlexHandler:
         return key if key else None
 
     async def process_movie(self, movie_key, title):
-        """Find similar movies via TMDb and request them via Jellyseer."""
+        """Find similar movies via TMDb and request them via Seer."""
         self.logger.debug(f"Processing movie with key: {movie_key} - {title}")
         source_tmbd_id = await self.plex_client.get_metadata_provider_id(movie_key)
         self.logger.debug(f"TMDb ID retrieved: {source_tmbd_id}")
@@ -112,16 +125,18 @@ class PlexHandler:
         for media in media_ids[:max_items]:
             media_id = media['id']
             media_title = media['title']
+            if media_title is not None and isinstance(media_title, str):
+                media_title = to_ascii(media_title)
             self.logger.debug(f"Processing similar media: '{media_title}' with ID: '{media_id}'")
 
             # Check if already downloaded, requested, or in an excluded streaming service
-            already_requested = await self.jellyseer_client.check_already_requested(media_id, media_type)
+            already_requested = await self.seer_client.check_already_requested(media_id, media_type)
             self.logger.debug(f"Already requested: {already_requested}")
             if already_requested:
                 self.logger.info(f"Skipping [{media_type}, {media_title}]: already requested.")
                 continue
 
-            already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content)
+            already_downloaded = await self.seer_client.check_already_downloaded(media_id, media_type, self.existing_content)
             self.logger.debug(f"Already downloaded: {already_downloaded}")
             if already_downloaded:
                 self.logger.info(f"Skipping [{media_type}, {media_title}]: already downloaded.")
@@ -132,15 +147,22 @@ class PlexHandler:
             if in_excluded_streaming_service:
                 self.logger.info(f"Skipping [{media_type}, {media_title}]: excluded by streaming service: {provider}")
                 continue
+            
+            media_to_send = dict(media)
+            if 'title' in media_to_send and media_to_send['title'] is not None and isinstance(media_to_send['title'], str):
+                media_to_send['title'] = to_ascii(media_to_send['title'])
 
             # Add to tasks if it passes all checks
-            tasks.append(self._request_media_and_log(media_type, media, source_tmdb_obj))
+            tasks.append(self._request_media_and_log(media_type, media_to_send, source_tmdb_obj))
 
         await asyncio.gather(*tasks)
 
     async def _request_media_and_log(self, media_type, media, source_tmdb_obj):
         """Helper method to request media and log the result."""
         self.logger.debug(f"Requesting media: {media} of type: {media_type}")
-        if await self.jellyseer_client.request_media(media_type, media, source_tmdb_obj):
+        if await self.seer_client.request_media(media_type, media, source_tmdb_obj):
             self.request_count += 1
-            self.logger.info(f"Requested {media_type}: {media['title']}")
+            title_for_log = media.get('title') or media.get('name') or ''
+            if title_for_log is not None and isinstance(title_for_log, str):
+                title_for_log = to_ascii(title_for_log)
+            self.logger.info(f"Requested {media_type}: {title_for_log}")
