@@ -57,36 +57,25 @@
                 <i class="fas fa-times"></i>
               </span>
             </div>
-                        <!-- Filter Buttons -->
+            <!-- Filter Buttons -->
             <div class="filter-bar">
               <!-- Sort By -->
-              <div class="filter-group">
-                <label class="filter-label">
-                  <i class="fas fa-sort"></i>
-                  Sort By
-                </label>
-                <select v-model="sortBy" class="filter-select">
-                  <option value="date-desc">Date (Newest)</option>
-                  <option value="date-asc">Date (Oldest)</option>
-                  <option value="title-asc">Title (A-Z)</option>
-                  <option value="title-desc">Title (Z-A)</option>
-                  <option value="rating-desc">Rating (High-Low)</option>
-                  <option value="rating-asc">Rating (Low-High)</option>
-                </select>
-              </div>
+              <BaseDropdown
+                v-model="sortBy"
+                :options="sortOptions"
+                placeholder="Select sort order"
+                :disabled="isLoading"
+                id="sortBy"
+              />
             
               <!-- Media Type Filter -->
-              <div class="filter-group">
-                <label class="filter-label">
-                  <i class="fas fa-filter"></i>
-                  Type
-                </label>
-                <select v-model="mediaTypeFilter" class="filter-select">
-                  <option value="all">All Types</option>
-                  <option value="movie">Movies</option>
-                  <option value="tv">TV Shows</option>
-                </select>
-              </div>
+              <BaseDropdown
+                v-model="mediaTypeFilter"
+                :options="mediaTypeOptions"
+                placeholder="Select media type"
+                :disabled="isLoading"
+                id="mediaType"
+              />
             
               <!-- Clear Filters -->
               <button 
@@ -377,12 +366,14 @@ import '@/assets/styles/requestsPage.css';
 import axios from "axios";
 import backgroundManager from '@/api/backgroundManager';
 import Footer from './AppFooter.vue';
+import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import { fetchRandomMovieImage } from '@/api/tmdbApi';
 
 export default {
   name: "RequestsPage",
   components: {
     Footer,
+    BaseDropdown,
   },
   mixins: [backgroundManager],
   data() {
@@ -401,6 +392,19 @@ export default {
       observer: null,
       totalSourcesCount: 0,
       totalRequestsCount: 0,
+      sortOptions: [
+        { value: 'date-desc', label: 'Date (Newest)' },
+        { value: 'date-asc', label: 'Date (Oldest)' },
+        { value: 'title-asc', label: 'Title (A-Z)' },
+        { value: 'title-desc', label: 'Title (Z-A)' },
+        { value: 'rating-desc', label: 'Rating (High-Low)' },
+        { value: 'rating-asc', label: 'Rating (Low-High)' }
+      ],
+      mediaTypeOptions: [
+        { value: 'all', label: 'All Types' },
+        { value: 'movie', label: 'Movies' },
+        { value: 'tv', label: 'TV Shows' }
+      ]
     };
   },
   computed: {

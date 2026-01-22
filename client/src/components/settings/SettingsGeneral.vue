@@ -316,6 +316,7 @@ export default {
   color: var(--color-text-primary);
   font-size: 1rem;
   transition: var(--transition-base);
+  min-height: 44px;
 }
 
 .form-control:focus {
@@ -350,6 +351,8 @@ export default {
   gap: 0.5rem;
   text-decoration: none;
   font-size: 0.875rem;
+  min-height: 44px;
+  min-width: 44px;
 }
 
 .btn:disabled {
@@ -379,12 +382,84 @@ export default {
 .btn-sm {
   padding: 0.375rem 0.75rem;
   font-size: 0.8125rem;
+  min-height: 44px;
+  min-width: 44px;
 }
 
 .cron-message {
   margin-left: 1rem;
   font-size: 0.875rem;
   font-weight: 500;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .settings-group {
+    padding: 1rem;
+  }
+
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .form-control {
+    padding: 0.875rem;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  .btn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.875rem 1rem;
+    font-size: 1rem;
+  }
+
+  .btn-sm {
+    width: auto;
+    min-width: 44px;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+  }
+
+  .cron-message {
+    margin-left: 0;
+    margin-top: 0.5rem;
+    display: block;
+  }
+
+  .section-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .settings-group h3 {
+    font-size: 1.1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .settings-grid {
+    gap: 1rem;
+  }
+
+  .settings-group {
+    padding: 0.75rem;
+  }
+
+  .form-control {
+    padding: 0.75rem;
+  }
+
+  .btn {
+    padding: 0.75rem;
+  }
 }
 
 .cron-message.valid {

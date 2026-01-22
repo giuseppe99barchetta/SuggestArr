@@ -89,14 +89,39 @@ export default {
 
 /* Responsive */
 @media (max-width: 768px) {
+  .footer {
+    padding: 1.5rem 1rem;
+    margin-top: 2rem;
+  }
+
   .footer-content {
     gap: 1rem;
   }
 
   .footer-link {
+    width: 44px;
+    height: 44px;
+    font-size: 1.125rem;
+    min-width: 44px; /* Ensure minimum touch target */
+    min-height: 44px; /* Ensure minimum touch target */
+  }
+}
+
+@media (max-width: 480px) {
+  .footer {
+    padding: 1rem;
+  }
+
+  .footer-content {
+    gap: 0.75rem;
+  }
+
+  .footer-link {
     width: 40px;
     height: 40px;
-    font-size: 1.125rem;
+    font-size: 1rem;
+    min-width: 40px;
+    min-height: 40px;
   }
 }
 </style>

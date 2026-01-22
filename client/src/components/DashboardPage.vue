@@ -12,7 +12,8 @@
       </div>
 
       <!-- Navigation Tabs -->
-      <div class="tabs-navigation">
+      <!-- Desktop Navigation -->
+      <div class="tabs-navigation desktop-nav">
         <button
           v-for="tab in tabs"
           :key="tab.id"
@@ -26,6 +27,43 @@
             {{ requestCount }}
           </span>
         </button>
+      </div>
+
+      <!-- Mobile Navigation -->
+      <div class="mobile-nav">
+        <div class="mobile-tab-selector">
+          <button 
+            @click="showMobileDropdown = !showMobileDropdown"
+            class="mobile-dropdown-button"
+            :class="{ active: showMobileDropdown }"
+          >
+            <i :class="getCurrentTabIcon()"></i>
+            <span class="current-tab-name">{{ getCurrentTabName() }}</span>
+            <!-- Badge per Requests -->
+            <span v-if="currentTabId === 'requests' && requestCount > 0" class="tab-badge">
+              {{ requestCount }}
+            </span>
+            <i class="fas fa-chevron-down dropdown-arrow" :class="{ rotated: showMobileDropdown }"></i>
+          </button>
+          
+          <transition name="dropdown-slide">
+            <div v-if="showMobileDropdown" class="mobile-dropdown">
+              <button
+                v-for="tab in tabs"
+                :key="tab.id"
+                @click="selectMobileTab(tab.id)"
+                :class="['mobile-dropdown-item', { active: activeTab === tab.id }]"
+              >
+                <i :class="tab.icon"></i>
+                <span>{{ tab.name }}</span>
+                <!-- Badge per Requests -->
+                <span v-if="tab.id === 'requests' && requestCount > 0" class="tab-badge">
+                  {{ requestCount }}
+                </span>
+              </button>
+            </div>
+          </transition>
+        </div>
       </div>
 
       <!-- Tab Content -->
@@ -178,6 +216,7 @@ export default {
       showResetModal: false,
       backgroundImageUrl: '',
       requestCount: 0,
+      showMobileDropdown: false,
       testingConnections: {
         tmdb: false,
         plex: false,
@@ -190,7 +229,7 @@ export default {
         { id: 'general', name: 'General', icon: 'fas fa-cog' },
         { id: 'services', name: 'Services', icon: 'fas fa-plug' },
         { id: 'database', name: 'Database', icon: 'fas fa-database' },
-        { id: 'content_filters', name: 'Content Filters', icon: 'fas fa-filter' },
+        { id: 'content_filters', name: 'Filters', icon: 'fas fa-filter' },
         { id: 'advanced', name: 'Advanced', icon: 'fas fa-sliders-h' },
         { id: 'logs', name: 'Logs', icon: 'fas fa-file-alt' },
       ],
@@ -209,6 +248,9 @@ export default {
       };
       return componentMap[this.activeTab];
     },
+    currentTabId() {
+      return this.activeTab;
+    },
   },
   async mounted() {
     await this.loadConfig();
@@ -219,6 +261,18 @@ export default {
     );
   },
   methods: {
+    selectMobileTab(tabId) {
+      this.activeTab = tabId;
+      this.showMobileDropdown = false;
+    },
+    getCurrentTabName() {
+      const currentTab = this.tabs.find(tab => tab.id === this.activeTab);
+      return currentTab ? currentTab.name : '';
+    },
+    getCurrentTabIcon() {
+      const currentTab = this.tabs.find(tab => tab.id === this.activeTab);
+      return currentTab ? currentTab.icon : 'fas fa-question';
+    },
     async loadConfig() {
       this.loadingMessage = 'Loading configuration...';
       this.isLoading = true;
@@ -944,8 +998,119 @@ export default {
   opacity: 0;
 }
 
+/* Mobile Navigation */
+.mobile-nav {
+  display: none;
+}
+
+.mobile-tab-selector {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.mobile-dropdown-button {
+  width: 100%;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+  padding: 1rem;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: var(--transition-base);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1rem;
+  font-weight: 500;
+  justify-content: space-between;
+  min-height: 52px; /* Touch target minimum */
+}
+
+.mobile-dropdown-button:hover {
+  background-color: var(--color-bg-active);
+}
+
+.mobile-dropdown-button.active {
+  background-color: var(--button-active-bg);
+  border-color: var(--color-primary);
+}
+
+.current-tab-name {
+  flex: 1;
+  text-align: left;
+}
+
+.dropdown-arrow {
+  transition: transform 0.3s ease;
+  color: var(--color-text-muted);
+}
+
+.dropdown-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.mobile-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--color-bg-content);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  margin-top: 0.5rem;
+  z-index: 100;
+  box-shadow: var(--shadow-base);
+  backdrop-filter: blur(10px);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.mobile-dropdown-item {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  transition: var(--transition-base);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border-light);
+  min-height: 48px; /* Touch target minimum */
+}
+
+.mobile-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.mobile-dropdown-item:hover {
+  background-color: var(--color-bg-interactive);
+  color: var(--color-text-primary);
+}
+
+.mobile-dropdown-item.active {
+  background-color: var(--button-active-bg);
+  color: var(--color-text-primary);
+}
+
+/* Desktop Navigation Hide on Mobile */
+.desktop-nav {
+  display: flex;
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
+  .desktop-nav {
+    display: none;
+  }
+
+  .mobile-nav {
+    display: block;
+  }
+
   .settings-content {
     padding: 1rem;
   }
@@ -965,22 +1130,6 @@ export default {
   .status-badge {
     font-size: 0.75rem;
     padding: 0.4rem 0.8rem;
-  }
-
-  .tabs-navigation {
-    justify-content: flex-start;
-    overflow-x: auto;
-    padding-bottom: 0.5rem;
-  }
-
-  .tab-button {
-    flex-shrink: 0;
-    font-size: 0.8rem;
-    padding: 0.6rem 1rem;
-  }
-
-  .tab-button span {
-    display: none;
   }
 
   .tab-content {
@@ -1005,10 +1154,14 @@ export default {
   .btn {
     width: 100%;
     justify-content: center;
+    min-height: 48px; /* Touch target minimum */
+    min-width: 48px; /* Ensure minimum touch target */
   }
 
   .modal-content {
     padding: 1.5rem;
+    margin: 1rem;
+    max-width: none;
   }
 
   .modal-actions {
@@ -1018,6 +1171,23 @@ export default {
   .modal-actions .btn {
     width: 100%;
   }
+}
+
+/* Dropdown Transition */
+.dropdown-slide-enter-active,
+.dropdown-slide-leave-active {
+  transition: all 0.3s ease;
+  transform-origin: top;
+}
+
+.dropdown-slide-enter-from {
+  opacity: 0;
+  transform: scaleY(0.8) translateY(-10px);
+}
+
+.dropdown-slide-leave-to {
+  opacity: 0;
+  transform: scaleY(0.8) translateY(-10px);
 }
 
 </style>
