@@ -44,6 +44,18 @@ class TestConfig(unittest.TestCase):
         "DB_USER": "postgres",
         "DB_PASSWORD": "password",
         "DB_NAME": "suggestarr",
+        "EXCLUDE_DOWNLOADED": "true",
+        "EXCLUDE_REQUESTED": "true",
+        "SETUP_COMPLETED": "false",
+        # Database pool settings
+        "DB_MIN_CONNECTIONS": "2",
+        "DB_MAX_CONNECTIONS": "10",
+        "DB_MAX_IDLE_TIME": "300",
+        "DB_MAX_LIFETIME": "3600",
+        "DB_CONNECTION_TIMEOUT": "30",
+        "DB_RETRY_ATTEMPTS": "3",
+        "DB_RETRY_DELAY": "1.0",
+        "LOG_LEVEL": "INFO",
     }
 
     def test_save_default_env_vars(self):

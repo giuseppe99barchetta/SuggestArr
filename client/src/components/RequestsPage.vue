@@ -561,13 +561,6 @@ export default {
       });
     },
 
-    async observeIntersection(entries) {
-      if (entries[0].isIntersecting && !this.loading) {
-        console.log('🔄 Lazy loading triggered for:', this.viewMode);
-        await this.fetchRequests(this.currentPage + 1);
-      }
-    },
-
     initObserver() {
       if (this.observer) {
         this.observer.disconnect();

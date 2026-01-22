@@ -1,11 +1,11 @@
 
 class DatabaseError(Exception):
     """Base class for all database-related exceptions."""
-    def __init__(self, db_type, error):
+    def __init__(self, error, db_type=None):
         self.db_type = db_type
         self.error = error
         super().__init__(self._format_error())
-
+    
     def _format_error(self):
         if self.db_type == 'sqlite':
             return f"SQLite error: {str(self.error)}"

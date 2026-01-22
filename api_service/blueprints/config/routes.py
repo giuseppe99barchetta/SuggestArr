@@ -8,6 +8,7 @@ from api_service.config.config import (
 )
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.db.connection_pool import pool_manager
 
 logger = LoggerManager.get_logger("ConfigRoute")
 config_bp = Blueprint('config', __name__)
@@ -230,3 +231,51 @@ def set_log_level():
     except Exception as e:
         logger.error(f'Error setting log level: {str(e)}')
         return jsonify({'message': f'Error setting log level: {str(e)}', 'status': 'error'}), 500
+
+@config_bp.route('/pool-stats', methods=['GET'])
+def get_pool_statistics():
+    """
+    Get database connection pool statistics.
+    """
+    try:
+        db_manager = DatabaseManager()
+        pool_stats = db_manager.get_pool_stats()
+        all_stats = pool_manager.get_all_stats()
+        
+        return jsonify({
+            'message': 'Connection pool statistics retrieved successfully',
+            'current_pool': pool_stats,
+            'all_pools': all_stats,
+            'status': 'success'
+        }), 200
+    except Exception as e:
+        logger.error(f'Error getting pool statistics: {str(e)}')
+        return jsonify({'message': f'Error getting pool statistics: {str(e)}', 'status': 'error'}), 500
+
+@config_bp.route('/test-db', methods=['POST'])
+def test_database_connection():
+    """
+    Test database connection with current configuration.
+    """
+    try:
+        config = load_env_vars()
+        db_config = {
+            'DB_TYPE': config.get('DB_TYPE', 'sqlite'),
+            'DB_HOST': config.get('DB_HOST'),
+            'DB_PORT': config.get('DB_PORT'),
+            'DB_USER': config.get('DB_USER'),
+            'DB_PASSWORD': config.get('DB_PASSWORD'),
+            'DB_NAME': config.get('DB_NAME'),
+            'DB_PATH': os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'config_files', 'requests.db')
+        }
+        
+        db_manager = DatabaseManager()
+        result = db_manager.test_connection(db_config)
+        
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f'Error testing database connection: {str(e)}')
+        return jsonify({
+            'message': f'Error testing database connection: {str(e)}', 
+            'status': 'error'
+        }), 500

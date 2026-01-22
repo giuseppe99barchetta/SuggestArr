@@ -71,6 +71,14 @@ def get_default_values():
         'EXCLUDE_REQUESTED': lambda: True,
         'SETUP_COMPLETED': lambda: False,
         'LOG_LEVEL': lambda: 'INFO',
+        # Database connection pool settings
+        'DB_MIN_CONNECTIONS': lambda: '2',
+        'DB_MAX_CONNECTIONS': lambda: '10',
+        'DB_MAX_IDLE_TIME': lambda: '300',
+        'DB_MAX_LIFETIME': lambda: '3600',
+        'DB_CONNECTION_TIMEOUT': lambda: '30',
+        'DB_RETRY_ATTEMPTS': lambda: '3',
+        'DB_RETRY_DELAY': lambda: '1.0',
     }
 
 def get_config_values():
@@ -159,7 +167,9 @@ def get_config_sections():
         'services': ['TMDB_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL',
                     'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
                     'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_SESSION_TOKEN'],
-        'database': ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'],
+        'database': ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
+                    'DB_MIN_CONNECTIONS', 'DB_MAX_CONNECTIONS', 'DB_MAX_IDLE_TIME', 
+                    'DB_MAX_LIFETIME', 'DB_CONNECTION_TIMEOUT', 'DB_RETRY_ATTEMPTS', 'DB_RETRY_DELAY'],
         'content_filters': ['FILTER_TMDB_THRESHOLD', 'FILTER_TMDB_MIN_VOTES', 'FILTER_GENRES_EXCLUDE',
                            'HONOR_JELLYSEER_DISCOVERY', 'FILTER_RELEASE_YEAR', 'FILTER_INCLUDE_NO_RATING',
                            'FILTER_LANGUAGE', 'FILTER_NUM_SEASONS', 'FILTER_STREAMING_SERVICES',
