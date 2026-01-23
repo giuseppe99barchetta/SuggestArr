@@ -94,6 +94,8 @@ jobs:
             --platform linux/amd64,linux/arm64 \
             --cache-from type=registry,ref=ciuse99/suggestarr:cache \
             --cache-to type=registry,ref=ciuse99/suggestarr:cache,mode=max \
+            --build-arg BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+            --build-arg DOCKER_TAG=nightly \
             -t ciuse99/suggestarr:latest \
             -t ciuse99/suggestarr:$new_version \
             -f docker/Dockerfile . --push
