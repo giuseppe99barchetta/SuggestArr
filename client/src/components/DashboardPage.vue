@@ -96,8 +96,28 @@
       <!-- Action Footer -->
       <div class="settings-footer">
         <div class="footer-info">
+          <button 
+                @click="showChangelog" 
+                class="changelog-btn"
+                title="View changelog for current version"
+              >
           <i class="fas fa-info-circle"></i>
-          <span>Changes are saved per section automatically</span>
+          </button>
+          <div class="version-info">
+            <div class="version-text-container">
+              <span>SuggestArr {{ currentVersion }}</span>
+            </div>
+            <button 
+              @click="checkForUpdates" 
+              :disabled="updateAvailable === null"
+              class="version-check-btn"
+              :class="{ 'update-available': updateAvailable }"
+              :title="updateAvailable ? `Update available!` : 'Check for updates'"
+            >
+              <i :class="updateAvailable === null ? 'fas fa-spinner fa-spin' : updateAvailable ? 'fas fa-arrow-up' : 'fas fa-sync'"></i>
+              <span v-if="updateAvailable" class="update-indicator">Update</span>
+            </button>
+          </div>
         </div>
         
         <div class="footer-actions">
@@ -136,6 +156,55 @@
           <div class="loading-content">
             <div class="spinner"></div>
             <p>{{ loadingMessage }}</p>
+          </div>
+        </div>
+      </transition>
+
+      <!-- Changelog Modal -->
+      <transition name="fade">
+        <div v-if="showChangelogModal" class="modal-overlay" @click.self="showChangelogModal = false">
+          <div class="modal-content changelog-modal">
+            <div class="modal-header">
+              <i class="fab fa-github changelog-icon"></i>
+              <h3>Changelog - {{ currentVersion }}</h3>
+            </div>
+            
+            <div class="modal-body changelog-body">
+              <div v-if="isLoadingChangelog" class="changelog-loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Loading changelog...</span>
+              </div>
+              
+              <div v-else-if="changelogError" class="changelog-error">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>{{ changelogError }}</span>
+                <button @click="showChangelog" class="btn btn-secondary btn-sm">Retry</button>
+              </div>
+              
+              <div v-else class="changelog-content">
+                <div v-if="changelogData" v-html="changelogData"></div>
+                <div v-else class="no-changelog">
+                  <i class="fas fa-info-circle"></i>
+                  <span>No changelog available for this version</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="modal-actions">
+              <a 
+                :href="`https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${currentVersion}`" 
+                target="_blank" 
+                class="btn btn-outline"
+                v-if="changelogData"
+              >
+                <i class="fas fa-external-link-alt"></i>
+                View on GitHub
+              </a>
+              <button @click="showChangelogModal = false" class="btn btn-primary">
+                <i class="fas fa-times"></i>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </transition>
@@ -194,6 +263,7 @@ import axios from 'axios';
 import Footer from './AppFooter.vue';
 import backgroundManager from '@/api/backgroundManager';
 import { fetchRandomMovieImage } from '@/api/tmdbApi';
+import { useVersionCheck } from '@/composables/useVersionCheck';
 
 // Import tab components
 import SettingsGeneral from './settings/SettingsGeneral.vue';
@@ -224,6 +294,10 @@ export default {
       loadingMessage: 'Processing...',
       activeTab: 'requests',
       showResetModal: false,
+      showChangelogModal: false,
+      changelogData: null,
+      isLoadingChangelog: false,
+      changelogError: null,
       backgroundImageUrl: '',
       nextBackgroundImageUrl: '',
       isTransitioning: false,
@@ -245,6 +319,15 @@ export default {
         { id: 'advanced', name: 'Advanced', icon: 'fas fa-sliders-h' },
         { id: 'logs', name: 'Logs', icon: 'fas fa-file-alt' },
       ],
+    };
+  },
+  setup() {
+    const { currentVersion, updateAvailable, checkForUpdates } = useVersionCheck();
+    
+    return {
+      currentVersion,
+      updateAvailable,
+      checkForUpdates
     };
   },
   computed: {
@@ -322,6 +405,53 @@ export default {
       } catch (error) {
         console.error('Error loading request count:', error);
       }
+    },
+
+    async showChangelog() {
+      this.showChangelogModal = true;
+      this.changelogError = null;
+      
+      if (!this.changelogData) {
+        this.isLoadingChangelog = true;
+        try {
+          // Get release info from GitHub API
+          const response = await axios.get(`https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases/tags/${this.currentVersion}`);
+          
+          if (response.data && response.data.body) {
+            // Convert markdown to basic HTML
+            this.changelogData = this.parseMarkdown(response.data.body);
+          } else {
+            this.changelogData = null;
+          }
+        } catch (error) {
+          console.error('Error fetching changelog:', error);
+          this.changelogError = 'Failed to load changelog from GitHub. Please check your internet connection.';
+        } finally {
+          this.isLoadingChangelog = false;
+        }
+      }
+    },
+
+    parseMarkdown(markdown) {
+      if (!markdown) return '';
+      
+      // Basic markdown to HTML conversion
+      return markdown
+        // Headers
+        .replace(/^### (.*$)/gim, '<h4>$1</h4>')
+        .replace(/^## (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^# (.*$)/gim, '<h2>$1</h2>')
+        // Bold
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // Italic
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        // Links
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+        // Line breaks
+        .replace(/\n/g, '<br>')
+        // Lists (basic)
+        .replace(/^- (.+)$/gim, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
     },
 
     async saveSection({ section, data }) {
@@ -788,6 +918,82 @@ export default {
   font-size: 0.85rem;
 }
 
+.version-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.version-text-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.changelog-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: var(--border-radius-sm);
+  transition: var(--transition-base);
+  font-size: 0.875rem;
+}
+
+.changelog-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-interactive);
+}
+
+.version-check-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: var(--transition-base);
+  position: relative;
+}
+
+.version-check-btn:hover:not(:disabled) {
+  background: var(--color-bg-active);
+  border-color: var(--color-border-medium);
+  color: var(--color-text-primary);
+}
+
+.version-check-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.version-check-btn.update-available {
+  background: var(--color-success, #28a745);
+  border-color: var(--color-success, #28a745);
+  color: white;
+}
+
+.version-check-btn.update-available:hover {
+  background: #218838;
+  border-color: #218838;
+}
+
+.update-indicator {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--border-radius-xs);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .footer-actions {
   display: flex;
   gap: 0.75rem;
@@ -1031,6 +1237,94 @@ export default {
   gap: 1rem;
 }
 
+/* Changelog Specific Styles */
+.changelog-modal {
+  max-width: 700px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.changelog-icon {
+  color: var(--color-text-primary);
+  font-size: 1.5rem;
+}
+
+.changelog-body {
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 1rem 0;
+}
+
+.changelog-loading,
+.changelog-error,
+.no-changelog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.changelog-loading i,
+.changelog-error i,
+.no-changelog i {
+  font-size: 2rem;
+}
+
+.changelog-error {
+  color: var(--color-danger);
+}
+
+.changelog-content {
+  line-height: 1.6;
+  color: var(--color-text-primary);
+}
+
+.changelog-content h2 {
+  color: var(--color-text-primary);
+  margin: 1.5rem 0 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--color-border-medium);
+}
+
+.changelog-content h3 {
+  color: var(--color-text-primary);
+  margin: 1.25rem 0 0.75rem 0;
+}
+
+.changelog-content h4 {
+  color: var(--color-text-primary);
+  margin: 1rem 0 0.5rem 0;
+}
+
+.changelog-content ul {
+  margin: 0.5rem 0 1rem 0;
+  padding-left: 1.5rem;
+}
+
+.changelog-content li {
+  margin: 0.5rem 0;
+  color: var(--color-text-secondary);
+}
+
+.changelog-content strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.changelog-content a {
+  color: var(--color-primary, #007bff);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--color-primary, #007bff);
+}
+
+.changelog-content a:hover {
+  color: var(--color-primary-hover, #0056b3);
+  border-bottom-style: solid;
+}
+
 /* Fade Transition */
 .fade-enter-active, .fade-leave-active {
   transition: opacity 0.3s ease;
@@ -1195,6 +1489,30 @@ export default {
   .footer-info {
     order: 2;
     justify-content: center;
+  }
+
+  .version-info {
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+
+  .version-text-container {
+    justify-content: center;
+  }
+
+  .version-check-btn {
+    font-size: 0.75rem;
+    padding: 0.3125rem 0.5rem;
+  }
+
+  .update-indicator {
+    font-size: 0.6875rem;
+  }
+
+  .changelog-modal {
+    max-width: 95%;
+    margin: 1rem;
   }
 
   .footer-actions {

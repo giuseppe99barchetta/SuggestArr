@@ -279,3 +279,34 @@ def test_database_connection():
             'message': f'Error testing database connection: {str(e)}', 
             'status': 'error'
         }), 500
+
+@config_bp.route('/version', methods=['GET'])
+def get_version():
+    """
+    Get current SuggestArr version.
+    """
+    try:
+        # Read version from package.json in client directory
+        client_package_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'client', 'package.json')
+        
+        if os.path.exists(client_package_path):
+            with open(client_package_path, 'r') as f:
+                import json
+                package_data = json.load(f)
+                version = package_data.get('version', 'unknown')
+        else:
+            # Fallback version if package.json not found
+            version = 'v2.0.0'
+        
+        return jsonify({
+            'version': version,
+            'name': 'SuggestArr',
+            'status': 'success'
+        }), 200
+    except Exception as e:
+        logger.error(f'Error getting version: {str(e)}')
+        return jsonify({
+            'version': 'unknown',
+            'message': f'Error getting version: {str(e)}', 
+            'status': 'error'
+        }), 500
