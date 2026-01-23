@@ -13,7 +13,7 @@
 [![Buy Me a Coffee](https://img.shields.io/badge/Donate-Buy%20Me%20a%20Coffee-orange?logo=buy-me-a-coffee)](https://buymeacoffee.com/suggestarr)
 [![Reddit Upvotes](https://img.shields.io/badge/Reddit-Upvotes-ff4500?logo=reddit)](https://www.reddit.com/r/selfhosted/comments/1gb4swg/release_major_update_for_suggestarr_now/)
 ![Last Commit](https://img.shields.io/github/last-commit/giuseppe99barchetta/suggestarr?label=Last%20Commit&logo=github)
-[![](https://dcbadge.limes.pink/api/server/https://discord.gg/JXwFd3PnXY?style=flat)](https://discord.gg/JXwFd3PnXY)
+[![](https://dcbadge.limes.pink/api/server/https://discord.com/invite/JXwFd3PnXY?style=flat)](https://discord.com/invite/JXwFd3PnXY)
 </div>
 
 SuggestArr is a project designed to automate media content recommendations and download requests based on user activity in media servers like **Jellyfin**, **Plex**, and now **Emby**. It retrieves recently watched content, searches for similar titles using the TMDb API, and sends automated download requests to **Jellyseer** or **Overseer**.

@@ -368,6 +368,7 @@ import backgroundManager from '@/api/backgroundManager';
 import Footer from './AppFooter.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import { fetchRandomMovieImage } from '@/api/tmdbApi';
+import { formatDate } from '@/utils/dateUtils.js';
 
 export default {
   name: "RequestsPage",
@@ -390,6 +391,7 @@ export default {
       currentPage: 1,
       totalPages: 1,
       observer: null,
+      retryTimeout: null,
       totalSourcesCount: 0,
       totalRequestsCount: 0,
       sortOptions: [
@@ -510,13 +512,12 @@ export default {
     },
   },
   methods: {
+    formatDate,
+
     resetAndReload() {
       console.log('🔄 Sorting changed, reloading data...');
       
-      if (this.observer) {
-        this.observer.disconnect();
-        this.observer = null;
-      }
+      this.cleanupObserver();
       
       this.sources = [];
       this.currentPage = 0;
@@ -532,19 +533,7 @@ export default {
       this.searchQuery = '';
     },
 
-    formatDate(dateString) {
-      if (!dateString) return 'N/A';
-      const date = new Date(dateString);
-      const now = new Date();
-      const diffTime = Math.abs(now - date);
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
-      if (diffDays === 0) return 'today';
-      if (diffDays === 1) return 'yesterday';
-      if (diffDays < 7) return `${diffDays} days ago`;
-      if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-      return date.toLocaleDateString();
-    },
+
 
     async observeIntersection(entries) {
       if (entries[0].isIntersecting && !this.loading) {
@@ -562,10 +551,8 @@ export default {
     },
 
     initObserver() {
-      if (this.observer) {
-        this.observer.disconnect();
-        this.observer = null;
-      }
+      // Cleanup existing observer
+      this.cleanupObserver();
 
       if (!this.hasMoreData) {
         console.log('❌ No more data to load');
@@ -588,11 +575,22 @@ export default {
           this.observer.observe(triggerRef);
         } else {
           console.warn('⚠️ Trigger ref not found, retrying...');
-          setTimeout(() => {
+          this.retryTimeout = setTimeout(() => {
             this.initObserver();
           }, 200);
         }
       });
+    },
+
+    cleanupObserver() {
+      if (this.observer) {
+        this.observer.disconnect();
+        this.observer = null;
+      }
+      if (this.retryTimeout) {
+        clearTimeout(this.retryTimeout);
+        this.retryTimeout = null;
+      }
     },
 
     async fetchRequests(page = 1) {
@@ -702,9 +700,7 @@ export default {
 
   beforeUnmount() {
     this.stopBackgroundImageRotation();
-    if (this.observer) {
-      this.observer.disconnect();
-    }
+    this.cleanupObserver();
     document.body.style.overflow = 'auto';
   },
 };

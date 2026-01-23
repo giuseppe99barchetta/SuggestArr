@@ -116,6 +116,7 @@
 
 <script>
 import axios from 'axios';
+import { formatDate } from '@/utils/dateUtils.js';
 
 export default {
   name: 'SettingsRequests',
@@ -149,6 +150,8 @@ export default {
     this.loadRecentRequests();
   },
   methods: {
+    formatDate,
+
     async loadStats() {
       try {
         const response = await axios.get('/api/automation/requests/stats');
@@ -184,18 +187,7 @@ export default {
       }
     },
 
-    formatDate(dateString) {
-      if (!dateString) return 'N/A';
-      const date = new Date(dateString);
-      const diffMs = new Date() - date;
-      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-      
-      if (diffDays === 0) return 'today';
-      if (diffDays === 1) return 'yesterday';
-      if (diffDays < 7) return `${diffDays} days ago`;
-      if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-      return date.toLocaleDateString();
-    },
+
 
     getStatusClass(status) {
       return status || 'pending';

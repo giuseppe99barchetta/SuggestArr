@@ -1,12 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import RequestsPage from '@/components/RequestsPage.vue';
-import ConfigWizard from '@/components/ConfigWizard.vue';
 import axios from 'axios';
 import { createApp } from 'vue';
 import App from '../App.vue';
 import 'vue-toast-notification/dist/theme-bootstrap.css';
 import ToastPlugin from 'vue-toast-notification';
-import DashboardPage from '@/components/DashboardPage.vue';
+
+// Lazy load components for code splitting
+const RequestsPage = () => import('@/components/RequestsPage.vue');
+const ConfigWizard = () => import('@/components/ConfigWizard.vue');
+const DashboardPage = () => import('@/components/DashboardPage.vue');
 
 async function loadConfig() {
     if (process.env.NODE_ENV === 'development') {
@@ -103,7 +105,7 @@ async function createAppRouter() {
     return router;
 }
 
-createAppRouter().then(router => {
+export default createAppRouter().then(router => {
     const app = createApp(App);
     app.use(router);
     app.mount('#app');
@@ -120,6 +122,7 @@ createAppRouter().then(router => {
     };
     
     app.use(ToastPlugin, options);
+    return router;
 }).catch(error => {
-    console.error('Error loading the router:', error);
+    console.error('Error loading router:', error);
 });

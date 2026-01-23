@@ -2,6 +2,7 @@ import os
 import sqlite3
 import psycopg2
 import mysql.connector
+import threading
 from contextlib import contextmanager
 from typing import Dict, Any, Optional, List, Tuple
 
@@ -14,10 +15,25 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 DB_PATH = os.path.join(BASE_DIR, 'config', 'config_files', 'requests.db')
 
 class DatabaseManager:
-    """Helper class for managing SQLite database."""
+    """Singleton database manager with connection pooling."""
+    
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls, pool_config: Optional[PoolConfig] = None):
+        """Create or return the singleton instance."""
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialized = False
+        return cls._instance
     
     def __init__(self, pool_config: Optional[PoolConfig] = None):
-        """Initialize database manager with connection pooling."""
+        """Initialize database manager with connection pooling (only once)."""
+        if hasattr(self, '_initialized') and self._initialized:
+            return
+            
         self.logger = LoggerManager.get_logger(self.__class__.__name__) 
         self.db_path = DB_PATH
         self.env_vars = load_env_vars()
@@ -27,6 +43,7 @@ class DatabaseManager:
         # Initialize connection pool
         self.pool = self._get_pool()
         self.logger.info(f"Initialized DatabaseManager with {self.db_type} connection pooling")
+        self._initialized = True
         
     def _get_default_pool_config(self) -> PoolConfig:
         """Get default pool configuration from environment or defaults."""
