@@ -357,25 +357,21 @@ export default {
         setTimeout(() => {
           this.backgroundImageUrl = this.nextBackgroundImageUrl;
           this.isTransitioning = false;
-        }, 800); // Durata della transizione CSS
+        }, 800);
       }
     }
   },
   async mounted() {
     try {
-      // Caricamento parallelo per migliorare le performance
-      const [configResult] = await Promise.allSettled([
-        this.loadConfig(),
-        this.loadRequestCount() // Non-await questo per non bloccare
-      ]);
+      await this.loadConfig();
       
-      // Inizia la rotazione dello sfondo solo se la config è caricata
-      if (configResult.status === 'fulfilled' && this.config.TMDB_API_KEY) {
+      this.loadRequestCount();
+      
+      if (this.config.TMDB_API_KEY) {
         this.startBackgroundImageRotation(fetchRandomMovieImage, this.config.TMDB_API_KEY);
       }
     } catch (error) {
       console.error('Error during component mount:', error);
-      // Mostra l'interfaccia anche se qualcosa fallisce
       this.isLoading = false;
     }
   },
@@ -393,7 +389,6 @@ export default {
       return currentTab ? currentTab.icon : 'fas fa-question';
     },
     async loadConfig(force = false) {
-      // Skip cache se forzato o se la cache è vecchia (più di 30 secondi)
       const now = Date.now();
       if (!force && this.configCache && (now - this.lastConfigLoad) < 30000) {
         this.config = this.configCache;
@@ -417,7 +412,6 @@ export default {
           position: 'top-right'
         });
         console.error('Error loading config:', error);
-        // In caso di errore, mostra un messaggio più user-friendly
         if (error.code === 'ECONNABORTED') {
           this.$toast.open({
             message: 'Configuration loading timed out. Please check your connection.',
@@ -439,7 +433,6 @@ export default {
         this.requestCount = response.data.today || 0;
       } catch (error) {
         console.error('Error loading request count:', error);
-        // Non bloccante - l'errore non ferma il caricamento principale
       }
     },
 

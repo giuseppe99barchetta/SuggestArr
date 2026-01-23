@@ -91,15 +91,12 @@ export function useVersionCheck() {
   };
 
   onMounted(() => {
-    // Get current version first (non-blocking)
     getCurrentVersion();
     
-    // Check for updates shortly after (non-blocking)
     setTimeout(() => {
-      checkForUpdates();
-    }, 2000); // Aumentato a 2 secondi per dare priorità al caricamento principale
+      checkForUpdates(false);
+    }, 5000);
     
-    // Check for updates every hour
     const interval = setInterval(() => checkForUpdates(false), 60 * 60 * 1000);
     
     return () => clearInterval(interval);
