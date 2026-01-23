@@ -64,7 +64,7 @@ def login_with_plex():
     
 @plex_bp.route('/check-auth/<int:pin_id>', methods=['GET'])
 def check_plex_auth(pin_id):
-    """Verifica se il login su Plex è stato completato e ottieni il token."""
+    """Check if Plex login has been completed and get the token."""
     plex_auth = PlexAuth(client_id=client_id)
     auth_token = plex_auth.check_authentication(pin_id)
     
