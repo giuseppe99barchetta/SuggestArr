@@ -9,11 +9,28 @@ export function useVersionCheck() {
   const updateAvailable = ref(false);
   const isChecking = ref(false);
 
-  const getCurrentVersion = async () => {
+  // Cache e debounce per evitare chiamate multiple
+  const versionCache = ref(null);
+  let lastCheckTime = 0;
+  const CHECK_COOLDOWN = 5 * 60 * 1000; // 5 minuti
+
+  const getCurrentVersion = async (useCache = true) => {
+    if (useCache && versionCache.value && (Date.now() - lastCheckTime < CHECK_COOLDOWN)) {
+      currentVersion.value = versionCache.value.version;
+      return;
+    }
+
     try {
-      const response = await axios.get('/api/config/version');
+      const response = await axios.get('/api/config/version', {
+        timeout: 5000 // 5 second timeout
+      });
       if (response.data.status === 'success') {
         currentVersion.value = response.data.version;
+        versionCache.value = {
+          version: response.data.version,
+          timestamp: Date.now()
+        };
+        lastCheckTime = Date.now();
       }
     } catch (error) {
       console.error('Error getting current version:', error);
@@ -21,18 +38,25 @@ export function useVersionCheck() {
     }
   };
 
-  const checkForUpdates = async () => {
+  const checkForUpdates = async (force = false) => {
     if (isChecking.value) return;
+    
+    // Skip if not enough time passed (unless forced)
+    if (!force && (Date.now() - lastCheckTime < CHECK_COOLDOWN)) {
+      return;
+    }
     
     isChecking.value = true;
     
     try {
       // Get current version if not already loaded
-      if (currentVersion.value === 'Loading...') {
-        await getCurrentVersion();
+      if (currentVersion.value === 'Loading...' || !currentVersion.value) {
+        await getCurrentVersion(false); // Skip cache for first load
       }
       
-      const response = await axios.get('https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases/latest');
+      const response = await axios.get('https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases/latest', {
+        timeout: 8000 // 8 second timeout
+      });
       const release = response.data;
       
       latestVersion.value = release.tag_name;
@@ -47,8 +71,11 @@ export function useVersionCheck() {
       } else {
         updateAvailable.value = false;
       }
+      
+      lastCheckTime = Date.now();
     } catch (error) {
       console.error('Error checking for updates:', error);
+      // Non bloccante - l'errore non ferma l'applicazione
     } finally {
       isChecking.value = false;
     }
@@ -64,16 +91,16 @@ export function useVersionCheck() {
   };
 
   onMounted(() => {
-    // Get current version first
+    // Get current version first (non-blocking)
     getCurrentVersion();
     
-    // Check for updates shortly after
+    // Check for updates shortly after (non-blocking)
     setTimeout(() => {
       checkForUpdates();
-    }, 1000);
+    }, 2000); // Aumentato a 2 secondi per dare priorità al caricamento principale
     
     // Check for updates every hour
-    const interval = setInterval(checkForUpdates, 60 * 60 * 1000);
+    const interval = setInterval(() => checkForUpdates(false), 60 * 60 * 1000);
     
     return () => clearInterval(interval);
   });

@@ -303,6 +303,9 @@ export default {
       isTransitioning: false,
       requestCount: 0,
       showMobileDropdown: false,
+      // Cache per migliorare performance
+      lastConfigLoad: 0,
+      configCache: null,
       testingConnections: {
         tmdb: false,
         plex: false,
@@ -359,12 +362,22 @@ export default {
     }
   },
   async mounted() {
-    await this.loadConfig();
-    await this.loadRequestCount();
-    this.startBackgroundImageRotation(
-      this.config.TMDB_API_KEY ? fetchRandomMovieImage : null,
-      this.config.TMDB_API_KEY
-    );
+    try {
+      // Caricamento parallelo per migliorare le performance
+      const [configResult] = await Promise.allSettled([
+        this.loadConfig(),
+        this.loadRequestCount() // Non-await questo per non bloccare
+      ]);
+      
+      // Inizia la rotazione dello sfondo solo se la config è caricata
+      if (configResult.status === 'fulfilled' && this.config.TMDB_API_KEY) {
+        this.startBackgroundImageRotation(fetchRandomMovieImage, this.config.TMDB_API_KEY);
+      }
+    } catch (error) {
+      console.error('Error during component mount:', error);
+      // Mostra l'interfaccia anche se qualcosa fallisce
+      this.isLoading = false;
+    }
   },
   methods: {
     selectMobileTab(tabId) {
@@ -379,12 +392,23 @@ export default {
       const currentTab = this.tabs.find(tab => tab.id === this.activeTab);
       return currentTab ? currentTab.icon : 'fas fa-question';
     },
-    async loadConfig() {
+    async loadConfig(force = false) {
+      // Skip cache se forzato o se la cache è vecchia (più di 30 secondi)
+      const now = Date.now();
+      if (!force && this.configCache && (now - this.lastConfigLoad) < 30000) {
+        this.config = this.configCache;
+        return;
+      }
+
       this.loadingMessage = 'Loading configuration...';
       this.isLoading = true;
       try {
-        const response = await axios.get('/api/config/fetch');
+        const response = await axios.get('/api/config/fetch', {
+          timeout: 10000 // 10 second timeout
+        });
         this.config = response.data;
+        this.configCache = response.data;
+        this.lastConfigLoad = now;
       } catch (error) {
         this.$toast.open({
           message: 'Failed to load configuration',
@@ -393,6 +417,15 @@ export default {
           position: 'top-right'
         });
         console.error('Error loading config:', error);
+        // In caso di errore, mostra un messaggio più user-friendly
+        if (error.code === 'ECONNABORTED') {
+          this.$toast.open({
+            message: 'Configuration loading timed out. Please check your connection.',
+            type: 'warning',
+            duration: 5000,
+            position: 'top-right'
+          });
+        }
       } finally {
         this.isLoading = false;
       }
@@ -400,10 +433,13 @@ export default {
 
     async loadRequestCount() {
       try {
-        const response = await axios.get('/api/automation/requests/stats');
+        const response = await axios.get('/api/automation/requests/stats', {
+          timeout: 5000 // 5 second timeout
+        });
         this.requestCount = response.data.today || 0;
       } catch (error) {
         console.error('Error loading request count:', error);
+        // Non bloccante - l'errore non ferma il caricamento principale
       }
     },
 
