@@ -26,8 +26,37 @@ async def run_now():
         return jsonify({'status': 'error', 'message': 'Unexpected error: ' + str(e)}), 500
 
 @automation_bp.route('/requests', methods=['GET'])
-def get_all_requests():
-    page = request.args.get('page', default=1, type=int)
-    per_page = request.args.get('per_page', default=5, type=int)
-    db_manager = DatabaseManager()
-    return jsonify(db_manager.get_all_requests_grouped_by_source(page=page, per_page=per_page))
+def get_requests():
+    """Get all automation requests grouped by source with pagination and sorting."""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 8, type=int)
+        sort_by = request.args.get('sort_by', 'date-desc', type=str)
+        
+        # Validte sort_by
+        valid_sorts = ['date-desc', 'date-asc', 'title-asc', 'title-desc', 'rating-desc', 'rating-asc']
+        if sort_by not in valid_sorts:
+            sort_by = 'date-desc'
+        
+        db_manager = DatabaseManager()
+        result = db_manager.get_all_requests_grouped_by_source(
+            page=page, 
+            per_page=per_page,
+            sort_by=sort_by
+        )
+        
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"Error retrieving requests: {e}")
+        return jsonify({"error": str(e)}), 500
+    
+@automation_bp.route('/requests/stats', methods=['GET'])
+def get_requests_stats():
+    """Get statistics for automation requests."""
+    try:
+        db_manager = DatabaseManager()
+        stats = db_manager.get_requests_stats()
+        return jsonify(stats), 200
+    except Exception as e:
+        logger.error(f"Error retrieving request stats: {e}")
+        return jsonify({"error": str(e)}), 500

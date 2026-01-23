@@ -4,7 +4,7 @@ from croniter import croniter
 from api_service.config.logger_manager import LoggerManager
 from api_service.config.cron_jobs import start_cron_job
 
-logger = LoggerManager().get_logger("Config")
+logger = LoggerManager.get_logger("Config")
 
 # Constants for environment variables
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -69,6 +69,16 @@ def get_default_values():
         'DB_NAME': lambda: None,
         'EXCLUDE_DOWNLOADED': lambda: True,
         'EXCLUDE_REQUESTED': lambda: True,
+        'SETUP_COMPLETED': lambda: False,
+        'LOG_LEVEL': lambda: 'INFO',
+        # Database connection pool settings
+        'DB_MIN_CONNECTIONS': lambda: '2',
+        'DB_MAX_CONNECTIONS': lambda: '10',
+        'DB_MAX_IDLE_TIME': lambda: '300',
+        'DB_MAX_LIFETIME': lambda: '3600',
+        'DB_CONNECTION_TIMEOUT': lambda: '30',
+        'DB_RETRY_ATTEMPTS': lambda: '3',
+        'DB_RETRY_DELAY': lambda: '1.0',
     }
 
 def get_config_values():
@@ -138,7 +148,7 @@ def clear_env_vars():
 
 def save_session_token(token):
     """Save session token of Seer client."""
-    logger.debug(f"Saving session token: {token}")
+    logger.debug("Saving session token")
     with open(CONFIG_PATH, 'r+', encoding='utf-8') as file:
         config_data = yaml.safe_load(file) or {}
         config_data['SEER_SESSION_TOKEN'] = token
@@ -146,3 +156,120 @@ def save_session_token(token):
         yaml.dump(config_data, file)
         file.truncate()
         logger.debug("Session token saved successfully")
+
+def get_config_sections():
+    """
+    Returns a dictionary of configuration sections and their associated keys.
+    """
+    return {
+        'general': ['MAX_SIMILAR_MOVIE', 'MAX_SIMILAR_TV', 'CRON_TIMES', 'MAX_CONTENT_CHECKS',
+                   'SEARCH_SIZE', 'SUBPATH', 'LOG_LEVEL'],
+        'services': ['TMDB_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL',
+                    'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
+                    'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_SESSION_TOKEN'],
+        'database': ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
+                    'DB_MIN_CONNECTIONS', 'DB_MAX_CONNECTIONS', 'DB_MAX_IDLE_TIME', 
+                    'DB_MAX_LIFETIME', 'DB_CONNECTION_TIMEOUT', 'DB_RETRY_ATTEMPTS', 'DB_RETRY_DELAY'],
+        'content_filters': ['FILTER_TMDB_THRESHOLD', 'FILTER_TMDB_MIN_VOTES', 'FILTER_GENRES_EXCLUDE',
+                           'HONOR_JELLYSEER_DISCOVERY', 'FILTER_RELEASE_YEAR', 'FILTER_INCLUDE_NO_RATING',
+                           'FILTER_LANGUAGE', 'FILTER_NUM_SEASONS', 'FILTER_STREAMING_SERVICES',
+                           'FILTER_REGION_PROVIDER', 'EXCLUDE_DOWNLOADED', 'EXCLUDE_REQUESTED'],
+        'advanced': ['SELECTED_USERS', 'LOG_LEVEL']
+    }
+
+def get_config_section(section_name):
+    """
+    Retrieve a specific configuration section.
+
+    Args:
+        section_name (str): Name of the section to retrieve
+
+    Returns:
+        dict: Configuration values for the requested section
+    """
+    sections = get_config_sections()
+    if section_name not in sections:
+        raise ValueError(f"Unknown configuration section: {section_name}")
+
+    config = load_env_vars()
+    section_keys = sections[section_name]
+
+    return {key: config.get(key) for key in section_keys}
+
+def save_config_section(section_name, section_data):
+    """
+    Save a specific configuration section.
+
+    Args:
+        section_name (str): Name of the section to save
+        section_data (dict): Configuration values for the section
+    """
+    sections = get_config_sections()
+    if section_name not in sections:
+        raise ValueError(f"Unknown configuration section: {section_name}")
+
+    # Load current configuration
+    current_config = load_env_vars()
+
+    # Update only the section-specific keys
+    section_keys = sections[section_name]
+    for key in section_keys:
+        if key in section_data:
+            current_config[key] = section_data[key]
+
+    # Special handling for setup completion
+    if section_name in ['general', 'services', 'database']:
+        # Check if essential setup is completed
+        if is_setup_complete(current_config):
+            current_config['SETUP_COMPLETED'] = True
+
+    # Save the updated configuration
+    save_env_vars(current_config)
+
+def is_setup_complete(config_data=None):
+    """
+    Check if essential setup configuration is complete.
+
+    Args:
+        config_data (dict, optional): Configuration data to check. If None, loads from file.
+
+    Returns:
+        bool: True if essential setup is complete
+    """
+    if config_data is None:
+        config_data = load_env_vars()
+
+    # Check essential configurations
+    essential_checks = [
+        config_data.get('TMDB_API_KEY'),  # TMDB API key is required
+        config_data.get('SELECTED_SERVICE'),  # Media service selection
+    ]
+
+    # Service-specific checks
+    service = config_data.get('SELECTED_SERVICE')
+    if service == 'plex':
+        essential_checks.extend([
+            config_data.get('PLEX_TOKEN'),
+            config_data.get('PLEX_API_URL'),
+            config_data.get('PLEX_LIBRARIES')
+        ])
+    elif service == 'jellyfin':
+        essential_checks.extend([
+            config_data.get('JELLYFIN_API_URL'),
+            config_data.get('JELLYFIN_TOKEN'),
+            config_data.get('JELLYFIN_LIBRARIES')
+        ])
+
+    # Database check (always required)
+    db_type = config_data.get('DB_TYPE', 'sqlite')
+    if db_type != 'sqlite':
+        essential_checks.extend([
+            config_data.get('DB_HOST'),
+            config_data.get('DB_PORT'),
+            config_data.get('DB_USER'),
+            config_data.get('DB_PASSWORD'),
+            config_data.get('DB_NAME')
+        ])
+
+    # Consider setup complete if all essential fields are filled
+    return all(essential_checks)

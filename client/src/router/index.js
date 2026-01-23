@@ -1,11 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import RequestsPage from '@/components/RequestsPage.vue';
-import ConfigWizard from '@/components/ConfigWizard.vue';
 import axios from 'axios';
 import { createApp } from 'vue';
 import App from '../App.vue';
 import 'vue-toast-notification/dist/theme-bootstrap.css';
 import ToastPlugin from 'vue-toast-notification';
+
+// Lazy load components for code splitting
+const RequestsPage = () => import('@/components/RequestsPage.vue');
+const ConfigWizard = () => import('@/components/ConfigWizard.vue');
+const DashboardPage = () => import('@/components/DashboardPage.vue');
 
 async function loadConfig() {
     if (process.env.NODE_ENV === 'development') {
@@ -20,21 +23,89 @@ async function loadConfig() {
     }
 }
 
+async function checkSetupStatus() {
+    try {
+        const response = await axios.get('/api/config/status');
+        return response.data;
+    } catch (error) {
+        console.error('Error checking setup status:', error);
+        return { setup_completed: false, is_complete: false };
+    }
+}
+
 async function createAppRouter() {
     const subpath = await loadConfig();
+    const setupStatus = await checkSetupStatus();
 
     const routes = [
-        { path: `/requests`, name: 'RequestsPage', component: RequestsPage },
-        { path: `/`, name: 'Home', component: ConfigWizard },
+        {
+            path: `/requests`,
+            name: 'RequestsPage',
+            component: RequestsPage,
+            meta: { requiresSetup: true }
+        },
+        {
+            path: `/`,
+            name: 'Home',
+            component: DashboardPage,
+            meta: { requiresSetup: true }
+        },
+        {
+            path: `/setup`,
+            name: 'Setup',
+            component: ConfigWizard,
+            meta: { setupOnly: true }
+        },
+        {
+            path: `/dashboard`,
+            name: 'Dashboard',
+            component: DashboardPage,
+            meta: { requiresSetup: true }
+        },
+        {
+            path: `/dashboard/:tab?`,
+            name: 'DashboardTab',
+            component: DashboardPage,
+            meta: { requiresSetup: true }
+        },
+        // Redirect legacy routes
+        {
+            path: `/wizard`,
+            redirect: '/setup'
+        }
     ];
 
-    return createRouter({
+    const router = createRouter({
         history: createWebHistory(subpath || '/'),
         routes
     });
+
+    // Add navigation guards
+    router.beforeEach(async (to, from, next) => {
+        // For development, we might want to skip setup checks
+        if (process.env.NODE_ENV === 'development' && to.query.skipSetup) {
+            return next();
+        }
+
+        const currentStatus = await checkSetupStatus();
+
+        // If setup is not completed and route requires setup, redirect to setup
+        if (to.meta.requiresSetup && !currentStatus.setup_completed) {
+            return next('/setup');
+        }
+
+        // If setup is completed and route is setup-only, redirect to settings
+        if (to.meta.setupOnly && currentStatus.setup_completed) {
+            return next('/dashboard');
+        }
+
+        next();
+    });
+
+    return router;
 }
 
-createAppRouter().then(router => {
+export default createAppRouter().then(router => {
     const app = createApp(App);
     app.use(router);
     app.mount('#app');
@@ -51,6 +122,7 @@ createAppRouter().then(router => {
     };
     
     app.use(ToastPlugin, options);
+    return router;
 }).catch(error => {
-    console.error('Error loading the router:', error);
+    console.error('Error loading router:', error);
 });

@@ -4,14 +4,14 @@
         <p class="text-xs sm:text-sm text-gray-400 mb-4">Configure the database settings below to connect to your preferred database (PostgreSQL, MySQL/MariaDB, or SQLite). By default, SQLite is used for the standard configuration.</p>
 
         <!-- DB Type Selection -->
-        <label for="DB_TYPE" class="block text-xs sm:text-sm font-semibold text-gray-300">Database Type:</label>
-        <p class="text-xs sm:text-sm text-gray-400 mb-2">Select the database to store request made from SuggestArr.</p>
-        <select v-model="config.DB_TYPE" @change="handleUpdate('DB_TYPE', config.DB_TYPE)"
-                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2">
-            <option value="sqlite">SQLite (Default)</option>
-            <option value="postgres">PostgreSQL</option>
-            <option value="mysql">MySQL/MariaDB</option>
-        </select>
+        <BaseDropdown
+          v-model="config.DB_TYPE"
+          :options="databaseOptions"
+          label="Database Type:"
+          help-text="Select the database to store request made from SuggestArr."
+          id="DB_TYPE"
+          @change="value => handleUpdate('DB_TYPE', value)"
+        />
 
         <div v-if="config.DB_TYPE !== 'sqlite'">
             <!-- Host -->
@@ -84,8 +84,12 @@
 
 <script>
 import axios from 'axios';
+import BaseDropdown from '@/components/common/BaseDropdown.vue';
 
 export default {
+    components: {
+        BaseDropdown
+    },
     props: ['config'],
     data() {
         return {
@@ -93,6 +97,11 @@ export default {
             dbSuccess: '',
             buttonText: 'Test Connection',
             isTestSuccessful: true,
+            databaseOptions: [
+                { value: 'sqlite', label: 'SQLite (Default)' },
+                { value: 'postgres', label: 'PostgreSQL' },
+                { value: 'mysql', label: 'MySQL/MariaDB' }
+            ]
         };
     },
     created() {

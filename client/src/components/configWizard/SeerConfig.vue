@@ -1,109 +1,223 @@
 <template>
     <div>
-        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Overseer/Jellyseer API Configuration</h3>
-        <p class="text-xs sm:text-sm text-gray-400 mb-4">To obtain your Overseer/Jellyseer API Key, open the Overseer/Jellyseer interface,
-            navigate to Settings, locate the "API Key" section, and copy your key for use in this configuration.</p>
+        <h3 class="text-xl font-bold text-gray-200 mb-2">Request Service Configuration</h3>
+        <p class="text-sm text-gray-400 mb-6">
+            Connect to Overseerr or Jellyseerr to manage content requests automatically.
+        </p>
 
-        <!-- Overseer/Jellyseer API URL -->
-        <label :for="`SEER_API_URL`" class="block text-xs sm:text-sm font-semibold text-gray-300">Overseer/Jellyseer
-            URL:</label>
-        <input type="text" :value="config[`SEER_API_URL`]" 
-            @focusout="updateSeerUrl($event.target.value)"
-            class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2" 
-            :placeholder="`http://your-overseer-or-jellySeer-url`">
-
-        <!-- Overseer/Jellyseer API Key -->
-        <label :for="`SEER_TOKEN`" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Overseer/Jellyseer API
-            Key:</label>
-        <div class="flex flex-col sm:flex-row items-start sm:items-center">
-            <input type="text" :value="config[`SEER_TOKEN`]"
-                @input="$emit('update-config', `SEER_TOKEN`, $event.target.value)"
-                class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2 mb-4 sm:mb-0 sm:mr-2"
-                :placeholder="`Enter your Overseer/Jellyseer API Key`">
-            <button type="button" @click="testApi" :disabled="testState.isTesting" 
-                :class="{
-                    'bg-green-500 hover:bg-green-600': testState.status === 'success',
-                    'bg-red-500 hover:bg-red-600': testState.status === 'fail',
-                    'bg-blue-500 hover:bg-blue-600': testState.status === null
-                }" 
-                class="text-white px-4 py-2 rounded-lg shadow-md w-full sm:w-auto">
-                <i v-if="testState.isTesting" class="fas fa-spinner fa-spin"></i>
-                <i v-else-if="testState.status === 'success'" class="fas fa-check"></i>
-                <i v-else-if="testState.status === 'fail'" class="fas fa-times"></i>
-                <i v-else class="fas fa-play"></i>
-            </button>
-        </div>
-
-        <!-- Error message for failed validation -->
-        <div v-if="testState.status === 'fail'"
-            class="bg-gray-800 border border-red-500 text-red-500 px-4 py-3 rounded-lg mt-4" role="alert">
-            <span class="block sm:inline">Failed to validate Overseer/Jellyseer Key.</span>
-        </div>
-
-        <!-- Overseer/Jellyseer user selection -->
-        <div v-if="testState.status === 'success'" class="mt-4">
-            <label :for="`SEER_USER_NAME`" class="block text-xs sm:text-sm font-semibold text-gray-300">Select a local
-                User:</label>
-
-            <p class="text-xs sm:text-sm text-gray-400 mb-2">
-                Only local users of Overseer/Jellyseer can be selected. Selecting a specific user is useful if you want to
-                disable automatic approval of requests and manually approve them before automatic downloading.
-                This step is optional. If no user is selected, the administrator account will be used to make requests.
+        <!-- Server URL Input -->
+        <div class="mb-6">
+            <label for="SEER_API_URL" class="block text-sm font-semibold text-gray-300 mb-2">
+                Server URL
+            </label>
+            <input 
+                type="url" 
+                :value="config[`SEER_API_URL`]" 
+                @input="handleUrlInput($event.target.value)"
+                @blur="updateSeerUrl($event.target.value)"
+                class="w-full h-12 bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4
+                       focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
+                       transition-all"
+                id="SEER_API_URL"
+                placeholder="http://overseerr.example.com:5055">
+            <p class="text-xs text-gray-500 mt-2">
+                <i class="fas fa-info-circle"></i> 
+                Example: http://192.168.1.100:5055 or https://overseerr.example.com
             </p>
-            <form @submit.prevent="authenticateUser">
-
-                <!-- If no local users are available, show a message and disable the select field -->
-                <div v-if="users.length > 0">
-                    <!-- Select per la selezione dell'utente -->
-                    <select v-model="selectedUser" @change="updateSeerUser"
-                        class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2">
-                        <option v-for="user in users" :key="user.name" :value="user">{{ user.name }}</option>
-                    </select>
-
-                    <input type="text" autocomplete="username" class="hidden">
-
-                    <!-- Password field -->
-                    <label :for="`SEER_USER_PSW`"
-                        class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Password:</label>
-                    <input type="password" v-model="userPassword" 
-                        @input="$emit('update-config', `SEER_USER_PSW`, userPassword)"
-                        class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                        :placeholder="`Enter your password`" 
-                        autocomplete="new-password">
-
-                    <!-- Authenticate button -->
-                    <button @click="authenticateUser" :disabled="isAuthenticating" :class="{
-                        'bg-green-500 hover:bg-green-600': authenticated,
-                        'bg-indigo-600 hover:bg-indigo-500': !authenticated,
-                        'opacity-50 cursor-not-allowed': isAuthenticating
-                    }" class="text-white font-bold py-4 px-8 rounded-lg w-full mt-4">
-                        <i v-if="isAuthenticating" class="fas fa-spinner fa-spin"></i>
-                        <span v-else-if="authenticated">Logged In</span>
-                        <span v-else>Authenticate</span>
-                    </button>
-
-                </div>
-
-                <div v-else>
-                    <p class="text-xs sm:text-sm text-red-500">
-                        No local users available. The administrator account will be used for requests.
-                        <a :href="`${config[`SEER_API_URL`]}/users`" target="_blank" class="text-blue-400 underline">
-                            Create a new local user here.
-                        </a>
-                    </p>
-                </div>
-            </form>
-
         </div>
 
-        <!-- Navigation buttons -->
-        <div class="flex justify-between mt-8 space-x-4">
-            <button @click="$emit('previous-step')"
-                class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg w-full">Back</button>
-            <button @click="$emit('next-step')"
-                class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full"
-                :disabled="testState.status !== 'success'">
-                Next
+        <!-- API Key Input with Test Button -->
+        <div class="mb-6">
+            <label for="SEER_TOKEN" class="block text-sm font-semibold text-gray-300 mb-2">
+                API Key
+            </label>
+            <div class="flex flex-row items-center gap-2">
+                <input 
+                    type="password" 
+                    :value="config[`SEER_TOKEN`]"
+                    @input="handleTokenInput($event.target.value)"
+                    :disabled="testState.isTesting"
+                    class="flex-1 h-12 bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4
+                           focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
+                           disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    id="SEER_TOKEN"
+                    placeholder="Your Overseerr/Jellyseerr API Key">
+                
+                <button 
+                    type="button" 
+                    @click="testApi" 
+                    :disabled="testState.isTesting || !canTest"
+                    :class="{
+                        'bg-green-500 hover:bg-green-600': testState.status === 'success',
+                        'bg-red-500 hover:bg-red-600': testState.status === 'fail',
+                        'bg-purple-500 hover:bg-purple-600': testState.status === null && canTest,
+                        'bg-gray-500 cursor-not-allowed': !canTest
+                    }"
+                    class="text-white px-6 h-12 rounded-lg shadow-md flex items-center justify-center 
+                           flex-shrink-0 transition-all duration-200 min-w-[120px]
+                           disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span v-if="testState.isTesting" class="flex items-center gap-2">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span class="hidden sm:inline">Testing</span>
+                    </span>
+                    <span v-else-if="testState.status === 'success'" class="flex items-center gap-2">
+                        <i class="fas fa-check"></i>
+                        <span class="hidden sm:inline">Connected</span>
+                    </span>
+                    <span v-else-if="testState.status === 'fail'" class="flex items-center gap-2">
+                        <i class="fas fa-times"></i>
+                        <span class="hidden sm:inline">Failed</span>
+                    </span>
+                    <span v-else class="flex items-center gap-2">
+                        <i class="fas fa-plug"></i>
+                        <span class="hidden sm:inline">Connect</span>
+                    </span>
+                </button>
+            </div>
+            
+            <div class="mt-2">
+                <button 
+                    type="button"
+                    @click="showApiKeyHelp = !showApiKeyHelp"
+                    class="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 
+                           bg-transparent border-none p-0 shadow-none font-normal">
+                    <i class="fas fa-question-circle"></i>
+                    How to get your API Key?
+                </button>
+                
+                <div v-if="showApiKeyHelp" class="mt-3 p-3 bg-gray-800 border border-gray-600 rounded-lg text-xs text-gray-300">
+                    <ol class="list-decimal list-inside space-y-1">
+                        <li>Open Overseerr/Jellyseerr web interface</li>
+                        <li>Navigate to Settings → General</li>
+                        <li>Scroll to "API Key" section</li>
+                        <li>Copy the API key and paste it above</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Message -->
+        <div v-if="testState.status === 'success'" 
+             class="bg-green-900 bg-opacity-30 border border-green-500 text-green-400 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
+            <i class="fas fa-check-circle"></i>
+            <span>Successfully connected! Found {{ users.length }} local user(s).</span>
+        </div>
+
+        <!-- Error Message -->
+        <div v-if="testState.status === 'fail'"
+            class="bg-red-900 bg-opacity-30 border border-red-500 text-red-400 px-4 py-3 rounded-lg mb-6 flex items-center gap-2"
+            role="alert">
+            <i class="fas fa-exclamation-circle"></i>
+            <span>Failed to connect. Please verify your URL and API Key.</span>
+        </div>
+
+        <!-- User Authentication Section -->
+        <div v-if="testState.status === 'success'" class="mb-6">
+            <div class="bg-purple-900 bg-opacity-20 border border-purple-500 rounded-lg p-4 mb-4">
+                <h4 class="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
+                    <i class="fas fa-user-shield"></i>
+                    User Authentication (Optional)
+                </h4>
+                <p class="text-xs text-gray-400">
+                    Select a local user to make requests on their behalf. This is useful for manual approval workflows. 
+                    If not configured, the administrator account will be used.
+                </p>
+            </div>
+
+            <div v-if="users.length > 0">
+                <!-- User Selection -->
+                <div class="mb-4">
+                    <label for="SEER_USER_NAME" class="block text-sm font-semibold text-gray-300 mb-2">
+                        Select Local User
+                    </label>
+                    <select 
+                        v-model="selectedUser" 
+                        @change="updateSeerUser"
+                        class="w-full h-12 bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4
+                               focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
+                               transition-all"
+                        id="SEER_USER_NAME">
+                        <option :value="null" disabled>Select a user...</option>
+                        <option v-for="user in users" :key="user.name" :value="user">
+                            {{ user.name }} {{ user.email ? `(${user.email})` : '' }}
+                        </option>
+                    </select>
+                </div>
+
+                <!-- Password Field -->
+                <div class="mb-4">
+                    <label for="SEER_USER_PSW" class="block text-sm font-semibold text-gray-300 mb-2">
+                        Password
+                    </label>
+                    <input 
+                        type="password" 
+                        v-model="userPassword" 
+                        @input="$emit('update-config', `SEER_USER_PSW`, userPassword)"
+                        class="w-full h-12 bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4
+                               focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
+                               transition-all"
+                        id="SEER_USER_PSW"
+                        placeholder="Enter password"
+                        autocomplete="new-password">
+                </div>
+
+                <!-- Authenticate Button -->
+                <button 
+                    @click="authenticateUser" 
+                    :disabled="isAuthenticating || !selectedUser || !userPassword"
+                    :class="{
+                        'bg-green-500 hover:bg-green-600': authenticated,
+                        'bg-purple-600 hover:bg-purple-500': !authenticated,
+                    }"
+                    class="text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200
+                           disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    <i v-if="isAuthenticating" class="fas fa-spinner fa-spin"></i>
+                    <i v-else-if="authenticated" class="fas fa-check-circle"></i>
+                    <i v-else class="fas fa-sign-in-alt"></i>
+                    <span v-if="isAuthenticating">Authenticating...</span>
+                    <span v-else-if="authenticated">Authenticated Successfully</span>
+                    <span v-else>Authenticate User</span>
+                </button>
+            </div>
+
+            <!-- No Local Users Message -->
+            <div v-else class="bg-yellow-900 bg-opacity-20 border border-yellow-500 rounded-lg p-4">
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-exclamation-triangle text-yellow-500 mt-1"></i>
+                    <div>
+                        <p class="text-sm text-yellow-400 font-semibold mb-1">No Local Users Found</p>
+                        <p class="text-xs text-gray-400 mb-2">
+                            The administrator account will be used for requests. You can create a local user if needed.
+                        </p>
+                        <a 
+                            :href="`${config[`SEER_API_URL`]}/users`" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            class="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1 
+                                   bg-transparent border-none p-0 shadow-none font-normal">
+                            <i class="fas fa-external-link-alt"></i>
+                            Create a new local user
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Buttons -->
+        <div class="flex justify-between mt-8 gap-4">
+            <button 
+                @click="$emit('previous-step')"
+                class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg w-full 
+                       transition-colors duration-200">
+                <i class="fas fa-arrow-left mr-2"></i>Back
+            </button>
+            <button 
+                @click="$emit('next-step')"
+                :disabled="testState.status !== 'success'"
+                class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 px-8 rounded-lg w-full
+                       transition-colors duration-200"
+                :class="{ 'opacity-50 cursor-not-allowed': testState.status !== 'success' }">
+                Next Step<i class="fas fa-arrow-right ml-2"></i>
             </button>
         </div>
     </div>
@@ -116,80 +230,130 @@ export default {
     props: ['config'],
     data() {
         return {
-            users: [],   // Users list will be filtered for local users
-            selectedUser: '',     // Selected user for authentication
-            userPassword: '',     // Password for selected user
-            authenticated: false, // Authentication state
-            isAuthenticating: false, // Authentication loading state
+            users: [],
+            selectedUser: null,
+            userPassword: '',
+            authenticated: false,
+            isAuthenticating: false,
             testState: {
-                status: null, // 'success', 'fail', or null (not tested)
+                status: null,
                 isTesting: false
-            }
+            },
+            showApiKeyHelp: false
         };
     },
+    computed: {
+        canTest() {
+            return this.config[`SEER_API_URL`] && this.config[`SEER_TOKEN`];
+        }
+    },
     methods: {
+        handleUrlInput(value) {
+            if (this.testState.status !== null) {
+                this.testState.status = null;
+                this.users = [];
+                this.authenticated = false;
+            }
+        },
+        
+        handleTokenInput(value) {
+            this.$emit('update-config', `SEER_TOKEN`, value);
+            if (this.testState.status !== null) {
+                this.testState.status = null;
+                this.users = [];
+                this.authenticated = false;
+            }
+        },
+
         autoTestAndAuthenticate() {
-            if (this.config[`SEER_API_URL`] && this.config[`SEER_TOKEN`]) {
+            if (this.canTest) {
                 this.testApi();
             }
 
             if (this.config[`SEER_USER_NAME`] && this.config[`SEER_USER_PSW`]) {
                 this.userPassword = this.config[`SEER_USER_PSW`];
-                this.selectedUser = { name: this.config[`SEER_USER_NAME`] }; // Set the selected user
-                this.authenticated = true; // Mark authenticated if the credentials exist
+                this.selectedUser = { name: this.config[`SEER_USER_NAME`] };
+                this.authenticated = true;
             }
         },
-        // Test Jellyseer or Overseer API and filter local users
+
         testApi() {
+            if (!this.canTest) return;
+            
             this.testState.isTesting = true;
-            this.testState.status = null; // Reset status before the test
+            this.testState.status = null;
+            
             testJellyseerApi(this.config[`SEER_API_URL`], this.config[`SEER_TOKEN`])
                 .then(response => {
-                    this.users = response.data.users.filter(user => user.isLocal); // Filter local users
+                    this.users = response.data.users.filter(user => user.isLocal);
                     this.testState.status = 'success';
                     this.loadSelectedUser();
                 })
-                .catch(() => {
+                .catch(error => {
+                    console.error('Error testing API:', error);
                     this.testState.status = 'fail';
+                    this.users = [];
                 })
                 .finally(() => {
                     this.testState.isTesting = false;
                 });
         },
-        // Authenticate the selected user
+
         authenticateUser() {
+            if (!this.selectedUser || !this.userPassword) return;
+            
             this.isAuthenticating = true;
-            authenticateUser(this.config[`SEER_API_URL`], this.config[`SEER_TOKEN`], this.config[`SEER_USER_NAME`], this.userPassword)
+            
+            authenticateUser(
+                this.config[`SEER_API_URL`], 
+                this.config[`SEER_TOKEN`], 
+                this.config[`SEER_USER_NAME`], 
+                this.userPassword
+            )
                 .then((response) => {
                     this.authenticated = true;
                     this.$emit('update-config', 'SEER_SESSION_TOKEN', response.data.session_token);
+                    this.$toast.open({
+                        message: '✅ User authenticated successfully!',
+                        type: 'success',
+                        duration: 3000,
+                        position: 'top-right'
+                    });
                 })
-                .catch(() => {
+                .catch(error => {
+                    console.error('Authentication error:', error);
                     this.authenticated = false;
                     this.$toast.open({
-                        message: 'Incorrect User/Password!',
-                        pauseOnHover: true,
-                        duration:5000,
+                        message: '❌ Incorrect username or password',
                         type: 'error',
-                    })
+                        duration: 5000,
+                        position: 'top-right'
+                    });
                 })
                 .finally(() => {
                     this.isAuthenticating = false;
                 });
         },
+
         updateSeerUser() {
-            const userIdentifier = this.selectedUser.email ? this.selectedUser.email : this.selectedUser.name;
-            this.$emit('update-config', 'SEER_USER_NAME', userIdentifier);
+            if (this.selectedUser) {
+                const userIdentifier = this.selectedUser.email || this.selectedUser.name;
+                this.$emit('update-config', 'SEER_USER_NAME', userIdentifier);
+                this.authenticated = false; // Reset auth status when user changes
+            }
         },
+
         updateSeerUrl(url) {
-            // Remove trailing slash if it exists
-            const trimmedUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+            const trimmedUrl = url.trim().replace(/\/+$/, '');
             this.$emit('update-config', 'SEER_API_URL', trimmedUrl);
         },
+
         loadSelectedUser() {
-            // If a user is already selected in the config, preselect it
             if (this.config.SEER_USER_NAME) {
-                this.selectedUser = this.users.find(user => user.name === this.config.SEER_USER_NAME || user.email === this.config.SEER_USER_NAME);
+                this.selectedUser = this.users.find(
+                    user => user.name === this.config.SEER_USER_NAME || 
+                            user.email === this.config.SEER_USER_NAME
+                );
             }
             if (this.config.SEER_USER_PSW) {
                 this.userPassword = this.config.SEER_USER_PSW;
@@ -197,7 +361,6 @@ export default {
         }
     },
     mounted() {
-        // Automatically test and authenticate if the configuration is already provided
         this.autoTestAndAuthenticate();
     }
 };

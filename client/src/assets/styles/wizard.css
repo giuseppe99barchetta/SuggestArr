@@ -1,5 +1,6 @@
 .wizard-container {
-    background-color: #1a202c;
+    
+    background-color: var(--color-bg-primary);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -20,29 +21,32 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--color-bg-overlay-light);
     z-index: -1;
 }
 
 .wizard-content {
     padding: 30px;
-    background-color: #2d3748e7;
+    background: rgba(0, 0, 0, 0.8);
     border-radius: 15px;
     max-width: 85vh;
     width: 100%;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-base);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .progress-bar {
     width: 100%;
-    background-color: #4a5568;
+    background-color: rgba(74, 85, 104, 0.3);
+    backdrop-filter: blur(5px);
     border-radius: 5px;
     height: 8px;
     margin-bottom: 20px;
 }
 
 .progress {
-    background-color: #3182ce;
+    background-color: rgba(79, 70, 229, 0.8);
     height: 100%;
     border-radius: 5px;
     transition: width 0.3s ease;
@@ -65,35 +69,14 @@
     justify-content: space-between;
     align-items: center;
     padding: 10px;
-    background-color: #1a202c;
+    background-color: var(--color-bg-primary);
     border-radius: 8px;
     margin-bottom: 20px;
-    color: #e2e8f0;
-}
-
-button {
-    background-color: #3182ce;
-    color: white;
-    font-weight: bold;
-    padding: 12px 20px;
-    border-radius: 8px;
-    transition: background-color 0.3s ease, transform 0.3s ease;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-button:hover {
-    background-color: #2c5282;
-    transform: translateY(-2px);
-}
-
-button:disabled {
-    background-color: #a0aec0;
-    cursor: not-allowed;
-    box-shadow: none;
+    color: var(--color-text-secondary);
 }
 
 input {
-    color: #ffffff;
+    color: var(--color-text-primary);
     /* Cambia il colore del testo all'interno dell'input */
     background-color: #2d3748;
     /* Cambia anche il colore di sfondo dell'input */
@@ -105,54 +88,70 @@ input {
 }
 
 input::placeholder {
-    color: #a0aec0;
     /* Cambia il colore del placeholder */
+    color: #a0aec0;
 }
 
 /* Stili per il campo select */
 select {
-    background-color: #2d3748; /* Colore di sfondo del select */
-    color: #ffffff; /* Colore del testo selezionato */
-    border: 1px solid #4a5568; /* Colore del bordo */
+    /* Colore di sfondo del select */
+    background-color: #2d3748;
+    /* Colore del testo selezionato */
+    color: var(--color-text-primary);
+    /* Colore del bordo */
+    border: 1px solid #4a5568;
     padding: 10px;
     border-radius: 5px;
     font-size: 1rem;
-    appearance: none; /* Nasconde la freccia nativa del browser */
+    /* Nasconde la freccia nativa del browser */
+    appearance: none;
     background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='292.362' height='292.362' viewBox='0 0 292.362 292.362'%3E%3Cpath fill='%23ffffff' d='M287.929 69.574c-7.614-7.611-19.978-7.611-27.586 0L146.181 183.736 32.021 69.574c-7.614-7.611-19.978-7.611-27.591 0-7.614 7.614-7.614 19.978 0 27.593l131.743 131.746c3.807 3.807 8.794 5.711 13.787 5.711 4.993 0 9.98-1.904 13.787-5.711l131.743-131.746c7.613-7.615 7.613-19.979 0-27.593z'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 10px top 50%; /* Posiziona la freccia a destra */
-    background-size: 10px; /* Dimensione della freccia */
-  }
-  
-  /* Cambia il colore delle opzioni del dropdown */
-  select option {
-    background-color: #2d3748; /* Colore di sfondo delle opzioni */
-    color: #ffffff; /* Colore del testo delle opzioni */
-  }
-  
-  /* Aggiungi effetto hover alle opzioni */
-  select option:hover {
-    background-color: #4a5568; /* Colore di sfondo quando l'opzione è selezionata */
-    color: #ffffff; /* Colore del testo */
-  }
-  
-  /* Cambia l'aspetto del select quando è in focus */
-  select:focus {
-    outline: none; /* Rimuove il bordo di default */
-    border: 1px solid #3182ce; /* Aggiunge un bordo blu quando è in focus */
-  }
-  
-  .fade-enter-active, .fade-leave-active {
+    /* Posiziona la freccia a destra */
+    background-position: right 10px top 50%;
+    /* Dimensione della freccia */
+    background-size: 10px;
+}
+
+/* Cambia il colore delle opzioni del dropdown */
+select option {
+    /* Colore di sfondo delle opzioni */
+    background-color: #2d3748;
+    /* Colore del testo delle opzioni */
+    color: var(--color-text-primary);
+}
+
+/* Aggiungi effetto hover alle opzioni */
+select option:hover {
+    /* Colore di sfondo quando l'opzione è selezionata */
+    background-color: #4a5568;
+    /* Colore del testo */
+    color: var(--color-text-primary);
+}
+
+/* Cambia l'aspetto del select quando è in focus */
+select:focus {
+    /* Rimuove il bordo di default */
+    outline: none;
+    /* Aggiunge un bordo blu quando è in focus */
+    border: 1px solid #3182ce;
+}
+
+.fade-enter-active,
+.fade-leave-active {
     transition: opacity 0.3s ease;
-  }
-  .fade-enter, .fade-leave-to /* .fade-leave-active in <2.1.8 */ {
+}
 
+/* .fade-leave-active in <2.1.8 */
+.fade-enter,
+.fade-leave-to {
     opacity: 0;
-  }
+}
 
-  .update-notification {
-    background-color: #2d3748; /* Darker gray for contrast */
-    border-radius: 0.5rem;
+.update-notification {
+    /* Darker gray for contrast */
+    background-color: #2d3748;
+    border-radius: var(--border-radius-sm);
     padding: 0.5rem;
     margin-top: 0.5rem;
     text-align: center;
@@ -161,7 +160,8 @@ select {
 }
 
 .update-notification:hover {
-    transform: scale(1.05); /* Small scale effect on hover */
+    /* Small scale effect on hover */
+    transform: scale(1.05);
 }
 
 .attached-logo {
@@ -193,9 +193,232 @@ select {
     .attached-logo {
         width: 80px;
     }
+
     .version-tag {
         width: 35px;
         height: 35px;
         font-size: 0.75rem;
+    }
+}
+
+/* Modal Styles for Logs */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+
+.modal-container {
+    background-color: var(--color-bg-content);
+    backdrop-filter: blur(10px);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid var(--color-border-light);
+    max-width: 900px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--color-border-light);
+    background-color: var(--color-bg-content-secondary);
+}
+
+.modal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.modal-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--color-bg-interactive);
+    border-radius: var(--border-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-primary);
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.modal-title {
+    color: var(--color-text-primary);
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.btn-close {
+    width: 48px;
+    height: 48px;
+    background: var(--color-bg-interactive);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--border-radius-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: var(--transition-base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.btn-close:hover {
+    background-color: var(--color-danger);
+    color: white;
+    border-color: var(--color-danger);
+    transform: rotate(90deg);
+}
+
+.modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2rem;
+    background-color: var(--color-bg-content);
+}
+
+.modal-footer {
+    padding: 1.5rem 2rem;
+    border-top: 1px solid var(--color-border-light);
+    background-color: var(--color-bg-content-secondary);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-modal-action {
+    background: var(--color-bg-interactive);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border-light);
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    transition: var(--transition-base);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    min-height: 48px;
+}
+
+.btn-modal-action:hover {
+    background-color: var(--color-bg-active);
+    border-color: var(--color-primary);
+}
+
+/* Modal Transition */
+.modal-enter-active,
+.modal-leave-active {
+    transition: all 0.3s ease;
+}
+
+.modal-enter-from {
+    opacity: 0;
+    transform: scale(0.9);
+}
+
+.modal-leave-to {
+    opacity: 0;
+    transform: scale(0.9);
+}
+
+/* Mobile Responsive for Modal */
+@media (max-width: 768px) {
+    .modal-container {
+        max-height: 100vh;
+        border-radius: 0;
+        margin: 0;
+        min-height: 100vh;
+    }
+
+    .modal-header {
+        padding: 1rem;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .modal-header-left {
+        gap: 0.75rem;
+    }
+
+    .modal-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+
+    .modal-title {
+        font-size: 1.25rem;
+    }
+
+    .btn-close {
+        width: 44px;
+        height: 44px;
+        font-size: 1.125rem;
+    }
+
+    .modal-body {
+        padding: 1rem;
+    }
+
+    .modal-footer {
+        padding: 1rem;
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+    }
+
+    .btn-modal-action {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-header {
+        padding: 0.75rem;
+    }
+
+    .modal-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 0.875rem;
+    }
+
+    .modal-title {
+        font-size: 1.125rem;
+    }
+
+    .btn-close {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+
+    .modal-body {
+        padding: 0.75rem;
+    }
+
+    .modal-footer {
+        padding: 0.75rem;
     }
 }

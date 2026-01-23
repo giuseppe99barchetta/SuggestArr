@@ -1,9 +1,11 @@
 import { createApp } from 'vue';
 import App from './App.vue';
 import ToastPlugin from 'vue-toast-notification';
-import 'vue-toast-notification/dist/theme-bootstrap.css';
+import 'vue-toast-notification/dist/theme-default.css';
+import '@/assets/styles/toast-custom.css';
 import axios from 'axios';
 import router from './router';
+import '@/assets/styles/theme.css';
 
 const app = createApp(App);
 
@@ -13,14 +15,10 @@ if (process.env.NODE_ENV === 'development') {
 
 const options = {
     position: 'top-right',
-    timeout: 5000,
-    closeOnClick: false,
+    duration: 5000,
+    dismissible: true,
     pauseOnHover: true,
-    draggable: false,
-    showCloseButtonOnHover: true,
-    closeButton: 'button',
-    icon: true,
-    rtl: false,
+    queue: true,
 };
 
 app.use(ToastPlugin, options);

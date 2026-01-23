@@ -1,186 +1,127 @@
 <template>
-    <footer class="footer">
+  <footer class="footer">
+    <!-- Social Links -->
+    <div class="footer-content">
+      <a 
+        href="https://github.com/giuseppe99barchetta/SuggestArr" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        aria-label="GitHub"
+        class="footer-link"
+      >
+        <font-awesome-icon :icon="['fab', 'github']" />
+      </a>
+      
+      <a 
+        href="https://hub.docker.com/repository/docker/ciuse99/suggestarr/" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        aria-label="Docker"
+        class="footer-link"
+      >
+        <font-awesome-icon :icon="['fab', 'docker']" />
+      </a>
 
-        <!-- Button to show logs -->
-        <div class="logs-button-container">
-            <button @click="toggleLogs" class="logs-button">
-                <font-awesome-icon :icon="['fas', 'file-alt']" class="logs-icon" />
-                <span class="logs-text">View Logs</span>
-            </button>
-        </div>
-
-        <div class="footer-content">
-            <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank" aria-label="GitHub">
-                <font-awesome-icon :icon="['fab', 'github']" class="footer-icon" />
-            </a>
-            <a href="https://hub.docker.com/repository/docker/ciuse99/suggestarr/" target="_blank" aria-label="Docker">
-                <font-awesome-icon :icon="['fab', 'docker']" class="footer-icon" />
-            </a>
-            <a href="https://www.reddit.com/r/selfhosted/comments/1g3dn1t/automate_media_recommendations_and_downloads_with/" target="_blank" aria-label="Reddit">
-                <font-awesome-icon :icon="['fab', 'reddit']" class="footer-icon" />
-            </a>
-            <a href="https://discord.gg/JXwFd3PnXY" target="_blank" aria-label="Discord">
-                <font-awesome-icon :icon="['fab', 'discord']" class="footer-icon" />
-            </a>
-        </div>
-
-        <!-- Modal for logs -->
-        <div v-if="showLogs" class="modal-overlay" @click.self="toggleLogs">
-            <div class="modal">
-                <div class="modal-header">
-                    <h2 class="modal-title">System Logs</h2>
-                    <button class="close-button" @click="toggleLogs">&times;</button>
-                </div>
-                <div class="modal-body">
-                    <LogsComponent />
-                </div>
-            </div>
-        </div>
-    </footer>
+      <a 
+        href="https://discord.gg/JXwFd3PnXY" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        aria-label="Discord"
+        class="footer-link"
+      >
+        <font-awesome-icon :icon="['fab', 'discord']" />
+      </a>
+    </div>
+  </footer>
 </template>
 
 <script>
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
-import { faGithub, faDocker, faReadme, faReddit, faDiscord } from '@fortawesome/free-brands-svg-icons';
-import { faFileAlt } from '@fortawesome/free-solid-svg-icons';
+import { faGithub, faDocker, faDiscord } from '@fortawesome/free-brands-svg-icons';
 import { library } from '@fortawesome/fontawesome-svg-core';
-import LogsComponent from './LogsComponent.vue'; // Import your LogsComponent
 
-// Add the icons to the library
-library.add(faGithub, faDocker, faReadme, faReddit, faFileAlt, faDiscord);
+library.add(faGithub, faDocker, faDiscord);
 
 export default {
-    components: {
-        FontAwesomeIcon,
-        LogsComponent
-    },
-    data() {
-        return {
-            showLogs: false // To control the modal visibility
-        };
-    },
-    methods: {
-        toggleLogs() {
-            this.showLogs = !this.showLogs; // Toggles the modal visibility
-        }
-    }
+  components: {
+    FontAwesomeIcon,
+  }
 };
 </script>
 
 <style scoped>
-.logs-button-container {
-    margin-bottom: 20px; /* Separa il pulsante dalle icone */
-    display: flex;
-    justify-content: center; /* Centra il pulsante */
-}
-.logs-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: transparent;
-    color: #ffffff;
-    padding: 10px 20px;
-    font-size: 1.1rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-}
-
-.logs-button:hover {
-    background-color: #4f46e5;
-    color: #ffffff;
-    border-color: #4f46e5;
-}
-
-/* Stili per l'icona e il testo del pulsante */
-.logs-icon {
-    margin-right: 10px;
-    font-size: 1.5rem;
-}
-
-.logs-text {
-    font-size: 1.1rem;
-}
-
-/* Footer styles */
+/* Footer */
 .footer {
-    padding: 20px;
-    text-align: center;
-    margin-top: 40px;
+  padding: 2rem 1rem;
+  text-align: center;
+  margin-top: 3rem;
+  border-top: 1px solid var(--color-border-light);
 }
 
+/* Social Links */
 .footer-content {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
 }
 
-.footer-icon {
-    font-size: 1.5rem;
-    color: #ffffff;
-    transition: color 0.3s ease;
+.footer-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+  transition: var(--transition-base);
 }
 
-.footer-icon:hover {
-    color: #4f46e5;
+.footer-link:hover {
+  background: var(--color-bg-active);
+  border-color: var(--color-border-medium);
+  color: var(--color-text-primary);
+  transform: translateY(-2px);
 }
 
-/* Modal styles */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7); /* Semi-transparent background */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 999;
+/* Responsive */
+@media (max-width: 768px) {
+  .footer {
+    padding: 1.5rem 1rem;
+    margin-top: 2rem;
+  }
+
+  .footer-content {
+    gap: 1rem;
+  }
+
+  .footer-link {
+    width: 44px;
+    height: 44px;
+    font-size: 1.125rem;
+    min-width: 44px; /* Ensure minimum touch target */
+    min-height: 44px; /* Ensure minimum touch target */
+  }
 }
 
-.modal {
-    background: #1f2937;
-    padding: 20px;
-    border-radius: 10px;
-    max-width: 90%;
-    max-height: 90%;
-    width: 70%;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
-    display: flex;
-    flex-direction: column;
-}
+@media (max-width: 480px) {
+  .footer {
+    padding: 1rem;
+  }
 
-.modal-body {
-    flex-grow: 1;
-    margin-top: 20px;
-    overflow-y: auto;
-    max-height: 70vh;
-}
+  .footer-content {
+    gap: 0.75rem;
+  }
 
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #4b5563;
-    padding-bottom: 10px;
+  .footer-link {
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
+    min-width: 40px;
+    min-height: 40px;
+  }
 }
-
-.modal-title {
-    color: #ffffff;
-    font-size: 1.5rem;
-}
-
-.close-button {
-    background: none;
-    border: none;
-    color: #ffffff;
-    font-size: 1.5rem;
-    cursor: pointer;
-}
-
-.close-button:hover {
-    color: #f87171;
-}
-
 </style>
