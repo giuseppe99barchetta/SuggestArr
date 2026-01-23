@@ -13,10 +13,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v6.0.1
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4.1.0
+        uses: actions/setup-node@v6.2.0
         with:
           node-version: '20'
 
@@ -25,15 +27,30 @@ jobs:
           npm install -g semver
           sudo apt-get install jq -y
 
-      - name: Strip 'v' prefix and bump version in package.json
+      - name: Detect version bump type and bump version
         id: bump_version
         run: |
           cd client/
+
           current_version=$(jq -r '.version' package.json | sed 's/^v//')
-          new_version=$(npx semver $current_version -i patch)
+          commit_msg=$(git log -1 --pretty=%B)
+
+          bump_type="patch"
+
+          if echo "$commit_msg" | grep -q "BREAKING CHANGE\|feat!"; then
+            bump_type="major"
+          elif echo "$commit_msg" | grep -q "^feat"; then
+            bump_type="minor"
+          fi
+
+          new_version=$(npx semver $current_version -i $bump_type)
           prefixed_version="v$new_version"
+
+          echo "Detected bump type: $bump_type"
           echo "Bumping version from v$current_version to $prefixed_version"
+
           jq ".version = \"$prefixed_version\"" package.json > package_tmp.json && mv package_tmp.json package.json
+
           echo "new_version=$prefixed_version" >> $GITHUB_ENV
           echo "::set-output name=new_version::$prefixed_version"
 
@@ -41,9 +58,12 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
           git add client/package.json
           git commit -m "chore: bump version to ${{ steps.bump_version.outputs.new_version }}"
+
           git tag -a "${{ steps.bump_version.outputs.new_version }}" -m "Release ${{ steps.bump_version.outputs.new_version }}"
+
           git pull origin main --rebase
           git push origin main
           git push origin "${{ steps.bump_version.outputs.new_version }}"
@@ -54,13 +74,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v6.0.1
 
       - name: Pull latest changes
         run: git pull origin main
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.7.1
+        uses: docker/setup-buildx-action@v3.12.0
 
       - name: Log in to Docker Hub
         run: echo ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} | docker login -u ciuse99 --password-stdin
@@ -83,7 +103,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v6.0.1
 
       - name: Recreate nightly branch
         run: |
