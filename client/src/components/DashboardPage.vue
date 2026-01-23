@@ -1,5 +1,15 @@
 <template>
-  <div class="settings-container" :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }">
+  <div class="settings-container">
+    <div 
+      class="background-layer current-bg" 
+      :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }"
+      :class="{ 'fade-out': isTransitioning }"
+    ></div>
+    <div 
+      class="background-layer next-bg" 
+      :style="{ backgroundImage: 'url(' + nextBackgroundImageUrl + ')' }"
+      :class="{ 'fade-in': isTransitioning }"
+    ></div>
     <div class="settings-content">
       <!-- Header -->
       <div class="settings-header">
@@ -215,6 +225,8 @@ export default {
       activeTab: 'requests',
       showResetModal: false,
       backgroundImageUrl: '',
+      nextBackgroundImageUrl: '',
+      isTransitioning: false,
       requestCount: 0,
       showMobileDropdown: false,
       testingConnections: {
@@ -251,6 +263,17 @@ export default {
     currentTabId() {
       return this.activeTab;
     },
+  },
+  watch: {
+    isTransitioning(newValue) {
+      if (newValue) {
+        // Quando la transizione inizia, attendi che finisca
+        setTimeout(() => {
+          this.backgroundImageUrl = this.nextBackgroundImageUrl;
+          this.isTransitioning = false;
+        }, 800); // Durata della transizione CSS
+      }
+    }
   },
   async mounted() {
     await this.loadConfig();
@@ -580,9 +603,35 @@ export default {
 <style scoped>
 .settings-container {
   min-height: 100vh;
+  position: relative;
+}
+
+.background-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
+  transition: opacity 0.8s ease-in-out;
+}
+
+.current-bg {
+  opacity: 1;
+}
+
+.current-bg.fade-out {
+  opacity: 0;
+}
+
+.next-bg {
+  opacity: 0;
+}
+
+.next-bg.fade-in {
+  opacity: 1;
 }
 
 .settings-content {
@@ -593,6 +642,8 @@ export default {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--color-border-light);
+  position: relative;
+  z-index: 1;
 }
 
 .settings-header {

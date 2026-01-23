@@ -2,25 +2,23 @@ export default {
   data() {
     return {
       backgroundImageUrl: "",
+      nextBackgroundImageUrl: "",  // Nuova: per crossfade
+      isTransitioning: false,      // Flag per animazione
       intervalId: null,
-      defaultImages: [
-        "/images/default1.jpg",
-        "/images/default2.jpg",
-        "/images/default3.jpg",
-      ],
+      defaultImages: ["/images/default1.jpg", "/images/default2.jpg", "/images/default3.jpg"],
       currentDefaultImageIndex: 0,
     };
   },
   methods: {
+    async changeBackground(newUrl) {
+      this.nextBackgroundImageUrl = newUrl;
+      this.isTransitioning = true;  // Avvia transizione
+    },
     startDefaultImageRotation() {
-      this.backgroundImageUrl =
-        this.defaultImages[this.currentDefaultImageIndex];
-
+      this.changeBackground(this.defaultImages[this.currentDefaultImageIndex]);
       this.intervalId = setInterval(() => {
-        this.currentDefaultImageIndex =
-          (this.currentDefaultImageIndex + 1) % this.defaultImages.length;
-        this.backgroundImageUrl =
-          this.defaultImages[this.currentDefaultImageIndex];
+        this.currentDefaultImageIndex = (this.currentDefaultImageIndex + 1) % this.defaultImages.length;
+        this.changeBackground(this.defaultImages[this.currentDefaultImageIndex]);
       }, 10000);
     },
     async fetchRandomMovieImage(fetchImageCallback, tmdbApiKey) {
@@ -28,9 +26,7 @@ export default {
       if (imageUrl) {
         const img = new Image();
         img.src = imageUrl;
-        img.onload = () => {
-          this.backgroundImageUrl = imageUrl;
-        };
+        img.onload = () => this.changeBackground(imageUrl);
       }
     },
     startBackgroundImageRotation(fetchImageCallback, tmdbApiKey) {
@@ -40,12 +36,7 @@ export default {
       }, 10000);
     },
     stopBackgroundImageRotation() {
-      if (this.intervalId) {
-        clearInterval(this.intervalId);
-      }
+      if (this.intervalId) clearInterval(this.intervalId);
     },
-  },
-  beforeUnmount() {
-    this.stopBackgroundImageRotation();
   },
 };
