@@ -65,9 +65,9 @@ class DatabaseConnectionPool:
             'pool_hits': 0,
             'pool_misses': 0
         }
-        
-        self.logger.info(f"Initialized connection pool for {db_type} with config: {pool_config}")
-    
+
+        self.logger.debug(f"Initialized connection pool for {db_type} with config: {pool_config}")
+
     def _create_connection(self) -> Any:
         """Create a new database connection based on type."""
         try:
@@ -98,7 +98,6 @@ class DatabaseConnectionPool:
                 
             elif self.db_type == 'sqlite':
                 # SQLite doesn't support true connection pooling the same way
-                # But we can still manage connections efficiently
                 conn = sqlite3.connect(
                     self.config['DB_PATH'],
                     timeout=self.pool_config.connection_timeout,
@@ -190,7 +189,7 @@ class DatabaseConnectionPool:
                     self._stats['active_connections'] += 1
                 
                 self._initialized = True
-                self.logger.info(f"Initialized pool with {self.pool_config.min_connections} connections")
+                self.logger.debug(f"Initialized pool with {self.pool_config.min_connections} connections")
                 
             except Full:
                 self.logger.warning("Pool full during initialization")
@@ -305,7 +304,7 @@ class DatabaseConnectionPool:
                 except Empty:
                     break
             
-            self.logger.info("Closed all connections in pool")
+            self.logger.debug("Closed all connections in pool")
     
     def get_stats(self) -> Dict[str, Any]:
         """Get pool statistics."""
@@ -372,7 +371,7 @@ class PoolManager:
                     config['DB_PATH'] = os.path.join(BASE_DIR, 'config', 'config_files', 'requests.db')
                 
                 self._pools[pool_key] = DatabaseConnectionPool(db_type, config, pool_config)
-                self.logger.info(f"Created new pool for {pool_key}")
+                self.logger.debug(f"Created new pool for {pool_key}")
             
             return self._pools[pool_key]
     
@@ -386,7 +385,7 @@ class PoolManager:
                     self.logger.error(f"Error closing pool {pool_key}: {e}")
             
             self._pools.clear()
-            self.logger.info("Closed all connection pools")
+            self.logger.debug("Closed all connection pools")
     
     def get_all_stats(self) -> Dict[str, Dict[str, Any]]:
         """Get statistics for all pools."""
