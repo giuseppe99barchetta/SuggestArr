@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.config.logger_manager import LoggerManager
+from api_service.config.config import load_env_vars
 
 logger = LoggerManager.get_logger("JellyfinRoute")
 jellyfin_bp = Blueprint('jellyfin', __name__)
@@ -96,15 +97,25 @@ async def test_jellyfin_connection():
             'status': 'error'
         }), 500
 
-@jellyfin_bp.route('/users', methods=['POST'])
+@jellyfin_bp.route('/users', methods=['POST', 'GET'])
 async def get_jellyfin_users():
     """
     Fetch Jellyfin users using the provided API key and server URL.
     """
     try:
-        config_data = request.json
-        api_url = config_data.get('JELLYFIN_API_URL')
-        api_key = config_data.get('JELLYFIN_TOKEN')
+        if request.method == 'POST':
+            config_data = request.json
+            api_url = config_data.get('JELLYFIN_API_URL')
+            api_key = config_data.get('JELLYFIN_TOKEN')
+        else:
+            # For GET requests, use saved configuration
+            env_vars = load_env_vars()
+            api_url = env_vars.get('JELLYFIN_API_URL')
+            api_key = env_vars.get('JELLYFIN_TOKEN')
+
+        if not api_url or not api_key:
+            logger.warning("Missing API URL or token in Jellyfin users request")
+            return jsonify({'message': 'API URL and token are required', 'type': 'error'}), 400
 
         jellyfin_client = JellyfinClient(api_url=api_url, token=api_key)
 
@@ -114,4 +125,4 @@ async def get_jellyfin_users():
         return jsonify({'message': 'No users found', 'type': 'error'}), 404
     except Exception as e:
         logger.error(f'Error fetching Jellyfin users: {str(e)}')
-        return jsonify({'message': f'Error fetching Jellyfin users: {str(e)}', 'type': 'error'}), 500  
+        return jsonify({'message': f'Error fetching Jellyfin users: {str(e)}', 'type': 'error'}), 500
