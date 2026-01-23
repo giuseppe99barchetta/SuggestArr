@@ -42,7 +42,7 @@ class DatabaseManager:
         
         # Initialize connection pool
         self.pool = self._get_pool()
-        self.logger.info(f"Initialized DatabaseManager with {self.db_type} connection pooling")
+        self.logger.debug(f"Initialized DatabaseManager with {self.db_type} connection pooling")
         self._initialized = True
         
     def _get_default_pool_config(self) -> PoolConfig:
@@ -104,7 +104,7 @@ class DatabaseManager:
     
     def initialize_db(self):
         """Initialize the database and create tables if they don't exist."""
-        self.logger.info(f"Initializing {self.db_type} database with connection pooling")
+        self.logger.debug(f"Initializing {self.db_type} database with connection pooling")
         
         queries = {
             'users': """
@@ -161,7 +161,7 @@ class DatabaseManager:
                         cursor.execute("PRAGMA foreign_keys = ON")
                     
                     conn.commit()
-                    self.logger.info(f"Table '{table_name}' created or verified successfully")
+                    self.logger.debug(f"Table '{table_name}' created or verified successfully")
                     
             except Exception as e:
                 self.logger.error(f"Failed to create table '{table_name}': {e}")
@@ -175,7 +175,7 @@ class DatabaseManager:
     
     def add_missing_columns(self):
         """Check and add missing columns to the requests table."""
-        self.logger.info("Checking for missing columns in requests table...")
+        self.logger.debug("Checking for missing columns in requests table...")
         
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -203,7 +203,7 @@ class DatabaseManager:
 
                 # Add missing user_id column
                 if 'user_id' not in existing_columns:
-                    self.logger.info("Adding column user_id...")
+                    self.logger.debug("Adding column user_id...")
                     cursor.execute("ALTER TABLE requests ADD COLUMN user_id TEXT;")
                     conn.commit()
                     
