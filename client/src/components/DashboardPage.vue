@@ -106,6 +106,12 @@
           <div class="version-info">
             <div class="version-text-container">
               <span>SuggestArr {{ currentVersion }}</span>
+              <span 
+                v-if="currentImageTag === 'nightly'" 
+                class="nightly-badge"
+              >
+                ({{ currentImageTag }})
+              </span>
             </div>
             <button 
               @click="checkForUpdates" 
@@ -323,10 +329,12 @@ export default {
     };
   },
   setup() {
-    const { currentVersion, updateAvailable, checkForUpdates } = useVersionCheck();
+    const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
     
     return {
       currentVersion,
+      currentImageTag,
+      currentBuildDate,
       updateAvailable,
       checkForUpdates
     };

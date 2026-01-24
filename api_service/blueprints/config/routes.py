@@ -385,7 +385,7 @@ def get_docker_info():
         except Exception as e:
             logger.debug(f'Docker socket failed: {e}')
         
-        logger.info('Docker info fallback: latest')
+        logger.debug('Docker info fallback: latest')
         return jsonify({
             'tag': 'latest',
             'build_date': None,
