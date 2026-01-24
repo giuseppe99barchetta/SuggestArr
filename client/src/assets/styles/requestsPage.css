@@ -4,6 +4,7 @@
   background-position: center;
   background-attachment: fixed;
   padding: 2rem 1rem;
+  transition: opacity 0.8s ease-in-out;
 }
 
 .request-content {

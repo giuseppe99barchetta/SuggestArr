@@ -37,7 +37,7 @@ export function useVersionCheck() {
       if (dockerResponse.data.status === 'success') {
         currentImageTag.value = dockerResponse.data.tag || 'latest';
         currentBuildDate.value = dockerResponse.data.build_date;
-        console.log(`Detected: ${currentImageTag.value} (${dockerResponse.data.source}) ${currentBuildDate.value ? `@ ${currentBuildDate.value}` : ''}`);
+        // console.log(`Detected: ${currentImageTag.value} (${dockerResponse.data.source}) ${currentBuildDate.value ? `@ ${currentBuildDate.value}` : ''}`);
       } else {
         const version = currentVersion.value?.toLowerCase() || '';
         currentImageTag.value = version.includes('nightly') || version.includes('dev') ? 'nightly' : 'latest';
@@ -88,8 +88,10 @@ export function useVersionCheck() {
       if (!latest) return;
 
       latestVersion.value = latest;
+      const cleanLatest = latest.replace(/^v/, '');
+      const cleanCurrent = currentVersion.value.replace(/^v/, '');
 
-      const isUpdateAvailable = latest > currentVersion.value.replace(/^v/, '');
+      const isUpdateAvailable = cleanLatest > cleanCurrent;
       updateAvailable.value = isUpdateAvailable;
 
       if (isUpdateAvailable) {
@@ -107,7 +109,7 @@ export function useVersionCheck() {
   const showUpdateNotification = () => {
     const isNightly = currentImageTag.value === 'nightly';
     const type = isNightly ? 'nightly' : 'stable';
-    const message = `New stable ${type} available!\nCurrent: ${currentVersion.value} (${currentImageTag.value})\nNew: ${latestVersion.value}`;
+    const message = `New ${type} available!\nCurrent: ${currentVersion.value} (${currentImageTag.value})\nNew: ${latestVersion.value}`;
 
     toast.info(message, {
       duration: 10000,
