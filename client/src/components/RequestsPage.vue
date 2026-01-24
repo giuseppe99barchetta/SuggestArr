@@ -379,6 +379,7 @@ export default {
   mixins: [backgroundManager],
   data() {
     return {
+      backgroundImageUrl: '/images/default1.jpg',
       tmdbApiKey: this.$route.query.tmdbApiKey,
       sources: [],
       viewMode: 'all-requests',
@@ -686,16 +687,22 @@ export default {
 
   mounted() {
     this.$nextTick(() => {
-      setTimeout(() => {
-        this.initObserver();
-      }, 500);
+      if (!this.tmdbApiKey) {
+        console.log('🖼️ Starting DEFAULT rotation (no TMDB key)');
+        this.startDefaultImageRotation();
+      } else {
+        console.log('🖼️ Starting TMDB rotation with key:', this.tmdbApiKey?.slice(0,10)+'...');
+        this.startBackgroundImageRotation(fetchRandomMovieImage, this.tmdbApiKey);
+      }
     });
-    
-    if (!this.tmdbApiKey) {
-      this.startDefaultImageRotation();
-    } else {
-      this.startBackgroundImageRotation(fetchRandomMovieImage, this.tmdbApiKey);
-    }
+
+    setTimeout(() => {
+      this.fetchRequests();
+
+      this.$nextTick(() => {
+        this.initObserver();
+      });
+    }, 300);
   },
 
   beforeUnmount() {
