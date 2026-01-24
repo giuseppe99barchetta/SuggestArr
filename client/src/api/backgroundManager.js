@@ -2,8 +2,8 @@ export default {
   data() {
     return {
       backgroundImageUrl: "",
-      nextBackgroundImageUrl: "",  // Nuova: per crossfade
-      isTransitioning: false,      // Flag per animazione
+      nextBackgroundImageUrl: "",
+      isTransitioning: false,
       intervalId: null,
       defaultImages: ["/images/default1.jpg", "/images/default2.jpg", "/images/default3.jpg"],
       currentDefaultImageIndex: 0,
@@ -12,7 +12,7 @@ export default {
   methods: {
     async changeBackground(newUrl) {
       this.nextBackgroundImageUrl = newUrl;
-      this.isTransitioning = true;  // Avvia transizione
+      this.isTransitioning = true; 
     },
     startDefaultImageRotation() {
       this.changeBackground(this.defaultImages[this.currentDefaultImageIndex]);
