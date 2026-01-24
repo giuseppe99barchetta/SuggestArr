@@ -315,129 +315,120 @@ def get_version():
 @config_bp.route('/docker-info', methods=['GET'])
 def get_docker_info():
     """
-    Get Docker container information including image tag from labels.
+    Get Docker container information using multiple reliable methods.
+    Prioritizes build args passed as ENV/LABELs.
     """
     try:
-        import json
         import os
+        import json
         
-        # Method 1: Try to read from environment variable first (most reliable)
-        docker_tag = os.environ.get('DOCKER_IMAGE_TAG')
-        docker_digest = os.environ.get('DOCKER_IMAGE_DIGEST')
+        docker_tag = os.environ.get('DOCKER_TAG') or os.environ.get('DOCKER_IMAGE_TAG')
+        build_date = os.environ.get('BUILD_DATE')
         
         if docker_tag:
-            logger.info(f'Docker tag from environment: {docker_tag}')
+            logger.info(f'Docker info from ENV: tag={docker_tag}, source=environment')
             return jsonify({
                 'tag': docker_tag,
-                'digest': docker_digest,
+                'build_date': build_date,
                 'source': 'environment',
                 'status': 'success'
             }), 200
         
-        # Method 2: Try to read from mounted metadata file (fallback)
         metadata_file = '/app/.docker_metadata'
         if os.path.exists(metadata_file):
             try:
                 with open(metadata_file, 'r') as f:
                     metadata = json.load(f)
-                    logger.info(f'Docker tag from metadata file: {metadata.get("tag")}')
+                    logger.info(f'Docker info from metadata file: {metadata.get("tag")}')
                     return jsonify({
                         'tag': metadata.get('tag', 'latest'),
-                        'digest': metadata.get('digest'),
+                        'build_date': metadata.get('build_date'),
                         'source': 'metadata_file',
                         'status': 'success'
                     }), 200
             except Exception as e:
-                logger.warning(f'Failed to read metadata file: {e}')
+                logger.warning(f'Metadata file read error: {e}')
         
-        # Method 3: Try Docker socket if available (last resort)
         try:
-            # Try to connect to Docker socket
             import requests
-            container_id = os.environ.get('HOSTNAME', 'unknown')
+            container_id = os.environ.get('HOSTNAME', '').split('.')[0]
             
-            response = requests.get(
-                f'unix:///var/run/docker.sock:/containers/{container_id}/json',
-                timeout=5,
-                headers={'Accept': 'application/json'}
-            )
-            
-            if response.status_code == 200:
-                container_info = response.json()
-                image_name = container_info.get('Config', {}).get('Image', '')
+            if container_id:
+                sock_url = f"http://unix:///var/run/docker.sock:2375/containers/{container_id}/json"
+                response = requests.get(
+                    sock_url,
+                    timeout=5,
+                    headers={'Accept': 'application/json'}
+                )
                 
-                # Extract tag from image name (e.g., "ciuse99/suggestarr:nightly" -> "nightly")
-                if ':' in image_name:
-                    tag = image_name.split(':')[-1]
-                else:
-                    tag = 'latest'
-                
-                logger.info(f'Docker tag from Docker socket: {tag}')
-                return jsonify({
-                    'tag': tag,
-                    'digest': None,
-                    'source': 'docker_socket',
-                    'status': 'success'
-                }), 200
-                
+                if response.status_code == 200:
+                    container_info = response.json()
+                    
+                    labels = container_info.get('Config', {}).get('Labels', {})
+                    docker_tag = labels.get('DOCKER_TAG') or labels.get('org.opencontainers.image.version')
+                    
+                    if not docker_tag:
+                        image_name = container_info.get('Config', {}).get('Image', '')
+                        if ':' in image_name:
+                            docker_tag = image_name.split(':')[-1]
+                        else:
+                            docker_tag = 'latest'
+                    
+                    logger.info(f'Docker info from socket: tag={docker_tag}')
+                    return jsonify({
+                        'tag': docker_tag or 'latest',
+                        'build_date': labels.get('BUILD_DATE'),
+                        'source': 'docker_socket',
+                        'status': 'success'
+                    }), 200
+                    
         except Exception as e:
-            logger.debug(f'Docker socket method failed: {e}')
+            logger.debug(f'Docker socket failed: {e}')
         
-        # Fallback: Assume latest if no method worked
-        logger.debug('Could not determine Docker tag, assuming latest')
+        logger.info('Docker info fallback: latest')
         return jsonify({
             'tag': 'latest',
-            'digest': None,
+            'build_date': None,
             'source': 'fallback',
             'status': 'success'
         }), 200
         
     except Exception as e:
-        logger.error(f'Error getting Docker info: {str(e)}')
-        return jsonify({
-            'message': f'Error getting Docker info: {str(e)}',
-            'status': 'error'
-        }), 500
+        logger.error(f'get_docker_info error: {e}')
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 @config_bp.route('/docker-digest/<tag>', methods=['GET'])
 def get_docker_digest(tag):
     """
-    Get Docker Hub image digest for specified tag.
-    This endpoint acts as a proxy to avoid CORS issues.
+    Docker Hub API proxy per digest (per nightly/stable checks).
     """
     try:
-        # Make request to Docker Hub API from backend
+        import requests
+        
         url = f'https://registry.hub.docker.com/v2/repositories/ciuse99/suggestarr/tags/{tag}'
         
         response = requests.get(url, timeout=10)
         response.raise_for_status()
-        
         data = response.json()
         
-        # Extract digest from response
-        digest = data.get('digest') or data.get('images', [{}])[0].get('digest')
-        
-        if not digest:
-            return jsonify({
-                'message': f'No digest found for tag {tag}',
-                'status': 'error'
-            }), 404
+        results = data.get('results', [])
+        if results:
+            digest = results[0].get('digest')
+            if digest:
+                logger.info(f'Digest for {tag}: {digest[:16]}...')
+                return jsonify({
+                    'tag': tag,
+                    'digest': digest,
+                    'status': 'success'
+                }), 200
         
         return jsonify({
             'tag': tag,
-            'digest': digest,
-            'status': 'success'
-        }), 200
+            'message': 'No digest found',
+            'status': 'error'
+        }), 404
         
     except requests.exceptions.RequestException as e:
-        logger.error(f'Error fetching Docker digest for {tag}: {str(e)}')
-        return jsonify({
-            'message': f'Error fetching Docker digest: {str(e)}',
-            'status': 'error'
-        }), 500
-    except Exception as e:
-        logger.error(f'Unexpected error getting Docker digest: {str(e)}')
-        return jsonify({
-            'message': f'Unexpected error: {str(e)}',
-            'status': 'error'
-        }), 500
+        logger.error(f'Docker digest API error for {tag}: {e}')
+        return jsonify({'status': 'error', 'message': str(e)}), 500
