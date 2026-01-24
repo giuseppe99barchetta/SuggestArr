@@ -17,6 +17,7 @@ async function loadConfig() {
     
     try {
         const response = await axios.get('/api/config/fetch');
+        localStorage.setItem('suggestarr_config', JSON.stringify(response.data));
         return response.data.SUBPATH || '';
     } catch (error) {
         throw new Error('Unable to load the configuration file');

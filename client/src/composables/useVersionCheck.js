@@ -107,7 +107,7 @@ export function useVersionCheck() {
   const showUpdateNotification = () => {
     const isNightly = currentImageTag.value === 'nightly';
     const type = isNightly ? 'nightly' : 'stable';
-    const message = `Nuova versione ${type} disponibile!\nAttuale: ${currentVersion.value} (${currentImageTag.value})\nNuova: ${latestVersion.value}`;
+    const message = `New stable ${type} available!\nCurrent: ${currentVersion.value} (${currentImageTag.value})\nNew: ${latestVersion.value}`;
 
     toast.info(message, {
       duration: 10000,

@@ -379,7 +379,12 @@ export default {
   mixins: [backgroundManager],
   data() {
     return {
-      backgroundImageUrl: '/images/default1.jpg',
+      backgroundImageUrl: "/images/default1.jpg",
+      nextBackgroundImageUrl: "",
+      isTransitioning: false,
+      intervalId: null,
+      defaultImages: ["/images/default1.jpg", "/images/default2.jpg", "/images/default3.jpg"],
+      currentDefaultImageIndex: 0,
       tmdbApiKey: this.$route.query.tmdbApiKey,
       sources: [],
       viewMode: 'all-requests',
@@ -409,6 +414,16 @@ export default {
         { value: 'tv', label: 'TV Shows' }
       ]
     };
+  },
+    watch: {
+    isTransitioning(newValue) {
+      if (newValue) {
+        setTimeout(() => {
+          this.backgroundImageUrl = this.nextBackgroundImageUrl;
+          this.isTransitioning = false;
+        }, 800);
+      }
+    }
   },
   computed: {
     totalRequests() {
@@ -565,8 +580,6 @@ export default {
           ? this.$refs.loadMoreTrigger 
           : this.$refs.loadMoreTriggerRequests;
 
-        console.log('🎯 Init observer for:', this.viewMode, 'Ref exists:', !!triggerRef);
-
         if (triggerRef) {
           this.observer = new IntersectionObserver(this.observeIntersection, {
             root: null,
@@ -686,14 +699,24 @@ export default {
   },
 
   mounted() {
+    const savedConfig = localStorage.getItem('suggestarr_config');
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig);
+        this.tmdbApiKey = config.TMDB_API_KEY || null;
+      } catch (e) {
+        console.error('❌ Failed to parse saved config:', e);
+      }
+    }
+
     this.$nextTick(() => {
       if (!this.tmdbApiKey) {
-        console.log('🖼️ Starting DEFAULT rotation (no TMDB key)');
+        console.log('ℹ️ No TMDB API key provided, using default images');
         this.startDefaultImageRotation();
       } else {
-        console.log('🖼️ Starting TMDB rotation with key:', this.tmdbApiKey?.slice(0,10)+'...');
         this.startBackgroundImageRotation(fetchRandomMovieImage, this.tmdbApiKey);
       }
+
     });
 
     setTimeout(() => {

@@ -359,7 +359,6 @@ export default {
   watch: {
     isTransitioning(newValue) {
       if (newValue) {
-        // Quando la transizione inizia, attendi che finisca
         setTimeout(() => {
           this.backgroundImageUrl = this.nextBackgroundImageUrl;
           this.isTransitioning = false;
