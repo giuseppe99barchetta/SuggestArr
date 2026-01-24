@@ -384,7 +384,7 @@ def get_docker_info():
             logger.debug(f'Docker socket method failed: {e}')
         
         # Fallback: Assume latest if no method worked
-        logger.warning('Could not determine Docker tag, assuming latest')
+        logger.debug('Could not determine Docker tag, assuming latest')
         return jsonify({
             'tag': 'latest',
             'digest': None,

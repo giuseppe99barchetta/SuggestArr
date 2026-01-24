@@ -64,7 +64,7 @@
                 v-model="sortBy"
                 :options="sortOptions"
                 placeholder="Select sort order"
-                :disabled="isLoading"
+                :disabled="loading"
                 id="sortBy"
               />
             
@@ -73,7 +73,7 @@
                 v-model="mediaTypeFilter"
                 :options="mediaTypeOptions"
                 placeholder="Select media type"
-                :disabled="isLoading"
+                :disabled="loading"
                 id="mediaType"
               />
             

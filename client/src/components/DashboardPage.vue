@@ -304,8 +304,6 @@ export default {
       requestCount: 0,
       showMobileDropdown: false,
       // Cache per migliorare performance
-      lastConfigLoad: 0,
-      configCache: null,
       testingConnections: {
         tmdb: false,
         plex: false,
@@ -389,12 +387,6 @@ export default {
       return currentTab ? currentTab.icon : 'fas fa-question';
     },
     async loadConfig(force = false) {
-      const now = Date.now();
-      if (!force && this.configCache && (now - this.lastConfigLoad) < 30000) {
-        this.config = this.configCache;
-        return;
-      }
-
       this.loadingMessage = 'Loading configuration...';
       this.isLoading = true;
       try {
@@ -402,8 +394,6 @@ export default {
           timeout: 10000 // 10 second timeout
         });
         this.config = response.data;
-        this.configCache = response.data;
-        this.lastConfigLoad = now;
       } catch (error) {
         this.$toast.open({
           message: 'Failed to load configuration',
