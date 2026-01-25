@@ -4,7 +4,7 @@ import axios from 'axios';
 
 export function useVersionCheck() {
   const toast = useToast();
-  const currentVersion = ref('Loading...');
+  const currentVersion = ref(`v${process.env.VUE_APP_VERSION || __APP_VERSION__ || 'unknown'}`);
   const latestVersion = ref(null);
   const updateAvailable = ref(false);
   const isChecking = ref(false);

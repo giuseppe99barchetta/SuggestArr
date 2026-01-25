@@ -1,13 +1,17 @@
 const { defineConfig } = require('@vue/cli-service')
 const webpack = require('webpack')
+const path = require('path')
 
 module.exports = defineConfig({
   transpileDependencies: [],
-  configureWebpack: {
-    plugins: [
-      new webpack.DefinePlugin({
-        __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: 'false'
-      })
-    ]
+  
+  chainWebpack: config => {
+    config.resolve.alias.set('@', path.resolve(__dirname, 'src'))
+    
+    config.plugin('define').tap(args => {
+      const pkg = require('./package.json')
+      args[0]['process.env.VUE_APP_VERSION'] = JSON.stringify(pkg.version)
+      return args
+    })
   }
 })
