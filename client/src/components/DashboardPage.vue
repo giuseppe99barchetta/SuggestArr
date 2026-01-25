@@ -2,12 +2,12 @@
   <div class="settings-container">
     <div 
       class="background-layer current-bg" 
-      :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }"
+      :style="{ backgroundImage: 'url(' + currentBackgroundUrl + ')' }"
       :class="{ 'fade-out': isTransitioning }"
     ></div>
     <div 
       class="background-layer next-bg" 
-      :style="{ backgroundImage: 'url(' + nextBackgroundImageUrl + ')' }"
+      :style="{ backgroundImage: 'url(' + nextBackgroundUrl + ')' }"
       :class="{ 'fade-in': isTransitioning }"
     ></div>
     <div class="settings-content">
@@ -267,8 +267,7 @@
 <script>
 import axios from 'axios';
 import Footer from './AppFooter.vue';
-import backgroundManager from '@/api/backgroundManager';
-import { fetchRandomMovieImage } from '@/api/tmdbApi';
+import { useBackgroundImage } from '@/composables/useBackgroundImage';
 import { useVersionCheck } from '@/composables/useVersionCheck';
 
 // Import tab components
@@ -292,7 +291,24 @@ export default {
     SettingsRequests,
     LogsComponent,
   },
-  mixins: [backgroundManager],
+  setup() {
+    const { currentBackgroundUrl, nextBackgroundUrl, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
+    const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
+    
+    return {
+      currentBackgroundUrl,
+      nextBackgroundUrl,
+      isTransitioning,
+      startDefaultImageRotation,
+      startBackgroundImageRotation,
+      stopBackgroundImageRotation,
+      currentVersion,
+      currentImageTag,
+      currentBuildDate,
+      updateAvailable,
+      checkForUpdates
+    };
+  },
   data() {
     return {
       config: {},
@@ -304,9 +320,6 @@ export default {
       changelogData: null,
       isLoadingChangelog: false,
       changelogError: null,
-      backgroundImageUrl: '',
-      nextBackgroundImageUrl: '',
-      isTransitioning: false,
       requestCount: 0,
       showMobileDropdown: false,
       // Cache per migliorare performance
@@ -326,17 +339,6 @@ export default {
         { id: 'advanced', name: 'Advanced', icon: 'fas fa-sliders-h' },
         { id: 'logs', name: 'Logs', icon: 'fas fa-file-alt' },
       ],
-    };
-  },
-  setup() {
-    const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
-    
-    return {
-      currentVersion,
-      currentImageTag,
-      currentBuildDate,
-      updateAvailable,
-      checkForUpdates
     };
   },
   computed: {
@@ -359,10 +361,7 @@ export default {
   watch: {
     isTransitioning(newValue) {
       if (newValue) {
-        setTimeout(() => {
-          this.backgroundImageUrl = this.nextBackgroundImageUrl;
-          this.isTransitioning = false;
-        }, 800);
+        // Handle background transition state if needed
       }
     }
   },
@@ -373,7 +372,7 @@ export default {
       this.loadRequestCount();
       
       if (this.config.TMDB_API_KEY) {
-        this.startBackgroundImageRotation(fetchRandomMovieImage, this.config.TMDB_API_KEY);
+        this.startBackgroundImageRotation(this.config.TMDB_API_KEY);
       }
     } catch (error) {
       console.error('Error during component mount:', error);
@@ -749,9 +748,6 @@ export default {
         this.isLoading = false;
       }
     },
-  },
-  beforeUnmount() {
-    this.stopBackgroundImageRotation();
   },
 };
 </script>

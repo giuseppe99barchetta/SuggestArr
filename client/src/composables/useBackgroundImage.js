@@ -2,13 +2,14 @@ import { ref, onUnmounted } from 'vue';
 import { fetchRandomMovieImage } from '@/api/tmdbApi';
 
 export function useBackgroundImage() {
-  const backgroundImageUrl = ref('/images/default1.jpg');
+  const currentBackgroundUrl = ref('/images/default1.jpg');
+  const nextBackgroundUrl = ref('/images/default1.jpg');
   const isTransitioning = ref(false);
   const intervalId = ref(null);
   const defaultImages = ['/images/default1.jpg', '/images/default2.jpg', '/images/default3.jpg'];
   const currentDefaultImageIndex = ref(0);
 
-  // Funzione per cambiare immagine con un piccolo "stato" di transizione
+  // Function to change the image with a smooth crossfade
   async function changeBackground(newUrl) {
     if (!newUrl) return;
 
@@ -16,24 +17,23 @@ export function useBackgroundImage() {
     img.src = newUrl;
 
     img.onload = () => {
-      // 1. Inizia la sfumatura (l'opacità scende)
+      // 1. Set the new image in the hidden layer
+      nextBackgroundUrl.value = newUrl;
+      
+      // 2. Start the transition
       isTransitioning.value = true;
 
-      // 2. Aspetta che la sfumatura in uscita sia a metà (es. 400ms)
+      // 3. Wait for the transition to complete (800ms)
       setTimeout(() => {
-        // 3. Cambia l'immagine mentre è "sbiadita"
-        backgroundImageUrl.value = newUrl;
-
-        // 4. Aspetta un attimo e fai risalire l'opacità
-        setTimeout(() => {
-          isTransitioning.value = false;
-        }, 50); 
-      }, 400); // Questo tempo deve essere circa la metà della transition CSS
+        // 4. Swap the images
+        currentBackgroundUrl.value = nextBackgroundUrl.value;
+        isTransitioning.value = false;
+      }, 800); // Matches the CSS transition duration
     };
   }
 
   function startDefaultImageRotation() {
-    stopBackgroundImageRotation(); // Sicurezza: pulisci intervalli esistenti
+    stopBackgroundImageRotation(); // Safety check: clear existing intervals
     intervalId.value = setInterval(() => {
       currentDefaultImageIndex.value = (currentDefaultImageIndex.value + 1) % defaultImages.length;
       changeBackground(defaultImages[currentDefaultImageIndex.value]);
@@ -42,9 +42,9 @@ export function useBackgroundImage() {
 
   function startBackgroundImageRotation(apiKey) {
     stopBackgroundImageRotation();
-    // Carica la prima immagine immediatamente
+    // Load the first image immediately
     fetchRandomMovieImageAsync(apiKey);
-    // Poi avvia l'intervallo
+    // Then start the interval
     intervalId.value = setInterval(() => fetchRandomMovieImageAsync(apiKey), 10000);
   }
 
@@ -55,7 +55,7 @@ export function useBackgroundImage() {
         await changeBackground(imageUrl);
       }
     } catch (error) {
-      console.error("Errore rotazione sfondo:", error);
+      console.error("Background rotation error:", error);
     }
   }
 
@@ -71,7 +71,8 @@ export function useBackgroundImage() {
   });
 
   return {
-    backgroundImageUrl,
+    currentBackgroundUrl,
+    nextBackgroundUrl,
     isTransitioning,
     startDefaultImageRotation,
     startBackgroundImageRotation,

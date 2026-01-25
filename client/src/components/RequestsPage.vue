@@ -1,6 +1,16 @@
 <template>
-  <transition name="fade" mode="out-in">
-    <div class="request-container" :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }">
+    <div class="request-container">
+      <div 
+        class="background-layer current-bg" 
+        :style="{ backgroundImage: 'url(' + currentBackgroundUrl + ')' }"
+        :class="{ 'fade-out': isTransitioning }"
+      ></div>
+      <div 
+        class="background-layer next-bg" 
+        :style="{ backgroundImage: 'url(' + nextBackgroundUrl + ')' }"
+        :class="{ 'fade-in': isTransitioning }"
+      ></div>
+      <div class="background-overlay"></div>
       <div class="request-content">
         <!-- Header -->
         <div class="request-header">
@@ -358,13 +368,12 @@
         </div>
       </transition>
     </div>
-  </transition>
 </template>
 
 <script>
 import '@/assets/styles/requestsPage.css';
 import axios from "axios";
-import backgroundManager from '@/api/backgroundManager';
+import { useBackgroundImage } from '@/composables/useBackgroundImage';
 import Footer from './AppFooter.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import { fetchRandomMovieImage } from '@/api/tmdbApi';
@@ -376,13 +385,19 @@ export default {
     Footer,
     BaseDropdown,
   },
-  mixins: [backgroundManager],
+  setup() {
+    const { currentBackgroundUrl, nextBackgroundUrl, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
+    return {
+      currentBackgroundUrl,
+      nextBackgroundUrl,
+      isTransitioning,
+      startDefaultImageRotation,
+      startBackgroundImageRotation,
+      stopBackgroundImageRotation,
+    };
+  },
   data() {
     return {
-      backgroundImageUrl: "/images/default1.jpg",
-      nextBackgroundImageUrl: "",
-      isTransitioning: false,
-      intervalId: null,
       defaultImages: ["/images/default1.jpg", "/images/default2.jpg", "/images/default3.jpg"],
       currentDefaultImageIndex: 0,
       tmdbApiKey: this.$route.query.tmdbApiKey,
@@ -714,7 +729,7 @@ export default {
         console.log('ℹ️ No TMDB API key provided, using default images');
         this.startDefaultImageRotation();
       } else {
-        this.startBackgroundImageRotation(fetchRandomMovieImage, this.tmdbApiKey);
+        this.startBackgroundImageRotation(this.tmdbApiKey);
       }
 
     });
