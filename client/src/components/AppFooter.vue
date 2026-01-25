@@ -56,8 +56,13 @@ export default {
   text-align: center;
   margin-top: 3rem;
   border-top: 1px solid var(--color-border-light);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
 }
 
+/* Version Section */
 /* Social Links */
 .footer-content {
   display: flex;
@@ -94,6 +99,21 @@ export default {
     margin-top: 2rem;
   }
 
+  .footer-version {
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+
+  .version-text {
+    font-size: 0.8rem;
+  }
+
+  .update-check-btn {
+    padding: 0.3125rem 0.625rem;
+    font-size: 0.8rem;
+  }
+
   .footer-content {
     gap: 1rem;
   }
@@ -110,6 +130,24 @@ export default {
 @media (max-width: 480px) {
   .footer {
     padding: 1rem;
+  }
+
+  .footer-version {
+    gap: 0.375rem;
+  }
+
+  .version-text {
+    font-size: 0.75rem;
+  }
+
+  .update-check-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .update-badge {
+    font-size: 0.6875rem;
+    padding: 0.0625rem 0.25rem;
   }
 
   .footer-content {

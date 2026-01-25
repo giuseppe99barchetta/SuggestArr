@@ -1,6 +1,16 @@
 <template>
-  <transition name="fade" mode="out-in">
-    <div class="request-container" :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }">
+    <div class="request-container">
+      <div 
+        class="background-layer current-bg" 
+        :style="{ backgroundImage: 'url(' + currentBackgroundUrl + ')' }"
+        :class="{ 'fade-out': isTransitioning }"
+      ></div>
+      <div 
+        class="background-layer next-bg" 
+        :style="{ backgroundImage: 'url(' + nextBackgroundUrl + ')' }"
+        :class="{ 'fade-in': isTransitioning }"
+      ></div>
+      <div class="background-overlay"></div>
       <div class="request-content">
         <!-- Header -->
         <div class="request-header">
@@ -64,7 +74,7 @@
                 v-model="sortBy"
                 :options="sortOptions"
                 placeholder="Select sort order"
-                :disabled="isLoading"
+                :disabled="loading"
                 id="sortBy"
               />
             
@@ -73,7 +83,7 @@
                 v-model="mediaTypeFilter"
                 :options="mediaTypeOptions"
                 placeholder="Select media type"
-                :disabled="isLoading"
+                :disabled="loading"
                 id="mediaType"
               />
             
@@ -358,13 +368,12 @@
         </div>
       </transition>
     </div>
-  </transition>
 </template>
 
 <script>
 import '@/assets/styles/requestsPage.css';
 import axios from "axios";
-import backgroundManager from '@/api/backgroundManager';
+import { useBackgroundImage } from '@/composables/useBackgroundImage';
 import Footer from './AppFooter.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import { fetchRandomMovieImage } from '@/api/tmdbApi';
@@ -376,9 +385,21 @@ export default {
     Footer,
     BaseDropdown,
   },
-  mixins: [backgroundManager],
+  setup() {
+    const { currentBackgroundUrl, nextBackgroundUrl, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
+    return {
+      currentBackgroundUrl,
+      nextBackgroundUrl,
+      isTransitioning,
+      startDefaultImageRotation,
+      startBackgroundImageRotation,
+      stopBackgroundImageRotation,
+    };
+  },
   data() {
     return {
+      defaultImages: ["/images/default1.jpg", "/images/default2.jpg", "/images/default3.jpg"],
+      currentDefaultImageIndex: 0,
       tmdbApiKey: this.$route.query.tmdbApiKey,
       sources: [],
       viewMode: 'all-requests',
@@ -408,6 +429,16 @@ export default {
         { value: 'tv', label: 'TV Shows' }
       ]
     };
+  },
+    watch: {
+    isTransitioning(newValue) {
+      if (newValue) {
+        setTimeout(() => {
+          this.backgroundImageUrl = this.nextBackgroundImageUrl;
+          this.isTransitioning = false;
+        }, 800);
+      }
+    }
   },
   computed: {
     totalRequests() {
@@ -564,8 +595,6 @@ export default {
           ? this.$refs.loadMoreTrigger 
           : this.$refs.loadMoreTriggerRequests;
 
-        console.log('🎯 Init observer for:', this.viewMode, 'Ref exists:', !!triggerRef);
-
         if (triggerRef) {
           this.observer = new IntersectionObserver(this.observeIntersection, {
             root: null,
@@ -685,17 +714,33 @@ export default {
   },
 
   mounted() {
-    this.$nextTick(() => {
-      setTimeout(() => {
-        this.initObserver();
-      }, 500);
-    });
-    
-    if (!this.tmdbApiKey) {
-      this.startDefaultImageRotation();
-    } else {
-      this.startBackgroundImageRotation(fetchRandomMovieImage, this.tmdbApiKey);
+    const savedConfig = localStorage.getItem('suggestarr_config');
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig);
+        this.tmdbApiKey = config.TMDB_API_KEY || null;
+      } catch (e) {
+        console.error('❌ Failed to parse saved config:', e);
+      }
     }
+
+    this.$nextTick(() => {
+      if (!this.tmdbApiKey) {
+        console.log('ℹ️ No TMDB API key provided, using default images');
+        this.startDefaultImageRotation();
+      } else {
+        this.startBackgroundImageRotation(this.tmdbApiKey);
+      }
+
+    });
+
+    setTimeout(() => {
+      this.fetchRequests();
+
+      this.$nextTick(() => {
+        this.initObserver();
+      });
+    }, 300);
   },
 
   beforeUnmount() {

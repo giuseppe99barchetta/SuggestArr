@@ -1,6 +1,7 @@
 import os
 from flask import Blueprint, request, jsonify
 import yaml
+import requests
 from api_service.config.config import (
     load_env_vars, save_env_vars, clear_env_vars,
     get_config_sections, get_config_section, save_config_section,
@@ -8,7 +9,6 @@ from api_service.config.config import (
 )
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
-from api_service.db.connection_pool import pool_manager
 
 logger = LoggerManager.get_logger("ConfigRoute")
 config_bp = Blueprint('config', __name__)
@@ -240,7 +240,7 @@ def get_pool_statistics():
     try:
         db_manager = DatabaseManager()
         pool_stats = db_manager.get_pool_stats()
-        all_stats = pool_manager.get_all_stats()
+        all_stats = {'status': 'direct_connection', 'message': 'Connection pooling has been removed for better performance'}
         
         return jsonify({
             'message': 'Connection pool statistics retrieved successfully',
@@ -251,6 +251,26 @@ def get_pool_statistics():
     except Exception as e:
         logger.error(f'Error getting pool statistics: {str(e)}')
         return jsonify({'message': f'Error getting pool statistics: {str(e)}', 'status': 'error'}), 500
+
+@config_bp.route('/force_run', methods=['POST'])
+def force_run_automation():
+    """
+    Force run the automation script immediately.
+    """
+    try:
+        from api_service.utils.utils import execute_automation
+        logger.info("Force run automation script requested")
+        
+        # Execute automation in background
+        execute_automation(force_run=True)
+        
+        return jsonify({
+            'message': 'Automation script forced successfully!',
+            'status': 'success'
+        }), 200
+    except Exception as e:
+        logger.error(f'Error forcing automation run: {str(e)}')
+        return jsonify({'message': f'Error forcing automation run: {str(e)}', 'status': 'error'}), 500
 
 @config_bp.route('/test-db', methods=['POST'])
 def test_database_connection():
@@ -279,3 +299,155 @@ def test_database_connection():
             'message': f'Error testing database connection: {str(e)}', 
             'status': 'error'
         }), 500
+
+@config_bp.route('/version', methods=['GET'])
+def get_version():
+    """
+    Get current SuggestArr version.
+    """
+    try:
+        # Read version from package.json in client directory
+        client_package_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'client', 'package.json')
+        
+        if os.path.exists(client_package_path):
+            with open(client_package_path, 'r') as f:
+                import json
+                package_data = json.load(f)
+                version = package_data.get('version', 'unknown')
+        else:
+            # Fallback version if package.json not found
+            version = 'v2.0.0'
+        
+        return jsonify({
+            'version': version,
+            'name': 'SuggestArr',
+            'status': 'success'
+        }), 200
+    except Exception as e:
+        logger.error(f'Error getting version: {str(e)}')
+        return jsonify({
+            'version': 'unknown',
+            'message': f'Error getting version: {str(e)}', 
+            'status': 'error'
+        }), 500
+
+@config_bp.route('/docker-info', methods=['GET'])
+def get_docker_info():
+    """
+    Get Docker container information using multiple reliable methods.
+    Prioritizes build args passed as ENV/LABELs.
+    """
+    try:
+        import os
+        import json
+        
+        docker_tag = os.environ.get('DOCKER_TAG') or os.environ.get('DOCKER_IMAGE_TAG')
+        build_date = os.environ.get('BUILD_DATE')
+        
+        if docker_tag:
+            logger.info(f'Docker info from ENV: tag={docker_tag}, source=environment')
+            return jsonify({
+                'tag': docker_tag,
+                'build_date': build_date,
+                'source': 'environment',
+                'status': 'success'
+            }), 200
+        
+        metadata_file = '/app/.docker_metadata'
+        if os.path.exists(metadata_file):
+            try:
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+                    logger.info(f'Docker info from metadata file: {metadata.get("tag")}')
+                    return jsonify({
+                        'tag': metadata.get('tag', 'latest'),
+                        'build_date': metadata.get('build_date'),
+                        'source': 'metadata_file',
+                        'status': 'success'
+                    }), 200
+            except Exception as e:
+                logger.warning(f'Metadata file read error: {e}')
+        
+        try:
+            import requests
+            container_id = os.environ.get('HOSTNAME', '').split('.')[0]
+            
+            if container_id:
+                sock_url = f"http://unix:///var/run/docker.sock:2375/containers/{container_id}/json"
+                response = requests.get(
+                    sock_url,
+                    timeout=5,
+                    headers={'Accept': 'application/json'}
+                )
+                
+                if response.status_code == 200:
+                    container_info = response.json()
+                    
+                    labels = container_info.get('Config', {}).get('Labels', {})
+                    docker_tag = labels.get('DOCKER_TAG') or labels.get('org.opencontainers.image.version')
+                    
+                    if not docker_tag:
+                        image_name = container_info.get('Config', {}).get('Image', '')
+                        if ':' in image_name:
+                            docker_tag = image_name.split(':')[-1]
+                        else:
+                            docker_tag = 'latest'
+                    
+                    logger.info(f'Docker info from socket: tag={docker_tag}')
+                    return jsonify({
+                        'tag': docker_tag or 'latest',
+                        'build_date': labels.get('BUILD_DATE'),
+                        'source': 'docker_socket',
+                        'status': 'success'
+                    }), 200
+                    
+        except Exception as e:
+            logger.debug(f'Docker socket failed: {e}')
+        
+        logger.debug('Docker info fallback: latest')
+        return jsonify({
+            'tag': 'latest',
+            'build_date': None,
+            'source': 'fallback',
+            'status': 'success'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f'get_docker_info error: {e}')
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@config_bp.route('/docker-digest/<tag>', methods=['GET'])
+def get_docker_digest(tag):
+    """
+    Docker Hub API proxy per digest (per nightly/stable checks).
+    """
+    try:
+        import requests
+        
+        url = f'https://registry.hub.docker.com/v2/repositories/ciuse99/suggestarr/tags/{tag}'
+        
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        results = data.get('results', [])
+        if results:
+            digest = results[0].get('digest')
+            if digest:
+                logger.info(f'Digest for {tag}: {digest[:16]}...')
+                return jsonify({
+                    'tag': tag,
+                    'digest': digest,
+                    'status': 'success'
+                }), 200
+        
+        return jsonify({
+            'tag': tag,
+            'message': 'No digest found',
+            'status': 'error'
+        }), 404
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f'Docker digest API error for {tag}: {e}')
+        return jsonify({'status': 'error', 'message': str(e)}), 500

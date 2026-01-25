@@ -166,7 +166,13 @@ class DatabaseConnectionPool:
         except Exception as e:
             self.logger.warning(f"Error closing connection: {e}")
         finally:
-            self._stats['active_connections'] -= 1
+            # Remove from all_connections if present
+            if conn in self._all_connections:
+                self._all_connections.remove(conn)
+            # Decrement active connections counter
+            with self._lock:
+                if self._stats['active_connections'] > 0:
+                    self._stats['active_connections'] -= 1
     
     def _initialize_pool(self) -> None:
         """Initialize the pool with minimum connections."""
@@ -179,22 +185,35 @@ class DatabaseConnectionPool:
                 
             try:
                 for i in range(self.pool_config.min_connections):
-                    conn = PooledConnection(
-                        connection=self._create_connection(),
-                        created_at=time.time(),
-                        last_used=time.time()
-                    )
-                    self._pool.put(conn, block=False)
-                    self._all_connections.append(conn)
-                    self._stats['active_connections'] += 1
+                    conn = None
+                    try:
+                        conn = PooledConnection(
+                            connection=self._create_connection(),
+                            created_at=time.time(),
+                            last_used=time.time()
+                        )
+                        self._pool.put(conn, block=False)
+                        self._all_connections.append(conn)
+                        self._stats['active_connections'] += 1
+                    except Full:
+                        self.logger.warning("Pool full during initialization - closing connection")
+                        if conn:
+                            conn.connection.close()
+                        break
                 
                 self._initialized = True
-                self.logger.debug(f"Initialized pool with {self.pool_config.min_connections} connections")
+                self.logger.debug(f"Initialized pool with {min(len(self._all_connections), self.pool_config.min_connections)} connections")
                 
-            except Full:
-                self.logger.warning("Pool full during initialization")
             except Exception as e:
                 self.logger.error(f"Failed to initialize pool: {e}")
+                # Clean up any partially created connections
+                for conn in self._all_connections:
+                    try:
+                        conn.connection.close()
+                    except:
+                        pass
+                self._all_connections.clear()
+                self._stats['active_connections'] = 0
                 raise
     
     @contextmanager
@@ -217,18 +236,23 @@ class DatabaseConnectionPool:
                     conn = self._pool.get(timeout=self.pool_config.connection_timeout)
                     self._stats['pool_hits'] += 1
                 except Empty:
-                    # Pool empty, try to create new connection
-                    if self._stats['active_connections'] < self.pool_config.max_connections:
-                        conn = PooledConnection(
-                            connection=self._create_connection(),
-                            created_at=time.time(),
-                            last_used=time.time()
-                        )
-                        self._all_connections.append(conn)
-                        self._stats['active_connections'] += 1
-                        self._stats['pool_misses'] += 1
-                    else:
-                        # Wait for a connection to become available
+                    # Pool empty, try to create new connection (with lock to prevent race conditions)
+                    with self._lock:
+                        if self._stats['active_connections'] < self.pool_config.max_connections:
+                            conn = PooledConnection(
+                                connection=self._create_connection(),
+                                created_at=time.time(),
+                                last_used=time.time()
+                            )
+                            self._all_connections.append(conn)
+                            self._stats['active_connections'] += 1
+                            self._stats['pool_misses'] += 1
+                        else:
+                            # Max connections reached, wait for a connection to become available
+                            pass
+                    
+                    # If we didn't create a new connection, wait for one to become available
+                    if conn is None:
                         conn = self._pool.get(timeout=self.pool_config.connection_timeout)
                         self._stats['pool_hits'] += 1
                 
@@ -256,7 +280,7 @@ class DatabaseConnectionPool:
                         try:
                             self._pool.put(conn, block=False)
                         except Full:
-                            # Pool full, close the connection
+                            # Pool full, close connection properly
                             self._close_connection(conn)
                     else:
                         self._close_connection(conn)
@@ -290,8 +314,9 @@ class DatabaseConnectionPool:
                 
             self._closed = True
             
-            # Close all connections
-            for conn in self._all_connections:
+            # Close all connections from the list
+            connections_to_close = list(self._all_connections)  # Create a copy to avoid modification during iteration
+            for conn in connections_to_close:
                 self._close_connection(conn)
             
             # Clear pools
@@ -347,9 +372,12 @@ class PoolManager:
     def get_pool(self, db_type: str, config: Optional[Dict[str, Any]] = None, 
                  pool_config: Optional[PoolConfig] = None) -> DatabaseConnectionPool:
         """Get or create a connection pool for the specified database type."""
-        
         if config is None:
             config = load_env_vars()
+        
+        # Ensure config is not None
+        if config is None:
+            config = {}
         
         if pool_config is None:
             # Default pool configuration

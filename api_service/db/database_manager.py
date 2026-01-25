@@ -9,7 +9,6 @@ from typing import Dict, Any, Optional, List, Tuple
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.database_exceptions import DatabaseError
-from api_service.db.connection_pool import pool_manager, PoolConfig
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 DB_PATH = os.path.join(BASE_DIR, 'config', 'config_files', 'requests.db')
@@ -20,7 +19,7 @@ class DatabaseManager:
     _instance = None
     _lock = threading.Lock()
     
-    def __new__(cls, pool_config: Optional[PoolConfig] = None):
+    def __new__(cls):
         """Create or return the singleton instance."""
         if cls._instance is None:
             with cls._lock:
@@ -29,8 +28,8 @@ class DatabaseManager:
                     cls._instance._initialized = False
         return cls._instance
     
-    def __init__(self, pool_config: Optional[PoolConfig] = None):
-        """Initialize database manager with connection pooling (only once)."""
+    def __init__(self):
+        """Initialize database manager (only once)."""
         if hasattr(self, '_initialized') and self._initialized:
             return
             
@@ -38,58 +37,68 @@ class DatabaseManager:
         self.db_path = DB_PATH
         self.env_vars = load_env_vars()
         self.db_type = self.env_vars.get('DB_TYPE', 'sqlite')
-        self.pool_config = pool_config or self._get_default_pool_config()
-        
-        # Initialize connection pool
-        self.pool = self._get_pool()
-        self.logger.debug(f"Initialized DatabaseManager with {self.db_type} connection pooling")
+        self.logger.debug(f"Initialized DatabaseManager with {self.db_type} direct connections")
         self._initialized = True
         
-    def _get_default_pool_config(self) -> PoolConfig:
-        """Get default pool configuration from environment or defaults."""
-        return PoolConfig(
-            min_connections=int(self.env_vars.get('DB_MIN_CONNECTIONS', '2')),
-            max_connections=int(self.env_vars.get('DB_MAX_CONNECTIONS', '10')),
-            max_idle_time=int(self.env_vars.get('DB_MAX_IDLE_TIME', '300')),
-            max_lifetime=int(self.env_vars.get('DB_MAX_LIFETIME', '3600')),
-            connection_timeout=int(self.env_vars.get('DB_CONNECTION_TIMEOUT', '30')),
-            retry_attempts=int(self.env_vars.get('DB_RETRY_ATTEMPTS', '3')),
-            retry_delay=float(self.env_vars.get('DB_RETRY_DELAY', '1.0'))
-        )
-    
-    def _get_pool(self):
-        """Get or create connection pool for current database type."""
-        try:
-            config = self.env_vars.copy()
-            if self.db_type == 'sqlite':
-                config['DB_PATH'] = self.db_path
-            
-            return pool_manager.get_pool(self.db_type, config, self.pool_config)
-        except Exception as e:
-            self.logger.error(f"Failed to create connection pool: {e}")
-            raise DatabaseError(
-                error=f"Failed to initialize connection pool: {str(e)}",
-                db_type=self.db_type
-            )
+
     
     @contextmanager
     def get_connection(self):
-        """Context manager for getting a database connection from the pool."""
-        with self.pool.get_connection() as conn:
-            try:
-                yield conn
-            except Exception as e:
-                self.logger.error(f"Database operation failed: {e}")
-                # For connection errors, don't rollback as connection will be discarded
-                if self._is_connection_error(e):
-                    raise
-                # For other errors, attempt rollback
-                try:
-                    if self.db_type != 'sqlite':
-                        conn.rollback()
-                except Exception as rollback_error:
-                    self.logger.warning(f"Failed to rollback transaction: {rollback_error}")
+        """Context manager for getting a database connection."""
+        conn = None
+        try:
+            if self.db_type == 'sqlite':
+                conn = sqlite3.connect(
+                    self.db_path,
+                    timeout=30,
+                    check_same_thread=False
+                )
+                conn.row_factory = sqlite3.Row
+            elif self.db_type == 'postgres':
+                conn = psycopg2.connect(
+                    host=self.env_vars['DB_HOST'],
+                    port=self.env_vars['DB_PORT'],
+                    user=self.env_vars['DB_USER'],
+                    password=self.env_vars['DB_PASSWORD'],
+                    dbname=self.env_vars['DB_NAME'],
+                    connect_timeout=30
+                )
+                conn.autocommit = False
+            elif self.db_type in ['mysql', 'mariadb']:
+                conn = mysql.connector.connect(
+                    host=self.env_vars['DB_HOST'],
+                    port=self.env_vars['DB_PORT'],
+                    user=self.env_vars['DB_USER'],
+                    password=self.env_vars['DB_PASSWORD'],
+                    database=self.env_vars['DB_NAME'],
+                    connection_timeout=30,
+                    autocommit=False
+                )
+            else:
+                raise DatabaseError(f"Unsupported database type: {self.db_type}")
+            
+            yield conn
+        except Exception as e:
+            self.logger.error(f"Database operation failed: {e}")
+            # For connection errors, don't rollback as connection will be discarded
+            if self._is_connection_error(e):
                 raise
+            # For other errors, attempt rollback
+            try:
+                if conn and self.db_type != 'sqlite':
+                    conn.rollback()
+            except Exception as rollback_error:
+                self.logger.warning(f"Failed to rollback transaction: {rollback_error}")
+            raise
+        finally:
+            if conn:
+                try:
+                    if self.db_type == 'sqlite':
+                        conn.close()
+                    else:
+                        conn.close()
+                except Exception as e:
+                    self.logger.warning(f"Error closing connection: {e}")
     
     def _is_connection_error(self, error: Exception) -> bool:
         """Check if an error is a connection-related error."""
@@ -601,4 +610,8 @@ class DatabaseManager:
     
     def get_pool_stats(self) -> Dict[str, Any]:
         """Get connection pool statistics."""
-        return self.pool.get_stats()
+        return {
+            'status': 'direct_connection',
+            'db_type': self.db_type,
+            'message': 'No connection pooling - using direct connections for better performance'
+        }

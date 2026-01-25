@@ -23,7 +23,7 @@ from api_service.blueprints.tmdb.routes import tmdb_bp
 
 executor = ThreadPoolExecutor(max_workers=3)
 logger = LoggerManager.get_logger("APP") 
-logger.info(f"Current log level: {logging.getLevelName(logger.getEffectiveLevel())}")
+logger.debug(f"Current log level: {logging.getLevelName(logger.getEffectiveLevel())}")
 
 # App Factory Pattern for modularity and testability
 def create_app():

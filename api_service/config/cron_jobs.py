@@ -33,7 +33,7 @@ def start_cron_job(env_vars, job_id='auto_content_fetcher'):
     logger.debug(f'Parsed cron parameters: {cron_params}')
     scheduler.add_job(force_run_job, 'cron', id=job_id, **cron_params)
     
-    logger.info(f"Cron job '{job_id}' set with expression: {cron_expression}")
+    logger.debug(f"Cron job '{job_id}' set with expression: {cron_expression}")
     scheduler.start()
     logger.debug('Scheduler started')
 

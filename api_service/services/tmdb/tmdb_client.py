@@ -125,7 +125,8 @@ class TMDbClient:
                         images_data = await images_response.json()
                         logos = images_data.get("logos", [])
                         logo_path = logos[0]["file_path"] if logos else None
-                        metadata["logo_path"] = f"https://image.tmdb.org/t/p/w500{logo_path}"
+                        if logo_path:
+                            metadata["logo_path"] = f"https://image.tmdb.org/t/p/w500{logo_path}"
                         self.logger.debug("Successfully fetched logo for %s with ID %s", content_type, tmdb_id)
                     else:
                         self.logger.warning("Failed to retrieve logos for TMDb ID %s: %d", tmdb_id, images_response.status)
@@ -202,7 +203,7 @@ class TMDbClient:
             'release_date': item.get('release_date') if content_type == 'movie' else item.get('first_air_date'),
             'origin_country': item.get('origin_country', []),
             'original_language': item.get('original_language', ''),
-            'poster_path': f"https://image.tmdb.org/t/p/w500{item.get('poster_path', 0)}",
+            'poster_path': f"https://image.tmdb.org/t/p/w500{item.get('poster_path', 0)}" if item.get('poster_path') else None,
             'overview': item.get('overview'),
             'genre_ids': item.get('genre_ids', []),
             'backdrop_path': f"https://image.tmdb.org/t/p/w1280/{item.get('backdrop_path', 0)}" if item.get('backdrop_path') else None

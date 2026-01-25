@@ -2,12 +2,12 @@
   <div class="settings-container">
     <div 
       class="background-layer current-bg" 
-      :style="{ backgroundImage: 'url(' + backgroundImageUrl + ')' }"
+      :style="{ backgroundImage: 'url(' + currentBackgroundUrl + ')' }"
       :class="{ 'fade-out': isTransitioning }"
     ></div>
     <div 
       class="background-layer next-bg" 
-      :style="{ backgroundImage: 'url(' + nextBackgroundImageUrl + ')' }"
+      :style="{ backgroundImage: 'url(' + nextBackgroundUrl + ')' }"
       :class="{ 'fade-in': isTransitioning }"
     ></div>
     <div class="settings-content">
@@ -96,8 +96,34 @@
       <!-- Action Footer -->
       <div class="settings-footer">
         <div class="footer-info">
+          <button 
+                @click="showChangelog" 
+                class="changelog-btn"
+                title="View changelog for current version"
+              >
           <i class="fas fa-info-circle"></i>
-          <span>Changes are saved per section automatically</span>
+          </button>
+          <div class="version-info">
+            <div class="version-text-container">
+              <span>SuggestArr {{ currentVersion }}</span>
+              <span 
+                v-if="currentImageTag === 'nightly'" 
+                class="nightly-badge"
+              >
+                ({{ currentImageTag }})
+              </span>
+            </div>
+            <button 
+              @click="checkForUpdates" 
+              :disabled="updateAvailable === null"
+              class="version-check-btn"
+              :class="{ 'update-available': updateAvailable }"
+              :title="updateAvailable ? `Update available!` : 'Check for updates'"
+            >
+              <i :class="updateAvailable === null ? 'fas fa-spinner fa-spin' : updateAvailable ? 'fas fa-arrow-up' : 'fas fa-sync'"></i>
+              <span v-if="updateAvailable" class="update-indicator">Update</span>
+            </button>
+          </div>
         </div>
         
         <div class="footer-actions">
@@ -123,9 +149,18 @@
             @click="resetConfig"
             class="btn btn-danger"
             :disabled="isLoading"
-            title="Reset all settings to default">
-            <i class="fas fa-trash-alt"></i>
-            <span>Reset All</span>
+            title="Reset all settings to defaults">
+            <i class="fas fa-undo"></i>
+            <span>Reset</span>
+          </button>
+          
+          <button
+            @click="forceRunAutomation"
+            class="btn btn-secondary"
+            :disabled="isForceRunning"
+            title="Force run automation script now">
+            <i :class="isForceRunning ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
+            <span>Force Run</span>
           </button>
         </div>
       </div>
@@ -136,6 +171,55 @@
           <div class="loading-content">
             <div class="spinner"></div>
             <p>{{ loadingMessage }}</p>
+          </div>
+        </div>
+      </transition>
+
+      <!-- Changelog Modal -->
+      <transition name="fade">
+        <div v-if="showChangelogModal" class="modal-overlay" @click.self="showChangelogModal = false">
+          <div class="modal-content changelog-modal">
+            <div class="modal-header">
+              <i class="fab fa-github changelog-icon"></i>
+              <h3>Changelog - {{ currentVersion }}</h3>
+            </div>
+            
+            <div class="modal-body changelog-body">
+              <div v-if="isLoadingChangelog" class="changelog-loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Loading changelog...</span>
+              </div>
+              
+              <div v-else-if="changelogError" class="changelog-error">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>{{ changelogError }}</span>
+                <button @click="showChangelog" class="btn btn-secondary btn-sm">Retry</button>
+              </div>
+              
+              <div v-else class="changelog-content">
+                <div v-if="changelogData" v-html="changelogData"></div>
+                <div v-else class="no-changelog">
+                  <i class="fas fa-info-circle"></i>
+                  <span>No changelog available for this version</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="modal-actions">
+              <a 
+                :href="`https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${currentVersion}`" 
+                target="_blank" 
+                class="btn btn-outline"
+                v-if="changelogData"
+              >
+                <i class="fas fa-external-link-alt"></i>
+                View on GitHub
+              </a>
+              <button @click="showChangelogModal = false" class="btn btn-primary">
+                <i class="fas fa-times"></i>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </transition>
@@ -192,8 +276,9 @@
 <script>
 import axios from 'axios';
 import Footer from './AppFooter.vue';
-import backgroundManager from '@/api/backgroundManager';
-import { fetchRandomMovieImage } from '@/api/tmdbApi';
+import { useBackgroundImage } from '@/composables/useBackgroundImage';
+import { useVersionCheck } from '@/composables/useVersionCheck';
+import '@/assets/styles/dashboardPage.css';
 
 // Import tab components
 import SettingsGeneral from './settings/SettingsGeneral.vue';
@@ -216,19 +301,39 @@ export default {
     SettingsRequests,
     LogsComponent,
   },
-  mixins: [backgroundManager],
-  data() {
+  setup() {
+    const { currentBackgroundUrl, nextBackgroundUrl, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
+    const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
+    
+    return {
+      currentBackgroundUrl,
+      nextBackgroundUrl,
+      isTransitioning,
+      startDefaultImageRotation,
+      startBackgroundImageRotation,
+      stopBackgroundImageRotation,
+      currentVersion,
+      currentImageTag,
+      currentBuildDate,
+      updateAvailable,
+      checkForUpdates
+    };
+  },
+    data() {
     return {
       config: {},
       isLoading: false,
+      isForceRunning: false,
       loadingMessage: 'Processing...',
       activeTab: 'requests',
       showResetModal: false,
-      backgroundImageUrl: '',
-      nextBackgroundImageUrl: '',
-      isTransitioning: false,
+      showChangelogModal: false,
+      changelogData: null,
+      isLoadingChangelog: false,
+      changelogError: null,
       requestCount: 0,
       showMobileDropdown: false,
+      // Cache per migliorare performance
       testingConnections: {
         tmdb: false,
         plex: false,
@@ -267,21 +372,23 @@ export default {
   watch: {
     isTransitioning(newValue) {
       if (newValue) {
-        // Quando la transizione inizia, attendi che finisca
-        setTimeout(() => {
-          this.backgroundImageUrl = this.nextBackgroundImageUrl;
-          this.isTransitioning = false;
-        }, 800); // Durata della transizione CSS
+        // Handle background transition state if needed
       }
     }
   },
   async mounted() {
-    await this.loadConfig();
-    await this.loadRequestCount();
-    this.startBackgroundImageRotation(
-      this.config.TMDB_API_KEY ? fetchRandomMovieImage : null,
-      this.config.TMDB_API_KEY
-    );
+    try {
+      await this.loadConfig();
+      
+      this.loadRequestCount();
+      
+      if (this.config.TMDB_API_KEY) {
+        this.startBackgroundImageRotation(this.config.TMDB_API_KEY);
+      }
+    } catch (error) {
+      console.error('Error during component mount:', error);
+      this.isLoading = false;
+    }
   },
   methods: {
     selectMobileTab(tabId) {
@@ -296,11 +403,13 @@ export default {
       const currentTab = this.tabs.find(tab => tab.id === this.activeTab);
       return currentTab ? currentTab.icon : 'fas fa-question';
     },
-    async loadConfig() {
+    async loadConfig(force = false) {
       this.loadingMessage = 'Loading configuration...';
       this.isLoading = true;
       try {
-        const response = await axios.get('/api/config/fetch');
+        const response = await axios.get('/api/config/fetch', {
+          timeout: 10000 // 10 second timeout
+        });
         this.config = response.data;
       } catch (error) {
         this.$toast.open({
@@ -310,6 +419,14 @@ export default {
           position: 'top-right'
         });
         console.error('Error loading config:', error);
+        if (error.code === 'ECONNABORTED') {
+          this.$toast.open({
+            message: 'Configuration loading timed out. Please check your connection.',
+            type: 'warning',
+            duration: 5000,
+            position: 'top-right'
+          });
+        }
       } finally {
         this.isLoading = false;
       }
@@ -317,11 +434,60 @@ export default {
 
     async loadRequestCount() {
       try {
-        const response = await axios.get('/api/automation/requests/stats');
+        const response = await axios.get('/api/automation/requests/stats', {
+          timeout: 5000 // 5 second timeout
+        });
         this.requestCount = response.data.today || 0;
       } catch (error) {
         console.error('Error loading request count:', error);
       }
+    },
+
+    async showChangelog() {
+      this.showChangelogModal = true;
+      this.changelogError = null;
+      
+      if (!this.changelogData) {
+        this.isLoadingChangelog = true;
+        try {
+          // Get release info from GitHub API
+          const response = await axios.get(`https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases/tags/${this.currentVersion}`);
+          
+          if (response.data && response.data.body) {
+            // Convert markdown to basic HTML
+            this.changelogData = this.parseMarkdown(response.data.body);
+          } else {
+            this.changelogData = null;
+          }
+        } catch (error) {
+          console.error('Error fetching changelog:', error);
+          this.changelogError = 'Failed to load changelog from GitHub. Please check your internet connection.';
+        } finally {
+          this.isLoadingChangelog = false;
+        }
+      }
+    },
+
+    parseMarkdown(markdown) {
+      if (!markdown) return '';
+      
+      // Basic markdown to HTML conversion
+      return markdown
+        // Headers
+        .replace(/^### (.*$)/gim, '<h4>$1</h4>')
+        .replace(/^## (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^# (.*$)/gim, '<h2>$1</h2>')
+        // Bold
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // Italic
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        // Links
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+        // Line breaks
+        .replace(/\n/g, '<br>')
+        // Lists (basic)
+        .replace(/^- (.+)$/gim, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
     },
 
     async saveSection({ section, data }) {
@@ -332,14 +498,14 @@ export default {
         Object.assign(this.config, data);
 
         this.$toast.open({
-          message: `✅ ${section} settings saved successfully!`,
+          message: `Settings saved successfully!`,
           type: 'success',
           duration: 3000,
           position: 'top-right'
         });
       } catch (error) {
         this.$toast.open({
-          message: `❌ Failed to save ${section} settings`,
+          message: `Failed to save settings, see logs for details.`,
           type: 'error',
           duration: 5000,
           position: 'top-right'
@@ -564,6 +730,32 @@ export default {
       this.showResetModal = true;
     },
 
+    async forceRunAutomation() {
+      this.isForceRunning = true;
+      this.loadingMessage = 'Manually running fetch...';
+
+      try {
+        await axios.post('/api/automation/force_run');
+        this.$toast.open({
+          message: 'Force run completed successfully!',
+          type: 'success',
+          duration: 3000,
+          position: 'top-right'
+        });
+      } catch (error) {
+        this.$toast.open({
+          message: 'Force run failed, see logs for details.',
+          type: 'error',
+          duration: 5000,
+          position: 'top-right'
+        });
+        console.error('Error force running automation:', error);
+      } finally {
+        this.isForceRunning = false;
+        this.loadingMessage = 'Processing...';
+      }
+    },
+
     async confirmReset() {
       this.showResetModal = false;
       this.loadingMessage = 'Resetting configuration...';
@@ -594,651 +786,5 @@ export default {
       }
     },
   },
-  beforeUnmount() {
-    this.stopBackgroundImageRotation();
-  },
 };
 </script>
-
-<style scoped>
-.settings-container {
-  min-height: 100vh;
-  position: relative;
-}
-
-.background-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  transition: opacity 0.8s ease-in-out;
-}
-
-.current-bg {
-  opacity: 1;
-}
-
-.current-bg.fade-out {
-  opacity: 0;
-}
-
-.next-bg {
-  opacity: 0;
-}
-
-.next-bg.fade-in {
-  opacity: 1;
-}
-
-.settings-content {
-  min-height: 100vh;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(10px);
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--color-border-light);
-  position: relative;
-  z-index: 1;
-}
-
-.settings-header {
-  margin-bottom: 2rem;
-  display: flex;
-  flex-direction: column;
-}
-
-.header-content {
-  text-align: center;
-}
-
-.back-button {
-  align-self: flex-start;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  background-color: var(--color-bg-interactive);
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  transition: var(--transition-base);
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.back-button:hover {
-  background-color: var(--color-bg-active);
-  color: var(--color-text-primary);
-  transform: translateX(-4px);
-}
-
-.logo {
-  width: 100px;
-  height: auto;
-  margin: 0 auto 1rem auto; /* Center horizontally */
-  display: block; /* Ensure block-level element */
-  transition: transform 0.3s ease;
-}
-
-.logo:hover {
-  transform: scale(1.05);
-}
-
-.settings-title {
-  font-size: 2.5rem;
-  font-weight: bold;
-  color: var(--color-text-primary);
-  margin-bottom: 0.5rem;
-}
-
-.settings-subtitle {
-  color: var(--color-text-muted);
-  font-size: 1.1rem;
-  margin-bottom: 1.5rem;
-}
-
-/* Status Indicators */
-.status-indicators {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-top: 1rem;
-}
-
-.status-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  border: 2px solid;
-  transition: var(--transition-base);
-}
-
-.status-connected {
-  background-color: rgba(16, 185, 129, 0.1);
-  border-color: var(--color-success);
-  color: var(--color-success);
-}
-
-.status-disconnected {
-  background-color: rgba(239, 68, 68, 0.1);
-  border-color: var(--color-danger);
-  color: var(--color-danger);
-}
-
-.status-warning {
-  background-color: rgba(245, 158, 11, 0.1);
-  border-color: var(--color-warning);
-  color: var(--color-warning);
-}
-
-
-/* Content */
-.tab-content {
-  flex: 1;
-  border-radius: var(--border-radius-lg);
-  padding: 2rem;
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--color-border-light);
-  min-height: 400px;
-}
-
-/* Transitions */
-.fade-slide-enter-active, .fade-slide-leave-active {
-  transition: all 0.3s ease;
-}
-
-.fade-slide-enter-from {
-  opacity: 0;
-  transform: translateX(20px);
-}
-
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateX(-20px);
-}
-
-/* Footer */
-.settings-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 2rem;
-  padding-top: 2rem;
-  border-top: 1px solid var(--color-border-light);
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-
-.footer-info {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-}
-
-.footer-actions {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.btn {
-  padding: 0.75rem 1.5rem;
-  border-radius: var(--border-radius-sm);
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition-base);
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background-color: #6b7280;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background-color: #4b5563;
-}
-
-.btn-outline {
-  background: var(--color-bg-interactive);
-  color: var(--color-text-primary);
-  border: 2px solid var(--color-border-medium);
-}
-
-.btn-outline:hover:not(:disabled) {
-  background-color: var(--color-bg-active);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.btn-danger {
-  background-color: var(--color-danger);
-  color: white;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background-color: #dc2626;
-}
-
-.tab-badge {
-  background: #ef4444;
-  color: white;
-  font-size: 0.75rem;
-  padding: 0.125rem 0.5rem;
-  border-radius: 12px;
-  font-weight: 700;
-  margin-left: 0.5rem;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-.tab-button.active .tab-badge {
-  background: rgba(255, 255, 255, 0.3);
-  color: white;
-}
-
-/* Loading Overlay */
-.loading-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--color-bg-overlay-heavy);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.loading-content {
-  text-align: center;
-  color: var(--color-text-primary);
-}
-
-.spinner {
-  width: 50px;
-  height: 50px;
-  border: 4px solid var(--color-border-medium);
-  border-top: 4px solid var(--color-primary);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 1rem;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.warning-icon {
-  font-size: 2rem;
-  color: var(--color-warning);
-}
-
-.modal-content h3 {
-  color: var(--color-text-primary);
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.modal-body {
-  color: var(--color-text-muted);
-  margin-bottom: 1.5rem;
-  line-height: 1.6;
-}
-
-.reset-warning-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 2rem 0;
-  background-color: rgba(239, 68, 68, 0.1);
-  border: 1px solid var(--color-danger);
-  border-radius: var(--border-radius-sm);
-  padding: 1rem;
-}
-
-.reset-warning-list li {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: var(--color-danger);
-  padding: 0.5rem 0;
-  font-size: 0.9rem;
-}
-
-.reset-warning-list li i {
-  font-size: 1rem;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-}
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--color-bg-overlay-heavy);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
-.modal-content {
-  background-color: var(--color-bg-content);
-  backdrop-filter: blur(10px);
-  padding: 2rem;
-  border-radius: var(--border-radius-lg);
-  border: 1px solid var(--color-border-light);
-  max-width: 500px;
-  width: 100%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.warning-icon {
-  font-size: 2rem;
-  color: var(--color-warning);
-}
-
-.modal-content h3 {
-  color: var(--color-text-primary);
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.modal-body {
-  color: var(--color-text-muted);
-  margin-bottom: 1.5rem;
-  line-height: 1.6;
-}
-
-.reset-warning-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 2rem 0;
-  background-color: rgba(239, 68, 68, 0.1);
-  border: 1px solid var(--color-danger);
-  border-radius: var(--border-radius-sm);
-  padding: 1rem;
-}
-
-.reset-warning-list li {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: var(--color-danger);
-  padding: 0.5rem 0;
-  font-size: 0.9rem;
-}
-
-.reset-warning-list li i {
-  font-size: 1rem;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-}
-
-/* Fade Transition */
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from, .fade-leave-to {
-  opacity: 0;
-}
-
-/* Fade Transition */
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from, .fade-leave-to {
-  opacity: 0;
-}
-
-/* Mobile Navigation */
-.mobile-nav {
-  display: none;
-}
-
-.mobile-tab-selector {
-  position: relative;
-  margin-bottom: 1.5rem;
-}
-
-.mobile-dropdown-button {
-  width: 100%;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  color: var(--color-text-primary);
-  padding: 1rem;
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  transition: var(--transition-base);
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 1rem;
-  font-weight: 500;
-  justify-content: space-between;
-  min-height: 52px; /* Touch target minimum */
-}
-
-.mobile-dropdown-button:hover {
-  background-color: var(--color-bg-active);
-}
-
-.mobile-dropdown-button.active {
-  background-color: var(--button-active-bg);
-  border-color: var(--color-primary);
-}
-
-.current-tab-name {
-  flex: 1;
-  text-align: left;
-}
-
-.dropdown-arrow {
-  transition: transform 0.3s ease;
-  color: var(--color-text-muted);
-}
-
-.dropdown-arrow.rotated {
-  transform: rotate(180deg);
-}
-
-.mobile-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: var(--color-bg-content);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
-  margin-top: 0.5rem;
-  z-index: 100;
-  box-shadow: var(--shadow-base);
-  backdrop-filter: blur(10px);
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.mobile-dropdown-item {
-  width: 100%;
-  background: transparent;
-  border: none;
-  color: var(--color-text-muted);
-  padding: 1rem 1.25rem;
-  cursor: pointer;
-  transition: var(--transition-base);
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 0.95rem;
-  text-align: left;
-  border-bottom: 1px solid var(--color-border-light);
-  min-height: 48px; /* Touch target minimum */
-}
-
-.mobile-dropdown-item:last-child {
-  border-bottom: none;
-}
-
-.mobile-dropdown-item:hover {
-  background-color: var(--color-bg-interactive);
-  color: var(--color-text-primary);
-}
-
-.mobile-dropdown-item.active {
-  background-color: var(--button-active-bg);
-  color: var(--color-text-primary);
-}
-
-/* Desktop Navigation Hide on Mobile */
-.desktop-nav {
-  display: flex;
-}
-
-/* Mobile Responsive */
-@media (max-width: 768px) {
-  .desktop-nav {
-    display: none;
-  }
-
-  .mobile-nav {
-    display: block;
-  }
-
-  .settings-content {
-    padding: 1rem;
-  }
-
-  .settings-title {
-    font-size: 2rem;
-  }
-
-  .back-button span {
-    display: none;
-  }
-
-  .status-indicators {
-    gap: 0.5rem;
-  }
-
-  .status-badge {
-    font-size: 0.75rem;
-    padding: 0.4rem 0.8rem;
-  }
-
-  .tab-content {
-    padding: 1rem;
-  }
-
-  .settings-footer {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .footer-info {
-    order: 2;
-    justify-content: center;
-  }
-
-  .footer-actions {
-    order: 1;
-    flex-direction: column;
-  }
-
-  .btn {
-    width: 100%;
-    justify-content: center;
-    min-height: 48px; /* Touch target minimum */
-    min-width: 48px; /* Ensure minimum touch target */
-  }
-
-  .modal-content {
-    padding: 1.5rem;
-    margin: 1rem;
-    max-width: none;
-  }
-
-  .modal-actions {
-    flex-direction: column;
-  }
-
-  .modal-actions .btn {
-    width: 100%;
-  }
-}
-
-/* Dropdown Transition */
-.dropdown-slide-enter-active,
-.dropdown-slide-leave-active {
-  transition: all 0.3s ease;
-  transform-origin: top;
-}
-
-.dropdown-slide-enter-from {
-  opacity: 0;
-  transform: scaleY(0.8) translateY(-10px);
-}
-
-.dropdown-slide-leave-to {
-  opacity: 0;
-  transform: scaleY(0.8) translateY(-10px);
-}
-
-</style>
