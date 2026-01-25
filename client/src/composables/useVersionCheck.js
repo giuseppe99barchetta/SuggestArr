@@ -4,7 +4,7 @@ import axios from 'axios';
 
 export function useVersionCheck() {
   const toast = useToast();
-  const currentVersion = ref(`v${process.env.VUE_APP_VERSION || __APP_VERSION__ || 'unknown'}`);
+  const currentVersion = ref(`${process.env.VUE_APP_VERSION || __APP_VERSION__ || 'unknown'}`);
   const latestVersion = ref(null);
   const updateAvailable = ref(false);
   const isChecking = ref(false);
@@ -25,19 +25,13 @@ export function useVersionCheck() {
     }
 
     try {
-      const [versionResponse, dockerResponse] = await Promise.all([
-        axios.get('/api/config/version', { timeout: 5000 }),
+      const [dockerResponse] = await Promise.all([
         axios.get('/api/config/docker-info', { timeout: 5000 })
       ]);
-
-      if (versionResponse.data.status === 'success') {
-        currentVersion.value = versionResponse.data.version;
-      }
 
       if (dockerResponse.data.status === 'success') {
         currentImageTag.value = dockerResponse.data.tag || 'latest';
         currentBuildDate.value = dockerResponse.data.build_date;
-        // console.log(`Detected: ${currentImageTag.value} (${dockerResponse.data.source}) ${currentBuildDate.value ? `@ ${currentBuildDate.value}` : ''}`);
       } else {
         const version = currentVersion.value?.toLowerCase() || '';
         currentImageTag.value = version.includes('nightly') || version.includes('dev') ? 'nightly' : 'latest';
