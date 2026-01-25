@@ -342,12 +342,24 @@
 }
 
 .btn-secondary {
-  background-color: #6b7280;
-  color: white;
+  background-color: var(--color-bg-interactive);
+  color: var(--color-text-primary);
+  border: 2px solid var(--color-border-medium);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background-color: #4b5563;
+  background-color: var(--color-bg-active);
+  border-color: var(--color-border-medium);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .btn-outline {

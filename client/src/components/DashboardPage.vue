@@ -149,9 +149,18 @@
             @click="resetConfig"
             class="btn btn-danger"
             :disabled="isLoading"
-            title="Reset all settings to default">
-            <i class="fas fa-trash-alt"></i>
-            <span>Reset All</span>
+            title="Reset all settings to defaults">
+            <i class="fas fa-undo"></i>
+            <span>Reset</span>
+          </button>
+          
+          <button
+            @click="forceRunAutomation"
+            class="btn btn-secondary"
+            :disabled="isForceRunning"
+            title="Force run automation script now">
+            <i :class="isForceRunning ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
+            <span>Force Run</span>
           </button>
         </div>
       </div>
@@ -310,10 +319,11 @@ export default {
       checkForUpdates
     };
   },
-  data() {
+    data() {
     return {
       config: {},
       isLoading: false,
+      isForceRunning: false,
       loadingMessage: 'Processing...',
       activeTab: 'requests',
       showResetModal: false,
@@ -488,14 +498,14 @@ export default {
         Object.assign(this.config, data);
 
         this.$toast.open({
-          message: `✅ ${section} settings saved successfully!`,
+          message: `Settings saved successfully!`,
           type: 'success',
           duration: 3000,
           position: 'top-right'
         });
       } catch (error) {
         this.$toast.open({
-          message: `❌ Failed to save ${section} settings`,
+          message: `Failed to save settings, see logs for details.`,
           type: 'error',
           duration: 5000,
           position: 'top-right'
@@ -718,6 +728,32 @@ export default {
 
     resetConfig() {
       this.showResetModal = true;
+    },
+
+    async forceRunAutomation() {
+      this.isForceRunning = true;
+      this.loadingMessage = 'Manually running fetch...';
+
+      try {
+        await axios.post('/api/automation/force_run');
+        this.$toast.open({
+          message: 'Force run completed successfully!',
+          type: 'success',
+          duration: 3000,
+          position: 'top-right'
+        });
+      } catch (error) {
+        this.$toast.open({
+          message: 'Force run failed, see logs for details.',
+          type: 'error',
+          duration: 5000,
+          position: 'top-right'
+        });
+        console.error('Error force running automation:', error);
+      } finally {
+        this.isForceRunning = false;
+        this.loadingMessage = 'Processing...';
+      }
     },
 
     async confirmReset() {
