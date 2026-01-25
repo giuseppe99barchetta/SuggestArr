@@ -9,7 +9,6 @@ from api_service.config.config import (
 )
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
-from api_service.db.connection_pool import pool_manager
 
 logger = LoggerManager.get_logger("ConfigRoute")
 config_bp = Blueprint('config', __name__)
@@ -241,7 +240,7 @@ def get_pool_statistics():
     try:
         db_manager = DatabaseManager()
         pool_stats = db_manager.get_pool_stats()
-        all_stats = pool_manager.get_all_stats()
+        all_stats = {'status': 'direct_connection', 'message': 'Connection pooling has been removed for better performance'}
         
         return jsonify({
             'message': 'Connection pool statistics retrieved successfully',
