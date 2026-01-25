@@ -252,6 +252,26 @@ def get_pool_statistics():
         logger.error(f'Error getting pool statistics: {str(e)}')
         return jsonify({'message': f'Error getting pool statistics: {str(e)}', 'status': 'error'}), 500
 
+@config_bp.route('/force_run', methods=['POST'])
+def force_run_automation():
+    """
+    Force run the automation script immediately.
+    """
+    try:
+        from api_service.utils.utils import execute_automation
+        logger.info("Force run automation script requested")
+        
+        # Execute automation in background
+        execute_automation(force_run=True)
+        
+        return jsonify({
+            'message': 'Automation script forced successfully!',
+            'status': 'success'
+        }), 200
+    except Exception as e:
+        logger.error(f'Error forcing automation run: {str(e)}')
+        return jsonify({'message': f'Error forcing automation run: {str(e)}', 'status': 'error'}), 500
+
 @config_bp.route('/test-db', methods=['POST'])
 def test_database_connection():
     """
