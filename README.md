@@ -85,7 +85,7 @@ Note: Currently, only local Jellyseer users are supported.
 For detailed instructions on setting up SuggestArr withouth Docker or as a system service, please refer to our [Installation Guide](https://github.com/giuseppe99barchetta/SuggestArr/wiki/Installation#documentation-to-run-the-project-without-docker).
 
 ## Join Our Discord Community
-Feel free to join our Discord community to share ideas, ask questions, or get help with SuggestArr: [Join here](https://discord.gg/cpjBJ5sK).
+Feel free to join our Discord community to share ideas, ask questions, or get help with SuggestArr: [Join here](https://discord.gg/JXwFd3PnXY).
 
 ## Contribute
 Contributions are highly welcome! Feel free to open issues, submit pull requests, or provide any feedback that can improve the project. Whether you're fixing bugs, improving documentation, or adding new features, all contributions are greatly appreciated.
