@@ -708,11 +708,6 @@ export default {
       document.body.style.overflow = 'auto';
     },
   },
-
-  created() {
-    this.fetchRequests();
-  },
-
   mounted() {
     const savedConfig = localStorage.getItem('suggestarr_config');
     if (savedConfig) {

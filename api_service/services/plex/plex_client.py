@@ -6,6 +6,7 @@ Classes:
     - PlexClient: A class that handles communication with the Plex API.
 """
 import asyncio
+import json
 import aiohttp
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.api_exceptions import PlexConnectionError, PlexClientError
@@ -41,6 +42,25 @@ class PlexClient:
         if client_id:
             self.headers['X-Plex-Client-Identifier'] = client_id
 
+    async def _safe_json_decode(self, response):
+        """
+        Safely decode JSON response with fallback encoding support
+        :param response: aiohttp response object
+        :return: decoded JSON data
+        :raises: PlexClientError if decoding fails
+        """
+        try:
+            text = await response.text()
+            return json.loads(text)
+        except UnicodeDecodeError:
+            try:
+                content = await response.read()
+                text = content.decode('latin-1')
+                return json.loads(text)
+            except (UnicodeDecodeError, json.JSONDecodeError) as e:
+                self.logger.error("Failed to decode response content: %s", str(e))
+                raise PlexClientError(f"Failed to decode Plex response: {str(e)}")
+
     async def get_all_users(self):
         """
         Retrieves a combined list of all users (both friends and local accounts) from the Plex server asynchronously.
@@ -58,7 +78,7 @@ class PlexClient:
                 self.logger.debug(f"Fetching friends from: {friends_url}")
                 async with session.get(friends_url, headers=self.headers, timeout=REQUEST_TIMEOUT) as friends_response:
                     if friends_response.status == 200:
-                        friends = await friends_response.json()
+                        friends = await self._safe_json_decode(friends_response)
                         self.logger.debug(f"Retrieved {len(friends)} friends from Plex")
                         # Extract 'id' and 'name' from each friend
                         users.extend({'id': friend['id'], 'name': friend['title']} for friend in friends)
@@ -69,7 +89,7 @@ class PlexClient:
                 self.logger.debug(f"Fetching local accounts from: {accounts_url}")
                 async with session.get(accounts_url, headers=self.headers, timeout=REQUEST_TIMEOUT) as accounts_response:
                     if accounts_response.status == 200:
-                        accounts_data = await accounts_response.json()
+                        accounts_data = await self._safe_json_decode(accounts_response)
                         accounts = accounts_data.get('MediaContainer', {}).get('Account', [])
                         self.logger.debug(f"Retrieved {len(accounts)} local accounts from Plex")
                         # Extract 'id' and 'name' from each local account
@@ -116,7 +136,7 @@ class PlexClient:
                 async with aiohttp.ClientSession() as session:
                     async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
                         if response.status == 200:
-                            data = await response.json()
+                            data = await self._safe_json_decode(response)
                             metadata = data.get('MediaContainer', {}).get('Metadata', [])
     
                             # Filter items for this specific user (or all users) and add to the combined list
@@ -189,7 +209,7 @@ class PlexClient:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200:
-                        data = await response.json()
+                        data = await self._safe_json_decode(response)
                         return data.get('MediaContainer', {}).get('Directory', [])
                     self.logger.error("Failed to retrieve libraries: %d", response.status)
         except aiohttp.ClientError as e:
@@ -209,7 +229,7 @@ class PlexClient:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
                     if response.status == 200:
-                        item_data = await response.json()
+                        item_data = await self._safe_json_decode(response)
                         guids = item_data.get('MediaContainer', {}).get('Metadata', [])[0].get('Guid', [])
 
                         for guid in guids:
@@ -234,7 +254,7 @@ class PlexClient:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, headers=self.headers, timeout=10) as response:
                     if response.status == 200:
-                        servers = await response.json()
+                        servers = await self._safe_json_decode(response)
                         return servers
                     else:
                         print(f"Errore durante il recupero dei server Plex: {response.status}")
@@ -289,7 +309,7 @@ class PlexClient:
             self.logger.debug(f"Requesting URL: {url} with headers: {self.headers} and timeout: {REQUEST_TIMEOUT}")
             async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
                 if response.status == 200:
-                    library_items = await response.json()
+                    library_items = await self._safe_json_decode(response)
                     items = library_items.get('MediaContainer', {}).get('Metadata', [])
 
                     if isinstance(items, list):
