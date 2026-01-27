@@ -58,16 +58,12 @@ class JellyfinClient:
     
     async def get_all_library_items(self):
         """
-        Retrieves all items from the specified libraries or all libraries if no specific IDs are provided.
-        :return: A dictionary of items organized by library name.
+        Retrieves all Movie and Series items from the specified libraries.
+        Returns a dict with keys: 'movie' and 'tv'.
         """
-        results_by_library = {}
-        users = await self.get_all_users()
-        admin_user = next((user for user in users if user.get('policy', {}).get('IsAdministrator')), None)
-        self.logger.debug(f'Admin user: {admin_user}')
-        libraries = self.libraries if self.libraries else await self.get_libraries()
-        self.logger.debug(f'Libraries to fetch items from: {libraries}')
+        results_by_library = {"movie": [], "tv": []}
 
+        libraries = self.libraries if self.libraries else await self.get_libraries()
         if not libraries:
             self.logger.error("No libraries found.")
             return None
@@ -75,46 +71,63 @@ class JellyfinClient:
         for library in libraries:
             library_id = library.get('id')
             library_name = library.get('name')
-            library_type = ''
 
             params = {
                 "Recursive": "true",
-                "IncludeItemTypes": "Movie,Series",
+                "IncludeItemTypes": "Movie,Episode",
+                "Fields": "ProviderIds",
                 "ParentID": library_id
             }
-            self.logger.debug(f'Requesting items for library {library_name} with params: {params}')
+
+            self.logger.debug(
+                f"Requesting items for library {library_name} with params: {params}"
+            )
 
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(f"{self.api_url}/Items", headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
-                        if response.status == 200:
-                            library_items = await response.json()
-                            items = library_items.get('Items', [])
-                            self.logger.debug(f'Items retrieved for library {library_name}: {items}')
-                            
-                            for item in items:
-                                item_id = item.get('Id')
-                                library_type = 'tv' if item.get('Type') == 'Series' else 'movie'
-                                if item_id:
-                                    tmdb_id = await self.get_item_provider_id(admin_user['id'], item_id, provider='Tmdb')
-                                    item['tmdb_id'] = tmdb_id
-                                    self.logger.debug(f'Item {item_id} TMDb ID: {tmdb_id}')
-                                
-                            results_by_library[library_type] = items
-                            self.logger.info(f"Retrieved {len(items)} items in {library_name}")
-                        else:
+                    async with session.get(
+                        f"{self.api_url}/Items",
+                        headers=self.headers,
+                        params=params,
+                        timeout=REQUEST_TIMEOUT
+                    ) as response:
+                        if response.status != 200:
                             self.logger.error(
-                                "Failed to get items for library %s: %d", library_name, response.status)
-            except TypeError as e:
-                self.logger.error(f"TypeError: {e}. Params: {params}, Timeout: {REQUEST_TIMEOUT}")
+                                "Failed to get items for library %s: %d",
+                                library_name, response.status
+                            )
+                            continue
+
+                        data = await response.json()
+                        items = data.get("Items", [])
+
+                        for item in items:
+                            item_type = item.get("Type")
+
+                            if item_type not in ("Movie", "Series"):
+                                continue
+
+                            tmdb_id = item.get("ProviderIds", {}).get("Tmdb")
+                            if not tmdb_id:
+                                continue
+
+                            item["tmdb_id"] = tmdb_id
+                            bucket = "tv" if item_type == "Series" else "movie"
+                            results_by_library[bucket].append(item)
+
+                        self.logger.info(
+                            "Retrieved %d valid items in %s",
+                            len(results_by_library["tv"]) + len(results_by_library["movie"]),
+                            library_name
+                        )
+
             except aiohttp.ClientError as e:
                 self.logger.error(
-                    "An error occurred while retrieving items for library %s: %s", library_name, str(e))
-            except Exception as e:
-                self.logger.error(e)
+                    "Error retrieving items for library %s: %s",
+                    library_name, str(e)
+                )
 
-        return results_by_library if results_by_library else None
-
+        return results_by_library
 
     async def get_recent_items(self, user):
         """
@@ -139,7 +152,8 @@ class JellyfinClient:
                 "IncludeItemTypes": "Movie,Episode",
                 "userId": user['id'],
                 "Limit": self.max_content_fetch,
-                "ParentID": library_id
+                "ParentID": library_id,
+                "Fields": "ProviderIds",
             }
             self.logger.debug(f'Requesting recent items for library {library.get("name")} with params: {params}')
 
@@ -204,28 +218,3 @@ class JellyfinClient:
         except aiohttp.ClientError as e:
             self.logger.error(
                 "An error occurred while retrieving libraries: %s", str(e))
-
-    async def get_item_provider_id(self, user_id, item_id, provider='Tmdb'):
-        """
-        Retrieves the provider ID (e.g., TMDb or TVDb) for a specific media item asynchronously.
-        :param user_id: The ID of the user.
-        :param item_id: The ID of the media item.
-        :param provider: The provider ID to retrieve (default is 'Tmdb').
-        :return: The provider ID if found, otherwise None.
-        """
-        url = f"{self.api_url}/Users/{user_id}/Items/{item_id}"
-        self.logger.debug(f'Requesting provider ID for item {item_id} from {url}')
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status == 200:
-                        item_data = await response.json()
-                        provider_id = item_data.get('ProviderIds', {}).get(provider)
-                        self.logger.debug(f'Provider ID for item {item_id}: {provider_id}')
-                        return provider_id
-
-                    self.logger.error("Failed to retrieve ID for item %s: %d", item_id, response.status)
-        except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while retrieving ID for item %s: %s", item_id, str(e))
-
-        return None

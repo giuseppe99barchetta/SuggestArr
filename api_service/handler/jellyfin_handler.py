@@ -53,34 +53,54 @@ class JellyfinHandler:
         self.logger.debug(f"Processing item: {item}")
         item_type = item['Type'].lower()
         if item_type == 'movie' and self.max_similar_movie > 0:
-            await self.process_movie(user, item['Id'])
+            await self.process_movie(user, item)
         elif item_type == 'episode' and self.max_similar_tv > 0:
             await self.process_episode(user, item)
 
-    async def process_movie(self, user, item_id):
-        """Find similar movies via TMDb and request them via Jellyseer."""
-        self.logger.debug(f"Processing movie with ID: {item_id}")
-        source_tmbd_id = await self.jellyfin_client.get_item_provider_id(user['id'], item_id)
-        self.logger.debug(f"TMDb ID for movie: {source_tmbd_id}")
-        source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmbd_id, 'movie')
-        if source_tmbd_id:
-            similar_movies = await self.tmdb_client.find_similar_movies(source_tmbd_id)
-            self.logger.debug(f"Similar movies found: {similar_movies}")
-            await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie, source_tmdb_obj, user)
+    async def process_movie(self, user, item):
+        provider_ids = item.get("ProviderIds", {})
+        source_tmdb_id = provider_ids.get("Tmdb")
+
+        if not source_tmdb_id:
+            self.logger.debug("Movie skipped: no TMDb ID")
+            return
+
+        source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmdb_id, 'movie')
+        similar_movies = await self.tmdb_client.find_similar_movies(source_tmdb_id)
+
+        await self.request_similar_media(
+            similar_movies,
+            'movie',
+            self.max_similar_movie,
+            source_tmdb_obj,
+            user
+        )
 
     async def process_episode(self, user, item):
-        """Process a TV show episode by finding similar TV shows via TMDb."""
-        self.logger.debug(f"Processing episode: {item}")
-        series_id = item.get('SeriesId')
-        if series_id and series_id not in self.processed_series:
-            self.processed_series.add(series_id)
-            source_tmbd_id = await self.jellyfin_client.get_item_provider_id(user['id'], series_id, provider='Tmdb')
-            self.logger.debug(f"TMDb ID for series: {source_tmbd_id}")
-            source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmbd_id, 'tv')
-            if source_tmbd_id:
-                similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmbd_id)
-                self.logger.debug(f"Similar TV shows found: {similar_tvshows}")
-                await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv, source_tmdb_obj, user)
+        series_id = item.get("SeriesId")
+
+        if not series_id or series_id in self.processed_series:
+            return
+
+        self.processed_series.add(series_id)
+
+        provider_ids = item.get("SeriesProviderIds") or item.get("ProviderIds", {})
+        source_tmdb_id = provider_ids.get("Tmdb")
+
+        if not source_tmdb_id:
+            self.logger.debug("Series skipped: no TMDb ID")
+            return
+
+        source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmdb_id, 'tv')
+        similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmdb_id)
+
+        await self.request_similar_media(
+            similar_tvshows,
+            'tv',
+            self.max_similar_tv,
+            source_tmdb_obj,
+            user
+        )
 
     async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj, user):
         """Request similar media (movie/TV show) via Jellyseer."""
