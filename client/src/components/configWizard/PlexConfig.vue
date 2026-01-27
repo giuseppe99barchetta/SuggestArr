@@ -126,11 +126,11 @@
                 <div>
                     <h4 class="text-sm font-semibold text-gray-300">Select Libraries</h4>
                     <p class="text-xs text-gray-500">
-                        {{ selectedLibraryIds.length > 0 ? `${selectedLibraryIds.length} selected` : 'Select libraries or leave empty for all' }}
+                        {{ selectedLibraries.length > 0 ? `${selectedLibraries.length} selected` : 'Select libraries or leave empty for all' }}
                     </p>
                 </div>
                 <button 
-                    v-if="selectedLibraryIds.length > 0"
+                    v-if="selectedLibraries.length > 0"
                     @click="clearLibrarySelection"
                     class="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1 bg-transparent border-none p-0 shadow-none font-normal">
                     <i class="fas fa-times-circle"></i>
@@ -172,7 +172,7 @@
                     <span class="px-2 py-1 bg-yellow-500 text-xs text-white font-bold rounded-full">BETA</span>
                 </div>
                 <button 
-                    v-if="selectedUserIds.length > 0"
+                    v-if="selectedUsers && selectedUsers.length > 0"
                     @click="clearUserSelection"
                     class="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1 bg-transparent border-none p-0 shadow-none font-normal">
                     <i class="fas fa-times-circle"></i>
@@ -180,7 +180,7 @@
                 </button>
             </div>
             <p class="text-xs text-gray-500 mb-3">
-                {{ selectedUserIds.length > 0 ? `${selectedUserIds.length} selected` : 'Select users or leave empty for all' }}
+                {{ selectedUsers.length > 0 ? `${selectedUsers.length} selected` : 'Select users or leave empty for all' }}
             </p>
             
             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -246,7 +246,7 @@ export default {
         },
         
         clearLibrarySelection() {
-            this.selectedLibraryIds = [];
+            this.selectedLibraries = [];
             this.selectedLibraryNames = [];
             this.$emit('update-config', 'PLEX_LIBRARIES', []);
         },
