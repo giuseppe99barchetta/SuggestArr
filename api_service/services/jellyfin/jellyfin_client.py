@@ -64,13 +64,20 @@ class JellyfinClient:
         results_by_library = {"movie": [], "tv": []}
 
         libraries = self.libraries if self.libraries else await self.get_libraries()
+        self.logger.debug(f"Libraries type: {type(libraries)}, content: {libraries}")
+
         if not libraries:
             self.logger.error("No libraries found.")
             return None
 
         for library in libraries:
-            library_id = library.get('id')
-            library_name = library.get('name')
+            self.logger.debug(f"Processing library - type: {type(library)}, content: {library}")
+            library_id = library.get('id') if isinstance(library, dict) else None
+            library_name = library.get('name') if isinstance(library, dict) else None
+
+            if not library_id:
+                self.logger.error(f"Library item is not a dict or missing 'id': {library}")
+                continue
 
             params = {
                 "Recursive": "true",
