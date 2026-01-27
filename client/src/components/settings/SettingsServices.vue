@@ -48,7 +48,7 @@
         <div class="form-group">
           <button
             @click="testTmdbConnection"
-            class="btn btn-outline"
+            class="btn btn-outline form-group-button"
             :disabled="isLoading || !localConfig.TMDB_API_KEY || testingConnections.tmdb"
           >
             <i v-if="testingConnections.tmdb" class="fas fa-spinner fa-spin"></i>
@@ -169,7 +169,7 @@
           <div class="form-group">
             <button
               @click="testJellyfinConnection"
-              class="btn btn-outline"
+              class="btn btn-outline form-group-button"
               :disabled="isLoading || !localConfig.JELLYFIN_API_URL || !localConfig.JELLYFIN_TOKEN || testingConnections.jellyfin"
             >
               <i v-if="testingConnections.jellyfin" class="fas fa-spinner fa-spin"></i>
@@ -244,7 +244,7 @@
         <div class="form-group">
           <button
             @click="testSeerConnection"
-            class="btn btn-outline"
+            class="btn btn-outline form-group-button"
             :disabled="isLoading || !localConfig.SEER_API_URL || !localConfig.SEER_TOKEN || testingConnections.seer"
           >
             <i v-if="testingConnections.seer" class="fas fa-spinner fa-spin"></i>
@@ -737,7 +737,7 @@ export default {
   color: var(--color-text-secondary);
 }
 
-.form-group button {
+.form-group-button {
   margin-top: 0.5rem;
 }
 

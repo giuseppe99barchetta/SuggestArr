@@ -1,6 +1,5 @@
 <template>
-  <div>
-    <div class="success-icon">
+  <div class="completion-wrapper"> <div class="success-icon">
       <i class="fas fa-check-circle"></i>
     </div>
 
@@ -42,129 +41,137 @@ export default {
 .completion-wrapper {
   text-align: center;
   max-width: 600px;
-  margin: 0 auto;
+  margin: 2rem auto; /* Aggiunto margine verticale */
+  padding: 0 1rem;
+  box-sizing: border-box;
 }
 
 .success-icon {
   color: var(--color-success);
-  font-size: 4rem;
-  margin-bottom: 1rem;
+  font-size: 5rem; /* Leggermente più grande */
+  margin-bottom: 1.5rem;
 }
 
+/* Animazione checkmark migliorata */
 .success-icon i {
-  animation: checkmark 0.5s ease-in-out;
+  display: inline-block;
+  animation: checkmark 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 @keyframes checkmark {
-  0% { transform: scale(0) rotate(-45deg); }
-  50% { transform: scale(1.2) rotate(-45deg); }
-  100% { transform: scale(1) rotate(0deg); }
+  0% { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
-.completion-wrapper h1 {
+h1 {
   color: var(--color-text-primary);
   font-size: 2.5rem;
-  margin-bottom: 1rem;
-  font-weight: bold;
+  margin-bottom: 0.5rem;
+  font-weight: 800;
 }
 
 .completion-subtitle {
   color: var(--color-text-muted);
-  font-size: 1.2rem;
-  margin-bottom: 2rem;
+  font-size: 1.1rem;
+  margin-bottom: 2.5rem;
   line-height: 1.6;
 }
 
 .next-steps {
   text-align: left;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03); /* Più sottile */
+  border: 1px solid var(--color-border-light);
   border-radius: var(--border-radius-sm);
   padding: 1.5rem;
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
 }
 
 .next-steps h3 {
   color: var(--color-text-primary);
   margin-bottom: 1rem;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
 }
 
 .next-steps ul {
-  color: #e5e7eb;
+  color: var(--color-text-secondary);
   margin: 0;
-  padding-left: 1.5rem;
-  line-height: 1.6;
+  padding-left: 1.2rem;
+  list-style-type: none; /* Pulizia icone custom */
 }
 
 .next-steps li {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+  position: relative;
+}
+
+/* Bullet points custom più eleganti */
+.next-steps li::before {
+  content: '→';
+  position: absolute;
+  left: -1.2rem;
+  color: var(--color-success);
 }
 
 .completion-actions {
   display: flex;
   gap: 1rem;
   justify-content: center;
+  align-items: center;
 }
 
 .action-btn {
-  padding: 1rem 2rem;
-  border-radius: var(--border-radius-sm);
-  font-weight: bold;
+  padding: 0.875rem 1.75rem;
+  border-radius: 8px; /* Un po' più morbido */
+  font-weight: 600;
   cursor: pointer;
-  transition: var(--transition-base);
+  transition: all 0.2s ease;
   border: none;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 1rem;
-  min-width: 150px;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  flex: 1; /* I bottoni prendono lo stesso spazio */
   justify-content: center;
+  max-width: 220px;
 }
 
 .action-btn.primary {
-  background: linear-gradient(135deg, var(--color-success), #059669);
+  background: var(--color-success);
   color: white;
 }
 
 .action-btn.primary:hover {
-  background: linear-gradient(135deg, #059669, #047857);
+  filter: brightness(1.1);
   transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
 }
 
 .action-btn.secondary {
-  background: var(--color-bg-interactive);
+  background: transparent;
   color: var(--color-text-primary);
   border: 1px solid var(--color-border-medium);
 }
 
 .action-btn.secondary:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.5);
-  transform: translateY(-2px);
+  background: var(--color-bg-interactive);
+  border-color: var(--color-text-muted);
 }
 
+/* Responsive */
 @media (max-width: 768px) {
-  .completion-wrapper {
-    padding: 1.5rem;
-    margin: 0 1rem;
-  }
-
-  .completion-wrapper h1 {
-    font-size: 2rem;
-  }
-
-  .completion-subtitle {
-    font-size: 1rem;
-  }
-
   .completion-actions {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: column-reverse; /* Inverte per avere l'azione principale in alto */
+    gap: 0.75rem;
   }
 
   .action-btn {
-    min-width: auto;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  h1 {
+    font-size: 2rem;
   }
 }
 </style>
