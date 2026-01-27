@@ -15,9 +15,7 @@
                 :value="config[`SEER_API_URL`]" 
                 @input="handleUrlInput($event.target.value)"
                 @blur="updateSeerUrl($event.target.value)"
-                class="w-full h-12 bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4
-                       focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
-                       transition-all"
+                class="form-input"
                 id="SEER_API_URL"
                 placeholder="http://overseerr.example.com:5055">
             <p class="text-xs text-gray-500 mt-2">
@@ -37,9 +35,7 @@
                     :value="config[`SEER_TOKEN`]"
                     @input="handleTokenInput($event.target.value)"
                     :disabled="testState.isTesting"
-                    class="flex-1 h-12 bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4
-                           focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
-                           disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    class="form-input"
                     id="SEER_TOKEN"
                     placeholder="Your Overseerr/Jellyseerr API Key">
                 
@@ -133,9 +129,7 @@
                     <select 
                         v-model="selectedUser" 
                         @change="updateSeerUser"
-                        class="w-full h-12 bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4
-                               focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
-                               transition-all"
+                        class="form-input"
                         id="SEER_USER_NAME">
                         <option :value="null" disabled>Select a user...</option>
                         <option v-for="user in users" :key="user.name" :value="user">
@@ -153,9 +147,7 @@
                         type="password" 
                         v-model="userPassword" 
                         @input="$emit('update-config', `SEER_USER_PSW`, userPassword)"
-                        class="w-full h-12 bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4
-                               focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
-                               transition-all"
+                        class="form-input"
                         id="SEER_USER_PSW"
                         placeholder="Enter password"
                         autocomplete="new-password">
@@ -222,7 +214,38 @@
         </div>
     </div>
 </template>
+<style scoped>
+.form-input {
+  flex: 1;
+  min-width: 200px;
+  min-height: 40px;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--border-radius-sm);
+  padding: 0 1rem;
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  transition: var(--transition-base);
+  width: 100%;           /* Forza l'input a occupare tutto il contenitore */
+  display: block;         /* Si assicura che si comporti come un blocco */
+  box-sizing: border-box;
+}
 
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.form-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form-input::placeholder {
+  color: var(--color-text-muted);
+}
+</style>
 <script>
 import { testJellyseerApi, authenticateUser } from '../../api/api';
 

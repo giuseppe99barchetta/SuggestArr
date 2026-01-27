@@ -11,28 +11,34 @@ plex_bp = Blueprint('plex', __name__)
 client_id = os.getenv('PLEX_CLIENT_ID', str(uuid.uuid4()))
 
 @plex_bp.route('/libraries', methods=['POST'])
-@handle_api_errors
-@validate_request_data(['PLEX_API_URL', 'PLEX_TOKEN'])
 async def get_plex_libraries():
     """
     Fetch Plex libraries using the provided API key and server URL.
     """
     logger.info("Received request to fetch Plex libraries")
+    try:
+        config_data = request.json
+        api_url = config_data.get('PLEX_API_URL')
+        api_token = config_data.get('PLEX_TOKEN')
+
+        if not api_url or not api_token:
+            logger.warning("Missing API URL or token in Plex libraries request")
+            return jsonify({'message': 'API URL and token are required', 'type': 'error'}), 400
+
+        logger.debug(f"Connecting to Plex server at: {api_url}")
+        plex_client = PlexClient(api_url=api_url, token=api_token)
+        libraries = await plex_client.get_libraries()
+
+        if not libraries:
+            logger.warning("No libraries found on Plex server")
+            return jsonify({'message': 'No library found', 'type': 'error'}), 404
+
+        logger.info(f"Successfully fetched {len(libraries)} libraries from Plex server")
+        return jsonify({'message': 'Libraries fetched successfully', 'items': libraries}), 200
+    except Exception as e:
+        logger.error(f'Error fetching Plex libraries: {str(e)}')
+        return jsonify({'message': f'Error fetching Plex libraries: {str(e)}', 'type': 'error'}), 500
     
-    config_data = request.json
-    api_url = config_data.get('PLEX_API_URL')
-    api_token = config_data.get('PLEX_TOKEN')
-
-    logger.debug(f"Connecting to Plex server at: {api_url}")
-    plex_client = PlexClient(api_url=api_url, token=api_token)
-    libraries = await plex_client.get_libraries()
-
-    if not libraries:
-        logger.warning("No libraries found on Plex server")
-        return jsonify({'message': 'No library found', 'type': 'error'}), 404
-
-    logger.info(f"Successfully fetched {len(libraries)} libraries from Plex server")
-    return success_response(libraries, 'Libraries fetched successfully')
     
 
 @plex_bp.route('/auth', methods=['POST'])

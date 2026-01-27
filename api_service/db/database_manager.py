@@ -615,3 +615,42 @@ class DatabaseManager:
             'db_type': self.db_type,
             'message': 'No connection pooling - using direct connections for better performance'
         }
+        
+    def save_requests_batch(self, requests: List[Dict[str, Any]]) -> None:
+            """Save a batch of media requests to the database, handling different DB types."""
+            if not requests:
+                return
+
+            self.logger.debug(f"Saving batch of requests: {len(requests)} requests")
+
+            query = """
+                INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, requested_by)
+                VALUES (?, ?, ?)
+            """
+
+            if self.db_type == 'mysql':
+                query = query.replace("INSERT OR IGNORE", "INSERT IGNORE").replace("?", "%s")
+            elif self.db_type == 'postgres':
+                query = query.replace("INSERT OR IGNORE", "INSERT").rstrip() + " ON CONFLICT DO NOTHING"
+                query = query.replace("?", "%s")
+
+            try:
+                with self.get_connection() as conn:
+                    cursor = conn.cursor()
+
+                    for request in requests:
+                        try:
+                            media_type = request['media']['mediaType']
+                            media_id = str(request['media']['tmdbId'])
+                            params = (media_type, media_id, 'Seer')
+
+                            cursor.execute(query, params)
+                        except KeyError as e:
+                            self.logger.error(f"Struttura richiesta non valida nel batch: {e}")
+                            continue
+                        
+                    conn.commit()
+                    self.logger.debug(f"Batch di {len(requests)} salvato correttamente")
+            except Exception as e:
+                self.logger.error(f"Errore durante il salvataggio del batch: {e}")
+                raise DatabaseError(f"Batch save failed: {str(e)}", db_type=self.db_type)
