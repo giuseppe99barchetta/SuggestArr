@@ -117,20 +117,24 @@ class PlexClient:
         """
         all_filtered_items = []
         user_ids = self.user_ids if self.user_ids else [None]  # Use None if no specific user is selected
-    
+
         for user_id in user_ids:
             url = f"{self.api_url}/status/sessions/history/all"
             params = {
                 "sort": "viewedAt:desc",
             }
-    
+
             # If a specific user is selected, add the accountID parameter
+            # Handle both dict format {id: 'xxx', name: 'yyy'} and plain string 'xxx'
             if user_id:
-                params["accountID"] = user_id
+                account_id = user_id.get('id') if isinstance(user_id, dict) else user_id
+                params["accountID"] = account_id
     
             # Add library filtering if libraries are specified
             if self.library_ids:
-                params["librarySectionIDs"] = ','.join(self.library_ids)
+                # Handle both dict format {id: 'xxx', name: 'yyy'} and plain string 'xxx'
+                library_id_list = [lib.get('id') if isinstance(lib, dict) else lib for lib in self.library_ids]
+                params["librarySectionIDs"] = ','.join(library_id_list)
     
             try:
                 async with aiohttp.ClientSession() as session:
@@ -143,16 +147,21 @@ class PlexClient:
                             filtered_items = await self.filter_recent_items(metadata)
                             all_filtered_items.extend(filtered_items)
                             if user_id:
-                                self.logger.info(f"User {user_id}: Returning {len(filtered_items)} filtered recent items.")
+                                # Get user identifier for logging (handle both dict and string formats)
+                                user_identifier = user_id.get('id') if isinstance(user_id, dict) else user_id
+                                self.logger.info(f"User {user_identifier}: Returning {len(filtered_items)} filtered recent items.")
                             else:
                                 self.logger.info(f"All users: Returning {len(filtered_items)} filtered recent items.")
                         else:
-                            self.logger.error("Failed to retrieve recent items for user %s: %d", user_id or "all", response.status)
+                            user_identifier = user_id.get('id') if isinstance(user_id, dict) else user_id if user_id else "all"
+                            self.logger.error("Failed to retrieve recent items for user %s: %d", user_identifier, response.status)
             except aiohttp.ClientError as e:
-                self.logger.error("An error occurred while retrieving recent items for user %s: %s", user_id or "all", str(e))
+                user_identifier = user_id.get('id') if isinstance(user_id, dict) else user_id if user_id else "all"
+                self.logger.error("An error occurred while retrieving recent items for user %s: %s", user_identifier, str(e))
                 raise PlexConnectionError(f"Failed to retrieve recent items from Plex: {str(e)}")
             except Exception as e:
-                self.logger.error("Unexpected error occurred while retrieving recent items for user %s: %s", user_id or "all", str(e))
+                user_identifier = user_id.get('id') if isinstance(user_id, dict) else user_id if user_id else "all"
+                self.logger.error("Unexpected error occurred while retrieving recent items for user %s: %s", user_identifier, str(e))
                 raise PlexClientError(f"Unexpected error while retrieving recent items: {str(e)}")
     
         self.logger.info(f"Total filtered items across all users: {len(all_filtered_items)}")
@@ -275,7 +284,15 @@ class PlexClient:
         results_by_library = {}
         
         if self.library_ids:
-            libraries = [{'key': library_id, 'title': f'Library {index}'} for index, library_id in enumerate(self.library_ids)]
+            # Handle both dict format {id: 'xxx', name: 'yyy'} and plain string 'xxx'
+            libraries = []
+            for index, lib in enumerate(self.library_ids):
+                if isinstance(lib, dict):
+                    # Already in dict format with 'id' and 'name'
+                    libraries.append({'key': lib.get('id'), 'title': lib.get('name', f'Library {index}')})
+                else:
+                    # Plain string format
+                    libraries.append({'key': lib, 'title': f'Library {index}'})
         else:
             libraries = await self.get_libraries()
     
