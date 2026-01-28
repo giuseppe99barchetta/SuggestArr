@@ -154,13 +154,36 @@ export default {
     getServerConnections() {
       return this.servers.reduce((connections, server) => {
         if (server.connections) {
-          server.connections.forEach(connection => {
+          // Filtra e ordina le connessioni per priorità
+          const filteredConnections = server.connections
+            .filter(conn => {
+              // Escludi connessioni relay (troppo lente)
+              if (conn.relay === true || conn.relay === 1) return false;
+              return true;
+            })
+            .sort((a, b) => {
+              // Priorità: locale HTTPS > locale HTTP > remota HTTPS > remota HTTP
+              const aLocal = a.local === true || a.local === 1;
+              const bLocal = b.local === true || b.local === 1;
+              const aHttps = a.protocol === 'https';
+              const bHttps = b.protocol === 'https';
+
+              if (aLocal !== bLocal) return bLocal - aLocal; // locali prima
+              if (aHttps !== bHttps) return bHttps - aHttps; // HTTPS prima
+              return 0;
+            });
+
+          // Prendi solo le prime 3 connessioni migliori per server
+          filteredConnections.slice(0, 3).forEach(connection => {
+            const localLabel = (connection.local === true || connection.local === 1) ? ' [Local]' : ' [Remote]';
             connections.push({
               serverName: server.name,
               address: connection.address,
               port: connection.port,
               protocol: connection.protocol,
               secure: connection.protocol === 'https',
+              local: connection.local,
+              localLabel: localLabel
             });
           });
         }

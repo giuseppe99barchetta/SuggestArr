@@ -6,6 +6,7 @@ import '@/assets/styles/toast-custom.css';
 import axios from 'axios';
 import router from './router';
 import '@/assets/styles/theme.css';
+import '@/assets/styles/global.css';
 
 const app = createApp(App);
 

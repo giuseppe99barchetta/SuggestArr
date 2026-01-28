@@ -270,7 +270,7 @@ export default {
 /* Dropdown Trigger */
 .dropdown-trigger {
   position: relative;
-  border-radius: 12px;
+  border-radius: var(--border-radius-sm);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
 }
@@ -278,9 +278,9 @@ export default {
 .select-background {
   position: absolute;
   inset: 0;
-  backdrop-filter: blur(12px) saturate(120%);
-  border: 1px solid rgba(229, 231, 235, 0.1);
-  border-radius: 12px;
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--border-radius-sm);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1;
 }
@@ -288,7 +288,7 @@ export default {
 .select-glow {
   position: absolute;
   inset: -2px;
-  border-radius: 12px;
+  border-radius: var(--border-radius-sm);
   opacity: 0;
   transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   filter: blur(8px);

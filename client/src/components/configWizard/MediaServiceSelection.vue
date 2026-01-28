@@ -44,18 +44,23 @@
 
         <!-- Navigation Buttons -->
         <div class="flex justify-between mt-8 gap-4">
-            <button @click="$emit('previous-step')"
-                    class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg w-full 
-                           transition-colors duration-200">
-                <i class="fas fa-arrow-left mr-2"></i>Back
-            </button>
-            <button @click="$emit('next-step')"
-                    :disabled="!config.SELECTED_SERVICE"
-                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full
-                           transition-colors duration-200"
-                    :class="{ 'opacity-50 cursor-not-allowed': !config.SELECTED_SERVICE }">
-                Next Step<i class="fas fa-arrow-right ml-2"></i>
-            </button>
+          <button
+            @click="$emit('previous-step')"
+            class="btn-secondary w-full flex items-center justify-center gap-2 py-4 px-8"
+          >
+            <i class="fas fa-arrow-left"></i>
+            Back
+          </button>
+      
+          <button
+            @click="$emit('next-step')"
+            :disabled="!config.SELECTED_SERVICE"
+            class="btn-primary w-full flex items-center justify-center gap-2 py-4 px-8"
+            :class="{ 'opacity-50 cursor-not-allowed': !config.SELECTED_SERVICE }"
+          >
+            Next Step
+            <i class="fas fa-arrow-right"></i>
+          </button>
         </div>
     </div>
 </template>
@@ -109,7 +114,7 @@ export default {
 .service-box:hover:not(.coming-soon) {
     transform: translateY(-8px);
     box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
-    border-color: rgba(79, 70, 229, 0.5);
+    border-color: var(--color-primary-hover)
 }
 
 .service-box:focus {
@@ -117,7 +122,7 @@ export default {
 }
 
 .selected {
-    border-color: rgb(79, 70, 229);
+    border-color: rgb(150, 149, 160);
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3);
     background-color: rgba(79, 70, 229, 0.1);
 }

@@ -2,89 +2,101 @@
   <div class="config-section">
     <h3 class="section-title">TMDB Configuration</h3>
     <p class="section-description">
-      You can get your TMDB API Key by signing up at 
-      <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" 
+      You can get your TMDB API Key by signing up at
+      <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer"
          class="link">The Movie Database</a>.
     </p>
 
-    <!-- TMDB API Key Input -->
-    <label for="TMDB_API_KEY" class="form-label">
-      TMDB API Key:
-    </label>
-    <div class="input-group">
-      <input 
-        type="text" 
-        :value="config.TMDB_API_KEY" 
-        @input="handleInput"
-        @keyup.enter="testTmdbApi"
-        :disabled="tmdbTestState.isTesting"
-        class="form-input"
-        id="TMDB_API_KEY" 
-        placeholder="Enter your TMDB API Key"
-      >
-      
-      <button 
-        type="button" 
-        @click="testTmdbApi" 
-        :disabled="tmdbTestState.isTesting || !config.TMDB_API_KEY"
-        :class="[
-          'btn btn-test',
-          {
-            'btn-success': tmdbTestState.status === 'success',
-            'btn-danger': tmdbTestState.status === 'fail',
-            'btn-primary': tmdbTestState.status === null && config.TMDB_API_KEY,
-            'btn-disabled': !config.TMDB_API_KEY
-          }
-        ]"
-      >
-        <span v-if="tmdbTestState.isTesting" class="btn-content">
-          <i class="fas fa-spinner fa-spin"></i>
-          <span class="btn-text">Testing</span>
-        </span>
-        <span v-else-if="tmdbTestState.status === 'success'" class="btn-content">
-          <i class="fas fa-check"></i>
-          <span class="btn-text">Valid</span>
-        </span>
-        <span v-else-if="tmdbTestState.status === 'fail'" class="btn-content">
-          <i class="fas fa-times"></i>
-          <span class="btn-text">Failed</span>
-        </span>
-        <span v-else class="btn-content">
-          <i class="fas fa-play"></i>
-          <span class="btn-text">Test</span>
-        </span>
-      </button>
-    </div>
+    <!-- API Configuration Card -->
+    <div class="settings-card">
+      <h4 class="card-title">API Configuration</h4>
 
-    <!-- Success Message -->
-    <div v-if="tmdbTestState.status === 'success'" 
-         class="alert alert-success" 
-         role="alert">
-      <i class="fas fa-check-circle"></i>
-      <span>TMDB API Key validated successfully!</span>
-    </div>
+      <!-- TMDB API Key Input -->
+      <div class="form-group">
+        <label for="TMDB_API_KEY" class="form-label">
+          TMDB API Key
+        </label>
+        <div class="input-group">
+          <input
+            type="text"
+            :value="config.TMDB_API_KEY"
+            @input="handleInput"
+            @keyup.enter="testTmdbApi"
+            :disabled="tmdbTestState.isTesting"
+            class="form-input"
+            id="TMDB_API_KEY"
+            placeholder="Enter your TMDB API Key"
+          >
 
-    <!-- Error Message -->
-    <div v-if="tmdbTestState.status === 'fail'" 
-         class="alert alert-danger" 
-         role="alert">
-      <i class="fas fa-exclamation-circle"></i>
-      <span>Failed to validate TMDB API Key. Please check your key and try again.</span>
+          <button
+            type="button"
+            @click="testTmdbApi"
+            :disabled="tmdbTestState.isTesting || !config.TMDB_API_KEY"
+            :class="[
+              'btn btn-test',
+              {
+                'btn-success': tmdbTestState.status === 'success',
+                'btn-danger': tmdbTestState.status === 'fail',
+                'btn-primary': tmdbTestState.status === null && config.TMDB_API_KEY,
+                'btn-disabled': !config.TMDB_API_KEY
+              }
+            ]"
+          >
+            <span v-if="tmdbTestState.isTesting" class="btn-content">
+              <i class="fas fa-spinner fa-spin"></i>
+              <span class="hidden btn-text">Testing</span>
+            </span>
+            <span v-else-if="tmdbTestState.status === 'success'" class="btn-content">
+              <i class="fas fa-check"></i>
+              <span class="hidden btn-text">Valid</span>
+            </span>
+            <span v-else-if="tmdbTestState.status === 'fail'" class="btn-content">
+              <i class="fas fa-times"></i>
+              <span class="hidden btn-text">Failed</span>
+            </span>
+            <span v-else class="btn-content">
+              <i class="fas fa-play"></i>
+              <span class="hidden btn-text">Test</span>
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Success Message -->
+      <div v-if="tmdbTestState.status === 'success'"
+           class="alert alert-success"
+           role="alert">
+        <i class="fas fa-check-circle"></i>
+        <span>TMDB API Key validated successfully!</span>
+      </div>
+
+      <!-- Error Message -->
+      <div v-if="tmdbTestState.status === 'fail'"
+           class="alert alert-danger"
+           role="alert">
+        <i class="fas fa-exclamation-circle"></i>
+        <span>Failed to validate TMDB API Key. Please check your key and try again.</span>
+      </div>
     </div>
 
     <!-- Navigation Buttons -->
     <div class="flex justify-between mt-8 gap-4">
-      <button @click="$emit('previous-step')"
-              class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg w-full 
-                     transition-colors duration-200">
-          <i class="fas fa-arrow-left mr-2"></i>Back
+      <button
+        @click="$emit('previous-step')"
+        class="btn-secondary w-full flex items-center justify-center gap-2 py-4 px-8"
+      >
+        <i class="fas fa-arrow-left"></i>
+        Back
       </button>
-      <button @click="$emit('next-step')"
-              :disabled="tmdbTestState.status !== 'success'" 
-              class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full
-                     transition-colors duration-200"
-              :class="{ 'opacity-50 cursor-not-allowed': tmdbTestState.status !== 'success' }">
-          Next Step<i class="fas fa-arrow-right ml-2"></i>
+  
+      <button
+        @click="$emit('next-step')"
+        :disabled="tmdbTestState.status !== 'success'"
+        class="btn-primary w-full flex items-center justify-center gap-2 py-4 px-8"
+        :class="{ 'opacity-50 cursor-not-allowed': tmdbTestState.status !== 'success' }"
+      >
+        Next Step
+        <i class="fas fa-arrow-right"></i>
       </button>
     </div>
   </div>
@@ -149,7 +161,7 @@ export default {
   color: var(--color-text-muted);
   font-size: 0.9rem;
   line-height: 1.5;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .link {

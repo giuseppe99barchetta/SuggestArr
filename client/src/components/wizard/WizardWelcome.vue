@@ -6,7 +6,7 @@
     </p>
 
     <div class="setup-options">
-      <button @click="$emit('start-quick')" class="setup-btn primary">
+      <button @click="$emit('start-quick')" class="setup-btn secondary">
         <i class="fas fa-rocket"></i>
         <span>Quick Setup</span>
         <small>Recommended for most users</small>
@@ -97,12 +97,12 @@ export default {
 }
 
 .setup-btn.primary {
-  background: linear-gradient(135deg, var(--color-primary), #1d4ed8);
+  background: linear-gradient(135deg, var(--color-primary), #343435);
   border-color: var(--color-primary);
 }
 
 .setup-btn.primary:hover {
-  background: linear-gradient(135deg, var(--color-primary-hover), #1e40af);
+  background: linear-gradient(135deg, var(--color-primary-hover), #6a6c72);
 }
 
 .setup-btn.secondary {

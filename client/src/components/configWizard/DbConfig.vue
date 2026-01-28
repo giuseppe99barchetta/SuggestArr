@@ -1,83 +1,126 @@
 <template>
-    <div>
-        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Database Configuration</h3>
-        <p class="text-xs sm:text-sm text-gray-400 mb-4">Configure the database settings below to connect to your preferred database (PostgreSQL, MySQL/MariaDB, or SQLite). By default, SQLite is used for the standard configuration.</p>
+    <div class="config-section">
+        <h3 class="section-title">Database Configuration</h3>
+        <p class="section-description">
+            Configure the database settings below to connect to your preferred database (PostgreSQL, MySQL/MariaDB, or SQLite). By default, SQLite is used for the standard configuration.
+        </p>
 
         <!-- DB Type Selection -->
-        <BaseDropdown
-          v-model="config.DB_TYPE"
-          :options="databaseOptions"
-          label="Database Type:"
-          help-text="Select the database to store request made from SuggestArr."
-          id="DB_TYPE"
-          @change="value => handleUpdate('DB_TYPE', value)"
-        />
+        <div class="form-group">
+            <label for="DB_TYPE" class="form-label">Database Type</label>
+            <BaseDropdown
+              v-model="config.DB_TYPE"
+              :options="databaseOptions"
+              placeholder="Select database type"
+              id="DB_TYPE"
+              @change="value => handleUpdate('DB_TYPE', value)"
+            />
+            <p class="form-help">
+                <i class="fas fa-info-circle"></i>
+                Select the database to store requests made from SuggestArr.
+            </p>
+        </div>
 
-        <div v-if="config.DB_TYPE !== 'sqlite'">
-            <!-- Host -->
-            <label for="DB_HOST" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Host:</label>
-            <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the database host address</p>
-            <input type="text" :value="config.DB_HOST"
-                   @input="handleUpdate('DB_HOST', $event.target.value)"
-                   class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                   id="DB_HOST" placeholder="localhost">
+        <!-- Database Configuration Card -->
+        <div v-if="config.DB_TYPE !== 'sqlite'" class="db-config-card">
+            <h4 class="card-title">Connection Settings</h4>
 
-            <!-- Port -->
-            <label for="DB_PORT" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Port:</label>
-            <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the port number for the database. Default for PostgreSQL is 5432, MySQL/MariaDB is 3306.</p>
-            <input type="number" :value="config.DB_PORT"
-                   @input="handleUpdate('DB_PORT', $event.target.value)"
-                   class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                   id="DB_PORT" placeholder="5432">
+            <!-- Host and Port in a row -->
+            <div class="form-row">
+                <div class="form-group flex-2">
+                    <label for="DB_HOST" class="form-label">Host</label>
+                    <input type="text" :value="config.DB_HOST"
+                           @input="handleUpdate('DB_HOST', $event.target.value)"
+                           class="form-input"
+                           id="DB_HOST" placeholder="localhost">
+                </div>
 
+                <div class="form-group flex-1">
+                    <label for="DB_PORT" class="form-label">Port</label>
+                    <input type="number" :value="config.DB_PORT"
+                           @input="handleUpdate('DB_PORT', $event.target.value)"
+                           class="form-input"
+                           id="DB_PORT" placeholder="5432">
+                </div>
+            </div>
+            <p class="form-help">
+                <i class="fas fa-info-circle"></i>
+                Default ports: PostgreSQL (5432), MySQL/MariaDB (3306)
+            </p>
+
+            <!-- User and Password in a row -->
             <form @submit.prevent="handleSubmit">
-                <!-- User -->
-                <label for="DB_USER" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database User:</label>
-                <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the username used to connect to your database.</p>
-                <input type="text" :value="config.DB_USER"
-                       @input="handleUpdate('DB_USER', $event.target.value)"
-                       class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                       id="DB_USER" placeholder="root" autocomplete="username">
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label for="DB_USER" class="form-label">Username</label>
+                        <input type="text" :value="config.DB_USER"
+                               @input="handleUpdate('DB_USER', $event.target.value)"
+                               class="form-input"
+                               id="DB_USER" placeholder="root" autocomplete="username">
+                    </div>
 
-                <!-- Password -->
-                <label for="DB_PASSWORD" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Password:</label>
-                <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the password for your database user.</p>
-                <input type="password" :value="config.DB_PASSWORD"
-                       @input="handleUpdate('DB_PASSWORD', $event.target.value)"
-                       class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                       id="DB_PASSWORD" placeholder="password"  autocomplete="new-password">
+                    <div class="form-group flex-1">
+                        <label for="DB_PASSWORD" class="form-label">Password</label>
+                        <input type="password" :value="config.DB_PASSWORD"
+                               @input="handleUpdate('DB_PASSWORD', $event.target.value)"
+                               class="form-input"
+                               id="DB_PASSWORD" placeholder="••••••••"  autocomplete="new-password">
+                    </div>
+                </div>
             </form>
 
             <!-- Database Name -->
-            <label for="DB_NAME" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">Database Name:</label>
-            <p class="text-xs sm:text-sm text-gray-400 mb-2">Enter the name of the database you wish to connect to.</p>
-            <p class="text-xs sm:text-sm font-bold text-yellow-400 mb-2">
-                <strong>Important:</strong> The database must be created before connecting.
-            </p>
-            <input type="text" :value="config.DB_NAME"
-                   @input="handleUpdate('DB_NAME', $event.target.value)"
-                   class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                   id="DB_NAME" placeholder="suggestarr">
-
-            <!-- Error Message -->
-            <p class="text-xs sm:text-sm text-red-500 mt-2" v-if="dbError">{{ dbError }}</p>
-            <p class="text-xs sm:text-sm text-green-500 mt-2" v-if="dbSuccess">{{ dbSuccess }}</p>
-
-            <!-- Test Connection Button -->
-            <div class="flex justify-between mt-4">
-                <button @click="testConnection" 
-                        class="bg-green-600 hover:bg-green-500 text-white font-bold py-4 px-8 rounded-lg w-full">
-                        {{ buttonText }}
-                </button>
+            <div class="form-group">
+                <label for="DB_NAME" class="form-label">Database Name</label>
+                <input type="text" :value="config.DB_NAME"
+                       @input="handleUpdate('DB_NAME', $event.target.value)"
+                       class="form-input"
+                       id="DB_NAME" placeholder="suggestarr">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span><strong>Important:</strong> The database must be created before connecting.</span>
+                </div>
             </div>
 
+            <!-- Error/Success Message -->
+            <div v-if="dbError" class="alert alert-danger" role="alert">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>{{ dbError }}</span>
+            </div>
+            <div v-if="dbSuccess" class="alert alert-success" role="alert">
+                <i class="fas fa-check-circle"></i>
+                <span>{{ dbSuccess }}</span>
+            </div>
+
+            <!-- Test Connection Button -->
+            <button @click="testConnection"
+                    :disabled="buttonText === 'Testing...'"
+                    :class="[
+                        'btn',
+                        'btn-test-connection',
+                        buttonText === 'Connection Successful!' ? 'btn-success' : 'btn-primary'
+                    ]">
+                <i v-if="buttonText === 'Testing...'" class="fas fa-spinner fa-spin"></i>
+                <i v-else-if="buttonText === 'Connection Successful!'" class="fas fa-check"></i>
+                <i v-else class="fas fa-plug"></i>
+                {{ buttonText }}
+            </button>
         </div>
 
-        <div class="flex justify-between mt-8 space-x-4">
-            <button @click="$emit('previous-step')" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg w-full">Back</button>
-            <button @click="$emit('next-step')" 
-                    :disabled="!isTestSuccessful"
-                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full">Next</button>
+        <!-- Navigation Buttons -->
+        <div class="flex justify-between mt-8 gap-4">
+            <button @click="$emit('previous-step')"
+              class="btn-secondary w-full flex items-center justify-center gap-2 py-4 px-8">
+              <i class="fas fa-arrow-left"></i>
+              Back
+            </button>
+
+            <button @click="$emit('next-step')" :disabled="!isTestSuccessful"
+              class="btn-primary w-full flex items-center justify-center gap-2 py-4 px-8"
+              :class="{ 'opacity-50 cursor-not-allowed': !isTestSuccessful }">
+              Next Step
+              <i class="fas fa-arrow-right"></i>
+            </button>
         </div>
     </div>
 </template>
@@ -118,8 +161,6 @@ export default {
     methods: {
         handleUpdate(key, value) {
             this.$emit('update-config', key, value);
-            console.log(key, value);
-            console.log(key == 'DB_TYPE' && value == 'sqlite')
             if (key == 'DB_TYPE' && value == 'sqlite') {
                 this.isTestSuccessful = true;
             } else {
@@ -128,13 +169,14 @@ export default {
         },
         async testConnection() {
             this.dbError = '';
+            this.dbSuccess = '';
             this.buttonText = 'Testing...';
 
-            // Per PostgreSQL, MySQL/MariaDB, possiamo tentare una connessione tramite API o direttamente
             try {
                 const response = await axios.post('/api/config/test-db-connection', this.config);
                 if (response.data.status == 'success') {
                     this.buttonText = 'Connection Successful!';
+                    this.dbSuccess = 'Successfully connected to the database!';
                     this.isTestSuccessful = true;
                 } else {
                     this.dbError = 'Failed to connect to the database.';
@@ -143,11 +185,115 @@ export default {
                 }
             } catch (error) {
                 this.dbError = 'Error connecting to the database: ' + error.message;
-                this.buttonText = 'Test Connection'; 
+                this.buttonText = 'Test Connection';
                 this.isTestSuccessful = false;
             }
-            
         }
     }
 };
 </script>
+
+<style scoped>
+/* Config Section */
+.config-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.section-description {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
+}
+
+/* Database Config Card */
+.db-config-card {
+  background: var(--color-bg-interactive);
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--border-radius-md);
+  padding: 1.5rem;
+  margin-top: 1rem;
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 1.25rem 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+/* Form Row for side-by-side fields */
+.form-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.form-row .form-group {
+  margin-bottom: 0;
+}
+
+.form-row + .form-help {
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.flex-2 {
+  flex: 2;
+}
+
+/* Test Connection Button */
+.btn-test-connection {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+/* Alert Warning */
+.alert-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(217, 119, 6, 0.1) 100%);
+  border-left: 3px solid var(--color-warning);
+  border-radius: var(--border-radius-sm);
+  font-size: 0.875rem;
+  color: var(--color-warning);
+  font-weight: 500;
+}
+
+.alert-warning i {
+  color: var(--color-warning);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .form-row .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .db-config-card {
+    padding: 1rem;
+  }
+}
+</style>

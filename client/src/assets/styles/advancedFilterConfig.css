@@ -6,19 +6,18 @@
 
 /* Styling for vue-multiselect */
 .multiselect {
-    /* Match border-gray-600 */
-    border: 1px solid #4a5568;
-        /* Match rounded-lg */
+    border: 1px solid var(--color-border-medium);
     border-radius: var(--border-radius-sm);
-    padding: 0.0rem;
-    color: #e5e7eb;
+    padding: 0;
+    color: var(--color-text-primary);
     width: 100%;
+    background: var(--color-bg-interactive);
 }
 
 .multiselect__tag {
     /* Red for excluded tags */
     background-color: #b84141;
-    color: #caced8 !important;
+    color: var(--color-text-primary) !important;
     margin: 2px;
     font-size: 0.875rem;
     border-radius: var(--border-radius-sm);
@@ -26,13 +25,12 @@
 
 .multiselect__input {
     background-color: transparent !important;
-    /* Force light text color */
     color: var(--color-text-primary) !important;
 }
 
 /* Target selected single items */
 .multiselect__single {
-    color: #e5e7eb !important;
+    color: var(--color-text-primary) !important;
     background-color: transparent !important;
 }
 
@@ -41,16 +39,39 @@
 }
 
 .multiselect__content-wrapper {
-    background-color: #1f2937;
-    border: 0px solid #4b5563;
+    background-color: #323233;
+    backdrop-filter: blur(50px);
+    border: 1px solid var(--color-border-medium);
     border-radius: var(--border-radius-sm);
 }
 
+.multiselect__content {
+    background-color: var(--color-bg-interactive);
+}
+
+.multiselect__option {
+    background-color: var(--color-bg-interactive);
+    color: var(--color-text-primary);
+    padding: 12px;
+    min-height: 40px;
+}
+
+.multiselect__option:hover {
+    background-color: var(--color-primary);
+    color: white;
+}
+
 .multiselect__option--highlight {
-    color: #e5e7eb;
+    background-color: var(--color-primary);
+    color: white;
 }
 
 .multiselect__option--selected {
+    background-color: #b84141;
+    color: var(--color-text-primary);
+}
+
+.multiselect__option--selected.multiselect__option--highlight {
     background-color: #b84141;
     color: var(--color-text-primary);
 }
@@ -61,13 +82,12 @@
 }
 
 .multiselect__tags {
-    min-height: 40px;
+    min-height: 42px;
     display: block;
     padding: 8px 40px 0 8px;
-    border-radius: 5px;
-    --tw-bg-opacity: 1;
-    background-color: rgba(55, 65, 81, var(--tw-bg-opacity));
-    font-size: 14px;
+    border-radius: var(--border-radius-sm);
+    background-color: var(--color-bg-interactive);
+    font-size: 0.875rem;
     border: 0;
 }
 
@@ -85,34 +105,28 @@
 }
 
 .multiselect__content-wrapper::-webkit-scrollbar {
-    /* Width of the scrollbar */
     width: 8px;
 }
 
 .multiselect__content-wrapper::-webkit-scrollbar-track {
-    /* Background of the scrollbar track */
-    background: #1f2937;
+    background: var(--color-bg-interactive);
     border-radius: 8px;
 }
 
 .multiselect__content-wrapper::-webkit-scrollbar-thumb {
-    /* Color of the scrollbar thumb */
-    background-color: #4b5563;
+    background-color: var(--color-border-medium);
     border-radius: 8px;
-    /* Adds padding around the thumb */
-    border: 2px solid #1f2937;
+    border: 2px solid var(--color-bg-interactive);
 }
 
 .multiselect__content-wrapper::-webkit-scrollbar-thumb:hover {
-    /* Color on hover */
-    background-color: #6b7280;
+    background-color: var(--color-primary);
 }
 
 /* Firefox scrollbar styling */
 .multiselect__content-wrapper {
     scrollbar-width: thin;
-    /* Thumb color and track color */
-    scrollbar-color: #4b5563 #1f2937;
+    scrollbar-color: var(--color-border-medium) var(--color-bg-interactive);
 }
 
 .switch {

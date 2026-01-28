@@ -1,78 +1,77 @@
 <template>
-    <div>
-        <h3 class="text-sm sm:text-lg font-semibold text-gray-300">Advanced Filter Configuration</h3>
-        <p class="text-xs sm:text-sm text-gray-400 mb-4">
-            Set up advanced filters to customize your content recommendations. Each field below allows you to narrow down suggestions based on specific criteria. All fields are optional, so feel free to adjust only those relevant to your preferences.
+    <div class="config-section">
+        <h3 class="section-title">Advanced Filter Configuration</h3>
+        <p class="section-description">
+            Set up advanced filters to customize your content recommendations. Each field below allows you to narrow down suggestions based on specific criteria. All fields are optional.
         </p>
 
-        <!-- TMDB Rating and Votes Filters -->
-        <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-            <div class="w-full sm:w-1/2">
-                <label for="FILTER_TMDB_THRESHOLD" class="block text-xs sm:text-sm font-semibold text-gray-300">
-                    TMDB Rating Threshold:
-                </label>
-                <p class="text-xs text-gray-400 mb-2">
-                    Specify the minimum average rating (out of 100) on TMDB that content must have to be included in your recommendations. For example, a value of 70 will only include content rated 70/100 or higher.
-                </p>
-                <input type="number" :value="config.FILTER_TMDB_THRESHOLD"
-                    @input="validateThreshold($event.target.value)"
-                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                    id="FILTER_TMDB_THRESHOLD" placeholder="60">
-                <span v-if="errors.FILTER_TMDB_THRESHOLD" class="text-red-500 text-xs">{{ errors.FILTER_TMDB_THRESHOLD }}</span>
+        <!-- Rating & Votes Card -->
+        <div class="settings-card">
+            <h4 class="card-title">Rating & Popularity Filters</h4>
+
+            <div class="form-row">
+                <div class="form-group flex-1">
+                    <label for="FILTER_TMDB_THRESHOLD" class="form-label">Minimum Rating</label>
+                    <input type="number" :value="config.FILTER_TMDB_THRESHOLD"
+                        @input="validateThreshold($event.target.value)"
+                        class="form-input"
+                        id="FILTER_TMDB_THRESHOLD" placeholder="60" min="0" max="100">
+                    <span v-if="errors.FILTER_TMDB_THRESHOLD" class="form-error">{{ errors.FILTER_TMDB_THRESHOLD }}</span>
+                </div>
+
+                <div class="form-group flex-1">
+                    <label for="FILTER_TMDB_MIN_VOTES" class="form-label">Minimum Votes</label>
+                    <input type="number" :value="config.FILTER_TMDB_MIN_VOTES"
+                        @input="validateMinVotes($event.target.value)"
+                        class="form-input"
+                        id="FILTER_TMDB_MIN_VOTES" placeholder="20" min="0">
+                    <span v-if="errors.FILTER_TMDB_MIN_VOTES" class="form-error">{{ errors.FILTER_TMDB_MIN_VOTES }}</span>
+                </div>
             </div>
-            <div class="w-full sm:w-1/2">
-                <label for="FILTER_TMDB_MIN_VOTES" class="block text-xs sm:text-sm font-semibold text-gray-300">
-                    TMDB Minimum Votes:
-                </label>
-                <p class="text-xs text-gray-400 mb-2">
-                    Set the minimum number of votes a movie or show must have on TMDB to be considered. For example, a value of 50 will exclude content with fewer than 50 votes.
-                </p>
-                <input type="number" :value="config.FILTER_TMDB_MIN_VOTES"
-                    @input="validateMinVotes($event.target.value)"
-                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                    id="FILTER_TMDB_MIN_VOTES" placeholder="20">
-                <span v-if="errors.FILTER_TMDB_MIN_VOTES" class="text-red-500 text-xs">{{ errors.FILTER_TMDB_MIN_VOTES }}</span>
-            </div>
+            <p class="form-help">
+                <i class="fas fa-info-circle"></i>
+                Filter by TMDB rating (0-100) and minimum number of votes required
+            </p>
         </div>
 
-        <div>
-            <div class="space-y-4 mt-4 pt-4">
-                <!-- Include content with missing ratings or votes -->
-                <div class="flex items-center justify-between bg-gray-800 p-4 rounded-lg">
-                    <div class="flex-grow pr-4">
-                        <h4 class="text-sm font-semibold text-gray-200">Include content with missing ratings or votes</h4>
-                        <p class="text-xs text-gray-400 mt-1">Show recommendations even without rating information</p>
+        <!-- Content Exclusion Card -->
+        <div class="settings-card">
+            <h4 class="card-title">Content Exclusion Options</h4>
+
+            <div class="space-y-3">
+                <div class="toggle-item">
+                    <div class="toggle-info">
+                        <h4 class="toggle-title">Include content with missing ratings</h4>
+                        <p class="toggle-description">Show recommendations even without rating information</p>
                     </div>
                     <label class="switch">
-                        <input type="checkbox" 
+                        <input type="checkbox"
                             :checked="config.FILTER_INCLUDE_NO_RATING"
                             @change="handleUpdate('FILTER_INCLUDE_NO_RATING', $event.target.checked)">
                         <span class="slider round"></span>
                     </label>
                 </div>
 
-                <!-- Exclude already downloaded content -->
-                <div class="flex items-center justify-between bg-gray-800 p-4 rounded-lg">
-                    <div class="flex-grow pr-4">
-                        <h4 class="text-sm font-semibold text-gray-200">Exclude downloaded content</h4>
-                        <p class="text-xs text-gray-400 mt-1">Skip suggesting items already in your library</p>
+                <div class="toggle-item">
+                    <div class="toggle-info">
+                        <h4 class="toggle-title">Exclude downloaded content</h4>
+                        <p class="toggle-description">Skip suggesting items already in your library</p>
                     </div>
                     <label class="switch">
-                        <input type="checkbox" 
+                        <input type="checkbox"
                             :checked="config.EXCLUDE_DOWNLOADED"
                             @change="handleUpdate('EXCLUDE_DOWNLOADED', $event.target.checked)">
                         <span class="slider round"></span>
                     </label>
                 </div>
 
-                <!-- Exclude already watched content -->
-                <div class="flex items-center justify-between bg-gray-800 p-4 rounded-lg">
-                    <div class="flex-grow pr-4">
-                        <h4 class="text-sm font-semibold text-gray-200">Exclude watched content</h4>
-                        <p class="text-xs text-gray-400 mt-1">Avoid recommending shows or movies you've already requested</p>
+                <div class="toggle-item">
+                    <div class="toggle-info">
+                        <h4 class="toggle-title">Exclude requested content</h4>
+                        <p class="toggle-description">Avoid recommending shows or movies you've already requested</p>
                     </div>
                     <label class="switch">
-                        <input type="checkbox" 
+                        <input type="checkbox"
                             :checked="config.EXCLUDE_REQUESTED"
                             @change="handleUpdate('EXCLUDE_REQUESTED', $event.target.checked)">
                         <span class="slider round"></span>
@@ -81,103 +80,110 @@
             </div>
         </div>
 
-        <!-- Genre Exclusion Filter with Vue Multiselect -->
-        <label for="FILTER_GENRES_EXCLUDE" class="block text-xs sm:text-sm font-semibold text-gray-300 mt-4">
-            Exclude Genres:
-        </label>
-        <p class="text-xs text-gray-400 mb-2">
-            Select genres you do not want to see in your recommendations. For instance, excluding "Horror" will prevent horror movies or shows from being suggested.
-        </p>
-        <vue-multiselect v-model="selectedGenres" :options="genres" track-by="id" label="name" multiple
-            placeholder="No excluded genre" @update:modelValue="updateGenres"
-            class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md multiselect-genres"
-            id="FILTER_GENRES_EXCLUDE">
-        </vue-multiselect>
+        <!-- Genre & Content Type Card -->
+        <div class="settings-card">
+            <h4 class="card-title">Genre & Content Filters</h4>
 
-        <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mt-4">
-            <div class="w-full">
-                <label for="FILTER_NUM_SEASONS" class="block text-xs sm:text-sm font-semibold text-gray-300">
-                    Number of Seasons:
-                </label>
-                <p class="text-xs text-gray-400 mb-2">
-                    Limit the number of seasons for a TV series. Set to "0" to include all seasons.
+            <div class="form-group">
+                <label for="FILTER_GENRES_EXCLUDE" class="form-label">Exclude Genres</label>
+                <vue-multiselect v-model="selectedGenres" :options="genres" track-by="id" label="name" multiple
+                    placeholder="No excluded genre" @update:modelValue="updateGenres"
+                    class="multiselect-genres"
+                    id="FILTER_GENRES_EXCLUDE">
+                </vue-multiselect>
+                <p class="form-help">
+                    <i class="fas fa-info-circle"></i>
+                    Select genres to exclude from recommendations (e.g., Horror, Documentary)
                 </p>
+            </div>
+
+            <div class="form-group">
+                <label for="FILTER_NUM_SEASONS" class="form-label">Maximum Number of Seasons</label>
                 <input type="number" :value="config.FILTER_NUM_SEASONS"
                     @input="validateNumSeasons($event.target.value)"
-                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                    id="FILTER_NUM_SEASONS" placeholder="0">
-                <span v-if="errors.FILTER_NUM_SEASONS" class="text-red-500 text-xs">{{ errors.FILTER_NUM_SEASONS }}</span>
+                    class="form-input"
+                    id="FILTER_NUM_SEASONS" placeholder="0 (unlimited)" min="0">
+                <p class="form-help">
+                    <i class="fas fa-info-circle"></i>
+                    Limit TV series by number of seasons (0 = no limit)
+                </p>
+                <span v-if="errors.FILTER_NUM_SEASONS" class="form-error">{{ errors.FILTER_NUM_SEASONS }}</span>
             </div>
         </div>
 
-        <!-- Exclude Streaming Services -->
-        <div class="mt-4 flex flex-wrap items-center">
-            <div class="w-full sm:w-1/2 pr-2">
-                <label for="FILTER_REGION_PROVIDER" class="block text-xs sm:text-sm font-semibold text-gray-300">
-                    Select Region:
-                </label>
-                <p class="text-xs text-gray-400 mb-2">
-                    Choose the region to filter streaming services available in that area.
-                </p>
-                <vue-multiselect v-model="selectedRegion" :options="regions" track-by="iso_3166_1" label="english_name"
-                    placeholder="Select a region" @update:modelValue="updateRegion"
-                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md multiselect-region"
-                    id="FILTER_REGION_PROVIDER">
-                </vue-multiselect>
+        <!-- Streaming & Region Card -->
+        <div class="settings-card">
+            <h4 class="card-title">Streaming & Regional Filters</h4>
+
+            <div class="form-row">
+                <div class="form-group flex-1">
+                    <label for="FILTER_REGION_PROVIDER" class="form-label">Region</label>
+                    <vue-multiselect v-model="selectedRegion" :options="regions" track-by="iso_3166_1" label="english_name"
+                        placeholder="Select a region" @update:modelValue="updateRegion"
+                        class="multiselect-region"
+                        id="FILTER_REGION_PROVIDER">
+                    </vue-multiselect>
+                </div>
+
+                <div class="form-group flex-1">
+                    <label for="FILTER_STREAMING_SERVICES" class="form-label">Exclude Streaming Services</label>
+                    <vue-multiselect v-model="selectedStreamingServices" :options="streamingServices" track-by="provider_id"
+                        label="provider_name" multiple placeholder="No excluded service"
+                        @update:modelValue="updateStreamingServices"
+                        class="multiselect-services"
+                        id="FILTER_STREAMING_SERVICES">
+                    </vue-multiselect>
+                </div>
             </div>
-        
-            <div class="w-full sm:w-1/2 pl-2 mt-4 sm:mt-0">
-                <label for="FILTER_STREAMING_SERVICES" class="block text-xs sm:text-sm font-semibold text-gray-300">
-                    Exclude Streaming Services:
-                </label>
-                <p class="text-xs text-gray-400 mb-2">
-                    Select streaming services to exclude from your recommendations.
-                </p>
-                <vue-multiselect v-model="selectedStreamingServices" :options="streamingServices" track-by="provider_id"
-                    label="provider_name" multiple placeholder="No excluded service"
-                    @update:modelValue="updateStreamingServices"
-                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md multiselect-services"
-                    id="FILTER_STREAMING_SERVICES">
-                </vue-multiselect>
-            </div>
+            <p class="form-help">
+                <i class="fas fa-info-circle"></i>
+                Filter by region and exclude specific streaming services
+            </p>
         </div>
 
-        <!-- Country and Release Year Filters -->
-        <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mt-4">
-            <div class="w-full sm:w-1/2">
-                <label for="FILTER_LANGUAGE" class="block text-xs sm:text-sm font-semibold text-gray-300">
-                    Original Language of Content:
-                </label>
-                <p class="text-xs text-gray-400 mb-2">
-                    Choose the preferred original language(s) of the content. For example, selecting "English" will prioritize content originally produced in English.
-                </p>
-                <vue-multiselect v-model="selectedLanguages" :options="languages" track-by="iso_639_1"
-                    label="english_name" multiple placeholder="No preferred language"
-                    @update:modelValue="updateLanguages"
-                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md multiselect-languages"
-                    id="FILTER_LANGUAGE">
-                </vue-multiselect>
+        <!-- Language & Year Card -->
+        <div class="settings-card">
+            <h4 class="card-title">Language & Release Date</h4>
+
+            <div class="form-row">
+                <div class="form-group flex-1">
+                    <label for="FILTER_LANGUAGE" class="form-label">Original Language</label>
+                    <vue-multiselect v-model="selectedLanguages" :options="languages" track-by="iso_639_1"
+                        label="english_name" multiple placeholder="No preferred language"
+                        @update:modelValue="updateLanguages"
+                        class="multiselect-languages"
+                        id="FILTER_LANGUAGE">
+                    </vue-multiselect>
+                </div>
+
+                <div class="form-group flex-1">
+                    <label for="FILTER_RELEASE_YEAR" class="form-label">Earliest Release Year</label>
+                    <input type="number" :value="config.FILTER_RELEASE_YEAR"
+                        @focusout="validateReleaseYear($event.target.value)"
+                        class="form-input"
+                        id="FILTER_RELEASE_YEAR" placeholder="2000" min="1900">
+                    <span v-if="errors.FILTER_RELEASE_YEAR" class="form-error">{{ errors.FILTER_RELEASE_YEAR }}</span>
+                </div>
             </div>
-            <div class="w-full sm:w-1/2">
-                <label for="FILTER_RELEASE_YEAR" class="block text-xs sm:text-sm font-semibold text-gray-300">
-                    Release Year:
-                </label>
-                <p class="text-xs text-gray-400 mb-2">
-                    Specify the earliest release year for content. For instance, entering "2020" will include content released in 2020 or later.
-                </p>
-                <input type="number" :value="config.FILTER_RELEASE_YEAR"
-                    @focusout="validateReleaseYear($event.target.value)"
-                    class="w-full bg-gray-700 border border-gray-600 rounded-lg shadow-md px-4 py-2"
-                    id="FILTER_RELEASE_YEAR" placeholder="2000">
-                <span v-if="errors.FILTER_RELEASE_YEAR" class="text-red-500 text-xs">{{ errors.FILTER_RELEASE_YEAR }}</span>
-            </div>
+            <p class="form-help">
+                <i class="fas fa-info-circle"></i>
+                Filter by original language and minimum release year
+            </p>
         </div>
 
-        <div class="flex flex-col sm:flex-row justify-between mt-8 space-y-4 sm:space-y-0 sm:space-x-4">
+        <!-- Navigation Buttons -->
+        <div class="flex justify-between mt-8 gap-4">
             <button @click="$emit('previous-step')"
-                class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-4 px-8 rounded-lg w-full">Back</button>
+                class="btn-secondary w-full flex items-center justify-center gap-2 py-4 px-8">
+                <i class="fas fa-arrow-left"></i>
+                Back
+            </button>
             <button @click="submit" :disabled="hasErrors"
-                class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 px-8 rounded-lg w-full">Next</button>
+                class="btn-primary w-full flex items-center justify-center gap-2 py-4 px-8"
+                :class="{ 'opacity-50 cursor-not-allowed': hasErrors }">
+                Next Step
+                <i class="fas fa-arrow-right"></i>
+            </button>
         </div>
     </div>
 </template>
@@ -207,13 +213,13 @@ export default {
             errors: {
                 FILTER_TMDB_THRESHOLD: '',
                 FILTER_TMDB_MIN_VOTES: '',
-                FILTER_RELEASE_YEAR: ''
+                FILTER_RELEASE_YEAR: '',
+                FILTER_NUM_SEASONS: ''
             }
         };
     },
     computed: {
             hasErrors() {
-                // Checks if there are any error messages in the errors object
                 return Object.values(this.errors).some(error => error !== '');
             }
     },
@@ -269,7 +275,7 @@ export default {
             this.handleUpdate('FILTER_GENRES_EXCLUDE', selected.map(genre => ({ id: genre.id, name: genre.name })));
         },
         updateRegion(selected) {
-            this.handleUpdate('FILTER_REGION_PROVIDER', selected ? selected.iso_3166_1 : null); 
+            this.handleUpdate('FILTER_REGION_PROVIDER', selected ? selected.iso_3166_1 : null);
         },
         updateStreamingServices(selected) {
             this.handleUpdate('FILTER_STREAMING_SERVICES', selected.map(service => ({ provider_id: service.provider_id, provider_name: service.provider_name })));
@@ -309,7 +315,6 @@ export default {
             }
         },
         submit() {
-            // Check if there are no validation errors before proceeding
             if (!this.hasErrors) {
                 this.$emit('next-step');
             }
@@ -335,3 +340,105 @@ export default {
     }
 };
 </script>
+
+<style scoped>
+/* Config Section */
+.config-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.section-description {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
+}
+
+/* Form Row */
+.form-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.form-row .form-group {
+  margin-bottom: 0;
+}
+
+.form-row + .form-help {
+  margin-top: 0.5rem;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+/* Form Error */
+.form-error {
+  display: block;
+  color: var(--color-error);
+  font-size: 0.8125rem;
+  margin-top: 0.25rem;
+  font-weight: 500;
+}
+
+/* Toggle Items */
+.space-y-3 > * + * {
+  margin-top: 0.75rem;
+}
+
+.toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--color-border-light);
+  padding: 1rem;
+  border-radius: var(--border-radius-sm);
+  transition: var(--transition-base);
+}
+
+.toggle-item:hover {
+  border-color: var(--color-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.toggle-info {
+  flex-grow: 1;
+  padding-right: 1rem;
+}
+
+.toggle-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 0.25rem 0;
+}
+
+.toggle-description {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .form-row .form-group {
+    margin-bottom: 1rem;
+  }
+
+}
+</style>
