@@ -391,7 +391,6 @@
 .btn-outline:hover:not(:disabled) {
   background-color: var(--color-bg-active);
   border-color: var(--color-primary);
-  color: var(--color-primary);
 }
 
 .btn-danger {

@@ -515,21 +515,21 @@ class DatabaseManager:
         }
     
     def get_requests_stats(self) -> Dict[str, Any]:
-        """Get statistics about requests: total and today's count."""
+        """Get statistics about requests: total, today, this week, and this month counts."""
         self.logger.debug("Retrieving request statistics")
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Total requests query
             total_query = """
                 SELECT COUNT(*) FROM requests
                 WHERE requested_by = 'SuggestArr'
             """
-            
+
             if self.db_type in ['mysql', 'postgres']:
                 total_query = total_query.replace("?", "%s")
-            
+
             cursor.execute(total_query)
             total_result = cursor.fetchone()
             total = total_result[0] if total_result else 0
@@ -558,16 +558,77 @@ class DatabaseManager:
 
             if self.db_type in ['mysql', 'postgres']:
                 today_query = today_query.replace("?", "%s")
-            
+
             cursor.execute(today_query)
             today_result = cursor.fetchone()
             today = today_result[0] if today_result else 0
+
+            # This week's requests query (from Monday to today)
+            if self.db_type == 'sqlite':
+                week_query = """
+                    SELECT COUNT(*) FROM requests
+                    WHERE requested_by = 'SuggestArr'
+                    AND DATE(requested_at) >= DATE('now', '-' || ((CAST(strftime('%w', 'now') AS INTEGER) + 6) % 7) || ' days')
+                """
+            elif self.db_type == 'postgres':
+                week_query = """
+                    SELECT COUNT(*) FROM requests
+                    WHERE requested_by = 'SuggestArr'
+                    AND DATE(requested_at) >= DATE_TRUNC('week', CURRENT_DATE)
+                """
+            elif self.db_type in ['mysql', 'mariadb']:
+                week_query = """
+                    SELECT COUNT(*) FROM requests
+                    WHERE requested_by = 'SuggestArr'
+                    AND DATE(requested_at) >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
+                """
+            else:
+                week_query = total_query
+
+            if self.db_type in ['mysql', 'postgres']:
+                week_query = week_query.replace("?", "%s")
+
+            cursor.execute(week_query)
+            week_result = cursor.fetchone()
+            this_week = week_result[0] if week_result else 0
+
+            # This month's requests query
+            if self.db_type == 'sqlite':
+                month_query = """
+                    SELECT COUNT(*) FROM requests
+                    WHERE requested_by = 'SuggestArr'
+                    AND strftime('%Y-%m', requested_at) = strftime('%Y-%m', 'now')
+                """
+            elif self.db_type == 'postgres':
+                month_query = """
+                    SELECT COUNT(*) FROM requests
+                    WHERE requested_by = 'SuggestArr'
+                    AND DATE_TRUNC('month', requested_at) = DATE_TRUNC('month', CURRENT_DATE)
+                """
+            elif self.db_type in ['mysql', 'mariadb']:
+                month_query = """
+                    SELECT COUNT(*) FROM requests
+                    WHERE requested_by = 'SuggestArr'
+                    AND YEAR(requested_at) = YEAR(CURDATE())
+                    AND MONTH(requested_at) = MONTH(CURDATE())
+                """
+            else:
+                month_query = total_query
+
+            if self.db_type in ['mysql', 'postgres']:
+                month_query = month_query.replace("?", "%s")
+
+            cursor.execute(month_query)
+            month_result = cursor.fetchone()
+            this_month = month_result[0] if month_result else 0
 
             return {
                 "total": total,
                 "approved": 0,  # Not handled on your side
                 "pending": 0,   # Not handled on your side
-                "today": today
+                "today": today,
+                "this_week": this_week,
+                "this_month": this_month
             }
     
     def test_connection(self, db_config: Dict[str, Any]) -> Dict[str, str]:

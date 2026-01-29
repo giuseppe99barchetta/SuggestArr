@@ -9,17 +9,22 @@
  */
 export function formatDate(dateString) {
   if (!dateString) return 'N/A';
-  
+
   const date = new Date(dateString);
   const now = new Date();
-  const diffTime = Math.abs(now - date);
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
+
+  // Reset time to midnight for accurate day comparison
+  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const nowOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const diffTime = nowOnly - dateOnly;
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
   if (diffDays === 0) return 'today';
   if (diffDays === 1) return 'yesterday';
   if (diffDays < 7) return `${diffDays} days ago`;
   if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  
+
   return date.toLocaleDateString();
 }
 
