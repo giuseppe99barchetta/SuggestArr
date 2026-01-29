@@ -550,20 +550,17 @@ export default {
 }
 
 .request-title-compact {
-  margin: 0;
-  color: #e5e7eb;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
   line-height: 1.3;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-height: 2em;
-  transition: color 0.2s ease;
 }
-
 .request-card-compact:hover .request-title-compact {
   color: #fff;
 }
@@ -623,7 +620,7 @@ export default {
 
 .btn-view-all-overlay:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(43, 44, 44, 0.5), var(--shadow-glow);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 30px rgba(255, 255, 255, 0.3);
 }
 
 .btn-view-all-overlay i {
