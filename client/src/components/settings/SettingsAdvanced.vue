@@ -389,7 +389,18 @@ export default {
   },
   methods: {
     isUserSelected(userId) {
-      return Array.isArray(this.localConfig.SELECTED_USERS) && this.localConfig.SELECTED_USERS.includes(userId);
+      if (!Array.isArray(this.localConfig.SELECTED_USERS)) {
+        return false;
+      }
+      // Handle both formats: array of objects or array of IDs (legacy)
+      return this.localConfig.SELECTED_USERS.some(user => {
+        if (typeof user === 'string') {
+          return user === userId;
+        } else if (typeof user === 'object' && user.id) {
+          return user.id === userId;
+        }
+        return false;
+      });
     },
 
     toggleUserSelection(userId) {
@@ -397,14 +408,36 @@ export default {
         this.localConfig.SELECTED_USERS = [];
       }
 
-      const index = this.localConfig.SELECTED_USERS.indexOf(userId);
+      // Normalize to array of objects format
+      const normalized = this.localConfig.SELECTED_USERS.map(user => {
+        if (typeof user === 'string') {
+          // Convert legacy format to new format
+          const fullUser = this.availableUsers.find(u => u.id === user);
+          return fullUser ? { id: fullUser.id, name: fullUser.name } : { id: user, name: user };
+        } else if (typeof user === 'object' && user.id) {
+          return { id: user.id, name: user.name };
+        }
+        return null;
+      }).filter(u => u !== null);
+
+      // Find index by comparing IDs
+      const index = normalized.findIndex(u => u.id === userId);
+
       if (index > -1) {
         // Remove user from selection
-        this.localConfig.SELECTED_USERS.splice(index, 1);
+        normalized.splice(index, 1);
       } else {
-        // Add user to selection
-        this.localConfig.SELECTED_USERS.push(userId);
+        // Add user to selection - find full user object
+        const userToAdd = this.availableUsers.find(u => u.id === userId);
+        if (userToAdd) {
+          normalized.push({ id: userToAdd.id, name: userToAdd.name });
+        } else {
+          // Fallback if user not found in availableUsers
+          normalized.push({ id: userId, name: userId });
+        }
       }
+
+      this.localConfig.SELECTED_USERS = normalized;
     },
 
     async loadUsers() {

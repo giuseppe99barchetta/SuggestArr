@@ -50,14 +50,31 @@ export default {
       return this.selectedUsers.some(user => user.id === userId);
     },
     updateSelectedUsers() {
-      const userIds = this.selectedUsers.map(user => user.id);
-      this.$emit('update-config', 'SELECTED_USERS', userIds);
+      // Save full user objects (id + name) for consistency with Jellyfin
+      const users = this.selectedUsers.map(user => ({
+        id: user.id,
+        name: user.name
+      }));
+      this.$emit('update-config', 'SELECTED_USERS', users);
     },
     loadSelectedUsers() {
       if (this.config.SELECTED_USERS) {
-        this.selectedUsers = this.users.filter(user =>
-          this.config.SELECTED_USERS.includes(user.id)
-        );
+        // Handle both formats: array of objects or array of IDs (legacy)
+        if (this.config.SELECTED_USERS.length > 0) {
+          const firstItem = this.config.SELECTED_USERS[0];
+          if (typeof firstItem === 'string') {
+            // Legacy format: array of IDs
+            this.selectedUsers = this.users.filter(user =>
+              this.config.SELECTED_USERS.includes(user.id)
+            );
+          } else if (typeof firstItem === 'object' && firstItem.id) {
+            // New format: array of objects
+            const selectedIds = this.config.SELECTED_USERS.map(u => u.id);
+            this.selectedUsers = this.users.filter(user =>
+              selectedIds.includes(user.id)
+            );
+          }
+        }
       }
     },
 

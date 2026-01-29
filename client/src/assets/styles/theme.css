@@ -177,7 +177,7 @@
 
 /* Settings Card */
 .settings-card {
-  background: #96969609;
+  background-color: hsla(0,0%,100%,.05);
   border: 1px solid var(--color-border-medium);
   border-radius: var(--border-radius-md);
   padding: 1.5rem;

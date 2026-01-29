@@ -771,7 +771,7 @@ export default {
         });
 
         setTimeout(() => {
-          this.$router.push({ name: 'Home' });
+          this.$router.push({ name: 'Setup' });
         }, 1000);
       } catch (error) {
         this.$toast.open({

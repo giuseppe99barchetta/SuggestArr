@@ -1,5 +1,6 @@
 import os
 import yaml
+import json
 from croniter import croniter
 from api_service.config.logger_manager import LoggerManager
 from api_service.config.cron_jobs import start_cron_job
@@ -9,6 +10,43 @@ logger = LoggerManager.get_logger("Config")
 # Constants for environment variables
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 CONFIG_PATH = os.path.join(BASE_DIR, 'config', 'config_files', 'config.yaml')
+
+def _parse_json_fields(config_data):
+    """
+    Parse JSON string fields into proper Python objects.
+    Some fields might be stored as JSON strings and need to be parsed.
+
+    Args:
+        config_data (dict): Configuration dictionary
+
+    Returns:
+        dict: Configuration with parsed JSON fields
+    """
+    # Fields that should be lists/dicts but might be stored as JSON strings
+    json_fields = [
+        'SELECTED_USERS',
+        'JELLYFIN_LIBRARIES',
+        'PLEX_LIBRARIES',
+        'FILTER_LANGUAGE',
+        'FILTER_GENRES_EXCLUDE',
+        'FILTER_STREAMING_SERVICES'
+    ]
+
+    for field in json_fields:
+        if field in config_data and isinstance(config_data[field], str):
+            try:
+                # Try to parse as JSON
+                parsed_value = json.loads(config_data[field])
+                config_data[field] = parsed_value
+                logger.debug(f"Parsed {field} from JSON string to {type(parsed_value).__name__}")
+            except (json.JSONDecodeError, TypeError):
+                # If parsing fails, check if it should be an empty list based on defaults
+                default_value = get_default_values().get(field, lambda: None)()
+                if isinstance(default_value, list):
+                    config_data[field] = []
+                    logger.warning(f"Failed to parse {field}, setting to empty list")
+
+    return config_data
 
 def load_env_vars():
     """
@@ -22,7 +60,10 @@ def load_env_vars():
     with open(CONFIG_PATH, 'r', encoding='utf-8') as file:
         config_data = yaml.safe_load(file)
         logger.debug("Correctly loaded stored config.yaml")
-        return {key: config_data.get(key, default_value()) for key, default_value in get_default_values().items()}
+        resolved_config = {key: config_data.get(key, default_value()) for key, default_value in get_default_values().items()}
+        # Parse JSON string fields
+        resolved_config = _parse_json_fields(resolved_config)
+        return resolved_config
 
 
 def get_default_values():
