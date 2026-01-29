@@ -33,7 +33,31 @@ class ContentAutomation:
         instance.max_similar_tv = min(int(env_vars.get('MAX_SIMILAR_TV', '2')), 20)
         instance.search_size = min(int(env_vars.get('SEARCH_SIZE', '20')), 100)
         instance.number_of_seasons = env_vars.get('FILTER_NUM_SEASONS') or "all"
-        instance.selected_users = env_vars.get('SELECTED_USERS') or []
+
+        # Ensure selected_users is always a list and normalize mixed types
+        selected_users_raw = env_vars.get('SELECTED_USERS') or []
+        if not isinstance(selected_users_raw, list):
+            instance.logger.warning(f"SELECTED_USERS is not a list (type: {type(selected_users_raw)}), using empty list")
+            instance.selected_users = []
+        else:
+            # Normalize mixed types: convert strings to dict format, keep dicts as is
+            normalized_users = []
+            for user in selected_users_raw:
+                if isinstance(user, dict):
+                    # Already a dict, ensure it has required keys
+                    if 'id' in user:
+                        normalized_users.append(user)
+                    else:
+                        instance.logger.warning(f"User dict missing 'id' key: {user}")
+                elif isinstance(user, str):
+                    # Convert string ID to dict format
+                    normalized_users.append({'id': user, 'name': user})
+                    instance.logger.debug(f"Normalized string user ID '{user}' to dict format")
+                else:
+                    instance.logger.warning(f"Invalid user type: {type(user)} - {user}")
+
+            instance.selected_users = normalized_users
+            instance.logger.debug(f"Normalized selected users: {instance.selected_users}")
 
         instance.logger.info(f"Configuration: service={instance.selected_service}, max_content={instance.max_content}, "
                            f"max_similar_movie={instance.max_similar_movie}, max_similar_tv={instance.max_similar_tv}")
@@ -44,10 +68,19 @@ class ContentAutomation:
         tmdb_min_votes = int(env_vars.get('FILTER_TMDB_MIN_VOTES') or 20)
         include_no_ratings = env_vars.get('FILTER_INCLUDE_NO_RATING', True) == True
         filter_release_year = int(env_vars.get('FILTER_RELEASE_YEAR') or 0)
-        filter_language = env_vars.get('FILTER_LANGUAGE', [])
-        filter_genre = env_vars.get('FILTER_GENRES_EXCLUDE', [])
+
+        # Ensure list fields are always lists
+        filter_language_raw = env_vars.get('FILTER_LANGUAGE', [])
+        filter_language = filter_language_raw if isinstance(filter_language_raw, list) else []
+
+        filter_genre_raw = env_vars.get('FILTER_GENRES_EXCLUDE', [])
+        filter_genre = filter_genre_raw if isinstance(filter_genre_raw, list) else []
+
         filter_region_provider = env_vars.get('FILTER_REGION_PROVIDER', None)
-        filter_streaming_services = env_vars.get('FILTER_STREAMING_SERVICES', [])
+
+        filter_streaming_raw = env_vars.get('FILTER_STREAMING_SERVICES', [])
+        filter_streaming_services = filter_streaming_raw if isinstance(filter_streaming_raw, list) else []
+
         exclude_downloaded = env_vars.get('EXCLUDE_DOWNLOADED', True)
         exclude_requested = env_vars.get('EXCLUDE_REQUESTED', True)
 
@@ -85,11 +118,18 @@ class ContentAutomation:
         # Initialize media service handler (Jellyfin or Plex)
         if instance.selected_service in ('jellyfin', 'emby'):
             instance.logger.info(f"Initializing {instance.selected_service.upper()} client")
+
+            # Ensure JELLYFIN_LIBRARIES is a list
+            jellyfin_libraries_raw = env_vars.get('JELLYFIN_LIBRARIES')
+            jellyfin_libraries = jellyfin_libraries_raw if isinstance(jellyfin_libraries_raw, list) else []
+            if not isinstance(jellyfin_libraries_raw, list) and jellyfin_libraries_raw is not None:
+                instance.logger.warning(f"JELLYFIN_LIBRARIES is not a list (type: {type(jellyfin_libraries_raw)}), using empty list")
+
             jellyfin_client = JellyfinClient(
                 env_vars['JELLYFIN_API_URL'],
                 env_vars['JELLYFIN_TOKEN'],
                 instance.max_content,
-                env_vars.get('JELLYFIN_LIBRARIES')
+                jellyfin_libraries
             )
             await jellyfin_client.init_existing_content()
             instance.media_handler = JellyfinHandler(
@@ -99,11 +139,18 @@ class ContentAutomation:
 
         elif instance.selected_service == 'plex':
             instance.logger.info("Initializing Plex client")
+
+            # Ensure PLEX_LIBRARIES is a list
+            plex_libraries_raw = env_vars.get('PLEX_LIBRARIES')
+            plex_libraries = plex_libraries_raw if isinstance(plex_libraries_raw, list) else []
+            if not isinstance(plex_libraries_raw, list) and plex_libraries_raw is not None:
+                instance.logger.warning(f"PLEX_LIBRARIES is not a list (type: {type(plex_libraries_raw)}), using empty list")
+
             plex_client = PlexClient(
                 api_url=env_vars['PLEX_API_URL'],
                 token=env_vars['PLEX_TOKEN'],
                 max_content=instance.max_content,
-                library_ids=env_vars.get('PLEX_LIBRARIES'),
+                library_ids=plex_libraries,
                 user_ids=instance.selected_users
             )
             await plex_client.init_existing_content()

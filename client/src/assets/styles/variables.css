@@ -1,0 +1,184 @@
+/**
+ * SuggestArr Design System
+ * Global CSS Variables and Design Tokens
+ */
+
+:root {
+  /* ========== Color Palette ========== */
+
+  /* Primary Colors */
+  --color-primary: #636363;
+  --color-primary-hover: #55575a;
+  --color-primary-light: #60a5fa;
+  --color-primary-dark: #1e40af;
+  --color-primary-alpha-10: rgba(59, 130, 246, 0.1);
+  --color-primary-alpha-20: rgba(59, 130, 246, 0.2);
+
+  /* Success Colors */
+  --color-success: #10b981;
+  --color-success-hover: #059669;
+  --color-success-light: #34d399;
+  --color-success-alpha-10: rgba(16, 185, 129, 0.1);
+  --color-success-alpha-20: rgba(16, 185, 129, 0.2);
+
+  /* Warning Colors */
+  --color-warning: #f59e0b;
+  --color-warning-hover: #d97706;
+  --color-warning-light: #fbbf24;
+  --color-warning-alpha-10: rgba(245, 158, 11, 0.1);
+
+  /* Error Colors */
+  --color-error: #ef4444;
+  --color-error-hover: #dc2626;
+  --color-error-light: #f87171;
+  --color-error-alpha-10: rgba(239, 68, 68, 0.1);
+
+  /* Info Colors */
+  --color-info: #06b6d4;
+  --color-info-hover: #0891b2;
+  --color-info-light: #22d3ee;
+  --color-info-alpha-10: rgba(6, 182, 212, 0.1);
+
+  /* Background Colors */
+  --color-bg-primary: rgba(0, 0, 0, 0.6);
+  --color-bg-content: #222224e7;
+  --color-bg-content-secondary: rgba(45, 55, 72, 0.8);
+  --color-bg-overlay-light: rgba(0, 0, 0, 0.6);
+  --color-bg-overlay-heavy: rgba(0, 0, 0, 0.75);
+  
+  /* Text Colors */
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-tertiary: #94a3b8;
+  --color-text-muted: #777879;
+  --color-text-disabled: #475569;
+  --color-text-inverse: #0f172a;
+
+  /* Border Colors */
+  --color-border-light: #444444;
+  --color-border-medium: #444444;
+  --color-border-heavy: #64748b;
+  --color-border-focus: var(--color-primary);
+
+  /* ========== Spacing ========== */
+  --spacing-xs: 0.25rem;    /* 4px */
+  --spacing-sm: 0.5rem;     /* 8px */
+  --spacing-md: 1rem;       /* 16px */
+  --spacing-lg: 1.5rem;     /* 24px */
+  --spacing-xl: 2rem;       /* 32px */
+  --spacing-2xl: 3rem;      /* 48px */
+  --spacing-3xl: 4rem;      /* 64px */
+
+  /* ========== Border Radius ========== */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* ========== Shadows ========== */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.3);
+  --shadow-success: 0 0 20px rgba(16, 185, 129, 0.3);
+
+  /* ========== Typography ========== */
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-family-mono: 'Monaco', 'Courier New', monospace;
+
+  /* Font Sizes */
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.875rem;   /* 14px */
+  --font-size-base: 1rem;     /* 16px */
+  --font-size-lg: 1.125rem;   /* 18px */
+  --font-size-xl: 1.25rem;    /* 20px */
+  --font-size-2xl: 1.5rem;    /* 24px */
+  --font-size-3xl: 1.875rem;  /* 30px */
+  --font-size-4xl: 2.25rem;   /* 36px */
+  --font-size-5xl: 3rem;      /* 48px */
+
+  /* Font Weights */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+
+  /* Line Heights */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ========== Transitions ========== */
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+  --transition-all: all 200ms ease;
+
+  /* ========== Z-Index ========== */
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+
+  /* ========== Breakpoints (for reference in JS) ========== */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  /* ========== Component Specific ========== */
+
+  /* Buttons */
+  --btn-height-sm: 32px;
+  --btn-height-md: 40px;
+  --btn-height-lg: 48px;
+  --btn-padding-x-sm: 12px;
+  --btn-padding-x-md: 16px;
+  --btn-padding-x-lg: 24px;
+
+  /* Inputs */
+  --input-height-sm: 32px;
+  --input-height-md: 40px;
+  --input-height-lg: 48px;
+  --input-padding-x: 12px;
+
+  /* Cards */
+  --card-padding: var(--spacing-lg);
+  --card-border-radius: var(--radius-lg);
+  --card-bg: var(--color-bg-secondary);
+
+  /* Progress Bar */
+  --progress-height: 4px;
+  --progress-bg: var(--color-bg-tertiary);
+}
+
+/* ========== Dark Mode Adjustments ========== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Already optimized for dark mode */
+  }
+}
+
+/* ========== Reduced Motion ========== */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-fast: 0ms;
+    --transition-base: 0ms;
+    --transition-slow: 0ms;
+    --transition-all: 0ms;
+  }
+
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

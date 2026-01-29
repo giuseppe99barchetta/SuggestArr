@@ -50,14 +50,31 @@ export default {
       return this.selectedUsers.some(user => user.id === userId);
     },
     updateSelectedUsers() {
-      const userIds = this.selectedUsers.map(user => user.id);
-      this.$emit('update-config', 'SELECTED_USERS', userIds);
+      // Save full user objects (id + name) for consistency with Jellyfin
+      const users = this.selectedUsers.map(user => ({
+        id: user.id,
+        name: user.name
+      }));
+      this.$emit('update-config', 'SELECTED_USERS', users);
     },
     loadSelectedUsers() {
       if (this.config.SELECTED_USERS) {
-        this.selectedUsers = this.users.filter(user =>
-          this.config.SELECTED_USERS.includes(user.id)
-        );
+        // Handle both formats: array of objects or array of IDs (legacy)
+        if (this.config.SELECTED_USERS.length > 0) {
+          const firstItem = this.config.SELECTED_USERS[0];
+          if (typeof firstItem === 'string') {
+            // Legacy format: array of IDs
+            this.selectedUsers = this.users.filter(user =>
+              this.config.SELECTED_USERS.includes(user.id)
+            );
+          } else if (typeof firstItem === 'object' && firstItem.id) {
+            // New format: array of objects
+            const selectedIds = this.config.SELECTED_USERS.map(u => u.id);
+            this.selectedUsers = this.users.filter(user =>
+              selectedIds.includes(user.id)
+            );
+          }
+        }
       }
     },
 
@@ -154,13 +171,36 @@ export default {
     getServerConnections() {
       return this.servers.reduce((connections, server) => {
         if (server.connections) {
-          server.connections.forEach(connection => {
+          // Filtra e ordina le connessioni per priorità
+          const filteredConnections = server.connections
+            .filter(conn => {
+              // Escludi connessioni relay (troppo lente)
+              if (conn.relay === true || conn.relay === 1) return false;
+              return true;
+            })
+            .sort((a, b) => {
+              // Priorità: locale HTTPS > locale HTTP > remota HTTPS > remota HTTP
+              const aLocal = a.local === true || a.local === 1;
+              const bLocal = b.local === true || b.local === 1;
+              const aHttps = a.protocol === 'https';
+              const bHttps = b.protocol === 'https';
+
+              if (aLocal !== bLocal) return bLocal - aLocal; // locali prima
+              if (aHttps !== bHttps) return bHttps - aHttps; // HTTPS prima
+              return 0;
+            });
+
+          // Prendi solo le prime 3 connessioni migliori per server
+          filteredConnections.slice(0, 3).forEach(connection => {
+            const localLabel = (connection.local === true || connection.local === 1) ? ' [Local]' : ' [Remote]';
             connections.push({
               serverName: server.name,
               address: connection.address,
               port: connection.port,
               protocol: connection.protocol,
               secure: connection.protocol === 'https',
+              local: connection.local,
+              localLabel: localLabel
             });
           });
         }

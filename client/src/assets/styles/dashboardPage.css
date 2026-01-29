@@ -18,8 +18,9 @@
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
-  transition: opacity 0.8s ease-in-out;
   z-index: 0;
+  /* Instant transition by default - opacity changes immediately when classes removed */
+  transition: opacity 0s;
 }
 
 .current-bg {
@@ -28,6 +29,8 @@
 
 .current-bg.fade-out {
   opacity: 0;
+  /* Apply transition only when fading out */
+  transition: opacity 0.8s ease-in-out;
 }
 
 .next-bg {
@@ -36,6 +39,8 @@
 
 .next-bg.fade-in {
   opacity: 1;
+  /* Apply transition only when fading in */
+  transition: opacity 0.8s ease-in-out;
 }
 
 .settings-content {
@@ -362,6 +367,21 @@
   100% { transform: rotate(360deg); }
 }
 
+/* Small button size - matches input height */
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  min-height: 40px;
+  height: 40px;
+}
+
+/* Button in input group - ensure same height as input */
+.input-group .btn {
+  min-height: 40px;
+  height: 40px;
+  padding: 0.5rem 1rem;
+}
+
 .btn-outline {
   background: var(--color-bg-interactive);
   color: var(--color-text-primary);
@@ -371,7 +391,6 @@
 .btn-outline:hover:not(:disabled) {
   background-color: var(--color-bg-active);
   border-color: var(--color-primary);
-  color: var(--color-primary);
 }
 
 .btn-danger {

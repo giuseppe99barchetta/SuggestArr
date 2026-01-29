@@ -120,7 +120,7 @@
           <div class="form-group">
             <button
               @click="testPlexConnection"
-              class="btn btn-outline"
+              class="btn btn-outline mt-4"
               :disabled="isLoading || !localConfig.PLEX_TOKEN || !localConfig.PLEX_API_URL || testingConnections.plex"
             >
               <i v-if="testingConnections.plex" class="fas fa-spinner fa-spin"></i>
