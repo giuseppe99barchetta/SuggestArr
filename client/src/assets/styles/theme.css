@@ -277,6 +277,21 @@
   background-color: #4b5563;
 }
 
+/* Small button size - matches input height */
+.btn-sm {
+  padding: 0.5rem 1rem !important;
+  font-size: 0.875rem;
+  min-height: 40px;
+  height: 40px;
+}
+
+/* Button in input group - ensure same height as input */
+.input-group .btn {
+  min-height: 40px;
+  height: 40px;
+  padding: 0.5rem 1rem;
+}
+
 .btn-outline {
   background: var(--color-bg-interactive);
   color: var(--color-text-primary);
