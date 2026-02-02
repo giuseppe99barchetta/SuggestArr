@@ -2,12 +2,14 @@ import asyncio
 from flask import Blueprint, request, jsonify
 import aiohttp
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.tmdb.tmdb_client import TMDbClient
 
 tmdb_bp = Blueprint('tmdb', __name__)
 logger = LoggerManager.get_logger("TMDBRoute")
 
+
 @tmdb_bp.route('/test', methods=['POST'])
-def test_tmdb_connection():
+async def test_tmdb_connection():
     """
     Test TMDB API connection with provided API key.
     """
@@ -20,58 +22,8 @@ def test_tmdb_connection():
             }), 400
 
         api_key = data['api_key']
-
-        # Test the TMDB API by fetching a popular movie
-        test_url = f"https://api.themoviedb.org/3/movie/popular?api_key={api_key}&page=1"
-
-        async def test_connection():
-            try:
-                timeout = aiohttp.ClientTimeout(total=10)
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.get(test_url) as response:
-                        if response.status == 200:
-                            result_data = await response.json()
-                            return {
-                                'status': 'success',
-                                'message': 'TMDB API connection successful!',
-                                'data': {
-                                    'total_results': result_data.get('total_results', 0),
-                                    'total_pages': result_data.get('total_pages', 0)
-                                }
-                            }
-                        elif response.status == 401:
-                            return {
-                                'status': 'error',
-                                'message': 'Invalid TMDB API key'
-                            }
-                        else:
-                            return {
-                                'status': 'error',
-                                'message': f'TMDB API returned status {response.status}'
-                            }
-            except aiohttp.ClientTimeout:
-                return {
-                    'status': 'error',
-                    'message': 'Connection to TMDB API timed out'
-                }
-            except aiohttp.ClientError as e:
-                return {
-                    'status': 'error',
-                    'message': f'Failed to connect to TMDB API: {str(e)}'
-                }
-            except Exception as e:
-                return {
-                    'status': 'error',
-                    'message': f'Unexpected error: {str(e)}'
-                }
-
-        # Run the async function
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(test_connection())
-        finally:
-            loop.close()
+        proxy = data.get('proxy', None)
+        result = await TMDbClient.test_connection(api_key, proxy)
 
         if result['status'] == 'success':
             return jsonify(result), 200

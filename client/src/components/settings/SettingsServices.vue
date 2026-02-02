@@ -46,6 +46,34 @@
         </div>
 
         <div class="form-group">
+          <label for="proxyUrl">Proxy url</label>
+          <div class="input-group">
+            <input
+              id="proxyUrl"
+              v-model="localConfig.PROXY_URL"
+              :type="showProxyUrl ? 'text' : 'password'"
+              placeholder="Leave blank for direct connection"
+              class="form-control"
+              :disabled="isLoading"
+            />
+            <button
+              @click="showProxyUrl = !showProxyUrl"
+              type="button"
+              class="btn btn-outline btn-sm"
+              :disabled="isLoading"
+            >
+              <i :class="showProxyUrl ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+            </button>
+          </div>
+          <small class="form-help">
+            If you are experiencing issues accessing the TMDB API, you can use a proxy to bypass the block.
+            Please note that only HTTP and HTTPS proxies are supported. Example of a connection string for
+            a proxy requiring authentication:<br>
+            https://user:password@your_proxy.org:3128.
+          </small>
+        </div>
+
+        <div class="form-group">
           <button
             @click="testTmdbConnection"
             class="btn btn-outline form-group-button"
@@ -306,6 +334,7 @@ export default {
       localConfig: {},
       originalConfig: {},
       showTmdbKey: false,
+      showProxyUrl: false,
       showPlexToken: false,
       showJellyfinToken: false,
       showSeerToken: false,
@@ -329,39 +358,39 @@ export default {
     getMediaServerStatus() {
       const service = this.localConfig.SELECTED_SERVICE;
       if (!service) return 'status-disconnected';
-      
+
       if (service === 'plex' && this.localConfig.PLEX_TOKEN && this.localConfig.PLEX_API_URL) {
         return 'status-connected';
       }
-      if ((service === 'jellyfin' || service === 'emby') && 
+      if ((service === 'jellyfin' || service === 'emby') &&
           this.localConfig.JELLYFIN_TOKEN && this.localConfig.JELLYFIN_API_URL) {
         return 'status-connected';
       }
-      
+
       return 'status-warning';
     },
     getMediaServerStatusText() {
       const service = this.localConfig.SELECTED_SERVICE;
       if (!service) return 'No Service Selected';
-      
+
       if (service === 'plex' && this.localConfig.PLEX_TOKEN && this.localConfig.PLEX_API_URL) {
         return 'Connected';
       }
-      if ((service === 'jellyfin' || service === 'emby') && 
+      if ((service === 'jellyfin' || service === 'emby') &&
           this.localConfig.JELLYFIN_TOKEN && this.localConfig.JELLYFIN_API_URL) {
         return 'Connected';
       }
-      
+
       return 'Incomplete Configuration';
     },
     getSeerStatus() {
-      return (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN) 
-        ? 'status-connected' 
+      return (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN)
+        ? 'status-connected'
         : 'status-disconnected';
     },
     getSeerStatusText() {
-      return (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN) 
-        ? 'Connected' 
+      return (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN)
+        ? 'Connected'
         : 'Disconnected';
     },
   },
@@ -375,16 +404,6 @@ export default {
     },
   },
   methods: {
-    async testTmdbConnection() {
-      try {
-        await this.$emit('test-connection', 'tmdb', {
-          api_key: this.localConfig.TMDB_API_KEY,
-        });
-      } catch (error) {
-        console.error('Error testing TMDB connection:', error);
-      }
-    },
-
     async testJellyfinConnection() {
       if (!this.localConfig.JELLYFIN_API_URL) {
         if (this.$toast) {
@@ -395,7 +414,7 @@ export default {
         }
         return;
       }
-    
+
       if (!this.localConfig.JELLYFIN_TOKEN) {
         if (this.$toast) {
           this.$toast.warning('Please enter a Jellyfin API token', {
@@ -405,7 +424,7 @@ export default {
         }
         return;
       }
-    
+
       try {
         const url = this.localConfig.JELLYFIN_API_URL.trim();
         const testUrl = url.startsWith('http') ? url : `http://${url}`;
@@ -419,7 +438,7 @@ export default {
         }
         return;
       }
-    
+
       await this.$emit('test-connection', 'jellyfin', {
         api_url: this.localConfig.JELLYFIN_API_URL.trim(),
         token: this.localConfig.JELLYFIN_TOKEN.trim(),
@@ -436,7 +455,7 @@ export default {
         }
         return;
       }
-    
+
       if (!this.localConfig.PLEX_TOKEN) {
         if (this.$toast) {
           this.$toast.warning('Please enter a Plex token', {
@@ -446,7 +465,7 @@ export default {
         }
         return;
       }
-    
+
       try {
         const url = this.localConfig.PLEX_API_URL.trim();
         const testUrl = url.startsWith('http') ? url : `http://${url}`;
@@ -460,7 +479,7 @@ export default {
         }
         return;
       }
-    
+
       await this.$emit('test-connection', 'plex', {
         token: this.localConfig.PLEX_TOKEN.trim(),
         api_url: this.localConfig.PLEX_API_URL.trim(),
@@ -477,9 +496,10 @@ export default {
         }
         return;
       }
-    
+
       await this.$emit('test-connection', 'tmdb', {
         api_key: this.localConfig.TMDB_API_KEY.trim(),
+        proxy: this.localConfig.PROXY_URL.trim(),
       });
     },
 
@@ -493,7 +513,7 @@ export default {
         }
         return;
       }
-    
+
       if (!this.localConfig.SEER_TOKEN) {
         if (this.$toast) {
           this.$toast.warning('Please enter an API token', {
@@ -503,7 +523,7 @@ export default {
         }
         return;
       }
-    
+
       try {
         const url = this.localConfig.SEER_API_URL.trim();
         const testUrl = url.startsWith('http') ? url : `http://${url}`;
@@ -517,7 +537,7 @@ export default {
         }
         return;
       }
-    
+
       await this.$emit('test-connection', 'seer', {
         api_url: this.localConfig.SEER_API_URL.trim(),
         token: this.localConfig.SEER_TOKEN.trim(),
@@ -528,6 +548,7 @@ export default {
       try {
         const dataToSave = {
           TMDB_API_KEY: this.localConfig.TMDB_API_KEY,
+          PROXY_URL: this.localConfig.PROXY_URL,
           SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE,
         };
 
@@ -567,6 +588,7 @@ export default {
     async resetToDefaults() {
       const defaults = {
         TMDB_API_KEY: '',
+        PROXY_URL: null,
         SELECTED_SERVICE: '',
         PLEX_TOKEN: '',
         PLEX_API_URL: '',

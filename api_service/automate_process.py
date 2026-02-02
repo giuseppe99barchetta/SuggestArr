@@ -1,3 +1,5 @@
+import traceback
+
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.handler.jellyfin_handler import JellyfinHandler
@@ -62,7 +64,7 @@ class ContentAutomation:
         instance.logger.info(f"Configuration: service={instance.selected_service}, max_content={instance.max_content}, "
                            f"max_similar_movie={instance.max_similar_movie}, max_similar_tv={instance.max_similar_tv}")
         instance.logger.debug(f"Selected users: {instance.selected_users}")
-        
+
         # TMDB filters
         tmdb_threshold = int(env_vars.get('FILTER_TMDB_THRESHOLD') or 60)
         tmdb_min_votes = int(env_vars.get('FILTER_TMDB_MIN_VOTES') or 20)
@@ -111,7 +113,8 @@ class ContentAutomation:
             filter_language,
             filter_genre,
             filter_region_provider,
-            filter_streaming_services
+            filter_streaming_services,
+            env_vars['PROXY_URL'],
         )
         instance.logger.info("TMDb client initialized successfully")
 
@@ -170,4 +173,7 @@ class ContentAutomation:
             self.logger.info("Content automation process completed successfully")
         except Exception as e:
             self.logger.error(f"Content automation process failed: {str(e)}")
+            tb = e.__traceback__
+            exception_text = ''.join(traceback.format_exception(type(e), e, tb))
+            self.logger.debug(f"Content automation process on fail traceback: {exception_text}")
             raise

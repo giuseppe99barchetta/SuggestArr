@@ -61,7 +61,13 @@ class JellyfinHandler:
         provider_ids = item.get("ProviderIds", {})
         source_tmdb_id = provider_ids.get("Tmdb")
 
-        if not source_tmdb_id:
+        if not source_tmdb_id and provider_ids.get("Imdb"):
+            source_tmdb_id = await self.tmdb_client.find_tmdb_id(
+                provider_ids.get("Imdb"), 'imdb_id')
+        if not source_tmdb_id and provider_ids.get("Tvdb"):
+            source_tmdb_id = await self.tmdb_client.find_tmdb_id(
+                provider_ids.get("Tvdb"), 'tvdb_id')
+        if source_tmdb_id is None:
             self.logger.debug("Movie skipped: no TMDb ID")
             return
 
@@ -113,7 +119,7 @@ class JellyfinHandler:
         for media in media_ids[:max_items]:
             media_id = media['id']
             media_title = media['title']
-            
+
             self.logger.debug(f"Processing similar media: '{media_title}' with ID: '{media_id}'")
 
             # Check if already downloaded, requested, or in an excluded streaming service
@@ -122,19 +128,19 @@ class JellyfinHandler:
             if already_requested:
                 self.logger.info(f"Skipping [{media_type}, {media_title}]: already requested.")
                 continue
-            
+
             already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content)
             self.logger.debug(f"Already downloaded check for {media_title}: {already_downloaded}")
             if already_downloaded:
                 self.logger.info(f"Skipping [{media_type}, {media_title}]: already downloaded.")
                 continue
-            
+
             in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
             self.logger.debug(f"Excluded streaming service check for {media_title}: {in_excluded_streaming_service}, {provider}")
             if in_excluded_streaming_service:
                 self.logger.info(f"Skipping [{media_type}, {media_title}]: excluded by streaming service: {provider}")
                 continue
-            
+
             # Add to tasks if it passes all checks
             tasks.append(self._request_media_and_log(media_type, media, source_tmdb_obj, user))
 
