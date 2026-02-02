@@ -73,6 +73,7 @@ def get_default_values():
     logger.debug("Getting default values for environment variables")
     return {
         'TMDB_API_KEY': lambda: '',
+        'PROXY_URL': lambda: None,
         'JELLYFIN_API_URL': lambda: '',
         'JELLYFIN_TOKEN': lambda: '',
         'SEER_API_URL': lambda: '',
@@ -165,10 +166,10 @@ def save_env_vars(config_data):
 
         # Reload environment variables after saving
         load_env_vars()
-        
+
         # Update the cron job
         start_cron_job(env_vars)
-        
+
     except Exception as e:
         logger.error(f"Error saving environment variables: {e}")
         raise
@@ -205,11 +206,11 @@ def get_config_sections():
     return {
         'general': ['MAX_SIMILAR_MOVIE', 'MAX_SIMILAR_TV', 'CRON_TIMES', 'MAX_CONTENT_CHECKS',
                    'SEARCH_SIZE', 'SUBPATH', 'LOG_LEVEL'],
-        'services': ['TMDB_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL',
+        'services': ['TMDB_API_KEY', 'PROXY_URL', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL',
                     'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
                     'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_SESSION_TOKEN'],
         'database': ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
-                    'DB_MIN_CONNECTIONS', 'DB_MAX_CONNECTIONS', 'DB_MAX_IDLE_TIME', 
+                    'DB_MIN_CONNECTIONS', 'DB_MAX_CONNECTIONS', 'DB_MAX_IDLE_TIME',
                     'DB_MAX_LIFETIME', 'DB_CONNECTION_TIMEOUT', 'DB_RETRY_ATTEMPTS', 'DB_RETRY_DELAY'],
         'content_filters': ['FILTER_TMDB_THRESHOLD', 'FILTER_TMDB_MIN_VOTES', 'FILTER_GENRES_EXCLUDE',
                            'HONOR_JELLYSEER_DISCOVERY', 'FILTER_RELEASE_YEAR', 'FILTER_INCLUDE_NO_RATING',

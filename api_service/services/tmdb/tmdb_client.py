@@ -7,6 +7,8 @@ Classes:
     - TMDbClient: A class to interact with the TMDb API.
 """
 
+from typing import Dict, Optional
+
 import aiohttp
 import asyncio
 from api_service.config.logger_manager import LoggerManager
@@ -23,9 +25,9 @@ class TMDbClient:
     related to movies, TV shows, and external IDs.
     """
 
-    def __init__(self, api_key, search_size, tmdb_threshold, tmdb_min_votes, 
+    def __init__(self, api_key, search_size, tmdb_threshold, tmdb_min_votes,
                 include_no_ratings, filter_release_year, filter_language, filter_genre,
-                filter_region_provider, filter_streaming_services
+                filter_region_provider, filter_streaming_services, proxy_url
                 ):
         """
         Initializes the TMDbClient with the provided API key.
@@ -44,6 +46,7 @@ class TMDbClient:
         self.region_provider = filter_region_provider
         self.excluded_streaming_services = filter_streaming_services
         self.tmdb_api_url = "https://api.themoviedb.org/3"
+        self.proxy_url = proxy_url if proxy_url.strip() else None
         self.logger.debug("TMDbClient initialized with API key: ***")
 
     async def _fetch_recommendations(self, content_id, content_type):
@@ -86,7 +89,7 @@ class TMDbClient:
         url = f"{self.tmdb_api_url}/{content_type}/{content_id}/recommendations?api_key={self.api_key}&page={page}"
         self.logger.debug("Fetching data from URL: %s", url)
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(proxy=self.proxy_url) as session:
                 async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
                     if response.status in HTTP_OK:
                         self.logger.debug("Successfully fetched data for page %d", page)
@@ -96,7 +99,7 @@ class TMDbClient:
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while requesting %s recommendations: %s", content_type, str(e))
         return None
-    
+
     async def get_metadata(self, tmdb_id, content_type):
         """
         Fetch metadata for a movie or TV show by its TMDb ID.
@@ -107,9 +110,9 @@ class TMDbClient:
         url = f"{self.tmdb_api_url}/{content_type}/{tmdb_id}?api_key={self.api_key}"
         images_url = f"{self.tmdb_api_url}/{content_type}/{tmdb_id}/images?api_key={self.api_key}&include_image_language=en,null"
         self.logger.debug("Fetching metadata for %s with ID %s", content_type, tmdb_id)
-        
+
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(proxy=self.proxy_url) as session:
                 async with session.get(url, timeout=REQUEST_TIMEOUT) as details_response:
                     if details_response.status in HTTP_OK:
                         data = await details_response.json()
@@ -136,7 +139,7 @@ class TMDbClient:
 
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while fetching metadata for TMDb ID %s: %s", tmdb_id, str(e))
-        
+
         return None
 
     def _apply_filters(self, item, content_type):
@@ -150,7 +153,7 @@ class TMDbClient:
         if self.include_no_ratings and (rating is None or votes is None):
             self._log_exclusion_reason(item, "missing rating or votes", content_type)
             return False
-        
+
         original_language = item.get('original_language')
         selected_language_ids = [lang['id'] for lang in self.language_filter] if self.language_filter else []
         if self.language_filter and original_language not in selected_language_ids:
@@ -224,30 +227,48 @@ class TMDbClient:
         self.logger.debug("Finding similar TV shows for TV show ID %s", tvshow_id)
         return await self._fetch_recommendations(tvshow_id, 'tv')
 
-    async def find_tmdb_id_from_tvdb(self, tvdb_id):
+    async def find_tmdb_id(self, external_id: str, external_source: str):
         """
-        Finds the TMDb ID for a TV show using its TVDb ID asynchronously.
-        :param tvdb_id: The TVDb ID to convert to TMDb ID.
-        :return: The TMDb ID corresponding to the provided TVDb ID, or None if not found.
+        Finds the TMDb ID with provided external ids.
+        :param external_id: The external provider's id.
+        :param external_source: The external provider type.
+        :return: The TMDb ID corresponding to the provided external IDs, or None if not found.
         """
-        url = f"{self.tmdb_api_url}/find/{tvdb_id}?api_key={self.api_key}&external_source=tvdb_id"
-        self.logger.debug("Finding TMDb ID for TVDb ID %s", tvdb_id)
+
+        url = (
+            f"{self.tmdb_api_url}/find/{external_id}?"
+            f"api_key={self.api_key}&external_source={external_source}"
+        )
+        self.logger.debug(
+            "Finding TMDb ID for %s=%s", external_source.upper(), external_source)
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(proxy=self.proxy_url) as session:
                 async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
                     if response.status in HTTP_OK:
                         data = await response.json()
-                        if 'tv_results' in data and data['tv_results']:
-                            self.logger.debug("Found TMDb ID %s for TVDb ID %s", data['tv_results'][0]['id'], tvdb_id)
-                            return data['tv_results'][0]['id']
-                        self.logger.warning("No results found on TMDb for TVDb ID: %s", tvdb_id)
+                        results = data.get('movie_results', []) + data.get('tv_results', [])
+                        if len(results) == 1:
+                            tmdb_id = results[0].get('id')
+                            self.logger.debug(
+                                "Found TMDb ID %s for %s=%s",
+                                tmdb_id, external_source.upper(), external_id
+                            )
+                            return tmdb_id
+                        else:
+                            self.logger.debug(
+                                "No relevant results found on TMDb for %s=%s",
+                                tmdb_id, external_source.upper(), external_id
+                            )
                     else:
-                        self.logger.error("Error converting TVDb ID to TMDb ID: %d", response.status)
+                        self.logger.error(
+                            "Error converting %s to TMDb ID: %d",
+                            external_source.upper(), response.status
+                        )
         except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while converting TVDb ID: %s", str(e))
+            self.logger.error("An error occurred while search for TMDb ID: %s", str(e))
 
         return None
-    
+
     async def get_watch_providers(self, content_id, content_type):
         """
         Retrieves the streaming providers for a specific movie or TV show.
@@ -262,12 +283,12 @@ class TMDbClient:
         if not self.region_provider or not self.excluded_streaming_services:
             self.logger.debug("Skipping watch providers check: region_provider or excluded_streaming_services not set.")
             return False, None
-        
+
         url = f"{self.tmdb_api_url}/{content_type}/{content_id}/watch/providers?api_key={self.api_key}"
         self.logger.debug("Fetching watch providers for %s with ID %s", content_type, content_id)
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(proxy=self.proxy_url) as session:
                 async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
                     if response.status in HTTP_OK:
                         data = await response.json()
@@ -286,3 +307,56 @@ class TMDbClient:
             self.logger.error("An error occurred while fetching watch providers: %s", str(e))
 
         return False, None
+
+
+    @staticmethod
+    async def test_connection(api_key: str, proxy: Optional[str] = None) -> Dict[str, str]:
+        """
+        Test the TMDB API by fetching a popular movie.
+
+        :param api_key: The TMDB API key
+        :param proxy: Proxy url for connection test. Use None for direct connection.
+        """
+
+        test_url = f"https://api.themoviedb.org/3/movie/popular?api_key={api_key}&page=1"
+        # replace empty string with None
+        proxy = proxy if proxy.strip() else None
+        try:
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with aiohttp.ClientSession(timeout=timeout, proxy=proxy) as session:
+                async with session.get(test_url) as response:
+                    if response.status == 200:
+                        result_data = await response.json()
+                        return {
+                            'status': 'success',
+                            'message': 'TMDB API connection successful!',
+                            'data': {
+                                'total_results': result_data.get('total_results', 0),
+                                'total_pages': result_data.get('total_pages', 0)
+                            }
+                        }
+                    elif response.status == 401:
+                        return {
+                            'status': 'error',
+                            'message': 'Invalid TMDB API key'
+                        }
+                    else:
+                        return {
+                            'status': 'error',
+                            'message': f'TMDB API returned status {response.status}'
+                        }
+        except aiohttp.ClientTimeout:
+            return {
+                'status': 'error',
+                'message': 'Connection to TMDB API timed out'
+            }
+        except aiohttp.ClientError as e:
+            return {
+                'status': 'error',
+                'message': f'Failed to connect to TMDB API: {str(e)}'
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Unexpected error: {str(e)}'
+            }

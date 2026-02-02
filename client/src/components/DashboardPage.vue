@@ -1,12 +1,12 @@
 <template>
   <div class="settings-container">
-    <div 
-      class="background-layer current-bg" 
+    <div
+      class="background-layer current-bg"
       :style="{ backgroundImage: 'url(' + currentBackgroundUrl + ')' }"
       :class="{ 'fade-out': isTransitioning }"
     ></div>
-    <div 
-      class="background-layer next-bg" 
+    <div
+      class="background-layer next-bg"
       :style="{ backgroundImage: 'url(' + nextBackgroundUrl + ')' }"
       :class="{ 'fade-in': isTransitioning }"
     ></div>
@@ -42,7 +42,7 @@
       <!-- Mobile Navigation -->
       <div class="mobile-nav">
         <div class="mobile-tab-selector">
-          <button 
+          <button
             @click="showMobileDropdown = !showMobileDropdown"
             class="mobile-dropdown-button"
             :class="{ active: showMobileDropdown }"
@@ -55,7 +55,7 @@
             </span>
             <i class="fas fa-chevron-down dropdown-arrow" :class="{ rotated: showMobileDropdown }"></i>
           </button>
-          
+
           <transition name="dropdown-slide">
             <div v-if="showMobileDropdown" class="mobile-dropdown">
               <button
@@ -96,8 +96,8 @@
       <!-- Action Footer -->
       <div class="settings-footer">
         <div class="footer-info">
-          <button 
-                @click="showChangelog" 
+          <button
+                @click="showChangelog"
                 class="changelog-btn"
                 title="View changelog for current version"
               >
@@ -106,15 +106,15 @@
           <div class="version-info">
             <div class="version-text-container">
               <span>SuggestArr {{ currentVersion }}</span>
-              <span 
-                v-if="currentImageTag === 'nightly'" 
+              <span
+                v-if="currentImageTag === 'nightly'"
                 class="nightly-badge"
               >
                 ({{ currentImageTag }})
               </span>
             </div>
-            <button 
-              @click="checkForUpdates" 
+            <button
+              @click="checkForUpdates"
               :disabled="updateAvailable === null"
               class="version-check-btn"
               :class="{ 'update-available': updateAvailable }"
@@ -125,7 +125,7 @@
             </button>
           </div>
         </div>
-        
+
         <div class="footer-actions">
           <button
             @click="exportConfig"
@@ -135,7 +135,7 @@
             <i class="fas fa-download"></i>
             <span>Export</span>
           </button>
-          
+
           <button
             @click="importConfig"
             class="btn btn-outline"
@@ -144,7 +144,7 @@
             <i class="fas fa-upload"></i>
             <span>Import</span>
           </button>
-          
+
           <button
             @click="resetConfig"
             class="btn btn-danger"
@@ -153,7 +153,7 @@
             <i class="fas fa-undo"></i>
             <span>Reset</span>
           </button>
-          
+
           <button
             @click="forceRunAutomation"
             class="btn btn-secondary"
@@ -183,19 +183,19 @@
               <i class="fab fa-github changelog-icon"></i>
               <h3>Changelog - {{ currentVersion }}</h3>
             </div>
-            
+
             <div class="modal-body changelog-body">
               <div v-if="isLoadingChangelog" class="changelog-loading">
                 <i class="fas fa-spinner fa-spin"></i>
                 <span>Loading changelog...</span>
               </div>
-              
+
               <div v-else-if="changelogError" class="changelog-error">
                 <i class="fas fa-exclamation-triangle"></i>
                 <span>{{ changelogError }}</span>
                 <button @click="showChangelog" class="btn btn-secondary btn-sm">Retry</button>
               </div>
-              
+
               <div v-else class="changelog-content">
                 <div v-if="changelogData" v-html="changelogData"></div>
                 <div v-else class="no-changelog">
@@ -204,11 +204,11 @@
                 </div>
               </div>
             </div>
-            
+
             <div class="modal-actions">
-              <a 
-                :href="`https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${currentVersion}`" 
-                target="_blank" 
+              <a
+                :href="`https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${currentVersion}`"
+                target="_blank"
                 class="btn btn-outline"
                 v-if="changelogData"
               >
@@ -241,19 +241,19 @@
               <i class="fas fa-exclamation-triangle warning-icon"></i>
               <h3>Confirm Reset</h3>
             </div>
-            
+
             <p class="modal-body">
-              Are you sure you want to reset all settings to default? 
+              Are you sure you want to reset all settings to default?
               <strong>This action cannot be undone</strong> and will:
             </p>
-            
+
             <ul class="reset-warning-list">
               <li><i class="fas fa-times-circle"></i> Clear all service connections</li>
               <li><i class="fas fa-times-circle"></i> Remove all custom filters</li>
               <li><i class="fas fa-times-circle"></i> Reset scheduling preferences</li>
               <li><i class="fas fa-times-circle"></i> Clear database configuration</li>
             </ul>
-            
+
             <div class="modal-actions">
               <button @click="showResetModal = false" class="btn btn-secondary">
                 <i class="fas fa-times"></i>
@@ -304,7 +304,7 @@ export default {
   setup() {
     const { currentBackgroundUrl, nextBackgroundUrl, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
     const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
-    
+
     return {
       currentBackgroundUrl,
       nextBackgroundUrl,
@@ -379,9 +379,9 @@ export default {
   async mounted() {
     try {
       await this.loadConfig();
-      
+
       this.loadRequestCount();
-      
+
       if (this.config.TMDB_API_KEY) {
         this.startBackgroundImageRotation(this.config.TMDB_API_KEY);
       }
@@ -446,13 +446,13 @@ export default {
     async showChangelog() {
       this.showChangelogModal = true;
       this.changelogError = null;
-      
+
       if (!this.changelogData) {
         this.isLoadingChangelog = true;
         try {
           // Get release info from GitHub API
           const response = await axios.get(`https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases/tags/${this.currentVersion}`);
-          
+
           if (response.data && response.data.body) {
             // Convert markdown to basic HTML
             this.changelogData = this.parseMarkdown(response.data.body);
@@ -470,7 +470,7 @@ export default {
 
     parseMarkdown(markdown) {
       if (!markdown) return '';
-      
+
       // Basic markdown to HTML conversion
       return markdown
         // Headers
@@ -517,15 +517,15 @@ export default {
     },
     async testConnection(service, config) {
       this.testingConnections[service] = true;
-    
+
       try {
         let endpoint = '';
         let payload = {};
-      
+
         switch (service) {
           case 'tmdb':
             endpoint = '/api/tmdb/test';
-            payload = { api_key: config.api_key };
+            payload = { api_key: config.api_key, proxy: config.proxy };
             break;
           case 'plex':
             endpoint = '/api/plex/test';
@@ -533,23 +533,23 @@ export default {
             break;
           case 'jellyfin':
             endpoint = '/api/jellyfin/test';
-            payload = { 
+            payload = {
               api_url: config.api_url,
-              token: config.token 
+              token: config.token
             };
             break;
           case 'emby':
             endpoint = '/api/jellyfin/test';
-            payload = { 
+            payload = {
               api_url: config.api_url,
-              token: config.token 
+              token: config.token
             };
             break;
           case 'seer':
             endpoint = '/api/seer/test';
-            payload = { 
-              api_url: config.api_url, 
-              token: config.token 
+            payload = {
+              api_url: config.api_url,
+              token: config.token
             };
             break;
           case 'database':
@@ -566,9 +566,9 @@ export default {
           default:
             throw new Error('Unknown service');
         }
-      
+
         const response = await axios.post(endpoint, payload);
-      
+
         if (this.$toast) {
           this.$toast.success(
             response.data.message || `${service.toUpperCase()} connection successful!`,
@@ -580,18 +580,18 @@ export default {
         } else {
           alert(response.data.message || `${service.toUpperCase()} connection successful!`);
         }
-      
+
         return response.data;
-      
+
       } catch (error) {
         console.error(`${service} connection test failed:`, error);
-      
+
         let errorMessage = 'Connection test failed';
-      
+
         if (error.response) {
           const status = error.response.status;
           const data = error.response.data;
-        
+
           if (status === 400) {
             errorMessage = data?.message || 'Invalid credentials or server unreachable. Please check your URL and token.';
           } else if (status === 401) {
@@ -610,7 +610,7 @@ export default {
         } else {
           errorMessage = error.message || 'Request configuration error';
         }
-      
+
         if (this.$toast) {
           this.$toast.error(errorMessage, {
             position: 'top-right',
@@ -619,12 +619,12 @@ export default {
         } else {
           alert(`Error: ${errorMessage}`);
         }
-      
+
         return {
           status: 'error',
           message: errorMessage
         };
-      
+
       } finally {
         this.testingConnections[service] = false;
       }
@@ -632,10 +632,10 @@ export default {
     getServiceStatus() {
       const service = this.config.SELECTED_SERVICE;
       if (!service) return 'status-disconnected';
-      
+
       if (service === 'plex' && this.config.PLEX_TOKEN) return 'status-connected';
       if ((service === 'jellyfin' || service === 'emby') && this.config.JELLYFIN_TOKEN) return 'status-connected';
-      
+
       return 'status-warning';
     },
 
@@ -698,7 +698,7 @@ export default {
 
       this.loadingMessage = 'Importing configuration...';
       this.isLoading = true;
-      
+
       try {
         const text = await file.text();
         const configData = JSON.parse(text);
