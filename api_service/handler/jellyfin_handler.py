@@ -40,7 +40,11 @@ class JellyfinHandler:
 
     async def process_user_recent_items(self, user):
         """Process recently watched items for a specific Jellyfin user."""
-        self.logger.info(f"Fetching content for user: {user['name']}")
+        if not isinstance(user, dict):
+            self.logger.error(f"Invalid user object (not a dict): {user}")
+            return
+        user_name = user.get('name', user.get('id', 'Unknown'))
+        self.logger.info(f"Fetching content for user: {user_name}")
         recent_items_by_library = await self.jellyfin_client.get_recent_items(user)
         self.logger.debug(f"Recent items for user {user['name']}: {recent_items_by_library}")
 

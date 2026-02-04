@@ -240,10 +240,14 @@ class SeerClient:
         
         return False
 
-    async def check_already_downloaded(self, tmdb_id, media_type, local_content={}):
+    async def check_already_downloaded(self, tmdb_id, media_type, local_content=None):
         """Check if a media item has already been downloaded based on local content."""
         if self.exclude_downloaded:
             self.logger.debug("Checking if media already downloaded: tmdb_id=%s, media_type=%s", tmdb_id, media_type)
+
+            if local_content is None:
+                self.logger.warning("local_content is None, skipping downloaded check")
+                return False
 
             items = local_content.get(media_type, [])
             if not isinstance(items, list):
@@ -261,7 +265,7 @@ class SeerClient:
                     return True
         else:
             self.logger.info("Skipping check for already downloaded media.")
-        
+
         return False
 
     async def get_metadata(self, media_id, media_type):
