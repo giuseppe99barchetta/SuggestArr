@@ -56,6 +56,7 @@ class TestConfig(unittest.TestCase):
         "DB_RETRY_ATTEMPTS": "3",
         "DB_RETRY_DELAY": "1.0",
         "LOG_LEVEL": "INFO",
+        "SEER_ANIME_PROFILE_CONFIG": {},
     }
 
     def test_save_default_env_vars(self):

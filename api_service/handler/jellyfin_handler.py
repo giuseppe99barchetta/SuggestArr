@@ -5,7 +5,7 @@ from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 
 class JellyfinHandler:
-    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users):
+    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client
@@ -14,6 +14,8 @@ class JellyfinHandler:
         :param logger: Logger instance
         :param max_similar_movie: Max number of similar movies to request
         :param max_similar_tv: Max number of similar TV shows to request
+        :param selected_users: List of selected users
+        :param library_anime_map: Dict mapping library name to is_anime boolean
         """
         self.jellyfin_client = jellyfin_client
         self.jellyseer_client = jellyseer_client
@@ -25,6 +27,7 @@ class JellyfinHandler:
         self.request_count = 0
         self.existing_content = jellyfin_client.existing_content
         self.selected_users = selected_users
+        self.library_anime_map = library_anime_map or {}
 
     async def process_recent_items(self):
         """Process recently watched items for all Jellyfin users."""
@@ -44,20 +47,21 @@ class JellyfinHandler:
         if recent_items_by_library:
             tasks = []
             for library_name, items in recent_items_by_library.items():
-                self.logger.debug(f"Processing library: {library_name} with items: {items}")
-                tasks.extend([self.process_item(user, item) for item in items])
+                is_anime = self.library_anime_map.get(library_name, False)
+                self.logger.debug(f"Processing library: {library_name} (anime={is_anime}) with items: {items}")
+                tasks.extend([self.process_item(user, item, is_anime) for item in items])
             await asyncio.gather(*tasks)
 
-    async def process_item(self, user, item):
+    async def process_item(self, user, item, is_anime=False):
         """Process an individual item (movie or TV show episode)."""
         self.logger.debug(f"Processing item: {item}")
         item_type = item['Type'].lower()
         if item_type == 'movie' and self.max_similar_movie > 0:
-            await self.process_movie(user, item)
+            await self.process_movie(user, item, is_anime)
         elif item_type == 'episode' and self.max_similar_tv > 0:
-            await self.process_episode(user, item)
+            await self.process_episode(user, item, is_anime)
 
-    async def process_movie(self, user, item):
+    async def process_movie(self, user, item, is_anime=False):
         provider_ids = item.get("ProviderIds", {})
         source_tmdb_id = provider_ids.get("Tmdb")
 
@@ -73,10 +77,11 @@ class JellyfinHandler:
             'movie',
             self.max_similar_movie,
             source_tmdb_obj,
-            user
+            user,
+            is_anime
         )
 
-    async def process_episode(self, user, item):
+    async def process_episode(self, user, item, is_anime=False):
         series_id = item.get("SeriesId")
 
         if not series_id or series_id in self.processed_series:
@@ -99,12 +104,13 @@ class JellyfinHandler:
             'tv',
             self.max_similar_tv,
             source_tmdb_obj,
-            user
+            user,
+            is_anime
         )
 
-    async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj, user):
+    async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj, user, is_anime=False):
         """Request similar media (movie/TV show) via Jellyseer."""
-        self.logger.debug(f"Requesting {max_items} similar media")
+        self.logger.debug(f"Requesting {max_items} similar media (anime={is_anime})")
         if not media_ids:
             self.logger.info("No media IDs provided for similar media request.")
             return
@@ -113,36 +119,36 @@ class JellyfinHandler:
         for media in media_ids[:max_items]:
             media_id = media['id']
             media_title = media['title']
-            
+
             self.logger.debug(f"Processing similar media: '{media_title}' with ID: '{media_id}'")
 
             # Check if already downloaded, requested, or in an excluded streaming service
             already_requested = await self.jellyseer_client.check_already_requested(media_id, media_type)
             self.logger.debug(f"Already requested check for {media_title}: {already_requested}")
             if already_requested:
-                self.logger.info(f"Skipping [{media_type}, {media_title}]: already requested.")
+                self.logger.debug(f"Skipping [{media_type}, {media_title}]: already requested.")
                 continue
-            
+
             already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content)
             self.logger.debug(f"Already downloaded check for {media_title}: {already_downloaded}")
             if already_downloaded:
-                self.logger.info(f"Skipping [{media_type}, {media_title}]: already downloaded.")
+                self.logger.debug(f"Skipping [{media_type}, {media_title}]: already downloaded.")
                 continue
-            
+
             in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
             self.logger.debug(f"Excluded streaming service check for {media_title}: {in_excluded_streaming_service}, {provider}")
             if in_excluded_streaming_service:
-                self.logger.info(f"Skipping [{media_type}, {media_title}]: excluded by streaming service: {provider}")
+                self.logger.debug(f"Skipping [{media_type}, {media_title}]: excluded by streaming service: {provider}")
                 continue
-            
+
             # Add to tasks if it passes all checks
-            tasks.append(self._request_media_and_log(media_type, media, source_tmdb_obj, user))
+            tasks.append(self._request_media_and_log(media_type, media, source_tmdb_obj, user, is_anime))
 
         await asyncio.gather(*tasks)
 
-    async def _request_media_and_log(self, media_type, media, source_tmdb_obj, user):
+    async def _request_media_and_log(self, media_type, media, source_tmdb_obj, user, is_anime=False):
         """Helper method to request media and log the result."""
-        self.logger.debug(f"Requesting media: {media}")
-        if await self.jellyseer_client.request_media(media_type=media_type, media=media, source=source_tmdb_obj, user=user):
+        self.logger.debug(f"Requesting media: {media} (anime={is_anime})")
+        if await self.jellyseer_client.request_media(media_type=media_type, media=media, source=source_tmdb_obj, user=user, is_anime=is_anime):
             self.request_count += 1
-            self.logger.info(f"Requested {media_type}: {media['title']}")
+            self.logger.info(f"Requested {media_type}: {media['title']}{' [Anime]' if is_anime else ''}")

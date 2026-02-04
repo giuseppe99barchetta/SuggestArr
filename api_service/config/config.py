@@ -29,7 +29,8 @@ def _parse_json_fields(config_data):
         'PLEX_LIBRARIES',
         'FILTER_LANGUAGE',
         'FILTER_GENRES_EXCLUDE',
-        'FILTER_STREAMING_SERVICES'
+        'FILTER_STREAMING_SERVICES',
+        'SEER_ANIME_PROFILE_CONFIG'
     ]
 
     for field in json_fields:
@@ -120,6 +121,7 @@ def get_default_values():
         'DB_CONNECTION_TIMEOUT': lambda: '30',
         'DB_RETRY_ATTEMPTS': lambda: '3',
         'DB_RETRY_DELAY': lambda: '1.0',
+        'SEER_ANIME_PROFILE_CONFIG': lambda: {},
     }
 
 def get_config_values():
@@ -207,7 +209,9 @@ def get_config_sections():
                    'SEARCH_SIZE', 'SUBPATH', 'LOG_LEVEL'],
         'services': ['TMDB_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL',
                     'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
-                    'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_SESSION_TOKEN'],
+                    'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_USER_PSW',
+                    'SEER_SESSION_TOKEN', 'SEER_ANIME_PROFILE_CONFIG',
+                    'SELECTED_USERS'],
         'database': ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
                     'DB_MIN_CONNECTIONS', 'DB_MAX_CONNECTIONS', 'DB_MAX_IDLE_TIME', 
                     'DB_MAX_LIFETIME', 'DB_CONNECTION_TIMEOUT', 'DB_RETRY_ATTEMPTS', 'DB_RETRY_DELAY'],

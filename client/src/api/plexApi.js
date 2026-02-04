@@ -8,9 +8,10 @@ export default {
       loadingLibraries: false,
       servers: [],
       selectedServer: null,
-      selectedServerConnection: null, 
+      selectedServerConnection: null,
       libraries: [],
       selectedLibraries: [],
+      libraryAnimeFlags: {},      // Maps library key -> is_anime boolean
       manualConfiguration: false,
       manualServerAddress: '',
       isLoggedIn: false,
@@ -22,21 +23,55 @@ export default {
     // Toggle and update selected libraries
     toggleLibrarySelection(library) {
       const index = this.selectedLibraries.findIndex(l => l.key === library.key);
-      index > -1 ? this.selectedLibraries.splice(index, 1) : this.selectedLibraries.push(library);
+      if (index > -1) {
+        this.selectedLibraries.splice(index, 1);
+        delete this.libraryAnimeFlags[library.key];
+      } else {
+        this.selectedLibraries.push(library);
+        // Auto-detect anime from library title
+        this.libraryAnimeFlags[library.key] = library.title.toLowerCase().includes('anime');
+      }
       this.updateSelectedLibraries();
+    },
+    toggleAnimeFlag(libraryKey) {
+      this.libraryAnimeFlags[libraryKey] = !this.libraryAnimeFlags[libraryKey];
+      this.updateSelectedLibraries();
+    },
+    isAnimeLibrary(libraryKey) {
+      return !!this.libraryAnimeFlags[libraryKey];
     },
     isSelected(libraryId) {
       return this.selectedLibraries.some(library => library.key === libraryId);
     },
     updateSelectedLibraries() {
-      const libraryIds = this.selectedLibraries.map(library => library.key);
-      this.$emit('update-config', 'PLEX_LIBRARIES', libraryIds);
+      const libraryConfigs = this.selectedLibraries.map(library => ({
+        id: library.key,
+        name: library.title,
+        is_anime: !!this.libraryAnimeFlags[library.key]
+      }));
+      this.$emit('update-config', 'PLEX_LIBRARIES', libraryConfigs);
     },
     loadSelectedLibraries() {
-      if (this.config.PLEX_LIBRARIES) {
-        this.selectedLibraries = this.libraries.filter(library =>
-          this.config.PLEX_LIBRARIES.includes(library.key)
-        );
+      if (this.config.PLEX_LIBRARIES && this.config.PLEX_LIBRARIES.length > 0) {
+        const firstItem = this.config.PLEX_LIBRARIES[0];
+        if (typeof firstItem === 'string') {
+          // Legacy format: array of key strings
+          this.selectedLibraries = this.libraries.filter(library =>
+            this.config.PLEX_LIBRARIES.includes(library.key)
+          );
+          // No anime flags in legacy format
+          this.libraryAnimeFlags = {};
+        } else if (typeof firstItem === 'object' && firstItem.id) {
+          // New format: array of {id, name, is_anime} objects
+          const selectedIds = this.config.PLEX_LIBRARIES.map(lib => lib.id);
+          this.selectedLibraries = this.libraries.filter(library =>
+            selectedIds.includes(library.key)
+          );
+          this.libraryAnimeFlags = {};
+          this.config.PLEX_LIBRARIES.forEach(lib => {
+            this.libraryAnimeFlags[lib.id] = lib.is_anime || false;
+          });
+        }
       }
     },
 

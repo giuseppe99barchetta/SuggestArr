@@ -215,7 +215,16 @@ class DatabaseManager:
                     self.logger.debug("Adding column user_id...")
                     cursor.execute("ALTER TABLE requests ADD COLUMN user_id TEXT;")
                     conn.commit()
-                    
+
+                # Add missing is_anime column
+                if 'is_anime' not in existing_columns:
+                    self.logger.debug("Adding column is_anime...")
+                    if self.db_type in ['mysql', 'mariadb']:
+                        cursor.execute("ALTER TABLE requests ADD COLUMN is_anime TINYINT(1) DEFAULT 0;")
+                    else:
+                        cursor.execute("ALTER TABLE requests ADD COLUMN is_anime BOOLEAN DEFAULT 0;")
+                    conn.commit()
+
             except Exception as e:
                 self.logger.error(f"Failed to add missing columns: {e}")
                 raise DatabaseError(
@@ -229,15 +238,15 @@ class DatabaseManager:
         # Connection pooling handles connection management automatically
         pass
     
-    def save_request(self, media_type: str, media_id: str, source: str, user_id: Optional[str] = None) -> None:
+    def save_request(self, media_type: str, media_id: str, source: str, user_id: Optional[str] = None, is_anime: bool = False) -> None:
         """Save a new media request to the database, ignoring duplicates."""
-        self.logger.debug(f"Saving request: {media_type} {media_id} from {source}")
-        
+        self.logger.debug(f"Saving request: {media_type} {media_id} from {source} (anime={is_anime})")
+
         query = """
-            INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, tmdb_source_id, requested_by, user_id)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, tmdb_source_id, requested_by, user_id, is_anime)
+            VALUES (?, ?, ?, ?, ?, ?)
         """
-        params = (media_type, media_id, source, 'SuggestArr', user_id)
+        params = (media_type, media_id, source, 'SuggestArr', user_id, 1 if is_anime else 0)
         
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -417,13 +426,13 @@ class DatabaseManager:
         order_by_clause = sort_mapping.get(sort_by, sort_mapping['date-desc'])
     
         query = f"""
-            SELECT 
-                s.media_id AS source_id, s.title AS source_title, s.overview AS source_overview, 
+            SELECT
+                s.media_id AS source_id, s.title AS source_title, s.overview AS source_overview,
                 s.release_date AS source_release_date, s.poster_path AS source_poster_path, s.rating as rating,
                 r.tmdb_request_id, r.media_type, r.requested_at, s.logo_path, s.backdrop_path,
-                m.title AS request_title, m.overview AS request_overview, 
+                m.title AS request_title, m.overview AS request_overview,
                 m.release_date AS request_release_date, m.poster_path AS request_poster_path, m.rating as request_rating,
-                m.logo_path, m.backdrop_path
+                m.logo_path, m.backdrop_path, r.is_anime
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id
             JOIN metadata s ON r.tmdb_source_id = s.media_id
@@ -458,6 +467,7 @@ class DatabaseManager:
                     "media_type": row[7],
                     "logo_path": row[9],
                     "backdrop_path": row[10],
+                    "is_anime": bool(row[18]) if len(row) > 18 and row[18] is not None else False,
                     "requests": []
                 }
                 source_max_dates[source_id] = requested_at

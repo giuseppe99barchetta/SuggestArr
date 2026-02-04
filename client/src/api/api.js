@@ -49,3 +49,37 @@ export function fetchJellyfinUsers(apiUrl, apiKey) {
         JELLYFIN_TOKEN: apiKey
     });
 }
+
+// Function to fetch Plex libraries
+export function fetchPlexLibraries(apiUrl, token) {
+    return axios.post('/api/plex/libraries', {
+        PLEX_API_URL: apiUrl,
+        PLEX_TOKEN: token
+    });
+}
+
+// Function to fetch Plex Users
+export function fetchPlexUsers(apiUrl, token) {
+    return axios.post('/api/plex/users', {
+        PLEX_API_URL: apiUrl,
+        PLEX_TOKEN: token
+    });
+}
+
+// Function to fetch Radarr servers from Overseerr for anime profile configuration
+export const fetchRadarrServers = (url, token, sessionToken) => {
+    return axios.post('/api/seer/radarr-servers', {
+        SEER_API_URL: url,
+        SEER_TOKEN: token,
+        SEER_SESSION_TOKEN: sessionToken
+    });
+};
+
+// Function to fetch Sonarr servers from Overseerr for anime profile configuration
+export const fetchSonarrServers = (url, token, sessionToken) => {
+    return axios.post('/api/seer/sonarr-servers', {
+        SEER_API_URL: url,
+        SEER_TOKEN: token,
+        SEER_SESSION_TOKEN: sessionToken
+    });
+};

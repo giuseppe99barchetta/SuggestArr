@@ -185,3 +185,51 @@ async def login_seer():
     except Exception as e:
         logger.error(f'An error occurred during login: {str(e)}')
         return jsonify({'message': 'An internal error has occurred', 'type': 'error'}), 500
+
+
+@seer_bp.route('/radarr-servers', methods=['POST'])
+async def get_radarr_servers():
+    """
+    Fetch available Radarr servers from Overseerr for anime profile configuration.
+    Returns servers with their quality profiles, root folders, and tags.
+    """
+    try:
+        config_data = request.json
+        api_url = config_data.get('SEER_API_URL')
+        api_key = config_data.get('SEER_TOKEN')
+        session_token = config_data.get('SEER_SESSION_TOKEN')
+
+        if not api_key or not api_url:
+            return jsonify({'message': 'API key and URL are required', 'type': 'error'}), 400
+
+        seer_client = SeerClient(api_url=api_url, api_key=api_key, session_token=session_token)
+        servers = await seer_client.get_radarr_servers()
+
+        return jsonify({'servers': servers or []}), 200
+    except Exception as e:
+        logger.error(f'Error fetching Radarr servers: {str(e)}')
+        return jsonify({'message': f'Error fetching Radarr servers: {str(e)}', 'type': 'error'}), 500
+
+
+@seer_bp.route('/sonarr-servers', methods=['POST'])
+async def get_sonarr_servers():
+    """
+    Fetch available Sonarr servers from Overseerr for anime profile configuration.
+    Returns servers with their quality profiles, root folders, and tags.
+    """
+    try:
+        config_data = request.json
+        api_url = config_data.get('SEER_API_URL')
+        api_key = config_data.get('SEER_TOKEN')
+        session_token = config_data.get('SEER_SESSION_TOKEN')
+
+        if not api_key or not api_url:
+            return jsonify({'message': 'API key and URL are required', 'type': 'error'}), 400
+
+        seer_client = SeerClient(api_url=api_url, api_key=api_key, session_token=session_token)
+        servers = await seer_client.get_sonarr_servers()
+
+        return jsonify({'servers': servers or []}), 200
+    except Exception as e:
+        logger.error(f'Error fetching Sonarr servers: {str(e)}')
+        return jsonify({'message': f'Error fetching Sonarr servers: {str(e)}', 'type': 'error'}), 500

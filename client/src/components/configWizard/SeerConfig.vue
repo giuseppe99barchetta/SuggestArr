@@ -162,6 +162,183 @@
             </div>
         </div>
 
+        <!-- Download Profiles Configuration Card -->
+        <div v-if="testState.status === 'success'" class="settings-card">
+            <h4 class="card-title">
+                <i class="fas fa-download"></i>
+                Download Profiles (Optional)
+            </h4>
+            <p class="section-description">
+                Configure download profiles for your content requests.
+                Select which Radarr/Sonarr server, quality profile, and root folder to use when requesting content via Overseerr.
+                If not configured, Overseerr's default settings will be used.
+            </p>
+
+            <!-- Load Servers Button -->
+            <button @click="fetchArrServers" :disabled="loadingServers" class="btn btn-primary mb-4">
+                <i :class="loadingServers ? 'fas fa-spinner fa-spin' : 'fas fa-server'"></i>
+                {{ loadingServers ? 'Loading...' : (radarrServers.length > 0 || sonarrServers.length > 0 ? 'Reload Servers' : 'Load Radarr/Sonarr Servers') }}
+            </button>
+
+            <!-- Default Movie Profile (Radarr) -->
+            <div v-if="radarrServers.length > 0" class="anime-profile-section">
+                <h5 class="subsection-title">
+                    <i class="fas fa-film"></i>
+                    Movie Profile (Radarr)
+                </h5>
+
+                <div class="form-group">
+                    <label class="form-label">Radarr Server</label>
+                    <BaseDropdown
+                        v-model="defaultMovieServerId"
+                        :options="radarrServerOptions"
+                        placeholder="Select Radarr server..."
+                        @change="onDefaultMovieServerChange"
+                    />
+                </div>
+
+                <div v-if="defaultMovieProfiles.length > 0" class="form-group">
+                    <label class="form-label">Quality Profile</label>
+                    <BaseDropdown
+                        v-model="defaultMovieProfileId"
+                        :options="defaultMovieProfiles"
+                        placeholder="Select quality profile..."
+                        @change="updateProfileConfig"
+                    />
+                </div>
+
+                <div v-if="defaultMovieRootFolders.length > 0" class="form-group">
+                    <label class="form-label">Root Folder</label>
+                    <BaseDropdown
+                        v-model="defaultMovieRootFolder"
+                        :options="defaultMovieRootFolders"
+                        placeholder="Select root folder..."
+                        @change="updateProfileConfig"
+                    />
+                </div>
+            </div>
+
+            <!-- Default TV Profile (Sonarr) -->
+            <div v-if="sonarrServers.length > 0" class="anime-profile-section">
+                <h5 class="subsection-title">
+                    <i class="fas fa-tv"></i>
+                    TV Show Profile (Sonarr)
+                </h5>
+
+                <div class="form-group">
+                    <label class="form-label">Sonarr Server</label>
+                    <BaseDropdown
+                        v-model="defaultTvServerId"
+                        :options="sonarrServerOptions"
+                        placeholder="Select Sonarr server..."
+                        @change="onDefaultTvServerChange"
+                    />
+                </div>
+
+                <div v-if="defaultTvProfiles.length > 0" class="form-group">
+                    <label class="form-label">Quality Profile</label>
+                    <BaseDropdown
+                        v-model="defaultTvProfileId"
+                        :options="defaultTvProfiles"
+                        placeholder="Select quality profile..."
+                        @change="updateProfileConfig"
+                    />
+                </div>
+
+                <div v-if="defaultTvRootFolders.length > 0" class="form-group">
+                    <label class="form-label">Root Folder</label>
+                    <BaseDropdown
+                        v-model="defaultTvRootFolder"
+                        :options="defaultTvRootFolders"
+                        placeholder="Select root folder..."
+                        @change="updateProfileConfig"
+                    />
+                </div>
+            </div>
+
+            <!-- Anime Movie Profile (Radarr) -->
+            <div v-if="radarrServers.length > 0 && hasAnimeLibraries" class="anime-profile-section">
+                <h5 class="subsection-title">
+                    <i class="fas fa-torii-gate"></i>
+                    Anime Movie Profile (Radarr)
+                </h5>
+
+                <div class="form-group">
+                    <label class="form-label">Radarr Server</label>
+                    <BaseDropdown
+                        v-model="animeMovieServerId"
+                        :options="radarrServerOptions"
+                        placeholder="Select Radarr server..."
+                        @change="onAnimeMovieServerChange"
+                    />
+                </div>
+
+                <div v-if="animeMovieProfiles.length > 0" class="form-group">
+                    <label class="form-label">Quality Profile</label>
+                    <BaseDropdown
+                        v-model="animeMovieProfileId"
+                        :options="animeMovieProfiles"
+                        placeholder="Select quality profile..."
+                        @change="updateProfileConfig"
+                    />
+                </div>
+
+                <div v-if="animeMovieRootFolders.length > 0" class="form-group">
+                    <label class="form-label">Root Folder</label>
+                    <BaseDropdown
+                        v-model="animeMovieRootFolder"
+                        :options="animeMovieRootFolders"
+                        placeholder="Select root folder..."
+                        @change="updateProfileConfig"
+                    />
+                </div>
+            </div>
+
+            <!-- Anime TV Profile (Sonarr) -->
+            <div v-if="sonarrServers.length > 0 && hasAnimeLibraries" class="anime-profile-section">
+                <h5 class="subsection-title">
+                    <i class="fas fa-torii-gate"></i>
+                    Anime TV Profile (Sonarr)
+                </h5>
+
+                <div class="form-group">
+                    <label class="form-label">Sonarr Server</label>
+                    <BaseDropdown
+                        v-model="animeTvServerId"
+                        :options="sonarrServerOptions"
+                        placeholder="Select Sonarr server..."
+                        @change="onAnimeTvServerChange"
+                    />
+                </div>
+
+                <div v-if="animeTvProfiles.length > 0" class="form-group">
+                    <label class="form-label">Quality Profile</label>
+                    <BaseDropdown
+                        v-model="animeTvProfileId"
+                        :options="animeTvProfiles"
+                        placeholder="Select quality profile..."
+                        @change="updateProfileConfig"
+                    />
+                </div>
+
+                <div v-if="animeTvRootFolders.length > 0" class="form-group">
+                    <label class="form-label">Root Folder</label>
+                    <BaseDropdown
+                        v-model="animeTvRootFolder"
+                        :options="animeTvRootFolders"
+                        placeholder="Select root folder..."
+                        @change="updateProfileConfig"
+                    />
+                </div>
+            </div>
+
+            <!-- Info when no servers loaded -->
+            <div v-if="!loadingServers && radarrServers.length === 0 && sonarrServers.length === 0 && serversLoaded" class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>No Radarr/Sonarr servers found in Overseerr. Make sure they are configured in Overseerr settings.</span>
+            </div>
+        </div>
+
         <!-- Navigation Buttons -->
         <div class="flex justify-between mt-8 gap-4">
             <button @click="$emit('previous-step')"
@@ -230,6 +407,28 @@
   color: var(--color-warning);
 }
 
+/* Anime Profile Sections */
+.anime-profile-section {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--border-radius-sm);
+  background: var(--color-bg-interactive);
+}
+
+.subsection-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .settings-card {
@@ -244,7 +443,7 @@
 </style>
 
 <script>
-import { testJellyseerApi, authenticateUser } from '../../api/api';
+import { testJellyseerApi, authenticateUser, fetchRadarrServers, fetchSonarrServers } from '../../api/api';
 import BaseDropdown from '../common/BaseDropdown.vue';
 
 export default {
@@ -263,7 +462,24 @@ export default {
                 status: null,
                 isTesting: false
             },
-            showApiKeyHelp: false
+            showApiKeyHelp: false,
+            // Anime profile configuration
+            loadingServers: false,
+            serversLoaded: false,
+            radarrServers: [],
+            sonarrServers: [],
+            defaultMovieServerId: null,
+            defaultMovieProfileId: null,
+            defaultMovieRootFolder: null,
+            defaultTvServerId: null,
+            defaultTvProfileId: null,
+            defaultTvRootFolder: null,
+            animeMovieServerId: null,
+            animeMovieProfileId: null,
+            animeMovieRootFolder: null,
+            animeTvServerId: null,
+            animeTvProfileId: null,
+            animeTvRootFolder: null
         };
     },
     computed: {
@@ -274,6 +490,89 @@ export default {
             return this.users.map(user => ({
                 label: `${user.name}${user.email ? ` (${user.email})` : ''}`,
                 value: user.email || user.name
+            }));
+        },
+        hasAnimeLibraries() {
+            const jellyfinLibs = this.config.JELLYFIN_LIBRARIES || [];
+            const plexLibs = this.config.PLEX_LIBRARIES || [];
+            return [...jellyfinLibs, ...plexLibs].some(lib =>
+                typeof lib === 'object' && lib.is_anime
+            );
+        },
+        radarrServerOptions() {
+            return this.radarrServers.map(server => ({
+                label: server.name || `Radarr (ID: ${server.id})`,
+                value: String(server.id)
+            }));
+        },
+        sonarrServerOptions() {
+            return this.sonarrServers.map(server => ({
+                label: server.name || `Sonarr (ID: ${server.id})`,
+                value: String(server.id)
+            }));
+        },
+        defaultMovieProfiles() {
+            const server = this.radarrServers.find(s => String(s.id) === String(this.defaultMovieServerId));
+            if (!server || !server.profiles) return [];
+            return server.profiles.map(p => ({
+                label: p.name,
+                value: String(p.id)
+            }));
+        },
+        defaultMovieRootFolders() {
+            const server = this.radarrServers.find(s => String(s.id) === String(this.defaultMovieServerId));
+            if (!server || !server.rootFolders) return [];
+            return server.rootFolders.map(rf => ({
+                label: rf.path,
+                value: rf.path
+            }));
+        },
+        defaultTvProfiles() {
+            const server = this.sonarrServers.find(s => String(s.id) === String(this.defaultTvServerId));
+            if (!server || !server.profiles) return [];
+            return server.profiles.map(p => ({
+                label: p.name,
+                value: String(p.id)
+            }));
+        },
+        defaultTvRootFolders() {
+            const server = this.sonarrServers.find(s => String(s.id) === String(this.defaultTvServerId));
+            if (!server || !server.rootFolders) return [];
+            return server.rootFolders.map(rf => ({
+                label: rf.path,
+                value: rf.path
+            }));
+        },
+        animeMovieProfiles() {
+            const server = this.radarrServers.find(s => String(s.id) === String(this.animeMovieServerId));
+            if (!server || !server.profiles) return [];
+            return server.profiles.map(p => ({
+                label: p.name,
+                value: String(p.id)
+            }));
+        },
+        animeMovieRootFolders() {
+            const server = this.radarrServers.find(s => String(s.id) === String(this.animeMovieServerId));
+            if (!server || !server.rootFolders) return [];
+            return server.rootFolders.map(rf => ({
+                label: rf.path,
+                value: rf.path
+            }));
+        },
+        animeTvProfiles() {
+            const server = this.sonarrServers.find(s => String(s.id) === String(this.animeTvServerId));
+            if (!server || !server.profiles) return [];
+            return server.profiles.map(p => ({
+                label: p.name,
+                value: String(p.id)
+            }));
+        },
+        animeTvRootFolders() {
+            const server = this.sonarrServers.find(s => String(s.id) === String(this.animeTvServerId));
+            if (!server || !server.rootFolders) return [];
+            return server.rootFolders.map(rf => ({
+                label: rf.path,
+                value: rf.path
             }));
         }
     },
@@ -383,6 +682,140 @@ export default {
             }
             if (this.config.SEER_USER_PSW) {
                 this.userPassword = this.config.SEER_USER_PSW;
+            }
+        },
+
+        // Anime profile methods
+        async fetchArrServers() {
+            this.loadingServers = true;
+            this.serversLoaded = false;
+            const url = this.config.SEER_API_URL;
+            const token = this.config.SEER_TOKEN;
+            const sessionToken = this.config.SEER_SESSION_TOKEN;
+
+            try {
+                const [radarrRes, sonarrRes] = await Promise.all([
+                    fetchRadarrServers(url, token, sessionToken),
+                    fetchSonarrServers(url, token, sessionToken)
+                ]);
+                this.radarrServers = radarrRes.data.servers || [];
+                this.sonarrServers = sonarrRes.data.servers || [];
+                this.loadSavedProfileConfig();
+            } catch (error) {
+                console.error('Error fetching Radarr/Sonarr servers:', error);
+                this.radarrServers = [];
+                this.sonarrServers = [];
+            } finally {
+                this.loadingServers = false;
+                this.serversLoaded = true;
+            }
+        },
+
+        onDefaultMovieServerChange(value) {
+            this.defaultMovieServerId = value;
+            this.defaultMovieProfileId = null;
+            this.defaultMovieRootFolder = null;
+            this.updateProfileConfig();
+        },
+
+        onDefaultTvServerChange(value) {
+            this.defaultTvServerId = value;
+            this.defaultTvProfileId = null;
+            this.defaultTvRootFolder = null;
+            this.updateProfileConfig();
+        },
+
+        onAnimeMovieServerChange(value) {
+            this.animeMovieServerId = value;
+            this.animeMovieProfileId = null;
+            this.animeMovieRootFolder = null;
+            this.updateProfileConfig();
+        },
+
+        onAnimeTvServerChange(value) {
+            this.animeTvServerId = value;
+            this.animeTvProfileId = null;
+            this.animeTvRootFolder = null;
+            this.updateProfileConfig();
+        },
+
+        updateProfileConfig() {
+            const profileConfig = {};
+
+            if (this.defaultMovieServerId) {
+                profileConfig.default_movie = {
+                    serverId: parseInt(this.defaultMovieServerId)
+                };
+                if (this.defaultMovieProfileId) {
+                    profileConfig.default_movie.profileId = parseInt(this.defaultMovieProfileId);
+                }
+                if (this.defaultMovieRootFolder) {
+                    profileConfig.default_movie.rootFolder = this.defaultMovieRootFolder;
+                }
+            }
+
+            if (this.defaultTvServerId) {
+                profileConfig.default_tv = {
+                    serverId: parseInt(this.defaultTvServerId)
+                };
+                if (this.defaultTvProfileId) {
+                    profileConfig.default_tv.profileId = parseInt(this.defaultTvProfileId);
+                }
+                if (this.defaultTvRootFolder) {
+                    profileConfig.default_tv.rootFolder = this.defaultTvRootFolder;
+                }
+            }
+
+            if (this.animeMovieServerId) {
+                profileConfig.anime_movie = {
+                    serverId: parseInt(this.animeMovieServerId)
+                };
+                if (this.animeMovieProfileId) {
+                    profileConfig.anime_movie.profileId = parseInt(this.animeMovieProfileId);
+                }
+                if (this.animeMovieRootFolder) {
+                    profileConfig.anime_movie.rootFolder = this.animeMovieRootFolder;
+                }
+            }
+
+            if (this.animeTvServerId) {
+                profileConfig.anime_tv = {
+                    serverId: parseInt(this.animeTvServerId)
+                };
+                if (this.animeTvProfileId) {
+                    profileConfig.anime_tv.profileId = parseInt(this.animeTvProfileId);
+                }
+                if (this.animeTvRootFolder) {
+                    profileConfig.anime_tv.rootFolder = this.animeTvRootFolder;
+                }
+            }
+
+            this.$emit('update-config', 'SEER_ANIME_PROFILE_CONFIG', profileConfig);
+        },
+
+        loadSavedProfileConfig() {
+            const saved = this.config.SEER_ANIME_PROFILE_CONFIG;
+            if (!saved || typeof saved !== 'object') return;
+
+            if (saved.default_movie) {
+                this.defaultMovieServerId = saved.default_movie.serverId != null ? String(saved.default_movie.serverId) : null;
+                this.defaultMovieProfileId = saved.default_movie.profileId != null ? String(saved.default_movie.profileId) : null;
+                this.defaultMovieRootFolder = saved.default_movie.rootFolder || null;
+            }
+            if (saved.default_tv) {
+                this.defaultTvServerId = saved.default_tv.serverId != null ? String(saved.default_tv.serverId) : null;
+                this.defaultTvProfileId = saved.default_tv.profileId != null ? String(saved.default_tv.profileId) : null;
+                this.defaultTvRootFolder = saved.default_tv.rootFolder || null;
+            }
+            if (saved.anime_movie) {
+                this.animeMovieServerId = saved.anime_movie.serverId != null ? String(saved.anime_movie.serverId) : null;
+                this.animeMovieProfileId = saved.anime_movie.profileId != null ? String(saved.anime_movie.profileId) : null;
+                this.animeMovieRootFolder = saved.anime_movie.rootFolder || null;
+            }
+            if (saved.anime_tv) {
+                this.animeTvServerId = saved.anime_tv.serverId != null ? String(saved.anime_tv.serverId) : null;
+                this.animeTvProfileId = saved.anime_tv.profileId != null ? String(saved.anime_tv.profileId) : null;
+                this.animeTvRootFolder = saved.anime_tv.rootFolder || null;
             }
         }
     },
