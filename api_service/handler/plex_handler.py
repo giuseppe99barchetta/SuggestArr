@@ -88,10 +88,13 @@ class PlexHandler:
         self.logger.debug(f"Processing movie with key: {movie_key} - {title}")
         source_tmbd_id = await self.plex_client.get_metadata_provider_id(movie_key)
         self.logger.debug(f"TMDb ID retrieved: {source_tmbd_id}")
-        source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmbd_id, 'movie')
-        self.logger.info(f"TMDb metadata: {source_tmdb_obj}")
 
         if source_tmbd_id:
+            source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmbd_id, 'movie')
+            self.logger.info(f"TMDb metadata: {source_tmdb_obj}")
+            if not source_tmdb_obj:
+                self.logger.warning(f"Failed to fetch TMDb metadata for movie '{title}' (ID: {source_tmbd_id}). Skipping.")
+                return
             similar_movies = await self.tmdb_client.find_similar_movies(source_tmbd_id)
             self.logger.debug(f"Found similar movies: {similar_movies}")
             await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie, source_tmdb_obj)
@@ -104,10 +107,13 @@ class PlexHandler:
         if show_key:
             source_tmbd_id = await self.plex_client.get_metadata_provider_id(show_key)
             self.logger.debug(f"TMDb ID retrieved: {source_tmbd_id}")
-            source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmbd_id, 'tv')
-            self.logger.debug(f"TMDb metadata: {source_tmdb_obj}")
 
             if source_tmbd_id:
+                source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmbd_id, 'tv')
+                self.logger.debug(f"TMDb metadata: {source_tmdb_obj}")
+                if not source_tmdb_obj:
+                    self.logger.warning(f"Failed to fetch TMDb metadata for TV show '{title}' (ID: {source_tmbd_id}). Skipping.")
+                    return
                 similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmbd_id)
                 self.logger.debug(f"Found {len(similar_tvshows)} similar TV shows")
                 await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv, source_tmdb_obj)
@@ -121,10 +127,17 @@ class PlexHandler:
             self.logger.info("No media IDs provided for similar media request.")
             return
 
+        if not isinstance(source_tmdb_obj, dict):
+            self.logger.warning(f"Invalid source_tmdb_obj (type: {type(source_tmdb_obj).__name__}), skipping similar media request.")
+            return
+
         tasks = []
         for media in media_ids[:max_items]:
-            media_id = media['id']
-            media_title = media['title']
+            if not isinstance(media, dict):
+                self.logger.warning(f"Skipping invalid media item (type: {type(media).__name__}): {media}")
+                continue
+            media_id = media.get('id')
+            media_title = media.get('title') or media.get('name') or 'Unknown'
             if media_title is not None and isinstance(media_title, str):
                 media_title = to_ascii(media_title)
             self.logger.debug(f"Processing similar media: '{media_title}' with ID: '{media_id}'")

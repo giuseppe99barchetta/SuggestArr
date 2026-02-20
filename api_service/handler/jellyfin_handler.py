@@ -66,6 +66,9 @@ class JellyfinHandler:
             return
 
         source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmdb_id, 'movie')
+        if not source_tmdb_obj:
+            self.logger.warning(f"Movie skipped: failed to fetch TMDb metadata for ID {source_tmdb_id}")
+            return
         similar_movies = await self.tmdb_client.find_similar_movies(source_tmdb_id)
 
         await self.request_similar_media(
@@ -92,6 +95,9 @@ class JellyfinHandler:
             return
 
         source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmdb_id, 'tv')
+        if not source_tmdb_obj:
+            self.logger.warning(f"Series skipped: failed to fetch TMDb metadata for ID {source_tmdb_id}")
+            return
         similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmdb_id)
 
         await self.request_similar_media(
@@ -109,10 +115,17 @@ class JellyfinHandler:
             self.logger.info("No media IDs provided for similar media request.")
             return
 
+        if not isinstance(source_tmdb_obj, dict):
+            self.logger.warning(f"Invalid source_tmdb_obj (type: {type(source_tmdb_obj).__name__}), skipping similar media request.")
+            return
+
         tasks = []
         for media in media_ids[:max_items]:
-            media_id = media['id']
-            media_title = media['title']
+            if not isinstance(media, dict):
+                self.logger.warning(f"Skipping invalid media item (type: {type(media).__name__}): {media}")
+                continue
+            media_id = media.get('id')
+            media_title = media.get('title') or media.get('name') or 'Unknown'
             
             self.logger.debug(f"Processing similar media: '{media_title}' with ID: '{media_id}'")
 
@@ -145,4 +158,4 @@ class JellyfinHandler:
         self.logger.debug(f"Requesting media: {media}")
         if await self.jellyseer_client.request_media(media_type=media_type, media=media, source=source_tmdb_obj, user=user):
             self.request_count += 1
-            self.logger.info(f"Requested {media_type}: {media['title']}")
+            self.logger.info(f"Requested {media_type}: {media.get('title') or media.get('name') or 'Unknown'}")

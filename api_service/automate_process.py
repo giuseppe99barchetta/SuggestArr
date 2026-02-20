@@ -169,5 +169,5 @@ class ContentAutomation:
             await self.media_handler.process_recent_items()
             self.logger.info("Content automation process completed successfully")
         except Exception as e:
-            self.logger.error(f"Content automation process failed: {str(e)}")
+            self.logger.error(f"Content automation process failed: {str(e)}", exc_info=True)
             raise
