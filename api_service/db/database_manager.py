@@ -39,7 +39,7 @@ class DatabaseManager:
         self.db_type = self.env_vars.get('DB_TYPE', 'sqlite')
         self.logger.debug(f"Initialized DatabaseManager with {self.db_type} direct connections")
         self._initialized = True
-        
+        self.initialize_db()
 
     
     @contextmanager
