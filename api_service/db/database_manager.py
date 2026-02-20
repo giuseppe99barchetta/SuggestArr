@@ -303,7 +303,8 @@ class DatabaseManager:
         self.logger.debug(f"Saving metadata: {media_type} {media['id']}")
         
         media_id = media['id']
-        title = media['title']
+        # Safely get title or fallback to name for TV shows
+        title = media.get('title') or media.get('name') or 'Unknown Title'
         overview = media.get('overview', '')
         release_date = media.get('release_date')
         poster_path = media.get('poster_path', '')
