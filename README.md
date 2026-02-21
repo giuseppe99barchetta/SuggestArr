@@ -21,6 +21,7 @@ SuggestArr is a project designed to automate media content recommendations and d
 ## Features
 - **Multi-Media Server Support**: Supports Jellyfin, Plex, and Emby for retrieving media content.
 - **TMDb Integration**: Searches for similar movies and TV shows on TMDb.
+- **AI-Powered Recommendations** *(beta)*: Uses any OpenAI-compatible LLM (OpenAI, Ollama, OpenRouter, LiteLLM…) to generate hyper-personalized suggestions based on watch history, complete with AI reasoning for each pick.
 - **Automated Requests**: Sends download requests for recommended content to Jellyseer or Overseer.
 - **Web Interface**: A user-friendly interface for configuration and management.
 - **Real-Time Logs**: View and filter logs in real time (e.g., `INFO`, `ERROR`, `DEBUG`).
@@ -80,6 +81,72 @@ If you'd like to use a specific Jellyseer user to make media requests, follow th
 4. The system will now use this user to make media requests, rather than using the admin or default profile.
 
 Note: Currently, only local Jellyseer users are supported.
+
+## AI-Powered Recommendations (Beta)
+
+SuggestArr includes an optional AI recommendation engine that analyzes your watch history and suggests titles that match your taste, with a short explanation for each pick.
+
+The engine works with **any OpenAI-compatible API**, so you can use a cloud provider or a local model running on your own machine.
+
+### How to enable
+
+1. Open the web interface and go to **Settings → Advanced**.
+2. Check **Enable beta features**.
+3. Check **Use advanced suggestion algorithm**.
+4. Fill in the **AI Provider Configuration** fields that appear (click the **ⓘ** button next to the section title for an in-app guide).
+5. Save. The AI engine will be used automatically on the next automation run.
+
+> If the LLM is unavailable or returns no results, SuggestArr falls back to the standard TMDb-based recommendation algorithm transparently.
+
+### Supported providers
+
+| Provider | API Key | Base URL | Example model |
+|---|---|---|---|
+| **OpenAI** | Required (`sk-proj-...`) | *(leave blank)* | `gpt-4o-mini` |
+| **Ollama** (local) | Not required | `http://localhost:11434/v1` | `mistral`, `llama3` |
+| **OpenRouter** | Required (`sk-or-v1-...`) | `https://openrouter.ai/api/v1` | `meta-llama/llama-3-8b-instruct` |
+| **LiteLLM Proxy** | Depends on config | `http://<your-proxy>:4000` | Depends on config |
+
+**Note for Ollama users:** make sure Ollama is running and the model is pulled (`ollama pull mistral`) before saving. The API Key field can be left blank — SuggestArr will use a placeholder automatically.
+
+### Docker Compose with Ollama (example)
+
+```yaml
+services:
+  suggestarr:
+    image: ciuse99/suggestarr:latest
+    container_name: SuggestArr
+    restart: always
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./config_files:/app/config/config_files
+
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  ollama_data:
+```
+
+After starting both containers, pull your preferred model:
+
+```bash
+docker exec -it ollama ollama pull mistral
+```
+
+Then in SuggestArr Advanced settings set:
+- **Base URL** → `http://ollama:11434/v1`
+- **Model** → `mistral`
+- **API Key** → *(leave blank)*
+
+---
 
 ## Running Without Docker
 For detailed instructions on setting up SuggestArr withouth Docker or as a system service, please refer to our [Installation Guide](https://github.com/giuseppe99barchetta/SuggestArr/wiki/Installation#documentation-to-run-the-project-without-docker).
