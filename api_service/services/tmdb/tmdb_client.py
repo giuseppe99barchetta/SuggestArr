@@ -23,13 +23,14 @@ class TMDbClient:
     related to movies, TV shows, and external IDs.
     """
 
-    def __init__(self, api_key, search_size, tmdb_threshold, tmdb_min_votes, 
+    def __init__(self, api_key, search_size, tmdb_threshold, tmdb_min_votes,
                 include_no_ratings, filter_release_year, filter_language, filter_genre,
-                filter_region_provider, filter_streaming_services
+                filter_region_provider, filter_streaming_services, filter_min_runtime=None
                 ):
         """
         Initializes the TMDbClient with the provided API key.
         :param api_key: API key to authenticate requests to TMDb.
+        :param filter_min_runtime: Minimum runtime in minutes; items shorter than this are excluded.
         """
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.api_key = api_key
@@ -43,6 +44,7 @@ class TMDbClient:
         self.pages = (self.search_size + CONTENT_PER_PAGE - 1) // CONTENT_PER_PAGE
         self.region_provider = filter_region_provider
         self.excluded_streaming_services = filter_streaming_services
+        self.filter_min_runtime = int(filter_min_runtime) if filter_min_runtime else None
         self.tmdb_api_url = "https://api.themoviedb.org/3"
         self.logger.debug("TMDbClient initialized with API key: ***")
 
@@ -61,6 +63,15 @@ class TMDbClient:
 
             for item in data['results']:
                 if self._apply_filters(item, content_type):
+                    if self.filter_min_runtime:
+                        runtime = await self._get_item_runtime(item['id'], content_type)
+                        if runtime is not None and runtime < self.filter_min_runtime:
+                            self._log_exclusion_reason(
+                                item,
+                                f"runtime {runtime}min below minimum {self.filter_min_runtime}min",
+                                content_type
+                            )
+                            continue
                     search.append(self._format_result(item, content_type))
 
                 # Stop if we reach the search size limit
@@ -213,6 +224,36 @@ class TMDbClient:
                 return False
 
         return True
+
+    async def _get_item_runtime(self, content_id, content_type):
+        """
+        Fetches the runtime (in minutes) for a movie or TV show from TMDb.
+
+        For movies, returns the `runtime` field directly.
+        For TV shows, returns the first value of `episode_run_time`, or None if unavailable.
+
+        :param content_id: The TMDb ID of the content item.
+        :param content_type: Either 'movie' or 'tv'.
+        :return: Runtime in minutes as an integer, or None if unavailable.
+        """
+        url = f"{self.tmdb_api_url}/{content_type}/{content_id}?api_key={self.api_key}"
+        self.logger.debug("Fetching runtime for %s ID %s", content_type, content_id)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status in HTTP_OK:
+                        data = await response.json()
+                        if content_type == 'movie':
+                            return data.get('runtime')
+                        else:
+                            run_times = data.get('episode_run_time', [])
+                            return run_times[0] if run_times else None
+                    else:
+                        self.logger.warning("Failed to fetch runtime for %s ID %s: HTTP %d",
+                                            content_type, content_id, response.status)
+        except aiohttp.ClientError as e:
+            self.logger.warning("Error fetching runtime for %s ID %s: %s", content_type, content_id, str(e))
+        return None
 
     def _log_exclusion_reason(self, item, reason, content_type):
         """

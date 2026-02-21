@@ -97,18 +97,29 @@
                 </p>
             </div>
 
-            <div class="form-group">
-                <label for="FILTER_NUM_SEASONS" class="form-label">Maximum Number of Seasons</label>
-                <input type="number" :value="config.FILTER_NUM_SEASONS"
-                    @input="validateNumSeasons($event.target.value)"
-                    class="form-input"
-                    id="FILTER_NUM_SEASONS" placeholder="0 (unlimited)" min="0">
-                <p class="form-help">
-                    <i class="fas fa-info-circle"></i>
-                    Limit TV series by number of seasons (0 = no limit)
-                </p>
-                <span v-if="errors.FILTER_NUM_SEASONS" class="form-error">{{ errors.FILTER_NUM_SEASONS }}</span>
+            <div class="form-row">
+                <div class="form-group flex-1">
+                    <label for="FILTER_NUM_SEASONS" class="form-label">Maximum Number of Seasons</label>
+                    <input type="number" :value="config.FILTER_NUM_SEASONS"
+                        @input="validateNumSeasons($event.target.value)"
+                        class="form-input"
+                        id="FILTER_NUM_SEASONS" placeholder="0 (unlimited)" min="0">
+                    <span v-if="errors.FILTER_NUM_SEASONS" class="form-error">{{ errors.FILTER_NUM_SEASONS }}</span>
+                </div>
+
+                <div class="form-group flex-1">
+                    <label for="FILTER_MIN_RUNTIME" class="form-label">Minimum Runtime (minutes)</label>
+                    <input type="number" :value="config.FILTER_MIN_RUNTIME"
+                        @input="validateMinRuntime($event.target.value)"
+                        class="form-input"
+                        id="FILTER_MIN_RUNTIME" placeholder="0 (no limit)" min="0">
+                    <span v-if="errors.FILTER_MIN_RUNTIME" class="form-error">{{ errors.FILTER_MIN_RUNTIME }}</span>
+                </div>
             </div>
+            <p class="form-help">
+                <i class="fas fa-info-circle"></i>
+                Limit TV series by number of seasons and exclude short content below a minimum runtime
+            </p>
         </div>
 
         <!-- Streaming & Region Card -->
@@ -214,7 +225,8 @@ export default {
                 FILTER_TMDB_THRESHOLD: '',
                 FILTER_TMDB_MIN_VOTES: '',
                 FILTER_RELEASE_YEAR: '',
-                FILTER_NUM_SEASONS: ''
+                FILTER_NUM_SEASONS: '',
+                FILTER_MIN_RUNTIME: ''
             }
         };
     },
@@ -312,6 +324,14 @@ export default {
             } else {
                 this.errors.FILTER_NUM_SEASONS = "";
                 this.handleUpdate('FILTER_NUM_SEASONS', value);
+            }
+        },
+        validateMinRuntime(value) {
+            if (value < 0) {
+                this.errors.FILTER_MIN_RUNTIME = "Minimum runtime cannot be negative.";
+            } else {
+                this.errors.FILTER_MIN_RUNTIME = "";
+                this.handleUpdate('FILTER_MIN_RUNTIME', value || null);
             }
         },
         submit() {

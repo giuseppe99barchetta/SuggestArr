@@ -202,6 +202,7 @@ class TMDbDiscover:
             'include_adult': 'include_adult',
             'with_runtime_gte': 'with_runtime.gte',
             'with_runtime_lte': 'with_runtime.lte',
+            'min_runtime': 'with_runtime.gte',
         }
 
         for filter_key, api_key in param_mapping.items():

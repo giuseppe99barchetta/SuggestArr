@@ -81,6 +81,8 @@ class ContentAutomation:
         filter_streaming_raw = env_vars.get('FILTER_STREAMING_SERVICES', [])
         filter_streaming_services = filter_streaming_raw if isinstance(filter_streaming_raw, list) else []
 
+        filter_min_runtime = env_vars.get('FILTER_MIN_RUNTIME', None)
+
         exclude_downloaded = env_vars.get('EXCLUDE_DOWNLOADED', True)
         exclude_requested = env_vars.get('EXCLUDE_REQUESTED', True)
 
@@ -116,7 +118,8 @@ class ContentAutomation:
             filter_language,
             filter_genre,
             filter_region_provider,
-            filter_streaming_services
+            filter_streaming_services,
+            filter_min_runtime
         )
         instance.logger.info("TMDb client initialized successfully")
 
