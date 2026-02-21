@@ -702,13 +702,20 @@ class DatabaseManager:
 
                     for request in requests:
                         try:
-                            media_type = request['media']['mediaType']
-                            media_id = str(request['media']['tmdbId'])
-                            params = (media_type, media_id, 'Seer')
+                            media = request.get('media') if isinstance(request, dict) else None
+                            if not isinstance(media, dict):
+                                self.logger.warning(f"Skipping request with invalid media object (type: {type(media).__name__}): {request}")
+                                continue
+                            media_type = media.get('mediaType')
+                            media_id = media.get('tmdbId')
+                            if not media_type or media_id is None:
+                                self.logger.warning(f"Skipping request with missing mediaType or tmdbId: {media}")
+                                continue
+                            params = (media_type, str(media_id), 'Seer')
 
                             cursor.execute(query, params)
-                        except KeyError as e:
-                            self.logger.error(f"Struttura richiesta non valida nel batch: {e}")
+                        except (KeyError, TypeError) as e:
+                            self.logger.error(f"Invalid request structure in batch: {e}")
                             continue
                         
                     conn.commit()
