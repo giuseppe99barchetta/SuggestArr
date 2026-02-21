@@ -130,6 +130,7 @@ class DatabaseManager:
                     requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     requested_by TEXT,
                     user_id TEXT,
+                    rationale TEXT,
                     UNIQUE(media_type, tmdb_request_id, tmdb_source_id),
                     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
                 )
@@ -216,6 +217,12 @@ class DatabaseManager:
                     cursor.execute("ALTER TABLE requests ADD COLUMN user_id TEXT;")
                     conn.commit()
                     
+                # Add missing rationale column
+                if 'rationale' not in existing_columns:
+                    self.logger.debug("Adding column rationale...")
+                    cursor.execute("ALTER TABLE requests ADD COLUMN rationale TEXT;")
+                    conn.commit()
+                    
             except Exception as e:
                 self.logger.error(f"Failed to add missing columns: {e}")
                 raise DatabaseError(
@@ -229,15 +236,15 @@ class DatabaseManager:
         # Connection pooling handles connection management automatically
         pass
     
-    def save_request(self, media_type: str, media_id: str, source: str, user_id: Optional[str] = None) -> None:
+    def save_request(self, media_type: str, media_id: str, source: str, user_id: Optional[str] = None, rationale: Optional[str] = None) -> None:
         """Save a new media request to the database, ignoring duplicates."""
         self.logger.debug(f"Saving request: {media_type} {media_id} from {source}")
         
         query = """
-            INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, tmdb_source_id, requested_by, user_id)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, tmdb_source_id, requested_by, user_id, rationale)
+            VALUES (?, ?, ?, ?, ?, ?)
         """
-        params = (media_type, media_id, source, 'SuggestArr', user_id)
+        params = (media_type, media_id, source, 'SuggestArr', user_id, rationale)
         
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -424,7 +431,7 @@ class DatabaseManager:
                 r.tmdb_request_id, r.media_type, r.requested_at, s.logo_path, s.backdrop_path,
                 m.title AS request_title, m.overview AS request_overview, 
                 m.release_date AS request_release_date, m.poster_path AS request_poster_path, m.rating as request_rating,
-                m.logo_path, m.backdrop_path
+                m.logo_path, m.backdrop_path, r.rationale
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id
             JOIN metadata s ON r.tmdb_source_id = s.media_id
@@ -477,6 +484,7 @@ class DatabaseManager:
                 "backdrop_path": row[17],
                 "rating": round(row[15], 2) if row[15] is not None else None,
                 "logo_path": row[16],
+                "rationale": row[18],
             })
     
         # Sort sources

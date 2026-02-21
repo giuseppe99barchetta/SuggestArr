@@ -106,7 +106,52 @@
             <span class="checkbox-text">Use advanced suggestion algorithm</span>
           </label>
           <small class="form-help">
-            Use an enhanced algorithm for better content suggestions (may be slower)
+            Use an AI-powered algorithm for hyper-personalized content suggestions based on watch history.
+          </small>
+        </div>
+        
+        <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES || !localConfig.ENABLE_ADVANCED_ALGORITHM }">
+          <label for="openaiApiKey">OpenAI API Key</label>
+          <input
+            id="openaiApiKey"
+            v-model="localConfig.OPENAI_API_KEY"
+            type="password"
+            placeholder="sk-..."
+            class="form-control"
+            :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES || !localConfig.ENABLE_ADVANCED_ALGORITHM"
+          />
+          <small class="form-help">
+            Required for the advanced suggestion algorithm.
+          </small>
+        </div>
+        
+        <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES || !localConfig.ENABLE_ADVANCED_ALGORITHM }">
+          <label for="llmModel">LLM Model</label>
+          <input
+            id="llmModel"
+            v-model="localConfig.LLM_MODEL"
+            type="text"
+            placeholder="gpt-4o-mini"
+            class="form-control"
+            :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES || !localConfig.ENABLE_ADVANCED_ALGORITHM"
+          />
+          <small class="form-help">
+            The OpenAI or compatible model to use (default: gpt-4o-mini).
+          </small>
+        </div>
+        
+        <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES || !localConfig.ENABLE_ADVANCED_ALGORITHM }">
+          <label for="openaiBaseUrl">OpenAI Base URL (Optional)</label>
+          <input
+            id="openaiBaseUrl"
+            v-model="localConfig.OPENAI_BASE_URL"
+            type="text"
+            placeholder="https://api.openai.com/v1"
+            class="form-control"
+            :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES || !localConfig.ENABLE_ADVANCED_ALGORITHM"
+          />
+          <small class="form-help">
+            Leave blank for default OpenAI. Use this to connect to OpenRouter, LiteLLM, or other OpenAI-compatible APIs.
           </small>
         </div>
       
@@ -373,6 +418,9 @@ export default {
           ENABLE_API_CACHING: true,
           ENABLE_BETA_FEATURES: false,
           ENABLE_ADVANCED_ALGORITHM: false,
+          OPENAI_API_KEY: '',
+          OPENAI_BASE_URL: '',
+          LLM_MODEL: 'gpt-4o-mini',
           ENABLE_SOCIAL_FEATURES: false,
         };
 
@@ -513,6 +561,9 @@ export default {
             ENABLE_API_CACHING: this.localConfig.ENABLE_API_CACHING !== false,
             ENABLE_BETA_FEATURES: this.localConfig.ENABLE_BETA_FEATURES || false,
             ENABLE_ADVANCED_ALGORITHM: this.localConfig.ENABLE_ADVANCED_ALGORITHM || false,
+            OPENAI_API_KEY: this.localConfig.OPENAI_API_KEY || '',
+            OPENAI_BASE_URL: this.localConfig.OPENAI_BASE_URL || '',
+            LLM_MODEL: this.localConfig.LLM_MODEL || 'gpt-4o-mini',
             ENABLE_SOCIAL_FEATURES: this.localConfig.ENABLE_SOCIAL_FEATURES || false,
           },
         });
@@ -536,6 +587,9 @@ export default {
         ENABLE_API_CACHING: true,
         ENABLE_BETA_FEATURES: false,
         ENABLE_ADVANCED_ALGORITHM: false,
+        OPENAI_API_KEY: '',
+        OPENAI_BASE_URL: '',
+        LLM_MODEL: 'gpt-4o-mini',
         ENABLE_SOCIAL_FEATURES: false,
       };
 
