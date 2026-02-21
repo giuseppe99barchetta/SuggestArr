@@ -109,51 +109,7 @@
             Use an AI-powered algorithm for hyper-personalized content suggestions based on watch history.
           </small>
         </div>
-        
-        <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES || !localConfig.ENABLE_ADVANCED_ALGORITHM }">
-          <label for="openaiApiKey">OpenAI API Key</label>
-          <input
-            id="openaiApiKey"
-            v-model="localConfig.OPENAI_API_KEY"
-            type="password"
-            placeholder="sk-..."
-            class="form-control"
-            :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES || !localConfig.ENABLE_ADVANCED_ALGORITHM"
-          />
-          <small class="form-help">
-            Required for the advanced suggestion algorithm.
-          </small>
-        </div>
-        
-        <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES || !localConfig.ENABLE_ADVANCED_ALGORITHM }">
-          <label for="llmModel">LLM Model</label>
-          <input
-            id="llmModel"
-            v-model="localConfig.LLM_MODEL"
-            type="text"
-            placeholder="gpt-4o-mini"
-            class="form-control"
-            :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES || !localConfig.ENABLE_ADVANCED_ALGORITHM"
-          />
-          <small class="form-help">
-            The OpenAI or compatible model to use (default: gpt-4o-mini).
-          </small>
-        </div>
-        
-        <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES || !localConfig.ENABLE_ADVANCED_ALGORITHM }">
-          <label for="openaiBaseUrl">OpenAI Base URL (Optional)</label>
-          <input
-            id="openaiBaseUrl"
-            v-model="localConfig.OPENAI_BASE_URL"
-            type="text"
-            placeholder="https://api.openai.com/v1"
-            class="form-control"
-            :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES || !localConfig.ENABLE_ADVANCED_ALGORITHM"
-          />
-          <small class="form-help">
-            Leave blank for default OpenAI. Use this to connect to OpenRouter, LiteLLM, or other OpenAI-compatible APIs.
-          </small>
-        </div>
+
       
         <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES }">
           <div v-if="!localConfig.ENABLE_BETA_FEATURES" class="development-badge">
@@ -173,6 +129,67 @@
           </small>
         </div>
       </div>
+
+      <!-- AI Provider Configuration (visible only when advanced algorithm is enabled) -->
+      <transition name="ai-card">
+        <div
+          v-if="localConfig.ENABLE_ADVANCED_ALGORITHM && localConfig.ENABLE_BETA_FEATURES"
+          class="settings-group ai-group"
+        >
+          <h3>
+            <i class="fas fa-robot"></i>
+            AI Provider Configuration
+          </h3>
+
+          <div class="form-group">
+            <label for="openaiApiKey">API Key</label>
+            <input
+              id="openaiApiKey"
+              v-model="localConfig.OPENAI_API_KEY"
+              type="password"
+              placeholder="sk-..."
+              class="form-control"
+              :disabled="isLoading"
+            />
+            <small class="form-help">
+              Required for the advanced suggestion algorithm.
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label for="llmModel">Model</label>
+            <input
+              id="llmModel"
+              v-model="localConfig.LLM_MODEL"
+              type="text"
+              placeholder="gpt-4o-mini"
+              class="form-control"
+              :disabled="isLoading"
+            />
+            <small class="form-help">
+              The OpenAI or compatible model to use (default: gpt-4o-mini).
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label for="openaiBaseUrl">
+              Base URL
+              <span class="optional-tag">Optional</span>
+            </label>
+            <input
+              id="openaiBaseUrl"
+              v-model="localConfig.OPENAI_BASE_URL"
+              type="text"
+              placeholder="https://api.openai.com/v1"
+              class="form-control"
+              :disabled="isLoading"
+            />
+            <small class="form-help">
+              Leave blank for default OpenAI. Use this to connect to OpenRouter, LiteLLM, or other OpenAI-compatible APIs.
+            </small>
+          </div>
+        </div>
+      </transition>
 
       <!-- Debug Settings -->
       <div class="settings-group">
@@ -1008,6 +1025,49 @@ export default {
   justify-content: flex-end;
   padding-top: 2rem;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* AI Provider card */
+.settings-group.ai-group {
+  border-color: rgba(99, 102, 241, 0.45);
+  background: rgba(99, 102, 241, 0.07);
+}
+
+.settings-group.ai-group h3 {
+  color: #a5b4fc;
+}
+
+.settings-group.ai-group h3 i {
+  color: #818cf8;
+}
+
+.optional-tag {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.1rem 0.45rem;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+
+/* Transition for the AI card appearing in the grid */
+.ai-card-enter-active,
+.ai-card-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.ai-card-enter-from,
+.ai-card-leave-to {
+  opacity: 0;
+  transform: scale(0.97) translateY(-8px);
+}
+
+.ai-card-enter-to,
+.ai-card-leave-from {
+  opacity: 1;
+  transform: scale(1) translateY(0);
 }
 
 @media (max-width: 768px) {
