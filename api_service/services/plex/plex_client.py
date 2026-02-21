@@ -133,7 +133,7 @@ class PlexClient:
             # Add library filtering if libraries are specified
             if self.library_ids:
                 # Handle both dict format {id: 'xxx', name: 'yyy'} and plain string 'xxx'
-                library_id_list = [lib.get('id') if isinstance(lib, dict) else lib for lib in self.library_ids]
+                library_id_list = [str(lib.get('id')) if isinstance(lib, dict) else str(lib) for lib in self.library_ids]
                 params["librarySectionIDs"] = ','.join(library_id_list)
     
             try:
@@ -181,8 +181,10 @@ class PlexClient:
     
         for item in metadata:
             # Check if the item's librarySectionID is in the selected libraries
-            if self.library_ids and item.get('librarySectionID') not in self.library_ids:
-                continue  # Skip items not in the selected libraries
+            if self.library_ids:
+                library_id_list = [str(lib.get('id')) if isinstance(lib, dict) else str(lib) for lib in self.library_ids]
+                if str(item.get('librarySectionID')) not in library_id_list:
+                    continue  # Skip items not in the selected libraries
             
             # Check if we've reached the max content fetch limit
             if total_items >= int(self.max_content_fetch):
