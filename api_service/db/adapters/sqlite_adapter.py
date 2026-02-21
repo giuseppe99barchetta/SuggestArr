@@ -37,28 +37,65 @@ class SQLiteAdapter(DatabaseAdapter):
             self.connection.close()
             self.connection = None
             self.logger.info("Disconnected from SQLite database")
-    
+
     def initialize_db(self) -> None:
         """Initialize SQLite database schema."""
         if not self.connection:
             self.connect()
         
-        create_table_query = '''
-        CREATE TABLE IF NOT EXISTS requests (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            user_id TEXT NOT NULL,
-            media_type TEXT NOT NULL,
-            media_title TEXT NOT NULL,
-            media_id TEXT,
-            request_status TEXT DEFAULT 'pending',
-            FOREIGN KEY(user_id) REFERENCES users(id)
+        # Create the users table first (required for the foreign key)
+        create_users_query = '''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            user_name TEXT
         )
         '''
         
-        self.execute_query(create_table_query)
-        self.logger.info("SQLite database initialized successfully")
+        # Create the matching requests table
+        create_requests_query = '''
+        CREATE TABLE IF NOT EXISTS requests (
+            tmdb_request_id TEXT NOT NULL PRIMARY KEY,
+            media_type TEXT NOT NULL,
+            tmdb_source_id TEXT,
+            requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            requested_by TEXT,
+            user_id TEXT,
+            UNIQUE(media_type, tmdb_request_id, tmdb_source_id),
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+        )
+        '''
+        
+        # Create the metadata table 
+        create_metadata_query = '''
+        CREATE TABLE IF NOT EXISTS metadata (
+            media_id TEXT PRIMARY KEY,
+            media_type TEXT NOT NULL,
+            title TEXT,
+            overview TEXT,
+            release_date TEXT,
+            poster_path TEXT,
+            rating REAL,
+            votes INTEGER,
+            origin_country TEXT,
+            genre_ids TEXT,
+            logo_path TEXT,
+            backdrop_path TEXT,
+            UNIQUE(media_id, media_type)
+        )
+        '''
+        
+        try:
+            # Enable foreign keys before creating tables
+            self.execute_query("PRAGMA foreign_keys = ON")
+            
+            # Execute creations in the correct order
+            self.execute_query(create_users_query)
+            self.execute_query(create_requests_query)
+            self.execute_query(create_metadata_query)
+            self.logger.info("SQLite database initialized successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to initialize SQLite database: {e}")
+            raise
     
     def execute_query(self, query: str, params: Optional[Tuple] = None) -> Any:
         """Execute a query and return results."""

@@ -57,6 +57,16 @@ class TestConfig(unittest.TestCase):
         "DB_RETRY_DELAY": "1.0",
         "LOG_LEVEL": "INFO",
         "SEER_ANIME_PROFILE_CONFIG": {},
+        "ENABLE_BETA_FEATURES": False,
+        "ENABLE_ADVANCED_ALGORITHM": False,
+        "ENABLE_SOCIAL_FEATURES": False,
+        "ENABLE_DEBUG_MODE": False,
+        "ENABLE_PERFORMANCE_MONITORING": False,
+        "CACHE_TTL": 24,
+        "MAX_CACHE_SIZE": 100,
+        "API_TIMEOUT": 30,
+        "API_RETRIES": 3,
+        "ENABLE_API_CACHING": True,
     }
 
     def test_save_default_env_vars(self):

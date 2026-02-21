@@ -23,10 +23,8 @@ async def run_now():
         logger.error(f'File not found: {str(fnfe)}')
         return jsonify({'status': 'error', 'message': 'File not found: ' + str(fnfe)}), 404
     except Exception as e:
-        error_msg = str(e) if str(e) else type(e).__name__
-        logger.error(f'Unexpected error: {error_msg}')
-        logger.error(f'Traceback: {traceback.format_exc()}')
-        return jsonify({'status': 'error', 'message': 'Unexpected error: ' + error_msg}), 500
+        logger.error(f'Unexpected error: {str(e)}', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Unexpected error: ' + str(e)}), 500
 
 @automation_bp.route('/requests', methods=['GET'])
 def get_requests():

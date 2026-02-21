@@ -208,13 +208,19 @@ class SeerClient:
         if response and 'error' not in response:
             self.logger.debug("Media request successful: %s", response)
             databaseManager = DatabaseManager()
+            # Safely get the user ID if the user object exists
+            user_id = None
             if user:
                 databaseManager.save_user(user)
-            user_id = user['id'] if user else None
-            databaseManager.save_request(media_type, media['id'], source['id'] if source else None, user_id, is_anime)
+                user_id = user.get('id')
+            # Safely get the source ID if the source object exists
+            source_id = source.get('id') if source else None
+            # Save the request utilizing the safely extracted variables
+            databaseManager.save_request(media_type, media.get('id'), source_id, user_id)
             if source:
                 databaseManager.save_metadata(source, media_type)
-            databaseManager.save_metadata(media, media_type)
+            if media:
+                databaseManager.save_metadata(media, media_type)
             return True
         else:
             self.logger.error("Media request failed: %s", response)

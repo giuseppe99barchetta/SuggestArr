@@ -113,6 +113,16 @@ def get_default_values():
         'EXCLUDE_REQUESTED': lambda: True,
         'SETUP_COMPLETED': lambda: False,
         'LOG_LEVEL': lambda: 'INFO',
+        'ENABLE_BETA_FEATURES': lambda: False,
+        'ENABLE_ADVANCED_ALGORITHM': lambda: False,
+        'ENABLE_SOCIAL_FEATURES': lambda: False,
+        'ENABLE_DEBUG_MODE': lambda: False,
+        'ENABLE_PERFORMANCE_MONITORING': lambda: False,
+        'CACHE_TTL': lambda: 24,
+        'MAX_CACHE_SIZE': lambda: 100,
+        'API_TIMEOUT': lambda: 30,
+        'API_RETRIES': lambda: 3,
+        'ENABLE_API_CACHING': lambda: True,
         # Database connection pool settings
         'DB_MIN_CONNECTIONS': lambda: '2',
         'DB_MAX_CONNECTIONS': lambda: '10',
@@ -219,7 +229,11 @@ def get_config_sections():
                            'HONOR_JELLYSEER_DISCOVERY', 'FILTER_RELEASE_YEAR', 'FILTER_INCLUDE_NO_RATING',
                            'FILTER_LANGUAGE', 'FILTER_NUM_SEASONS', 'FILTER_STREAMING_SERVICES',
                            'FILTER_REGION_PROVIDER', 'EXCLUDE_DOWNLOADED', 'EXCLUDE_REQUESTED'],
-        'advanced': ['SELECTED_USERS', 'LOG_LEVEL']
+        'advanced': ['SELECTED_USERS', 'LOG_LEVEL', 'ENABLE_BETA_FEATURES',
+                     'ENABLE_ADVANCED_ALGORITHM', 'ENABLE_SOCIAL_FEATURES',
+                     'ENABLE_DEBUG_MODE', 'ENABLE_PERFORMANCE_MONITORING',
+                     'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
+                     'ENABLE_API_CACHING']
     }
 
 def get_config_section(section_name):

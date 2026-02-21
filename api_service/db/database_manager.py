@@ -39,7 +39,7 @@ class DatabaseManager:
         self.db_type = self.env_vars.get('DB_TYPE', 'sqlite')
         self.logger.debug(f"Initialized DatabaseManager with {self.db_type} direct connections")
         self._initialized = True
-        
+        self.initialize_db()
 
     
     @contextmanager
@@ -415,7 +415,8 @@ class DatabaseManager:
         self.logger.debug(f"Saving metadata: {media_type} {media['id']}")
         
         media_id = media['id']
-        title = media['title']
+        # Safely get title or fallback to name for TV shows
+        title = media.get('title') or media.get('name') or 'Unknown Title'
         overview = media.get('overview', '')
         release_date = media.get('release_date')
         poster_path = media.get('poster_path', '')
@@ -814,13 +815,20 @@ class DatabaseManager:
 
                     for request in requests:
                         try:
-                            media_type = request['media']['mediaType']
-                            media_id = str(request['media']['tmdbId'])
-                            params = (media_type, media_id, 'Seer')
+                            media = request.get('media') if isinstance(request, dict) else None
+                            if not isinstance(media, dict):
+                                self.logger.warning(f"Skipping request with invalid media object (type: {type(media).__name__}): {request}")
+                                continue
+                            media_type = media.get('mediaType')
+                            media_id = media.get('tmdbId')
+                            if not media_type or media_id is None:
+                                self.logger.warning(f"Skipping request with missing mediaType or tmdbId: {media}")
+                                continue
+                            params = (media_type, str(media_id), 'Seer')
 
                             cursor.execute(query, params)
-                        except KeyError as e:
-                            self.logger.error(f"Struttura richiesta non valida nel batch: {e}")
+                        except (KeyError, TypeError) as e:
+                            self.logger.error(f"Invalid request structure in batch: {e}")
                             continue
                         
                     conn.commit()
