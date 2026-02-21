@@ -194,6 +194,17 @@
               Leave blank for OpenAI. Set to <code>http://localhost:11434/v1</code> for Ollama, or your OpenRouter / LiteLLM endpoint.
             </small>
           </div>
+
+          <div class="form-group">
+            <button
+              @click="testLlmConnection"
+              class="btn btn-outline btn-sm"
+              :disabled="isLoading || isTestingLlm"
+            >
+              <i :class="isTestingLlm ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>
+              {{ isTestingLlm ? 'Testing...' : 'Test Connection' }}
+            </button>
+          </div>
         </div>
       </transition>
 
@@ -470,6 +481,7 @@ export default {
       availableUsers: [],
       isLoadingUsers: false,
       showAiInfoModal: false,
+      isTestingLlm: false,
       logLevelOptions: [
         { value: 'ERROR', label: 'Error' },
         { value: 'WARNING', label: 'Warning' },
@@ -660,6 +672,27 @@ export default {
         this.originalConfig = { ...this.localConfig };
       } catch (error) {
         console.error('Error saving advanced settings:', error);
+      }
+    },
+
+    async testLlmConnection() {
+      this.isTestingLlm = true;
+      try {
+        const response = await axios.post('/api/jobs/llm-test', {
+          OPENAI_API_KEY: this.localConfig.OPENAI_API_KEY || '',
+          OPENAI_BASE_URL: this.localConfig.OPENAI_BASE_URL || '',
+          LLM_MODEL: this.localConfig.LLM_MODEL || 'gpt-4o-mini',
+        });
+        if (response.data.status === 'success') {
+          this.$toast.success('AI connection successful!');
+        } else {
+          this.$toast.error(response.data.message || 'Connection failed');
+        }
+      } catch (error) {
+        const msg = error.response?.data?.message || 'Connection failed';
+        this.$toast.error(msg);
+      } finally {
+        this.isTestingLlm = false;
       }
     },
 

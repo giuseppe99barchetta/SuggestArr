@@ -523,6 +523,49 @@ def get_llm_status():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+@jobs_bp.route('/llm-test', methods=['POST'])
+def test_llm_connection():
+    """
+    Test the LLM connection by making a real API call with the provided configuration.
+
+    Accepts OPENAI_API_KEY, OPENAI_BASE_URL, and LLM_MODEL in the request body.
+    Returns success or a descriptive error message.
+    """
+    try:
+        from openai import OpenAI
+
+        data = request.get_json() or {}
+        api_key = (data.get('OPENAI_API_KEY') or '').strip()
+        base_url = (data.get('OPENAI_BASE_URL') or '').strip() or None
+        model = (data.get('LLM_MODEL') or 'gpt-4o-mini').strip()
+
+        if not api_key:
+            if base_url:
+                # Local providers like Ollama don't need a real key
+                api_key = 'ollama'
+            else:
+                return jsonify({'status': 'error', 'message': 'API Key is required for cloud providers.'}), 400
+
+        client_kwargs = {'api_key': api_key}
+        if base_url:
+            client_kwargs['base_url'] = base_url
+
+        client = OpenAI(**client_kwargs)
+
+        # Make a minimal completion to verify the connection and credentials
+        client.chat.completions.create(
+            model=model,
+            messages=[{'role': 'user', 'content': 'Hi'}],
+            max_tokens=1,
+        )
+
+        return jsonify({'status': 'success', 'message': 'Connection successful!'}), 200
+
+    except Exception as e:
+        logger.error(f"LLM connection test failed: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
+
 @jobs_bp.route('/import-config', methods=['POST'])
 def import_config():
     """
