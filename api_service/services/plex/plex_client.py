@@ -133,7 +133,7 @@ class PlexClient:
             # Add library filtering if libraries are specified
             if self.library_ids:
                 # Handle both dict format {id: 'xxx', name: 'yyy'} and plain string 'xxx'
-                library_id_list = [lib.get('id') if isinstance(lib, dict) else lib for lib in self.library_ids]
+                library_id_list = [str(lib.get('id')) if isinstance(lib, dict) else str(lib) for lib in self.library_ids]
                 params["librarySectionIDs"] = ','.join(library_id_list)
     
             try:
