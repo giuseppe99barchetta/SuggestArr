@@ -6,88 +6,91 @@
     </div>
 
     <div class="services-stack">
-      <!-- TMDB -->
-      <div class="service-card">
-        <div class="service-header">
-          <h3><i class="fas fa-film"></i> TMDB API</h3>
-          <span class="status-badge" :class="getTmdbStatus">
-            <span class="status-dot"></span>
-            {{ getTmdbStatusText }}
-          </span>
-        </div>
-
-        <div class="form-group">
-          <label for="tmdbApiKey">API Key</label>
-          <div class="input-group">
-            <input
-              id="tmdbApiKey"
-              v-model="localConfig.TMDB_API_KEY"
-              :type="showTmdbKey ? 'text' : 'password'"
-              placeholder="Enter your TMDB API key"
-              class="form-control"
-              :disabled="isLoading"
-            />
-            <button @click="showTmdbKey = !showTmdbKey" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
-              <i :class="showTmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-            </button>
+      <!-- TMDB + OMDb side by side -->
+      <div class="rating-apis-row">
+        <!-- TMDB -->
+        <div class="service-card">
+          <div class="service-header">
+            <h3><i class="fas fa-film"></i> TMDB API</h3>
+            <span class="status-badge" :class="getTmdbStatus">
+              <span class="status-dot"></span>
+              {{ getTmdbStatusText }}
+            </span>
           </div>
-          <small class="form-help">
-            Get one from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="link">TMDB Settings</a>
-          </small>
-        </div>
 
-        <button
-          @click="testTmdbConnection"
-          class="btn btn-outline btn-block"
-          :disabled="isLoading || !localConfig.TMDB_API_KEY || testingConnections.tmdb"
-        >
-          <i v-if="testingConnections.tmdb" class="fas fa-spinner fa-spin"></i>
-          <i v-else class="fas fa-plug"></i>
-          {{ testingConnections.tmdb ? 'Testing...' : 'Test Connection' }}
-        </button>
-      </div>
-
-      <!-- OMDb (IMDB ratings) -->
-      <div class="service-card">
-        <div class="service-header">
-          <h3><i class="fas fa-star"></i> IMDB (via OMDb)</h3>
-          <span class="status-badge" :class="getOmdbStatus">
-            <span class="status-dot"></span>
-            {{ getOmdbStatusText }}
-          </span>
-        </div>
-
-        <div class="form-group">
-          <label for="omdbApiKey">API Key</label>
-          <div class="input-group">
-            <input
-              id="omdbApiKey"
-              v-model="localConfig.OMDB_API_KEY"
-              :type="showOmdbKey ? 'text' : 'password'"
-              placeholder="Enter your OMDb API key (optional)"
-              class="form-control"
-              :disabled="isLoading"
-            />
-            <button @click="showOmdbKey = !showOmdbKey" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
-              <i :class="showOmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-            </button>
+          <div class="form-group">
+            <label for="tmdbApiKey">API Key</label>
+            <div class="input-group">
+              <input
+                id="tmdbApiKey"
+                v-model="localConfig.TMDB_API_KEY"
+                :type="showTmdbKey ? 'text' : 'password'"
+                placeholder="Enter your TMDB API key"
+                class="form-control"
+                :disabled="isLoading"
+              />
+              <button @click="showTmdbKey = !showTmdbKey" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
+                <i :class="showTmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+              </button>
+            </div>
+            <small class="form-help">
+              Get one from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="link">TMDB Settings</a>
+            </small>
           </div>
-          <small class="form-help">
-            Optional — needed only when rating source is set to IMDB or Both.
-            Free key (1,000 req/day) at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" class="link">omdbapi.com</a>
-          </small>
+
+          <button
+            @click="testTmdbConnection"
+            class="btn btn-outline btn-block"
+            :disabled="isLoading || !localConfig.TMDB_API_KEY || testingConnections.tmdb"
+          >
+            <i v-if="testingConnections.tmdb" class="fas fa-spinner fa-spin"></i>
+            <i v-else class="fas fa-plug"></i>
+            {{ testingConnections.tmdb ? 'Testing...' : 'Test Connection' }}
+          </button>
         </div>
 
-        <button
-          @click="testOmdbConnection"
-          class="btn btn-outline btn-block"
-          :disabled="isLoading || !localConfig.OMDB_API_KEY || omdbTesting"
-        >
-          <i v-if="omdbTesting" class="fas fa-spinner fa-spin"></i>
-          <i v-else-if="omdbConnected" class="fas fa-check"></i>
-          <i v-else class="fas fa-plug"></i>
-          {{ omdbTesting ? 'Testing...' : (omdbConnected ? 'Connected' : 'Test Connection') }}
-        </button>
+        <!-- OMDb (IMDB ratings) -->
+        <div class="service-card">
+          <div class="service-header">
+            <h3><i class="fas fa-star"></i> IMDB (via OMDb)</h3>
+            <span class="status-badge" :class="getOmdbStatus">
+              <span class="status-dot"></span>
+              {{ getOmdbStatusText }}
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label for="omdbApiKey">API Key</label>
+            <div class="input-group">
+              <input
+                id="omdbApiKey"
+                v-model="localConfig.OMDB_API_KEY"
+                :type="showOmdbKey ? 'text' : 'password'"
+                placeholder="Enter your OMDb API key (optional)"
+                class="form-control"
+                :disabled="isLoading"
+              />
+              <button @click="showOmdbKey = !showOmdbKey" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
+                <i :class="showOmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+              </button>
+            </div>
+            <small class="form-help">
+              Optional — needed only when rating source is set to IMDB or Both.
+              Free key (1,000 req/day) at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" class="link">omdbapi.com</a>
+            </small>
+          </div>
+
+          <button
+            @click="testOmdbConnection"
+            class="btn btn-outline btn-block"
+            :disabled="isLoading || !localConfig.OMDB_API_KEY || omdbTesting"
+          >
+            <i v-if="omdbTesting" class="fas fa-spinner fa-spin"></i>
+            <i v-else-if="omdbConnected" class="fas fa-check"></i>
+            <i v-else class="fas fa-plug"></i>
+            {{ omdbTesting ? 'Testing...' : (omdbConnected ? 'Connected' : 'Test Connection') }}
+          </button>
+        </div>
       </div>
 
       <!-- Media Server -->
@@ -1064,6 +1067,13 @@ export default {
   margin-bottom: 2rem;
 }
 
+/* TMDB + OMDb side by side */
+.rating-apis-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
 /* Service card */
 .service-card {
   background: rgba(255, 255, 255, 0.05);
@@ -1455,6 +1465,7 @@ export default {
 
 /* Responsive */
 @media (max-width: 768px) {
+  .rating-apis-row { grid-template-columns: 1fr; }
   .service-card { padding: 1rem; }
   .service-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
   .input-group { flex-direction: column; }
