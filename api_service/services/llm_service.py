@@ -13,9 +13,14 @@ def get_llm_client() -> Optional[OpenAI]:
     base_url = config.get('OPENAI_BASE_URL') # Optional for proxy/alternative setups
     
     if not api_key:
-        logger.warning("OPENAI_API_KEY is not configured. LLM recommendations will be disabled.")
-        return None
-        
+        if base_url:
+            # Local providers like Ollama don't require an API key; use a placeholder.
+            logger.info("OPENAI_API_KEY not set. Using placeholder for local provider at %s.", base_url)
+            api_key = "ollama"
+        else:
+            logger.warning("OPENAI_API_KEY is not configured. LLM recommendations will be disabled.")
+            return None
+
     try:
         # Pass base_url only if it exists
         client_kwargs = {"api_key": api_key}

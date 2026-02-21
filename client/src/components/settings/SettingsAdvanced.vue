@@ -139,10 +139,16 @@
           <h3>
             <i class="fas fa-robot"></i>
             AI Provider Configuration
+            <button class="info-btn" @click="showAiInfoModal = true" title="Learn how to configure AI providers">
+              <i class="fas fa-circle-info"></i>
+            </button>
           </h3>
 
           <div class="form-group">
-            <label for="openaiApiKey">API Key</label>
+            <label for="openaiApiKey">
+              API Key
+              <span class="optional-tag">Optional</span>
+            </label>
             <input
               id="openaiApiKey"
               v-model="localConfig.OPENAI_API_KEY"
@@ -152,7 +158,7 @@
               :disabled="isLoading"
             />
             <small class="form-help">
-              Required for the advanced suggestion algorithm.
+              Required for OpenAI and hosted providers. Not needed for local LLMs like Ollama (leave blank or enter any value).
             </small>
           </div>
 
@@ -167,7 +173,7 @@
               :disabled="isLoading"
             />
             <small class="form-help">
-              The OpenAI or compatible model to use (default: gpt-4o-mini).
+              The model name to use. For Ollama, use the name of the locally installed model (e.g. <code>mistral</code>, <code>llama3</code>).
             </small>
           </div>
 
@@ -185,11 +191,76 @@
               :disabled="isLoading"
             />
             <small class="form-help">
-              Leave blank for default OpenAI. Use this to connect to OpenRouter, LiteLLM, or other OpenAI-compatible APIs.
+              Leave blank for OpenAI. Set to <code>http://localhost:11434/v1</code> for Ollama, or your OpenRouter / LiteLLM endpoint.
             </small>
           </div>
         </div>
       </transition>
+
+      <!-- AI Info Modal -->
+      <teleport to="body">
+        <transition name="modal-fade">
+          <div v-if="showAiInfoModal" class="modal-overlay" @click.self="showAiInfoModal = false">
+            <div class="modal-box">
+              <div class="modal-header">
+                <h3><i class="fas fa-robot"></i> AI Provider Setup Guide</h3>
+                <button class="modal-close" @click="showAiInfoModal = false">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+              <div class="modal-body">
+                <p class="modal-intro">
+                  SuggestArr uses any <strong>OpenAI-compatible API</strong> to generate personalized recommendations based on your watch history. You can use a cloud provider or a local LLM running on your machine.
+                </p>
+
+                <div class="provider-list">
+                  <div class="provider-card">
+                    <div class="provider-name"><i class="fas fa-cloud"></i> OpenAI</div>
+                    <table class="provider-table">
+                      <tr><td>API Key</td><td><code>sk-proj-...</code> (required)</td></tr>
+                      <tr><td>Base URL</td><td><em>leave blank</em></td></tr>
+                      <tr><td>Model</td><td><code>gpt-4o-mini</code></td></tr>
+                    </table>
+                  </div>
+
+                  <div class="provider-card provider-card--local">
+                    <div class="provider-name"><i class="fas fa-server"></i> Ollama <span class="badge-local">Local</span></div>
+                    <table class="provider-table">
+                      <tr><td>API Key</td><td><em>not required</em></td></tr>
+                      <tr><td>Base URL</td><td><code>http://localhost:11434/v1</code></td></tr>
+                      <tr><td>Model</td><td><code>mistral</code>, <code>llama3</code>, etc.</td></tr>
+                    </table>
+                    <small class="provider-note">Make sure Ollama is running and the model is pulled before saving.</small>
+                  </div>
+
+                  <div class="provider-card">
+                    <div class="provider-name"><i class="fas fa-network-wired"></i> OpenRouter</div>
+                    <table class="provider-table">
+                      <tr><td>API Key</td><td><code>sk-or-v1-...</code> (required)</td></tr>
+                      <tr><td>Base URL</td><td><code>https://openrouter.ai/api/v1</code></td></tr>
+                      <tr><td>Model</td><td><code>meta-llama/llama-3-8b-instruct</code></td></tr>
+                    </table>
+                  </div>
+
+                  <div class="provider-card">
+                    <div class="provider-name"><i class="fas fa-exchange-alt"></i> LiteLLM Proxy</div>
+                    <table class="provider-table">
+                      <tr><td>API Key</td><td>depends on your proxy config</td></tr>
+                      <tr><td>Base URL</td><td><code>http://&lt;your-proxy&gt;:4000</code></td></tr>
+                      <tr><td>Model</td><td>depends on your proxy config</td></tr>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="modal-tip">
+                  <i class="fas fa-lightbulb"></i>
+                  <span>The system sends your watch history to the LLM and receives a ranked list of recommendations with reasoning. No personal data is stored by the provider beyond your API usage.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </transition>
+      </teleport>
 
       <!-- Debug Settings -->
       <div class="settings-group">
@@ -398,6 +469,7 @@ export default {
       originalConfig: {},
       availableUsers: [],
       isLoadingUsers: false,
+      showAiInfoModal: false,
       logLevelOptions: [
         { value: 'ERROR', label: 'Error' },
         { value: 'WARNING', label: 'Warning' },
@@ -1068,6 +1140,203 @@ export default {
 .ai-card-leave-from {
   opacity: 1;
   transform: scale(1) translateY(0);
+}
+
+/* Info button next to AI section title */
+.info-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #818cf8;
+  font-size: 1rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 50%;
+  transition: color 0.2s, background 0.2s;
+  line-height: 1;
+}
+
+.info-btn:hover {
+  color: #a5b4fc;
+  background: rgba(165, 180, 252, 0.12);
+}
+
+/* Modal overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+}
+
+.modal-box {
+  background: #1e1e2e;
+  border: 1px solid rgba(165, 180, 252, 0.3);
+  border-radius: var(--border-radius-md);
+  width: 100%;
+  max-width: 620px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #a5b4fc;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.modal-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--border-radius-sm);
+  transition: color 0.2s, background 0.2s;
+}
+
+.modal-close:hover {
+  color: #e5e7eb;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.modal-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.modal-intro {
+  color: #e5e7eb;
+  line-height: 1.6;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.provider-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--border-radius-sm);
+  padding: 0.9rem 1rem;
+}
+
+.provider-card--local {
+  border-color: rgba(99, 102, 241, 0.35);
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.provider-name {
+  font-weight: 600;
+  color: #e5e7eb;
+  margin-bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.provider-name i {
+  color: #818cf8;
+}
+
+.badge-local {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.25);
+  color: #a5b4fc;
+  border-radius: 8px;
+  padding: 0.1rem 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.provider-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.provider-table td {
+  padding: 0.2rem 0.4rem;
+  color: var(--color-text-muted);
+}
+
+.provider-table td:first-child {
+  font-weight: 500;
+  color: #9ca3af;
+  width: 90px;
+  white-space: nowrap;
+}
+
+.provider-table code {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.8rem;
+  color: #c4b5fd;
+  font-family: monospace;
+}
+
+.provider-note {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.modal-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--border-radius-sm);
+  padding: 0.85rem 1rem;
+  font-size: 0.875rem;
+  color: #fbbf24;
+  line-height: 1.5;
+}
+
+.modal-tip i {
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+/* Modal transition */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
 }
 
 @media (max-width: 768px) {
