@@ -3,6 +3,8 @@ import asyncio
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
+from api_service.config.config import load_env_vars
+from api_service.services.llm_service import get_recommendations_from_history
 
 class JellyfinHandler:
     def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users):
@@ -25,6 +27,10 @@ class JellyfinHandler:
         self.request_count = 0
         self.existing_content = jellyfin_client.existing_content
         self.selected_users = selected_users
+        
+        config = load_env_vars()
+        self.use_llm = config.get('ENABLE_ADVANCED_ALGORITHM', False)
+
 
     async def process_recent_items(self):
         """Process recently watched items for all Jellyfin users."""
@@ -43,10 +49,77 @@ class JellyfinHandler:
 
         if recent_items_by_library:
             tasks = []
-            for library_name, items in recent_items_by_library.items():
-                self.logger.debug(f"Processing library: {library_name} with items: {items}")
-                tasks.extend([self.process_item(user, item) for item in items])
-            await asyncio.gather(*tasks)
+            if self.use_llm:
+                self.logger.info("Advanced Algorithm enabled. Generating recommendations using LLM.")
+                # We extract all recently watched items across libraries for the LLM
+                all_recent_items = []
+                for library_name, items in recent_items_by_library.items():
+                    all_recent_items.extend(items)
+                
+                history_items = []
+                for item in all_recent_items:
+                    title = item.get('Name')
+                    year = item.get('ProductionYear')
+                    item_type_raw = item.get('Type', '').lower()
+                    if title:
+                        history_items.append({
+                            "title": title, 
+                            "year": year, 
+                            "type": 'movie' if item_type_raw == 'movie' else 'tv'
+                        })
+                
+                if history_items:
+                    # Filter history list for movies vs tv to feed to LLM
+                    movie_history = [h for h in history_items if h['type'] == 'movie']
+                    tv_history = [h for h in history_items if h['type'] == 'tv']
+                    
+                    if movie_history:
+                        tasks.append(self.process_llm_recommendations(user, movie_history, 'movie', self.max_similar_movie))
+                    if tv_history:
+                        tasks.append(self.process_llm_recommendations(user, tv_history, 'tv', self.max_similar_tv))
+            else:
+                for library_name, items in recent_items_by_library.items():
+                    self.logger.debug(f"Processing library: {library_name} with items: {items}")
+                    tasks.extend([self.process_item(user, item) for item in items])
+                    
+            if tasks:
+                await asyncio.gather(*tasks)
+
+    async def process_llm_recommendations(self, user, history_items, item_type, max_results):
+        """Pass history to LLM, resolve TMDb IDs, and request them."""
+        if max_results <= 0:
+            return
+            
+        self.logger.info(f"Delegating {max_results} {item_type} recommendations to LLM service for user {user['name']}.")
+        cached_source_obj = {"id": 0, "name": "LLM Recommendation"} # Dummy source for Overseerr
+        
+        # Call LLM service for raw titles
+        llm_recommendations = get_recommendations_from_history(history_items, max_results, item_type)
+        
+        if not llm_recommendations:
+            self.logger.warning("LLM returned no recommendations.")
+            return
+            
+        # Translate to TMDb items
+        tmdb_items = []
+        for rec in llm_recommendations:
+            title = rec.get("title")
+            year = rec.get("year")
+            
+            if item_type == 'movie':
+                search_results = await self.tmdb_client.search_movie(title, year)
+            else:
+                search_results = await self.tmdb_client.search_tv(title, year)
+                
+            if search_results and len(search_results) > 0:
+                # take best match
+                best_match = search_results[0]
+                best_match['rationale'] = rec.get('rationale')
+                tmdb_items.append(best_match)
+                
+        if tmdb_items:
+            self.logger.info(f"LLM successfully matched {len(tmdb_items)} items to TMDb.")
+            await self.request_similar_media(tmdb_items, item_type, max_results, cached_source_obj, user)
 
     async def process_item(self, user, item):
         """Process an individual item (movie or TV show episode)."""
@@ -156,6 +229,6 @@ class JellyfinHandler:
     async def _request_media_and_log(self, media_type, media, source_tmdb_obj, user):
         """Helper method to request media and log the result."""
         self.logger.debug(f"Requesting media: {media}")
-        if await self.jellyseer_client.request_media(media_type=media_type, media=media, source=source_tmdb_obj, user=user):
+        if await self.jellyseer_client.request_media(media_type=media_type, media=media, source=source_tmdb_obj, user=user, rationale=media.get('rationale')):
             self.request_count += 1
             self.logger.info(f"Requested {media_type}: {media.get('title') or media.get('name') or 'Unknown'}")

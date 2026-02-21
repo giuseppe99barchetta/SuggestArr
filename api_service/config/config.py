@@ -117,6 +117,9 @@ def get_default_values():
         'ENABLE_SOCIAL_FEATURES': lambda: False,
         'ENABLE_DEBUG_MODE': lambda: False,
         'ENABLE_PERFORMANCE_MONITORING': lambda: False,
+        'OPENAI_API_KEY': lambda: '',
+        'OPENAI_BASE_URL': lambda: '',
+        'LLM_MODEL': lambda: 'gpt-4o-mini',
         'CACHE_TTL': lambda: 24,
         'MAX_CACHE_SIZE': lambda: 100,
         'API_TIMEOUT': lambda: 30,
@@ -229,7 +232,8 @@ def get_config_sections():
                      'ENABLE_ADVANCED_ALGORITHM', 'ENABLE_SOCIAL_FEATURES',
                      'ENABLE_DEBUG_MODE', 'ENABLE_PERFORMANCE_MONITORING',
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
-                     'ENABLE_API_CACHING']
+                     'ENABLE_API_CACHING', 'OPENAI_API_KEY', 'OPENAI_BASE_URL',
+                     'LLM_MODEL']
     }
 
 def get_config_section(section_name):

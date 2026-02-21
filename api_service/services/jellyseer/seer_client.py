@@ -147,7 +147,7 @@ class SeerClient:
         self.logger.debug("Total requests count: %d", total)
         return total
 
-    async def request_media(self, media_type, media, source=None, tvdb_id=None, user=None):
+    async def request_media(self, media_type, media, source=None, tvdb_id=None, user=None, rationale=None):
         """Request media and save it to the database if successful."""
         
         # Avoid duplicate requests
@@ -175,7 +175,7 @@ class SeerClient:
             # Safely get the source ID if the source object exists
             source_id = source.get('id') if source else None
             # Save the request utilizing the safely extracted variables
-            databaseManager.save_request(media_type, media.get('id'), source_id, user_id)
+            databaseManager.save_request(media_type, media.get('id'), source_id, user_id, rationale=rationale)
             if source:
                 databaseManager.save_metadata(source, media_type)
             if media:
