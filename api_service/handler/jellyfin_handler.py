@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.jellyseer.seer_client import SeerClient
@@ -65,14 +66,20 @@ class JellyfinHandler:
                 
                 history_items = []
                 for item in all_recent_items:
-                    title = item.get('Name')
-                    year = item.get('ProductionYear')
                     item_type_raw = item.get('Type', '').lower()
+                    if item_type_raw == 'episode':
+                        # Use the series name, not the individual episode title
+                        title = item.get('SeriesName') or item.get('Name')
+                        media_type = 'tv'
+                    else:
+                        title = item.get('Name')
+                        media_type = 'movie'
+                    year = item.get('ProductionYear')
                     if title:
                         history_items.append({
-                            "title": title, 
-                            "year": year, 
-                            "type": 'movie' if item_type_raw == 'movie' else 'tv'
+                            "title": title,
+                            "year": year,
+                            "type": media_type,
                         })
                 
                 if history_items:
@@ -96,23 +103,28 @@ class JellyfinHandler:
     async def _resolve_llm_source(self, source_title: str, item_type: str) -> dict:
         """Resolve an LLM-suggested source title to a TMDB metadata object.
 
+        Strips episode notation (e.g. "Dan Da Dan - S02E12" → "Dan Da Dan") before
+        searching, so that series-level titles are looked up correctly on TMDB.
+
         :param source_title: The title of the watched item that inspired the recommendation.
         :param item_type: 'movie' or 'tv'.
         :return: TMDB metadata dict, or a fallback sentinel dict if not found.
         """
         if source_title:
+            # Strip episode codes like "- S02E12" or "- s02e12" that may appear in titles
+            clean_title = re.sub(r'\s*[-–]\s*S\d+E\d+.*', '', source_title, flags=re.IGNORECASE).strip()
             if item_type == 'movie':
-                results = await self.tmdb_client.search_movie(source_title)
+                results = await self.tmdb_client.search_movie(clean_title)
             else:
-                results = await self.tmdb_client.search_tv(source_title)
+                results = await self.tmdb_client.search_tv(clean_title)
             if results:
-                self.logger.debug(f"Resolved LLM source '{source_title}' to TMDB ID {results[0].get('id')}")
+                self.logger.debug(f"Resolved LLM source '{clean_title}' to TMDB ID {results[0].get('id')}")
                 return results[0]
-            self.logger.warning(f"Could not resolve LLM source title '{source_title}' on TMDB.")
+            self.logger.warning(f"Could not resolve LLM source title '{clean_title}' on TMDB.")
         return {"id": 0, "name": "LLM Recommendation"}
 
     async def process_llm_recommendations(self, user, history_items, item_type, max_results):
-        """Pass history to LLM, resolve TMDb IDs, and request them."""
+        """Pass history to LLM, resolve TMDb IDs in parallel, and request them."""
         if max_results <= 0:
             return
 
@@ -124,30 +136,29 @@ class JellyfinHandler:
             self.logger.warning("LLM returned no recommendations.")
             return
 
-        count = 0
-        for rec in llm_recommendations:
-            if count >= max_results:
-                break
+        search_fn = self.tmdb_client.search_movie if item_type == 'movie' else self.tmdb_client.search_tv
 
-            title = rec.get("title")
-            year = rec.get("year")
+        async def resolve(rec):
+            """Fetch TMDB data for the recommended item and its source in parallel."""
+            rec_results, source_obj = await asyncio.gather(
+                search_fn(rec.get("title"), rec.get("year")),
+                self._resolve_llm_source(rec.get("source_title"), item_type),
+            )
+            return rec, rec_results, source_obj
 
-            if item_type == 'movie':
-                search_results = await self.tmdb_client.search_movie(title, year)
-            else:
-                search_results = await self.tmdb_client.search_tv(title, year)
+        resolved = await asyncio.gather(*[resolve(rec) for rec in llm_recommendations])
 
-            if not search_results:
+        request_tasks = []
+        for rec, rec_results, source_obj in resolved:
+            if not rec_results:
                 continue
-
-            best_match = search_results[0]
+            best_match = rec_results[0]
             best_match['rationale'] = rec.get('rationale')
+            request_tasks.append(self.request_similar_media([best_match], item_type, 1, source_obj, user))
 
-            source_obj = await self._resolve_llm_source(rec.get("source_title"), item_type)
-            await self.request_similar_media([best_match], item_type, 1, source_obj, user)
-            count += 1
-
-        self.logger.info(f"LLM successfully processed {count} {item_type} recommendations for user {user['name']}.")
+        if request_tasks:
+            self.logger.info(f"LLM matched {len(request_tasks)} {item_type} items to TMDb for user {user['name']}.")
+            await asyncio.gather(*request_tasks)
 
     async def process_item(self, user, item, is_anime=False):
         """Process an individual item (movie or TV show episode)."""

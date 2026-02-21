@@ -9,7 +9,8 @@ import aiohttp
 from api_service.config.logger_manager import LoggerManager
 
 # Constants
-REQUEST_TIMEOUT = 10  # Timeout in seconds for HTTP requests
+REQUEST_TIMEOUT = 10       # Timeout in seconds for regular HTTP requests
+LIBRARY_FETCH_TIMEOUT = 120  # Timeout in seconds for full-library bulk fetches
 
 
 class JellyfinClient:
@@ -96,7 +97,7 @@ class JellyfinClient:
                         f"{self.api_url}/Items",
                         headers=self.headers,
                         params=params,
-                        timeout=REQUEST_TIMEOUT
+                        timeout=aiohttp.ClientTimeout(total=LIBRARY_FETCH_TIMEOUT)
                     ) as response:
                         if response.status != 200:
                             self.logger.error(
@@ -128,7 +129,7 @@ class JellyfinClient:
                             library_name
                         )
 
-            except aiohttp.ClientError as e:
+            except (aiohttp.ClientError, TimeoutError) as e:
                 self.logger.error(
                     "Error retrieving items for library %s: %s",
                     library_name, str(e)
