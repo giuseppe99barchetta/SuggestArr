@@ -29,7 +29,8 @@ def _parse_json_fields(config_data):
         'PLEX_LIBRARIES',
         'FILTER_LANGUAGE',
         'FILTER_GENRES_EXCLUDE',
-        'FILTER_STREAMING_SERVICES'
+        'FILTER_STREAMING_SERVICES',
+        'SEER_ANIME_PROFILE_CONFIG'
     ]
 
     for field in json_fields:
@@ -117,6 +118,9 @@ def get_default_values():
         'ENABLE_SOCIAL_FEATURES': lambda: False,
         'ENABLE_DEBUG_MODE': lambda: False,
         'ENABLE_PERFORMANCE_MONITORING': lambda: False,
+        'OPENAI_API_KEY': lambda: '',
+        'OPENAI_BASE_URL': lambda: '',
+        'LLM_MODEL': lambda: 'gpt-4o-mini',
         'CACHE_TTL': lambda: 24,
         'MAX_CACHE_SIZE': lambda: 100,
         'API_TIMEOUT': lambda: 30,
@@ -130,6 +134,7 @@ def get_default_values():
         'DB_CONNECTION_TIMEOUT': lambda: '30',
         'DB_RETRY_ATTEMPTS': lambda: '3',
         'DB_RETRY_DELAY': lambda: '1.0',
+        'SEER_ANIME_PROFILE_CONFIG': lambda: {},
     }
 
 def get_config_values():
@@ -150,7 +155,8 @@ def save_env_vars(config_data):
     logger.debug("Saving environment variables to config.yaml")
     cron_times = config_data.get('CRON_TIMES', '0 0 * * *')
 
-    if not croniter.is_valid(cron_times):
+    valid_presets = {'daily', 'weekly', 'every_12h', 'every_6h', 'every_hour'}
+    if cron_times not in valid_presets and not croniter.is_valid(cron_times):
         logger.error("Invalid cron time provided.")
         raise ValueError("Invalid cron time provided.")
 
@@ -217,7 +223,9 @@ def get_config_sections():
                    'SEARCH_SIZE', 'SUBPATH', 'LOG_LEVEL'],
         'services': ['TMDB_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL',
                     'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
-                    'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_SESSION_TOKEN'],
+                    'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_USER_PSW',
+                    'SEER_SESSION_TOKEN', 'SEER_ANIME_PROFILE_CONFIG',
+                    'SELECTED_USERS'],
         'database': ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
                     'DB_MIN_CONNECTIONS', 'DB_MAX_CONNECTIONS', 'DB_MAX_IDLE_TIME', 
                     'DB_MAX_LIFETIME', 'DB_CONNECTION_TIMEOUT', 'DB_RETRY_ATTEMPTS', 'DB_RETRY_DELAY'],
@@ -229,7 +237,8 @@ def get_config_sections():
                      'ENABLE_ADVANCED_ALGORITHM', 'ENABLE_SOCIAL_FEATURES',
                      'ENABLE_DEBUG_MODE', 'ENABLE_PERFORMANCE_MONITORING',
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
-                     'ENABLE_API_CACHING']
+                     'ENABLE_API_CACHING', 'OPENAI_API_KEY', 'OPENAI_BASE_URL',
+                     'LLM_MODEL']
     }
 
 def get_config_section(section_name):

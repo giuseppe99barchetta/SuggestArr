@@ -143,6 +143,15 @@
                     <i :class="getLibraryIcon(library.type)" class="selection-icon"></i>
 
                     <p class="selection-name">{{ library.title }}</p>
+
+                    <!-- Anime toggle badge -->
+                    <button v-if="isSelected(library.key)"
+                        @click.stop="toggleAnimeFlag(library.key)"
+                        :class="['anime-badge', { 'anime-active': isAnimeLibrary(library.key) }]"
+                        :title="isAnimeLibrary(library.key) ? 'Marked as Anime library' : 'Mark as Anime library'">
+                        <i class="fas fa-torii-gate"></i>
+                        <span class="anime-badge-text">Anime</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -267,7 +276,7 @@ export default {
         
         clearLibrarySelection() {
             this.selectedLibraries = [];
-            this.selectedLibraryNames = [];
+            this.libraryAnimeFlags = {};
             this.$emit('update-config', 'PLEX_LIBRARIES', []);
         },
         
@@ -432,6 +441,43 @@ export default {
   font-size: 0.9rem;
   margin: 0;
   line-height: 1.2;
+}
+
+/* Anime Badge */
+.anime-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 1rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.anime-badge:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
+.anime-badge.anime-active {
+  background: #e74c9c;
+  border-color: #e74c9c;
+  color: white;
+  box-shadow: 0 2px 8px rgba(231, 76, 156, 0.4);
+}
+
+.anime-badge.anime-active:hover {
+  background: #d63d8c;
+  border-color: #d63d8c;
+}
+
+.anime-badge-text {
+  line-height: 1;
 }
 
 /* Responsive */

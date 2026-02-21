@@ -191,6 +191,13 @@ export default {
         return;
       }
 
+      const validPresets = ['daily', 'weekly', 'every_12h', 'every_6h', 'every_hour'];
+      if (validPresets.includes(this.localConfig.CRON_TIMES.toLowerCase())) {
+        this.cronValidationMessage = `Valid preset: ${this.localConfig.CRON_TIMES}`;
+        this.cronValidationValid = true;
+        return;
+      }
+
       try {
         cronParser.parseExpression(this.localConfig.CRON_TIMES);
 

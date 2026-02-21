@@ -284,9 +284,9 @@ import '@/assets/styles/dashboardPage.css';
 import SettingsGeneral from './settings/SettingsGeneral.vue';
 import SettingsServices from './settings/SettingsServices.vue';
 import SettingsDatabase from './settings/SettingsDatabase.vue';
-import SettingsContentFilters from './settings/SettingsContentFilters.vue';
 import SettingsAdvanced from './settings/SettingsAdvanced.vue';
 import SettingsRequests from './settings/SettingsRequests.vue';
+import SettingsJobs from './settings/SettingsJobs.vue';
 import LogsComponent from './LogsComponent.vue';
 
 export default {
@@ -296,9 +296,9 @@ export default {
     SettingsGeneral,
     SettingsServices,
     SettingsDatabase,
-    SettingsContentFilters,
     SettingsAdvanced,
     SettingsRequests,
+    SettingsJobs,
     LogsComponent,
   },
   setup() {
@@ -345,8 +345,8 @@ export default {
         { id: 'requests', name: 'Requests', icon: 'fas fa-paper-plane' },
         { id: 'general', name: 'General', icon: 'fas fa-cog' },
         { id: 'services', name: 'Services', icon: 'fas fa-plug' },
+        { id: 'jobs', name: 'Jobs', icon: 'fas fa-briefcase' },
         { id: 'database', name: 'Database', icon: 'fas fa-database' },
-        { id: 'content_filters', name: 'Filters', icon: 'fas fa-filter' },
         { id: 'advanced', name: 'Advanced', icon: 'fas fa-sliders-h' },
         { id: 'logs', name: 'Logs', icon: 'fas fa-file-alt' },
       ],
@@ -358,8 +358,8 @@ export default {
         requests: 'SettingsRequests',
         general: 'SettingsGeneral',
         services: 'SettingsServices',
+        jobs: 'SettingsJobs',
         database: 'SettingsDatabase',
-        content_filters: 'SettingsContentFilters',
         advanced: 'SettingsAdvanced',
         logs: 'LogsComponent',
       };
@@ -737,19 +737,28 @@ export default {
       try {
         await axios.post('/api/automation/force_run');
         this.$toast.open({
-          message: 'Force run completed successfully!',
+          message: 'Force run started in the background!',
           type: 'success',
           duration: 3000,
           position: 'top-right'
         });
       } catch (error) {
-        this.$toast.open({
-          message: 'Force run failed, see logs for details.',
-          type: 'error',
-          duration: 5000,
-          position: 'top-right'
-        });
-        console.error('Error force running automation:', error);
+        if (error.response && error.response.status === 409) {
+          this.$toast.open({
+            message: 'A force run is already in progress.',
+            type: 'warning',
+            duration: 4000,
+            position: 'top-right'
+          });
+        } else {
+          this.$toast.open({
+            message: 'Force run failed, see logs for details.',
+            type: 'error',
+            duration: 5000,
+            position: 'top-right'
+          });
+          console.error('Error force running automation:', error);
+        }
       } finally {
         this.isForceRunning = false;
         this.loadingMessage = 'Processing...';

@@ -84,6 +84,10 @@ class ContentAutomation:
         exclude_downloaded = env_vars.get('EXCLUDE_DOWNLOADED', True)
         exclude_requested = env_vars.get('EXCLUDE_REQUESTED', True)
 
+        # Anime profile configuration
+        anime_profile_config_raw = env_vars.get('SEER_ANIME_PROFILE_CONFIG', {})
+        anime_profile_config = anime_profile_config_raw if isinstance(anime_profile_config_raw, dict) else {}
+
         # Overseer/Jellyseer client
         instance.logger.info("Initializing Jellyseer client")
         seer_client = SeerClient(
@@ -94,7 +98,8 @@ class ContentAutomation:
             env_vars['SEER_SESSION_TOKEN'],
             instance.number_of_seasons,
             exclude_downloaded,
-            exclude_requested
+            exclude_requested,
+            anime_profile_config
         )
         await seer_client.init()
         instance.logger.info("Jellyseer client initialized successfully")
@@ -132,8 +137,17 @@ class ContentAutomation:
                 jellyfin_libraries
             )
             await jellyfin_client.init_existing_content()
+
+            # Build library anime map: library name -> is_anime
+            jellyfin_anime_map = {}
+            for lib in jellyfin_libraries:
+                if isinstance(lib, dict) and lib.get('name'):
+                    jellyfin_anime_map[lib['name']] = lib.get('is_anime', False)
+
             instance.media_handler = JellyfinHandler(
-                jellyfin_client, seer_client, tmdb_client, instance.logger, instance.max_similar_movie, instance.max_similar_tv, instance.selected_users
+                jellyfin_client, seer_client, tmdb_client, instance.logger,
+                instance.max_similar_movie, instance.max_similar_tv,
+                instance.selected_users, jellyfin_anime_map
             )
             instance.logger.info(f"{instance.selected_service.upper()} client initialized successfully")
 
@@ -154,7 +168,18 @@ class ContentAutomation:
                 user_ids=instance.selected_users
             )
             await plex_client.init_existing_content()
-            instance.media_handler = PlexHandler(plex_client, seer_client, tmdb_client, instance.logger, instance.max_similar_movie, instance.max_similar_tv)
+
+            # Build library anime map: library section ID -> is_anime
+            plex_anime_map = {}
+            for lib in plex_libraries:
+                if isinstance(lib, dict) and lib.get('id'):
+                    plex_anime_map[str(lib['id'])] = lib.get('is_anime', False)
+
+            instance.media_handler = PlexHandler(
+                plex_client, seer_client, tmdb_client, instance.logger,
+                instance.max_similar_movie, instance.max_similar_tv,
+                plex_anime_map
+            )
             instance.logger.info("Plex client initialized successfully")
         else:
             instance.logger.warning(f"Unknown selected service: {instance.selected_service}")

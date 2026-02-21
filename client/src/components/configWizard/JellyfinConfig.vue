@@ -97,10 +97,10 @@
         <div class="selection-info">
           <h4 class="card-title">Select Libraries</h4>
           <p class="section-description">
-            {{ selectedLibraryIds.length > 0 ? `${selectedLibraryIds.length} selected` : 'Select libraries or leave empty for all' }}
+            {{ selectedLibraries.length > 0 ? `${selectedLibraries.length} selected` : 'Select libraries or leave empty for all' }}
           </p>
         </div>
-        <button v-if="selectedLibraryIds.length > 0" @click="clearLibrarySelection" class="clear-btn">
+        <button v-if="selectedLibraries.length > 0" @click="clearLibrarySelection" class="clear-btn">
           <i class="fas fa-times-circle"></i>
           Clear Selection
         </button>
@@ -118,6 +118,15 @@
           <i :class="getLibraryIcon(library.CollectionType)" class="selection-icon"></i>
 
           <p class="selection-name">{{ library.Name }}</p>
+
+          <!-- Anime toggle badge -->
+          <button v-if="isSelected(library.ItemId)"
+            @click.stop="toggleAnimeFlag(library.ItemId)"
+            :class="['anime-badge', { 'anime-active': isAnimeLibrary(library.ItemId) }]"
+            :title="isAnimeLibrary(library.ItemId) ? 'Marked as Anime library' : 'Mark as Anime library'">
+            <i class="fas fa-torii-gate"></i>
+            <span class="anime-badge-text">Anime</span>
+          </button>
         </div>
       </div>
     </div>
@@ -298,6 +307,43 @@
   line-height: 1.2;
 }
 
+/* Anime Badge */
+.anime-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 1rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.anime-badge:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
+.anime-badge.anime-active {
+  background: #e74c9c;
+  border-color: #e74c9c;
+  color: white;
+  box-shadow: 0 2px 8px rgba(231, 76, 156, 0.4);
+}
+
+.anime-badge.anime-active:hover {
+  background: #d63d8c;
+  border-color: #d63d8c;
+}
+
+.anime-badge-text {
+  line-height: 1;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .settings-card {
@@ -345,8 +391,7 @@ export default {
         isTesting: false
       },
       libraries: [],
-      selectedLibraryIds: [],
-      selectedLibraryNames: [],
+      selectedLibraries: [],
       users: [],
       selectedUserIds: [],
       selectedUserName: [],
@@ -420,15 +465,38 @@ export default {
         },
 
         toggleLibrarySelection(library) {
-            const index = this.selectedLibraryIds.indexOf(library.ItemId);
+            const index = this.selectedLibraries.findIndex(lib => lib.id === library.ItemId);
             if (index === -1) {
-                this.selectedLibraryIds.push(library.ItemId);
-                this.selectedLibraryNames.push(library.Name);
+                const isAnime = library.Name.toLowerCase().includes('anime');
+                this.selectedLibraries.push({
+                    id: library.ItemId,
+                    name: library.Name,
+                    is_anime: isAnime
+                });
             } else {
-                this.selectedLibraryIds.splice(index, 1);
-                this.selectedLibraryNames.splice(this.selectedLibraryNames.indexOf(library.Name), 1);
+                this.selectedLibraries.splice(index, 1);
             }
-            this.$emit('update-config', `JELLYFIN_LIBRARIES`, this.combineLibraryData(this.selectedLibraryIds, this.selectedLibraryNames));
+            this.emitLibraryConfig();
+        },
+
+        toggleAnimeFlag(libraryId) {
+            const lib = this.selectedLibraries.find(l => l.id === libraryId);
+            if (lib) {
+                lib.is_anime = !lib.is_anime;
+                this.emitLibraryConfig();
+            }
+        },
+
+        isAnimeLibrary(libraryId) {
+            const lib = this.selectedLibraries.find(l => l.id === libraryId);
+            return lib ? lib.is_anime : false;
+        },
+
+        emitLibraryConfig() {
+            const config = this.selectedLibraries
+                .filter(lib => lib.id && lib.name)
+                .map(lib => ({ id: lib.id, name: lib.name, is_anime: lib.is_anime }));
+            this.$emit('update-config', `JELLYFIN_LIBRARIES`, config);
         },
 
         toggleUserSelection(user) {
@@ -449,8 +517,7 @@ export default {
         },
 
         clearLibrarySelection() {
-            this.selectedLibraryIds = [];
-            this.selectedLibraryNames = [];
+            this.selectedLibraries = [];
             this.$emit('update-config', `JELLYFIN_LIBRARIES`, []);
         },
 
@@ -465,7 +532,7 @@ export default {
         },
 
         isSelected(libraryId) {
-            return this.selectedLibraryIds.includes(libraryId);
+            return this.selectedLibraries.some(lib => lib.id === libraryId);
         },
 
         getLibraryIcon(collectionType) {
@@ -481,8 +548,11 @@ export default {
 
         loadSelectedLibraries() {
             if (this.config[`JELLYFIN_LIBRARIES`]) {
-                this.selectedLibraryIds = this.config[`JELLYFIN_LIBRARIES`].map(lib => lib.id);
-                this.selectedLibraryNames = this.config[`JELLYFIN_LIBRARIES`].map(lib => lib.name);
+                this.selectedLibraries = this.config[`JELLYFIN_LIBRARIES`].map(lib => ({
+                    id: lib.id,
+                    name: lib.name,
+                    is_anime: lib.is_anime || false
+                }));
             }
         },
 

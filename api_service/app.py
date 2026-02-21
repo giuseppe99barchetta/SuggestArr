@@ -20,6 +20,7 @@ from api_service.blueprints.automation.routes import automation_bp
 from api_service.blueprints.logs.routes import logs_bp
 from api_service.blueprints.config.routes import config_bp
 from api_service.blueprints.tmdb.routes import tmdb_bp
+from api_service.blueprints.jobs.routes import jobs_bp
 
 executor = ThreadPoolExecutor(max_workers=3)
 logger = LoggerManager.get_logger("APP") 
@@ -44,6 +45,7 @@ def create_app():
     application.register_blueprint(logs_bp, url_prefix='/api')
     application.register_blueprint(config_bp, url_prefix='/api/config')
     application.register_blueprint(tmdb_bp, url_prefix='/api/tmdb')
+    application.register_blueprint(jobs_bp, url_prefix='/api/jobs')
 
     # Register routes
     register_routes(application)
@@ -63,7 +65,13 @@ def register_routes(app): # pylint: disable=redefined-outer-name
     def serve_frontend(path):
         """
         Serve the built frontend's index.html or any other static file.
+        API routes should be handled by blueprints, not this catch-all.
         """
+        # API routes that reach here were not matched by blueprints - return 404
+        if path.startswith('api/'):
+            from flask import abort
+            abort(404)
+
         app.static_folder = '../static'
         if path == "" or not os.path.exists(os.path.join(app.static_folder, path)):
             return send_from_directory(app.static_folder, 'index.html')
@@ -77,6 +85,38 @@ env_vars = load_env_vars()
 if env_vars.get('CRON_TIMES'):
     from api_service.config.cron_jobs import start_cron_job
     start_cron_job(env_vars)
+
+# Initialize database and jobs scheduler
+try:
+    from api_service.db.database_manager import DatabaseManager
+    from api_service.jobs.job_manager import JobManager
+    from api_service.jobs.discover_automation import execute_discover_job
+    from api_service.jobs.recommendation_automation import execute_recommendation_job
+    from api_service.jobs.system_job_sync import sync_system_job_from_config
+
+    # Initialize database tables (including discover_jobs)
+    db_manager = DatabaseManager()
+    db_manager.initialize_db()
+
+    # Sync system job from YAML config (backwards compatibility)
+    sync_result = sync_system_job_from_config()
+    if sync_result['status'] == 'success':
+        logger.info(f"System job synced from config (ID: {sync_result['job_id']})")
+    elif sync_result['status'] == 'skipped':
+        logger.debug("No system job to sync (CRON_TIMES not configured)")
+
+    # Initialize and start job scheduler
+    job_manager = JobManager.get_instance()
+    # Register executors for both job types
+    job_manager.set_job_executor(execute_discover_job, job_type='discover')
+    job_manager.set_job_executor(execute_recommendation_job, job_type='recommendation')
+    job_manager.start()
+    job_manager.sync_jobs_from_db()
+    logger.info("Jobs scheduler initialized (discover + recommendation)")
+except Exception as e:
+    import traceback
+    logger.error(f"Failed to initialize discover jobs scheduler: {e}")
+    logger.error(traceback.format_exc())
 
 def close_log_handlers():
     for handler in logging.root.handlers[:]:

@@ -1,9 +1,12 @@
 import asyncio
+import re
 import unicodedata
 
 from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
+from api_service.config.config import load_env_vars
+from api_service.services.llm.llm_service import get_recommendations_from_history
 
 def to_ascii(value):
     """
@@ -16,7 +19,7 @@ def to_ascii(value):
     return unicodedata.normalize('NFKD', value)
 
 class PlexHandler:
-    def __init__(self, plex_client: PlexClient, seer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv):
+    def __init__(self, plex_client: PlexClient, seer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -25,6 +28,8 @@ class PlexHandler:
         :param logger: Logger instance
         :param max_similar_movie: Max number of similar movies to request
         :param max_similar_tv: Max number of similar TV shows to request
+        :param library_anime_map: Dict mapping library section ID to is_anime boolean
+        :param use_llm: Override for LLM mode. If None, falls back to global ENABLE_ADVANCED_ALGORITHM setting.
         """
         self.plex_client = plex_client
         self.seer_client = seer_client
@@ -34,6 +39,14 @@ class PlexHandler:
         self.max_similar_tv = max_similar_tv
         self.request_count = 0
         self.existing_content = plex_client.existing_content
+        self.library_anime_map = library_anime_map or {}
+
+        if use_llm is not None:
+            self.use_llm = use_llm
+        else:
+            config = load_env_vars()
+            self.use_llm = config.get('ENABLE_ADVANCED_ALGORITHM', False)
+
 
     async def process_recent_items(self):
         """Process recently watched items for Plex (without user context)."""
@@ -46,18 +59,109 @@ class PlexHandler:
                 title = response_item.get('title', response_item.get('grandparentTitle'))
                 if title is not None and isinstance(title, str):
                     title = to_ascii(title)
-                self.logger.info(f"Processing item: {title}")
-                tasks.append(self.process_item(response_item, title))  # No user context needed for Plex
+                # Look up anime status from the item's library section ID
+                library_section_id = str(response_item.get('librarySectionID', ''))
+                is_anime = self.library_anime_map.get(library_section_id, False)
+                self.logger.info(f"Processing item: {title} (anime={is_anime})")
+                tasks.append(self.process_item(response_item, title, is_anime))
 
             if tasks:
-                await asyncio.gather(*tasks)
+                if self.use_llm:
+                    self.logger.info("Advanced Algorithm enabled. Generating recommendations using LLM.")
+                    movie_history, tv_history = [], []
+                    for response_item in recent_items_response:
+                        item_type_raw = response_item.get('type', '').lower()
+                        if item_type_raw == 'episode':
+                            title = response_item.get('grandparentTitle')
+                            media_type = 'tv'
+                        else:
+                            title = response_item.get('title')
+                            media_type = 'movie'
+                        year = response_item.get('year')
+                        if title:
+                            entry = {"title": title, "year": year}
+                            if media_type == 'movie':
+                                movie_history.append(entry)
+                            else:
+                                tv_history.append(entry)
+
+                    llm_tasks = []
+                    if movie_history and self.max_similar_movie > 0:
+                        llm_tasks.append(self.process_llm_recommendations(movie_history, 'movie', self.max_similar_movie))
+                    if tv_history and self.max_similar_tv > 0:
+                        llm_tasks.append(self.process_llm_recommendations(tv_history, 'tv', self.max_similar_tv))
+                    if llm_tasks:
+                        await asyncio.gather(*llm_tasks)
+                else:
+                    await asyncio.gather(*tasks)
+                
                 self.logger.info(f"Total media requested: {self.request_count}")
             else:
                 self.logger.warning("No recent items found in Plex response")
         else:
             self.logger.warning("Unexpected response format: expected a list")
 
-    async def process_item(self, item, title):
+    async def _resolve_llm_source(self, source_title: str, item_type: str) -> dict:
+        """Resolve an LLM-suggested source title to a TMDB metadata object.
+
+        Strips episode notation (e.g. "Dan Da Dan - S02E12" → "Dan Da Dan") before
+        searching, so that series-level titles are looked up correctly on TMDB.
+
+        :param source_title: The title of the watched item that inspired the recommendation.
+        :param item_type: 'movie' or 'tv'.
+        :return: TMDB metadata dict, or a fallback sentinel dict if not found.
+        """
+        if source_title:
+            # Strip episode codes like "- S02E12" or "- s02e12" that may appear in titles
+            clean_title = re.sub(r'\s*[-–]\s*S\d+E\d+.*', '', source_title, flags=re.IGNORECASE).strip()
+            if item_type == 'movie':
+                results = await self.tmdb_client.search_movie(clean_title)
+            else:
+                results = await self.tmdb_client.search_tv(clean_title)
+            if results:
+                self.logger.debug(f"Resolved LLM source '{clean_title}' to TMDB ID {results[0].get('id')}")
+                return results[0]
+            self.logger.warning(f"Could not resolve LLM source title '{clean_title}' on TMDB.")
+        return {"id": 0, "name": "LLM Recommendation"}
+
+    async def process_llm_recommendations(self, history_items, item_type, max_results):
+        """Pass history to LLM, resolve TMDb IDs in parallel, and request them."""
+        if max_results <= 0:
+            return
+
+        self.logger.info(f"Delegating {max_results} {item_type} recommendations to LLM service.")
+
+        llm_recommendations = get_recommendations_from_history(history_items, max_results, item_type)
+
+        if not llm_recommendations:
+            self.logger.warning("LLM returned no recommendations.")
+            return
+
+        search_fn = self.tmdb_client.search_movie if item_type == 'movie' else self.tmdb_client.search_tv
+
+        async def resolve(rec):
+            """Fetch TMDB data for the recommended item and its source in parallel."""
+            rec_results, source_obj = await asyncio.gather(
+                search_fn(rec.get("title"), rec.get("year")),
+                self._resolve_llm_source(rec.get("source_title"), item_type),
+            )
+            return rec, rec_results, source_obj
+
+        resolved = await asyncio.gather(*[resolve(rec) for rec in llm_recommendations])
+
+        request_tasks = []
+        for rec, rec_results, source_obj in resolved:
+            if not rec_results:
+                continue
+            best_match = rec_results[0]
+            best_match['rationale'] = rec.get('rationale')
+            request_tasks.append(self.request_similar_media([best_match], item_type, 1, source_obj))
+
+        if request_tasks:
+            self.logger.info(f"LLM matched {len(request_tasks)} {item_type} items to TMDb.")
+            await asyncio.gather(*request_tasks)
+
+    async def process_item(self, item, title, is_anime=False):
         """Process an individual item (movie or TV show episode)."""
         self.logger.debug(f"Processing item: {item}")
 
@@ -69,9 +173,9 @@ class PlexHandler:
                 self.logger.debug(f"Extracted key: {key} for item type: {item_type}")
                 if key:
                     if item_type == 'movie':
-                        await self.process_movie(key, title)
+                        await self.process_movie(key, title, is_anime)
                     elif item_type == 'episode':
-                        await self.process_episode(key, title)
+                        await self.process_episode(key, title, is_anime)
                 else:
                     raise ValueError(f"Missing key for {item_type} '{title}'. Cannot process this item. Skipping.")
             except Exception as e:
@@ -83,7 +187,7 @@ class PlexHandler:
         self.logger.debug(f"Extracted rating key: {key} for item type: {item_type}")
         return key if key else None
 
-    async def process_movie(self, movie_key, title):
+    async def process_movie(self, movie_key, title, is_anime=False):
         """Find similar movies via TMDb and request them via Seer."""
         self.logger.debug(f"Processing movie with key: {movie_key} - {title}")
         source_tmbd_id = await self.plex_client.get_metadata_provider_id(movie_key)
@@ -97,11 +201,11 @@ class PlexHandler:
                 return
             similar_movies = await self.tmdb_client.find_similar_movies(source_tmbd_id)
             self.logger.debug(f"Found similar movies: {similar_movies}")
-            await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie, source_tmdb_obj)
+            await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie, source_tmdb_obj, is_anime)
         else:
             self.logger.warning(f"Error while processing item: 'tmdb_id' not found for movie '{title}'. Skipping.")
 
-    async def process_episode(self, show_key, title):
+    async def process_episode(self, show_key, title, is_anime=False):
         """Process a TV show episode by finding similar TV shows via TMDb."""
         self.logger.debug(f"Processing episode with show key: {show_key} - {title}")
         if show_key:
@@ -116,13 +220,13 @@ class PlexHandler:
                     return
                 similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmbd_id)
                 self.logger.debug(f"Found {len(similar_tvshows)} similar TV shows")
-                await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv, source_tmdb_obj)
+                await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv, source_tmdb_obj, is_anime)
             else:
                 self.logger.warning(f"Error while processing item: 'tmdb_id' not found for tv show '{title}'. Skipping.")
 
-    async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj):
+    async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj, is_anime=False):
         """Request similar media (movie/TV show) via Overseer."""
-        self.logger.debug(f"Requesting {max_items} similar media")
+        self.logger.debug(f"Requesting {max_items} similar media (anime={is_anime})")
         if not media_ids:
             self.logger.info("No media IDs provided for similar media request.")
             return
@@ -160,22 +264,22 @@ class PlexHandler:
             if in_excluded_streaming_service:
                 self.logger.info(f"Skipping [{media_type}, {media_title}]: excluded by streaming service: {provider}")
                 continue
-            
+
             media_to_send = dict(media)
             if 'title' in media_to_send and media_to_send['title'] is not None and isinstance(media_to_send['title'], str):
                 media_to_send['title'] = to_ascii(media_to_send['title'])
 
             # Add to tasks if it passes all checks
-            tasks.append(self._request_media_and_log(media_type, media_to_send, source_tmdb_obj))
+            tasks.append(self._request_media_and_log(media_type, media_to_send, source_tmdb_obj, is_anime))
 
         await asyncio.gather(*tasks)
 
-    async def _request_media_and_log(self, media_type, media, source_tmdb_obj):
+    async def _request_media_and_log(self, media_type, media, source_tmdb_obj, is_anime=False):
         """Helper method to request media and log the result."""
-        self.logger.debug(f"Requesting media: {media} of type: {media_type}")
-        if await self.seer_client.request_media(media_type, media, source_tmdb_obj):
+        self.logger.debug(f"Requesting media: {media} of type: {media_type} (anime={is_anime})")
+        if await self.seer_client.request_media(media_type, media, source_tmdb_obj, is_anime=is_anime, rationale=media.get('rationale')):
             self.request_count += 1
             title_for_log = media.get('title') or media.get('name') or ''
             if title_for_log is not None and isinstance(title_for_log, str):
                 title_for_log = to_ascii(title_for_log)
-            self.logger.info(f"Requested {media_type}: {title_for_log}")
+            self.logger.info(f"Requested {media_type}: {title_for_log}{' [Anime]' if is_anime else ''}")
