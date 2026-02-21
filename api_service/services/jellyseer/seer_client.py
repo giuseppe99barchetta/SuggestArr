@@ -177,7 +177,7 @@ class SeerClient:
         self.logger.info("Applied profile '%s': serverId=%s, profileId=%s, rootFolder=%s",
                         profile_key, profile.get('serverId'), profile.get('profileId'), profile.get('rootFolder'))
 
-    async def request_media(self, media_type, media, source=None, tvdb_id=None, user=None, is_anime=False):
+    async def request_media(self, media_type, media, source=None, tvdb_id=None, user=None, is_anime=False, rationale=None):
         """Request media and save it to the database if successful.
         :param is_anime: If True, use anime-specific Overseerr profile routing.
         """
@@ -216,7 +216,7 @@ class SeerClient:
             # Safely get the source ID if the source object exists
             source_id = source.get('id') if source else None
             # Save the request utilizing the safely extracted variables
-            databaseManager.save_request(media_type, media.get('id'), source_id, user_id)
+            databaseManager.save_request(media_type, media.get('id'), source_id, user_id, rationale=rationale)
             if source:
                 databaseManager.save_metadata(source, media_type)
             if media:

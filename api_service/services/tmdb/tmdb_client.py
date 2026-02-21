@@ -286,3 +286,57 @@ class TMDbClient:
             self.logger.error("An error occurred while fetching watch providers: %s", str(e))
 
         return False, None
+
+    async def search_movie(self, title, year=None):
+        """
+        Search for a movie by title and optionally release year.
+        :param title: Movie title.
+        :param year: Release year (optional).
+        :return: List of formatted search results or empty list.
+        """
+        import urllib.parse
+        encoded_title = urllib.parse.quote(str(title))
+        url = f"{self.tmdb_api_url}/search/movie?api_key={self.api_key}&query={encoded_title}"
+        if year:
+            url += f"&year={year}"
+            
+        self.logger.debug("Searching TMDb for movie: %s (Year: %s)", title, year)
+        return await self._execute_search(url, 'movie')
+
+    async def search_tv(self, title, year=None):
+        """
+        Search for a TV show by name and optionally first air year.
+        :param title: TV show name.
+        :param year: First air year (optional).
+        :return: List of formatted search results or empty list.
+        """
+        import urllib.parse
+        encoded_title = urllib.parse.quote(str(title))
+        url = f"{self.tmdb_api_url}/search/tv?api_key={self.api_key}&query={encoded_title}"
+        if year:
+            url += f"&first_air_date_year={year}"
+            
+        self.logger.debug("Searching TMDb for TV show: %s (Year: %s)", title, year)
+        return await self._execute_search(url, 'tv')
+
+    async def _execute_search(self, url, content_type):
+        """Helper to execute search and format results."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status in HTTP_OK:
+                        data = await response.json()
+                        results = []
+                        for item in data.get('results', []):
+                            # Ensure we don't crash if format_result fails on missing keys
+                            try:
+                                results.append(self._format_result(item, content_type))
+                            except Exception as e:
+                                self.logger.warning("Failed to format search result: %s", str(e))
+                        return results
+                    else:
+                        self.logger.error("Error searching TMDb: %d", response.status)
+        except aiohttp.ClientError as e:
+            self.logger.error("An error occurred while searching TMDb: %s", str(e))
+        return []
+

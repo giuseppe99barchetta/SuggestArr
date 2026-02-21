@@ -327,6 +327,17 @@
 
                 <div class="modal-separator"></div>
 
+                <!-- LLM Rationale -->
+                <div v-if="selectedSource.rationale" class="modal-section">
+                  <h3 class="modal-section-title" style="color: #a855f7;">
+                    <i class="fas fa-robot"></i>
+                    AI Reasoning
+                  </h3>
+                  <p class="modal-overview" style="font-style: italic; border-left: 3px solid #a855f7; padding-left: 1rem; margin-top: 0.5rem; white-space: pre-wrap;">
+                    {{ selectedSource.rationale }}
+                  </p>
+                </div>
+
                 <!-- Overview -->
                 <div class="modal-section">
                   <h3 class="modal-section-title">
@@ -666,6 +677,7 @@ export default {
             rating: request.rating,
             logo_path: request.logo_path,
             backdrop_path: request.backdrop_path,
+            rationale: request.rationale,
           })),
         }));
 
