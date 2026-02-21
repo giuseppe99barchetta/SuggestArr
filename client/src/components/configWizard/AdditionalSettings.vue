@@ -132,6 +132,13 @@ export default {
         handleCronInput(value) {
             this.handleUpdate('CRON_TIMES', value);
 
+            const validPresets = ['daily', 'weekly', 'every_12h', 'every_6h', 'every_hour'];
+            if (validPresets.includes(value.toLowerCase())) {
+                this.cronDescription = `Preset schedule: ${value}`;
+                this.cronError = '';
+                return;
+            }
+
             try {
                 const interval = cronParser.parseExpression(value);
                 const nextRun = interval.next().toString();
