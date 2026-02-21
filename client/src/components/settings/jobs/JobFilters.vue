@@ -60,6 +60,21 @@
       <small class="form-help">Only include TV shows with at least this many seasons</small>
     </div>
 
+    <!-- Minimum Runtime Filter -->
+    <div class="form-group">
+      <label for="minRuntime">Minimum Runtime (minutes)</label>
+      <input
+        id="minRuntime"
+        v-model.number="localFilters.min_runtime"
+        type="number"
+        min="0"
+        step="1"
+        placeholder="e.g., 60"
+        class="form-control"
+      />
+      <small class="form-help">Exclude short content below this runtime — useful to filter out clips and shorts</small>
+    </div>
+
     <!-- Release Date Filter -->
     <div class="form-group">
       <label>Release Date Range</label>

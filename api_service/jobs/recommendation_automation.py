@@ -156,6 +156,11 @@ class RecommendationAutomation:
             filter_streaming_raw = self.env_vars.get('FILTER_STREAMING_SERVICES', [])
             filter_streaming_services = filter_streaming_raw if isinstance(filter_streaming_raw, list) else []
 
+        # Minimum runtime filter - job overrides global
+        filter_min_runtime = job_filters.get('min_runtime')
+        if filter_min_runtime is None:
+            filter_min_runtime = self.env_vars.get('FILTER_MIN_RUNTIME', None)
+
         # LLM enhancement - job setting overrides global; verify LLM is actually configured
         job_use_llm = job_filters.get('use_llm', None)
         if job_use_llm:
@@ -195,7 +200,8 @@ class RecommendationAutomation:
             filter_language,
             filter_genre,
             filter_region_provider,
-            filter_streaming_services
+            filter_streaming_services,
+            filter_min_runtime
         )
 
         # Determine which users to process

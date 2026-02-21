@@ -374,6 +374,16 @@ export default {
       if (newValue) {
         // Handle background transition state if needed
       }
+    },
+    'config.ENABLE_VISUAL_EFFECTS': {
+      immediate: true,
+      handler(newValue) {
+        if (newValue === false) {
+          document.body.classList.add('no-blur');
+        } else {
+          document.body.classList.remove('no-blur');
+        }
+      }
     }
   },
   async mounted() {

@@ -29,6 +29,7 @@ export function useConfigManager() {
       DB_TYPE: 'sqlite',
       EXCLUDE_DOWNLOADED: true,
       EXCLUDE_REQUESTED: true,
+      FILTER_MIN_RUNTIME: null,
     };
   }
 

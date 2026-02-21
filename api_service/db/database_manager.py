@@ -547,10 +547,12 @@ class DatabaseManager:
                 r.tmdb_request_id, r.media_type, r.requested_at, s.logo_path, s.backdrop_path,
                 m.title AS request_title, m.overview AS request_overview,
                 m.release_date AS request_release_date, m.poster_path AS request_poster_path, m.rating as request_rating,
-                m.logo_path, m.backdrop_path, r.is_anime, r.rationale
+                m.logo_path, m.backdrop_path, r.is_anime, r.rationale,
+                r.user_id, u.user_name
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id
             LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id
+            LEFT JOIN users u ON r.user_id = u.user_id
             WHERE r.requested_by = 'SuggestArr'
             ORDER BY {order_by_clause}
         """
@@ -602,6 +604,8 @@ class DatabaseManager:
                 "rating": round(row[15], 2) if row[15] is not None else None,
                 "logo_path": row[16],
                 "rationale": row[19] if len(row) > 19 else None,
+                "user_id": row[20] if len(row) > 20 else None,
+                "user_name": row[21] if len(row) > 21 else None,
             })
     
         # Sort sources

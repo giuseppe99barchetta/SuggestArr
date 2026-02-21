@@ -316,6 +316,20 @@
             Track performance metrics for optimization
           </small>
         </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input
+              v-model="localConfig.ENABLE_VISUAL_EFFECTS"
+              type="checkbox"
+              :disabled="isLoading"
+            />
+            <span class="checkbox-text">Enable visual effects (blur)</span>
+          </label>
+          <small class="form-help">
+            Disable to improve UI performance and frame rates by turning off heavy CSS background blurs.
+          </small>
+        </div>
       </div>
 
       <!-- Cache Settings -->
@@ -523,6 +537,7 @@ export default {
           OPENAI_BASE_URL: '',
           LLM_MODEL: 'gpt-4o-mini',
           ENABLE_SOCIAL_FEATURES: false,
+          ENABLE_VISUAL_EFFECTS: true,
         };
 
         Object.keys(advancedDefaults).forEach(key => {
@@ -666,6 +681,7 @@ export default {
             OPENAI_BASE_URL: this.localConfig.OPENAI_BASE_URL || '',
             LLM_MODEL: this.localConfig.LLM_MODEL || 'gpt-4o-mini',
             ENABLE_SOCIAL_FEATURES: this.localConfig.ENABLE_SOCIAL_FEATURES || false,
+            ENABLE_VISUAL_EFFECTS: this.localConfig.ENABLE_VISUAL_EFFECTS !== false,
           },
         });
 
@@ -713,6 +729,7 @@ export default {
         OPENAI_BASE_URL: '',
         LLM_MODEL: 'gpt-4o-mini',
         ENABLE_SOCIAL_FEATURES: false,
+        ENABLE_VISUAL_EFFECTS: true,
       };
 
       if (confirm('Are you sure you want to reset all advanced settings to their defaults?')) {
