@@ -6,7 +6,7 @@ from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 from api_service.config.config import load_env_vars
-from api_service.services.llm_service import get_recommendations_from_history
+from api_service.services.llm.llm_service import get_recommendations_from_history
 
 def to_ascii(value):
     """

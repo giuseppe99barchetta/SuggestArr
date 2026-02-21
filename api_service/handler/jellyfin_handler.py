@@ -5,7 +5,7 @@ from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 from api_service.config.config import load_env_vars
-from api_service.services.llm_service import get_recommendations_from_history
+from api_service.services.llm.llm_service import get_recommendations_from_history
 
 class JellyfinHandler:
     def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None):
