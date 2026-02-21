@@ -102,6 +102,7 @@ class ContentAutomation:
 
         exclude_downloaded = env_vars.get('EXCLUDE_DOWNLOADED', True)
         exclude_requested = env_vars.get('EXCLUDE_REQUESTED', True)
+        request_delay = int(env_vars.get('SEER_REQUEST_DELAY', 0) or 0)
 
         # Anime profile configuration
         anime_profile_config_raw = env_vars.get('SEER_ANIME_PROFILE_CONFIG', {})
@@ -171,7 +172,8 @@ class ContentAutomation:
             instance.media_handler = JellyfinHandler(
                 jellyfin_client, seer_client, tmdb_client, instance.logger,
                 instance.max_similar_movie, instance.max_similar_tv,
-                instance.selected_users, jellyfin_anime_map
+                instance.selected_users, jellyfin_anime_map,
+                request_delay=request_delay
             )
             instance.logger.info(f"{instance.selected_service.upper()} client initialized successfully")
 
@@ -202,7 +204,7 @@ class ContentAutomation:
             instance.media_handler = PlexHandler(
                 plex_client, seer_client, tmdb_client, instance.logger,
                 instance.max_similar_movie, instance.max_similar_tv,
-                plex_anime_map
+                plex_anime_map, request_delay=request_delay
             )
             instance.logger.info("Plex client initialized successfully")
         else:

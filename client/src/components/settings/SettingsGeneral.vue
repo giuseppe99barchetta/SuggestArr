@@ -65,6 +65,7 @@
           />
           <small class="form-help">Number of results to fetch from TMDB when searching for similar content</small>
         </div>
+
       </div>
 
       <!-- Schedule Settings -->

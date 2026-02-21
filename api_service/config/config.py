@@ -141,6 +141,7 @@ def get_default_values():
         'DB_RETRY_ATTEMPTS': lambda: '3',
         'DB_RETRY_DELAY': lambda: '1.0',
         'SEER_ANIME_PROFILE_CONFIG': lambda: {},
+        'SEER_REQUEST_DELAY': lambda: 2,
     }
 
 def get_config_values():
@@ -230,7 +231,7 @@ def get_config_sections():
         'services': ['TMDB_API_KEY', 'OMDB_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL',
                     'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
                     'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_USER_PSW',
-                    'SEER_SESSION_TOKEN', 'SEER_ANIME_PROFILE_CONFIG',
+                    'SEER_SESSION_TOKEN', 'SEER_ANIME_PROFILE_CONFIG', 'SEER_REQUEST_DELAY',
                     'SELECTED_USERS'],
         'database': ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
                     'DB_MIN_CONNECTIONS', 'DB_MAX_CONNECTIONS', 'DB_MAX_IDLE_TIME', 

@@ -338,6 +338,24 @@
             </span>
           </button>
           <div class="collapsible-content" v-show="seerAdvancedExpanded">
+            <!-- Request delay -->
+            <div class="advanced-block">
+              <div class="advanced-block-header">
+                <span class="advanced-block-title"><i class="fas fa-user-shield"></i> Request Delay</span>
+              </div>
+              <p class="advanced-block-desc">Wait time between consecutive Overseerr/Jellyseerr requests. Increase if you receive notification rate-limit errors (0 = send all requests simultaneously)</p>
+              <div class="form-group" style="margin-top: 1.25rem;">
+                <input
+                  id="seerRequestDelay"
+                  v-model.number="localConfig.SEER_REQUEST_DELAY"
+                  type="number"
+                  min="0"
+                  max="60"
+                  class="form-control"
+                  :disabled="isLoading"
+                />
+              </div>
+            </div>
             <!-- User Authentication -->
             <div class="advanced-block">
               <div class="advanced-block-header">
@@ -1049,6 +1067,7 @@ export default {
           SEER_USER_NAME: this.localConfig.SEER_USER_NAME || null, SEER_USER_PSW: this.localConfig.SEER_USER_PSW || null,
           SEER_SESSION_TOKEN: this.localConfig.SEER_SESSION_TOKEN || null,
           SEER_ANIME_PROFILE_CONFIG: this.localConfig.SEER_ANIME_PROFILE_CONFIG || {},
+          SEER_REQUEST_DELAY: this.localConfig.SEER_REQUEST_DELAY ?? 2,
           SELECTED_USERS: this.localConfig.SELECTED_USERS || [],
         });
         await this.$emit('save-section', { section: 'services', data: dataToSave });
@@ -1063,7 +1082,7 @@ export default {
         TMDB_API_KEY: '', OMDB_API_KEY: '', SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
         JELLYFIN_API_URL: '', JELLYFIN_TOKEN: '', JELLYFIN_LIBRARIES: [],
         SEER_API_URL: '', SEER_TOKEN: '', SEER_USER_NAME: null, SEER_USER_PSW: null,
-        SEER_SESSION_TOKEN: null, SEER_ANIME_PROFILE_CONFIG: {}, SELECTED_USERS: [],
+        SEER_SESSION_TOKEN: null, SEER_ANIME_PROFILE_CONFIG: {}, SEER_REQUEST_DELAY: 2, SELECTED_USERS: [],
       };
       if (confirm('Are you sure you want to reset all service settings to their defaults?')) {
         this.localConfig = { ...this.localConfig, ...defaults };
