@@ -737,19 +737,28 @@ export default {
       try {
         await axios.post('/api/automation/force_run');
         this.$toast.open({
-          message: 'Force run completed successfully!',
+          message: 'Force run started in the background!',
           type: 'success',
           duration: 3000,
           position: 'top-right'
         });
       } catch (error) {
-        this.$toast.open({
-          message: 'Force run failed, see logs for details.',
-          type: 'error',
-          duration: 5000,
-          position: 'top-right'
-        });
-        console.error('Error force running automation:', error);
+        if (error.response && error.response.status === 409) {
+          this.$toast.open({
+            message: 'A force run is already in progress.',
+            type: 'warning',
+            duration: 4000,
+            position: 'top-right'
+          });
+        } else {
+          this.$toast.open({
+            message: 'Force run failed, see logs for details.',
+            type: 'error',
+            duration: 5000,
+            position: 'top-right'
+          });
+          console.error('Error force running automation:', error);
+        }
       } finally {
         this.isForceRunning = false;
         this.loadingMessage = 'Processing...';

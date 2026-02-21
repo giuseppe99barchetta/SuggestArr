@@ -1,3 +1,5 @@
+import asyncio
+import threading
 import traceback
 from flask import Blueprint, jsonify, request
 from api_service.automate_process import ContentAutomation
@@ -7,24 +9,42 @@ from api_service.db.database_manager import DatabaseManager
 logger = LoggerManager().get_logger("AutomationRoute")
 automation_bp = Blueprint('automation', __name__)
 
-@automation_bp.route('/force_run', methods=['POST'])
-async def run_now():
-    """
-    Endpoint to execute the process in the background.
-    """
+_force_run_lock = threading.Lock()
+_force_run_running = False
+
+
+def _run_automation_in_background():
+    """Run the automation in a dedicated thread with its own event loop."""
+    global _force_run_running
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        content_automation = await ContentAutomation.create()
-        await content_automation.run()
-        return jsonify({'status': 'success', 'message': 'Task is running in the background!'}), 202
-    except ValueError as ve:
-        logger.error(f'Value error: {str(ve)}')
-        return jsonify({'status': 'error', 'message': 'Value error: ' + str(ve)}), 400
-    except FileNotFoundError as fnfe:
-        logger.error(f'File not found: {str(fnfe)}')
-        return jsonify({'status': 'error', 'message': 'File not found: ' + str(fnfe)}), 404
+        content_automation = loop.run_until_complete(ContentAutomation.create())
+        loop.run_until_complete(content_automation.run())
+        logger.info("Force run completed successfully.")
     except Exception as e:
-        logger.error(f'Unexpected error: {str(e)}', exc_info=True)
-        return jsonify({'status': 'error', 'message': 'Unexpected error: ' + str(e)}), 500
+        logger.error(f'Background force run error: {str(e)}', exc_info=True)
+    finally:
+        loop.close()
+        with _force_run_lock:
+            _force_run_running = False
+
+
+@automation_bp.route('/force_run', methods=['POST'])
+def run_now():
+    """
+    Endpoint to execute the automation process in a background thread.
+    Returns immediately while the task runs asynchronously.
+    """
+    global _force_run_running
+    with _force_run_lock:
+        if _force_run_running:
+            return jsonify({'status': 'busy', 'message': 'A force run is already in progress.'}), 409
+        _force_run_running = True
+
+    thread = threading.Thread(target=_run_automation_in_background, daemon=True)
+    thread.start()
+    return jsonify({'status': 'success', 'message': 'Task started in the background!'}), 202
 
 @automation_bp.route('/requests', methods=['GET'])
 def get_requests():
