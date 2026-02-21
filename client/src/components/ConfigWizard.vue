@@ -154,6 +154,7 @@ import { useBackgroundImage } from '@/composables/useBackgroundImage';
 // Wizard step components
 import MediaServiceSelection from './configWizard/MediaServiceSelection.vue';
 import TmdbConfig from './configWizard/TmdbConfig.vue';
+import OmdbConfig from './configWizard/OmdbConfig.vue';
 import JellyfinConfig from './configWizard/JellyfinConfig.vue';
 import PlexConfig from './configWizard/PlexConfig.vue';
 import SeerConfig from './configWizard/SeerConfig.vue';
@@ -181,6 +182,7 @@ export default {
     WizardCompletion,
     MediaServiceSelection,
     TmdbConfig,
+    OmdbConfig,
     JellyfinConfig,
     PlexConfig,
     SeerConfig,
@@ -209,14 +211,14 @@ export default {
     const steps = computed(() => {
       const stepsByService = {
         quick: {
-          jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig'],
-          plex: ['MediaServiceSelection', 'TmdbConfig', 'PlexConfig', 'SeerConfig'],
-          emby: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig'],
+          jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'OmdbConfig', 'JellyfinConfig', 'SeerConfig'],
+          plex: ['MediaServiceSelection', 'TmdbConfig', 'OmdbConfig', 'PlexConfig', 'SeerConfig'],
+          emby: ['MediaServiceSelection', 'TmdbConfig', 'OmdbConfig', 'JellyfinConfig', 'SeerConfig'],
         },
         advanced: {
-          jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
-          plex: ['MediaServiceSelection', 'TmdbConfig', 'PlexConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
-          emby: ['MediaServiceSelection', 'TmdbConfig', 'JellyfinConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
+          jellyfin: ['MediaServiceSelection', 'TmdbConfig', 'OmdbConfig', 'JellyfinConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
+          plex: ['MediaServiceSelection', 'TmdbConfig', 'OmdbConfig', 'PlexConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
+          emby: ['MediaServiceSelection', 'TmdbConfig', 'OmdbConfig', 'JellyfinConfig', 'SeerConfig', 'DbConfig', 'ContentFilterSettings', 'AdditionalSettings'],
         }
       };
 

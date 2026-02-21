@@ -4,6 +4,7 @@ from api_service.handler.jellyfin_handler import JellyfinHandler
 from api_service.handler.plex_handler import PlexHandler
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.jellyseer.seer_client import SeerClient
+from api_service.services.omdb.omdb_client import OmdbClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 
@@ -83,6 +84,22 @@ class ContentAutomation:
 
         filter_min_runtime = env_vars.get('FILTER_MIN_RUNTIME', None)
 
+        # IMDB / OMDb rating filter settings
+        rating_source = env_vars.get('FILTER_RATING_SOURCE', 'tmdb')
+        imdb_threshold = env_vars.get('FILTER_IMDB_THRESHOLD', None)
+        imdb_min_votes = env_vars.get('FILTER_IMDB_MIN_VOTES', None)
+        omdb_api_key = env_vars.get('OMDB_API_KEY', '')
+
+        omdb_client = None
+        if rating_source in ('imdb', 'both') and omdb_api_key:
+            omdb_client = OmdbClient(omdb_api_key)
+            instance.logger.info("OmdbClient initialized for IMDB rating filtering (source: %s)", rating_source)
+        elif rating_source in ('imdb', 'both') and not omdb_api_key:
+            instance.logger.warning(
+                "FILTER_RATING_SOURCE is '%s' but OMDB_API_KEY is not set. "
+                "IMDB filtering will be skipped.", rating_source
+            )
+
         exclude_downloaded = env_vars.get('EXCLUDE_DOWNLOADED', True)
         exclude_requested = env_vars.get('EXCLUDE_REQUESTED', True)
 
@@ -119,7 +136,11 @@ class ContentAutomation:
             filter_genre,
             filter_region_provider,
             filter_streaming_services,
-            filter_min_runtime
+            filter_min_runtime,
+            rating_source=rating_source,
+            imdb_threshold=imdb_threshold,
+            imdb_min_votes=imdb_min_votes,
+            omdb_client=omdb_client,
         )
         instance.logger.info("TMDb client initialized successfully")
 

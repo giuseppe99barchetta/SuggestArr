@@ -25,12 +25,18 @@ class TMDbClient:
 
     def __init__(self, api_key, search_size, tmdb_threshold, tmdb_min_votes,
                 include_no_ratings, filter_release_year, filter_language, filter_genre,
-                filter_region_provider, filter_streaming_services, filter_min_runtime=None
+                filter_region_provider, filter_streaming_services, filter_min_runtime=None,
+                rating_source='tmdb', imdb_threshold=None, imdb_min_votes=None,
+                omdb_client=None
                 ):
         """
         Initializes the TMDbClient with the provided API key.
         :param api_key: API key to authenticate requests to TMDb.
         :param filter_min_runtime: Minimum runtime in minutes; items shorter than this are excluded.
+        :param rating_source: Which rating source to use for filtering ('tmdb', 'imdb', or 'both').
+        :param imdb_threshold: Minimum IMDB rating threshold (0-100 scale).
+        :param imdb_min_votes: Minimum IMDB vote count.
+        :param omdb_client: OmdbClient instance for IMDB rating lookups, or None.
         """
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.api_key = api_key
@@ -45,6 +51,10 @@ class TMDbClient:
         self.region_provider = filter_region_provider
         self.excluded_streaming_services = filter_streaming_services
         self.filter_min_runtime = int(filter_min_runtime) if filter_min_runtime else None
+        self.rating_source = rating_source
+        self.imdb_threshold = int(imdb_threshold) if imdb_threshold is not None else 60
+        self.imdb_min_votes = int(imdb_min_votes) if imdb_min_votes is not None else 100
+        self.omdb_client = omdb_client
         self.tmdb_api_url = "https://api.themoviedb.org/3"
         self.logger.debug("TMDbClient initialized with API key: ***")
 
@@ -63,15 +73,31 @@ class TMDbClient:
 
             for item in data['results']:
                 if self._apply_filters(item, content_type):
-                    if self.filter_min_runtime:
-                        runtime = await self._get_item_runtime(item['id'], content_type)
-                        if runtime is not None and runtime < self.filter_min_runtime:
+                    needs_detail_call = self.filter_min_runtime or self.rating_source in ('imdb', 'both')
+                    imdb_id = None
+
+                    if needs_detail_call:
+                        details = await self._get_item_details(item['id'], content_type)
+                        runtime = details.get('runtime') if details else None
+                        imdb_id = details.get('imdb_id') if details else None
+
+                        if self.filter_min_runtime and runtime is not None and runtime < self.filter_min_runtime:
                             self._log_exclusion_reason(
                                 item,
                                 f"runtime {runtime}min below minimum {self.filter_min_runtime}min",
                                 content_type
                             )
                             continue
+
+                    if self.rating_source in ('imdb', 'both') and self.omdb_client:
+                        if imdb_id:
+                            imdb_data = await self.omdb_client.get_rating(imdb_id)
+                            if not self._apply_imdb_filter(imdb_data, item, content_type):
+                                continue
+                        elif self.include_no_ratings:
+                            self._log_exclusion_reason(item, "no IMDB ID found", content_type)
+                            continue
+
                     search.append(self._format_result(item, content_type))
 
                 # Stop if we reach the search size limit
@@ -154,14 +180,20 @@ class TMDbClient:
         """
         Applies rating, country, release year, and genre filters to a content item.
         Returns True if the item passes all filters, False otherwise.
+
+        When rating_source is 'imdb', TMDB vote_average/vote_count checks are skipped
+        (IMDB rating will be checked separately via OMDb). All other TMDB filters
+        (language, genre, year, streaming) are always applied.
         """
         rating = item.get('vote_average')
         votes = item.get('vote_count')
 
-        if self.include_no_ratings and (rating is None or votes is None):
-            self._log_exclusion_reason(item, "missing rating or votes", content_type)
-            return False
-        
+        # Only apply TMDB rating/votes filters when TMDB ratings are used
+        if self.rating_source != 'imdb':
+            if self.include_no_ratings and (rating is None or votes is None):
+                self._log_exclusion_reason(item, "missing rating or votes", content_type)
+                return False
+
         original_language = item.get('original_language')
         
         if self.language_filter:
@@ -184,13 +216,14 @@ class TMDbClient:
                 )
                 return False
 
-        if rating is not None and rating < self.tmdb_threshold / 10:
-            self._log_exclusion_reason(item, f"rating below threshold of {int(self.tmdb_threshold)}%", content_type)
-            return False
+        if self.rating_source != 'imdb':
+            if rating is not None and rating < self.tmdb_threshold / 10:
+                self._log_exclusion_reason(item, f"TMDB rating below threshold of {int(self.tmdb_threshold)}%", content_type)
+                return False
 
-        if votes is not None and votes < self.tmdb_min_votes:
-            self._log_exclusion_reason(item, f"votes below minimum threshold of {self.tmdb_min_votes}", content_type)
-            return False
+            if votes is not None and votes < self.tmdb_min_votes:
+                self._log_exclusion_reason(item, f"TMDB votes below minimum threshold of {self.tmdb_min_votes}", content_type)
+                return False
 
         release_date = item.get('release_date') if content_type == 'movie' else item.get('first_air_date')
         if release_date and int(release_date[:4]) < self.release_year_filter:
@@ -225,35 +258,104 @@ class TMDbClient:
 
         return True
 
-    async def _get_item_runtime(self, content_id, content_type):
+    async def _get_item_details(self, content_id, content_type):
         """
-        Fetches the runtime (in minutes) for a movie or TV show from TMDb.
+        Fetches runtime and IMDB ID for a movie or TV show from TMDb in a single call.
 
-        For movies, returns the `runtime` field directly.
-        For TV shows, returns the first value of `episode_run_time`, or None if unavailable.
+        For movies, uses the standard details endpoint which includes both 'runtime'
+        and 'imdb_id'. For TV shows, the details endpoint provides 'episode_run_time'
+        but not the IMDB ID — a separate '/external_ids' call is made to retrieve it.
 
         :param content_id: The TMDb ID of the content item.
         :param content_type: Either 'movie' or 'tv'.
-        :return: Runtime in minutes as an integer, or None if unavailable.
+        :return: dict with 'runtime' (int|None) and 'imdb_id' (str|None), or empty dict on error.
         """
         url = f"{self.tmdb_api_url}/{content_type}/{content_id}?api_key={self.api_key}"
-        self.logger.debug("Fetching runtime for %s ID %s", content_type, content_id)
+        self.logger.debug("Fetching details for %s ID %s", content_type, content_id)
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
                     if response.status in HTTP_OK:
                         data = await response.json()
                         if content_type == 'movie':
-                            return data.get('runtime')
+                            return {
+                                'runtime': data.get('runtime'),
+                                'imdb_id': data.get('imdb_id'),
+                            }
                         else:
                             run_times = data.get('episode_run_time', [])
-                            return run_times[0] if run_times else None
+                            runtime = run_times[0] if run_times else None
+                            # TV details don't include imdb_id; fetch from external_ids
+                            imdb_id = await self._get_tv_imdb_id(content_id)
+                            return {'runtime': runtime, 'imdb_id': imdb_id}
                     else:
-                        self.logger.warning("Failed to fetch runtime for %s ID %s: HTTP %d",
+                        self.logger.warning("Failed to fetch details for %s ID %s: HTTP %d",
                                             content_type, content_id, response.status)
         except aiohttp.ClientError as e:
-            self.logger.warning("Error fetching runtime for %s ID %s: %s", content_type, content_id, str(e))
+            self.logger.warning("Error fetching details for %s ID %s: %s",
+                                content_type, content_id, str(e))
+        return {}
+
+    async def _get_tv_imdb_id(self, tv_id):
+        """
+        Fetches the IMDB ID for a TV show from TMDb's external_ids endpoint.
+
+        :param tv_id: The TMDb ID of the TV show.
+        :return: IMDB ID string (e.g. 'tt1234567') or None if not available.
+        """
+        url = f"{self.tmdb_api_url}/tv/{tv_id}/external_ids?api_key={self.api_key}"
+        self.logger.debug("Fetching external IDs for TV ID %s", tv_id)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status in HTTP_OK:
+                        data = await response.json()
+                        return data.get('imdb_id')
+                    else:
+                        self.logger.warning("Failed to fetch external IDs for TV ID %s: HTTP %d",
+                                            tv_id, response.status)
+        except aiohttp.ClientError as e:
+            self.logger.warning("Error fetching external IDs for TV ID %s: %s", tv_id, str(e))
         return None
+
+    def _apply_imdb_filter(self, imdb_data, item, content_type):
+        """
+        Checks IMDB rating and vote count against configured thresholds.
+
+        Args:
+            imdb_data (dict | None): Result from OmdbClient.get_rating(); may be None.
+            item (dict): The TMDb recommendation item (used for logging).
+            content_type (str): 'movie' or 'tv'.
+
+        Returns:
+            bool: True if the item passes IMDB filters, False if it should be excluded.
+        """
+        if imdb_data is None:
+            if self.include_no_ratings:
+                self._log_exclusion_reason(item, "no IMDB rating data available", content_type)
+                return False
+            return True
+
+        imdb_rating = imdb_data.get('imdb_rating')
+        imdb_votes = imdb_data.get('imdb_votes')
+
+        if imdb_rating is not None and imdb_rating < self.imdb_threshold / 10:
+            self._log_exclusion_reason(
+                item,
+                f"IMDB rating {imdb_rating} below threshold of {self.imdb_threshold / 10:.1f}",
+                content_type
+            )
+            return False
+
+        if imdb_votes is not None and imdb_votes < self.imdb_min_votes:
+            self._log_exclusion_reason(
+                item,
+                f"IMDB votes {imdb_votes} below minimum of {self.imdb_min_votes}",
+                content_type
+            )
+            return False
+
+        return True
 
     def _log_exclusion_reason(self, item, reason, content_type):
         """
