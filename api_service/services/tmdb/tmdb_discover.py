@@ -21,15 +21,17 @@ class TMDbDiscover:
     Allows searching for movies and TV shows using various filters.
     """
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, omdb_client=None):
         """
         Initialize the TMDb Discover client.
 
         Args:
             api_key: TMDb API key for authentication.
+            omdb_client: Optional OmdbClient for per-job IMDB rating filtering.
         """
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.api_key = api_key
+        self.omdb_client = omdb_client
         self.tmdb_api_url = "https://api.themoviedb.org/3"
         self.logger.debug("TMDbDiscover initialized")
 
@@ -89,6 +91,19 @@ class TMDbDiscover:
         results = []
         pages_needed = (max_results + CONTENT_PER_PAGE - 1) // CONTENT_PER_PAGE
 
+        # Extract per-job IMDB filter params (not sent to TMDB API)
+        rating_source = filters.get('rating_source', 'tmdb')
+        imdb_rating_gte = filters.get('imdb_rating_gte')   # 0–10 scale from the UI slider
+        imdb_min_votes = filters.get('imdb_min_votes')
+        include_no_rating = filters.get('include_no_rating', True)
+        use_imdb = rating_source in ('imdb', 'both') and self.omdb_client is not None
+
+        if use_imdb:
+            self.logger.info(
+                "IMDB filtering enabled for %s discover (source=%s, rating>=%s, votes>=%s)",
+                media_type, rating_source, imdb_rating_gte, imdb_min_votes
+            )
+
         for page in range(1, pages_needed + 1):
             self.logger.debug(f"Fetching discover page {page} for {media_type}")
 
@@ -98,6 +113,19 @@ class TMDbDiscover:
                 break
 
             for item in data['results']:
+                if use_imdb:
+                    imdb_id = await self._get_imdb_id(item['id'], media_type)
+                    if imdb_id:
+                        imdb_data = await self.omdb_client.get_rating(imdb_id)
+                        if not self._check_imdb_filter(
+                            imdb_data, item, imdb_rating_gte, imdb_min_votes, include_no_rating
+                        ):
+                            continue
+                    elif not include_no_rating:
+                        title = item.get('title') or item.get('name', 'Unknown')
+                        self.logger.debug("Excluding %s: no IMDB ID found in TMDB data", title)
+                        continue
+
                 formatted = self._format_result(item, media_type)
                 results.append(formatted)
 
@@ -161,6 +189,78 @@ class TMDbDiscover:
 
         return None
 
+    async def _get_imdb_id(self, tmdb_id: int, media_type: str) -> Optional[str]:
+        """
+        Fetch IMDB ID from TMDB for a movie or TV show.
+
+        Args:
+            tmdb_id: TMDB content ID.
+            media_type: 'movie' or 'tv'.
+
+        Returns:
+            IMDB ID string (e.g. 'tt0816692') or None if unavailable.
+        """
+        try:
+            if media_type == 'movie':
+                url = f"{self.tmdb_api_url}/movie/{tmdb_id}?api_key={self.api_key}"
+            else:
+                url = f"{self.tmdb_api_url}/tv/{tmdb_id}/external_ids?api_key={self.api_key}"
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status in HTTP_OK:
+                        data = await response.json()
+                        return data.get('imdb_id')
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            self.logger.debug("Failed to fetch IMDB ID for %s %s: %s", media_type, tmdb_id, e)
+        return None
+
+    def _check_imdb_filter(
+        self,
+        imdb_data: Optional[Dict[str, Any]],
+        item: Dict[str, Any],
+        imdb_rating_gte: Optional[float],
+        imdb_min_votes: Optional[int],
+        include_no_rating: bool
+    ) -> bool:
+        """
+        Return True if item should be included based on IMDB rating data.
+
+        Args:
+            imdb_data: Dict with 'imdb_rating' and 'imdb_votes', or None.
+            item: Raw TMDB result item (for logging).
+            imdb_rating_gte: Minimum IMDB rating on 0–10 scale, or None.
+            imdb_min_votes: Minimum IMDB vote count, or None.
+            include_no_rating: If True, pass through items with no IMDB data.
+
+        Returns:
+            True if the item passes the filter, False otherwise.
+        """
+        title = item.get('title') or item.get('name', 'Unknown')
+
+        if not imdb_data:
+            if include_no_rating:
+                return True
+            self.logger.debug("Excluding %s: no IMDB rating data available", title)
+            return False
+
+        rating = imdb_data.get('imdb_rating', 0)
+        votes = imdb_data.get('imdb_votes', 0)
+
+        if imdb_rating_gte is not None and rating < float(imdb_rating_gte):
+            self.logger.debug(
+                "Excluding %s: IMDB rating %.1f below threshold %.1f", title, rating, imdb_rating_gte
+            )
+            return False
+
+        if imdb_min_votes is not None and votes < int(imdb_min_votes):
+            self.logger.debug(
+                "Excluding %s: IMDB votes %d below minimum %d", title, votes, imdb_min_votes
+            )
+            return False
+
+        return True
+
     def _build_query_params(self, filters: Dict[str, Any]) -> Dict[str, Any]:
         """
         Build TMDb API query parameters from filter dictionary.
@@ -187,7 +287,12 @@ class TMDbDiscover:
         """
         params = {}
 
-        # Direct parameter mapping
+        # Determine if TMDB rating/vote filters should be skipped
+        # (when IMDB-only source is selected, TMDB rating checks are replaced by IMDB checks)
+        rating_source = filters.get('rating_source', 'tmdb')
+        skip_tmdb_rating = rating_source == 'imdb'
+
+        # Direct parameter mapping (internal IMDB keys are intentionally excluded)
         param_mapping = {
             'vote_average_gte': 'vote_average.gte',
             'vote_average_lte': 'vote_average.lte',
@@ -206,6 +311,8 @@ class TMDbDiscover:
         }
 
         for filter_key, api_key in param_mapping.items():
+            if skip_tmdb_rating and filter_key in ('vote_average_gte', 'vote_count_gte'):
+                continue
             if filter_key in filters and filters[filter_key] is not None:
                 params[api_key] = filters[filter_key]
 

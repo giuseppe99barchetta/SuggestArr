@@ -90,6 +90,46 @@
             <i v-else class="fas fa-plug"></i>
             {{ omdbTesting ? 'Testing...' : (omdbConnected ? 'Connected' : 'Test Connection') }}
           </button>
+
+          <!-- About IMDB Filtering -->
+          <div class="omdb-info-section">
+            <button class="collapsible-toggle" @click="omdbInfoExpanded = !omdbInfoExpanded">
+              <i class="fas fa-chevron-right toggle-arrow" :class="{ expanded: omdbInfoExpanded }"></i>
+              <span>What is IMDB filtering?</span>
+            </button>
+            <div class="collapsible-content" v-show="omdbInfoExpanded">
+              <div class="omdb-info-body">
+                <p class="omdb-info-lead">
+                  IMDB filtering uses the <a href="https://www.omdbapi.com/" target="_blank" class="link">OMDb API</a>
+                  to fetch IMDB community ratings for each recommendation candidate, letting you reject content
+                  that falls below your IMDB threshold.
+                </p>
+                <div class="omdb-pros-cons">
+                  <div class="pros-block">
+                    <div class="pros-cons-title pros"><i class="fas fa-check-circle"></i> Pros</div>
+                    <ul>
+                      <li>Widely trusted ratings from a large, diverse voter base</li>
+                      <li>Cross-validates quality when used alongside TMDB ("Both" mode)</li>
+                      <li>IMDB IDs are already stored by Jellyfin, Emby, and Plex</li>
+                    </ul>
+                  </div>
+                  <div class="cons-block">
+                    <div class="pros-cons-title cons"><i class="fas fa-exclamation-circle"></i> Cons</div>
+                    <ul>
+                      <li>Adds 1–2 extra API calls per recommendation (slight slowdown)</li>
+                      <li>Free tier limited to 1,000 requests/day</li>
+                      <li>Items missing an IMDB ID are skipped or passed through</li>
+                    </ul>
+                  </div>
+                </div>
+                <p class="omdb-info-footer">
+                  <i class="fas fa-cog"></i>
+                  Configure the rating source and thresholds in
+                  <strong>Content Filters → Rating & Popularity</strong>.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -453,6 +493,7 @@ export default {
       // OMDb connection test
       omdbTesting: false,
       omdbConnected: false,
+      omdbInfoExpanded: false,
       // Collapsible sections
       mediaServerAdvancedExpanded: false,
       seerAdvancedExpanded: false,
@@ -1459,6 +1500,90 @@ export default {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* OMDb info section */
+.omdb-info-section {
+  margin-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 0.75rem;
+}
+
+.omdb-info-body {
+  padding-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.omdb-info-lead {
+  margin: 0 0 1rem;
+  line-height: 1.5;
+}
+
+.omdb-pros-cons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.pros-block, .cons-block {
+  padding: 0.75rem;
+  border-radius: var(--border-radius-sm);
+}
+
+.pros-block {
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.cons-block {
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+.pros-cons-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pros-cons-title.pros { color: #10b981; }
+.pros-cons-title.cons { color: #ef4444; }
+
+.pros-block ul, .cons-block ul {
+  margin: 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.pros-block ul li, .cons-block ul li {
+  line-height: 1.4;
+}
+
+.omdb-info-footer {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--border-radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  line-height: 1.4;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.omdb-info-footer i {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: var(--color-primary);
+}
+
 /* Spinner */
 .fa-spinner.fa-spin { animation: spin 1s linear infinite; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -1466,6 +1591,7 @@ export default {
 /* Responsive */
 @media (max-width: 768px) {
   .rating-apis-row { grid-template-columns: 1fr; }
+  .omdb-pros-cons { grid-template-columns: 1fr; }
   .service-card { padding: 1rem; }
   .service-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
   .input-group { flex-direction: column; }
