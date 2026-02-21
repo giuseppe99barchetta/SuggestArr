@@ -9,29 +9,74 @@
         <div class="settings-card">
             <h4 class="card-title">Rating & Popularity Filters</h4>
 
-            <div class="form-row">
-                <div class="form-group flex-1">
-                    <label for="FILTER_TMDB_THRESHOLD" class="form-label">Minimum Rating</label>
-                    <input type="number" :value="config.FILTER_TMDB_THRESHOLD"
-                        @input="validateThreshold($event.target.value)"
-                        class="form-input"
-                        id="FILTER_TMDB_THRESHOLD" placeholder="60" min="0" max="100">
-                    <span v-if="errors.FILTER_TMDB_THRESHOLD" class="form-error">{{ errors.FILTER_TMDB_THRESHOLD }}</span>
+            <!-- Rating Source Selector -->
+            <div class="form-group">
+                <label class="form-label">Rating Source</label>
+                <div class="rating-source-tabs">
+                    <button
+                        v-for="opt in ratingSourceOptions"
+                        :key="opt.value"
+                        type="button"
+                        class="rating-tab"
+                        :class="{ active: ratingSource === opt.value }"
+                        @click="updateRatingSource(opt.value)"
+                    >{{ opt.label }}</button>
                 </div>
+                <p class="form-help">
+                    <i class="fas fa-info-circle"></i>
+                    <span v-if="ratingSource === 'tmdb'">Filter using TMDB ratings (default).</span>
+                    <span v-else-if="ratingSource === 'imdb'">Filter using IMDB ratings via OMDb (requires OMDb API key in Services).</span>
+                    <span v-else>Content must pass both TMDB and IMDB thresholds (strictest).</span>
+                </p>
+            </div>
 
-                <div class="form-group flex-1">
-                    <label for="FILTER_TMDB_MIN_VOTES" class="form-label">Minimum Votes</label>
-                    <input type="number" :value="config.FILTER_TMDB_MIN_VOTES"
-                        @input="validateMinVotes($event.target.value)"
-                        class="form-input"
-                        id="FILTER_TMDB_MIN_VOTES" placeholder="20" min="0">
-                    <span v-if="errors.FILTER_TMDB_MIN_VOTES" class="form-error">{{ errors.FILTER_TMDB_MIN_VOTES }}</span>
+            <!-- TMDB Rating fields -->
+            <div v-if="ratingSource !== 'imdb'">
+                <p class="source-section-label">TMDB Rating</p>
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label for="FILTER_TMDB_THRESHOLD" class="form-label">Minimum Rating (0-100)</label>
+                        <input type="number" :value="config.FILTER_TMDB_THRESHOLD"
+                            @input="validateThreshold($event.target.value)"
+                            class="form-input"
+                            id="FILTER_TMDB_THRESHOLD" placeholder="60" min="0" max="100">
+                        <span v-if="errors.FILTER_TMDB_THRESHOLD" class="form-error">{{ errors.FILTER_TMDB_THRESHOLD }}</span>
+                    </div>
+
+                    <div class="form-group flex-1">
+                        <label for="FILTER_TMDB_MIN_VOTES" class="form-label">Minimum Votes</label>
+                        <input type="number" :value="config.FILTER_TMDB_MIN_VOTES"
+                            @input="validateMinVotes($event.target.value)"
+                            class="form-input"
+                            id="FILTER_TMDB_MIN_VOTES" placeholder="20" min="0">
+                        <span v-if="errors.FILTER_TMDB_MIN_VOTES" class="form-error">{{ errors.FILTER_TMDB_MIN_VOTES }}</span>
+                    </div>
                 </div>
             </div>
-            <p class="form-help">
-                <i class="fas fa-info-circle"></i>
-                Filter by TMDB rating (0-100) and minimum number of votes required
-            </p>
+
+            <!-- IMDB Rating fields -->
+            <div v-if="ratingSource !== 'tmdb'">
+                <p class="source-section-label">IMDB Rating <span class="omdb-note">(via OMDb API)</span></p>
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label for="FILTER_IMDB_THRESHOLD" class="form-label">Minimum Rating (0-100)</label>
+                        <input type="number" :value="config.FILTER_IMDB_THRESHOLD"
+                            @input="validateImdbThreshold($event.target.value)"
+                            class="form-input"
+                            id="FILTER_IMDB_THRESHOLD" placeholder="60" min="0" max="100">
+                        <span v-if="errors.FILTER_IMDB_THRESHOLD" class="form-error">{{ errors.FILTER_IMDB_THRESHOLD }}</span>
+                    </div>
+
+                    <div class="form-group flex-1">
+                        <label for="FILTER_IMDB_MIN_VOTES" class="form-label">Minimum Votes</label>
+                        <input type="number" :value="config.FILTER_IMDB_MIN_VOTES"
+                            @input="validateImdbMinVotes($event.target.value)"
+                            class="form-input"
+                            id="FILTER_IMDB_MIN_VOTES" placeholder="100" min="0">
+                        <span v-if="errors.FILTER_IMDB_MIN_VOTES" class="form-error">{{ errors.FILTER_IMDB_MIN_VOTES }}</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Content Exclusion Card -->
@@ -97,18 +142,29 @@
                 </p>
             </div>
 
-            <div class="form-group">
-                <label for="FILTER_NUM_SEASONS" class="form-label">Maximum Number of Seasons</label>
-                <input type="number" :value="config.FILTER_NUM_SEASONS"
-                    @input="validateNumSeasons($event.target.value)"
-                    class="form-input"
-                    id="FILTER_NUM_SEASONS" placeholder="0 (unlimited)" min="0">
-                <p class="form-help">
-                    <i class="fas fa-info-circle"></i>
-                    Limit TV series by number of seasons (0 = no limit)
-                </p>
-                <span v-if="errors.FILTER_NUM_SEASONS" class="form-error">{{ errors.FILTER_NUM_SEASONS }}</span>
+            <div class="form-row">
+                <div class="form-group flex-1">
+                    <label for="FILTER_NUM_SEASONS" class="form-label">Maximum Number of Seasons</label>
+                    <input type="number" :value="config.FILTER_NUM_SEASONS"
+                        @input="validateNumSeasons($event.target.value)"
+                        class="form-input"
+                        id="FILTER_NUM_SEASONS" placeholder="0 (unlimited)" min="0">
+                    <span v-if="errors.FILTER_NUM_SEASONS" class="form-error">{{ errors.FILTER_NUM_SEASONS }}</span>
+                </div>
+
+                <div class="form-group flex-1">
+                    <label for="FILTER_MIN_RUNTIME" class="form-label">Minimum Runtime (minutes)</label>
+                    <input type="number" :value="config.FILTER_MIN_RUNTIME"
+                        @input="validateMinRuntime($event.target.value)"
+                        class="form-input"
+                        id="FILTER_MIN_RUNTIME" placeholder="0 (no limit)" min="0">
+                    <span v-if="errors.FILTER_MIN_RUNTIME" class="form-error">{{ errors.FILTER_MIN_RUNTIME }}</span>
+                </div>
             </div>
+            <p class="form-help">
+                <i class="fas fa-info-circle"></i>
+                Limit TV series by number of seasons and exclude short content below a minimum runtime
+            </p>
         </div>
 
         <!-- Streaming & Region Card -->
@@ -210,11 +266,20 @@ export default {
             selectedRegion: this.config.FILTER_REGION_PROVIDER || null,
             streamingServices: [],
             selectedStreamingServices: this.config.FILTER_STREAMING_SERVICES || [],
+            ratingSource: this.config.FILTER_RATING_SOURCE || 'tmdb',
+            ratingSourceOptions: [
+                { value: 'tmdb', label: 'TMDB Only' },
+                { value: 'imdb', label: 'IMDB Only' },
+                { value: 'both', label: 'Both' },
+            ],
             errors: {
                 FILTER_TMDB_THRESHOLD: '',
                 FILTER_TMDB_MIN_VOTES: '',
+                FILTER_IMDB_THRESHOLD: '',
+                FILTER_IMDB_MIN_VOTES: '',
                 FILTER_RELEASE_YEAR: '',
-                FILTER_NUM_SEASONS: ''
+                FILTER_NUM_SEASONS: '',
+                FILTER_MIN_RUNTIME: ''
             }
         };
     },
@@ -226,6 +291,26 @@ export default {
     methods: {
         handleUpdate(key, value) {
             this.$emit('update-config', key, value);
+        },
+        updateRatingSource(value) {
+            this.ratingSource = value;
+            this.handleUpdate('FILTER_RATING_SOURCE', value);
+        },
+        validateImdbThreshold(value) {
+            if (value < 0 || value > 100) {
+                this.errors.FILTER_IMDB_THRESHOLD = "Rating must be between 0 and 100.";
+            } else {
+                this.errors.FILTER_IMDB_THRESHOLD = "";
+                this.handleUpdate('FILTER_IMDB_THRESHOLD', value);
+            }
+        },
+        validateImdbMinVotes(value) {
+            if (value < 0) {
+                this.errors.FILTER_IMDB_MIN_VOTES = "Minimum votes cannot be negative.";
+            } else {
+                this.errors.FILTER_IMDB_MIN_VOTES = "";
+                this.handleUpdate('FILTER_IMDB_MIN_VOTES', value);
+            }
         },
         async fetchGenres() {
             try {
@@ -312,6 +397,14 @@ export default {
             } else {
                 this.errors.FILTER_NUM_SEASONS = "";
                 this.handleUpdate('FILTER_NUM_SEASONS', value);
+            }
+        },
+        validateMinRuntime(value) {
+            if (value < 0) {
+                this.errors.FILTER_MIN_RUNTIME = "Minimum runtime cannot be negative.";
+            } else {
+                this.errors.FILTER_MIN_RUNTIME = "";
+                this.handleUpdate('FILTER_MIN_RUNTIME', value || null);
             }
         },
         submit() {
@@ -429,6 +522,55 @@ export default {
   margin: 0;
 }
 
+/* Rating Source Tabs */
+.rating-source-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.rating-tab {
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--color-border-medium);
+  border-radius: 2rem;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.rating-tab:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text-primary);
+}
+
+.rating-tab.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+  font-weight: 600;
+}
+
+.source-section-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0.75rem 0 0.5rem 0;
+}
+
+.omdb-note {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .form-row {
@@ -438,6 +580,15 @@ export default {
 
   .form-row .form-group {
     margin-bottom: 1rem;
+  }
+
+  .rating-source-tabs {
+    gap: 0.35rem;
+  }
+
+  .rating-tab {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
   }
 
 }

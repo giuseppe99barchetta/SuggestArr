@@ -6,45 +6,91 @@
     </div>
 
     <div class="services-stack">
-      <!-- TMDB -->
-      <div class="service-card">
-        <div class="service-header">
-          <h3><i class="fas fa-film"></i> TMDB API</h3>
-          <span class="status-badge" :class="getTmdbStatus">
-            <span class="status-dot"></span>
-            {{ getTmdbStatusText }}
-          </span>
-        </div>
-
-        <div class="form-group">
-          <label for="tmdbApiKey">API Key</label>
-          <div class="input-group">
-            <input
-              id="tmdbApiKey"
-              v-model="localConfig.TMDB_API_KEY"
-              :type="showTmdbKey ? 'text' : 'password'"
-              placeholder="Enter your TMDB API key"
-              class="form-control"
-              :disabled="isLoading"
-            />
-            <button @click="showTmdbKey = !showTmdbKey" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
-              <i :class="showTmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-            </button>
+      <!-- TMDB + OMDb side by side -->
+      <div class="rating-apis-row">
+        <!-- TMDB -->
+        <div class="service-card">
+          <div class="service-header">
+            <h3><i class="fas fa-film"></i> TMDB API</h3>
+            <span class="status-badge" :class="getTmdbStatus">
+              <span class="status-dot"></span>
+              {{ getTmdbStatusText }}
+            </span>
           </div>
-          <small class="form-help">
-            Get one from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="link">TMDB Settings</a>
-          </small>
+
+          <div class="form-group">
+            <label for="tmdbApiKey">API Key</label>
+            <div class="input-group">
+              <input
+                id="tmdbApiKey"
+                v-model="localConfig.TMDB_API_KEY"
+                :type="showTmdbKey ? 'text' : 'password'"
+                placeholder="Enter your TMDB API key"
+                class="form-control"
+                :disabled="isLoading"
+              />
+              <button @click="showTmdbKey = !showTmdbKey" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
+                <i :class="showTmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+              </button>
+            </div>
+            <small class="form-help">
+              Get one from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="link">TMDB Settings</a>
+            </small>
+          </div>
+
+          <button
+            @click="testTmdbConnection"
+            class="btn btn-outline btn-block"
+            :disabled="isLoading || !localConfig.TMDB_API_KEY || testingConnections.tmdb"
+          >
+            <i v-if="testingConnections.tmdb" class="fas fa-spinner fa-spin"></i>
+            <i v-else class="fas fa-plug"></i>
+            {{ testingConnections.tmdb ? 'Testing...' : 'Test Connection' }}
+          </button>
         </div>
 
-        <button
-          @click="testTmdbConnection"
-          class="btn btn-outline btn-block"
-          :disabled="isLoading || !localConfig.TMDB_API_KEY || testingConnections.tmdb"
-        >
-          <i v-if="testingConnections.tmdb" class="fas fa-spinner fa-spin"></i>
-          <i v-else class="fas fa-plug"></i>
-          {{ testingConnections.tmdb ? 'Testing...' : 'Test Connection' }}
-        </button>
+        <!-- OMDb (IMDB ratings) -->
+        <div class="service-card">
+          <div class="service-header">
+            <h3><i class="fas fa-star"></i> IMDB (via OMDb)</h3>
+            <span class="status-badge" :class="getOmdbStatus">
+              <span class="status-dot"></span>
+              {{ getOmdbStatusText }}
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label for="omdbApiKey">API Key</label>
+            <div class="input-group">
+              <input
+                id="omdbApiKey"
+                v-model="localConfig.OMDB_API_KEY"
+                :type="showOmdbKey ? 'text' : 'password'"
+                placeholder="Enter your OMDb API key (optional)"
+                class="form-control"
+                :disabled="isLoading"
+              />
+              <button @click="showOmdbKey = !showOmdbKey" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
+                <i :class="showOmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+              </button>
+            </div>
+            <small class="form-help">
+              Optional — needed only when rating source is set to IMDB or Both.
+              Free key (1,000 req/day) at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" class="link">omdbapi.com</a>
+            </small>
+          </div>
+
+          <button
+            @click="testOmdbConnection"
+            class="btn btn-outline btn-block"
+            :disabled="isLoading || !localConfig.OMDB_API_KEY || omdbTesting"
+          >
+            <i v-if="omdbTesting" class="fas fa-spinner fa-spin"></i>
+            <i v-else-if="omdbConnected" class="fas fa-check"></i>
+            <i v-else class="fas fa-plug"></i>
+            {{ omdbTesting ? 'Testing...' : (omdbConnected ? 'Connected' : 'Test Connection') }}
+          </button>
+        </div>
       </div>
 
       <!-- Media Server -->
@@ -371,7 +417,8 @@
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import {
   testJellyseerApi, authenticateUser, fetchRadarrServers, fetchSonarrServers,
-  fetchJellyfinLibraries, fetchJellyfinUsers, fetchPlexLibraries, fetchPlexUsers
+  fetchJellyfinLibraries, fetchJellyfinUsers, fetchPlexLibraries, fetchPlexUsers,
+  testOmdbApi
 } from '@/api/api';
 
 export default {
@@ -399,9 +446,13 @@ export default {
       localConfig: {},
       originalConfig: {},
       showTmdbKey: false,
+      showOmdbKey: false,
       showPlexToken: false,
       showJellyfinToken: false,
       showSeerToken: false,
+      // OMDb connection test
+      omdbTesting: false,
+      omdbConnected: false,
       // Collapsible sections
       mediaServerAdvancedExpanded: false,
       seerAdvancedExpanded: false,
@@ -481,6 +532,16 @@ export default {
     },
     getTmdbStatusText() {
       return this.localConfig.TMDB_API_KEY ? 'Configured' : 'Not Set';
+    },
+    getOmdbStatus() {
+      if (this.omdbConnected) return 'status-connected';
+      if (this.localConfig.OMDB_API_KEY) return 'status-warning';
+      return 'status-disconnected';
+    },
+    getOmdbStatusText() {
+      if (this.omdbConnected) return 'Connected';
+      if (this.localConfig.OMDB_API_KEY) return 'Not Tested';
+      return 'Not Set';
     },
     getMediaServerStatus() {
       const service = this.localConfig.SELECTED_SERVICE;
@@ -642,6 +703,22 @@ export default {
       await this.$emit('test-connection', 'tmdb', {
         api_key: this.localConfig.TMDB_API_KEY.trim(),
       });
+    },
+
+    async testOmdbConnection() {
+      if (!this.localConfig.OMDB_API_KEY) return;
+      this.omdbTesting = true;
+      this.omdbConnected = false;
+      try {
+        await testOmdbApi(this.localConfig.OMDB_API_KEY.trim());
+        this.omdbConnected = true;
+        if (this.$toast) this.$toast.success('OMDb API key validated!', { position: 'top-right', duration: 3000 });
+      } catch (error) {
+        this.omdbConnected = false;
+        if (this.$toast) this.$toast.error('Invalid OMDb API key. Please check and try again.', { position: 'top-right', duration: 5000 });
+      } finally {
+        this.omdbTesting = false;
+      }
     },
 
     async testJellyfinConnection() {
@@ -920,7 +997,7 @@ export default {
 
     async saveSettings() {
       try {
-        const dataToSave = { TMDB_API_KEY: this.localConfig.TMDB_API_KEY, SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE };
+        const dataToSave = { TMDB_API_KEY: this.localConfig.TMDB_API_KEY, OMDB_API_KEY: this.localConfig.OMDB_API_KEY || '', SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE };
         if (this.localConfig.SELECTED_SERVICE === 'plex') {
           Object.assign(dataToSave, { PLEX_TOKEN: this.localConfig.PLEX_TOKEN, PLEX_API_URL: this.localConfig.PLEX_API_URL, PLEX_LIBRARIES: this.localConfig.PLEX_LIBRARIES || [] });
         } else if (this.localConfig.SELECTED_SERVICE === 'jellyfin' || this.localConfig.SELECTED_SERVICE === 'emby') {
@@ -942,7 +1019,7 @@ export default {
 
     async resetToDefaults() {
       const defaults = {
-        TMDB_API_KEY: '', SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
+        TMDB_API_KEY: '', OMDB_API_KEY: '', SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
         JELLYFIN_API_URL: '', JELLYFIN_TOKEN: '', JELLYFIN_LIBRARIES: [],
         SEER_API_URL: '', SEER_TOKEN: '', SEER_USER_NAME: null, SEER_USER_PSW: null,
         SEER_SESSION_TOKEN: null, SEER_ANIME_PROFILE_CONFIG: {}, SELECTED_USERS: [],
@@ -950,6 +1027,7 @@ export default {
       if (confirm('Are you sure you want to reset all service settings to their defaults?')) {
         this.localConfig = { ...this.localConfig, ...defaults };
         this.seerConnected = false; this.seerAuthenticated = false; this.seerUsers = [];
+        this.omdbConnected = false;
         this.radarrServers = []; this.sonarrServers = [];
         this.jellyfinConnected = false; this.jellyfinLibraries = []; this.jellyfinUsers = [];
         this.selectedJellyfinLibraries = []; this.selectedJellyfinUsers = [];
@@ -987,6 +1065,13 @@ export default {
   flex-direction: column;
   gap: 1.5rem;
   margin-bottom: 2rem;
+}
+
+/* TMDB + OMDb side by side */
+.rating-apis-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
 }
 
 /* Service card */
@@ -1380,6 +1465,7 @@ export default {
 
 /* Responsive */
 @media (max-width: 768px) {
+  .rating-apis-row { grid-template-columns: 1fr; }
   .service-card { padding: 1rem; }
   .service-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
   .input-group { flex-direction: column; }

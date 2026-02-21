@@ -20,6 +20,7 @@ from api_service.blueprints.automation.routes import automation_bp
 from api_service.blueprints.logs.routes import logs_bp
 from api_service.blueprints.config.routes import config_bp
 from api_service.blueprints.tmdb.routes import tmdb_bp
+from api_service.blueprints.omdb.routes import omdb_bp
 from api_service.blueprints.jobs.routes import jobs_bp
 
 executor = ThreadPoolExecutor(max_workers=3)
@@ -45,6 +46,7 @@ def create_app():
     application.register_blueprint(logs_bp, url_prefix='/api')
     application.register_blueprint(config_bp, url_prefix='/api/config')
     application.register_blueprint(tmdb_bp, url_prefix='/api/tmdb')
+    application.register_blueprint(omdb_bp, url_prefix='/api/omdb')
     application.register_blueprint(jobs_bp, url_prefix='/api/jobs')
 
     # Register routes
