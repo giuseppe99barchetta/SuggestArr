@@ -152,15 +152,26 @@ class TMDbClient:
             return False
         
         original_language = item.get('original_language')
-        selected_language_ids = [lang['id'] for lang in self.language_filter] if self.language_filter else []
-        if self.language_filter and original_language not in selected_language_ids:
-            selected_language_names = ', '.join([lang['english_name'] for lang in self.language_filter])
-            self._log_exclusion_reason(
-                item,
-                f"language '{original_language}' not in selected languages: {selected_language_names}",
-                content_type
-            )
-            return False
+        
+        if self.language_filter:
+            selected_language_ids = []
+            selected_language_names = []
+            for lang in self.language_filter:
+                if isinstance(lang, dict):
+                    selected_language_ids.append(lang.get('id', lang.get('iso_639_1')))
+                    selected_language_names.append(lang.get('english_name', lang.get('name', str(lang))))
+                else:
+                    selected_language_ids.append(lang)
+                    selected_language_names.append(str(lang))
+            
+            if original_language not in selected_language_ids:
+                names_str = ', '.join(selected_language_names)
+                self._log_exclusion_reason(
+                    item,
+                    f"language '{original_language}' not in selected languages: {names_str}",
+                    content_type
+                )
+                return False
 
         if rating is not None and rating < self.tmdb_threshold / 10:
             self._log_exclusion_reason(item, f"rating below threshold of {int(self.tmdb_threshold)}%", content_type)
@@ -176,11 +187,30 @@ class TMDbClient:
             return False
 
         item_genres = item.get('genre_ids', [])
-        genre_ids_to_exclude = [genre['id'] for genre in self.genre_filter]
-        if any(genre_id in item_genres for genre_id in genre_ids_to_exclude):
-            excluded_genres = [genre['name'] for genre in self.genre_filter if genre['id'] in item_genres]
-            self._log_exclusion_reason(item, f"excluded genres: {', '.join(excluded_genres)}", content_type)
-            return False
+        
+        if self.genre_filter:
+            genre_ids_to_exclude = []
+            excluded_genres_names = []
+            
+            for genre in self.genre_filter:
+                if isinstance(genre, dict):
+                    genre_id = genre.get('id')
+                    genre_ids_to_exclude.append(genre_id)
+                    if genre_id in item_genres:
+                        excluded_genres_names.append(genre.get('name', str(genre_id)))
+                else:
+                    # Primitive integer
+                    try:
+                        genre_id = int(genre)
+                        genre_ids_to_exclude.append(genre_id)
+                        if genre_id in item_genres:
+                            excluded_genres_names.append(str(genre_id))
+                    except (ValueError, TypeError):
+                        pass
+
+            if any(genre_id in item_genres for genre_id in genre_ids_to_exclude):
+                self._log_exclusion_reason(item, f"excluded genres: {', '.join(excluded_genres_names)}", content_type)
+                return False
 
         return True
 
