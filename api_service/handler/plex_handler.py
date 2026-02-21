@@ -83,41 +83,61 @@ class PlexHandler:
         else:
             self.logger.warning("Unexpected response format: expected a list")
 
+    async def _resolve_llm_source(self, source_title: str, item_type: str) -> dict:
+        """Resolve an LLM-suggested source title to a TMDB metadata object.
+
+        :param source_title: The title of the watched item that inspired the recommendation.
+        :param item_type: 'movie' or 'tv'.
+        :return: TMDB metadata dict, or a fallback sentinel dict if not found.
+        """
+        if source_title:
+            if item_type == 'movie':
+                results = await self.tmdb_client.search_movie(source_title)
+            else:
+                results = await self.tmdb_client.search_tv(source_title)
+            if results:
+                self.logger.debug(f"Resolved LLM source '{source_title}' to TMDB ID {results[0].get('id')}")
+                return results[0]
+            self.logger.warning(f"Could not resolve LLM source title '{source_title}' on TMDB.")
+        return {"id": 0, "name": "LLM Recommendation"}
+
     async def process_llm_recommendations(self, history_items, item_type, max_results):
         """Pass history to LLM, resolve TMDb IDs, and request them."""
         if max_results <= 0:
             return
-            
+
         self.logger.info(f"Delegating {max_results} {item_type} recommendations to LLM service.")
-        cached_source_obj = {"id": 0, "name": "LLM Recommendation"} # Dummy source for Overseerr
-        
-        # Call LLM service for raw titles
+
         llm_recommendations = get_recommendations_from_history(history_items, max_results, item_type)
-        
+
         if not llm_recommendations:
             self.logger.warning("LLM returned no recommendations.")
             return
-            
-        # Translate to TMDb items
-        tmdb_items = []
+
+        count = 0
         for rec in llm_recommendations:
+            if count >= max_results:
+                break
+
             title = rec.get("title")
             year = rec.get("year")
-            
+
             if item_type == 'movie':
                 search_results = await self.tmdb_client.search_movie(title, year)
             else:
                 search_results = await self.tmdb_client.search_tv(title, year)
-                
-            if search_results and len(search_results) > 0:
-                # take best match
-                best_match = search_results[0]
-                best_match['rationale'] = rec.get('rationale')
-                tmdb_items.append(best_match)
-                
-        if tmdb_items:
-            self.logger.info(f"LLM successfully matched {len(tmdb_items)} items to TMDb.")
-            await self.request_similar_media(tmdb_items, item_type, max_results, cached_source_obj)
+
+            if not search_results:
+                continue
+
+            best_match = search_results[0]
+            best_match['rationale'] = rec.get('rationale')
+
+            source_obj = await self._resolve_llm_source(rec.get("source_title"), item_type)
+            await self.request_similar_media([best_match], item_type, 1, source_obj)
+            count += 1
+
+        self.logger.info(f"LLM successfully processed {count} {item_type} recommendations.")
 
     async def process_item(self, item, title, is_anime=False):
         """Process an individual item (movie or TV show episode)."""

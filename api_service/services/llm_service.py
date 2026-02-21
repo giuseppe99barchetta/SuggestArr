@@ -1,4 +1,5 @@
 import json
+import re
 from openai import OpenAI
 from typing import List, Dict, Optional
 from api_service.config.logger_manager import LoggerManager
@@ -67,26 +68,28 @@ def get_recommendations_from_history(history_items: List[Dict], max_results: int
     history_text = "\n".join(history_strings)
     list_type = "movies" if item_type == "movie" else "TV shows"
     
-    prompt = f"""You are an expert film and television recommendation system.
-The user has recently watched and enjoyed the following {list_type}:
+    prompt = f"""
+        You are an expert film and television recommendation system.
+        The user has recently watched and enjoyed the following {list_type}:
 
-{history_text}
+        {history_text}
 
-Analyze the themes, genres, pacing, and tone of these {list_type} to build a taste profile.
-Based on this profile, recommend exactly {max_results} similar {list_type} that the user is highly likely to enjoy.
+        Analyze the themes, genres, pacing, and tone of these {list_type} to build a taste profile.
+        Based on this profile, recommend exactly {max_results} similar {list_type} that the user is highly likely to enjoy.
 
-Follow these strict rules:
-1. Do NOT recommend any of the {list_type} that the user has already watched (listed above).
-2. ONLY respond with a valid JSON array of objects.
-3. Each object MUST have a "title" string field, a "year" integer field, and a "rationale" string field explaining why it was chosen based on the user's history.
-4. Do NOT wrap the JSON in markdown code blocks. Do not add any conversational text.
+        Follow these strict rules:
+        1. Do NOT recommend any of the {list_type} that the user has already watched (listed above).
+        2. ONLY respond with a valid JSON array of objects.
+        3. Each object MUST have: a "title" string, a "year" integer, a "rationale" string explaining why it was chosen, and a "source_title" string containing the EXACT title (from the list above) of the watched item that most inspired this recommendation.
+        4. Do NOT wrap the JSON in markdown code blocks. Do not add any conversational text.
+        5. The "title" field must be a plain JSON string. Do NOT add any text, qualifiers, or annotations outside the string (e.g., write "True Detective (Season 1)" NOT "True Detective" (Season 1)).
 
-Example format:
-[
-  {{"title": "Example Movie", "year": 2023, "rationale": "Because you enjoyed X and Y, this movie shares similar themes..."}},
-  {{"title": "Another Great Catch", "year": 1999, "rationale": "A classic in the same genre as Z..."}}
-]
-"""
+        Example format:
+        [
+          {{"title": "Example Movie", "year": 2023, "source_title": "Harry Potter", "rationale": "Because you enjoyed X and Y, this movie shares similar themes..."}},
+          {{"title": "Another Great Catch", "year": 1999, "source_title": "The Matrix", "rationale": "A classic in the same genre as Z..."}}
+        ]
+    """
 
     try:
         logger.info(f"Sending LLM request to OpenAI ({model}) for {len(history_items)} {list_type} history items.")
@@ -112,7 +115,11 @@ Example format:
             content = content[:-3]
             
         content = content.strip()
-        
+
+        # Attempt to repair common LLM JSON formatting mistakes before parsing.
+        # Fix: "Some Title" (qualifier) -> "Some Title (qualifier)"
+        content = re.sub(r'"([^"]*?)"\s+(\([^)]*?\))', r'"\1 \2"', content)
+
         # Parse the JSON
         # Some models return `{"recommendations": [{...}]}` when forced into json_object mode
         parsed_json = json.loads(content)

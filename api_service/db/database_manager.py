@@ -550,7 +550,7 @@ class DatabaseManager:
                 m.logo_path, m.backdrop_path, r.is_anime, r.rationale
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id
-            LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id AND r.tmdb_source_id != '0'
+            LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id
             WHERE r.requested_by = 'SuggestArr'
             ORDER BY {order_by_clause}
         """
