@@ -540,7 +540,9 @@ class DatabaseManager:
     
         query = f"""
             SELECT
-                s.media_id AS source_id, s.title AS source_title, s.overview AS source_overview,
+                COALESCE(s.media_id, '0') AS source_id,
+                COALESCE(s.title, 'LLM Recommendation') AS source_title,
+                s.overview AS source_overview,
                 s.release_date AS source_release_date, s.poster_path AS source_poster_path, s.rating as rating,
                 r.tmdb_request_id, r.media_type, r.requested_at, s.logo_path, s.backdrop_path,
                 m.title AS request_title, m.overview AS request_overview,
@@ -548,7 +550,7 @@ class DatabaseManager:
                 m.logo_path, m.backdrop_path, r.is_anime, r.rationale
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id
-            JOIN metadata s ON r.tmdb_source_id = s.media_id
+            LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id AND r.tmdb_source_id != '0'
             WHERE r.requested_by = 'SuggestArr'
             ORDER BY {order_by_clause}
         """
@@ -599,7 +601,7 @@ class DatabaseManager:
                 "backdrop_path": row[17],
                 "rating": round(row[15], 2) if row[15] is not None else None,
                 "logo_path": row[16],
-                "rationale": row[18],
+                "rationale": row[19] if len(row) > 19 else None,
             })
     
         # Sort sources

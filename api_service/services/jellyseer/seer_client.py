@@ -217,7 +217,7 @@ class SeerClient:
             source_id = source.get('id') if source else None
             # Save the request utilizing the safely extracted variables
             databaseManager.save_request(media_type, media.get('id'), source_id, user_id, rationale=rationale)
-            if source:
+            if source and source.get('id'):
                 databaseManager.save_metadata(source, media_type)
             if media:
                 databaseManager.save_metadata(media, media_type)
