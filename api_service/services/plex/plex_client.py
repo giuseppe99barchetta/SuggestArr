@@ -178,11 +178,18 @@ class PlexClient:
         seen_series = set()
         filtered_items = []
         total_items = 0  # Counter for total filtered items
+        
+        # Pre-calculate a list of target library IDs as strings
+        target_library_ids = []
+        if self.library_ids:
+            target_library_ids = [str(lib.get('id')) if isinstance(lib, dict) else str(lib) for lib in self.library_ids]
     
         for item in metadata:
             # Check if the item's librarySectionID is in the selected libraries
-            if self.library_ids and item.get('librarySectionID') not in self.library_ids:
-                continue  # Skip items not in the selected libraries
+            if target_library_ids:
+                item_lib_id = str(item.get('librarySectionID', ''))
+                if item_lib_id not in target_library_ids:
+                    continue  # Skip items not in the selected libraries
             
             # Check if we've reached the max content fetch limit
             if total_items >= int(self.max_content_fetch):
