@@ -26,7 +26,7 @@ export function useVersionCheck() {
 
     try {
       const [dockerResponse] = await Promise.all([
-        axios.get('/api/config/docker-info', { timeout: 5000 })
+        axios.get('/api/config/docker-info', { timeout: 30000 })
       ]);
 
       if (dockerResponse.data.status === 'success') {

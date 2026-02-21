@@ -356,3 +356,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+config/config_files/requests.db
+docker/docker-compose-local.yaml
+config/config_files/config.yaml
+config/config_files/.__app.lock
+.gitignore
+.vscode
+nul
+docker-version-detection.md
+AGENTS.md
+.python-version
+.__app.lock
+.claude/settings.local.json
+opencode.json

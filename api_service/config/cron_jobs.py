@@ -41,9 +41,18 @@ def parse_cron_expression(cron_expression):
     """
     Function to decode the cron expression.
     Returns a dictionary compatible with APScheduler.
+    Falls back to '0 0 * * *' if the expression is missing or malformed.
     """
+    default_expression = '0 0 * * *'
     logger.debug(f'Parsing cron expression: {cron_expression}')
-    cron_parts = cron_expression.split()
+    cron_parts = (cron_expression or '').split()
+
+    if len(cron_parts) != 5:
+        logger.warning(
+            f"Invalid cron expression '{cron_expression}' (expected 5 parts, got {len(cron_parts)}). "
+            f"Falling back to default: '{default_expression}'"
+        )
+        cron_parts = default_expression.split()
 
     # Return the dictionary for APScheduler
     cron_params = {

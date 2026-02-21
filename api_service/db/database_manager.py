@@ -150,6 +150,36 @@ class DatabaseManager:
                     backdrop_path TEXT,
                     UNIQUE(media_id, media_type)
                 )
+            """,
+            'discover_jobs': """
+                CREATE TABLE IF NOT EXISTS discover_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    job_type TEXT NOT NULL DEFAULT 'discover',
+                    enabled INTEGER DEFAULT 1,
+                    media_type TEXT NOT NULL,
+                    filters TEXT NOT NULL,
+                    schedule_type TEXT NOT NULL,
+                    schedule_value TEXT NOT NULL,
+                    max_results INTEGER DEFAULT 20,
+                    user_ids TEXT,
+                    is_system INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """,
+            'job_execution_history': """
+                CREATE TABLE IF NOT EXISTS job_execution_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id INTEGER NOT NULL,
+                    started_at TIMESTAMP NOT NULL,
+                    finished_at TIMESTAMP,
+                    status TEXT NOT NULL,
+                    results_count INTEGER DEFAULT 0,
+                    requested_count INTEGER DEFAULT 0,
+                    error_message TEXT,
+                    FOREIGN KEY (job_id) REFERENCES discover_jobs(id) ON DELETE CASCADE
+                )
             """
         }
         
@@ -161,8 +191,19 @@ class DatabaseManager:
                     
                     # Database-specific modifications
                     if self.db_type == 'mysql':
-                        query = query.replace("TEXT", "VARCHAR(255)")
-                    
+                        # Order matters: do specific replacements first
+                        query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "INT AUTO_INCREMENT PRIMARY KEY")
+                        query = query.replace("INTEGER", "INT")
+                        query = query.replace("TEXT", "VARCHAR(512)")
+                        query = query.replace("REAL", "DOUBLE")
+                        # Add ENGINE=InnoDB for foreign key support
+                        if not query.strip().endswith("ENGINE=InnoDB"):
+                            query = query.rstrip().rstrip(")").rstrip() + ") ENGINE=InnoDB"
+                    elif self.db_type == 'postgres':
+                        query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+                        query = query.replace("AUTOINCREMENT", "")
+
+                    self.logger.info(f"Creating table '{table_name}'...")
                     cursor.execute(query)
                     
                     if self.db_type == 'sqlite':
@@ -226,12 +267,74 @@ class DatabaseManager:
                     conn.commit()
 
             except Exception as e:
-                self.logger.error(f"Failed to add missing columns: {e}")
+                self.logger.error(f"Failed to add missing columns to requests: {e}")
                 raise DatabaseError(
                     error=f"Column addition failed: {str(e)}",
                     db_type=self.db_type
                 )
-    
+
+        # Check and add missing columns to discover_jobs table
+        self._migrate_discover_jobs_table()
+
+    def _migrate_discover_jobs_table(self):
+        """Add missing columns to discover_jobs table for job type support."""
+        self.logger.debug("Checking for missing columns in discover_jobs table...")
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            try:
+                # Get existing columns
+                if self.db_type == 'sqlite':
+                    query = "PRAGMA table_info(discover_jobs);"
+                    cursor.execute(query)
+                    existing_columns = {row[1] for row in cursor.fetchall()}
+                elif self.db_type == 'postgres':
+                    query = """
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name = 'discover_jobs';
+                    """
+                    cursor.execute(query)
+                    existing_columns = {row[0] for row in cursor.fetchall()}
+                elif self.db_type in ['mysql', 'mariadb']:
+                    query = "SHOW COLUMNS FROM discover_jobs;"
+                    cursor.execute(query)
+                    existing_columns = {row[0] for row in cursor.fetchall()}
+                else:
+                    self.logger.warning(f"Unsupported DB type for column check: {self.db_type}")
+                    return
+
+                # Add missing job_type column
+                if 'job_type' not in existing_columns:
+                    self.logger.info("Adding column job_type to discover_jobs...")
+                    if self.db_type in ['mysql', 'mariadb']:
+                        cursor.execute("ALTER TABLE discover_jobs ADD COLUMN job_type VARCHAR(50) NOT NULL DEFAULT 'discover';")
+                    else:
+                        cursor.execute("ALTER TABLE discover_jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'discover';")
+                    conn.commit()
+
+                # Add missing user_ids column (for recommendation jobs)
+                if 'user_ids' not in existing_columns:
+                    self.logger.info("Adding column user_ids to discover_jobs...")
+                    if self.db_type in ['mysql', 'mariadb']:
+                        cursor.execute("ALTER TABLE discover_jobs ADD COLUMN user_ids VARCHAR(512);")
+                    else:
+                        cursor.execute("ALTER TABLE discover_jobs ADD COLUMN user_ids TEXT;")
+                    conn.commit()
+
+                # Add missing is_system column (for system-managed jobs from config)
+                if 'is_system' not in existing_columns:
+                    self.logger.info("Adding column is_system to discover_jobs...")
+                    if self.db_type in ['mysql', 'mariadb']:
+                        cursor.execute("ALTER TABLE discover_jobs ADD COLUMN is_system TINYINT(1) DEFAULT 0;")
+                    else:
+                        cursor.execute("ALTER TABLE discover_jobs ADD COLUMN is_system INTEGER DEFAULT 0;")
+                    conn.commit()
+
+            except Exception as e:
+                self.logger.error(f"Failed to migrate discover_jobs table: {e}")
+                # Don't raise - table might not exist yet
+
     def ensure_connection(self):
         """Legacy method - now handled by connection pool."""
         # This method is kept for backward compatibility
