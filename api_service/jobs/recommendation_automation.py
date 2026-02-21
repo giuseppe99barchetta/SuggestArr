@@ -156,6 +156,14 @@ class RecommendationAutomation:
             filter_streaming_raw = self.env_vars.get('FILTER_STREAMING_SERVICES', [])
             filter_streaming_services = filter_streaming_raw if isinstance(filter_streaming_raw, list) else []
 
+        # LLM enhancement - job setting overrides global; verify LLM is actually configured
+        job_use_llm = job_filters.get('use_llm', None)
+        if job_use_llm:
+            from api_service.services.llm.llm_service import get_llm_client
+            if not get_llm_client():
+                self.logger.warning("Job has AI enhancement enabled but LLM is not configured. Falling back to standard algorithm.")
+                job_use_llm = False
+
         # Anime profile configuration
         anime_profile_config_raw = self.env_vars.get('SEER_ANIME_PROFILE_CONFIG', {})
         anime_profile_config = anime_profile_config_raw if isinstance(anime_profile_config_raw, dict) else {}
@@ -197,12 +205,12 @@ class RecommendationAutomation:
         if selected_service in ('jellyfin', 'emby'):
             await self._init_jellyfin_handler(
                 seer_client, tmdb_client, max_similar_movie, max_similar_tv,
-                selected_users, max_content
+                selected_users, max_content, job_use_llm
             )
         elif selected_service == 'plex':
             await self._init_plex_handler(
                 seer_client, tmdb_client, max_similar_movie, max_similar_tv,
-                selected_users, max_content
+                selected_users, max_content, job_use_llm
             )
         else:
             raise ValueError(f"Unsupported service: {selected_service}")
@@ -240,7 +248,7 @@ class RecommendationAutomation:
 
     async def _init_jellyfin_handler(
         self, seer_client, tmdb_client, max_similar_movie, max_similar_tv,
-        selected_users, max_content
+        selected_users, max_content, use_llm=None
     ):
         """Initialize Jellyfin handler."""
         self.logger.info("Initializing Jellyfin client")
@@ -265,13 +273,13 @@ class RecommendationAutomation:
         self.media_handler = JellyfinHandler(
             jellyfin_client, seer_client, tmdb_client, self.logger,
             max_similar_movie, max_similar_tv,
-            selected_users, jellyfin_anime_map
+            selected_users, jellyfin_anime_map, use_llm=use_llm
         )
         self.logger.info("Jellyfin handler initialized")
 
     async def _init_plex_handler(
         self, seer_client, tmdb_client, max_similar_movie, max_similar_tv,
-        selected_users, max_content
+        selected_users, max_content, use_llm=None
     ):
         """Initialize Plex handler."""
         self.logger.info("Initializing Plex client")
@@ -297,7 +305,7 @@ class RecommendationAutomation:
         self.media_handler = PlexHandler(
             plex_client, seer_client, tmdb_client, self.logger,
             max_similar_movie, max_similar_tv,
-            plex_anime_map
+            plex_anime_map, use_llm=use_llm
         )
         self.logger.info("Plex handler initialized")
 

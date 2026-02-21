@@ -19,7 +19,7 @@ def to_ascii(value):
     return unicodedata.normalize('NFKD', value)
 
 class PlexHandler:
-    def __init__(self, plex_client: PlexClient, seer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv, library_anime_map=None):
+    def __init__(self, plex_client: PlexClient, seer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -29,6 +29,7 @@ class PlexHandler:
         :param max_similar_movie: Max number of similar movies to request
         :param max_similar_tv: Max number of similar TV shows to request
         :param library_anime_map: Dict mapping library section ID to is_anime boolean
+        :param use_llm: Override for LLM mode. If None, falls back to global ENABLE_ADVANCED_ALGORITHM setting.
         """
         self.plex_client = plex_client
         self.seer_client = seer_client
@@ -39,9 +40,12 @@ class PlexHandler:
         self.request_count = 0
         self.existing_content = plex_client.existing_content
         self.library_anime_map = library_anime_map or {}
-        
-        config = load_env_vars()
-        self.use_llm = config.get('ENABLE_ADVANCED_ALGORITHM', False)
+
+        if use_llm is not None:
+            self.use_llm = use_llm
+        else:
+            config = load_env_vars()
+            self.use_llm = config.get('ENABLE_ADVANCED_ALGORITHM', False)
 
 
     async def process_recent_items(self):

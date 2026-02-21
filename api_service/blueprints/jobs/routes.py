@@ -506,6 +506,23 @@ def get_languages():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+@jobs_bp.route('/llm-status', methods=['GET'])
+def get_llm_status():
+    """
+    Check if LLM is configured and available for AI-enhanced recommendations.
+
+    Returns:
+        JSON with configured status boolean.
+    """
+    try:
+        from api_service.services.llm.llm_service import get_llm_client
+        client = get_llm_client()
+        return jsonify({'status': 'success', 'configured': client is not None}), 200
+    except Exception as e:
+        logger.error(f"Error checking LLM status: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 @jobs_bp.route('/import-config', methods=['POST'])
 def import_config():
     """

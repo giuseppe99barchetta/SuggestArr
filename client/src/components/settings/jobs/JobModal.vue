@@ -107,7 +107,7 @@
           <!-- User Selection (only for recommendation jobs) -->
           <div v-if="form.job_type === 'recommendation'" class="settings-group">
             <h4>Users to Monitor</h4>
-            <RecommendationFilters v-model="form" :show-advanced="showAdvanced" />
+            <RecommendationFilters v-model="form" :show-advanced="showAdvanced" :llm-configured="llmConfigured" />
           </div>
 
           <!-- Schedule -->
@@ -177,6 +177,7 @@
 import JobFilters from './JobFilters.vue';
 import RecommendationFilters from './RecommendationFilters.vue';
 import SchedulePicker from './SchedulePicker.vue';
+import { jobsApi } from '@/api/jobsApi';
 
 export default {
   name: 'JobModal',
@@ -208,7 +209,8 @@ export default {
         value: 'daily'
       },
       isSaving: false,
-      showAdvanced: false
+      showAdvanced: false,
+      llmConfigured: false
     };
   },
   computed: {
@@ -219,7 +221,7 @@ export default {
       return this.form.name.trim().length > 0 && this.form.media_type;
     }
   },
-  mounted() {
+  async mounted() {
     if (this.job) {
       this.form = {
         name: this.job.name || '',
@@ -234,6 +236,12 @@ export default {
         type: this.job.schedule_type || 'preset',
         value: this.job.schedule_value || 'daily'
       };
+    }
+    try {
+      const llmStatus = await jobsApi.getLlmStatus();
+      this.llmConfigured = llmStatus.configured === true;
+    } catch {
+      this.llmConfigured = false;
     }
   },
   methods: {

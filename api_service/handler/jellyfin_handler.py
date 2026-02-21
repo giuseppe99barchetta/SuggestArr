@@ -8,7 +8,7 @@ from api_service.config.config import load_env_vars
 from api_service.services.llm.llm_service import get_recommendations_from_history
 
 class JellyfinHandler:
-    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None):
+    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client
@@ -19,6 +19,7 @@ class JellyfinHandler:
         :param max_similar_tv: Max number of similar TV shows to request
         :param selected_users: List of selected users
         :param library_anime_map: Dict mapping library name to is_anime boolean
+        :param use_llm: Override for LLM mode. If None, falls back to global ENABLE_ADVANCED_ALGORITHM setting.
         """
         self.jellyfin_client = jellyfin_client
         self.jellyseer_client = jellyseer_client
@@ -31,9 +32,12 @@ class JellyfinHandler:
         self.existing_content = jellyfin_client.existing_content
         self.selected_users = selected_users
         self.library_anime_map = library_anime_map or {}
-        
-        config = load_env_vars()
-        self.use_llm = config.get('ENABLE_ADVANCED_ALGORITHM', False)
+
+        if use_llm is not None:
+            self.use_llm = use_llm
+        else:
+            config = load_env_vars()
+            self.use_llm = config.get('ENABLE_ADVANCED_ALGORITHM', False)
 
 
     async def process_recent_items(self):

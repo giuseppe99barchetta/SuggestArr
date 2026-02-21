@@ -53,6 +53,35 @@
       </div>
     </div>
 
+    <!-- AI Enhancement (shown when LLM is configured) -->
+    <div v-if="llmConfigured" class="form-group llm-section">
+      <label class="llm-label">
+        <i class="fas fa-robot llm-icon"></i>
+        AI Enhancement
+        <span class="llm-badge">Beta</span>
+      </label>
+      <div class="llm-toggle-row">
+        <label class="toggle-item">
+          <input
+            v-model="localFilters.use_llm"
+            type="checkbox"
+            @change="updateFilters(localFilters)"
+          />
+          <span class="toggle-label">
+            <i class="fas fa-brain"></i>
+            Enable AI-powered recommendations
+          </span>
+        </label>
+      </div>
+      <small class="form-help llm-help" v-if="localFilters.use_llm">
+        <i class="fas fa-info-circle"></i>
+        The AI will analyze the full watch history to generate personalized recommendations, replacing the standard TMDb similarity search.
+      </small>
+      <small class="form-help" v-else>
+        Use your configured LLM to generate recommendations based on watch history patterns instead of TMDb similarity.
+      </small>
+    </div>
+
     <!-- Advanced Recommendation Settings (only shown when showAdvanced is true) -->
     <template v-if="showAdvanced">
       <!-- Recommendation-specific settings -->
@@ -170,6 +199,10 @@ export default {
     showAdvanced: {
       type: Boolean,
       default: false
+    },
+    llmConfigured: {
+      type: Boolean,
+      default: false
     }
   },
   emits: ['update:modelValue'],
@@ -178,6 +211,7 @@ export default {
       availableUsers: [],
       isLoading: false,
       localFilters: {
+        use_llm: false,
         max_similar_movie: 5,
         max_similar_tv: 2,
         max_content: 10,
@@ -201,6 +235,7 @@ export default {
         if (newVal.filters) {
           this.isUpdatingFromParent = true;
           this.localFilters = {
+            use_llm: newVal.filters.use_llm ?? false,
             max_similar_movie: newVal.filters.max_similar_movie ?? 5,
             max_similar_tv: newVal.filters.max_similar_tv ?? 2,
             max_content: newVal.filters.max_content ?? 10,
@@ -515,5 +550,51 @@ export default {
   color: var(--color-text-muted);
   margin-left: 2.5rem;
   margin-bottom: 0.5rem;
+}
+
+/* LLM section */
+.llm-section {
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  background: var(--color-primary-alpha-10);
+}
+
+.llm-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary) !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.llm-icon {
+  color: var(--color-primary);
+}
+
+.llm-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: var(--color-primary);
+  color: white;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.llm-toggle-row {
+  padding: 0.25rem 0;
+}
+
+.llm-help {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  color: var(--color-primary) !important;
+  opacity: 0.85;
 }
 </style>

@@ -125,6 +125,15 @@ export const jobsApi = {
   async syncSystemJob() {
     const response = await axios.post('/api/jobs/sync-config');
     return response.data;
+  },
+
+  /**
+   * Check if LLM is configured for AI-enhanced recommendations.
+   * @returns {Promise<Object>} Response with configured boolean.
+   */
+  async getLlmStatus() {
+    const response = await axios.get('/api/jobs/llm-status');
+    return response.data;
   }
 };
 
