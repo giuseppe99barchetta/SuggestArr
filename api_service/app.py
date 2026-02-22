@@ -31,7 +31,10 @@ class SubpathMiddleware:
         self.app = app
 
     def __call__(self, environ, start_response):
-        subpath = os.environ.get('SUBPATH', '').strip('/')
+        env_vars = load_env_vars()
+        subpath = env_vars.get('SUBPATH')
+        subpath = str(subpath).strip('/') if subpath else ''
+        
         if subpath and environ['PATH_INFO'].startswith(f'/{subpath}'):
             # Strip the subpath from PATH_INFO
             environ['PATH_INFO'] = environ['PATH_INFO'][len(subpath) + 1:]
@@ -91,6 +94,18 @@ def register_routes(app): # pylint: disable=redefined-outer-name
 
         app.static_folder = '../static'
         
+        env_vars = load_env_vars()
+        subpath = env_vars.get('SUBPATH')
+        subpath = str(subpath).strip('/') if subpath else ''
+        
+        # If the browser mistakenly requested the asset including the subpath 
+        # (e.g., due to absolute vs relative resolution confusion), we strip it
+        # so we can find the actual file in the static directory.
+        if subpath and path.startswith(f"{subpath}/"):
+            path = path[len(subpath) + 1:]
+        elif subpath and path == subpath:
+            path = ""
+            
         target_path = path if path != "" else "index.html"
         full_path = os.path.join(app.static_folder, target_path)
 
@@ -104,12 +119,14 @@ def register_routes(app): # pylint: disable=redefined-outer-name
             with open(index_path, 'r', encoding='utf-8') as f:
                 content = f.read()
                 
-            subpath = os.environ.get('SUBPATH', '')
-            if not subpath.startswith('/') and subpath:
-                subpath = '/' + subpath
+                
+            if subpath:
+                subpath_prefix = '/' + subpath
+            else:
+                subpath_prefix = ''
                 
             # Inject subpath so frontend knows its base URL
-            meta_tag = f'<meta name="suggestarr-subpath" content="{subpath}">'
+            meta_tag = f'<meta name="suggestarr-subpath" content="{subpath_prefix}">'
             content = content.replace('<head>', f'<head>{meta_tag}')
             
             return Response(content, mimetype='text/html')
