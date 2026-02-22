@@ -11,7 +11,7 @@
       <i class="fas fa-exclamation-triangle"></i>
       <div class="warning-content">
         <strong>LLM not configured</strong>
-        <span>Set <code>OPENAI_API_KEY</code> (and optionally <code>OPENAI_BASE_URL</code> for local models) in the <strong>Advanced</strong> tab to enable AI Search.</span>
+        <span>Complete the configuration for the AI Integration in the <strong>Advanced</strong> tab, under <strong>Experimental Features</strong> card to enable AI Search.</span>
       </div>
     </div>
 

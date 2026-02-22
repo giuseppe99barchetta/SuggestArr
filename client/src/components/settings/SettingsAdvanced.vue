@@ -93,10 +93,6 @@
         </div>
       
         <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES }">
-          <div v-if="!localConfig.ENABLE_BETA_FEATURES" class="development-badge">
-            <i class="fas fa-code"></i>
-            In Development
-          </div>
           <label class="checkbox-label">
             <input
               v-model="localConfig.ENABLE_ADVANCED_ALGORITHM"
@@ -110,24 +106,6 @@
           </small>
         </div>
 
-      
-        <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES }">
-          <div v-if="!localConfig.ENABLE_BETA_FEATURES" class="development-badge">
-            <i class="fas fa-code"></i>
-            In Development
-          </div>
-          <label class="checkbox-label">
-            <input
-              v-model="localConfig.ENABLE_SOCIAL_FEATURES"
-              type="checkbox"
-              :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES"
-            />
-            <span class="checkbox-text">Enable social features</span>
-          </label>
-          <small class="form-help">
-            Enable social features like sharing and collaborative filtering
-          </small>
-        </div>
       </div>
 
       <!-- AI Provider Configuration (visible only when advanced algorithm is enabled) -->
@@ -1150,30 +1128,6 @@ export default {
 /* Feature wrapper for positioning */
 .feature-wrapper {
   position: relative;
-}
-
-/* Development badge */
-.development-badge {
-  position: absolute;
-  top: -8px;
-  right: 0;
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-  z-index: 1;
-}
-
-.development-badge i {
-  font-size: 0.625rem;
 }
 
 .btn-outline:hover:not(:disabled) {
