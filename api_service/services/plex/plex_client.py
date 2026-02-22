@@ -330,7 +330,8 @@ class PlexClient:
         url = f"{self.api_url}/library/sections/{library_id}/all"
 
         try:
-            self.logger.debug(f"Requesting URL: {url} with headers: {self.headers} and timeout: {REQUEST_TIMEOUT}")
+            safe_headers = {k: '***' if k == 'X-Plex-Token' else v for k, v in self.headers.items()}
+            self.logger.debug(f"Requesting URL: {url} with headers: {safe_headers} and timeout: {REQUEST_TIMEOUT}")
             async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     library_items = await self._safe_json_decode(response)
