@@ -217,7 +217,7 @@
                 v-for="item in aiRequests"
                 :key="item.request_id"
                 class="request-card"
-                @click="openModal(item)">
+                @click="openModal(item, true)">
 
                 <div class="request-card-poster">
                   <img
@@ -248,9 +248,9 @@
                     </span>
                   </div>
 
-                  <div v-if="item.rationale" class="source-link" style="font-style: italic;">
-                    <i class="fas fa-quote-left"></i>
-                    <span>{{ item.rationale }}</span>
+                  <div v-if="item.rationale" class="source-link">
+                    <i class="fas fa-search"></i>
+                    <span>Search: <em>"{{ item.rationale }}"</em></span>
                   </div>
                   <div v-else class="source-link">
                     <i class="fas fa-magic"></i>
@@ -411,13 +411,13 @@
 
                 <div class="modal-separator"></div>
 
-                <!-- LLM Rationale -->
+                <!-- LLM Rationale / Search Query -->
                 <div v-if="selectedSource.rationale" class="modal-section">
-                  <h3 class="modal-section-title" style="color: #a855f7;">
-                    <i class="fas fa-robot"></i>
-                    AI Reasoning
+                  <h3 class="modal-section-title" :style="selectedSource._isAiRequest ? 'color: var(--color-info)' : 'color: #a855f7'">
+                    <i :class="selectedSource._isAiRequest ? 'fas fa-search' : 'fas fa-robot'"></i>
+                    {{ selectedSource._isAiRequest ? 'Search Query' : 'AI Reasoning' }}
                   </h3>
-                  <p class="modal-overview" style="font-style: italic; border-left: 3px solid #a855f7; padding-left: 1rem; margin-top: 0.5rem; white-space: pre-wrap;">
+                  <p class="modal-overview" :style="selectedSource._isAiRequest ? 'border-left: 3px solid var(--color-info); padding-left: 1rem; margin-top: 0.5rem;' : 'font-style: italic; border-left: 3px solid #a855f7; padding-left: 1rem; margin-top: 0.5rem; white-space: pre-wrap;'">
                     {{ selectedSource.rationale }}
                   </p>
                 </div>
@@ -867,8 +867,8 @@ export default {
       this.$router.push({ name: "Home" });
     },
 
-    openModal(source) {
-      this.selectedSource = source;
+    openModal(source, isAiRequest = false) {
+      this.selectedSource = { ...source, _isAiRequest: isAiRequest };
       this.showModal = true;
       document.body.style.overflow = 'hidden';
     },

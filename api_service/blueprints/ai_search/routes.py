@@ -95,7 +95,8 @@ async def ai_search_request():
     Request body:
         tmdb_id (int): TMDB ID of the item to request.
         media_type (str): 'movie' or 'tv'.
-        rationale (str): Optional AI rationale to attach to the request record.
+        rationale (str): Optional AI per-item rationale (why this title was suggested).
+        search_query (str): The original natural-language query used for this search.
         metadata (dict): Full item metadata dict (title, poster_path, overview,
             release_date, rating, …) returned by the search endpoint.
 
@@ -107,7 +108,11 @@ async def ai_search_request():
         tmdb_id = data.get("tmdb_id")
         media_type = data.get("media_type", "movie")
         rationale = data.get("rationale") or None
+        search_query = (data.get("search_query") or "").strip() or None
         metadata = data.get("metadata") or {}
+        # Prefer the original search query as the stored rationale so the
+        # "AI Requests" tab can show what the user was looking for.
+        db_rationale = search_query or rationale
 
         if not tmdb_id:
             return jsonify({"status": "error", "message": "tmdb_id is required"}), 400
@@ -156,7 +161,7 @@ async def ai_search_request():
                     # Tag with 'ai_search' source to keep these requests out of the
                     # "By Watched Content" view in the dashboard.
                     db.save_request(
-                        media_type, str(tmdb_id), "ai_search", None, rationale=rationale
+                        media_type, str(tmdb_id), "ai_search", None, rationale=db_rationale
                     )
                     return jsonify({"status": "success", "message": "Request submitted successfully."}), 200
 

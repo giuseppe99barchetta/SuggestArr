@@ -355,13 +355,13 @@ export default {
       },
       tabs: [
         { id: 'requests', name: 'Requests', icon: 'fas fa-paper-plane' },
+        { id: 'ai_search', name: 'AI Search', icon: 'fas fa-magic', isBeta: true },
         { id: 'general', name: 'General', icon: 'fas fa-cog' },
         { id: 'services', name: 'Services', icon: 'fas fa-plug' },
         { id: 'jobs', name: 'Jobs', icon: 'fas fa-briefcase' },
         { id: 'database', name: 'Database', icon: 'fas fa-database' },
         { id: 'advanced', name: 'Advanced', icon: 'fas fa-sliders-h' },
         { id: 'logs', name: 'Logs', icon: 'fas fa-file-alt' },
-        { id: 'ai_search', name: 'AI Search', icon: 'fas fa-magic', isBeta: true },
       ],
     };
   },

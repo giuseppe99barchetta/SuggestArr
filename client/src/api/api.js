@@ -109,12 +109,13 @@ export const getAiSearchRequests = (page = 1, perPage = 12, sortBy = 'date-desc'
 };
 
 // AI Search: request a specific TMDB item via Jellyseer/Overseer
-export const aiSearchRequest = (tmdbId, mediaType, rationale = '', metadata = {}) => {
+export const aiSearchRequest = (tmdbId, mediaType, rationale = '', metadata = {}, searchQuery = '') => {
     return axios.post('/api/ai-search/request', {
         tmdb_id: tmdbId,
         media_type: mediaType,
         rationale,
         metadata,
+        search_query: searchQuery,
     });
 };
 

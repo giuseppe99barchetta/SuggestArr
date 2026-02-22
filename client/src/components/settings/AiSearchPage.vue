@@ -110,6 +110,24 @@
       </div>
     </div>
 
+    <!-- Recent Searches -->
+    <div v-if="recentSearches.length > 0" class="recent-searches">
+      <span class="recent-label"><i class="fas fa-history"></i> Recent:</span>
+      <div class="recent-chips">
+        <button
+          v-for="(search, i) in recentSearches"
+          :key="i"
+          @click="rerunSearch(search)"
+          class="recent-chip"
+          :disabled="isSearching"
+          :title="search"
+        >{{ search }}</button>
+      </div>
+      <button class="recent-clear" @click="clearHistory" title="Clear search history">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
     <!-- Query Interpretation Badge -->
     <div v-if="queryInterpretation && hasInterpretation" class="interpretation-bar">
       <i class="fas fa-brain"></i>
@@ -231,6 +249,8 @@ export default {
       useHistory: true,
       excludeWatched: true,
       maxResults: 12,
+      // Recent search history (persisted in localStorage)
+      recentSearches: JSON.parse(localStorage.getItem('suggestarr_ai_search_history') || '[]'),
     };
   },
 
@@ -303,6 +323,7 @@ export default {
         this.results = data.results || [];
         this.queryInterpretation = data.query_interpretation || null;
         this.hasSearched = true;
+        this.saveToHistory(this.query.trim());
       } catch (err) {
         const msg = err.response?.data?.message || err.message || 'Unexpected error.';
         this.errorMessage = msg;
@@ -318,7 +339,7 @@ export default {
       this.requestingIds = new Set([...this.requestingIds, key]);
 
       try {
-        const res = await aiSearchRequest(item.id, item.media_type, item.rationale || '', item);
+        const res = await aiSearchRequest(item.id, item.media_type, item.rationale || '', item, this.query.trim());
         if (res.data.status === 'success') {
           this.requestedIds = new Set([...this.requestedIds, key]);
         } else {
@@ -330,6 +351,27 @@ export default {
       } finally {
         this.requestingIds = new Set([...this.requestingIds].filter(k => k !== key));
       }
+    },
+
+    saveToHistory(query) {
+      if (!query) return;
+      let history = JSON.parse(localStorage.getItem('suggestarr_ai_search_history') || '[]');
+      const idx = history.indexOf(query);
+      if (idx !== -1) history.splice(idx, 1);
+      history.unshift(query);
+      history = history.slice(0, 8);
+      localStorage.setItem('suggestarr_ai_search_history', JSON.stringify(history));
+      this.recentSearches = history;
+    },
+
+    rerunSearch(query) {
+      this.query = query;
+      this.runSearch();
+    },
+
+    clearHistory() {
+      localStorage.removeItem('suggestarr_ai_search_history');
+      this.recentSearches = [];
     },
 
     releaseYear(item) {
@@ -632,6 +674,71 @@ export default {
 .number-input:focus {
   outline: none;
   border-color: var(--color-info);
+}
+
+/* Recent searches */
+.recent-searches {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.recent-label {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  flex-shrink: 0;
+  padding-top: 4px;
+  white-space: nowrap;
+}
+
+.recent-chips {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.recent-chip {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-full);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-chip:hover:not(:disabled) {
+  border-color: var(--color-info);
+  color: var(--color-info);
+  background: rgba(6, 182, 212, 0.08);
+}
+
+.recent-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.recent-clear {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  padding: 4px 6px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-base);
+}
+
+.recent-clear:hover {
+  color: var(--color-error-light);
 }
 
 /* Interpretation bar */
