@@ -5,14 +5,9 @@
 ![ezgif com-optimize (2)](https://github.com/user-attachments/assets/d5c48bdb-3c11-4f35-bb55-849297d521e7)
 
 ![Build Status](https://img.shields.io/github/actions/workflow/status/giuseppe99barchetta/suggestarr/docker_hub_build.yml?branch=main&label=Build&logo=github)
-![Latest Release](https://img.shields.io/github/v/release/giuseppe99barchetta/suggestarr?include_prereleases&label=Latest%20Release&logo=github)
-[![Documentation](https://img.shields.io/badge/Docs-Available-blue?logo=readthedocs)](https://github.com/giuseppe99barchetta/SuggestArr/wiki)
 ![Platform Support](https://img.shields.io/badge/platforms-linux%2Famd64%20|%20linux%2Farm64-blue?logo=linux)
 ![Docker Pulls](https://img.shields.io/docker/pulls/ciuse99/suggestarr?label=Docker%20Pulls&logo=docker)
-
 [![Buy Me a Coffee](https://img.shields.io/badge/Donate-Buy%20Me%20a%20Coffee-orange?logo=buy-me-a-coffee)](https://buymeacoffee.com/suggestarr)
-[![Reddit Upvotes](https://img.shields.io/badge/Reddit-Upvotes-ff4500?logo=reddit)](https://www.reddit.com/r/selfhosted/comments/1gb4swg/release_major_update_for_suggestarr_now/)
-![Last Commit](https://img.shields.io/github/last-commit/giuseppe99barchetta/suggestarr?label=Last%20Commit&logo=github)
 [![](https://dcbadge.limes.pink/api/server/https://discord.com/invite/JXwFd3PnXY?style=flat)](https://discord.com/invite/JXwFd3PnXY)
 </div>
 
@@ -22,7 +17,8 @@ SuggestArr is a project designed to automate media content recommendations and d
 - **Multi-Media Server Support**: Supports Jellyfin, Plex, and Emby for retrieving media content.
 - **TMDb Integration**: Searches for similar movies and TV shows on TMDb.
 - **AI-Powered Recommendations** *(beta)*: Uses any OpenAI-compatible LLM (OpenAI, Ollama, OpenRouter, LiteLLM…) to generate hyper-personalized suggestions based on watch history, complete with AI reasoning for each pick.
-- **Automated Requests**: Sends download requests for recommended content to Jellyseer or Overseer.
+- **AI Search** *(beta)*: Describe in natural language what you want to watch and let the AI find matching titles, personalised to your viewing history, with one-click request to Seer.
+- **Automated Requests**: Sends download requests for recommended content to Jellyseer or Seer.
 - **Web Interface**: A user-friendly interface for configuration and management.
 - **Real-Time Logs**: View and filter logs in real time (e.g., `INFO`, `ERROR`, `DEBUG`).
 - **User Selection**: Choose specific users to initiate requests, allowing management and approval of auto-requested content.
@@ -145,6 +141,41 @@ Then in SuggestArr Advanced settings set:
 - **Base URL** → `http://ollama:11434/v1`
 - **Model** → `mistral`
 - **API Key** → *(leave blank)*
+
+---
+
+## 🔍 AI Search (Beta)
+
+SuggestArr includes an **AI Search** tab in the dashboard that lets you find movies and TV shows using plain text, no browsing required.
+
+### How it works
+
+Type a natural-language description of what you feel like watching. The LLM interprets your query (genres, era, language, rating threshold, mood…) and translates it into structured TMDB filters. Results are ranked and enriched with an AI-generated rationale explaining why each title was picked for you.
+
+**Examples of queries you can use:**
+- *"A psychological thriller from the 90s with a twist ending"*
+- *"Feel-good anime with strong friendships"*
+- *"80s sci-fi movies with practical effects"*
+- *"A dark comedy series like Breaking Bad"*
+
+### Key capabilities
+
+- **Natural language queries** — describe mood, genre, decade, language, or specific themes
+- **Viewing-history personalisation** — the AI tailors results based on what you (or your users) have already watched
+- **Exclude already-watched titles** — hide content you've already seen
+- **One-click requesting** — send results directly to Jellyseer/Overseer without leaving the page
+- **Query interpretation badge** — see how the AI parsed your query (genres, year range, language, min rating)
+
+### How to enable
+
+AI Search requires an LLM to be configured (same setup as AI-Powered Recommendations):
+
+1. Open the web interface → **Settings → Advanced**.
+2. Check **Enable beta features**.
+3. Fill in the **AI Provider Configuration** fields (API key, base URL, model).
+4. Save. The **AI Search** tab will become active in the dashboard.
+
+> AI Search is independent of the automated recommendations run — it is triggered manually from the dashboard and does not affect cron-based automation.
 
 ---
 
