@@ -141,6 +141,9 @@
       <span v-if="interpLang" class="interp-tag">
         <i class="fas fa-globe"></i> {{ interpLang.toUpperCase() }}
       </span>
+      <span v-if="interpMinRating" class="interp-tag interp-tag-rating">
+        <i class="fas fa-star"></i> min {{ interpMinRating }}
+      </span>
     </div>
 
     <!-- Error State -->
@@ -189,6 +192,7 @@
               <span v-if="releaseYear(item)" class="meta-year">{{ releaseYear(item) }}</span>
               <span v-if="item.rating" class="meta-rating">
                 <i class="fas fa-star"></i> {{ Number(item.rating).toFixed(1) }}
+                <span v-if="item.votes" class="meta-votes">({{ formatVotes(item.votes) }})</span>
               </span>
               <span class="meta-type">{{ item.media_type === 'tv' ? 'TV' : 'Movie' }}</span>
             </div>
@@ -264,7 +268,8 @@ export default {
         (params.genres && params.genres.length > 0) ||
         params.year_from ||
         params.year_to ||
-        params.original_language
+        params.original_language ||
+        params.min_rating != null
       );
     },
 
@@ -289,6 +294,11 @@ export default {
 
     interpLang() {
       return this.interpParams.original_language || null;
+    },
+
+    interpMinRating() {
+      const r = this.interpParams.min_rating;
+      return r != null ? Number(r).toFixed(1) : null;
     },
   },
 
@@ -378,6 +388,14 @@ export default {
       const date = item.release_date;
       if (!date) return null;
       return date.substring(0, 4);
+    },
+
+    formatVotes(votes) {
+      const n = Number(votes);
+      if (!n) return null;
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+      return String(n);
     },
 
     requestButtonClass(item) {
@@ -770,6 +788,16 @@ export default {
   font-size: var(--font-size-xs);
 }
 
+.interp-tag-rating {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: var(--color-warning);
+}
+
+.interp-tag-rating i {
+  color: var(--color-warning);
+}
+
 /* Results section */
 .results-header h3 {
   font-size: var(--font-size-base);
@@ -893,6 +921,11 @@ export default {
   display: flex;
   align-items: center;
   gap: 3px;
+}
+
+.meta-votes {
+  color: var(--color-text-muted);
+  font-size: 0.9em;
 }
 
 .card-rationale {

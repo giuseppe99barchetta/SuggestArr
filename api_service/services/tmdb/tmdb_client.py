@@ -185,12 +185,17 @@ class TMDbClient:
         (IMDB rating will be checked separately via OMDb). All other TMDB filters
         (language, genre, year, streaming) are always applied.
         """
-        rating = item.get('vote_average')
-        votes = item.get('vote_count')
+        # Support both raw TMDB API keys (vote_average / vote_count) and the
+        # formatted keys produced by _format_result (rating / votes) so that
+        # _apply_filters works correctly whether called on raw or formatted items.
+        rating = item.get('vote_average') if item.get('vote_average') is not None else item.get('rating')
+        votes = item.get('vote_count') if item.get('vote_count') is not None else item.get('votes')
 
         # Only apply TMDB rating/votes filters when TMDB ratings are used
         if self.rating_source != 'imdb':
-            if self.include_no_ratings and (rating is None or votes is None):
+            # Exclude items that have no rating data only when the user has opted out
+            # of including unrated content (include_no_ratings=False means "require ratings").
+            if not self.include_no_ratings and (rating is None or votes is None):
                 self._log_exclusion_reason(item, "missing rating or votes", content_type)
                 return False
 

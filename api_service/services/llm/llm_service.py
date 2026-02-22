@@ -272,7 +272,14 @@ Return ONLY a single valid JSON object (no markdown, no explanation) with exactl
    - "year_from": optional integer minimum release year
    - "year_to": optional integer maximum release year
    - "original_language": optional ISO 639-1 language code (e.g. "en", "it", "ja")
-   - "sort_by": "popularity.desc" or "vote_average.desc"
+   - "sort_by": choose based on query intent:
+       * "vote_average.desc" — when the query implies quality, prestige or acclaim (e.g. "best", "greatest", "top rated", "masterpiece", "must-see", "critically acclaimed", "classic", "award-winning", "all time")
+       * "popularity.desc" — for mood, genre, or style searches with no quality implication (e.g. "something relaxing", "sci-fi adventure", "Italian comedy")
+   - "min_rating": optional float 0–10. Set a minimum TMDB average rating when quality is implied:
+       * 8.0 for "best ever", "all-time greatest", "masterpiece", "perfect"
+       * 7.5 for "best", "top", "must-see", "critically acclaimed"
+       * 7.0 for "good", "great", "worth watching", "hidden gem"
+       * omit (null) for mood/genre/style searches with no quality implication
 
 2. "suggested_titles": list of exactly {max_suggestions} specific {list_type} that exist on TMDB:
    - "title": exact title as it appears on TMDB
@@ -282,12 +289,13 @@ Return ONLY a single valid JSON object (no markdown, no explanation) with exactl
 Rules:
 - suggested_titles must be real {list_type} verifiable on TMDB
 - Do NOT suggest titles from the user's watch history
+- When min_rating is set, suggested_titles must also respect it (only suggest highly rated {list_type})
 - Provide sensible discover_params even if you also suggest specific titles
 - All fields must be valid JSON types (no undefined, no trailing commas)
 
 Example format:
 {{
-  "discover_params": {{"genres": ["Thriller"], "year_from": 1990, "year_to": 1999, "sort_by": "vote_average.desc"}},
+  "discover_params": {{"genres": ["Thriller"], "year_from": 1990, "year_to": 1999, "sort_by": "vote_average.desc", "min_rating": 7.5}},
   "suggested_titles": [
     {{"title": "Se7en", "year": 1995, "rationale": "Dark psychological thriller with a shocking twist ending."}},
     {{"title": "The Silence of the Lambs", "year": 1991, "rationale": "Acclaimed psychological thriller with strong suspense."}}

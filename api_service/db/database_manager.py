@@ -645,6 +645,20 @@ class DatabaseManager:
             "per_page": per_page
         }
     
+    def get_requested_tmdb_ids(self) -> set:
+        """Return the set of TMDB IDs (as strings) that SuggestArr has already requested.
+
+        Used by AI Search to exclude items that have already been sent to Jellyseer,
+        whether through the normal automation or through the AI Search feature.
+
+        :return: Set of tmdb_request_id strings.
+        """
+        query = "SELECT DISTINCT tmdb_request_id FROM requests WHERE requested_by = 'SuggestArr'"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            return {str(row[0]) for row in cursor.fetchall()}
+
     def get_ai_search_requests(self, page: int = 1, per_page: int = 12, sort_by: str = 'date-desc') -> Dict[str, Any]:
         """Get requests made via AI Search, paginated and sorted.
 

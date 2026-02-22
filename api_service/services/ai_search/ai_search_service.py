@@ -10,12 +10,9 @@ from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.llm.llm_service import interpret_search_query
 from api_service.services.tmdb.tmdb_client import TMDbClient
-from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
 logger = LoggerManager.get_logger("AiSearchService")
 
-# Maximum number of results from TMDB discover when used as fallback/supplement
-_DISCOVER_MAX = 10
 # Maximum total results returned to the caller
 _RESULTS_MAX = 12
 
@@ -25,12 +22,11 @@ class AiSearchService:
 
     Flow:
     1. Fetch viewing history from the configured media server (Jellyfin / Plex).
-    2. Send query + history to the LLM to obtain structured discover params and
-       a ranked list of specific title suggestions.
-    3. In parallel: run TMDB Discover with the extracted params AND resolve each
-       suggested title via TMDB search.
-    4. Merge, deduplicate, apply rating filters, and exclude already-watched titles.
-    5. Return results sorted with AI suggestions first, followed by discover results.
+    2. Send query + history to the LLM to obtain a ranked list of specific title
+       suggestions (plus discover_params used for the interpretation bar).
+    3. Resolve each suggested title on TMDB in parallel.
+    4. Apply rating filters, exclude already-watched/requested titles, deduplicate.
+    5. Return AI-curated results only — no generic Discover fallback.
     """
 
     def __init__(self):
@@ -65,20 +61,16 @@ class AiSearchService:
             tv_task = self._search_single(query, "tv", user_ids, max_results, use_history, exclude_watched)
             movie_res, tv_res = await asyncio.gather(movie_task, tv_task)
 
-            # Interleave: AI movie, AI tv, discover movie, discover tv …
-            ai_movies = [r for r in movie_res["results"] if r.get("source") == "ai_suggestion"]
-            ai_tv = [r for r in tv_res["results"] if r.get("source") == "ai_suggestion"]
-            disc_movies = [r for r in movie_res["results"] if r.get("source") == "discover"]
-            disc_tv = [r for r in tv_res["results"] if r.get("source") == "discover"]
+            # Interleave: AI movie, AI tv, …
+            ai_movies = movie_res["results"]
+            ai_tv = tv_res["results"]
 
             merged: List[Dict] = []
             for pair in zip(ai_movies, ai_tv):
                 merged.extend(pair)
-            for pair in zip(disc_movies, disc_tv):
-                merged.extend(pair)
 
-            # Append leftovers
-            for lst in (ai_movies, ai_tv, disc_movies, disc_tv):
+            # Append leftovers (when one list is longer than the other)
+            for lst in (ai_movies, ai_tv):
                 for item in lst:
                     if item not in merged:
                         merged.append(item)
@@ -121,35 +113,34 @@ class AiSearchService:
             for item in history
         }
 
-        # 2. LLM interpretation
-        interpretation = interpret_search_query(query, history, media_type)
+        # 2. Fetch already-requested TMDB IDs to exclude from results (best-effort)
+        already_requested: set = set()
+        try:
+            from api_service.db.database_manager import DatabaseManager  # local import avoids circular deps
+            already_requested = DatabaseManager().get_requested_tmdb_ids()
+        except Exception as exc:
+            logger.warning("Could not fetch already-requested IDs: %s", exc)
+
+        # 3. LLM interpretation — request enough suggestions to fill max_results after
+        # filtering; ask for slightly more than needed to absorb TMDB lookup misses.
+        llm_suggestions_count = max(max_results, 12)
+        interpretation = interpret_search_query(
+            query, history, media_type, max_suggestions=llm_suggestions_count
+        )
         discover_params = interpretation.get("discover_params", {})
         suggested_titles = interpretation.get("suggested_titles", [])
 
-        # 3. Build TMDb clients from config
+        # 4. Build TMDb client from config
         tmdb_client = self._make_tmdb_client()
-        tmdb_api_key = self.config.get("TMDB_API_KEY", "")
-        discover_client = TMDbDiscover(api_key=tmdb_api_key)
 
-        # 4. Convert genre names → IDs for discover
-        tmdb_filters = await self._build_discover_filters(
-            discover_params, media_type, discover_client
-        )
-
-        # 5. Run discover + title searches in parallel
-        discover_task = self._run_discover(
-            media_type, tmdb_filters, discover_client, _DISCOVER_MAX
-        )
+        # 5. Resolve each suggested title on TMDB in parallel
         title_tasks = [
             self._resolve_suggested_title(t, media_type, tmdb_client)
             for t in suggested_titles
         ]
-        results_bundle = await asyncio.gather(discover_task, *title_tasks)
+        title_results: List[Optional[Dict]] = list(await asyncio.gather(*title_tasks))
 
-        discover_results: List[Dict] = results_bundle[0]
-        title_results: List[Optional[Dict]] = list(results_bundle[1:])
-
-        # 6. Build AI-suggestion items (with rationale), then filter & dedup
+        # 6. Build result list: AI suggestions only, filtered & deduped
         seen_ids: set = set()
         final: List[Dict] = []
 
@@ -158,6 +149,8 @@ class AiSearchService:
                 continue
             item_id = tmdb_item.get("id")
             if not item_id or item_id in seen_ids:
+                continue
+            if str(item_id) in already_requested:
                 continue
             if exclude_watched and self._is_watched(tmdb_item, watched_titles):
                 continue
@@ -169,39 +162,11 @@ class AiSearchService:
             tmdb_item["media_type"] = media_type
             final.append(tmdb_item)
 
-        for item in discover_results:
-            item_id = item.get("id")
-            if not item_id or item_id in seen_ids:
-                continue
-            if exclude_watched and self._is_watched(item, watched_titles):
-                continue
-            seen_ids.add(item_id)
-            item["rationale"] = ""
-            item["source"] = "discover"
-            item["media_type"] = media_type
-            final.append(item)
-
         return {
             "results": final[:max_results],
             "query_interpretation": discover_params,
             "total": len(final[:max_results]),
         }
-
-    async def _run_discover(
-        self,
-        media_type: str,
-        filters: Dict,
-        client: TMDbDiscover,
-        max_results: int,
-    ) -> List[Dict]:
-        """Run TMDbDiscover for the given media type and filter dict."""
-        try:
-            if media_type == "movie":
-                return await client.discover_movies(filters, max_results)
-            return await client.discover_tv(filters, max_results)
-        except Exception as exc:
-            logger.warning("TMDB discover failed: %s", exc)
-            return []
 
     async def _resolve_suggested_title(
         self, suggestion: Dict, media_type: str, tmdb_client: TMDbClient
@@ -220,52 +185,6 @@ class AiSearchService:
         except Exception as exc:
             logger.warning("TMDB search failed for '%s': %s", title, exc)
             return None
-
-    async def _build_discover_filters(
-        self,
-        discover_params: Dict,
-        media_type: str,
-        discover_client: TMDbDiscover,
-    ) -> Dict:
-        """Convert LLM discover_params (genre names, year range, etc.) to TMDB filter dict."""
-        filters: Dict[str, Any] = {}
-
-        genre_names: List[str] = discover_params.get("genres") or []
-        if genre_names:
-            try:
-                all_genres = await discover_client.get_genres(media_type)
-                name_to_id = {g["name"].lower(): g["id"] for g in all_genres}
-                genre_ids = [
-                    name_to_id[name.lower()]
-                    for name in genre_names
-                    if name.lower() in name_to_id
-                ]
-                if genre_ids:
-                    filters["with_genres"] = ",".join(str(g) for g in genre_ids)
-            except Exception as exc:
-                logger.warning("Could not resolve genre names to IDs: %s", exc)
-
-        year_from = discover_params.get("year_from")
-        year_to = discover_params.get("year_to")
-        if year_from:
-            if media_type == "movie":
-                filters["primary_release_date.gte"] = f"{year_from}-01-01"
-            else:
-                filters["first_air_date.gte"] = f"{year_from}-01-01"
-        if year_to:
-            if media_type == "movie":
-                filters["primary_release_date.lte"] = f"{year_to}-12-31"
-            else:
-                filters["first_air_date.lte"] = f"{year_to}-12-31"
-
-        lang = discover_params.get("original_language")
-        if lang:
-            filters["with_original_language"] = lang
-
-        sort_by = discover_params.get("sort_by", "popularity.desc")
-        filters["sort_by"] = sort_by
-
-        return filters
 
     async def _get_history(self, user_ids: Optional[List]) -> List[Dict]:
         """Fetch and normalise the user's viewing history from Jellyfin or Plex.
