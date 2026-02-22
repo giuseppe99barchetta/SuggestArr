@@ -121,7 +121,7 @@ class TMDbClient:
         Fetches a single page of recommendations from TMDb API.
         """
         url = f"{self.tmdb_api_url}/{content_type}/{content_id}/recommendations?api_key={self.api_key}&page={page}"
-        self.logger.debug("Fetching data from URL: %s", url)
+        self.logger.debug("Fetching data from URL: %s", url.replace(self.api_key, "***"))
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
@@ -131,7 +131,7 @@ class TMDbClient:
                     else:
                         self.logger.error("Error retrieving %s recommendations: %d", content_type, response.status)
         except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while requesting %s recommendations: %s", content_type, str(e))
+            self.logger.error("An error occurred while requesting %s recommendations: %s", content_type, str(e).replace(self.api_key, "***"))
         return None
     
     async def get_metadata(self, tmdb_id, content_type):
@@ -172,7 +172,7 @@ class TMDbClient:
             return metadata
 
         except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while fetching metadata for TMDb ID %s: %s", tmdb_id, str(e))
+            self.logger.error("An error occurred while fetching metadata for TMDb ID %s: %s", tmdb_id, str(e).replace(self.api_key, "***"))
         
         return None
 
@@ -298,7 +298,7 @@ class TMDbClient:
                                             content_type, content_id, response.status)
         except aiohttp.ClientError as e:
             self.logger.warning("Error fetching details for %s ID %s: %s",
-                                content_type, content_id, str(e))
+                                content_type, content_id, str(e).replace(self.api_key, "***"))
         return {}
 
     async def _get_tv_imdb_id(self, tv_id):
@@ -320,7 +320,7 @@ class TMDbClient:
                         self.logger.warning("Failed to fetch external IDs for TV ID %s: HTTP %d",
                                             tv_id, response.status)
         except aiohttp.ClientError as e:
-            self.logger.warning("Error fetching external IDs for TV ID %s: %s", tv_id, str(e))
+            self.logger.warning("Error fetching external IDs for TV ID %s: %s", tv_id, str(e).replace(self.api_key, "***"))
         return None
 
     def _apply_imdb_filter(self, imdb_data, item, content_type):
@@ -422,7 +422,7 @@ class TMDbClient:
                     else:
                         self.logger.error("Error converting TVDb ID to TMDb ID: %d", response.status)
         except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while converting TVDb ID: %s", str(e))
+            self.logger.error("An error occurred while converting TVDb ID: %s", str(e).replace(self.api_key, "***"))
 
         return None
     
@@ -461,7 +461,7 @@ class TMDbClient:
                     else:
                         self.logger.error("Failed to retrieve watch providers for content ID %s: %d", content_id, response.status)
         except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while fetching watch providers: %s", str(e))
+            self.logger.error("An error occurred while fetching watch providers: %s", str(e).replace(self.api_key, "***"))
 
         return False, None
 
@@ -515,6 +515,6 @@ class TMDbClient:
                     else:
                         self.logger.error("Error searching TMDb: %d", response.status)
         except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while searching TMDb: %s", str(e))
+            self.logger.error("An error occurred while searching TMDb: %s", str(e).replace(self.api_key, "***"))
         return []
 

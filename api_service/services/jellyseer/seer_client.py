@@ -95,8 +95,7 @@ class SeerClient:
         self.logger.debug("Logging in to %s", login_url)
         async with aiohttp.ClientSession() as session:
             try:
-                login_data = {"email": self.username, "password": self.password}
-                async with session.post(login_url, json=login_data, timeout=REQUEST_TIMEOUT) as response:
+                async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=REQUEST_TIMEOUT) as response:
                     self.logger.debug("Login response status: %d", response.status)
                     if response.status == 200 and 'connect.sid' in response.cookies:
                         self.session_token = response.cookies['connect.sid'].value
