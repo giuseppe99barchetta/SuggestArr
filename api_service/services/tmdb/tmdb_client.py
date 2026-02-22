@@ -94,7 +94,7 @@ class TMDbClient:
                             imdb_data = await self.omdb_client.get_rating(imdb_id)
                             if not self._apply_imdb_filter(imdb_data, item, content_type):
                                 continue
-                        elif self.include_no_ratings:
+                        elif not self.include_no_ratings:
                             self._log_exclusion_reason(item, "no IMDB ID found", content_type)
                             continue
 
@@ -336,7 +336,7 @@ class TMDbClient:
             bool: True if the item passes IMDB filters, False if it should be excluded.
         """
         if imdb_data is None:
-            if self.include_no_ratings:
+            if not self.include_no_ratings:
                 self._log_exclusion_reason(item, "no IMDB rating data available", content_type)
                 return False
             return True
