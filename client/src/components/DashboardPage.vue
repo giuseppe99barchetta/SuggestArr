@@ -1,14 +1,21 @@
 <template>
-  <div class="settings-container">
+  <div class="settings-container" :class="{ 'static-bg-active': config.ENABLE_STATIC_BACKGROUND }">
     <div 
+      v-if="!config.ENABLE_STATIC_BACKGROUND"
       class="background-layer current-bg" 
       :style="{ backgroundImage: 'url(' + currentBackgroundUrl + ')' }"
       :class="{ 'fade-out': isTransitioning }"
     ></div>
     <div 
+      v-if="!config.ENABLE_STATIC_BACKGROUND"
       class="background-layer next-bg" 
       :style="{ backgroundImage: 'url(' + nextBackgroundUrl + ')' }"
       :class="{ 'fade-in': isTransitioning }"
+    ></div>
+    <div
+      v-if="config.ENABLE_STATIC_BACKGROUND"
+      class="background-layer static-bg"
+      :style="{ backgroundColor: config.STATIC_BACKGROUND_COLOR }"
     ></div>
     <div class="settings-content">
       <!-- Header -->
@@ -382,6 +389,17 @@ export default {
         // Handle background transition state if needed
       }
     },
+    'config.ENABLE_STATIC_BACKGROUND': {
+      handler(newValue) {
+        if (newValue) {
+          this.stopBackgroundImageRotation();
+        } else if (this.config.TMDB_API_KEY) {
+          this.startBackgroundImageRotation(this.config.TMDB_API_KEY);
+        } else {
+          this.startDefaultImageRotation();
+        }
+      }
+    },
     'config.ENABLE_VISUAL_EFFECTS': {
       immediate: true,
       handler(newValue) {
@@ -399,7 +417,7 @@ export default {
       
       this.loadRequestCount();
       
-      if (this.config.TMDB_API_KEY) {
+      if (!this.config.ENABLE_STATIC_BACKGROUND && this.config.TMDB_API_KEY) {
         this.startBackgroundImageRotation(this.config.TMDB_API_KEY);
       }
     } catch (error) {

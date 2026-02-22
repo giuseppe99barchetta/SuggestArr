@@ -1,14 +1,21 @@
 <template>
-    <div class="request-container">
+    <div class="request-container" :class="{ 'static-bg-active': config.ENABLE_STATIC_BACKGROUND }">
       <div 
+        v-if="!config.ENABLE_STATIC_BACKGROUND"
         class="background-layer current-bg" 
         :style="{ backgroundImage: 'url(' + currentBackgroundUrl + ')' }"
         :class="{ 'fade-out': isTransitioning }"
       ></div>
       <div 
+        v-if="!config.ENABLE_STATIC_BACKGROUND"
         class="background-layer next-bg" 
         :style="{ backgroundImage: 'url(' + nextBackgroundUrl + ')' }"
         :class="{ 'fade-in': isTransitioning }"
+      ></div>
+      <div
+        v-if="config.ENABLE_STATIC_BACKGROUND"
+        class="background-layer static-bg"
+        :style="{ backgroundColor: config.STATIC_BACKGROUND_COLOR }"
       ></div>
       <div class="background-overlay"></div>
       <div class="request-content">
@@ -494,6 +501,7 @@ export default {
       defaultImages: ["/images/default1.jpg", "/images/default2.jpg", "/images/default3.jpg"],
       currentDefaultImageIndex: 0,
       tmdbApiKey: this.$route.query.tmdbApiKey,
+      config: {},
       sources: [],
       viewMode: 'all-requests',
       searchQuery: "",
@@ -876,6 +884,7 @@ export default {
     if (savedConfig) {
       try {
         const config = JSON.parse(savedConfig);
+        this.config = config || {};
         this.tmdbApiKey = config.TMDB_API_KEY || null;
       } catch (e) {
         console.error('❌ Failed to parse saved config:', e);
@@ -883,13 +892,14 @@ export default {
     }
 
     this.$nextTick(() => {
-      if (!this.tmdbApiKey) {
+      if (this.config.ENABLE_STATIC_BACKGROUND) {
+        // do not start rotation
+      } else if (!this.tmdbApiKey) {
         console.log('ℹ️ No TMDB API key provided, using default images');
         this.startDefaultImageRotation();
       } else {
         this.startBackgroundImageRotation(this.tmdbApiKey);
       }
-
     });
 
     setTimeout(() => {
