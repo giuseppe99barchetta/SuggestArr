@@ -124,7 +124,7 @@ class AiSearchService:
         # 3. LLM interpretation — request enough suggestions to fill max_results after
         # filtering; ask for slightly more than needed to absorb TMDB lookup misses.
         llm_suggestions_count = max(max_results, 12)
-        interpretation = interpret_search_query(
+        interpretation = await interpret_search_query(
             query, history, media_type, max_suggestions=llm_suggestions_count
         )
         discover_params = interpretation.get("discover_params", {})

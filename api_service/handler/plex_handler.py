@@ -133,7 +133,7 @@ class PlexHandler:
 
         self.logger.info(f"Delegating {max_results} {item_type} recommendations to LLM service.")
 
-        llm_recommendations = get_recommendations_from_history(history_items, max_results, item_type)
+        llm_recommendations = await get_recommendations_from_history(history_items, max_results, item_type)
 
         if not llm_recommendations:
             self.logger.warning("LLM returned no recommendations.")

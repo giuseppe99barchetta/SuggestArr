@@ -136,7 +136,7 @@ class JellyfinHandler:
 
         self.logger.info(f"Delegating {max_results} {item_type} recommendations to LLM service for user {user['name']}.")
 
-        llm_recommendations = get_recommendations_from_history(history_items, max_results, item_type)
+        llm_recommendations = await get_recommendations_from_history(history_items, max_results, item_type)
 
         if not llm_recommendations:
             self.logger.warning("LLM returned no recommendations.")

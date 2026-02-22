@@ -1,6 +1,6 @@
 import json
 import re
-from openai import OpenAI
+from openai import AsyncOpenAI
 from typing import List, Dict, Optional, Any
 from api_service.config.logger_manager import LoggerManager
 from api_service.config.config import load_env_vars
@@ -12,7 +12,7 @@ logger = LoggerManager.get_logger("LLMService")
 MAX_HISTORY_ITEMS = 20
 
 
-def get_llm_client() -> Optional[OpenAI]:
+def get_llm_client() -> Optional[AsyncOpenAI]:
     """Initialize and return the OpenAI client if configured."""
     config = load_env_vars()
     api_key = config.get('OPENAI_API_KEY')
@@ -32,7 +32,7 @@ def get_llm_client() -> Optional[OpenAI]:
         if base_url:
             client_kwargs["base_url"] = base_url
 
-        client = OpenAI(**client_kwargs)
+        client = AsyncOpenAI(**client_kwargs)
         return client
     except Exception as e:
         logger.error(f"Failed to initialize OpenAI client: {str(e)}")
@@ -78,7 +78,7 @@ def _is_duplicate_of_history(rec_title: str, watched_titles: set) -> bool:
     return False
 
 
-def get_recommendations_from_history(history_items: List[Dict], max_results: int = 5, item_type: str = "movie") -> List[Dict]:
+async def get_recommendations_from_history(history_items: List[Dict], max_results: int = 5, item_type: str = "movie") -> List[Dict]:
     """Generate recommendations based on a user's watch history using an LLM.
 
     :param history_items: List of dicts with 'title' and ideally 'year'.
@@ -142,7 +142,7 @@ def get_recommendations_from_history(history_items: List[Dict], max_results: int
 
     try:
         logger.info(f"Sending LLM request to OpenAI ({model}) for {len(history_items)} unique {list_type} history items.")
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": "You are a specialized system that only outputs raw JSON arrays of media recommendations."},
@@ -218,7 +218,7 @@ def get_recommendations_from_history(history_items: List[Dict], max_results: int
         return []
 
 
-def interpret_search_query(
+async def interpret_search_query(
     query: str,
     history_items: List[Dict],
     media_type: str = "movie",
@@ -306,7 +306,7 @@ Example format:
         logger.info(
             "Sending AI search query to LLM (%s): '%s' (media_type=%s)", model, query[:80], media_type
         )
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=model,
             messages=[
                 {
