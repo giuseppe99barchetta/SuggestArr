@@ -57,6 +57,17 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
+.static-bg-active .background-overlay {
+  display: none;
+}
+
+.static-bg-active .request-content {
+  background: transparent;
+  backdrop-filter: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 /* Header */
 .request-header {
   margin-bottom: 2rem;
@@ -471,6 +482,7 @@
   0% {
     transform: rotate(0deg);
   }
+
   100% {
     transform: rotate(360deg);
   }
@@ -500,7 +512,7 @@
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  margin: auto; 
+  margin: auto;
 }
 
 .modal-close {
@@ -537,7 +549,8 @@
 
 @media (min-width: 768px) {
   .modal-layout {
-    flex-direction: row; /* Affianca gli elementi */
+    flex-direction: row;
+    /* Affianca gli elementi */
     gap: 3rem;
     padding: 3rem;
   }
@@ -915,11 +928,9 @@
 
 .filter-select {
   padding: 0.875rem 3rem 0.875rem 1.125rem;
-  background: linear-gradient(
-    135deg,
-    rgba(28, 28, 29, 0.95) 0%,
-    rgba(30, 30, 31, 0.98) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(28, 28, 29, 0.95) 0%,
+      rgba(30, 30, 31, 0.98) 100%);
   backdrop-filter: blur(12px) saturate(120%);
   border: 1px solid rgba(229, 231, 235, 0.1);
   border-radius: 12px;
@@ -938,11 +949,9 @@
 }
 
 .filter-select:hover {
-  background: linear-gradient(
-    135deg,
-    rgba(30, 30, 31, 0.95) 0%,
-    rgba(32, 32, 33, 0.98) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(30, 30, 31, 0.95) 0%,
+      rgba(32, 32, 33, 0.98) 100%);
   border-color: rgba(229, 231, 235, 0.2);
   transform: translateY(-1px);
 }
@@ -955,21 +964,17 @@
 
 /* Option styling for dropdown */
 .filter-select option {
-  background: linear-gradient(
-    135deg,
-    rgba(28, 28, 29, 0.98) 0%,
-    rgba(30, 30, 31, 0.99) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(28, 28, 29, 0.98) 0%,
+      rgba(30, 30, 31, 0.99) 100%);
   color: #f3f4f6;
   padding: 0.875rem 1rem;
 }
 
 .filter-select option:hover {
-  background: linear-gradient(
-    135deg,
-    rgba(107, 114, 128, 0.4) 0%,
-    rgba(75, 85, 99, 0.3) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(107, 114, 128, 0.4) 0%,
+      rgba(75, 85, 99, 0.3) 100%);
 }
 
 .clear-filters-btn {
@@ -977,11 +982,9 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.875rem 1.125rem;
-  background: linear-gradient(
-    135deg,
-    rgba(239, 68, 68, 0.15) 0%,
-    rgba(31, 41, 55, 0.7) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(239, 68, 68, 0.15) 0%,
+      rgba(31, 41, 55, 0.7) 100%);
   backdrop-filter: blur(12px) saturate(120%);
   border: 1px solid rgba(239, 68, 68, 0.4);
   border-radius: 12px;
@@ -996,11 +999,9 @@
 }
 
 .clear-filters-btn:hover {
-  background: linear-gradient(
-    135deg,
-    rgba(239, 68, 68, 0.25) 0%,
-    rgba(31, 41, 55, 0.8) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(239, 68, 68, 0.25) 0%,
+      rgba(31, 41, 55, 0.8) 100%);
   border-color: rgba(239, 68, 68, 0.6);
   transform: translateY(-1px);
 }
@@ -1042,12 +1043,14 @@
 
 .search-input {
   width: 100%;
-  padding: 0.625rem 3rem 0.625rem 3rem; /* 👈 Allineato ai filtri */
+  padding: 0.625rem 3rem 0.625rem 3rem;
+  /* 👈 Allineato ai filtri */
   background-color: var(--color-bg-interactive);
   border: 2px solid var(--color-border-light);
   border-radius: var(--border-radius-md);
   color: var(--color-text-primary);
-  font-size: 0.875rem; /* 👈 Allineato ai filtri */
+  font-size: 0.875rem;
+  /* 👈 Allineato ai filtri */
   transition: var(--transition-base);
 }
 

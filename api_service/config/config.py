@@ -120,6 +120,8 @@ def get_default_values():
         'ENABLE_DEBUG_MODE': lambda: False,
         'ENABLE_PERFORMANCE_MONITORING': lambda: False,
         'ENABLE_VISUAL_EFFECTS': lambda: True,
+        'ENABLE_STATIC_BACKGROUND': lambda: False,
+        'STATIC_BACKGROUND_COLOR': lambda: '#2E3440',
         'OMDB_API_KEY': lambda: '',
         'FILTER_RATING_SOURCE': lambda: 'tmdb',
         'FILTER_IMDB_THRESHOLD': lambda: None,
@@ -245,6 +247,7 @@ def get_config_sections():
         'advanced': ['SELECTED_USERS', 'LOG_LEVEL', 'ENABLE_BETA_FEATURES',
                      'ENABLE_ADVANCED_ALGORITHM', 'ENABLE_SOCIAL_FEATURES',
                      'ENABLE_DEBUG_MODE', 'ENABLE_PERFORMANCE_MONITORING', 'ENABLE_VISUAL_EFFECTS',
+                     'ENABLE_STATIC_BACKGROUND', 'STATIC_BACKGROUND_COLOR',
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
                      'ENABLE_API_CACHING', 'OPENAI_API_KEY', 'OPENAI_BASE_URL',
                      'LLM_MODEL']

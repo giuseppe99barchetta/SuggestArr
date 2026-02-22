@@ -320,15 +320,53 @@
         <div class="form-group">
           <label class="checkbox-label">
             <input
-              v-model="localConfig.ENABLE_VISUAL_EFFECTS"
+              :checked="!localConfig.ENABLE_VISUAL_EFFECTS"
+              @change="localConfig.ENABLE_VISUAL_EFFECTS = !$event.target.checked"
               type="checkbox"
               :disabled="isLoading"
             />
-            <span class="checkbox-text">Enable visual effects (blur)</span>
+            <span class="checkbox-text">Disable visual effects (blur)</span>
           </label>
           <small class="form-help">
-            Disable to improve UI performance and frame rates by turning off heavy CSS background blurs.
+            Check this box to improve UI performance and frame rates by turning off heavy CSS background blurs.
           </small>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input
+              v-model="localConfig.ENABLE_STATIC_BACKGROUND"
+              type="checkbox"
+              :disabled="isLoading"
+            />
+            <span class="checkbox-text">Enable static colored background</span>
+          </label>
+          <small class="form-help">
+            Override the app's default rotating background pictures with a static color.
+          </small>
+        </div>
+
+        <div class="form-group" v-if="localConfig.ENABLE_STATIC_BACKGROUND">
+          <label for="staticBackgroundColor">Static Background Color (Hex)</label>
+          <div style="display: flex; gap: 10px; align-items: center; margin-top: 0.5rem;">
+            <input
+              id="staticBackgroundColor"
+              v-model="localConfig.STATIC_BACKGROUND_COLOR"
+              type="color"
+              class="form-control"
+              style="width: 50px; padding: 0.2rem; height: 38px; cursor: pointer;"
+              :disabled="isLoading"
+            />
+            <input
+              v-model="localConfig.STATIC_BACKGROUND_COLOR"
+              type="text"
+              placeholder="#2E3440"
+              class="form-control"
+              pattern="^#[0-9A-Fa-f]{6}$"
+              title="Must be a valid hex color code (e.g. #FF0000)"
+              :disabled="isLoading"
+            />
+          </div>
         </div>
       </div>
 
@@ -538,6 +576,8 @@ export default {
           LLM_MODEL: 'gpt-4o-mini',
           ENABLE_SOCIAL_FEATURES: false,
           ENABLE_VISUAL_EFFECTS: true,
+          ENABLE_STATIC_BACKGROUND: false,
+          STATIC_BACKGROUND_COLOR: '#2E3440',
         };
 
         Object.keys(advancedDefaults).forEach(key => {
@@ -682,6 +722,8 @@ export default {
             LLM_MODEL: this.localConfig.LLM_MODEL || 'gpt-4o-mini',
             ENABLE_SOCIAL_FEATURES: this.localConfig.ENABLE_SOCIAL_FEATURES || false,
             ENABLE_VISUAL_EFFECTS: this.localConfig.ENABLE_VISUAL_EFFECTS !== false,
+            ENABLE_STATIC_BACKGROUND: this.localConfig.ENABLE_STATIC_BACKGROUND || false,
+            STATIC_BACKGROUND_COLOR: this.localConfig.STATIC_BACKGROUND_COLOR || '#2E3440',
           },
         });
 
@@ -730,6 +772,8 @@ export default {
         LLM_MODEL: 'gpt-4o-mini',
         ENABLE_SOCIAL_FEATURES: false,
         ENABLE_VISUAL_EFFECTS: true,
+        ENABLE_STATIC_BACKGROUND: false,
+        STATIC_BACKGROUND_COLOR: '#2E3440',
       };
 
       if (confirm('Are you sure you want to reset all advanced settings to their defaults?')) {

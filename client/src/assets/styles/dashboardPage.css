@@ -55,6 +55,12 @@
   border: 1px solid var(--color-border-light);
 }
 
+.static-bg-active .settings-content {
+  background: transparent;
+  backdrop-filter: none;
+  border-color: transparent;
+}
+
 /* Header */
 .settings-header {
   margin-bottom: 2rem;
@@ -211,8 +217,15 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .tab-button.active .tab-badge {
@@ -363,8 +376,13 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* Small button size - matches input height */
@@ -432,8 +450,13 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .warning-icon {
@@ -844,7 +867,7 @@
     transform: scaleY(0.8) translateY(-10px);
   }
 
-.dropdown-slide-leave-to {
+  .dropdown-slide-leave-to {
     opacity: 0;
     transform: scaleY(0.8) translateY(-10px);
   }
@@ -874,13 +897,17 @@
 .wizard-screen {
   display: flex;
   flex-direction: column;
-  justify-content: center; /* Centra verticalmente */
-  align-items: stretch;    /* Forza i figli a occupare tutta la larghezza */
-  
+  justify-content: center;
+  /* Centra verticalmente */
+  align-items: stretch;
+  /* Forza i figli a occupare tutta la larghezza */
+
   min-height: 60vh;
   max-width: 1200px;
-  margin: 0 auto;          /* Centra il contenitore nella pagina */
-  width: 100%;             /* Assicura che provi a prendersi tutto lo spazio */
+  margin: 0 auto;
+  /* Centra il contenitore nella pagina */
+  width: 100%;
+  /* Assicura che provi a prendersi tutto lo spazio */
 }
 
 .wizard-header {
