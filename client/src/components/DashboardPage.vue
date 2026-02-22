@@ -291,7 +291,6 @@ import { useVersionCheck } from '@/composables/useVersionCheck';
 import '@/assets/styles/dashboardPage.css';
 
 // Import tab components
-import SettingsGeneral from './settings/SettingsGeneral.vue';
 import SettingsServices from './settings/SettingsServices.vue';
 import SettingsDatabase from './settings/SettingsDatabase.vue';
 import SettingsAdvanced from './settings/SettingsAdvanced.vue';
@@ -304,7 +303,6 @@ export default {
   name: 'SettingsPage',
   components: {
     Footer,
-    SettingsGeneral,
     SettingsServices,
     SettingsDatabase,
     SettingsAdvanced,
@@ -356,7 +354,6 @@ export default {
       tabs: [
         { id: 'requests', name: 'Requests', icon: 'fas fa-paper-plane' },
         { id: 'ai_search', name: 'AI Search', icon: 'fas fa-magic', isBeta: true },
-        { id: 'general', name: 'General', icon: 'fas fa-cog' },
         { id: 'services', name: 'Services', icon: 'fas fa-plug' },
         { id: 'jobs', name: 'Jobs', icon: 'fas fa-briefcase' },
         { id: 'database', name: 'Database', icon: 'fas fa-database' },
@@ -369,7 +366,6 @@ export default {
     activeTabComponent() {
       const componentMap = {
         requests: 'SettingsRequests',
-        general: 'SettingsGeneral',
         services: 'SettingsServices',
         jobs: 'SettingsJobs',
         database: 'SettingsDatabase',

@@ -457,9 +457,27 @@
           <small class="form-help">
             Cache API responses to reduce external service load
           </small>
+       </div>
+      </div>
+
+      <div class="settings-group">
+        <h3>
+          <i class="fas fa-gear"></i>
+          Application
+        </h3>
+
+        <div class="form-group">
+          <label for="subpath">Subpath</label>
+          <input id="subpath" v-model="localConfig.SUBPATH" type="text" placeholder="/suggestarr" class="form-control"
+            :disabled="isLoading" />
+          <small class="form-help">
+            Subpath for running SuggestArr under a subdirectory (e.g., "/suggestarr"). Leave empty for root.
+          </small>
         </div>
       </div>
     </div>
+
+
 
     <!-- Save Button -->
     <div class="settings-actions">
@@ -702,6 +720,7 @@ export default {
             ENABLE_VISUAL_EFFECTS: this.localConfig.ENABLE_VISUAL_EFFECTS !== false,
             ENABLE_STATIC_BACKGROUND: this.localConfig.ENABLE_STATIC_BACKGROUND || false,
             STATIC_BACKGROUND_COLOR: this.localConfig.STATIC_BACKGROUND_COLOR || '#2E3440',
+            SUBPATH: this.localConfig.SUBPATH || null,
           },
         });
 
@@ -752,6 +771,7 @@ export default {
         ENABLE_VISUAL_EFFECTS: true,
         ENABLE_STATIC_BACKGROUND: false,
         STATIC_BACKGROUND_COLOR: '#2E3440',
+        SUBPATH: null,
       };
 
       if (confirm('Are you sure you want to reset all advanced settings to their defaults?')) {

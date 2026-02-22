@@ -228,8 +228,6 @@ def get_config_sections():
     Returns a dictionary of configuration sections and their associated keys.
     """
     return {
-        'general': ['MAX_SIMILAR_MOVIE', 'MAX_SIMILAR_TV', 'CRON_TIMES', 'MAX_CONTENT_CHECKS',
-                   'SEARCH_SIZE', 'SUBPATH', 'LOG_LEVEL'],
         'services': ['TMDB_API_KEY', 'OMDB_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL',
                     'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
                     'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_USER_PSW',
@@ -250,7 +248,7 @@ def get_config_sections():
                      'ENABLE_STATIC_BACKGROUND', 'STATIC_BACKGROUND_COLOR',
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
                      'ENABLE_API_CACHING', 'OPENAI_API_KEY', 'OPENAI_BASE_URL',
-                     'LLM_MODEL']
+                     'LLM_MODEL', 'SUBPATH']
     }
 
 def get_config_section(section_name):
@@ -294,7 +292,7 @@ def save_config_section(section_name, section_data):
             current_config[key] = section_data[key]
 
     # Special handling for setup completion
-    if section_name in ['general', 'services', 'database']:
+    if section_name in ['services', 'database']:
         # Check if essential setup is completed
         if is_setup_complete(current_config):
             current_config['SETUP_COMPLETED'] = True
