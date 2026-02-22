@@ -156,6 +156,41 @@ class RecommendationAutomation:
             filter_streaming_raw = self.env_vars.get('FILTER_STREAMING_SERVICES', [])
             filter_streaming_services = filter_streaming_raw if isinstance(filter_streaming_raw, list) else []
 
+        # Minimum runtime filter - job overrides global
+        filter_min_runtime = job_filters.get('min_runtime')
+        if filter_min_runtime is None:
+            filter_min_runtime = self.env_vars.get('FILTER_MIN_RUNTIME', None)
+
+        # IMDB / OMDb rating filter settings — job filter overrides global config
+        rating_source = job_filters.get('rating_source', self.env_vars.get('FILTER_RATING_SOURCE', 'tmdb'))
+
+        # imdb_rating_gte from job filter is 0–10 scale; TMDbClient expects 0–100
+        job_imdb_rating = job_filters.get('imdb_rating_gte')
+        if job_imdb_rating is not None:
+            imdb_threshold = int(float(job_imdb_rating) * 10)
+        else:
+            raw = self.env_vars.get('FILTER_IMDB_THRESHOLD')
+            imdb_threshold = int(raw) if raw is not None else None
+
+        job_imdb_min_votes = job_filters.get('imdb_min_votes')
+        imdb_min_votes = int(job_imdb_min_votes) if job_imdb_min_votes is not None \
+            else (int(self.env_vars.get('FILTER_IMDB_MIN_VOTES'))
+                  if self.env_vars.get('FILTER_IMDB_MIN_VOTES') is not None else None)
+
+        omdb_api_key = self.env_vars.get('OMDB_API_KEY', '')
+        omdb_client = None
+        if rating_source in ('imdb', 'both'):
+            if omdb_api_key:
+                from api_service.services.omdb.omdb_client import OmdbClient
+                omdb_client = OmdbClient(omdb_api_key)
+                self.logger.info("OmdbClient initialized for per-job IMDB filtering (source: %s)", rating_source)
+            else:
+                self.logger.warning(
+                    "Job '%s' has rating_source='%s' but OMDB_API_KEY is not configured. "
+                    "IMDB filtering will be skipped.",
+                    self.job_data.get('name', '?'), rating_source
+                )
+
         # LLM enhancement - job setting overrides global; verify LLM is actually configured
         job_use_llm = job_filters.get('use_llm', None)
         if job_use_llm:
@@ -195,7 +230,12 @@ class RecommendationAutomation:
             filter_language,
             filter_genre,
             filter_region_provider,
-            filter_streaming_services
+            filter_streaming_services,
+            filter_min_runtime,
+            rating_source=rating_source,
+            imdb_threshold=imdb_threshold,
+            imdb_min_votes=imdb_min_votes,
+            omdb_client=omdb_client,
         )
 
         # Determine which users to process

@@ -10,11 +10,19 @@ const RequestsPage = () => import('@/components/RequestsPage.vue');
 const ConfigWizard = () => import('@/components/ConfigWizard.vue');
 const DashboardPage = () => import('@/components/DashboardPage.vue');
 
-async function loadConfig() {
+function configureAxiosSubpath() {
+    const metaTag = document.querySelector('meta[name="suggestarr-subpath"]');
+    const subpath = metaTag ? (metaTag.getAttribute('content') || '') : '';
+
     if (process.env.NODE_ENV === 'development') {
-        axios.defaults.baseURL = 'http://localhost:5000';
+        axios.defaults.baseURL = 'http://localhost:5000' + subpath;
+    } else {
+        axios.defaults.baseURL = subpath || '/';
     }
-    
+    return subpath;
+}
+
+async function loadConfig() {
     try {
         const response = await axios.get('/api/config/fetch');
         localStorage.setItem('suggestarr_config', JSON.stringify(response.data));
@@ -35,7 +43,8 @@ async function checkSetupStatus() {
 }
 
 async function createAppRouter() {
-    const subpath = await loadConfig();
+    const subpath = configureAxiosSubpath();
+    await loadConfig();
     const setupStatus = await checkSetupStatus();
 
     const routes = [
@@ -121,7 +130,7 @@ export default createAppRouter().then(router => {
         icon: true,
         rtl: false,
     };
-    
+
     app.use(ToastPlugin, options);
     return router;
 }).catch(error => {

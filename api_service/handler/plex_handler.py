@@ -19,7 +19,7 @@ def to_ascii(value):
     return unicodedata.normalize('NFKD', value)
 
 class PlexHandler:
-    def __init__(self, plex_client: PlexClient, seer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None):
+    def __init__(self, plex_client: PlexClient, seer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -30,6 +30,7 @@ class PlexHandler:
         :param max_similar_tv: Max number of similar TV shows to request
         :param library_anime_map: Dict mapping library section ID to is_anime boolean
         :param use_llm: Override for LLM mode. If None, falls back to global ENABLE_ADVANCED_ALGORITHM setting.
+        :param request_delay: Seconds to wait between consecutive Jellyseerr requests (0 = concurrent).
         """
         self.plex_client = plex_client
         self.seer_client = seer_client
@@ -40,6 +41,7 @@ class PlexHandler:
         self.request_count = 0
         self.existing_content = plex_client.existing_content
         self.library_anime_map = library_anime_map or {}
+        self.request_delay = request_delay
 
         if use_llm is not None:
             self.use_llm = use_llm
@@ -272,7 +274,12 @@ class PlexHandler:
             # Add to tasks if it passes all checks
             tasks.append(self._request_media_and_log(media_type, media_to_send, source_tmdb_obj, is_anime))
 
-        await asyncio.gather(*tasks)
+        if self.request_delay > 0:
+            for task in tasks:
+                await task
+                await asyncio.sleep(self.request_delay)
+        else:
+            await asyncio.gather(*tasks)
 
     async def _request_media_and_log(self, media_type, media, source_tmdb_obj, is_anime=False):
         """Helper method to request media and log the result."""

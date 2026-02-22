@@ -6,6 +6,11 @@ export const testTmdbApi = (apiKey) => {
     return axios.get(tmdbApiUrl);
 };
 
+// Function to test the OMDb API key (IMDB ratings integration)
+export const testOmdbApi = (apiKey) => {
+    return axios.post('/api/omdb/test', { api_key: apiKey });
+};
+
 // Function to test Jellyfin configuration
 export const testJellyfinApi = (url, token) => {
     const jellyfinApiUrl = `${url}/Users`; // Endpoint to retrieve Jellyfin users

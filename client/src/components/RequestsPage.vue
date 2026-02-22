@@ -325,6 +325,12 @@
                   <span>Requested from: <strong>{{ selectedSource.source_title }}</strong></span>
                 </div>
 
+                <!-- Requested For (user) -->
+                <div v-if="selectedSource.user_name" class="source-link-modal">
+                  <i class="fas fa-user"></i>
+                  <span>Requested for: <strong>{{ selectedSource.user_name }}</strong></span>
+                </div>
+
                 <div class="modal-separator"></div>
 
                 <!-- LLM Rationale -->
@@ -354,8 +360,8 @@
                     Requested Media ({{ selectedSource.requests.length }})
                   </h3>
                   <div class="modal-requests-list">
-                    <div 
-                      v-for="request in selectedSource.requests" 
+                    <div
+                      v-for="request in selectedSource.requests"
                       :key="request.request_id"
                       class="modal-request-item"
                       @click="openModal(request)">
@@ -364,6 +370,10 @@
                         <p class="modal-request-date">
                           <i class="fas fa-clock"></i>
                           Requested on {{ formatDate(request.requested_at) }}
+                        </p>
+                        <p v-if="request.user_name" class="modal-request-date">
+                          <i class="fas fa-user"></i>
+                          {{ request.user_name }}
                         </p>
                       </div>
                       <button class="modal-request-btn">
@@ -678,6 +688,8 @@ export default {
             logo_path: request.logo_path,
             backdrop_path: request.backdrop_path,
             rationale: request.rationale,
+            user_id: request.user_id,
+            user_name: request.user_name,
           })),
         }));
 

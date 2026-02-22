@@ -89,8 +89,16 @@ class DiscoverAutomation:
         )
         await instance.seer_client.init()
 
+        # Initialize OmdbClient if API key is available (used for per-job IMDB filtering)
+        omdb_api_key = env_vars.get('OMDB_API_KEY', '')
+        omdb_client = None
+        if omdb_api_key:
+            from api_service.services.omdb.omdb_client import OmdbClient
+            omdb_client = OmdbClient(omdb_api_key)
+            instance.logger.debug("OmdbClient initialized for discover job IMDB filtering")
+
         # Initialize TMDb Discover client
-        instance.tmdb_discover = TMDbDiscover(env_vars['TMDB_API_KEY'])
+        instance.tmdb_discover = TMDbDiscover(env_vars['TMDB_API_KEY'], omdb_client=omdb_client)
 
         instance.logger.info("DiscoverAutomation initialized successfully")
         return instance

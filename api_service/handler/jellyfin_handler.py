@@ -8,7 +8,7 @@ from api_service.config.config import load_env_vars
 from api_service.services.llm.llm_service import get_recommendations_from_history
 
 class JellyfinHandler:
-    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None):
+    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client
@@ -20,6 +20,7 @@ class JellyfinHandler:
         :param selected_users: List of selected users
         :param library_anime_map: Dict mapping library name to is_anime boolean
         :param use_llm: Override for LLM mode. If None, falls back to global ENABLE_ADVANCED_ALGORITHM setting.
+        :param request_delay: Seconds to wait between consecutive Jellyseerr requests (0 = concurrent).
         """
         self.jellyfin_client = jellyfin_client
         self.jellyseer_client = jellyseer_client
@@ -32,6 +33,7 @@ class JellyfinHandler:
         self.existing_content = jellyfin_client.existing_content
         self.selected_users = selected_users
         self.library_anime_map = library_anime_map or {}
+        self.request_delay = request_delay
 
         if use_llm is not None:
             self.use_llm = use_llm
@@ -269,7 +271,12 @@ class JellyfinHandler:
             # Add to tasks if it passes all checks
             tasks.append(self._request_media_and_log(media_type, media, source_tmdb_obj, user, is_anime))
 
-        await asyncio.gather(*tasks)
+        if self.request_delay > 0:
+            for task in tasks:
+                await task
+                await asyncio.sleep(self.request_delay)
+        else:
+            await asyncio.gather(*tasks)
 
     async def _request_media_and_log(self, media_type, media, source_tmdb_obj, user, is_anime=False):
         """Helper method to request media and log the result."""

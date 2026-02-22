@@ -1,8 +1,32 @@
 <template>
   <div class="job-filters">
-    <!-- Rating Filter -->
+    <!-- Rating Source Selector -->
     <div class="form-group">
-      <label>Minimum Rating: {{ localFilters.vote_average_gte || 0 }}</label>
+      <label>Rating Source</label>
+      <div class="rating-source-options">
+        <label
+          v-for="option in ratingSourceOptions"
+          :key="option.value"
+          class="rating-source-option"
+          :class="{ active: localFilters.rating_source === option.value }"
+        >
+          <input
+            type="radio"
+            :value="option.value"
+            v-model="localFilters.rating_source"
+            class="rating-source-radio"
+          />
+          <div class="option-content">
+            <span class="option-label">{{ option.label }}</span>
+            <span class="option-desc">{{ option.description }}</span>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- TMDB Rating Filter (hidden when source is imdb-only) -->
+    <div v-if="localFilters.rating_source !== 'imdb'" class="form-group">
+      <label>{{ localFilters.rating_source === 'both' ? 'Minimum Rating (TMDB)' : 'Minimum Rating' }}: {{ localFilters.vote_average_gte || 0 }}</label>
       <input
         v-model.number="localFilters.vote_average_gte"
         type="range"
@@ -18,9 +42,9 @@
       </div>
     </div>
 
-    <!-- Vote Count Filter -->
-    <div class="form-group">
-      <label for="voteCount">Minimum Vote Count</label>
+    <!-- TMDB Vote Count Filter (hidden when source is imdb-only) -->
+    <div v-if="localFilters.rating_source !== 'imdb'" class="form-group">
+      <label for="voteCount">{{ localFilters.rating_source === 'both' ? 'Minimum Vote Count (TMDB)' : 'Minimum Vote Count' }}</label>
       <input
         id="voteCount"
         v-model.number="localFilters.vote_count_gte"
@@ -33,6 +57,49 @@
       <small class="form-help">Filter out content with too few votes</small>
     </div>
 
+    <!-- IMDB Rating Filter (shown when IMDB is part of rating source) -->
+    <div v-if="localFilters.rating_source !== 'tmdb'" class="form-group">
+      <label>IMDB Minimum Rating: {{ (localFilters.imdb_rating_gte || 0).toFixed(1) }}</label>
+      <input
+        v-model.number="localFilters.imdb_rating_gte"
+        type="range"
+        min="0"
+        max="10"
+        step="0.1"
+        class="form-range imdb-range"
+      />
+      <div class="range-labels">
+        <span>0</span>
+        <span>5</span>
+        <span>10</span>
+      </div>
+      <small class="form-help">
+        <i class="fas fa-star" style="color: #f5c518;"></i>
+        Filter by IMDB community rating — requires OMDb API key configured in Services
+      </small>
+    </div>
+
+    <!-- IMDB Vote Count Filter (shown when IMDB is part of rating source) -->
+    <div v-if="localFilters.rating_source !== 'tmdb'" class="form-group">
+      <label for="imdbVotes">IMDB Minimum Vote Count</label>
+      <input
+        id="imdbVotes"
+        v-model.number="localFilters.imdb_min_votes"
+        type="number"
+        min="0"
+        step="1000"
+        placeholder="e.g., 10000"
+        class="form-control"
+      />
+      <small class="form-help">Filter out content with too few IMDB votes (more votes = more reliable rating)</small>
+    </div>
+
+    <!-- "Both must pass" notice -->
+    <div v-if="localFilters.rating_source === 'both'" class="rating-both-notice">
+      <i class="fas fa-info-circle"></i>
+      Content must pass <strong>both</strong> TMDB and IMDB thresholds to be recommended.
+    </div>
+
     <!-- Include No Rating Toggle -->
     <div class="form-group">
       <label class="toggle-item inline">
@@ -40,9 +107,11 @@
           v-model="localFilters.include_no_rating"
           type="checkbox"
         />
-        <span class="toggle-label">Include content without rating</span>
+        <span class="toggle-label">
+          {{ localFilters.rating_source !== 'tmdb' ? 'Include content without IMDB rating' : 'Include content without rating' }}
+        </span>
       </label>
-      <small class="form-help">Also include content that doesn't have any votes yet</small>
+      <small class="form-help">Also include content that doesn't have any rating data yet</small>
     </div>
 
     <!-- Minimum Seasons Filter (TV only) -->
@@ -58,6 +127,21 @@
         class="form-range"
       />
       <small class="form-help">Only include TV shows with at least this many seasons</small>
+    </div>
+
+    <!-- Minimum Runtime Filter -->
+    <div class="form-group">
+      <label for="minRuntime">Minimum Runtime (minutes)</label>
+      <input
+        id="minRuntime"
+        v-model.number="localFilters.min_runtime"
+        type="number"
+        min="0"
+        step="1"
+        placeholder="e.g., 60"
+        class="form-control"
+      />
+      <small class="form-help">Exclude short content below this runtime — useful to filter out clips and shorts</small>
     </div>
 
     <!-- Release Date Filter -->
@@ -145,9 +229,26 @@ export default {
   emits: ['update:modelValue'],
   data() {
     return {
-      localFilters: { ...this.modelValue },
+      localFilters: { rating_source: 'tmdb', ...this.modelValue },
       genres: [],
       isUpdating: false,
+      ratingSourceOptions: [
+        {
+          value: 'tmdb',
+          label: 'TMDB Only',
+          description: 'Use TMDB ratings. No OMDb API key required.'
+        },
+        {
+          value: 'imdb',
+          label: 'IMDB Only',
+          description: 'Use IMDB ratings via OMDb API. Requires an OMDb API key in Services.'
+        },
+        {
+          value: 'both',
+          label: 'Both (stricter)',
+          description: 'Content must pass both TMDB and IMDB thresholds.'
+        }
+      ],
       languageOptions: [
         { value: '', label: 'Any Language' },
         { value: 'en', label: 'English' },
@@ -211,7 +312,7 @@ export default {
         const newStr = JSON.stringify(newVal);
         const localStr = JSON.stringify(this.localFilters);
         if (newStr !== localStr) {
-          this.localFilters = JSON.parse(newStr);
+          this.localFilters = { rating_source: 'tmdb', ...JSON.parse(newStr) };
         }
       },
       deep: true
@@ -527,6 +628,85 @@ input[type="date"] {
 .toggle-label {
   font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
+}
+
+/* Rating source selector */
+.rating-source-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rating-source-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-base);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.rating-source-option:hover {
+  border-color: var(--color-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.rating-source-option.active {
+  border-color: var(--color-primary);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.rating-source-radio {
+  margin-top: 0.2rem;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.option-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.option-desc {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  line-height: 1.3;
+}
+
+.imdb-range::-webkit-slider-thumb {
+  background: #f5c518;
+}
+.imdb-range::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.25);
+}
+.imdb-range::-moz-range-thumb {
+  background: #f5c518;
+}
+
+.rating-both-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.875rem;
+  background: rgba(245, 197, 24, 0.08);
+  border: 1px solid rgba(245, 197, 24, 0.25);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+.rating-both-notice i {
+  color: #f5c518;
+  flex-shrink: 0;
 }
 
 @media (max-width: 480px) {

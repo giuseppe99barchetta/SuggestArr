@@ -307,6 +307,12 @@
   border: 1px solid rgba(168, 85, 247, 0.3);
 }
 
+.badge-user {
+  background-color: rgba(20, 184, 166, 0.2);
+  color: #2dd4bf;
+  border: 1px solid rgba(20, 184, 166, 0.3);
+}
+
 /* Toggle Button */
 .toggle-requests-btn {
   width: 100%;
@@ -384,6 +390,15 @@
   display: flex;
   align-items: center;
   gap: 0.375rem;
+}
+
+.request-user {
+  font-size: 0.85rem;
+  color: #2dd4bf;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.125rem;
 }
 
 .request-arrow {
