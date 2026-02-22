@@ -320,14 +320,15 @@
         <div class="form-group">
           <label class="checkbox-label">
             <input
-              v-model="localConfig.ENABLE_VISUAL_EFFECTS"
+              :checked="!localConfig.ENABLE_VISUAL_EFFECTS"
+              @change="localConfig.ENABLE_VISUAL_EFFECTS = !$event.target.checked"
               type="checkbox"
               :disabled="isLoading"
             />
-            <span class="checkbox-text">Enable visual effects (blur)</span>
+            <span class="checkbox-text">Disable visual effects (blur)</span>
           </label>
           <small class="form-help">
-            Disable to improve UI performance and frame rates by turning off heavy CSS background blurs.
+            Check this box to improve UI performance and frame rates by turning off heavy CSS background blurs.
           </small>
         </div>
       </div>
