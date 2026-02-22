@@ -1,5 +1,5 @@
 .wizard-container {
-    
+
     background-color: var(--color-bg-primary);
     display: flex;
     justify-content: center;
@@ -34,6 +34,21 @@
     box-shadow: var(--shadow-base);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wizard-container.static-bg-active {
+    background-color: transparent;
+}
+
+.wizard-container.static-bg-active::before {
+    display: none;
+}
+
+.wizard-container.static-bg-active .wizard-content {
+    background: transparent;
+    backdrop-filter: none;
+    border-color: transparent;
+    box-shadow: none;
 }
 
 .progress-bar {
