@@ -179,10 +179,6 @@
             <div v-else class="poster-placeholder">
               <i :class="item.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"></i>
             </div>
-            <!-- Source badge -->
-            <span class="source-badge" :class="item.source === 'ai_suggestion' ? 'badge-ai' : 'badge-discover'">
-              {{ item.source === 'ai_suggestion' ? 'AI Pick' : 'Discover' }}
-            </span>
             <!-- Expand hint -->
             <div class="poster-expand-hint"><i class="fas fa-expand-alt"></i></div>
           </div>
@@ -230,86 +226,80 @@
     <!-- Item Detail Modal -->
     <teleport to="body">
       <transition name="modal-fade">
-        <div v-if="selectedItem" class="modal-overlay" @click.self="closeModal">
-          <div class="modal-container" role="dialog" aria-modal="true">
-            <!-- Backdrop header -->
-            <div
-              class="modal-backdrop"
-              :style="selectedItem.backdrop_path ? `background-image: url('${selectedItem.backdrop_path}')` : ''"
-            >
-              <div class="modal-backdrop-overlay"></div>
-              <button class="modal-close-btn" @click="closeModal" aria-label="Close">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
+        <div v-if="selectedItem" class="ai-modal-overlay" @click.self="closeModal">
+          <div class="ai-modal-content" role="dialog" aria-modal="true">
+            <!-- Close button -->
+            <button class="ai-modal-close" @click="closeModal" aria-label="Close">
+              <i class="fas fa-times"></i>
+            </button>
 
-            <!-- Content area -->
-            <div class="modal-body">
-              <!-- Poster + main info side by side -->
-              <div class="modal-main">
-                <div class="modal-poster">
-                  <img
-                    v-if="selectedItem.poster_path"
-                    :src="selectedItem.poster_path"
-                    :alt="selectedItem.title"
-                  />
-                  <div v-else class="modal-poster-placeholder">
-                    <i :class="selectedItem.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"></i>
-                  </div>
+            <div class="ai-modal-layout">
+              <!-- Left: Poster -->
+              <div class="ai-modal-poster-section">
+                <img
+                  v-if="selectedItem.poster_path"
+                  :src="selectedItem.poster_path"
+                  :alt="selectedItem.title"
+                  class="ai-modal-poster"
+                />
+                <div v-else class="ai-modal-poster-placeholder">
+                  <i :class="selectedItem.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"></i>
+                </div>
+              </div>
+
+              <!-- Right: Details -->
+              <div class="ai-modal-details">
+                <h2 class="ai-modal-title">{{ selectedItem.title }}</h2>
+
+                <!-- Badges -->
+                <div class="ai-badge-row">
+                  <span class="ai-badge ai-badge-media">
+                    <i :class="selectedItem.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
+                    {{ selectedItem.media_type === 'tv' ? 'TV SHOW' : 'MOVIE' }}
+                  </span>
+                  <span v-if="selectedItem.rating" class="ai-badge ai-badge-rating">
+                    <i class="fas fa-star"></i>
+                    {{ Number(selectedItem.rating).toFixed(1) }}
+                    <span v-if="selectedItem.votes" class="ai-badge-votes">· {{ formatVotes(selectedItem.votes) }}</span>
+                  </span>
+                  <span v-if="releaseYear(selectedItem)" class="ai-badge ai-badge-date">
+                    <i class="fas fa-calendar"></i>
+                    {{ releaseYear(selectedItem) }}
+                  </span>
+                  <span v-if="selectedItem.original_language" class="ai-badge ai-badge-lang">
+                    <i class="fas fa-globe"></i>
+                    {{ selectedItem.original_language.toUpperCase() }}
+                  </span>
                 </div>
 
-                <div class="modal-info">
-                  <div class="modal-badges">
-                    <span class="modal-badge badge-ai">
-                      <i class="fas fa-magic"></i> AI Pick
-                    </span>
-                    <span class="modal-badge badge-type">
-                      {{ selectedItem.media_type === 'tv' ? 'TV Show' : 'Movie' }}
-                    </span>
-                  </div>
+                <div class="ai-modal-sep"></div>
 
-                  <h2 class="modal-title">{{ selectedItem.title }}</h2>
-
-                  <div class="modal-meta-row">
-                    <span v-if="releaseYear(selectedItem)" class="modal-year">
-                      <i class="fas fa-calendar-alt"></i> {{ releaseYear(selectedItem) }}
-                    </span>
-                    <span v-if="selectedItem.rating" class="modal-rating">
-                      <i class="fas fa-star"></i> {{ Number(selectedItem.rating).toFixed(1) }}
-                      <span v-if="selectedItem.votes" class="modal-votes">· {{ formatVotes(selectedItem.votes) }} votes</span>
-                    </span>
-                    <span v-if="selectedItem.original_language" class="modal-lang">
-                      <i class="fas fa-globe"></i> {{ selectedItem.original_language.toUpperCase() }}
-                    </span>
-                  </div>
-
-                  <!-- AI Rationale -->
-                  <div v-if="selectedItem.rationale" class="modal-rationale">
-                    <div class="modal-section-label">
-                      <i class="fas fa-robot"></i> Why the AI picked this
-                    </div>
-                    <p>{{ selectedItem.rationale }}</p>
-                  </div>
-
-                  <!-- Overview -->
-                  <div v-if="selectedItem.overview" class="modal-overview">
-                    <div class="modal-section-label">
-                      <i class="fas fa-align-left"></i> Overview
-                    </div>
-                    <p>{{ selectedItem.overview }}</p>
-                  </div>
-
-                  <!-- Request button -->
-                  <button
-                    @click="requestItem(selectedItem)"
-                    :disabled="requestedIds.has(selectedItem.id + '-' + selectedItem.media_type) || requestingIds.has(selectedItem.id + '-' + selectedItem.media_type)"
-                    class="btn modal-request-btn"
-                    :class="requestButtonClass(selectedItem)"
-                  >
-                    <i :class="requestButtonIcon(selectedItem)"></i>
-                    {{ requestButtonLabel(selectedItem) }}
-                  </button>
+                <!-- AI Rationale -->
+                <div v-if="selectedItem.rationale" class="ai-modal-section">
+                  <h3 class="ai-modal-section-title" style="color: var(--color-info)">
+                    <i class="fas fa-robot"></i> Why the AI picked this
+                  </h3>
+                  <p class="ai-modal-text ai-modal-rationale-text">{{ selectedItem.rationale }}</p>
                 </div>
+
+                <!-- Overview -->
+                <div class="ai-modal-section">
+                  <h3 class="ai-modal-section-title">
+                    <i class="fas fa-align-left"></i> Overview
+                  </h3>
+                  <p class="ai-modal-text">{{ selectedItem.overview || 'No overview available.' }}</p>
+                </div>
+
+                <!-- Request button -->
+                <button
+                  @click="requestItem(selectedItem)"
+                  :disabled="requestedIds.has(selectedItem.id + '-' + selectedItem.media_type) || requestingIds.has(selectedItem.id + '-' + selectedItem.media_type)"
+                  class="btn ai-modal-req-btn"
+                  :class="requestButtonClass(selectedItem)"
+                >
+                  <i :class="requestButtonIcon(selectedItem)"></i>
+                  {{ requestButtonLabel(selectedItem) }}
+                </button>
               </div>
             </div>
           </div>
@@ -940,10 +930,6 @@ export default {
   transform: translateY(-2px);
 }
 
-.result-card.ai-pick {
-  border-color: rgba(6, 182, 212, 0.35);
-}
-
 /* Poster */
 .card-poster {
   position: relative;
@@ -1131,220 +1117,204 @@ export default {
 }
 
 /* ── Modal ──────────────────────────────────────────────────── */
-.modal-overlay {
+.ai-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background-color: var(--color-bg-overlay-heavy, rgba(0,0,0,0.8));
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  padding: var(--spacing-md);
-  backdrop-filter: blur(4px);
+  padding: 1rem;
+  overflow-y: auto;
 }
 
-.modal-container {
-  background: var(--color-bg-elevated, #1e2330);
-  border: 1px solid var(--color-border-medium);
-  border-radius: var(--radius-xl, 16px);
+.ai-modal-content {
+  position: relative;
+  background-color: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(15px);
+  border-radius: var(--border-radius-xl, 16px);
+  border: 1px solid var(--color-border-light);
+  max-width: 1100px;
   width: 100%;
-  max-width: 780px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
-  display: flex;
-  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  margin: auto;
 }
 
-.modal-backdrop {
-  position: relative;
-  height: 180px;
-  background-size: cover;
-  background-position: center 30%;
-  background-color: rgba(0,0,0,0.5);
-  border-radius: var(--radius-xl, 16px) var(--radius-xl, 16px) 0 0;
-  flex-shrink: 0;
-}
-
-.modal-backdrop-overlay {
+.ai-modal-close {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.7) 100%);
-  border-radius: inherit;
-}
-
-.modal-close-btn {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: rgba(0,0,0,0.5);
-  border: 1px solid rgba(255,255,255,0.15);
-  color: #fff;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  top: 1rem;
+  right: 1rem;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
+  border: 1px solid var(--color-border-light);
+  border-radius: 50%;
+  color: var(--color-text-muted);
   cursor: pointer;
-  font-size: 0.85rem;
-  z-index: 1;
-  transition: background var(--transition-base);
+  transition: var(--transition-base, all 0.2s);
+  z-index: 10;
 }
 
-.modal-close-btn:hover { background: rgba(0,0,0,0.8); }
-
-.modal-body {
-  padding: var(--spacing-lg);
+.ai-modal-close:hover {
+  background-color: var(--color-danger, #ef4444);
+  color: white;
+  border-color: var(--color-danger, #ef4444);
+  transform: rotate(90deg);
 }
 
-.modal-main {
+.ai-modal-layout {
   display: flex;
-  gap: var(--spacing-lg);
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 2rem;
 }
 
-.modal-poster {
+@media (min-width: 768px) {
+  .ai-modal-layout {
+    flex-direction: row;
+    gap: 3rem;
+    padding: 3rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ai-modal-layout {
+    gap: 3.5rem;
+    padding: 3.5rem 4rem;
+  }
+}
+
+.ai-modal-poster-section {
   flex-shrink: 0;
-  width: 130px;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  margin-top: -60px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-  border: 2px solid var(--color-border-medium);
+  width: 100%;
 }
 
-.modal-poster img {
+@media (min-width: 768px) {
+  .ai-modal-poster-section { width: 260px; }
+}
+
+.ai-modal-poster {
   width: 100%;
+  height: auto;
+  border-radius: var(--border-radius-lg, 12px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   display: block;
 }
 
-.modal-poster-placeholder {
-  width: 130px;
+.ai-modal-poster-placeholder {
+  width: 100%;
   aspect-ratio: 2/3;
-  background: rgba(0,0,0,0.4);
+  background-color: var(--color-bg-primary, #111);
+  border-radius: var(--border-radius-lg, 12px);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2rem;
   color: var(--color-text-muted);
-  margin-top: -60px;
-  border-radius: var(--radius-md);
-  border: 2px solid var(--color-border-medium);
+  font-size: 3rem;
 }
 
-.modal-info {
+.ai-modal-details {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
 }
 
-.modal-badges {
+.ai-modal-title {
+  font-size: 2rem;
+  font-weight: bold;
+  color: var(--color-text-primary);
+  margin: 0 0 1rem 0;
+  line-height: 1.2;
+  word-wrap: break-word;
+  padding-right: 2rem;
+}
+
+/* Badges */
+.ai-badge-row {
   display: flex;
-  gap: var(--spacing-xs);
   flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
-.modal-badge {
+.ai-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  border-radius: var(--radius-full);
-  padding: 3px 10px;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
-.modal-badge.badge-ai {
-  background: rgba(6, 182, 212, 0.15);
-  border: 1px solid rgba(6, 182, 212, 0.4);
-  color: var(--color-info);
+.ai-badge-media {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
-.modal-badge.badge-type {
-  background: rgba(100, 116, 139, 0.2);
-  border: 1px solid rgba(100, 116, 139, 0.35);
-  color: var(--color-text-secondary);
+.ai-badge-rating {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
-.modal-title {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
+.ai-badge-votes {
+  color: rgba(52, 211, 153, 0.6);
+  font-weight: 400;
+}
+
+.ai-badge-date {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.ai-badge-lang {
+  background-color: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.ai-modal-sep {
+  border-top: 1px solid var(--color-border-light);
+  margin: 1rem 0;
+}
+
+.ai-modal-section {
+  margin-bottom: 1.5rem;
+}
+
+.ai-modal-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
   color: var(--color-text-primary);
-  margin: 0;
-  line-height: var(--line-height-tight);
+  margin-bottom: 0.75rem;
 }
 
-.modal-meta-row {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  flex-wrap: wrap;
-}
-
-.modal-year, .modal-lang {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.modal-rating {
-  font-size: var(--font-size-sm);
-  color: var(--color-warning);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-weight: var(--font-weight-semibold);
-}
-
-.modal-votes {
-  color: var(--color-text-muted);
-  font-weight: var(--font-weight-normal);
-}
-
-.modal-section-label {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-text-muted);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.modal-rationale {
-  background: rgba(6, 182, 212, 0.07);
-  border: 1px solid rgba(6, 182, 212, 0.2);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-sm) var(--spacing-md);
-}
-
-.modal-rationale .modal-section-label { color: var(--color-info); }
-
-.modal-rationale p {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-info-light);
-  font-style: italic;
-  line-height: var(--line-height-relaxed);
-}
-
-.modal-overview p {
-  margin: 0;
-  font-size: var(--font-size-sm);
+.ai-modal-text {
   color: var(--color-text-secondary);
-  line-height: var(--line-height-relaxed);
+  line-height: 1.6;
+  margin: 0;
+  font-size: 0.95rem;
 }
 
-.modal-request-btn {
-  align-self: flex-start;
-  margin-top: var(--spacing-xs);
+.ai-modal-rationale-text {
+  font-style: italic;
+  border-left: 3px solid var(--color-info);
+  padding-left: 1rem;
+  color: var(--color-text-secondary);
+}
+
+.ai-modal-req-btn {
   padding: 10px 24px;
   font-size: var(--font-size-sm);
 }
@@ -1355,24 +1325,6 @@ export default {
 }
 .modal-fade-enter-from, .modal-fade-leave-to {
   opacity: 0;
-}
-.modal-fade-enter-active .modal-container,
-.modal-fade-leave-active .modal-container {
-  transition: transform 0.2s ease;
-}
-.modal-fade-enter-from .modal-container {
-  transform: scale(0.95) translateY(10px);
-}
-.modal-fade-leave-to .modal-container {
-  transform: scale(0.95) translateY(10px);
-}
-
-@media (max-width: 600px) {
-  .modal-main { flex-direction: column; align-items: center; }
-  .modal-poster { margin-top: -50px; width: 110px; }
-  .modal-poster-placeholder { margin-top: -50px; width: 110px; }
-  .modal-info { width: 100%; }
-  .modal-request-btn { width: 100%; justify-content: center; }
 }
 
 /* Reuse global btn classes */
