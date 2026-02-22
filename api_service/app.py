@@ -109,7 +109,16 @@ def register_routes(app): # pylint: disable=redefined-outer-name
             path = ""
             
         target_path = path if path != "" else "index.html"
-        full_path = os.path.join(app.static_folder, target_path)
+
+        # Resolve and validate the requested path against the static folder to
+        # prevent directory traversal using user-controlled `path`.
+        static_root = os.path.realpath(app.static_folder)
+        full_path = os.path.realpath(os.path.join(static_root, target_path))
+
+        # If the resolved path is outside the static root, do not serve it.
+        if os.path.commonpath([static_root, full_path]) != static_root:
+            from flask import abort
+            abort(404)
 
         if target_path == "index.html" or not os.path.exists(full_path):
             from flask import Response
@@ -133,7 +142,8 @@ def register_routes(app): # pylint: disable=redefined-outer-name
             
             return Response(content, mimetype='text/html')
         else:
-            # Serve the requested file (static assets like JS, CSS, images, etc.)
+            # Serve the requested file (static assets like JS, CSS, images, etc.).
+            # `target_path` has been validated to stay within `static_root`.
             return send_from_directory(app.static_folder, target_path)
 
 app = create_app()
