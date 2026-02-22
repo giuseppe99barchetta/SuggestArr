@@ -1,7 +1,7 @@
 import json
 import re
 from openai import OpenAI
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from api_service.config.logger_manager import LoggerManager
 from api_service.config.config import load_env_vars
 
@@ -21,7 +21,7 @@ def get_llm_client() -> Optional[OpenAI]:
     if not api_key:
         if base_url:
             # Local providers like Ollama don't require an API key; use a placeholder.
-            logger.info("OPENAI_API_KEY not set. Using placeholder for local provider at %s.", base_url)
+            logger.debug("OPENAI_API_KEY not set. Using placeholder for local provider at %s.", base_url)
             api_key = "ollama"
         else:
             logger.warning("OPENAI_API_KEY is not configured. LLM recommendations will be disabled.")
@@ -216,3 +216,144 @@ def get_recommendations_from_history(history_items: List[Dict], max_results: int
     except Exception as e:
         logger.error(f"Error communicating with LLM API: {str(e)}")
         return []
+
+
+def interpret_search_query(
+    query: str,
+    history_items: List[Dict],
+    media_type: str = "movie",
+    max_suggestions: int = 8
+) -> Dict[str, Any]:
+    """Interpret a natural language search query and return structured TMDB parameters.
+
+    Uses the configured LLM to extract discover parameters and suggest specific titles
+    that match the user's request, taking into account their viewing history.
+
+    :param query: Natural language search description (e.g. "psychological thriller from the 90s").
+    :param history_items: List of dicts with 'title' and 'year' representing already-watched content.
+    :param media_type: 'movie' or 'tv'.
+    :param max_suggestions: Number of specific title suggestions to request from the LLM.
+    :return: Dict with 'discover_params' and 'suggested_titles', or {} on failure.
+    """
+    client = get_llm_client()
+    if not client:
+        logger.info("LLM not configured — cannot interpret search query.")
+        return {}
+
+    config = load_env_vars()
+    model = config.get('LLM_MODEL', 'gpt-4o-mini')
+
+    list_type = "movies" if media_type == "movie" else "TV shows"
+
+    # Build the watched-titles section of the prompt
+    deduped_history = _deduplicate_history(history_items)[:MAX_HISTORY_ITEMS]
+    if deduped_history:
+        history_text = "\n".join(
+            f"- {item.get('title', item.get('name', 'Unknown'))} ({item.get('year', 'Unknown')})"
+            for item in deduped_history
+        )
+        history_section = f"""
+The user has already watched the following {list_type} (do NOT suggest any of these):
+{history_text}
+
+Use the viewing history to understand their taste and personalise suggestions.
+"""
+    else:
+        history_section = ""
+
+    prompt = f"""You are a {list_type} search assistant for a personal media server.
+The user wants to find {list_type} that match this description:
+"{query}"
+{history_section}
+Return ONLY a single valid JSON object (no markdown, no explanation) with exactly these two keys:
+
+1. "discover_params": TMDB discover filter parameters:
+   - "genres": list of genre names (e.g. ["Thriller", "Crime"])
+   - "year_from": optional integer minimum release year
+   - "year_to": optional integer maximum release year
+   - "original_language": optional ISO 639-1 language code (e.g. "en", "it", "ja")
+   - "sort_by": "popularity.desc" or "vote_average.desc"
+
+2. "suggested_titles": list of exactly {max_suggestions} specific {list_type} that exist on TMDB:
+   - "title": exact title as it appears on TMDB
+   - "year": integer release year
+   - "rationale": 1-2 sentence explanation of why it matches the user's request
+
+Rules:
+- suggested_titles must be real {list_type} verifiable on TMDB
+- Do NOT suggest titles from the user's watch history
+- Provide sensible discover_params even if you also suggest specific titles
+- All fields must be valid JSON types (no undefined, no trailing commas)
+
+Example format:
+{{
+  "discover_params": {{"genres": ["Thriller"], "year_from": 1990, "year_to": 1999, "sort_by": "vote_average.desc"}},
+  "suggested_titles": [
+    {{"title": "Se7en", "year": 1995, "rationale": "Dark psychological thriller with a shocking twist ending."}},
+    {{"title": "The Silence of the Lambs", "year": 1991, "rationale": "Acclaimed psychological thriller with strong suspense."}}
+  ]
+}}"""
+
+    try:
+        logger.info(
+            "Sending AI search query to LLM (%s): '%s' (media_type=%s)", model, query[:80], media_type
+        )
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a media search assistant that only outputs raw JSON objects for TMDB queries.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.8,
+        )
+
+        content = response.choices[0].message.content.strip()
+
+        # Strip markdown fences if present
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+
+        # Repair common LLM JSON mistake: "Some Title" (qualifier) → "Some Title (qualifier)"
+        content = re.sub(r'"([^"]*?)"\s+(\([^)]*?\))', r'"\1 \2"', content)
+
+        parsed = json.loads(content)
+
+        if not isinstance(parsed, dict):
+            logger.error("LLM returned non-dict JSON for search query interpretation.")
+            return {}
+
+        # Normalise suggested_titles: ensure required keys exist
+        raw_titles = parsed.get("suggested_titles", [])
+        valid_titles = []
+        for t in raw_titles:
+            if isinstance(t, dict) and "title" in t and "year" in t:
+                valid_titles.append({
+                    "title": str(t["title"]).strip(),
+                    "year": int(t["year"]) if t["year"] else None,
+                    "rationale": str(t.get("rationale", "")).strip(),
+                })
+        parsed["suggested_titles"] = valid_titles
+
+        logger.info(
+            "LLM interpreted query: genres=%s, year=%s-%s, %d title suggestions",
+            parsed.get("discover_params", {}).get("genres"),
+            parsed.get("discover_params", {}).get("year_from"),
+            parsed.get("discover_params", {}).get("year_to"),
+            len(valid_titles),
+        )
+        return parsed
+
+    except json.JSONDecodeError:
+        logger.error("Failed to parse LLM search interpretation as JSON. Raw: %s", content[:300])
+        return {}
+    except Exception as e:
+        logger.error("Error during LLM search query interpretation: %s", str(e))
+        return {}

@@ -88,3 +88,37 @@ export const fetchSonarrServers = (url, token, sessionToken) => {
         SEER_SESSION_TOKEN: sessionToken
     });
 };
+
+// AI Search: semantic content search powered by LLM + TMDB
+export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 12, useHistory = true, excludeWatched = true) => {
+    return axios.post('/api/ai-search/query', {
+        query,
+        media_type: mediaType,
+        user_ids: userIds,
+        max_results: maxResults,
+        use_history: useHistory,
+        exclude_watched: excludeWatched,
+    });
+};
+
+// AI Search: fetch requests made via AI Search
+export const getAiSearchRequests = (page = 1, perPage = 12, sortBy = 'date-desc') => {
+    return axios.get('/api/automation/requests/ai-search', {
+        params: { page, per_page: perPage, sort_by: sortBy },
+    });
+};
+
+// AI Search: request a specific TMDB item via Jellyseer/Overseer
+export const aiSearchRequest = (tmdbId, mediaType, rationale = '', metadata = {}) => {
+    return axios.post('/api/ai-search/request', {
+        tmdb_id: tmdbId,
+        media_type: mediaType,
+        rationale,
+        metadata,
+    });
+};
+
+// AI Search: check whether LLM is configured and AI search is available
+export const aiSearchStatus = () => {
+    return axios.get('/api/ai-search/status');
+};

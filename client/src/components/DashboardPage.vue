@@ -32,6 +32,9 @@
         >
           <i :class="tab.icon"></i>
           <span>{{ tab.name }}</span>
+          <span v-if="tab.isBeta" class="beta-badge">
+            BETA
+          </span>
           <!-- Badge per Requests -->
           <span v-if="tab.id === 'requests' && requestCount > 0" class="tab-badge">
             {{ requestCount }}
@@ -287,6 +290,7 @@ import SettingsDatabase from './settings/SettingsDatabase.vue';
 import SettingsAdvanced from './settings/SettingsAdvanced.vue';
 import SettingsRequests from './settings/SettingsRequests.vue';
 import SettingsJobs from './settings/SettingsJobs.vue';
+import AiSearchPage from './settings/AiSearchPage.vue';
 import LogsComponent from './LogsComponent.vue';
 
 export default {
@@ -299,6 +303,7 @@ export default {
     SettingsAdvanced,
     SettingsRequests,
     SettingsJobs,
+    AiSearchPage,
     LogsComponent,
   },
   setup() {
@@ -349,6 +354,7 @@ export default {
         { id: 'database', name: 'Database', icon: 'fas fa-database' },
         { id: 'advanced', name: 'Advanced', icon: 'fas fa-sliders-h' },
         { id: 'logs', name: 'Logs', icon: 'fas fa-file-alt' },
+        { id: 'ai_search', name: 'AI Search', icon: 'fas fa-magic', isBeta: true },
       ],
     };
   },
@@ -362,6 +368,7 @@ export default {
         database: 'SettingsDatabase',
         advanced: 'SettingsAdvanced',
         logs: 'LogsComponent',
+        ai_search: 'AiSearchPage',
       };
       return componentMap[this.activeTab];
     },

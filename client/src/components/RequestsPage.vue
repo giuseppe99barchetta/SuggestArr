@@ -40,13 +40,21 @@
               <span>By Watched Content</span>
               <span class="view-count">{{ totalSources }}</span>
             </button>
-            <button 
-              @click="viewMode = 'all-requests'" 
+            <button
+              @click="viewMode = 'all-requests'"
               :class="{ active: viewMode === 'all-requests' }"
               class="view-toggle-btn">
               <i class="fas fa-list"></i>
               <span>All Requests</span>
               <span class="view-count">{{ totalRequests }}</span>
+            </button>
+            <button
+              @click="switchToAiRequests"
+              :class="{ active: viewMode === 'ai-requests' }"
+              class="view-toggle-btn">
+              <i class="fas fa-magic"></i>
+              <span>AI Requests</span>
+              <span class="view-count">{{ aiRequestsTotal }}</span>
             </button>
           </div>
         </div>
@@ -192,6 +200,64 @@
             </transition-group>
           </div>
 
+          <!-- View: AI Requests -->
+          <div v-else-if="viewMode === 'ai-requests'" key="ai-requests">
+            <transition-group
+              name="fade-slide"
+              tag="div"
+              class="requests-grid">
+              <div
+                v-for="item in aiRequests"
+                :key="item.request_id"
+                class="request-card"
+                @click="openModal(item)">
+
+                <div class="request-card-poster">
+                  <img
+                    v-if="item.poster_path"
+                    :src="item.poster_path"
+                    :alt="item.title"
+                    class="poster-image" />
+                  <div v-else class="poster-placeholder">
+                    <i class="fas fa-magic"></i>
+                  </div>
+                </div>
+
+                <div class="request-card-body">
+                  <h3 class="request-card-title">{{ item.title }}</h3>
+
+                  <div class="badge-container">
+                    <span class="badge badge-media">
+                      <i :class="item.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
+                      {{ item.media_type.toUpperCase() }}
+                    </span>
+                    <span v-if="item.rating" class="badge badge-rating">
+                      <i class="fas fa-star"></i>
+                      {{ item.rating }}
+                    </span>
+                    <span class="badge badge-requested">
+                      <i class="fas fa-clock"></i>
+                      {{ formatDate(item.requested_at) }}
+                    </span>
+                  </div>
+
+                  <div v-if="item.rationale" class="source-link" style="font-style: italic;">
+                    <i class="fas fa-quote-left"></i>
+                    <span>{{ item.rationale }}</span>
+                  </div>
+                  <div v-else class="source-link">
+                    <i class="fas fa-magic"></i>
+                    <span>From: <strong>AI Search</strong></span>
+                  </div>
+                </div>
+              </div>
+            </transition-group>
+            <div v-if="aiRequestsHasMore" ref="loadMoreTriggerAi" class="load-more-trigger">
+              <div class="spinner-small"></div>
+              <p>Loading more...</p>
+            </div>
+          </div>
+
           <!-- View: All Requests -->
           <div v-else key="all-requests">
             <transition-group 
@@ -246,19 +312,24 @@
 
           </div>
         </transition>
-        <div 
-          v-if="hasMoreData" 
+        <div
+          v-if="hasMoreData && viewMode !== 'ai-requests'"
           :ref="viewMode === 'by-content' ? 'loadMoreTrigger' : 'loadMoreTriggerRequests'"
           class="load-more-trigger">
           <div class="spinner-small"></div>
           <p>Loading more requests...</p>
         </div>
         <!-- No Results -->
-        <div v-if="(viewMode === 'by-content' ? filteredAndSortedSources : filteredAndSortedRequests).length === 0 && !loading" class="no-results">
+        <div v-if="viewMode !== 'ai-requests' && (viewMode === 'by-content' ? filteredAndSortedSources : filteredAndSortedRequests).length === 0 && !loading" class="no-results">
           <i class="fas fa-inbox text-6xl mb-4"></i>
           <h3>No {{ viewMode === 'by-content' ? 'content' : 'requests' }} found</h3>
           <p v-if="searchQuery || mediaTypeFilter !== 'all'">Try adjusting your filters</p>
           <p v-else>Start watching content to see suggestions here</p>
+        </div>
+        <div v-if="viewMode === 'ai-requests' && aiRequests.length === 0 && !loading" class="no-results">
+          <i class="fas fa-magic text-6xl mb-4"></i>
+          <h3>No AI Search requests yet</h3>
+          <p>Use the <strong>AI Search</strong> tab to discover and request content.</p>
         </div>
 
         <!-- Initial Loading -->
@@ -399,6 +470,7 @@ import Footer from './AppFooter.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import { fetchRandomMovieImage } from '@/api/tmdbApi';
 import { formatDate } from '@/utils/dateUtils.js';
+import { getAiSearchRequests } from '@/api/api.js';
 
 export default {
   name: "RequestsPage",
@@ -436,6 +508,12 @@ export default {
       retryTimeout: null,
       totalSourcesCount: 0,
       totalRequestsCount: 0,
+      // AI Requests state
+      aiRequests: [],
+      aiRequestsTotal: 0,
+      aiRequestsPage: 1,
+      aiRequestsTotalPages: 1,
+      aiObserver: null,
       sortOptions: [
         { value: 'date-desc', label: 'Date (Newest)' },
         { value: 'date-asc', label: 'Date (Oldest)' },
@@ -537,17 +615,28 @@ export default {
     hasMoreData() {
       return this.currentPage < this.totalPages;
     },
+
+    aiRequestsHasMore() {
+      return this.aiRequestsPage < this.aiRequestsTotalPages;
+    },
   },
   watch: {
-    viewMode() {
+    viewMode(newMode) {
+      if (newMode === 'ai-requests') return; // handled by switchToAiRequests
       this.$nextTick(() => {
         setTimeout(() => {
           this.initObserver();
         }, 400);
       });
     },
-    
+
     sortBy() {
+      if (this.viewMode === 'ai-requests') {
+        this.aiRequests = [];
+        this.aiRequestsPage = 1;
+        this.fetchAiRequests(1);
+        return;
+      }
       this.resetAndReload();
     },
     
@@ -568,15 +657,65 @@ export default {
 
     resetAndReload() {
       console.log('🔄 Sorting changed, reloading data...');
-      
+
       this.cleanupObserver();
-      
+
       this.sources = [];
       this.currentPage = 0;
       this.totalPages = 1;
       this.retryCount = 0;
-      
+
       this.fetchRequests(1);
+    },
+
+    switchToAiRequests() {
+      this.viewMode = 'ai-requests';
+      if (this.aiRequests.length === 0) {
+        this.fetchAiRequests(1);
+      }
+    },
+
+    async fetchAiRequests(page = 1) {
+      if (this.loading) return;
+      this.loading = true;
+      try {
+        const response = await getAiSearchRequests(page, 12, this.sortBy);
+        const { data, total, total_pages } = response.data;
+        if (page === 1) {
+          this.aiRequests = data;
+          this.aiRequestsTotal = total;
+        } else {
+          this.aiRequests = [...this.aiRequests, ...data];
+        }
+        this.aiRequestsPage = page;
+        this.aiRequestsTotalPages = total_pages;
+        this.$nextTick(() => {
+          setTimeout(() => this.initAiObserver(), 150);
+        });
+      } catch (error) {
+        console.error('❌ Failed to fetch AI search requests:', error);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    initAiObserver() {
+      if (this.aiObserver) {
+        this.aiObserver.disconnect();
+        this.aiObserver = null;
+      }
+      if (!this.aiRequestsHasMore) return;
+      this.$nextTick(() => {
+        const trigger = this.$refs.loadMoreTriggerAi;
+        if (trigger) {
+          this.aiObserver = new IntersectionObserver(async (entries) => {
+            if (entries[0].isIntersecting && !this.loading) {
+              await this.fetchAiRequests(this.aiRequestsPage + 1);
+            }
+          }, { rootMargin: '300px', threshold: 0 });
+          this.aiObserver.observe(trigger);
+        }
+      });
     },
 
     clearFilters() {

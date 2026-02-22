@@ -402,6 +402,24 @@
   background-color: #dc2626;
 }
 
+.beta-badge {
+  background: linear-gradient(135deg, #ff9800, #ff5722);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 12px;
+  margin-left: 6px;
+  letter-spacing: 0.5px;
+  animation: betaPulse 2s infinite;
+}
+
+@keyframes betaPulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.6); }
+  70% { box-shadow: 0 0 0 6px rgba(255, 87, 34, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0); }
+}
+
 /* Loading Overlay */
 .loading-overlay {
   position: fixed;

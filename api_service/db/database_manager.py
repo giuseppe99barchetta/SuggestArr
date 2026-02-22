@@ -554,6 +554,7 @@ class DatabaseManager:
             LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id
             LEFT JOIN users u ON r.user_id = u.user_id
             WHERE r.requested_by = 'SuggestArr'
+            AND COALESCE(r.tmdb_source_id, '') != 'ai_search'
             ORDER BY {order_by_clause}
         """
         
@@ -644,6 +645,81 @@ class DatabaseManager:
             "per_page": per_page
         }
     
+    def get_ai_search_requests(self, page: int = 1, per_page: int = 12, sort_by: str = 'date-desc') -> Dict[str, Any]:
+        """Get requests made via AI Search, paginated and sorted.
+
+        :param page: Page number (1-based).
+        :param per_page: Results per page.
+        :param sort_by: Sort key — one of 'date-desc', 'date-asc', 'title-asc', 'title-desc'.
+        :return: Dict with 'data', 'total', 'total_pages', 'current_page', 'per_page'.
+        """
+        self.logger.debug("Retrieving AI search requests: page=%d, per_page=%d, sort_by=%s", page, per_page, sort_by)
+
+        sort_mapping = {
+            'date-desc': 'r.requested_at DESC',
+            'date-asc': 'r.requested_at ASC',
+            'title-asc': 'm.title ASC',
+            'title-desc': 'm.title DESC',
+        }
+        order_by_clause = sort_mapping.get(sort_by, 'r.requested_at DESC')
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+
+        count_query = """
+            SELECT COUNT(*)
+            FROM requests r
+            JOIN metadata m ON r.tmdb_request_id = m.media_id
+            WHERE r.requested_by = 'SuggestArr'
+            AND r.tmdb_source_id = 'ai_search'
+        """
+
+        select_query = f"""
+            SELECT
+                r.tmdb_request_id, r.media_type, r.requested_at, r.rationale,
+                m.title, m.overview, m.poster_path, m.release_date, m.rating,
+                m.backdrop_path, m.logo_path
+            FROM requests r
+            JOIN metadata m ON r.tmdb_request_id = m.media_id
+            WHERE r.requested_by = 'SuggestArr'
+            AND r.tmdb_source_id = 'ai_search'
+            ORDER BY {order_by_clause}
+            LIMIT {placeholder} OFFSET {placeholder}
+        """
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute(count_query)
+            total = (cursor.fetchone() or [0])[0]
+
+            offset = (page - 1) * per_page
+            cursor.execute(select_query, (per_page, offset))
+            rows = cursor.fetchall()
+
+        items = []
+        for row in rows:
+            items.append({
+                "request_id": row[0],
+                "media_type": row[1],
+                "requested_at": row[2],
+                "rationale": row[3],
+                "title": row[4],
+                "overview": row[5],
+                "poster_path": row[6],
+                "release_date": row[7],
+                "rating": round(row[8], 2) if row[8] is not None else None,
+                "backdrop_path": row[9],
+                "logo_path": row[10],
+            })
+
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        return {
+            "data": items,
+            "total": total,
+            "total_pages": total_pages,
+            "current_page": page,
+            "per_page": per_page,
+        }
+
     def get_requests_stats(self) -> Dict[str, Any]:
         """Get statistics about requests: total, today, this week, and this month counts."""
         self.logger.debug("Retrieving request statistics")
