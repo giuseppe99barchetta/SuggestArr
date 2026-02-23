@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - nightly
+
+jobs:
+  test-backend:
+    name: Backend tests (pytest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: '3.13'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v5.0.3
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('api_service/requirements.txt') }}
+          restore-keys: pip-
+
+      - name: Install dependencies
+        run: pip install -r api_service/requirements.txt
+
+      - name: Run tests
+        run: cd api_service && python -m pytest --tb=short -q
+
+  lint-frontend:
+    name: Frontend lint (ESLint)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6.2.0
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        run: cd client && npm ci
+
+      - name: Run ESLint
+        run: cd client && npm run lint
