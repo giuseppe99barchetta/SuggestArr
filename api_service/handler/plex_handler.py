@@ -6,7 +6,7 @@ from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 from api_service.config.config import load_env_vars
-from api_service.services.llm.llm_service import get_recommendations_from_history
+from api_service.services.llm.llm_service import get_llm_client, get_recommendations_from_history
 
 def to_ascii(value):
     """
@@ -47,7 +47,17 @@ class PlexHandler:
             self.use_llm = use_llm
         else:
             config = load_env_vars()
-            self.use_llm = config.get('ENABLE_ADVANCED_ALGORITHM', False)
+            if config.get('ENABLE_ADVANCED_ALGORITHM', False):
+                if get_llm_client() is not None:
+                    self.use_llm = True
+                else:
+                    self.logger.warning(
+                        "ENABLE_ADVANCED_ALGORITHM is True but LLM is not configured. "
+                        "AI-powered recommendations will be disabled."
+                    )
+                    self.use_llm = False
+            else:
+                self.use_llm = False
 
 
     async def process_recent_items(self):

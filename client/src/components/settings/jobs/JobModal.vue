@@ -240,6 +240,10 @@ export default {
     try {
       const llmStatus = await jobsApi.getLlmStatus();
       this.llmConfigured = llmStatus.configured === true;
+      // For new jobs, auto-enable AI recommendations if ENABLE_ADVANCED_ALGORITHM is on
+      if (!this.isEditing && this.llmConfigured && llmStatus.advanced_algorithm_enabled === true) {
+        this.form.filters = { ...this.form.filters, use_llm: true };
+      }
     } catch {
       this.llmConfigured = false;
     }

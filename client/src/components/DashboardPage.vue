@@ -529,6 +529,11 @@ export default {
         await axios.post(`/api/config/section/${section}`, data);
         Object.assign(this.config, data);
 
+        // After saving advanced settings, sync use_llm flag on all recommendation jobs
+        if (section === 'advanced' && 'ENABLE_ADVANCED_ALGORITHM' in data) {
+          axios.post('/api/jobs/sync-ai-setting').catch(() => {});
+        }
+
         // If SUBPATH changed, redirect the browser to the new base URL so the
         // router re-initialises with the correct history base.
         if (section === 'advanced' && 'SUBPATH' in data) {

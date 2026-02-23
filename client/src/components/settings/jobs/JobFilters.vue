@@ -107,7 +107,7 @@
           v-model="localFilters.include_no_rating"
           type="checkbox"
         />
-        <span class="toggle-label">
+        <span class="toggle-label-modal">
           {{ localFilters.rating_source !== 'tmdb' ? 'Include content without IMDB rating' : 'Include content without rating' }}
         </span>
       </label>
@@ -625,9 +625,10 @@ input[type="date"] {
   cursor: pointer;
 }
 
-.toggle-label {
+.toggle-label-modal {
   font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
+  flex-direction: row !important;
 }
 
 /* Rating source selector */
