@@ -55,14 +55,16 @@ def test_tmdb_connection():
                     'message': 'Connection to TMDB API timed out'
                 }
             except aiohttp.ClientError as e:
+                logger.error("TMDB connection error: %s", e)
                 return {
                     'status': 'error',
-                    'message': f'Failed to connect to TMDB API: {str(e)}'
+                    'message': 'Failed to connect to TMDB API'
                 }
             except Exception as e:
+                logger.error("TMDB unexpected error: %s", e, exc_info=True)
                 return {
                     'status': 'error',
-                    'message': f'Unexpected error: {str(e)}'
+                    'message': 'An unexpected error occurred'
                 }
 
         # Run the async function
@@ -79,9 +81,9 @@ def test_tmdb_connection():
             return jsonify(result), 400
 
     except Exception as e:
-        logger.error(f'Error testing TMDB connection: {str(e)}')
+        logger.error(f'Error testing TMDB connection: {str(e)}', exc_info=True)
         return jsonify({
-            'message': f'Error testing TMDB connection: {str(e)}',
+            'message': 'Error testing TMDB connection',
             'status': 'error'
         }), 500
 
@@ -118,9 +120,10 @@ def get_movie_genres():
                                 'message': f'Failed to fetch genres: HTTP {response.status}'
                             }
             except Exception as e:
+                logger.error("Error fetching movie genres: %s", e, exc_info=True)
                 return {
                     'status': 'error',
-                    'message': f'Error fetching genres: {str(e)}'
+                    'message': 'Error fetching genres'
                 }
 
         # Run the async function
@@ -137,9 +140,9 @@ def get_movie_genres():
             return jsonify(result), 400
 
     except Exception as e:
-        logger.error(f'Error fetching movie genres: {str(e)}')
+        logger.error(f'Error fetching movie genres: {str(e)}', exc_info=True)
         return jsonify({
-            'message': f'Error fetching movie genres: {str(e)}',
+            'message': 'Error fetching movie genres',
             'status': 'error'
         }), 500
 
@@ -176,9 +179,10 @@ def get_tv_genres():
                                 'message': f'Failed to fetch genres: HTTP {response.status}'
                             }
             except Exception as e:
+                logger.error("Error fetching TV genres: %s", e, exc_info=True)
                 return {
                     'status': 'error',
-                    'message': f'Error fetching genres: {str(e)}'
+                    'message': 'Error fetching genres'
                 }
 
         # Run the async function
@@ -195,8 +199,8 @@ def get_tv_genres():
             return jsonify(result), 400
 
     except Exception as e:
-        logger.error(f'Error fetching TV genres: {str(e)}')
+        logger.error(f'Error fetching TV genres: {str(e)}', exc_info=True)
         return jsonify({
-            'message': f'Error fetching TV genres: {str(e)}',
+            'message': 'Error fetching TV genres',
             'status': 'error'
         }), 500
