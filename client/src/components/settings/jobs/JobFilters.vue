@@ -87,7 +87,7 @@
         v-model.number="localFilters.imdb_min_votes"
         type="number"
         min="0"
-        step="1000"
+        step="1"
         placeholder="e.g., 10000"
         class="form-control"
       />

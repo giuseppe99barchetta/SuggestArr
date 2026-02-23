@@ -67,6 +67,18 @@ class TestConfig(unittest.TestCase):
         "API_TIMEOUT": 30,
         "API_RETRIES": 3,
         "ENABLE_API_CACHING": True,
+        "FILTER_MIN_RUNTIME": 0,
+        "ENABLE_VISUAL_EFFECTS": False,
+        "ENABLE_STATIC_BACKGROUND": False,
+        "STATIC_BACKGROUND_COLOR": "#000000",
+        "OMDB_API_KEY": "omdb123abc",
+        "FILTER_RATING_SOURCE": "TMDB",
+        "FILTER_IMDB_THRESHOLD": "7.0",
+        "FILTER_IMDB_MIN_VOTES": "1000",
+        "OPENAI_API_KEY": "openai123abc",
+        "OPENAI_BASE_URL": "https://api.openai.com/v1",
+        "LLM_MODEL": "gpt-4-0613",
+        "SEER_REQUEST_DELAY": 0.5,
     }
 
     def test_save_default_env_vars(self):
