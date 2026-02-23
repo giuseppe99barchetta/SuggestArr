@@ -206,18 +206,22 @@
                   <div class="provider-card">
                     <div class="provider-name"><i class="fas fa-cloud"></i> OpenAI</div>
                     <table class="provider-table">
-                      <tr><td>API Key</td><td><code>sk-proj-...</code> (required)</td></tr>
-                      <tr><td>Base URL</td><td><em>leave blank</em></td></tr>
-                      <tr><td>Model</td><td><code>gpt-4o-mini</code></td></tr>
+                      <tbody>
+                        <tr><td>API Key</td><td><code>sk-proj-...</code> (required)</td></tr>
+                        <tr><td>Base URL</td><td><em>leave blank</em></td></tr>
+                        <tr><td>Model</td><td><code>gpt-4o-mini</code></td></tr>
+                      </tbody>
                     </table>
                   </div>
 
                   <div class="provider-card provider-card--local">
                     <div class="provider-name"><i class="fas fa-server"></i> Ollama <span class="badge-local">Local</span></div>
                     <table class="provider-table">
-                      <tr><td>API Key</td><td><em>not required</em></td></tr>
-                      <tr><td>Base URL</td><td><code>http://localhost:11434/v1</code></td></tr>
-                      <tr><td>Model</td><td><code>mistral</code>, <code>llama3</code>, etc.</td></tr>
+                      <tbody>
+                        <tr><td>API Key</td><td><em>not required</em></td></tr>
+                        <tr><td>Base URL</td><td><code>http://localhost:11434/v1</code></td></tr>
+                        <tr><td>Model</td><td><code>mistral</code>, <code>llama3</code>, etc.</td></tr>
+                      </tbody>
                     </table>
                     <small class="provider-note">Make sure Ollama is running and the model is pulled before saving.</small>
                   </div>
@@ -225,18 +229,22 @@
                   <div class="provider-card">
                     <div class="provider-name"><i class="fas fa-network-wired"></i> OpenRouter</div>
                     <table class="provider-table">
-                      <tr><td>API Key</td><td><code>sk-or-v1-...</code> (required)</td></tr>
-                      <tr><td>Base URL</td><td><code>https://openrouter.ai/api/v1</code></td></tr>
-                      <tr><td>Model</td><td><code>meta-llama/llama-3-8b-instruct</code></td></tr>
+                      <tbody>
+                        <tr><td>API Key</td><td><code>sk-or-v1-...</code> (required)</td></tr>
+                        <tr><td>Base URL</td><td><code>https://openrouter.ai/api/v1</code></td></tr>
+                        <tr><td>Model</td><td><code>meta-llama/llama-3-8b-instruct</code></td></tr>
+                      </tbody>
                     </table>
                   </div>
 
                   <div class="provider-card">
                     <div class="provider-name"><i class="fas fa-exchange-alt"></i> LiteLLM Proxy</div>
                     <table class="provider-table">
-                      <tr><td>API Key</td><td>depends on your proxy config</td></tr>
-                      <tr><td>Base URL</td><td><code>http://&lt;your-proxy&gt;:4000</code></td></tr>
-                      <tr><td>Model</td><td>depends on your proxy config</td></tr>
+                      <tbody>
+                        <tr><td>API Key</td><td>depends on your proxy config</td></tr>
+                        <tr><td>Base URL</td><td><code>http://&lt;your-proxy&gt;:4000</code></td></tr>
+                        <tr><td>Model</td><td>depends on your proxy config</td></tr>
+                      </tbody>
                     </table>
                   </div>
                 </div>

@@ -524,9 +524,28 @@ export default {
     async saveSection({ section, data }) {
       this.loadingMessage = `Saving ${section} settings...`;
       this.isLoading = true;
+      const oldSubpath = (this.config.SUBPATH || '').replace(/\/$/, '');
       try {
         await axios.post(`/api/config/section/${section}`, data);
         Object.assign(this.config, data);
+
+        // If SUBPATH changed, redirect the browser to the new base URL so the
+        // router re-initialises with the correct history base.
+        if (section === 'advanced' && 'SUBPATH' in data) {
+          const newSubpath = (data.SUBPATH || '').replace(/\/$/, '');
+          if (newSubpath !== oldSubpath) {
+            this.$toast.open({
+              message: 'Settings saved! Redirecting to new base URL…',
+              type: 'success',
+              duration: 2000,
+              position: 'top-right'
+            });
+            setTimeout(() => {
+              window.location.href = (newSubpath || '') + '/';
+            }, 1500);
+            return;
+          }
+        }
 
         this.$toast.open({
           message: `Settings saved successfully!`,

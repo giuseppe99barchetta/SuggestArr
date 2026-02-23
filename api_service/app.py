@@ -38,8 +38,12 @@ class SubpathMiddleware:
         subpath = str(subpath).strip('/') if subpath else ''
         
         if subpath and environ['PATH_INFO'].startswith(f'/{subpath}'):
-            # Strip the subpath from PATH_INFO
-            environ['PATH_INFO'] = environ['PATH_INFO'][len(subpath) + 1:]
+            # Strip the subpath from PATH_INFO.
+            # If the URL is exactly /<subpath> (no trailing slash), the result
+            # would be an empty string which is not a valid WSGI PATH_INFO.
+            # Fall back to '/' so Flask can match the root route.
+            stripped = environ['PATH_INFO'][len(subpath) + 1:]
+            environ['PATH_INFO'] = stripped if stripped else '/'
             # Ensure SCRIPT_NAME correctly reflects the subpath
             environ['SCRIPT_NAME'] = f'/{subpath}'
         return self.app(environ, start_response)
