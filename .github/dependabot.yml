@@ -1,0 +1,37 @@
+version: 2
+
+updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Python backend
+  - package-ecosystem: "pip"
+    directory: "/api_service"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      python-deps:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Vue frontend
+  - package-ecosystem: "npm"
+    directory: "/client"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      npm-deps:
+        update-types:
+          - "minor"
+          - "patch"

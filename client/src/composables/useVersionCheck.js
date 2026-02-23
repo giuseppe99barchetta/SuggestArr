@@ -1,3 +1,4 @@
+/* global __APP_VERSION__ */
 import { ref, onMounted } from 'vue';
 import { useToast } from 'vue-toast-notification';
 import axios from 'axios';

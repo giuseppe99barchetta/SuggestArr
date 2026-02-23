@@ -47,7 +47,7 @@ async function createAppRouter() {
     const subpath = readSubpathFromMeta();
     configureAxiosSubpath(subpath);
     await loadConfig();
-    const setupStatus = await checkSetupStatus();
+    await checkSetupStatus();
 
     const routes = [
         {

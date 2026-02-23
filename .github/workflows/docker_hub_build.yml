@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
 
@@ -35,6 +35,13 @@ jobs:
           current_version=$(jq -r '.version' package.json | sed 's/^v//')
           commit_msg=$(git log -1 --pretty=%B)
 
+          if echo "$commit_msg" | grep -q "\[skip bump\]"; then
+            echo "Skip bump detected — keeping current version v$current_version"
+            echo "new_version=v$current_version" >> $GITHUB_OUTPUT
+            echo "skip_bump=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           bump_type="patch"
 
           if echo "$commit_msg" | grep -q "BREAKING CHANGE\|feat!"; then
@@ -51,10 +58,11 @@ jobs:
 
           jq ".version = \"$prefixed_version\"" package.json > package_tmp.json && mv package_tmp.json package.json
 
-          echo "new_version=$prefixed_version" >> $GITHUB_ENV
-          echo "::set-output name=new_version::$prefixed_version"
+          echo "new_version=$prefixed_version" >> $GITHUB_OUTPUT
+          echo "skip_bump=false" >> $GITHUB_OUTPUT
 
       - name: Commit and push new version
+        if: steps.bump_version.outputs.skip_bump != 'true'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -70,11 +78,19 @@ jobs:
 
   build:
     needs: bump-version
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runs-on: ubuntu-latest
+          - platform: linux/arm64
+            runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runs-on }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
 
       - name: Pull latest changes
         run: git pull origin main
@@ -83,29 +99,76 @@ jobs:
         uses: docker/setup-buildx-action@v3.12.0
 
       - name: Log in to Docker Hub
-        run: echo ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} | docker login -u ciuse99 --password-stdin
+        uses: docker/login-action@v3.7.0
+        with:
+          username: ciuse99
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      - name: Build and Push Docker Image
+      - name: Prepare platform slug
+        id: prep
+        run: echo "platform_slug=$(echo '${{ matrix.platform }}' | tr '/' '-')" >> $GITHUB_OUTPUT
+
+      - name: Build and push platform image
+        uses: docker/build-push-action@v6.19.2
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ciuse99/suggestarr:${{ needs.bump-version.outputs.new_version }}-${{ steps.prep.outputs.platform_slug }}
+          cache-from: |
+            type=gha,scope=prod-${{ matrix.platform }}
+            type=registry,ref=ciuse99/suggestarr:cache
+          cache-to: type=gha,scope=prod-${{ matrix.platform }},mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            DOCKER_TAG=${{ needs.bump-version.outputs.new_version }}
+
+  merge:
+    needs: [bump-version, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3.7.0
+        with:
+          username: ciuse99
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.12.0
+
+      - name: Create and push multi-platform manifest
         env:
-          new_version: ${{ needs.bump-version.outputs.new_version }}
+          VERSION: ${{ needs.bump-version.outputs.new_version }}
         run: |
-          echo "New version tag: $new_version"
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --cache-from type=registry,ref=ciuse99/suggestarr:cache \
-            --cache-to type=registry,ref=ciuse99/suggestarr:cache,mode=max \
-            --build-arg BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
-            --build-arg DOCKER_TAG=nightly \
+          docker buildx imagetools create \
             -t ciuse99/suggestarr:latest \
-            -t ciuse99/suggestarr:$new_version \
-            -f docker/Dockerfile . --push
+            -t ciuse99/suggestarr:${VERSION} \
+            ciuse99/suggestarr:${VERSION}-linux-amd64 \
+            ciuse99/suggestarr:${VERSION}-linux-arm64
+
+      - name: Clean up temporary platform tags
+        env:
+          VERSION: ${{ needs.bump-version.outputs.new_version }}
+        run: |
+          TOKEN=$(curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"ciuse99\",\"password\":\"${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}\"}" \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+          for SLUG in linux-amd64 linux-arm64; do
+            curl -s -X DELETE \
+              -H "Authorization: Bearer ${TOKEN}" \
+              "https://hub.docker.com/v2/repositories/ciuse99/suggestarr/tags/${VERSION}-${SLUG}/" || true
+          done
 
   recreate-nightly:
-    needs: build
+    needs: merge
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
 
       - name: Recreate nightly branch
         run: |
