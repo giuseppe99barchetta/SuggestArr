@@ -129,6 +129,7 @@
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 
+/* eslint-disable vue/no-mutating-props */
 export default {
     components: {
         BaseDropdown

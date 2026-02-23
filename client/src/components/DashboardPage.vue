@@ -434,7 +434,7 @@ export default {
       const currentTab = this.tabs.find(tab => tab.id === this.activeTab);
       return currentTab ? currentTab.icon : 'fas fa-question';
     },
-    async loadConfig(force = false) {
+    async loadConfig(_force = false) {
       this.loadingMessage = 'Loading configuration...';
       this.isLoading = true;
       try {

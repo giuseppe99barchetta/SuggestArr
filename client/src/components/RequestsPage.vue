@@ -475,7 +475,6 @@ import axios from "axios";
 import { useBackgroundImage } from '@/composables/useBackgroundImage';
 import Footer from './AppFooter.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
-import { fetchRandomMovieImage } from '@/api/tmdbApi';
 import { formatDate } from '@/utils/dateUtils.js';
 import { getAiSearchRequests } from '@/api/api.js';
 
@@ -536,16 +535,6 @@ export default {
         { value: 'tv', label: 'TV Shows' }
       ]
     };
-  },
-    watch: {
-    isTransitioning(newValue) {
-      if (newValue) {
-        setTimeout(() => {
-          this.backgroundImageUrl = this.nextBackgroundImageUrl;
-          this.isTransitioning = false;
-        }, 800);
-      }
-    }
   },
   computed: {
     totalRequests() {
@@ -629,6 +618,14 @@ export default {
     },
   },
   watch: {
+    isTransitioning(newValue) {
+      if (newValue) {
+        setTimeout(() => {
+          this.backgroundImageUrl = this.nextBackgroundImageUrl;
+          this.isTransitioning = false;
+        }, 800);
+      }
+    },
     viewMode(newMode) {
       if (newMode === 'ai-requests') return; // handled by switchToAiRequests
       this.$nextTick(() => {

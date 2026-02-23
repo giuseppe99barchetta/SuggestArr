@@ -4,7 +4,7 @@ import ToastPlugin from 'vue-toast-notification';
 import 'vue-toast-notification/dist/theme-default.css';
 import '@/assets/styles/toast-custom.css';
 import axios from 'axios';
-import router from './router';
+import './router'; // side-effect: mounts the app via createAppRouter()
 import '@/assets/styles/theme.css';
 import '@/assets/styles/global.css';
 
