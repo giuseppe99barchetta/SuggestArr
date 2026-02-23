@@ -6,6 +6,7 @@ import asyncio
 import traceback
 from flask import Blueprint, jsonify, request
 
+from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
 from api_service.jobs.job_manager import JobManager
@@ -517,9 +518,59 @@ def get_llm_status():
     try:
         from api_service.services.llm.llm_service import get_llm_client
         client = get_llm_client()
-        return jsonify({'status': 'success', 'configured': client is not None}), 200
+        config = load_env_vars()
+        advanced_enabled = config.get('ENABLE_ADVANCED_ALGORITHM', False) is True
+        return jsonify({
+            'status': 'success',
+            'configured': client is not None,
+            'advanced_algorithm_enabled': advanced_enabled
+        }), 200
     except Exception as e:
         logger.error(f"Error checking LLM status: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@jobs_bp.route('/sync-ai-setting', methods=['POST'])
+def sync_ai_setting():
+    """
+    Sync the use_llm flag across all recommendation jobs based on ENABLE_ADVANCED_ALGORITHM config.
+
+    When ENABLE_ADVANCED_ALGORITHM is True and LLM is configured, sets use_llm=True on all
+    recommendation jobs. Otherwise sets use_llm=False.
+
+    Returns:
+        JSON with sync result and number of updated jobs.
+    """
+    try:
+        from api_service.services.llm.llm_service import get_llm_client
+
+        config = load_env_vars()
+        advanced_enabled = config.get('ENABLE_ADVANCED_ALGORITHM', False) is True
+        llm_configured = advanced_enabled and get_llm_client() is not None
+        new_use_llm = advanced_enabled and llm_configured
+
+        repository = JobRepository()
+        jobs = repository.get_all_jobs()
+        updated = 0
+
+        for job in jobs:
+            if job.get('job_type') == 'recommendation':
+                filters = job.get('filters') or {}
+                if filters.get('use_llm') != new_use_llm:
+                    filters['use_llm'] = new_use_llm
+                    repository.update_job(job['id'], {'filters': filters})
+                    updated += 1
+
+        logger.info(
+            "Synced AI setting to recommendation jobs: use_llm=%s, updated=%d", new_use_llm, updated
+        )
+        return jsonify({
+            'status': 'success',
+            'use_llm': new_use_llm,
+            'updated_jobs': updated
+        }), 200
+    except Exception as e:
+        logger.error(f"Error syncing AI setting: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 

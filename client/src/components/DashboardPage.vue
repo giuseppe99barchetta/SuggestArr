@@ -1,14 +1,21 @@
 <template>
-  <div class="settings-container">
+  <div class="settings-container" :class="{ 'static-bg-active': config.ENABLE_STATIC_BACKGROUND }">
     <div 
+      v-if="!config.ENABLE_STATIC_BACKGROUND"
       class="background-layer current-bg" 
       :style="{ backgroundImage: 'url(' + currentBackgroundUrl + ')' }"
       :class="{ 'fade-out': isTransitioning }"
     ></div>
     <div 
+      v-if="!config.ENABLE_STATIC_BACKGROUND"
       class="background-layer next-bg" 
       :style="{ backgroundImage: 'url(' + nextBackgroundUrl + ')' }"
       :class="{ 'fade-in': isTransitioning }"
+    ></div>
+    <div
+      v-if="config.ENABLE_STATIC_BACKGROUND"
+      class="background-layer static-bg"
+      :style="{ backgroundColor: config.STATIC_BACKGROUND_COLOR }"
     ></div>
     <div class="settings-content">
       <!-- Header -->
@@ -32,6 +39,9 @@
         >
           <i :class="tab.icon"></i>
           <span>{{ tab.name }}</span>
+          <span v-if="tab.isBeta" class="beta-badge">
+            BETA
+          </span>
           <!-- Badge per Requests -->
           <span v-if="tab.id === 'requests' && requestCount > 0" class="tab-badge">
             {{ requestCount }}
@@ -281,24 +291,24 @@ import { useVersionCheck } from '@/composables/useVersionCheck';
 import '@/assets/styles/dashboardPage.css';
 
 // Import tab components
-import SettingsGeneral from './settings/SettingsGeneral.vue';
 import SettingsServices from './settings/SettingsServices.vue';
 import SettingsDatabase from './settings/SettingsDatabase.vue';
 import SettingsAdvanced from './settings/SettingsAdvanced.vue';
 import SettingsRequests from './settings/SettingsRequests.vue';
 import SettingsJobs from './settings/SettingsJobs.vue';
+import AiSearchPage from './settings/AiSearchPage.vue';
 import LogsComponent from './LogsComponent.vue';
 
 export default {
   name: 'SettingsPage',
   components: {
     Footer,
-    SettingsGeneral,
     SettingsServices,
     SettingsDatabase,
     SettingsAdvanced,
     SettingsRequests,
     SettingsJobs,
+    AiSearchPage,
     LogsComponent,
   },
   setup() {
@@ -343,7 +353,7 @@ export default {
       },
       tabs: [
         { id: 'requests', name: 'Requests', icon: 'fas fa-paper-plane' },
-        { id: 'general', name: 'General', icon: 'fas fa-cog' },
+        { id: 'ai_search', name: 'AI Search', icon: 'fas fa-magic', isBeta: true },
         { id: 'services', name: 'Services', icon: 'fas fa-plug' },
         { id: 'jobs', name: 'Jobs', icon: 'fas fa-briefcase' },
         { id: 'database', name: 'Database', icon: 'fas fa-database' },
@@ -356,12 +366,12 @@ export default {
     activeTabComponent() {
       const componentMap = {
         requests: 'SettingsRequests',
-        general: 'SettingsGeneral',
         services: 'SettingsServices',
         jobs: 'SettingsJobs',
         database: 'SettingsDatabase',
         advanced: 'SettingsAdvanced',
         logs: 'LogsComponent',
+        ai_search: 'AiSearchPage',
       };
       return componentMap[this.activeTab];
     },
@@ -373,6 +383,17 @@ export default {
     isTransitioning(newValue) {
       if (newValue) {
         // Handle background transition state if needed
+      }
+    },
+    'config.ENABLE_STATIC_BACKGROUND': {
+      handler(newValue) {
+        if (newValue) {
+          this.stopBackgroundImageRotation();
+        } else if (this.config.TMDB_API_KEY) {
+          this.startBackgroundImageRotation(this.config.TMDB_API_KEY);
+        } else {
+          this.startDefaultImageRotation();
+        }
       }
     },
     'config.ENABLE_VISUAL_EFFECTS': {
@@ -392,7 +413,7 @@ export default {
       
       this.loadRequestCount();
       
-      if (this.config.TMDB_API_KEY) {
+      if (!this.config.ENABLE_STATIC_BACKGROUND && this.config.TMDB_API_KEY) {
         this.startBackgroundImageRotation(this.config.TMDB_API_KEY);
       }
     } catch (error) {
@@ -503,9 +524,33 @@ export default {
     async saveSection({ section, data }) {
       this.loadingMessage = `Saving ${section} settings...`;
       this.isLoading = true;
+      const oldSubpath = (this.config.SUBPATH || '').replace(/\/$/, '');
       try {
         await axios.post(`/api/config/section/${section}`, data);
         Object.assign(this.config, data);
+
+        // After saving advanced settings, sync use_llm flag on all recommendation jobs
+        if (section === 'advanced' && 'ENABLE_ADVANCED_ALGORITHM' in data) {
+          axios.post('/api/jobs/sync-ai-setting').catch(() => {});
+        }
+
+        // If SUBPATH changed, redirect the browser to the new base URL so the
+        // router re-initialises with the correct history base.
+        if (section === 'advanced' && 'SUBPATH' in data) {
+          const newSubpath = (data.SUBPATH || '').replace(/\/$/, '');
+          if (newSubpath !== oldSubpath) {
+            this.$toast.open({
+              message: 'Settings saved! Redirecting to new base URL…',
+              type: 'success',
+              duration: 2000,
+              position: 'top-right'
+            });
+            setTimeout(() => {
+              window.location.href = (newSubpath || '') + '/';
+            }, 1500);
+            return;
+          }
+        }
 
         this.$toast.open({
           message: `Settings saved successfully!`,

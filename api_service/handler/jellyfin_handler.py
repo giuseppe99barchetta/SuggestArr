@@ -5,7 +5,7 @@ from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 from api_service.config.config import load_env_vars
-from api_service.services.llm.llm_service import get_recommendations_from_history
+from api_service.services.llm.llm_service import get_llm_client, get_recommendations_from_history
 
 class JellyfinHandler:
     def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0):
@@ -39,7 +39,17 @@ class JellyfinHandler:
             self.use_llm = use_llm
         else:
             config = load_env_vars()
-            self.use_llm = config.get('ENABLE_ADVANCED_ALGORITHM', False)
+            if config.get('ENABLE_ADVANCED_ALGORITHM', False):
+                if get_llm_client() is not None:
+                    self.use_llm = True
+                else:
+                    self.logger.warning(
+                        "ENABLE_ADVANCED_ALGORITHM is True but LLM is not configured. "
+                        "AI-powered recommendations will be disabled."
+                    )
+                    self.use_llm = False
+            else:
+                self.use_llm = False
 
 
     async def process_recent_items(self):
@@ -136,7 +146,7 @@ class JellyfinHandler:
 
         self.logger.info(f"Delegating {max_results} {item_type} recommendations to LLM service for user {user['name']}.")
 
-        llm_recommendations = get_recommendations_from_history(history_items, max_results, item_type)
+        llm_recommendations = await get_recommendations_from_history(history_items, max_results, item_type)
 
         if not llm_recommendations:
             self.logger.warning("LLM returned no recommendations.")

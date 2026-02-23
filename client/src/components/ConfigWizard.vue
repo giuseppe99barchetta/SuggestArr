@@ -1,14 +1,21 @@
 <template>
-  <div class="wizard-container">
+  <div class="wizard-container" :class="{ 'static-bg-active': config.ENABLE_STATIC_BACKGROUND }">
     <div 
+      v-if="!config.ENABLE_STATIC_BACKGROUND"
       class="background-layer current-bg" 
       :style="{ backgroundImage: 'url(' + currentBackgroundUrl + ')' }"
       :class="{ 'fade-out': isTransitioning }"
     ></div>
     <div 
+      v-if="!config.ENABLE_STATIC_BACKGROUND"
       class="background-layer next-bg" 
       :style="{ backgroundImage: 'url(' + nextBackgroundUrl + ')' }"
       :class="{ 'fade-in': isTransitioning }"
+    ></div>
+    <div
+      v-if="config.ENABLE_STATIC_BACKGROUND"
+      class="background-layer static-bg"
+      :style="{ backgroundColor: config.STATIC_BACKGROUND_COLOR }"
     ></div>
 
     <button v-if="!showWelcome" @click="toggleLogs" class="floating-log-btn" 
@@ -231,10 +238,20 @@ export default {
 
     // Watchers
     watch(() => config.value.TMDB_API_KEY, (newApiKey) => {
-      if (newApiKey) {
+      if (!config.value.ENABLE_STATIC_BACKGROUND && newApiKey) {
         // Clear any existing rotation and start TMDB rotation
         stopBackgroundImageRotation();
         startBackgroundImageRotation(newApiKey);
+      }
+    });
+
+    watch(() => config.value.ENABLE_STATIC_BACKGROUND, (isEnabled) => {
+      if (isEnabled) {
+        stopBackgroundImageRotation();
+      } else if (config.value.TMDB_API_KEY) {
+        startBackgroundImageRotation(config.value.TMDB_API_KEY);
+      } else {
+        startDefaultImageRotation();
       }
     });
 
@@ -310,7 +327,9 @@ export default {
 
     // Initialization
     fetchConfig().then(() => {
-      if (!config.value.TMDB_API_KEY) {
+      if (config.value.ENABLE_STATIC_BACKGROUND) {
+        // do nothing
+      } else if (!config.value.TMDB_API_KEY) {
         startDefaultImageRotation();
       }
       // TMDB rotation will start via the watcher when config is loaded

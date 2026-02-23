@@ -67,7 +67,7 @@
             type="checkbox"
             @change="updateFilters(localFilters)"
           />
-          <span class="toggle-label">
+          <span class="toggle-label-modal">
             <i class="fas fa-brain"></i>
             Enable AI-powered recommendations
           </span>
@@ -532,7 +532,7 @@ export default {
   cursor: pointer;
 }
 
-.toggle-label {
+.toggle-label-modal {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -540,7 +540,7 @@ export default {
   color: var(--color-text-primary);
 }
 
-.toggle-label i {
+.toggle-label-modal i {
   color: var(--color-text-muted);
   width: 1rem;
 }

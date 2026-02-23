@@ -22,6 +22,7 @@ from api_service.blueprints.config.routes import config_bp
 from api_service.blueprints.tmdb.routes import tmdb_bp
 from api_service.blueprints.omdb.routes import omdb_bp
 from api_service.blueprints.jobs.routes import jobs_bp
+from api_service.blueprints.ai_search.routes import ai_search_bp
 
 class SubpathMiddleware:
     """
@@ -37,8 +38,12 @@ class SubpathMiddleware:
         subpath = str(subpath).strip('/') if subpath else ''
         
         if subpath and environ['PATH_INFO'].startswith(f'/{subpath}'):
-            # Strip the subpath from PATH_INFO
-            environ['PATH_INFO'] = environ['PATH_INFO'][len(subpath) + 1:]
+            # Strip the subpath from PATH_INFO.
+            # If the URL is exactly /<subpath> (no trailing slash), the result
+            # would be an empty string which is not a valid WSGI PATH_INFO.
+            # Fall back to '/' so Flask can match the root route.
+            stripped = environ['PATH_INFO'][len(subpath) + 1:]
+            environ['PATH_INFO'] = stripped if stripped else '/'
             # Ensure SCRIPT_NAME correctly reflects the subpath
             environ['SCRIPT_NAME'] = f'/{subpath}'
         return self.app(environ, start_response)
@@ -68,6 +73,7 @@ def create_app():
     application.register_blueprint(tmdb_bp, url_prefix='/api/tmdb')
     application.register_blueprint(omdb_bp, url_prefix='/api/omdb')
     application.register_blueprint(jobs_bp, url_prefix='/api/jobs')
+    application.register_blueprint(ai_search_bp, url_prefix='/api/ai-search')
 
     # Register routes
     register_routes(application)

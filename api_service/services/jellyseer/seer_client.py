@@ -29,7 +29,7 @@ class SeerClient:
         self.password = seer_password
         self.session_token = session_token
         self.is_logged_in = False
-        self._login_lock = asyncio.Lock()
+        self._login_lock = None
         self.number_of_seasons = number_of_seasons
         self.pending_requests = set()
         self.exclude_downloaded = exclude_downloaded
@@ -86,6 +86,9 @@ class SeerClient:
 
     async def login(self):
         """Authenticate with Jellyseer and obtain a session token."""
+        if self._login_lock is None:
+            self._login_lock = asyncio.Lock()
+
         async with self._login_lock:
             if self.is_logged_in:
                 self.logger.debug("Already logged in.")
@@ -95,8 +98,7 @@ class SeerClient:
         self.logger.debug("Logging in to %s", login_url)
         async with aiohttp.ClientSession() as session:
             try:
-                login_data = {"email": self.username, "password": self.password}
-                async with session.post(login_url, json=login_data, timeout=REQUEST_TIMEOUT) as response:
+                async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=REQUEST_TIMEOUT) as response:
                     self.logger.debug("Login response status: %d", response.status)
                     if response.status == 200 and 'connect.sid' in response.cookies:
                         self.session_token = response.cookies['connect.sid'].value

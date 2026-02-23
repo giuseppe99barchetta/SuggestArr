@@ -10,16 +10,17 @@ const RequestsPage = () => import('@/components/RequestsPage.vue');
 const ConfigWizard = () => import('@/components/ConfigWizard.vue');
 const DashboardPage = () => import('@/components/DashboardPage.vue');
 
-function configureAxiosSubpath() {
+function readSubpathFromMeta() {
     const metaTag = document.querySelector('meta[name="suggestarr-subpath"]');
-    const subpath = metaTag ? (metaTag.getAttribute('content') || '') : '';
+    return metaTag ? (metaTag.getAttribute('content') || '') : '';
+}
 
+function configureAxiosSubpath(subpath) {
     if (process.env.NODE_ENV === 'development') {
         axios.defaults.baseURL = 'http://localhost:5000' + subpath;
     } else {
         axios.defaults.baseURL = subpath || '/';
     }
-    return subpath;
 }
 
 async function loadConfig() {
@@ -43,7 +44,8 @@ async function checkSetupStatus() {
 }
 
 async function createAppRouter() {
-    const subpath = configureAxiosSubpath();
+    const subpath = readSubpathFromMeta();
+    configureAxiosSubpath(subpath);
     await loadConfig();
     const setupStatus = await checkSetupStatus();
 
@@ -115,24 +117,32 @@ async function createAppRouter() {
     return router;
 }
 
-export default createAppRouter().then(router => {
-    const app = createApp(App);
-    app.use(router);
-    app.mount('#app');
-    const options = {
-        position: 'top-right',
-        timeout: 5000,
-        closeOnClick: false,
-        pauseOnHover: true,
-        draggable: false,
-        showCloseButtonOnHover: true,
-        closeButton: 'button',
-        icon: true,
-        rtl: false,
-    };
+// If a subpath is configured but the browser is already on the wrong base URL,
+// redirect BEFORE any app initialisation to avoid a race condition where Vue
+// Router mounts the app while the page is simultaneously being unloaded.
+const _earlySubpath = readSubpathFromMeta();
+if (_earlySubpath && !window.location.pathname.startsWith(_earlySubpath)) {
+    window.location.replace(_earlySubpath + '/');
+} else {
+    createAppRouter().then(router => {
+        const app = createApp(App);
+        app.use(router);
+        app.mount('#app');
+        const options = {
+            position: 'top-right',
+            timeout: 5000,
+            closeOnClick: false,
+            pauseOnHover: true,
+            draggable: false,
+            showCloseButtonOnHover: true,
+            closeButton: 'button',
+            icon: true,
+            rtl: false,
+        };
 
-    app.use(ToastPlugin, options);
-    return router;
-}).catch(error => {
-    console.error('Error loading router:', error);
-});
+        app.use(ToastPlugin, options);
+        return router;
+    }).catch(error => {
+        console.error('Error loading router:', error);
+    });
+}

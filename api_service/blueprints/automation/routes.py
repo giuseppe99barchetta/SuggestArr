@@ -71,6 +71,26 @@ def get_requests():
         logger.error(f"Error retrieving requests: {e}")
         return jsonify({"error": str(e)}), 500
     
+@automation_bp.route('/requests/ai-search', methods=['GET'])
+def get_ai_requests():
+    """Get requests originated from AI Search with pagination and sorting."""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 12, type=int)
+        sort_by = request.args.get('sort_by', 'date-desc', type=str)
+
+        valid_sorts = ['date-desc', 'date-asc', 'title-asc', 'title-desc']
+        if sort_by not in valid_sorts:
+            sort_by = 'date-desc'
+
+        db_manager = DatabaseManager()
+        result = db_manager.get_ai_search_requests(page=page, per_page=per_page, sort_by=sort_by)
+        return jsonify(result), 200
+    except Exception as e:
+        logger.error(f"Error retrieving AI search requests: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @automation_bp.route('/requests/stats', methods=['GET'])
 def get_requests_stats():
     """Get statistics for automation requests."""

@@ -94,7 +94,7 @@ class TMDbClient:
                             imdb_data = await self.omdb_client.get_rating(imdb_id)
                             if not self._apply_imdb_filter(imdb_data, item, content_type):
                                 continue
-                        elif self.include_no_ratings:
+                        elif not self.include_no_ratings:
                             self._log_exclusion_reason(item, "no IMDB ID found", content_type)
                             continue
 
@@ -121,7 +121,7 @@ class TMDbClient:
         Fetches a single page of recommendations from TMDb API.
         """
         url = f"{self.tmdb_api_url}/{content_type}/{content_id}/recommendations?api_key={self.api_key}&page={page}"
-        self.logger.debug("Fetching data from URL: %s", url)
+        self.logger.debug("Fetching data from URL: %s", url.replace(self.api_key, "***"))
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
@@ -131,7 +131,7 @@ class TMDbClient:
                     else:
                         self.logger.error("Error retrieving %s recommendations: %d", content_type, response.status)
         except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while requesting %s recommendations: %s", content_type, str(e))
+            self.logger.error("An error occurred while requesting %s recommendations: %s", content_type, str(e).replace(self.api_key, "***"))
         return None
     
     async def get_metadata(self, tmdb_id, content_type):
@@ -172,7 +172,7 @@ class TMDbClient:
             return metadata
 
         except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while fetching metadata for TMDb ID %s: %s", tmdb_id, str(e))
+            self.logger.error("An error occurred while fetching metadata for TMDb ID %s: %s", tmdb_id, str(e).replace(self.api_key, "***"))
         
         return None
 
@@ -185,12 +185,17 @@ class TMDbClient:
         (IMDB rating will be checked separately via OMDb). All other TMDB filters
         (language, genre, year, streaming) are always applied.
         """
-        rating = item.get('vote_average')
-        votes = item.get('vote_count')
+        # Support both raw TMDB API keys (vote_average / vote_count) and the
+        # formatted keys produced by _format_result (rating / votes) so that
+        # _apply_filters works correctly whether called on raw or formatted items.
+        rating = item.get('vote_average') if item.get('vote_average') is not None else item.get('rating')
+        votes = item.get('vote_count') if item.get('vote_count') is not None else item.get('votes')
 
         # Only apply TMDB rating/votes filters when TMDB ratings are used
         if self.rating_source != 'imdb':
-            if self.include_no_ratings and (rating is None or votes is None):
+            # Exclude items that have no rating data only when the user has opted out
+            # of including unrated content (include_no_ratings=False means "require ratings").
+            if not self.include_no_ratings and (rating is None or votes is None):
                 self._log_exclusion_reason(item, "missing rating or votes", content_type)
                 return False
 
@@ -293,7 +298,7 @@ class TMDbClient:
                                             content_type, content_id, response.status)
         except aiohttp.ClientError as e:
             self.logger.warning("Error fetching details for %s ID %s: %s",
-                                content_type, content_id, str(e))
+                                content_type, content_id, str(e).replace(self.api_key, "***"))
         return {}
 
     async def _get_tv_imdb_id(self, tv_id):
@@ -315,7 +320,7 @@ class TMDbClient:
                         self.logger.warning("Failed to fetch external IDs for TV ID %s: HTTP %d",
                                             tv_id, response.status)
         except aiohttp.ClientError as e:
-            self.logger.warning("Error fetching external IDs for TV ID %s: %s", tv_id, str(e))
+            self.logger.warning("Error fetching external IDs for TV ID %s: %s", tv_id, str(e).replace(self.api_key, "***"))
         return None
 
     def _apply_imdb_filter(self, imdb_data, item, content_type):
@@ -331,7 +336,7 @@ class TMDbClient:
             bool: True if the item passes IMDB filters, False if it should be excluded.
         """
         if imdb_data is None:
-            if self.include_no_ratings:
+            if not self.include_no_ratings:
                 self._log_exclusion_reason(item, "no IMDB rating data available", content_type)
                 return False
             return True
@@ -417,7 +422,7 @@ class TMDbClient:
                     else:
                         self.logger.error("Error converting TVDb ID to TMDb ID: %d", response.status)
         except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while converting TVDb ID: %s", str(e))
+            self.logger.error("An error occurred while converting TVDb ID: %s", str(e).replace(self.api_key, "***"))
 
         return None
     
@@ -456,7 +461,7 @@ class TMDbClient:
                     else:
                         self.logger.error("Failed to retrieve watch providers for content ID %s: %d", content_id, response.status)
         except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while fetching watch providers: %s", str(e))
+            self.logger.error("An error occurred while fetching watch providers: %s", str(e).replace(self.api_key, "***"))
 
         return False, None
 
@@ -510,6 +515,6 @@ class TMDbClient:
                     else:
                         self.logger.error("Error searching TMDb: %d", response.status)
         except aiohttp.ClientError as e:
-            self.logger.error("An error occurred while searching TMDb: %s", str(e))
+            self.logger.error("An error occurred while searching TMDb: %s", str(e).replace(self.api_key, "***"))
         return []
 
