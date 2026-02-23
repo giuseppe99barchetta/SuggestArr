@@ -59,4 +59,4 @@ jobs:
         run: cd client && npm install
 
       - name: Run ESLint
-        run: cd client && npm run lint
+        run: cd client && npx eslint --ext .js,.vue src/

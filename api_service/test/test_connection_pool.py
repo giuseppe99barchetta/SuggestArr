@@ -23,7 +23,7 @@ class TestConnectionPool(unittest.TestCase):
         
         self.db_manager = DatabaseManager()
     
-def tearDown(self):
+    def tearDown(self):
         """Clean up after tests."""
         pass  # No cleanup needed for direct connections
     
@@ -77,7 +77,7 @@ def tearDown(self):
             result = cursor.fetchone()
             self.assertEqual(result[0], 1)
     
-def test_global_pool_manager(self):
+    def test_global_pool_manager(self):
         """Test that database manager works correctly."""
         # Get pool stats from database manager
         stats = self.db_manager.get_pool_stats()
