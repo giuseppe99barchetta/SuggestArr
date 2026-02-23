@@ -2,6 +2,9 @@
 
 from functools import wraps
 from flask import jsonify
+from api_service.config.logger_manager import LoggerManager
+
+logger = LoggerManager.get_logger(__name__)
 
 def handle_api_errors(f):
     """
@@ -16,7 +19,8 @@ def handle_api_errors(f):
         except FileNotFoundError as fnfe:
             return jsonify({'message': str(fnfe), 'type': 'error'}), 404
         except Exception as e:
-            return jsonify({'message': f'Unexpected error: {str(e)}', 'type': 'error'}), 500
+            logger.error("Unexpected error in API handler: %s", e, exc_info=True)
+            return jsonify({'message': 'An internal error occurred', 'type': 'error'}), 500
     return decorated_function
 
 def validate_required_fields(required_fields, data):

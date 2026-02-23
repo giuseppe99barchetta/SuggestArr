@@ -36,8 +36,8 @@ async def get_plex_libraries():
         logger.info(f"Successfully fetched {len(libraries)} libraries from Plex server")
         return jsonify({'message': 'Libraries fetched successfully', 'items': libraries}), 200
     except Exception as e:
-        logger.error(f'Error fetching Plex libraries: {str(e)}')
-        return jsonify({'message': f'Error fetching Plex libraries: {str(e)}', 'type': 'error'}), 500
+        logger.error(f'Error fetching Plex libraries: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error fetching Plex libraries', 'type': 'error'}), 500
     
     
 
@@ -99,8 +99,8 @@ async def get_plex_servers_async_route():
             return jsonify({'message': 'Failed to fetch Plex servers', 'type': 'error'}), 404
 
     except Exception as e:
-        logger.error(f"Error fetching Plex servers: {str(e)}")
-        return jsonify({'message': f'Error fetching Plex servers: {str(e)}', 'type': 'error'}), 500
+        logger.error(f"Error fetching Plex servers: {str(e)}", exc_info=True)
+        return jsonify({'message': 'Error fetching Plex servers', 'type': 'error'}), 500
     
 @plex_bp.route('/test', methods=['POST'])
 async def test_plex_connection():
@@ -149,16 +149,16 @@ async def test_plex_connection():
                 }), 400
 
         except Exception as conn_error:
-            logger.error(f'Plex connection test failed: {str(conn_error)}')
+            logger.error(f'Plex connection test failed: {str(conn_error)}', exc_info=True)
             return jsonify({
-                'message': f'Plex connection failed: {str(conn_error)}',
+                'message': 'Plex connection failed',
                 'status': 'error'
             }), 400
 
     except Exception as e:
-        logger.error(f'Error testing Plex connection: {str(e)}')
+        logger.error(f'Error testing Plex connection: {str(e)}', exc_info=True)
         return jsonify({
-            'message': f'Error testing Plex connection: {str(e)}',
+            'message': 'Error testing Plex connection',
             'status': 'error'
         }), 500
 
@@ -189,5 +189,5 @@ async def get_plex_users():
 
         return jsonify({'message': 'Users fetched successfully', 'users': users}), 200
     except Exception as e:
-        logger.error(f'Error fetching Plex users: {str(e)}')
-        return jsonify({'message': f'Error fetching Plex users: {str(e)}', 'type': 'error'}), 500
+        logger.error(f'Error fetching Plex users: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error fetching Plex users', 'type': 'error'}), 500

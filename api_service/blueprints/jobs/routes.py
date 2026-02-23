@@ -74,8 +74,8 @@ def get_jobs():
 
         return jsonify({'status': 'success', 'jobs': jobs}), 200
     except Exception as e:
-        logger.error(f"Error retrieving jobs: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error retrieving jobs: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('/<int:job_id>', methods=['GET'])
@@ -108,8 +108,8 @@ def get_job(job_id: int):
 
         return jsonify({'status': 'success', 'job': job}), 200
     except Exception as e:
-        logger.error(f"Error retrieving job {job_id}: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error retrieving job {job_id}: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('', methods=['POST'])
@@ -182,9 +182,8 @@ def create_job():
         return jsonify({'status': 'success', 'job_id': job_id}), 201
 
     except Exception as e:
-        logger.error(f"Error creating job: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error creating job: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('/<int:job_id>', methods=['PUT'])
@@ -246,9 +245,8 @@ def update_job(job_id: int):
             return jsonify({'status': 'error', 'message': 'Update failed'}), 500
 
     except Exception as e:
-        logger.error(f"Error updating job {job_id}: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error updating job {job_id}: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('/<int:job_id>', methods=['DELETE'])
@@ -284,8 +282,8 @@ def delete_job(job_id: int):
             return jsonify({'status': 'error', 'message': 'Delete failed'}), 500
 
     except Exception as e:
-        logger.error(f"Error deleting job {job_id}: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error deleting job {job_id}: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('/<int:job_id>/toggle', methods=['POST'])
@@ -329,8 +327,8 @@ def toggle_job(job_id: int):
         }), 200
 
     except Exception as e:
-        logger.error(f"Error toggling job {job_id}: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error toggling job {job_id}: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('/<int:job_id>/run', methods=['POST'])
@@ -375,10 +373,8 @@ def run_job_now(job_id: int):
             }), 500
 
     except Exception as e:
-        error_msg = str(e) if str(e) else type(e).__name__
-        logger.error(f"Error running job {job_id}: {error_msg}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({'status': 'error', 'message': error_msg}), 500
+        logger.error(f"Error running job {job_id}: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('/<int:job_id>/history', methods=['GET'])
@@ -413,8 +409,8 @@ def get_job_history(job_id: int):
         }), 200
 
     except Exception as e:
-        logger.error(f"Error retrieving history for job {job_id}: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error retrieving history for job {job_id}: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('/history', methods=['GET'])
@@ -436,8 +432,8 @@ def get_all_history():
         return jsonify({'status': 'success', 'history': history}), 200
 
     except Exception as e:
-        logger.error(f"Error retrieving history: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error retrieving history: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('/genres/<media_type>', methods=['GET'])
@@ -480,8 +476,8 @@ def get_genres(media_type: str):
         return jsonify({'status': 'success', 'genres': genres}), 200
 
     except Exception as e:
-        logger.error(f"Error retrieving genres: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error retrieving genres: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('/languages', methods=['GET'])
@@ -503,8 +499,8 @@ def get_languages():
         return jsonify({'status': 'success', 'languages': languages}), 200
 
     except Exception as e:
-        logger.error(f"Error retrieving languages: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error retrieving languages: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('/llm-status', methods=['GET'])
@@ -526,8 +522,8 @@ def get_llm_status():
             'advanced_algorithm_enabled': advanced_enabled
         }), 200
     except Exception as e:
-        logger.error(f"Error checking LLM status: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error checking LLM status: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('/sync-ai-setting', methods=['POST'])
@@ -570,8 +566,8 @@ def sync_ai_setting():
             'updated_jobs': updated
         }), 200
     except Exception as e:
-        logger.error(f"Error syncing AI setting: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error syncing AI setting: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @jobs_bp.route('/llm-test', methods=['POST'])
@@ -613,8 +609,8 @@ def test_llm_connection():
         return jsonify({'status': 'success', 'message': 'Connection successful!'}), 200
 
     except Exception as e:
-        logger.error(f"LLM connection test failed: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 400
+        logger.error(f"LLM connection test failed: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'LLM connection test failed. Check logs for details.'}), 400
 
 
 @jobs_bp.route('/import-config', methods=['POST'])
@@ -657,6 +653,5 @@ def import_config():
             }), 500
 
     except Exception as e:
-        logger.error(f"Error importing config: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f"Error importing config: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500

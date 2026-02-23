@@ -22,8 +22,8 @@ def fetch_config():
         config = load_env_vars()
         return jsonify(config), 200
     except Exception as e:
-        logger.error(f'Error loading configuration: {str(e)}')
-        return jsonify({'message': f'Error loading configuration: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error loading configuration: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error loading configuration', 'status': 'error'}), 500
 
 @config_bp.route('/save', methods=['POST'])
 def save_config():
@@ -36,8 +36,8 @@ def save_config():
         DatabaseManager().initialize_db()
         return jsonify({'message': 'Configuration saved successfully!', 'status': 'success'}), 200
     except Exception as e:
-        logger.error(f'Error saving configuration: {str(e)}')
-        return jsonify({'message': f'Error saving configuration: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error saving configuration: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error saving configuration', 'status': 'error'}), 500
 
 @config_bp.route('/reset', methods=['POST'])
 def reset_config():
@@ -48,8 +48,8 @@ def reset_config():
         clear_env_vars()
         return jsonify({'message': 'Configuration cleared successfully!', 'status': 'success'}), 200
     except Exception as e:
-        logger.error(f'Error clearing configuration: {str(e)}')
-        return jsonify({'message': f'Error clearing configuration: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error clearing configuration: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error clearing configuration', 'status': 'error'}), 500
 
 @config_bp.route('/test-db-connection', methods=['POST'])
 def test_db_connection():
@@ -75,8 +75,8 @@ def test_db_connection():
         return jsonify(result), 200 if result['status'] == 'success' else 500
 
     except Exception as e:
-        logger.error(f'Error testing database connection: {str(e)}')
-        return jsonify({'message': f'Error testing database connection: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error testing database connection: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error testing database connection', 'status': 'error'}), 500
 
 @config_bp.route('/sections', methods=['GET'])
 def get_config_sections():
@@ -90,8 +90,8 @@ def get_config_sections():
             'status': 'success'
         }), 200
     except Exception as e:
-        logger.error(f'Error getting configuration sections: {str(e)}')
-        return jsonify({'message': f'Error getting configuration sections: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error getting configuration sections: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error getting configuration sections', 'status': 'error'}), 500
 
 @config_bp.route('/section/<section_name>', methods=['GET'])
 def get_config_section_endpoint(section_name):
@@ -109,8 +109,8 @@ def get_config_section_endpoint(section_name):
         logger.error(f'Invalid configuration section: {str(e)}')
         return jsonify({'message': f'Invalid configuration section: {str(e)}', 'status': 'error'}), 400
     except Exception as e:
-        logger.error(f'Error getting configuration section {section_name}: {str(e)}')
-        return jsonify({'message': f'Error getting configuration section: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error getting configuration section {section_name}: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error getting configuration section', 'status': 'error'}), 500
 
 @config_bp.route('/section/<section_name>', methods=['POST'])
 def save_config_section_endpoint(section_name):
@@ -132,8 +132,8 @@ def save_config_section_endpoint(section_name):
         logger.error(f'Invalid configuration section: {str(e)}')
         return jsonify({'message': f'Invalid configuration section: {str(e)}', 'status': 'error'}), 400
     except Exception as e:
-        logger.error(f'Error saving configuration section {section_name}: {str(e)}')
-        return jsonify({'message': f'Error saving configuration section: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error saving configuration section {section_name}: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error saving configuration section', 'status': 'error'}), 500
 
 @config_bp.route('/status', methods=['GET'])
 def get_setup_status():
@@ -159,8 +159,8 @@ def get_setup_status():
             'status': 'success'
         }), 200
     except Exception as e:
-        logger.error(f'Error getting setup status: {str(e)}')
-        return jsonify({'message': f'Error getting setup status: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error getting setup status: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error getting setup status', 'status': 'error'}), 500
 
 @config_bp.route('/complete-setup', methods=['POST'])
 def complete_setup():
@@ -185,8 +185,8 @@ def complete_setup():
             'status': 'success'
         }), 200
     except Exception as e:
-        logger.error(f'Error completing setup: {str(e)}')
-        return jsonify({'message': f'Error completing setup: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error completing setup: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error completing setup', 'status': 'error'}), 500
 
 @config_bp.route('/log-level', methods=['GET'])
 def get_log_level():
@@ -201,8 +201,8 @@ def get_log_level():
             'status': 'success'
         }), 200
     except Exception as e:
-        logger.error(f'Error getting log level: {str(e)}')
-        return jsonify({'message': f'Error getting log level: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error getting log level: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error getting log level', 'status': 'error'}), 500
 
 @config_bp.route('/log-level', methods=['POST'])
 def set_log_level():
@@ -229,8 +229,8 @@ def set_log_level():
         logger.error(f'Invalid log level: {str(e)}')
         return jsonify({'message': str(e), 'status': 'error'}), 400
     except Exception as e:
-        logger.error(f'Error setting log level: {str(e)}')
-        return jsonify({'message': f'Error setting log level: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error setting log level: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error setting log level', 'status': 'error'}), 500
 
 @config_bp.route('/pool-stats', methods=['GET'])
 def get_pool_statistics():
@@ -249,8 +249,8 @@ def get_pool_statistics():
             'status': 'success'
         }), 200
     except Exception as e:
-        logger.error(f'Error getting pool statistics: {str(e)}')
-        return jsonify({'message': f'Error getting pool statistics: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error getting pool statistics: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error getting pool statistics', 'status': 'error'}), 500
 
 @config_bp.route('/force_run', methods=['POST'])
 def force_run_automation():
@@ -269,8 +269,8 @@ def force_run_automation():
             'status': 'success'
         }), 200
     except Exception as e:
-        logger.error(f'Error forcing automation run: {str(e)}')
-        return jsonify({'message': f'Error forcing automation run: {str(e)}', 'status': 'error'}), 500
+        logger.error(f'Error forcing automation run: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error forcing automation run', 'status': 'error'}), 500
 
 @config_bp.route('/test-db', methods=['POST'])
 def test_database_connection():
@@ -294,9 +294,9 @@ def test_database_connection():
         
         return jsonify(result), 200
     except Exception as e:
-        logger.error(f'Error testing database connection: {str(e)}')
+        logger.error(f'Error testing database connection: {str(e)}', exc_info=True)
         return jsonify({
-            'message': f'Error testing database connection: {str(e)}', 
+            'message': 'Error testing database connection',
             'status': 'error'
         }), 500
 
@@ -382,8 +382,8 @@ def get_docker_info():
         }), 200
         
     except Exception as e:
-        logger.error(f'get_docker_info error: {e}')
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f'get_docker_info error: {e}', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
 @config_bp.route('/docker-digest/<tag>', methods=['GET'])
@@ -418,5 +418,5 @@ def get_docker_digest(tag):
         }), 404
         
     except requests.exceptions.RequestException as e:
-        logger.error(f'Docker digest API error for {tag}: {e}')
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        logger.error(f'Docker digest API error for {tag}: {e}', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Failed to retrieve Docker digest'}), 500

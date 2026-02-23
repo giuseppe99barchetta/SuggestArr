@@ -29,8 +29,8 @@ async def get_users():
 
         return jsonify({'message': 'Users fetched successfully', 'users': users}), 200
     except Exception as e:
-        logger.error(f'Error fetching Jellyseer/Overseer users: {str(e)}')
-        return jsonify({'message': f'Error fetching users: {str(e)}', 'type': 'error'}), 500
+        logger.error(f'Error fetching Jellyseer/Overseer users: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error fetching users', 'type': 'error'}), 500
 
 async def _simple_seer_http_test(api_url, api_key):
     """
@@ -69,9 +69,11 @@ async def _simple_seer_http_test(api_url, api_key):
     except aiohttp.ClientTimeout:
         return False, "Connection timeout", {}
     except aiohttp.ClientError as e:
-        return False, f"Connection error: {str(e)}", {}
+        logger.error("Seer HTTP connection error: %s", e)
+        return False, "Connection error", {}
     except Exception as e:
-        return False, f"Unexpected error: {str(e)}", {}
+        logger.error("Seer HTTP unexpected error: %s", e, exc_info=True)
+        return False, "Unexpected error occurred", {}
 
 @seer_bp.route('/test', methods=['POST'])
 async def test_seer_connection():
@@ -135,17 +137,17 @@ async def test_seer_connection():
                 }), 400
 
         except Exception as client_error:
-            logger.error(f'Overseer/Jellyseer client test failed: {str(client_error)}')
+            logger.error(f'Overseer/Jellyseer client test failed: {str(client_error)}', exc_info=True)
             return jsonify({
-                'message': f'HTTP connection successful but client test failed: {str(client_error)}',
+                'message': 'HTTP connection successful but client test failed',
                 'status': 'error',
                 'data': http_data
             }), 400
 
     except Exception as e:
-        logger.error(f'Error testing Overseer/Jellyseer connection: {str(e)}')
+        logger.error(f'Error testing Overseer/Jellyseer connection: {str(e)}', exc_info=True)
         return jsonify({
-            'message': f'Error testing Overseer/Jellyseer connection: {str(e)}',
+            'message': 'Error testing Overseer/Jellyseer connection',
             'status': 'error'
         }), 500
 
@@ -207,8 +209,8 @@ async def get_radarr_servers():
 
         return jsonify({'servers': servers or []}), 200
     except Exception as e:
-        logger.error(f'Error fetching Radarr servers: {str(e)}')
-        return jsonify({'message': f'Error fetching Radarr servers: {str(e)}', 'type': 'error'}), 500
+        logger.error(f'Error fetching Radarr servers: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error fetching Radarr servers', 'type': 'error'}), 500
 
 
 @seer_bp.route('/sonarr-servers', methods=['POST'])
@@ -231,5 +233,5 @@ async def get_sonarr_servers():
 
         return jsonify({'servers': servers or []}), 200
     except Exception as e:
-        logger.error(f'Error fetching Sonarr servers: {str(e)}')
-        return jsonify({'message': f'Error fetching Sonarr servers: {str(e)}', 'type': 'error'}), 500
+        logger.error(f'Error fetching Sonarr servers: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error fetching Sonarr servers', 'type': 'error'}), 500

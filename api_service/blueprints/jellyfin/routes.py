@@ -34,8 +34,8 @@ async def get_jellyfin_library():
             logger.warning("No libraries found on Jellyfin server")
             return jsonify({'message': 'No library found', 'type': 'error'}), 404
     except Exception as e:
-        logger.error(f'Error fetching Jellyfin libraries: {str(e)}')
-        return jsonify({'message': f'Error fetching Jellyfin libraries: {str(e)}', 'type': 'error'}), 500
+        logger.error(f'Error fetching Jellyfin libraries: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error fetching Jellyfin libraries', 'type': 'error'}), 500
 
 @jellyfin_bp.route('/test', methods=['POST'])
 async def test_jellyfin_connection():
@@ -84,16 +84,16 @@ async def test_jellyfin_connection():
                 }), 400
 
         except Exception as conn_error:
-            logger.error(f'Jellyfin connection test failed: {str(conn_error)}')
+            logger.error(f'Jellyfin connection test failed: {str(conn_error)}', exc_info=True)
             return jsonify({
-                'message': f'Jellyfin connection failed: {str(conn_error)}',
+                'message': 'Jellyfin connection failed',
                 'status': 'error'
             }), 400
 
     except Exception as e:
-        logger.error(f'Error testing Jellyfin connection: {str(e)}')
+        logger.error(f'Error testing Jellyfin connection: {str(e)}', exc_info=True)
         return jsonify({
-            'message': f'Error testing Jellyfin connection: {str(e)}',
+            'message': 'Error testing Jellyfin connection',
             'status': 'error'
         }), 500
 
@@ -124,5 +124,5 @@ async def get_jellyfin_users():
             return jsonify({'message': 'Users fetched successfully', 'users': users}), 200
         return jsonify({'message': 'No users found', 'type': 'error'}), 404
     except Exception as e:
-        logger.error(f'Error fetching Jellyfin users: {str(e)}')
-        return jsonify({'message': f'Error fetching Jellyfin users: {str(e)}', 'type': 'error'}), 500
+        logger.error(f'Error fetching Jellyfin users: {str(e)}', exc_info=True)
+        return jsonify({'message': 'Error fetching Jellyfin users', 'type': 'error'}), 500

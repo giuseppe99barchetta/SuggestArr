@@ -325,13 +325,11 @@ def is_setup_complete(config_data=None):
         essential_checks.extend([
             config_data.get('PLEX_TOKEN'),
             config_data.get('PLEX_API_URL'),
-            config_data.get('PLEX_LIBRARIES')
         ])
-    elif service == 'jellyfin':
+    elif service in ('jellyfin', 'emby'):
         essential_checks.extend([
             config_data.get('JELLYFIN_API_URL'),
             config_data.get('JELLYFIN_TOKEN'),
-            config_data.get('JELLYFIN_LIBRARIES')
         ])
 
     # Database check (always required)
