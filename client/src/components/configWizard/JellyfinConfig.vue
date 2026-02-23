@@ -410,7 +410,7 @@ export default {
         }
     },
     methods: {
-        handleUrlInput(_value) {
+        handleUrlInput() {
             // Reset test state when URL changes
             if (this.testState.status !== null) {
                 this.testState.status = null;

@@ -9,7 +9,7 @@
         <div class="form-group">
             <label for="DB_TYPE" class="form-label">Database Type</label>
             <BaseDropdown
-              v-model="config.DB_TYPE"
+              :model-value="config.DB_TYPE"
               :options="databaseOptions"
               placeholder="Select database type"
               id="DB_TYPE"

@@ -577,7 +577,7 @@ export default {
         }
     },
     methods: {
-        handleUrlInput(_value) {
+        handleUrlInput() {
             if (this.testState.status !== null) {
                 this.testState.status = null;
                 this.users = [];
