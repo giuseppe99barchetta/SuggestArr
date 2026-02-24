@@ -194,9 +194,47 @@ class SeerClient:
         self.logger.info("Applied profile '%s': serverId=%s, profileId=%s, rootFolder=%s",
                         profile_key, profile.get('serverId'), profile.get('profileId'), profile.get('rootFolder'))
 
+    def _build_seer_payload(self, media_type, media, source=None, user=None,
+                            is_anime=False, rationale=None):
+        """Build the Seer request payload dict.
+
+        Private meta-keys (prefixed with ``_``) are stripped before the payload is
+        sent to Seer but are preserved in the queue row so the worker can call
+        ``save_request`` / ``save_metadata`` correctly after a successful submission.
+
+        :return: payload dict ready for JSON serialisation.
+        """
+        data = {"mediaType": media_type, "mediaId": media['id']}
+
+        if media_type == 'tv':
+            data["seasons"] = (
+                "all" if self.number_of_seasons == "all"
+                else list(range(1, int(self.number_of_seasons) + 1))
+            )
+
+        if self.anime_profile_config:
+            profile_key = f"anime_{media_type}" if is_anime else f"default_{media_type}"
+            self._apply_profile_config(data, profile_key, media_type)
+
+        # Private meta-keys — consumed by the worker, not sent to Seer
+        data["_source_id"] = source.get('id') if source else None
+        data["_user_id"] = user.get('id') if user else None
+        data["_rationale"] = rationale
+        data["_is_anime"] = is_anime
+        data["_media_obj"] = media    # worker needs this for save_metadata
+        data["_source_obj"] = source  # worker needs this for save_metadata
+
+        return data
+
     async def request_media(self, media_type, media, source=None, tvdb_id=None, user=None, is_anime=False, rationale=None):
-        """Request media and save it to the database if successful.
-        :param is_anime: If True, use anime-specific Overseerr profile routing.
+        """Enqueue a Seer submission for reliable background delivery.
+
+        Replaces the old direct-submit behaviour. All pre-checks (already requested /
+        downloaded / streaming-excluded) are still performed by the caller (handler
+        layer) before this method is invoked.
+
+        :return: True if the item was newly enqueued, False if skipped (duplicate or
+            already submitted).
         """
         tmdb_id = str(media['id'])
 
@@ -205,59 +243,51 @@ class SeerClient:
             self.logger.debug("Skipping duplicate request for %s (ID: %s)", media_type, tmdb_id)
             return False
 
-        # Cross-process guard: atomic DB lock prevents duplicates across overlapping job runs
         db = DatabaseManager()
-        if not db.try_acquire_submission_lock(tmdb_id, media_type):
-            self.logger.info("Skipping %s (ID: %s): submission lock held by another job.", media_type, tmdb_id)
+
+        # Double-check DB to close the TOCTOU gap between the handler's
+        # check_already_requested() call and this point.
+        if self.exclude_requested and db.check_request_exists(media_type, tmdb_id):
+            self.logger.debug(
+                "Skipping %s (ID: %s): already in DB (concurrent submission).", media_type, tmdb_id
+            )
             return False
 
-        try:
-            # Double-check DB inside the lock: closes the TOCTOU gap between the handler's
-            # check_already_requested() call and this point (another run may have committed).
-            # Respects exclude_requested so it mirrors the handler-level check exactly.
-            if self.exclude_requested and db.check_request_exists(media_type, tmdb_id):
-                self.logger.debug(
-                    "Skipping %s (ID: %s): already in DB (concurrent submission).", media_type, tmdb_id
-                )
-                return False
+        # Mark in-memory to short-circuit further calls within this run
+        self.pending_requests.add((media_type, tmdb_id))
 
-            # Mark in-memory to short-circuit further calls within this run
-            self.pending_requests.add((media_type, tmdb_id))
+        payload = self._build_seer_payload(media_type, media, source=source, user=user,
+                                           is_anime=is_anime, rationale=rationale)
+        user_id = user.get('id') if user else None
 
-            self.logger.debug("Requesting media: %s, media_type: %s, is_anime: %s", media, media_type, is_anime)
-            data = {"mediaType": media_type, "mediaId": media['id']}
+        if user:
+            db.save_user(user)
 
-            if media_type == 'tv':
-                data["seasons"] = "all" if self.number_of_seasons == "all" else list(range(1, int(self.number_of_seasons) + 1))
+        enqueued = db.enqueue_request(tmdb_id, media_type, user_id, payload)
+        if enqueued:
+            self.logger.info("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)
+        return enqueued
 
-            # Apply anime or default profile routing
-            if self.anime_profile_config:
-                if is_anime:
-                    profile_key = f"anime_{media_type}"
-                    self._apply_profile_config(data, profile_key, media_type)
-                else:
-                    profile_key = f"default_{media_type}"
-                    self._apply_profile_config(data, profile_key, media_type)
+    async def submit_queued_request(self, payload: dict) -> bool:
+        """Perform the actual HTTP submission to Seer for a single queue row.
 
-            response = await self._make_request("POST", "api/v1/request", data=data, use_cookie=bool(self.session_token))
-            if response and 'error' not in response:
-                self.logger.debug("Media request successful: %s", response)
-                user_id = None
-                if user:
-                    db.save_user(user)
-                    user_id = user.get('id')
-                source_id = source.get('id') if source else None
-                db.save_request(media_type, media.get('id'), source_id, user_id, rationale=rationale)
-                if source and source.get('id'):
-                    db.save_metadata(source, media_type)
-                if media:
-                    db.save_metadata(media, media_type)
-                return True
-            else:
-                self.logger.error("Media request failed: %s", response)
-                return False
-        finally:
-            db.release_submission_lock(tmdb_id, media_type)
+        Called by the queue worker.  Strips private meta-keys before sending.
+
+        :param payload: The JSON-decoded payload stored in pending_requests.
+        :return: True on HTTP success, False on any failure.
+        """
+        # Build clean Seer body (drop private meta-keys)
+        data = {k: v for k, v in payload.items() if not k.startswith('_')}
+
+        response = await self._make_request(
+            "POST", "api/v1/request", data=data, use_cookie=bool(self.session_token)
+        )
+        if response and 'error' not in response:
+            self.logger.debug("Seer submission successful: %s", response)
+            return True
+
+        self.logger.error("Seer submission failed: %s", response)
+        return False
             
     async def check_already_requested(self, tmdb_id, media_type):
         """Check if a media request is cached in the current cycle."""
