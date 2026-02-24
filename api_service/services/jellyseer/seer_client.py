@@ -198,49 +198,66 @@ class SeerClient:
         """Request media and save it to the database if successful.
         :param is_anime: If True, use anime-specific Overseerr profile routing.
         """
+        tmdb_id = str(media['id'])
 
-        # Avoid duplicate requests
-        if (media_type, media['id']) in self.pending_requests:
-            self.logger.debug("Skipping duplicate request for %s (ID: %s)", media_type, media['id'])
+        # Fast intra-process guard (asyncio is single-threaded: check+add are atomic)
+        if (media_type, tmdb_id) in self.pending_requests:
+            self.logger.debug("Skipping duplicate request for %s (ID: %s)", media_type, tmdb_id)
             return False
 
-        self.pending_requests.add((media_type, media['id']))
-        self.logger.debug("Requesting media: %s, media_type: %s, is_anime: %s", media, media_type, is_anime)
-        data = {"mediaType": media_type, "mediaId": media['id']}
+        # Cross-process guard: atomic DB lock prevents duplicates across overlapping job runs
+        db = DatabaseManager()
+        if not db.try_acquire_submission_lock(tmdb_id, media_type):
+            self.logger.info("Skipping %s (ID: %s): submission lock held by another job.", media_type, tmdb_id)
+            return False
 
-        if media_type == 'tv':
-            data["seasons"] = "all" if self.number_of_seasons == "all" else list(range(1, int(self.number_of_seasons) + 1))
+        try:
+            # Double-check DB inside the lock: closes the TOCTOU gap between the handler's
+            # check_already_requested() call and this point (another run may have committed).
+            # Respects exclude_requested so it mirrors the handler-level check exactly.
+            if self.exclude_requested and db.check_request_exists(media_type, tmdb_id):
+                self.logger.debug(
+                    "Skipping %s (ID: %s): already in DB (concurrent submission).", media_type, tmdb_id
+                )
+                return False
 
-        # Apply anime or default profile routing
-        if self.anime_profile_config:
-            if is_anime:
-                profile_key = f"anime_{media_type}"
-                self._apply_profile_config(data, profile_key, media_type)
+            # Mark in-memory to short-circuit further calls within this run
+            self.pending_requests.add((media_type, tmdb_id))
+
+            self.logger.debug("Requesting media: %s, media_type: %s, is_anime: %s", media, media_type, is_anime)
+            data = {"mediaType": media_type, "mediaId": media['id']}
+
+            if media_type == 'tv':
+                data["seasons"] = "all" if self.number_of_seasons == "all" else list(range(1, int(self.number_of_seasons) + 1))
+
+            # Apply anime or default profile routing
+            if self.anime_profile_config:
+                if is_anime:
+                    profile_key = f"anime_{media_type}"
+                    self._apply_profile_config(data, profile_key, media_type)
+                else:
+                    profile_key = f"default_{media_type}"
+                    self._apply_profile_config(data, profile_key, media_type)
+
+            response = await self._make_request("POST", "api/v1/request", data=data, use_cookie=bool(self.session_token))
+            if response and 'error' not in response:
+                self.logger.debug("Media request successful: %s", response)
+                user_id = None
+                if user:
+                    db.save_user(user)
+                    user_id = user.get('id')
+                source_id = source.get('id') if source else None
+                db.save_request(media_type, media.get('id'), source_id, user_id, rationale=rationale)
+                if source and source.get('id'):
+                    db.save_metadata(source, media_type)
+                if media:
+                    db.save_metadata(media, media_type)
+                return True
             else:
-                profile_key = f"default_{media_type}"
-                self._apply_profile_config(data, profile_key, media_type)
-
-        response = await self._make_request("POST", "api/v1/request", data=data, use_cookie=bool(self.session_token))
-        if response and 'error' not in response:
-            self.logger.debug("Media request successful: %s", response)
-            databaseManager = DatabaseManager()
-            # Safely get the user ID if the user object exists
-            user_id = None
-            if user:
-                databaseManager.save_user(user)
-                user_id = user.get('id')
-            # Safely get the source ID if the source object exists
-            source_id = source.get('id') if source else None
-            # Save the request utilizing the safely extracted variables
-            databaseManager.save_request(media_type, media.get('id'), source_id, user_id, rationale=rationale)
-            if source and source.get('id'):
-                databaseManager.save_metadata(source, media_type)
-            if media:
-                databaseManager.save_metadata(media, media_type)
-            return True
-        else:
-            self.logger.error("Media request failed: %s", response)
-            return False
+                self.logger.error("Media request failed: %s", response)
+                return False
+        finally:
+            db.release_submission_lock(tmdb_id, media_type)
             
     async def check_already_requested(self, tmdb_id, media_type):
         """Check if a media request is cached in the current cycle."""

@@ -223,6 +223,42 @@ class DatabaseManager:
         
         # Add missing columns
         self.add_missing_columns()
+
+        # Create submission lock table (separate to control column types per DB engine)
+        self._create_submission_locks_table()
+
+    def _create_submission_locks_table(self):
+        """Create the submission_locks table for cross-process submission deduplication."""
+        if self.db_type in ['mysql', 'mariadb']:
+            query = """
+                CREATE TABLE IF NOT EXISTS submission_locks (
+                    tmdb_id VARCHAR(64) NOT NULL,
+                    media_type VARCHAR(16) NOT NULL,
+                    locked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (tmdb_id, media_type)
+                ) ENGINE=InnoDB
+            """
+        else:
+            query = """
+                CREATE TABLE IF NOT EXISTS submission_locks (
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    locked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (tmdb_id, media_type)
+                )
+            """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query)
+                conn.commit()
+                self.logger.debug("Table 'submission_locks' created or verified successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to create table 'submission_locks': {e}")
+            raise DatabaseError(
+                error=f"Table creation failed: {str(e)}",
+                db_type=self.db_type
+            )
     
     def add_missing_columns(self):
         """Check and add missing columns to the requests table."""
@@ -419,6 +455,99 @@ class DatabaseManager:
             result = cursor.fetchone()
             return result is not None
     
+    def try_acquire_submission_lock(self, tmdb_id: str, media_type: str, ttl_seconds: int = 60) -> bool:
+        """Attempt to acquire a per-media submission lock to prevent cross-process duplicates.
+
+        Uses DB-native INSERT-ignore semantics (atomic check+acquire). Cleans stale locks
+        (from crashes) before attempting acquisition. Fails open on DB errors so a broken
+        lock table never blocks all submissions.
+
+        :param tmdb_id: TMDB ID as string.
+        :param media_type: 'movie' or 'tv'.
+        :param ttl_seconds: Locks older than this are considered stale and deleted first.
+        :return: True if lock acquired (caller should proceed), False if already held.
+        """
+        # Build stale-lock cleanup query (DB-specific timestamp arithmetic)
+        if self.db_type == 'sqlite':
+            cleanup_query = (
+                "DELETE FROM submission_locks WHERE tmdb_id = ? AND media_type = ? "
+                "AND locked_at < datetime('now', '-' || ? || ' seconds')"
+            )
+            cleanup_params = (str(tmdb_id), media_type, str(ttl_seconds))
+        elif self.db_type == 'postgres':
+            cleanup_query = (
+                "DELETE FROM submission_locks WHERE tmdb_id = %s AND media_type = %s "
+                "AND locked_at < NOW() - (INTERVAL '1 second' * %s)"
+            )
+            cleanup_params = (str(tmdb_id), media_type, ttl_seconds)
+        else:  # mysql / mariadb
+            cleanup_query = (
+                "DELETE FROM submission_locks WHERE tmdb_id = %s AND media_type = %s "
+                "AND locked_at < DATE_SUB(NOW(), INTERVAL %s SECOND)"
+            )
+            cleanup_params = (str(tmdb_id), media_type, ttl_seconds)
+
+        # Build atomic lock-acquisition INSERT (INSERT OR IGNORE / INSERT IGNORE / ON CONFLICT DO NOTHING)
+        insert_query = "INSERT OR IGNORE INTO submission_locks (tmdb_id, media_type) VALUES (?, ?)"
+        insert_params = (str(tmdb_id), media_type)
+
+        if self.db_type in ['mysql', 'mariadb']:
+            insert_query = insert_query.replace("INSERT OR IGNORE", "INSERT IGNORE")
+            insert_query = insert_query.replace("?", "%s")
+        elif self.db_type == 'postgres':
+            insert_query = insert_query.replace("INSERT OR IGNORE", "INSERT")
+            insert_query = insert_query.rstrip() + " ON CONFLICT DO NOTHING"
+            insert_query = insert_query.replace("?", "%s")
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(cleanup_query, cleanup_params)
+                cursor.execute(insert_query, insert_params)
+                acquired = cursor.rowcount > 0  # Read BEFORE commit
+                conn.commit()
+                self.logger.debug(
+                    "Submission lock %s: tmdb_id=%s, media_type=%s",
+                    "acquired" if acquired else "already held",
+                    tmdb_id, media_type
+                )
+                return acquired
+        except Exception as e:
+            self.logger.error(
+                "Error acquiring submission lock for tmdb_id=%s, media_type=%s: %s",
+                tmdb_id, media_type, e
+            )
+            return True  # Fail open: don't block submissions if lock table has issues
+
+    def release_submission_lock(self, tmdb_id: str, media_type: str) -> None:
+        """Release a previously acquired submission lock.
+
+        Should always be called in a finally block so the lock is never left dangling.
+        Stale locks (from crashes) are cleaned automatically on the next acquire attempt.
+
+        :param tmdb_id: TMDB ID as string.
+        :param media_type: 'movie' or 'tv'.
+        """
+        query = "DELETE FROM submission_locks WHERE tmdb_id = ? AND media_type = ?"
+        params = (str(tmdb_id), media_type)
+
+        if self.db_type in ['mysql', 'mariadb', 'postgres']:
+            query = query.replace("?", "%s")
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, params)
+                conn.commit()
+                self.logger.debug(
+                    "Released submission lock: tmdb_id=%s, media_type=%s", tmdb_id, media_type
+                )
+        except Exception as e:
+            self.logger.error(
+                "Error releasing submission lock for tmdb_id=%s, media_type=%s: %s",
+                tmdb_id, media_type, e
+            )
+
     def save_metadata(self, media: Dict[str, Any], media_type: str) -> None:
         """Save metadata for a media item."""
         self.logger.debug(f"Saving metadata: {media_type} {media['id']}")
@@ -853,7 +982,6 @@ class DatabaseManager:
     
     def test_connection(self, db_config: Dict[str, Any]) -> Dict[str, str]:
         """Test database connection based on provided db_config."""
-        self.logger.debug(f"Testing database connection with config: {db_config}")
         
         try:
             db_type = db_config.get('DB_TYPE', 'sqlite')
