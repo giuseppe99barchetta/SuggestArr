@@ -319,18 +319,52 @@ export default {
     },
     copyLog(log) {
       const logText = `${log.dateTime} - ${log.tag} - ${log.severity} - ${log.message}`;
-      navigator.clipboard.writeText(logText)
-        .then(() => {
-          this.$toast.open({
-            message: 'Log copied to clipboard!',
-            type: 'success',
-            duration: 5000,
-            position: 'top-right'
-          });
-        })
-        .catch(err => {
-          console.error('Error while copying log:', err);
+      const showSuccess = () => {
+        this.$toast.open({
+          message: 'Log copied to clipboard!',
+          type: 'success',
+          duration: 5000,
+          position: 'top-right'
         });
+      };
+      const showError = (err) => {
+        console.error('Error while copying log:', err);
+        this.$toast.open({
+          message: 'Failed to copy log to clipboard.',
+          type: 'error',
+          duration: 5000,
+          position: 'top-right'
+        });
+      };
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(logText).then(showSuccess).catch(() => {
+          this.fallbackCopyText(logText, showSuccess, showError);
+        });
+      } else {
+        this.fallbackCopyText(logText, showSuccess, showError);
+      }
+    },
+    fallbackCopyText(text, onSuccess, onError) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      try {
+        const success = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (success) {
+          onSuccess();
+        } else {
+          onError(new Error('execCommand copy returned false'));
+        }
+      } catch (err) {
+        document.body.removeChild(textarea);
+        onError(err);
+      }
     },
     startAutoUpdate() {
       this.fetchLogs();
