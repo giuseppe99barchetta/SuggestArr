@@ -214,6 +214,18 @@
                     </table>
                   </div>
 
+                  <div class="provider-card">
+                    <div class="provider-name"><i class="fas fa-gem"></i> Google Gemini</div>
+                    <table class="provider-table">
+                      <tbody>
+                        <tr><td>API Key</td><td><code>AIza...</code> (from Google AI Studio)</td></tr>
+                        <tr><td>Base URL</td><td><code>https://generativelanguage.googleapis.com/v1beta/openai/</code></td></tr>
+                        <tr><td>Model</td><td><code>gemini-2.0-flash</code>, <code>gemini-1.5-pro</code>, etc.</td></tr>
+                      </tbody>
+                    </table>
+                    <small class="provider-note">Get your free API key at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">aistudio.google.com</a>. The Base URL must end with <code>/openai/</code>.</small>
+                  </div>
+
                   <div class="provider-card provider-card--local">
                     <div class="provider-name"><i class="fas fa-server"></i> Ollama <span class="badge-local">Local</span></div>
                     <table class="provider-table">

@@ -16,7 +16,7 @@ SuggestArr is a project designed to automate media content recommendations and d
 ## Features
 - **Multi-Media Server Support**: Supports Jellyfin, Plex, and Emby for retrieving media content.
 - **TMDb Integration**: Searches for similar movies and TV shows on TMDb.
-- **AI-Powered Recommendations** *(beta)*: Uses any OpenAI-compatible LLM (OpenAI, Ollama, OpenRouter, LiteLLM…) to generate hyper-personalized suggestions based on watch history, complete with AI reasoning for each pick.
+- **AI-Powered Recommendations** *(beta)*: Uses any OpenAI-compatible LLM (OpenAI, Ollama, Gemini, LiteLLM…) to generate hyper-personalized suggestions based on watch history, complete with AI reasoning for each pick.
 - **AI Search** *(beta)*: Describe in natural language what you want to watch and let the AI find matching titles, personalised to your viewing history, with one-click request to Seer.
 - **Automated Requests**: Sends download requests for recommended content to Jellyseer or Seer.
 - **Web Interface**: A user-friendly interface for configuration and management.
