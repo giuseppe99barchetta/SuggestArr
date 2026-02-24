@@ -254,7 +254,9 @@ class PlexClient:
                                 tmdb_id = guid_id.split(f'{provider}://')[-1]
                                 return tmdb_id
 
-                    self.logger.error("Failed to retrieve metadata for item %s: %d", item_id, response.status)
+                        self.logger.debug("No %s GUID found for item %s (available GUIDs: %s)", provider, item_id, [g.get('id') for g in guids])
+                    else:
+                        self.logger.error("Failed to retrieve metadata for item %s: %d", item_id, response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while retrieving metadata for item %s: %s", item_id, str(e))
 
@@ -340,6 +342,7 @@ class PlexClient:
                     if isinstance(items, list):
                         # Extract TMDB ID for each element in list
                         processed_items = []
+                        library_type = None
                         for item in items:
                             library_type = 'tv' if item.get('type') == 'show' else 'movie'
                             item_id = item.get('key').replace('/children', '')
@@ -348,7 +351,8 @@ class PlexClient:
                                 item['tmdb_id'] = tmdb_id
                             processed_items.append(item)
 
-                        results_by_library[library_type] = processed_items
+                        if library_type:
+                            results_by_library.setdefault(library_type, []).extend(processed_items)
                         self.logger.info(f"Retrieved {len(processed_items)} items in {library_type} with TMDB IDs")
 
                     else:

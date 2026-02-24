@@ -71,13 +71,28 @@ class SeerClient:
                         self.logger.debug("Received response with status %d for request to %s", response.status, url)
                         if response.status in HTTP_OK:
                             return await response.json()
-                        elif response.status in (403, 404) and attempt < retries - 1:
-                            self.logger.debug("Retrying login due to status %d", response.status)
+                        elif response.status == 403:
+                            resp = await response.json()
+                            message = resp.get('message') or resp.get('error', '')
+                            self.logger.error(
+                                f"Request to {url} failed with status: {response.status}, {message}"
+                            )
+                            # Quota-exceeded errors won't be resolved by re-logging in; abort immediately
+                            if 'quota' in message.lower():
+                                return None
+                            # Otherwise treat as auth failure and retry with login
+                            if attempt < retries - 1:
+                                self.logger.debug("Retrying login due to 403")
+                                await self.login()
+                            else:
+                                return None
+                        elif response.status == 404 and attempt < retries - 1:
+                            self.logger.debug("Retrying login due to status 404")
                             await self.login()
                         else:
                             resp = await response.json()
                             self.logger.error(
-                                f"Request to {url} failed with status: {response.status}, {resp['message'] if 'message' in resp else resp['error']}"
+                                f"Request to {url} failed with status: {response.status}, {resp.get('message') or resp.get('error', 'Unknown error')}"
                             )
                 except aiohttp.ClientError as e:
                     self.logger.error(f"Client error during request to {url}: {e}")
@@ -194,7 +209,6 @@ class SeerClient:
         data = {"mediaType": media_type, "mediaId": media['id']}
 
         if media_type == 'tv':
-            data["tvdbId"] = media['id']
             data["seasons"] = "all" if self.number_of_seasons == "all" else list(range(1, int(self.number_of_seasons) + 1))
 
         # Apply anime or default profile routing
