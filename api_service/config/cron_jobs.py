@@ -1,4 +1,5 @@
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from api_service.config.logger_manager import LoggerManager
 import requests
 
@@ -29,9 +30,9 @@ def start_cron_job(env_vars, job_id='auto_content_fetcher'):
     logger.debug(f'Cron expression from env_vars: {cron_expression}')
 
     # Add the job using the dynamic cron expression
-    cron_params = parse_cron_expression(cron_expression)
-    logger.debug(f'Parsed cron parameters: {cron_params}')
-    scheduler.add_job(force_run_job, 'cron', id=job_id, **cron_params)
+    trigger = parse_cron_expression(cron_expression)
+    logger.debug(f'Parsed cron trigger: {trigger}')
+    scheduler.add_job(force_run_job, trigger=trigger, id=job_id)
     
     logger.debug(f"Cron job '{job_id}' set with expression: {cron_expression}")
     scheduler.start()
@@ -40,27 +41,32 @@ def start_cron_job(env_vars, job_id='auto_content_fetcher'):
 def parse_cron_expression(cron_expression):
     """
     Function to decode the cron expression.
-    Returns a dictionary compatible with APScheduler.
+    Returns a CronTrigger compatible with APScheduler.
     Falls back to '0 0 * * *' if the expression is missing or malformed.
+
+    Uses CronTrigger.from_crontab() to correctly handle '*' wildcards.
+    Building a CronTrigger manually with day_of_week='*' causes APScheduler
+    to apply OR logic between 'day' and 'day_of_week', making schedules like
+    '0 0 1 * *' fire every day instead of only on the 1st of the month.
     """
     default_expression = '0 0 * * *'
     logger.debug(f'Parsing cron expression: {cron_expression}')
-    cron_parts = (cron_expression or '').split()
 
-    if len(cron_parts) != 5:
+    expression = (cron_expression or '').strip()
+    if len(expression.split()) != 5:
         logger.warning(
-            f"Invalid cron expression '{cron_expression}' (expected 5 parts, got {len(cron_parts)}). "
+            f"Invalid cron expression '{cron_expression}' (expected 5 parts, got {len(expression.split())}). "
             f"Falling back to default: '{default_expression}'"
         )
-        cron_parts = default_expression.split()
+        expression = default_expression
 
-    # Return the dictionary for APScheduler
-    cron_params = {
-        'minute': cron_parts[0],
-        'hour': cron_parts[1],
-        'day': cron_parts[2],
-        'month': cron_parts[3],
-        'day_of_week': cron_parts[4],
-    }
-    logger.debug(f'Cron expression parsed to: {cron_params}')
-    return cron_params
+    try:
+        trigger = CronTrigger.from_crontab(expression)
+        logger.debug(f'Cron expression parsed to trigger: {trigger}')
+        return trigger
+    except Exception as e:
+        logger.warning(
+            f"Failed to parse cron expression '{expression}': {e}. "
+            f"Falling back to default: '{default_expression}'"
+        )
+        return CronTrigger.from_crontab(default_expression)

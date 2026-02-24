@@ -257,13 +257,11 @@ class JobManager:
                 self.logger.error(f"Invalid cron expression (expected 5 parts): {cron_expr}")
                 return None
 
-            return CronTrigger(
-                minute=parts[0],
-                hour=parts[1],
-                day=parts[2],
-                month=parts[3],
-                day_of_week=parts[4]
-            )
+            # Use from_crontab to correctly handle '*' wildcards.
+            # Constructing CronTrigger manually with day_of_week='*' causes APScheduler
+            # to apply OR logic between 'day' and 'day_of_week', so a schedule like
+            # '0 0 1 * *' would fire every day instead of only on the 1st of the month.
+            return CronTrigger.from_crontab(cron_expr.strip())
         except Exception as e:
             self.logger.error(f"Error parsing cron expression '{cron_expr}': {str(e)}")
             return None
