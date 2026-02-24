@@ -167,6 +167,7 @@ try:
     from api_service.jobs.discover_automation import execute_discover_job
     from api_service.jobs.recommendation_automation import execute_recommendation_job
     from api_service.jobs.system_job_sync import sync_system_job_from_config
+    from api_service.jobs.queue_worker import run_queue_worker
 
     # Initialize database tables (including discover_jobs)
     db_manager = DatabaseManager()
@@ -186,7 +187,17 @@ try:
     job_manager.set_job_executor(execute_recommendation_job, job_type='recommendation')
     job_manager.start()
     job_manager.sync_jobs_from_db()
-    logger.info("Jobs scheduler initialized (discover + recommendation)")
+
+    # Register Seer delivery queue worker (every 2 min, no overlap)
+    job_manager.scheduler.add_job(
+        run_queue_worker,
+        'interval',
+        minutes=2,
+        id='seer_queue_worker',
+        max_instances=1,
+        replace_existing=True,
+    )
+    logger.info("Jobs scheduler initialized (discover + recommendation + queue_worker)")
 except Exception as e:
     import traceback
     logger.error(f"Failed to initialize discover jobs scheduler: {e}")

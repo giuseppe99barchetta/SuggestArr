@@ -80,8 +80,8 @@ class PlexClient:
                     if friends_response.status == 200:
                         friends = await self._safe_json_decode(friends_response)
                         self.logger.debug(f"Retrieved {len(friends)} friends from Plex")
-                        # Extract 'id' and 'name' from each friend
-                        users.extend({'id': friend['id'], 'name': friend['title']} for friend in friends)
+                        # Extract 'id' and 'name' from each friend (skip users without username)
+                        users.extend({'id': friend['id'], 'name': friend['title']} for friend in friends if friend.get('username'))
                     else:
                         self.logger.error("Failed to retrieve friends: HTTP %d", friends_response.status)
 
@@ -92,8 +92,8 @@ class PlexClient:
                         accounts_data = await self._safe_json_decode(accounts_response)
                         accounts = accounts_data.get('MediaContainer', {}).get('Account', [])
                         self.logger.debug(f"Retrieved {len(accounts)} local accounts from Plex")
-                        # Extract 'id' and 'name' from each local account
-                        users.extend({'id': account['id'], 'name': account['name']} for account in accounts)
+                        # Extract 'id' and 'name' from each local account (skip users without username)
+                        users.extend({'id': account['id'], 'name': account['name']} for account in accounts if account.get('name'))
                     else:
                         self.logger.error("Failed to retrieve local accounts: HTTP %d", accounts_response.status)
 

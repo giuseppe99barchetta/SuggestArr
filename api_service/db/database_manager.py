@@ -1,9 +1,11 @@
+import json
 import os
 import sqlite3
 import psycopg2
 import mysql.connector
 import threading
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
 from api_service.config.config import load_env_vars
@@ -181,6 +183,21 @@ class DatabaseManager:
                     error_message TEXT,
                     FOREIGN KEY (job_id) REFERENCES discover_jobs(id) ON DELETE CASCADE
                 )
+            """,
+            'pending_requests': """
+                CREATE TABLE IF NOT EXISTS pending_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    user_id TEXT,
+                    payload TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    retry_count INTEGER DEFAULT 0,
+                    last_attempt_at TIMESTAMP,
+                    next_attempt_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(tmdb_id, media_type)
+                )
             """
         }
         
@@ -223,6 +240,42 @@ class DatabaseManager:
         
         # Add missing columns
         self.add_missing_columns()
+
+        # Create submission lock table (separate to control column types per DB engine)
+        self._create_submission_locks_table()
+
+    def _create_submission_locks_table(self):
+        """Create the submission_locks table for cross-process submission deduplication."""
+        if self.db_type in ['mysql', 'mariadb']:
+            query = """
+                CREATE TABLE IF NOT EXISTS submission_locks (
+                    tmdb_id VARCHAR(64) NOT NULL,
+                    media_type VARCHAR(16) NOT NULL,
+                    locked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (tmdb_id, media_type)
+                ) ENGINE=InnoDB
+            """
+        else:
+            query = """
+                CREATE TABLE IF NOT EXISTS submission_locks (
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    locked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (tmdb_id, media_type)
+                )
+            """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query)
+                conn.commit()
+                self.logger.debug("Table 'submission_locks' created or verified successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to create table 'submission_locks': {e}")
+            raise DatabaseError(
+                error=f"Table creation failed: {str(e)}",
+                db_type=self.db_type
+            )
     
     def add_missing_columns(self):
         """Check and add missing columns to the requests table."""
@@ -419,6 +472,99 @@ class DatabaseManager:
             result = cursor.fetchone()
             return result is not None
     
+    def try_acquire_submission_lock(self, tmdb_id: str, media_type: str, ttl_seconds: int = 60) -> bool:
+        """Attempt to acquire a per-media submission lock to prevent cross-process duplicates.
+
+        Uses DB-native INSERT-ignore semantics (atomic check+acquire). Cleans stale locks
+        (from crashes) before attempting acquisition. Fails open on DB errors so a broken
+        lock table never blocks all submissions.
+
+        :param tmdb_id: TMDB ID as string.
+        :param media_type: 'movie' or 'tv'.
+        :param ttl_seconds: Locks older than this are considered stale and deleted first.
+        :return: True if lock acquired (caller should proceed), False if already held.
+        """
+        # Build stale-lock cleanup query (DB-specific timestamp arithmetic)
+        if self.db_type == 'sqlite':
+            cleanup_query = (
+                "DELETE FROM submission_locks WHERE tmdb_id = ? AND media_type = ? "
+                "AND locked_at < datetime('now', '-' || ? || ' seconds')"
+            )
+            cleanup_params = (str(tmdb_id), media_type, str(ttl_seconds))
+        elif self.db_type == 'postgres':
+            cleanup_query = (
+                "DELETE FROM submission_locks WHERE tmdb_id = %s AND media_type = %s "
+                "AND locked_at < NOW() - (INTERVAL '1 second' * %s)"
+            )
+            cleanup_params = (str(tmdb_id), media_type, ttl_seconds)
+        else:  # mysql / mariadb
+            cleanup_query = (
+                "DELETE FROM submission_locks WHERE tmdb_id = %s AND media_type = %s "
+                "AND locked_at < DATE_SUB(NOW(), INTERVAL %s SECOND)"
+            )
+            cleanup_params = (str(tmdb_id), media_type, ttl_seconds)
+
+        # Build atomic lock-acquisition INSERT (INSERT OR IGNORE / INSERT IGNORE / ON CONFLICT DO NOTHING)
+        insert_query = "INSERT OR IGNORE INTO submission_locks (tmdb_id, media_type) VALUES (?, ?)"
+        insert_params = (str(tmdb_id), media_type)
+
+        if self.db_type in ['mysql', 'mariadb']:
+            insert_query = insert_query.replace("INSERT OR IGNORE", "INSERT IGNORE")
+            insert_query = insert_query.replace("?", "%s")
+        elif self.db_type == 'postgres':
+            insert_query = insert_query.replace("INSERT OR IGNORE", "INSERT")
+            insert_query = insert_query.rstrip() + " ON CONFLICT DO NOTHING"
+            insert_query = insert_query.replace("?", "%s")
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(cleanup_query, cleanup_params)
+                cursor.execute(insert_query, insert_params)
+                acquired = cursor.rowcount > 0  # Read BEFORE commit
+                conn.commit()
+                self.logger.debug(
+                    "Submission lock %s: tmdb_id=%s, media_type=%s",
+                    "acquired" if acquired else "already held",
+                    tmdb_id, media_type
+                )
+                return acquired
+        except Exception as e:
+            self.logger.error(
+                "Error acquiring submission lock for tmdb_id=%s, media_type=%s: %s",
+                tmdb_id, media_type, e
+            )
+            return True  # Fail open: don't block submissions if lock table has issues
+
+    def release_submission_lock(self, tmdb_id: str, media_type: str) -> None:
+        """Release a previously acquired submission lock.
+
+        Should always be called in a finally block so the lock is never left dangling.
+        Stale locks (from crashes) are cleaned automatically on the next acquire attempt.
+
+        :param tmdb_id: TMDB ID as string.
+        :param media_type: 'movie' or 'tv'.
+        """
+        query = "DELETE FROM submission_locks WHERE tmdb_id = ? AND media_type = ?"
+        params = (str(tmdb_id), media_type)
+
+        if self.db_type in ['mysql', 'mariadb', 'postgres']:
+            query = query.replace("?", "%s")
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, params)
+                conn.commit()
+                self.logger.debug(
+                    "Released submission lock: tmdb_id=%s, media_type=%s", tmdb_id, media_type
+                )
+        except Exception as e:
+            self.logger.error(
+                "Error releasing submission lock for tmdb_id=%s, media_type=%s: %s",
+                tmdb_id, media_type, e
+            )
+
     def save_metadata(self, media: Dict[str, Any], media_type: str) -> None:
         """Save metadata for a media item."""
         self.logger.debug(f"Saving metadata: {media_type} {media['id']}")
@@ -853,7 +999,6 @@ class DatabaseManager:
     
     def test_connection(self, db_config: Dict[str, Any]) -> Dict[str, str]:
         """Test database connection based on provided db_config."""
-        self.logger.debug(f"Testing database connection with config: {db_config}")
         
         try:
             db_type = db_config.get('DB_TYPE', 'sqlite')
@@ -942,3 +1087,161 @@ class DatabaseManager:
             except Exception as e:
                 self.logger.error(f"Errore durante il salvataggio del batch: {e}")
                 raise DatabaseError(f"Batch save failed: {str(e)}", db_type=self.db_type)
+
+    # ---------------------------------------------------------------------------
+    # Pending-request queue methods
+    # ---------------------------------------------------------------------------
+
+    def enqueue_request(self, tmdb_id: str, media_type: str, user_id: Optional[str],
+                        payload: dict) -> bool:
+        """Enqueue a Seer submission for background delivery.
+
+        Idempotent: silently no-ops when an entry for (tmdb_id, media_type) already
+        exists in any status.  Items that were already successfully submitted (present
+        in the ``requests`` table) are also skipped.
+
+        :param tmdb_id: TMDB media ID.
+        :param media_type: 'movie' or 'tv'.
+        :param user_id: Jellyseer user ID to attribute the request to (may be None).
+        :param payload: Complete Seer request body plus private meta-keys prefixed
+            with ``_`` (``_source_id``, ``_rationale``, ``_is_anime``).
+        :return: True if a new row was inserted, False if already present or already
+            submitted.
+        """
+        if self.check_request_exists(media_type, tmdb_id):
+            self.logger.debug("enqueue_request: %s %s already submitted, skipping.", media_type, tmdb_id)
+            return False
+
+        query = """
+            INSERT OR IGNORE INTO pending_requests
+                (tmdb_id, media_type, user_id, payload, status)
+            VALUES (?, ?, ?, ?, 'queued')
+        """
+        params = (str(tmdb_id), media_type, user_id, json.dumps(payload))
+
+        if self.db_type in ['mysql', 'mariadb']:
+            query = query.replace("INSERT OR IGNORE", "INSERT IGNORE").replace("?", "%s")
+        elif self.db_type == 'postgres':
+            query = (query.replace("INSERT OR IGNORE", "INSERT").replace("?", "%s").rstrip()
+                     + " ON CONFLICT (tmdb_id, media_type) DO NOTHING")
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, params)
+                inserted = cursor.rowcount > 0
+                conn.commit()
+                if inserted:
+                    self.logger.debug("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)
+                return inserted
+        except Exception as e:
+            self.logger.error("Failed to enqueue %s tmdb:%s: %s", media_type, tmdb_id, e)
+            return False
+
+    def get_due_requests(self, max_items: int = 50) -> List[Dict[str, Any]]:
+        """Return up to *max_items* queued rows whose next_attempt_at is due.
+
+        :param max_items: Maximum number of rows to return.
+        :return: List of row dicts ordered by created_at ASC.
+        """
+        now_iso = datetime.utcnow().isoformat()
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+
+        query = f"""
+            SELECT id, tmdb_id, media_type, user_id, payload, retry_count
+            FROM pending_requests
+            WHERE status = 'queued'
+              AND (next_attempt_at IS NULL OR next_attempt_at <= {placeholder})
+            ORDER BY created_at ASC
+            LIMIT {placeholder}
+        """
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (now_iso, max_items))
+                cols = [d[0] for d in cursor.description]
+                return [dict(zip(cols, row)) for row in cursor.fetchall()]
+        except Exception as e:
+            self.logger.error("Failed to fetch due pending_requests: %s", e)
+            return []
+
+    def _update_pending_status(self, row_id: int, status: str, retry_count: int,
+                               last_attempt_at: Optional[str] = None,
+                               next_attempt_at: Optional[str] = None) -> None:
+        """Internal helper — update status / retry columns on a pending_requests row."""
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        query = (f"UPDATE pending_requests SET status={placeholder}, retry_count={placeholder}"
+                 f", last_attempt_at={placeholder}, next_attempt_at={placeholder}"
+                 f" WHERE id={placeholder}")
+        params = (status, retry_count, last_attempt_at, next_attempt_at, row_id)
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, params)
+                conn.commit()
+        except Exception as e:
+            self.logger.error("Failed to update pending_requests row %s: %s", row_id, e)
+
+    def mark_pending_submitting(self, row_id: int, retry_count: int) -> None:
+        """Mark a row as in-flight so concurrent workers skip it.
+
+        :param row_id: Primary key of the pending_requests row.
+        :param retry_count: Current retry count (unchanged at this point).
+        """
+        self._update_pending_status(row_id, 'submitting', retry_count,
+                                    last_attempt_at=datetime.utcnow().isoformat())
+
+    def mark_pending_submitted(self, row_id: int, retry_count: int) -> None:
+        """Mark a row as successfully submitted.
+
+        :param row_id: Primary key of the pending_requests row.
+        :param retry_count: Final retry count at time of success.
+        """
+        self._update_pending_status(row_id, 'submitted', retry_count)
+
+    def mark_pending_failed(self, row_id: int, retry_count: int) -> None:
+        """Mark a row as permanently failed (max retries exceeded).
+
+        :param row_id: Primary key of the pending_requests row.
+        :param retry_count: Final retry count.
+        """
+        self._update_pending_status(row_id, 'failed', retry_count,
+                                    last_attempt_at=datetime.utcnow().isoformat())
+
+    def increment_pending_retry(self, row_id: int, new_retry_count: int,
+                                next_attempt_at: str) -> None:
+        """Bump retry counter and schedule next attempt with exponential backoff.
+
+        :param row_id: Primary key of the pending_requests row.
+        :param new_retry_count: Incremented retry count.
+        :param next_attempt_at: ISO-8601 UTC timestamp for next eligible attempt.
+        """
+        self._update_pending_status(row_id, 'queued', new_retry_count,
+                                    last_attempt_at=datetime.utcnow().isoformat(),
+                                    next_attempt_at=next_attempt_at)
+
+    def reset_stale_inflight(self, cutoff_minutes: int = 10) -> int:
+        """Reset 'submitting' rows that have been stuck longer than *cutoff_minutes*.
+
+        Called at queue worker startup to recover from crashes.
+
+        :param cutoff_minutes: Rows locked for longer than this are re-queued.
+        :return: Number of rows reset.
+        """
+        cutoff = (datetime.utcnow() - timedelta(minutes=cutoff_minutes)).isoformat()
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        query = (f"UPDATE pending_requests SET status='queued'"
+                 f" WHERE status='submitting' AND last_attempt_at < {placeholder}")
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (cutoff,))
+                reset = cursor.rowcount
+                conn.commit()
+                if reset:
+                    self.logger.warning("reset_stale_inflight: re-queued %d stuck row(s).", reset)
+                return reset
+        except Exception as e:
+            self.logger.error("Failed to reset stale in-flight rows: %s", e)
+            return 0

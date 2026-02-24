@@ -590,7 +590,7 @@ export default {
       return this.localConfig.TMDB_API_KEY ? 'status-connected' : 'status-disconnected';
     },
     getTmdbStatusText() {
-      return this.localConfig.TMDB_API_KEY ? 'Configured' : 'Not Set';
+      return this.localConfig.TMDB_API_KEY ? 'Connected' : 'Not Set';
     },
     getOmdbStatus() {
       if (this.omdbConnected) return 'status-connected';
@@ -707,17 +707,21 @@ export default {
   async mounted() {
     const service = this.localConfig.SELECTED_SERVICE;
     if (service === 'plex' && this.localConfig.PLEX_TOKEN && this.localConfig.PLEX_API_URL) {
-      await this.testAndFetchPlex();
+      await this.testAndFetchPlex(true);
     } else if ((service === 'jellyfin' || service === 'emby') &&
                this.localConfig.JELLYFIN_TOKEN && this.localConfig.JELLYFIN_API_URL) {
-      await this.testAndFetchJellyfin();
+      await this.testAndFetchJellyfin(true);
     }
 
     if (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN) {
-      await this.testSeerAndFetchUsers();
+      await this.testSeerAndFetchUsers(true);
       if (this.seerConnected && this.localConfig.SEER_SESSION_TOKEN) {
         await this.fetchArrServers();
       }
+    }
+
+    if (this.localConfig.OMDB_API_KEY) {
+      await this.testOmdbConnection(true);
     }
   },
   methods: {
@@ -764,17 +768,17 @@ export default {
       });
     },
 
-    async testOmdbConnection() {
+    async testOmdbConnection(silent = false) {
       if (!this.localConfig.OMDB_API_KEY) return;
       this.omdbTesting = true;
       this.omdbConnected = false;
       try {
         await testOmdbApi(this.localConfig.OMDB_API_KEY.trim());
         this.omdbConnected = true;
-        if (this.$toast) this.$toast.success('OMDb API key validated!', { position: 'top-right', duration: 3000 });
+        if (!silent && this.$toast) this.$toast.success('OMDb API key validated!', { position: 'top-right', duration: 3000 });
       } catch (error) {
         this.omdbConnected = false;
-        if (this.$toast) this.$toast.error('Invalid OMDb API key. Please check and try again.', { position: 'top-right', duration: 5000 });
+        if (!silent && this.$toast) this.$toast.error('Invalid OMDb API key. Please check and try again.', { position: 'top-right', duration: 5000 });
       } finally {
         this.omdbTesting = false;
       }
@@ -812,13 +816,13 @@ export default {
       });
     },
 
-    async testAndFetchJellyfin() {
+    async testAndFetchJellyfin(silent = false) {
       if (!this.localConfig.JELLYFIN_API_URL || !this.localConfig.JELLYFIN_TOKEN) return;
       try {
         const url = this.localConfig.JELLYFIN_API_URL.trim();
         new URL(url.startsWith('http') ? url : `http://${url}`);
       } catch (e) {
-        if (this.$toast) this.$toast.error('Invalid URL format.', { position: 'top-right', duration: 4000 });
+        if (!silent && this.$toast) this.$toast.error('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
       this.jellyfinFetching = true;
@@ -833,25 +837,25 @@ export default {
           this.jellyfinUsers = userRes.data.users || [];
           this.loadSavedJellyfinUsers();
         } catch (e) { console.error('Error fetching Jellyfin users:', e); }
-        if (this.$toast) this.$toast.success(`Connected! Found ${this.jellyfinLibraries.length} libraries.`, { position: 'top-right', duration: 3000 });
+        if (!silent && this.$toast) this.$toast.success(`Connected! Found ${this.jellyfinLibraries.length} libraries.`, { position: 'top-right', duration: 3000 });
       } catch (error) {
         console.error('Jellyfin connection failed:', error);
         this.jellyfinConnected = false;
         this.jellyfinLibraries = [];
         this.jellyfinUsers = [];
-        if (this.$toast) this.$toast.error('Failed to connect. Check your URL and token.', { position: 'top-right', duration: 5000 });
+        if (!silent && this.$toast) this.$toast.error('Failed to connect. Check your URL and token.', { position: 'top-right', duration: 5000 });
       } finally {
         this.jellyfinFetching = false;
       }
     },
 
-    async testAndFetchPlex() {
+    async testAndFetchPlex(silent = false) {
       if (!this.localConfig.PLEX_API_URL || !this.localConfig.PLEX_TOKEN) return;
       try {
         const url = this.localConfig.PLEX_API_URL.trim();
         new URL(url.startsWith('http') ? url : `http://${url}`);
       } catch (e) {
-        if (this.$toast) this.$toast.error('Invalid URL format.', { position: 'top-right', duration: 4000 });
+        if (!silent && this.$toast) this.$toast.error('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
       this.plexFetching = true;
@@ -866,13 +870,13 @@ export default {
           this.plexUsers = userRes.data.users || [];
           this.loadSavedPlexUsers();
         } catch (e) { console.error('Error fetching Plex users:', e); }
-        if (this.$toast) this.$toast.success(`Connected! Found ${this.plexLibraries.length} libraries.`, { position: 'top-right', duration: 3000 });
+        if (!silent && this.$toast) this.$toast.success(`Connected! Found ${this.plexLibraries.length} libraries.`, { position: 'top-right', duration: 3000 });
       } catch (error) {
         console.error('Plex connection failed:', error);
         this.plexConnected = false;
         this.plexLibraries = [];
         this.plexUsers = [];
-        if (this.$toast) this.$toast.error('Failed to connect. Check your URL and token.', { position: 'top-right', duration: 5000 });
+        if (!silent && this.$toast) this.$toast.error('Failed to connect. Check your URL and token.', { position: 'top-right', duration: 5000 });
       } finally {
         this.plexFetching = false;
       }
@@ -959,13 +963,13 @@ export default {
     },
 
     // Seer connection test + user fetch
-    async testSeerAndFetchUsers() {
+    async testSeerAndFetchUsers(silent = false) {
       if (!this.localConfig.SEER_API_URL || !this.localConfig.SEER_TOKEN) return;
       try {
         const url = this.localConfig.SEER_API_URL.trim();
         new URL(url.startsWith('http') ? url : `http://${url}`);
       } catch (e) {
-        if (this.$toast) this.$toast.error('Invalid URL format.', { position: 'top-right', duration: 4000 });
+        if (!silent && this.$toast) this.$toast.error('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
       this.seerTesting = true;
@@ -976,11 +980,11 @@ export default {
         this.seerUsers = (response.data.users || []).filter(user => user.isLocal);
         this.seerConnected = true;
         this.loadSavedSeerUser();
-        if (this.$toast) this.$toast.success(`Connected! Found ${this.seerUsers.length} local user(s).`, { position: 'top-right', duration: 3000 });
+        if (!silent && this.$toast) this.$toast.success(`Connected! Found ${this.seerUsers.length} local user(s).`, { position: 'top-right', duration: 3000 });
       } catch (error) {
         console.error('Seer connection test failed:', error);
         this.seerConnected = false;
-        if (this.$toast) this.$toast.error('Failed to connect. Verify URL and API Key.', { position: 'top-right', duration: 5000 });
+        if (!silent && this.$toast) this.$toast.error('Failed to connect. Verify URL and API Key.', { position: 'top-right', duration: 5000 });
       } finally {
         this.seerTesting = false;
       }

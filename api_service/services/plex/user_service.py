@@ -30,10 +30,12 @@ class PlexUserService(PlexBaseClient):
         
         users_data = response_data['_embedded']['Account']
         
-        # Filter unique users by ID
+        # Filter unique users by ID (skip users without a username)
         unique_users = {}
         for user in users_data:
             user_id = user.get('id')
+            if not user.get('username'):
+                continue
             if user_id not in unique_users:
                 # Filter out unwanted fields
                 filtered_user = {
