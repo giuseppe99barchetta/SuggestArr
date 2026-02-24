@@ -358,7 +358,7 @@ class DatabaseManager:
             INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, tmdb_source_id, requested_by, user_id, is_anime, rationale)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """
-        params = (media_type, media_id, source, 'SuggestArr', user_id, 1 if is_anime else 0, rationale)
+        params = (media_type, str(media_id), source, 'SuggestArr', user_id, 1 if is_anime else 0, rationale)
         
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -423,7 +423,7 @@ class DatabaseManager:
         """Save metadata for a media item."""
         self.logger.debug(f"Saving metadata: {media_type} {media['id']}")
         
-        media_id = media['id']
+        media_id = str(media['id'])
         # Safely get title or fallback to name for TV shows
         title = media.get('title') or media.get('name') or 'Unknown Title'
         overview = media.get('overview', '')
