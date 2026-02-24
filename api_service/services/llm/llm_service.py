@@ -55,6 +55,23 @@ def _deduplicate_history(history_items: List[Dict]) -> List[Dict]:
     return unique
 
 
+def _normalize_title(title: str) -> str:
+    """Normalize a title for comparison by stripping common decorations.
+
+    Removes episode notation (e.g. ``"Show - S02E12"`` → ``"Show"``) and
+    trailing release-year suffixes (e.g. ``"Manchester by the Sea (2016)"``
+    → ``"Manchester by the Sea"``), then lowercases and strips whitespace.
+
+    :param title: Raw title string.
+    :return: Normalised, lowercased title suitable for set membership checks.
+    """
+    # Strip episode notation: "Show - S02E12 ..." → "Show"
+    title = re.sub(r'\s*[-–]\s*S\d+E\d+.*', '', title, flags=re.IGNORECASE)
+    # Strip trailing year: "Title (2016)" → "Title"
+    title = re.sub(r'\s*\((19|20)\d{2}\)\s*$', '', title)
+    return title.strip().lower()
+
+
 def _is_duplicate_of_history(rec_title: str, watched_titles: set) -> bool:
     """Check whether a recommendation title duplicates a watched title.
 
@@ -104,9 +121,11 @@ async def get_recommendations_from_history(history_items: List[Dict], max_result
         logger.info("No unique history items after deduplication.")
         return []
 
-    # Build a set of lowercase history titles for validation and duplicate detection
+    # Build a set of normalised history titles for validation and duplicate detection.
+    # _normalize_title strips episode notation and trailing year suffixes so that
+    # lookups are resilient to LLM-added decorations like "(2016)".
     history_titles_lower = {
-        (item.get("title") or item.get("name") or "").strip().lower()
+        _normalize_title(item.get("title") or item.get("name") or "")
         for item in history_items
     }
 
@@ -188,20 +207,22 @@ async def get_recommendations_from_history(history_items: List[Dict], max_result
                 logger.info(f"Filtered out duplicate recommendation already in watch history: {rec['title']}")
                 continue
 
-            # Validate source_title: must be one of the actual history titles.
-            # Also strip episode notation (e.g. "Dan Da Dan - S02E12" → "Dan Da Dan")
-            # before comparing, in case the history still contains raw episode strings.
+            # Validate source_title: must correspond to an actual history title.
+            # Use _normalize_title on both sides to tolerate LLM-added decorations
+            # such as episode suffixes ("Show - S02E12") or year suffixes ("Title (2016)").
             source_title = rec.get("source_title", "")
             if source_title:
-                clean_source = re.sub(r'\s*[-–]\s*S\d+E\d+.*', '', source_title, flags=re.IGNORECASE).strip().lower()
+                clean_source = _normalize_title(source_title)
                 if clean_source not in history_titles_lower:
                     logger.warning(
                         f"LLM returned source_title '{source_title}' not found in history. Clearing."
                     )
                     rec["source_title"] = None
                 else:
-                    # Normalise to the clean version so handlers receive a searchable title
-                    rec["source_title"] = re.sub(r'\s*[-–]\s*S\d+E\d+.*', '', source_title, flags=re.IGNORECASE).strip()
+                    # Store a decoration-stripped version so handlers receive a searchable title
+                    stripped = re.sub(r'\s*[-–]\s*S\d+E\d+.*', '', source_title, flags=re.IGNORECASE)
+                    stripped = re.sub(r'\s*\((19|20)\d{2}\)\s*$', '', stripped)
+                    rec["source_title"] = stripped.strip()
 
             rationale = rec.get("rationale", "No rationale provided by LLM.")
             logger.info(f"[{rec['title']} ({rec['year']})] LLM Rationale: {rationale}")
