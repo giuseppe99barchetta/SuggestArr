@@ -147,6 +147,15 @@ export const jobsApi = {
   },
 
   /**
+   * Get default filter values for new jobs (derived from global config).
+   * @returns {Promise<Object>} Response with defaults object.
+   */
+  async getDefaultFilters() {
+    const response = await axios.get('/api/jobs/defaults');
+    return response.data;
+  },
+
+  /**
    * Check if LLM is configured for AI-enhanced recommendations.
    * @returns {Promise<Object>} Response with configured boolean.
    */

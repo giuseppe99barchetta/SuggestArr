@@ -556,6 +556,46 @@ def get_watch_providers():
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
+@jobs_bp.route('/defaults', methods=['GET'])
+def get_job_defaults():
+    """
+    Return default filter values for new jobs, derived from the global content-filter config.
+
+    The frontend uses these to pre-populate new job forms so that they match
+    the thresholds configured in the wizard instead of starting from zero.
+
+    Returns:
+        JSON with default filter values:
+            - vote_average_gte: global FILTER_TMDB_THRESHOLD / 10, or 6.0 if not set
+            - vote_count_gte: global FILTER_TMDB_MIN_VOTES, or None
+    """
+    try:
+        config = load_env_vars()
+
+        tmdb_threshold = config.get('FILTER_TMDB_THRESHOLD')
+        if tmdb_threshold is not None:
+            try:
+                vote_average_gte = float(tmdb_threshold) / 10
+            except (ValueError, TypeError):
+                vote_average_gte = 6.0
+        else:
+            vote_average_gte = 6.0
+
+        tmdb_min_votes = config.get('FILTER_TMDB_MIN_VOTES')
+        vote_count_gte = int(tmdb_min_votes) if tmdb_min_votes is not None else None
+
+        return jsonify({
+            'status': 'success',
+            'defaults': {
+                'vote_average_gte': vote_average_gte,
+                'vote_count_gte': vote_count_gte,
+            }
+        }), 200
+    except Exception as e:
+        logger.error(f"Error fetching job defaults: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
+
+
 @jobs_bp.route('/llm-status', methods=['GET'])
 def get_llm_status():
     """

@@ -237,6 +237,22 @@ export default {
         value: this.job.schedule_value || 'daily'
       };
     }
+    // For new jobs, pre-populate filters with global config defaults
+    if (!this.isEditing) {
+      try {
+        const defaultsResponse = await jobsApi.getDefaultFilters();
+        if (defaultsResponse.status === 'success') {
+          const d = defaultsResponse.defaults;
+          this.form.filters = {
+            vote_average_gte: d.vote_average_gte,
+            ...(d.vote_count_gte != null ? { vote_count_gte: d.vote_count_gte } : {}),
+            ...this.form.filters
+          };
+        }
+      } catch {
+        // fallback: leave filters as-is
+      }
+    }
     try {
       const llmStatus = await jobsApi.getLlmStatus();
       this.llmConfigured = llmStatus.configured === true;
