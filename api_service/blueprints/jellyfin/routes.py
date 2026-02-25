@@ -22,17 +22,16 @@ async def get_jellyfin_library():
             return jsonify({'message': 'API URL and token are required', 'type': 'error'}), 400
 
         logger.debug(f"Connecting to Jellyfin server at: {api_url}")
-        jellyfin_client = JellyfinClient(api_url=api_url, token=api_key)
+        async with JellyfinClient(api_url=api_url, token=api_key) as jellyfin_client:
+            libraries = await jellyfin_client.get_libraries()
+            logger.debug(f"Retrieved {len(libraries) if libraries else 0} libraries from Jellyfin")
 
-        libraries = await jellyfin_client.get_libraries()
-        logger.debug(f"Retrieved {len(libraries) if libraries else 0} libraries from Jellyfin")
-
-        if libraries:
-            logger.info(f"Successfully fetched {len(libraries)} libraries from Jellyfin server")
-            return jsonify({'message': 'Libraries fetched successfully', 'items': libraries}), 200
-        else:
-            logger.warning("No libraries found on Jellyfin server")
-            return jsonify({'message': 'No library found', 'type': 'error'}), 404
+            if libraries:
+                logger.info(f"Successfully fetched {len(libraries)} libraries from Jellyfin server")
+                return jsonify({'message': 'Libraries fetched successfully', 'items': libraries}), 200
+            else:
+                logger.warning("No libraries found on Jellyfin server")
+                return jsonify({'message': 'No library found', 'type': 'error'}), 404
     except Exception as e:
         logger.error(f'Error fetching Jellyfin libraries: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error fetching Jellyfin libraries', 'type': 'error'}), 500
@@ -56,32 +55,31 @@ async def test_jellyfin_connection():
             }), 400
 
         logger.debug(f"Testing connection to Jellyfin server at: {api_url}")
-        jellyfin_client = JellyfinClient(api_url=api_url, token=api_key)
-
-        # Test connection by fetching basic server info
+        
         try:
-            # Try to get libraries as a connection test
-            libraries = await jellyfin_client.get_libraries()
-            logger.debug(f"Connection test response: {type(libraries)} - {len(libraries) if libraries else 0} libraries")
+            async with JellyfinClient(api_url=api_url, token=api_key) as jellyfin_client:
+                # Try to get libraries as a connection test
+                libraries = await jellyfin_client.get_libraries()
+                logger.debug(f"Connection test response: {type(libraries)} - {len(libraries) if libraries else 0} libraries")
 
-            # Check if we got a valid response with actual libraries data
-            if libraries and isinstance(libraries, list):
-                logger.info(f"Jellyfin connection test successful - found {len(libraries)} libraries")
-                return jsonify({
-                    'message': 'Jellyfin connection successful!',
-                    'status': 'success',
-                    'data': {
-                        'libraries_count': len(libraries),
-                        'server_url': api_url
-                    }
-                }), 200
-            else:
-                # None or invalid response means connection failed
-                logger.warning(f"Jellyfin connection test failed - invalid response from server")
-                return jsonify({
-                    'message': 'Failed to connect to Jellyfin server - invalid token or server unreachable',
-                    'status': 'error'
-                }), 400
+                # Check if we got a valid response with actual libraries data
+                if libraries and isinstance(libraries, list):
+                    logger.info(f"Jellyfin connection test successful - found {len(libraries)} libraries")
+                    return jsonify({
+                        'message': 'Jellyfin connection successful!',
+                        'status': 'success',
+                        'data': {
+                            'libraries_count': len(libraries),
+                            'server_url': api_url
+                        }
+                    }), 200
+                else:
+                    # None or invalid response means connection failed
+                    logger.warning(f"Jellyfin connection test failed - invalid response from server")
+                    return jsonify({
+                        'message': 'Failed to connect to Jellyfin server - invalid token or server unreachable',
+                        'status': 'error'
+                    }), 400
 
         except Exception as conn_error:
             logger.error(f'Jellyfin connection test failed: {str(conn_error)}', exc_info=True)
@@ -117,12 +115,11 @@ async def get_jellyfin_users():
             logger.warning("Missing API URL or token in Jellyfin users request")
             return jsonify({'message': 'API URL and token are required', 'type': 'error'}), 400
 
-        jellyfin_client = JellyfinClient(api_url=api_url, token=api_key)
-
-        users = await jellyfin_client.get_all_users()
-        if users:
-            return jsonify({'message': 'Users fetched successfully', 'users': users}), 200
-        return jsonify({'message': 'No users found', 'type': 'error'}), 404
+        async with JellyfinClient(api_url=api_url, token=api_key) as jellyfin_client:
+            users = await jellyfin_client.get_all_users()
+            if users:
+                return jsonify({'message': 'Users fetched successfully', 'users': users}), 200
+            return jsonify({'message': 'No users found', 'type': 'error'}), 404
     except Exception as e:
         logger.error(f'Error fetching Jellyfin users: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error fetching Jellyfin users', 'type': 'error'}), 500

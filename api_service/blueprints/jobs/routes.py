@@ -458,20 +458,23 @@ def get_genres(media_type: str):
         from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
         env_vars = load_env_vars()
-        tmdb = TMDbDiscover(env_vars['TMDB_API_KEY'])
 
-        if media_type == 'both':
-            # Combine movie and TV genres, removing duplicates
-            movie_genres = run_async(tmdb.get_genres('movie'))
-            tv_genres = run_async(tmdb.get_genres('tv'))
-            # Merge by id, keeping unique genres
-            genres_dict = {g['id']: g for g in movie_genres}
-            for g in tv_genres:
-                if g['id'] not in genres_dict:
-                    genres_dict[g['id']] = g
-            genres = sorted(genres_dict.values(), key=lambda x: x['name'])
-        else:
-            genres = run_async(tmdb.get_genres(media_type))
+        async def fetch_genres():
+            async with TMDbDiscover(env_vars['TMDB_API_KEY']) as tmdb:
+                if media_type == 'both':
+                    # Combine movie and TV genres, removing duplicates
+                    movie_genres = await tmdb.get_genres('movie')
+                    tv_genres = await tmdb.get_genres('tv')
+                    # Merge by id, keeping unique genres
+                    genres_dict = {g['id']: g for g in movie_genres}
+                    for g in tv_genres:
+                        if g['id'] not in genres_dict:
+                            genres_dict[g['id']] = g
+                    return sorted(genres_dict.values(), key=lambda x: x['name'])
+                else:
+                    return await tmdb.get_genres(media_type)
+
+        genres = run_async(fetch_genres())
 
         return jsonify({'status': 'success', 'genres': genres}), 200
 
@@ -493,8 +496,12 @@ def get_languages():
         from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
         env_vars = load_env_vars()
-        tmdb = TMDbDiscover(env_vars['TMDB_API_KEY'])
-        languages = run_async(tmdb.get_languages())
+
+        async def fetch_languages():
+            async with TMDbDiscover(env_vars['TMDB_API_KEY']) as tmdb:
+                return await tmdb.get_languages()
+
+        languages = run_async(fetch_languages())
 
         return jsonify({'status': 'success', 'languages': languages}), 200
 
@@ -516,8 +523,12 @@ def get_watch_regions():
         from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
         env_vars = load_env_vars()
-        tmdb = TMDbDiscover(env_vars['TMDB_API_KEY'])
-        regions = run_async(tmdb.get_watch_regions())
+
+        async def fetch_regions():
+            async with TMDbDiscover(env_vars['TMDB_API_KEY']) as tmdb:
+                return await tmdb.get_watch_regions()
+
+        regions = run_async(fetch_regions())
 
         return jsonify({'status': 'success', 'regions': regions}), 200
 
@@ -546,8 +557,12 @@ def get_watch_providers():
         from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
         env_vars = load_env_vars()
-        tmdb = TMDbDiscover(env_vars['TMDB_API_KEY'])
-        providers = run_async(tmdb.get_streaming_providers(region))
+
+        async def fetch_providers():
+            async with TMDbDiscover(env_vars['TMDB_API_KEY']) as tmdb:
+                return await tmdb.get_streaming_providers(region)
+
+        providers = run_async(fetch_providers())
 
         return jsonify({'status': 'success', 'providers': providers}), 200
 

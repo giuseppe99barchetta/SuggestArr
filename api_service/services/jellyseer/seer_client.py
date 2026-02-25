@@ -35,7 +35,23 @@ class SeerClient:
         self.exclude_downloaded = exclude_downloaded
         self.exclude_requested = exclude_watched
         self.anime_profile_config = anime_profile_config or {}
+        self.session = None
         self.logger.debug("SeerClient initialized with API URL: %s", api_url)
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self.session is None or self.session.closed:
+            self.session = aiohttp.ClientSession()
+        return self.session
+
+    async def close(self):
+        if self.session and not self.session.closed:
+            await self.session.close()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
         
     async def init(self):
         """
@@ -65,38 +81,41 @@ class SeerClient:
 
         for attempt in range(retries):
             self.logger.debug("Attempt %d for request to %s", attempt + 1, url)
-            async with aiohttp.ClientSession(headers=headers, cookies=cookies) as session:
-                try:
-                    async with session.request(method, url, json=data, timeout=REQUEST_TIMEOUT) as response:
-                        self.logger.debug("Received response with status %d for request to %s", response.status, url)
-                        if response.status in HTTP_OK:
-                            return await response.json()
-                        elif response.status == 403:
-                            resp = await response.json()
-                            message = resp.get('message') or resp.get('error', '')
-                            self.logger.error(
-                                f"Request to {url} failed with status: {response.status}, {message}"
-                            )
-                            # Quota-exceeded errors won't be resolved by re-logging in; abort immediately
-                            if 'quota' in message.lower():
-                                return None
-                            # Otherwise treat as auth failure and retry with login
-                            if attempt < retries - 1:
-                                self.logger.debug("Retrying login due to 403")
-                                await self.login()
-                            else:
-                                return None
-                        elif response.status == 404 and attempt < retries - 1:
-                            self.logger.debug("Retrying login due to status 404")
+            
+            # Use shared session but override headers/cookies for this request
+            # since aiohttp allows passing request-level headers/cookies
+            session = await self._get_session()
+            try:
+                async with session.request(method, url, json=data, headers=headers, cookies=cookies, timeout=REQUEST_TIMEOUT) as response:
+                    self.logger.debug("Received response with status %d for request to %s", response.status, url)
+                    if response.status in HTTP_OK:
+                        return await response.json()
+                    elif response.status == 403:
+                        resp = await response.json()
+                        message = resp.get('message') or resp.get('error', '')
+                        self.logger.error(
+                            f"Request to {url} failed with status: {response.status}, {message}"
+                        )
+                        # Quota-exceeded errors won't be resolved by re-logging in; abort immediately
+                        if 'quota' in message.lower():
+                            return None
+                        # Otherwise treat as auth failure and retry with login
+                        if attempt < retries - 1:
+                            self.logger.debug("Retrying login due to 403")
                             await self.login()
                         else:
-                            resp = await response.json()
-                            self.logger.error(
-                                f"Request to {url} failed with status: {response.status}, {resp.get('message') or resp.get('error', 'Unknown error')}"
-                            )
-                except aiohttp.ClientError as e:
-                    self.logger.error(f"Client error during request to {url}: {e}")
-                await asyncio.sleep(delay)
+                            return None
+                    elif response.status == 404 and attempt < retries - 1:
+                        self.logger.debug("Retrying login due to status 404")
+                        await self.login()
+                    else:
+                        resp = await response.json()
+                        self.logger.error(
+                            f"Request to {url} failed with status: {response.status}, {resp.get('message') or resp.get('error', 'Unknown error')}"
+                        )
+            except aiohttp.ClientError as e:
+                self.logger.error(f"Client error during request to {url}: {e}")
+            await asyncio.sleep(delay)
         return None
 
     async def login(self):
@@ -111,18 +130,18 @@ class SeerClient:
 
         login_url = f"{self.api_url}/api/v1/auth/local"
         self.logger.debug("Logging in to %s", login_url)
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=REQUEST_TIMEOUT) as response:
-                    self.logger.debug("Login response status: %d", response.status)
-                    if response.status == 200 and 'connect.sid' in response.cookies:
-                        self.session_token = response.cookies['connect.sid'].value
-                        self.is_logged_in = True
-                        self.logger.info("Successfully logged in as %s", self.username)
-                    else:
-                        self.logger.error("Login failed: %d", response.status)
-            except asyncio.TimeoutError:
-                self.logger.error("Login request to %s timed out.", login_url)
+        session = await self._get_session()
+        try:
+            async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=REQUEST_TIMEOUT) as response:
+                self.logger.debug("Login response status: %d", response.status)
+                if response.status == 200 and 'connect.sid' in response.cookies:
+                    self.session_token = response.cookies['connect.sid'].value
+                    self.is_logged_in = True
+                    self.logger.info("Successfully logged in as %s", self.username)
+                else:
+                    self.logger.error("Login failed: %d", response.status)
+        except asyncio.TimeoutError:
+            self.logger.error("Login request to %s timed out.", login_url)
 
     async def get_all_users(self, max_users=100):
         """Fetch all users from Jellyseer API, returning a list of user IDs, names, and local status."""

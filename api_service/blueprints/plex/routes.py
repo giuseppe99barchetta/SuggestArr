@@ -26,12 +26,12 @@ async def get_plex_libraries():
             return jsonify({'message': 'API URL and token are required', 'type': 'error'}), 400
 
         logger.debug(f"Connecting to Plex server at: {api_url}")
-        plex_client = PlexClient(api_url=api_url, token=api_token)
-        libraries = await plex_client.get_libraries()
+        async with PlexClient(api_url=api_url, token=api_token) as plex_client:
+            libraries = await plex_client.get_libraries()
 
-        if not libraries:
-            logger.warning("No libraries found on Plex server")
-            return jsonify({'message': 'No library found', 'type': 'error'}), 404
+            if not libraries:
+                logger.warning("No libraries found on Plex server")
+                return jsonify({'message': 'No library found', 'type': 'error'}), 404
 
         logger.info(f"Successfully fetched {len(libraries)} libraries from Plex server")
         return jsonify({'message': 'Libraries fetched successfully', 'items': libraries}), 200
@@ -90,13 +90,13 @@ async def get_plex_servers_async_route():
         if not auth_token:
             return jsonify({'message': 'Auth token is required', 'type': 'error'}), 400
 
-        plex_client = PlexClient(token=auth_token, client_id=os.getenv('PLEX_CLIENT_ID', str(uuid.uuid4())))
-        servers = await plex_client.get_servers()
+        async with PlexClient(token=auth_token, client_id=os.getenv('PLEX_CLIENT_ID', str(uuid.uuid4()))) as plex_client:
+            servers = await plex_client.get_servers()
 
-        if servers:
-            return jsonify({'message': 'Plex servers fetched successfully', 'servers': servers}), 200
-        else:
-            return jsonify({'message': 'Failed to fetch Plex servers', 'type': 'error'}), 404
+            if servers:
+                return jsonify({'message': 'Plex servers fetched successfully', 'servers': servers}), 200
+            else:
+                return jsonify({'message': 'Failed to fetch Plex servers', 'type': 'error'}), 404
 
     except Exception as e:
         logger.error(f"Error fetching Plex servers: {str(e)}", exc_info=True)
@@ -121,32 +121,31 @@ async def test_plex_connection():
             }), 400
 
         logger.debug(f"Testing connection to Plex server at: {api_url}")
-        plex_client = PlexClient(token=api_token, client_id=client_id, api_url=api_url)
-
-        # Test connection by fetching basic server info
+        
         try:
-            # Try to get server information or libraries as a connection test
-            libraries = await plex_client.get_libraries()
-            logger.debug(f"Connection test response: {type(libraries)} - {len(libraries) if libraries else 0} libraries")
+            async with PlexClient(token=api_token, client_id=client_id, api_url=api_url) as plex_client:
+                # Try to get server information or libraries as a connection test
+                libraries = await plex_client.get_libraries()
+                logger.debug(f"Connection test response: {type(libraries)} - {len(libraries) if libraries else 0} libraries")
 
-            # Check if we got a valid response with actual libraries data
-            if libraries and isinstance(libraries, list):
-                logger.info(f"Plex connection test successful - found {len(libraries)} libraries")
-                return jsonify({
-                    'message': 'Plex connection successful!',
-                    'status': 'success',
-                    'data': {
-                        'libraries_count': len(libraries),
-                        'server_url': api_url
-                    }
-                }), 200
-            else:
-                # None or invalid response means connection failed
-                logger.warning(f"Plex connection test failed - invalid response from server")
-                return jsonify({
-                    'message': 'Failed to connect to Plex server - invalid token or server unreachable',
-                    'status': 'error'
-                }), 400
+                # Check if we got a valid response with actual libraries data
+                if libraries and isinstance(libraries, list):
+                    logger.info(f"Plex connection test successful - found {len(libraries)} libraries")
+                    return jsonify({
+                        'message': 'Plex connection successful!',
+                        'status': 'success',
+                        'data': {
+                            'libraries_count': len(libraries),
+                            'server_url': api_url
+                        }
+                    }), 200
+                else:
+                    # None or invalid response means connection failed
+                    logger.warning(f"Plex connection test failed - invalid response from server")
+                    return jsonify({
+                        'message': 'Failed to connect to Plex server - invalid token or server unreachable',
+                        'status': 'error'
+                    }), 400
 
         except Exception as conn_error:
             logger.error(f'Plex connection test failed: {str(conn_error)}', exc_info=True)
@@ -181,13 +180,13 @@ async def get_plex_users():
         if not api_token:
             return jsonify({'message': 'API token is required', 'type': 'error'}), 400
 
-        plex_client = PlexClient(token=api_token, client_id=client_id, api_url=api_url)
-        users = await plex_client.get_all_users()
+        async with PlexClient(token=api_token, client_id=client_id, api_url=api_url) as plex_client:
+            users = await plex_client.get_all_users()
 
-        if not users:
-            return jsonify({'message': 'No users found', 'type': 'error'}), 404
+            if not users:
+                return jsonify({'message': 'No users found', 'type': 'error'}), 404
 
-        return jsonify({'message': 'Users fetched successfully', 'users': users}), 200
+            return jsonify({'message': 'Users fetched successfully', 'users': users}), 200
     except Exception as e:
         logger.error(f'Error fetching Plex users: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error fetching Plex users', 'type': 'error'}), 500

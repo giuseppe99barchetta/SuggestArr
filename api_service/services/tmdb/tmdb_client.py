@@ -56,7 +56,23 @@ class TMDbClient:
         self.imdb_min_votes = int(imdb_min_votes) if imdb_min_votes is not None else 100
         self.omdb_client = omdb_client
         self.tmdb_api_url = "https://api.themoviedb.org/3"
+        self.session = None
         self.logger.debug("TMDbClient initialized with API key: ***")
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self.session is None or self.session.closed:
+            self.session = aiohttp.ClientSession()
+        return self.session
+
+    async def close(self):
+        if self.session and not self.session.closed:
+            await self.session.close()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
 
     async def _fetch_recommendations(self, content_id, content_type):
         """
@@ -123,13 +139,13 @@ class TMDbClient:
         url = f"{self.tmdb_api_url}/{content_type}/{content_id}/recommendations?api_key={self.api_key}&page={page}"
         self.logger.debug("Fetching data from URL: %s", url.replace(self.api_key, "***"))
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        self.logger.debug("Successfully fetched data for page %d", page)
-                        return await response.json()
-                    else:
-                        self.logger.error("Error retrieving %s recommendations: %d", content_type, response.status)
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    self.logger.debug("Successfully fetched data for page %d", page)
+                    return await response.json()
+                else:
+                    self.logger.error("Error retrieving %s recommendations: %d", content_type, response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while requesting %s recommendations: %s", content_type, str(e).replace(self.api_key, "***"))
         return None
@@ -146,28 +162,28 @@ class TMDbClient:
         self.logger.debug("Fetching metadata for %s with ID %s", content_type, tmdb_id)
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as details_response:
-                    if details_response.status in HTTP_OK:
-                        data = await details_response.json()
-                        metadata = self._format_result(data, content_type)
-                        self.logger.debug("Successfully fetched metadata for %s with ID %s", content_type, tmdb_id)
-                    else:
-                        self.logger.error("Failed to retrieve metadata for TMDb ID %s: %d", tmdb_id, details_response.status)
-                        return None
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as details_response:
+                if details_response.status in HTTP_OK:
+                    data = await details_response.json()
+                    metadata = self._format_result(data, content_type)
+                    self.logger.debug("Successfully fetched metadata for %s with ID %s", content_type, tmdb_id)
+                else:
+                    self.logger.error("Failed to retrieve metadata for TMDb ID %s: %d", tmdb_id, details_response.status)
+                    return None
 
-                # Fetch images for logo
-                async with session.get(images_url, timeout=REQUEST_TIMEOUT) as images_response:
-                    if images_response.status in HTTP_OK:
-                        images_data = await images_response.json()
-                        logos = images_data.get("logos", [])
-                        logo_path = logos[0]["file_path"] if logos else None
-                        if logo_path:
-                            metadata["logo_path"] = f"https://image.tmdb.org/t/p/w500{logo_path}"
-                        self.logger.debug("Successfully fetched logo for %s with ID %s", content_type, tmdb_id)
-                    else:
-                        self.logger.warning("Failed to retrieve logos for TMDb ID %s: %d", tmdb_id, images_response.status)
-                        metadata["logo_path"] = None
+            # Fetch images for logo
+            async with session.get(images_url, timeout=REQUEST_TIMEOUT) as images_response:
+                if images_response.status in HTTP_OK:
+                    images_data = await images_response.json()
+                    logos = images_data.get("logos", [])
+                    logo_path = logos[0]["file_path"] if logos else None
+                    if logo_path:
+                        metadata["logo_path"] = f"https://image.tmdb.org/t/p/w500{logo_path}"
+                    self.logger.debug("Successfully fetched logo for %s with ID %s", content_type, tmdb_id)
+                else:
+                    self.logger.warning("Failed to retrieve logos for TMDb ID %s: %d", tmdb_id, images_response.status)
+                    metadata["logo_path"] = None
 
             return metadata
 
@@ -278,24 +294,24 @@ class TMDbClient:
         url = f"{self.tmdb_api_url}/{content_type}/{content_id}?api_key={self.api_key}"
         self.logger.debug("Fetching details for %s ID %s", content_type, content_id)
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        data = await response.json()
-                        if content_type == 'movie':
-                            return {
-                                'runtime': data.get('runtime'),
-                                'imdb_id': data.get('imdb_id'),
-                            }
-                        else:
-                            run_times = data.get('episode_run_time', [])
-                            runtime = run_times[0] if run_times else None
-                            # TV details don't include imdb_id; fetch from external_ids
-                            imdb_id = await self._get_tv_imdb_id(content_id)
-                            return {'runtime': runtime, 'imdb_id': imdb_id}
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    data = await response.json()
+                    if content_type == 'movie':
+                        return {
+                            'runtime': data.get('runtime'),
+                            'imdb_id': data.get('imdb_id'),
+                        }
                     else:
-                        self.logger.warning("Failed to fetch details for %s ID %s: HTTP %d",
-                                            content_type, content_id, response.status)
+                        run_times = data.get('episode_run_time', [])
+                        runtime = run_times[0] if run_times else None
+                        # TV details don't include imdb_id; fetch from external_ids
+                        imdb_id = await self._get_tv_imdb_id(content_id)
+                        return {'runtime': runtime, 'imdb_id': imdb_id}
+                else:
+                    self.logger.warning("Failed to fetch details for %s ID %s: HTTP %d",
+                                        content_type, content_id, response.status)
         except aiohttp.ClientError as e:
             self.logger.warning("Error fetching details for %s ID %s: %s",
                                 content_type, content_id, str(e).replace(self.api_key, "***"))
@@ -311,14 +327,14 @@ class TMDbClient:
         url = f"{self.tmdb_api_url}/tv/{tv_id}/external_ids?api_key={self.api_key}"
         self.logger.debug("Fetching external IDs for TV ID %s", tv_id)
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        data = await response.json()
-                        return data.get('imdb_id')
-                    else:
-                        self.logger.warning("Failed to fetch external IDs for TV ID %s: HTTP %d",
-                                            tv_id, response.status)
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    data = await response.json()
+                    return data.get('imdb_id')
+                else:
+                    self.logger.warning("Failed to fetch external IDs for TV ID %s: HTTP %d",
+                                        tv_id, response.status)
         except aiohttp.ClientError as e:
             self.logger.warning("Error fetching external IDs for TV ID %s: %s", tv_id, str(e).replace(self.api_key, "***"))
         return None
@@ -411,16 +427,16 @@ class TMDbClient:
         url = f"{self.tmdb_api_url}/find/{tvdb_id}?api_key={self.api_key}&external_source=tvdb_id"
         self.logger.debug("Finding TMDb ID for TVDb ID %s", tvdb_id)
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        data = await response.json()
-                        if 'tv_results' in data and data['tv_results']:
-                            self.logger.debug("Found TMDb ID %s for TVDb ID %s", data['tv_results'][0]['id'], tvdb_id)
-                            return data['tv_results'][0]['id']
-                        self.logger.warning("No results found on TMDb for TVDb ID: %s", tvdb_id)
-                    else:
-                        self.logger.error("Error converting TVDb ID to TMDb ID: %d", response.status)
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    data = await response.json()
+                    if 'tv_results' in data and data['tv_results']:
+                        self.logger.debug("Found TMDb ID %s for TVDb ID %s", data['tv_results'][0]['id'], tvdb_id)
+                        return data['tv_results'][0]['id']
+                    self.logger.warning("No results found on TMDb for TVDb ID: %s", tvdb_id)
+                else:
+                    self.logger.error("Error converting TVDb ID to TMDb ID: %d", response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while converting TVDb ID: %s", str(e).replace(self.api_key, "***"))
 
@@ -445,29 +461,29 @@ class TMDbClient:
         self.logger.debug("Fetching watch providers for %s with ID %s", content_type, content_id)
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        data = await response.json()
-                        if "results" in data and self.region_provider in data["results"]:
-                            region_data = data["results"][self.region_provider]
-                            providers = region_data.get('flatrate', [])
-                            if self.logger.isEnabledFor(10):  # DEBUG level
-                                found_names = [p.get('provider_name') for p in providers]
-                                self.logger.debug(
-                                    "Watch providers (flatrate) for %s ID %s in %s: %s",
-                                    content_type, content_id, self.region_provider,
-                                    found_names if found_names else "none"
-                                )
-                            for provider in providers:
-                                if any(str(provider['provider_id']) == str(excluded['provider_id']) for excluded in self.excluded_streaming_services):
-                                    self.logger.debug("Content ID %s is in excluded streaming service: %s", content_id, provider['provider_name'])
-                                    return True, provider['provider_name']
-                        else:
-                            self.logger.debug("No watch providers found for content ID %s in region %s.", content_id, self.region_provider)
-                            return False, None
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    data = await response.json()
+                    if "results" in data and self.region_provider in data["results"]:
+                        region_data = data["results"][self.region_provider]
+                        providers = region_data.get('flatrate', [])
+                        if self.logger.isEnabledFor(10):  # DEBUG level
+                            found_names = [p.get('provider_name') for p in providers]
+                            self.logger.debug(
+                                "Watch providers (flatrate) for %s ID %s in %s: %s",
+                                content_type, content_id, self.region_provider,
+                                found_names if found_names else "none"
+                            )
+                        for provider in providers:
+                            if any(str(provider['provider_id']) == str(excluded['provider_id']) for excluded in self.excluded_streaming_services):
+                                self.logger.debug("Content ID %s is in excluded streaming service: %s", content_id, provider['provider_name'])
+                                return True, provider['provider_name']
                     else:
-                        self.logger.error("Failed to retrieve watch providers for content ID %s: %d", content_id, response.status)
+                        self.logger.debug("No watch providers found for content ID %s in region %s.", content_id, self.region_provider)
+                        return False, None
+                else:
+                    self.logger.error("Failed to retrieve watch providers for content ID %s: %d", content_id, response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while fetching watch providers: %s", str(e).replace(self.api_key, "***"))
 
@@ -508,20 +524,20 @@ class TMDbClient:
     async def _execute_search(self, url, content_type):
         """Helper to execute search and format results."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        data = await response.json()
-                        results = []
-                        for item in data.get('results', []):
-                            # Ensure we don't crash if format_result fails on missing keys
-                            try:
-                                results.append(self._format_result(item, content_type))
-                            except Exception as e:
-                                self.logger.warning("Failed to format search result: %s", str(e))
-                        return results
-                    else:
-                        self.logger.error("Error searching TMDb: %d", response.status)
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    data = await response.json()
+                    results = []
+                    for item in data.get('results', []):
+                        # Ensure we don't crash if format_result fails on missing keys
+                        try:
+                            results.append(self._format_result(item, content_type))
+                        except Exception as e:
+                            self.logger.warning("Failed to format search result: %s", str(e))
+                    return results
+                else:
+                    self.logger.error("Error searching TMDb: %d", response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while searching TMDb: %s", str(e).replace(self.api_key, "***"))
         return []
