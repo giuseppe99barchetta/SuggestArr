@@ -64,7 +64,17 @@ class JellyfinClient:
         """
         results_by_library = {"movie": [], "tv": []}
 
-        libraries = self.libraries if self.libraries else await self.get_libraries()
+        if not self.libraries:
+            raw = await self.get_libraries() or []
+            # get_libraries() returns raw Jellyfin VirtualFolders format (ItemId/Name).
+            # Normalize to the internal {id, name} shape expected by all callers so
+            # that get_recent_items() works correctly when libraries weren't pre-configured.
+            self.libraries = [
+                {"id": lib["ItemId"], "name": lib["Name"]}
+                for lib in raw
+                if lib.get("ItemId") and lib.get("Name")
+            ]
+        libraries = self.libraries
         self.logger.debug(f"Libraries type: {type(libraries)}, content: {libraries}")
 
         if not libraries:
@@ -109,6 +119,7 @@ class JellyfinClient:
                         data = await response.json()
                         items = data.get("Items", [])
 
+                        added = 0
                         for item in items:
                             item_type = item.get("Type")
 
@@ -122,10 +133,11 @@ class JellyfinClient:
                             item["tmdb_id"] = tmdb_id
                             bucket = "tv" if item_type == "Series" else "movie"
                             results_by_library[bucket].append(item)
+                            added += 1
 
                         self.logger.info(
                             "Retrieved %d valid items in %s",
-                            len(results_by_library["tv"]) + len(results_by_library["movie"]),
+                            added,
                             library_name
                         )
 
@@ -140,30 +152,43 @@ class JellyfinClient:
     async def get_recent_items(self, user):
         """
         Retrieves a list of recently played items for a given user from specific libraries asynchronously.
-        :param user_id: The ID of the user whose recent items are to be retrieved.
-        :return: A combined list of recent items from all specified libraries, organized by library.
+        Uses the user-scoped endpoint /Users/{userId}/Items to respect per-user library visibility.
+        Falls back to a simpler query if the primary request returns 404 (e.g. Collections library).
+        :param user: Dict with 'id' and 'name' keys for the target user.
+        :return: A combined dict of recent items keyed by library name, or None if nothing retrieved.
         """
         results_by_library = {}
         seen_series = set()  # Track seen series to avoid duplicates
 
-        url = f"{self.api_url}/Items"
-        self.logger.debug(f'Requesting recent items for user {user["name"]} from {url}')
+        user_id = user['id']
+        user_name = user.get('name', user_id)
+
+        self.logger.debug(f'Fetching recent items for user {user_name} (id={user_id})')
 
         for library in self.libraries:
             library_id = library.get('id')
+            library_name = library.get('name', library_id)
 
+            # Use the proper user-scoped endpoint so Jellyfin enforces per-user library
+            # visibility correctly. Using /Items?userId=... on the admin endpoint caused
+            # 404 for users whose library visibility excludes certain virtual folders
+            # (e.g. Collections) in Jellyfin 10.9+.
+            url = f"{self.api_url}/Users/{user_id}/Items"
             params = {
                 "SortBy": "DatePlayed",
                 "SortOrder": "Descending",
-                'isPlayed': "true",
+                "IsPlayed": "true",
                 "Recursive": "true",
                 "IncludeItemTypes": "Movie,Episode",
-                "userId": user['id'],
                 "Limit": self.max_content_fetch,
-                "ParentID": library_id,
+                "ParentId": library_id,
                 "Fields": "ProviderIds",
             }
-            self.logger.debug(f'Requesting recent items for library {library.get("name")} with params: {params}')
+
+            self.logger.debug(
+                "[library=%s] [userId=%s] GET %s params=%s",
+                library_name, user_id, url, params
+            )
 
             try:
                 async with aiohttp.ClientSession() as session:
@@ -171,37 +196,108 @@ class JellyfinClient:
                         if response.status == 200:
                             library_items = await response.json()
                             items = library_items.get('Items', [])
-                            self.logger.debug(f'Recent items retrieved for library {library.get("name")}: {items}')
+                            self.logger.debug(
+                                "[library=%s] [user=%s] Raw item count: %d",
+                                library_name, user_name, len(items)
+                            )
 
-                            filtered_items = []  # Store the filtered items for this library
-
+                            filtered_items = []
                             for item in items:
-                                # Check if we've reached the max content fetch limit
                                 if len(filtered_items) >= int(self.max_content_fetch):
                                     break
-
-                                # If the item is an episode, check for its series
                                 if item['Type'] == 'Episode':
                                     series_title = item['SeriesName']
                                     if series_title not in seen_series:
                                         seen_series.add(series_title)
-                                        filtered_items.append(item)  # Add the episode as part of the series
+                                        filtered_items.append(item)
                                 else:
-                                    filtered_items.append(item)  # Add movies directly
+                                    filtered_items.append(item)
 
-                            results_by_library[library.get('name')] = filtered_items  # Add filtered items to the results by library
-                            self.logger.info(f"Retrieved {len(filtered_items)} watched items in {library.get('name')}. for user {user['name']}")
+                            results_by_library[library_name] = filtered_items
+                            self.logger.info(
+                                "Retrieved %d watched items in %s for user %s",
+                                len(filtered_items), library_name, user_name
+                            )
+
+                        elif response.status == 404:
+                            raw_body = await response.text()
+                            self.logger.warning(
+                                "[library=%s] [user=%s] Recent items returned 404 — library may not be "
+                                "visible to this user or does not support DatePlayed sorting. "
+                                "URL=%s body=%.300s. Trying fallback query.",
+                                library_name, user_name, url, raw_body
+                            )
+                            fallback_items = await self._fallback_recent_items(
+                                user_id, user_name, library_id, library_name
+                            )
+                            if fallback_items is not None:
+                                results_by_library[library_name] = fallback_items
 
                         else:
                             self.logger.error(
-                                "Failed to get recent items for library %s (user %s): %d", library.get('name'), user['name'], response.status)
+                                "Failed to get recent items for library %s (user %s): %d",
+                                library_name, user_name, response.status
+                            )
+
             except aiohttp.ClientError as e:
                 self.logger.error(
-                    "An error occurred while retrieving recent items for library %s (user %s): %s", library.get('name'), user['name'], str(e))
+                    "An error occurred while retrieving recent items for library %s (user %s): %s",
+                    library_name, user_name, str(e)
+                )
             except Exception as e:
-                self.logger.error(e)
+                self.logger.error(
+                    "Unexpected error retrieving recent items for library %s (user %s): %s",
+                    library_name, user_name, str(e)
+                )
 
         return results_by_library if results_by_library else None
+
+    async def _fallback_recent_items(self, user_id, user_name, library_id, library_name):
+        """
+        Fallback for when the primary recent-items query returns 404.
+        Omits SortBy=DatePlayed, which some virtual libraries (e.g. Collections) do not support.
+        Uses /Users/{userId}/Items?ParentId=...&IsPlayed=true without date sorting.
+        :return: List of items, or None if the fallback also fails.
+        """
+        url = f"{self.api_url}/Users/{user_id}/Items"
+        params = {
+            "IsPlayed": "true",
+            "Recursive": "true",
+            "IncludeItemTypes": "Movie,Episode",
+            "Limit": self.max_content_fetch,
+            "ParentId": library_id,
+            "Fields": "ProviderIds",
+        }
+
+        self.logger.debug(
+            "[library=%s] [userId=%s] Fallback GET %s params=%s",
+            library_name, user_id, url, params
+        )
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        items = data.get('Items', [])
+                        self.logger.info(
+                            "[library=%s] [user=%s] Fallback retrieved %d items",
+                            library_name, user_name, len(items)
+                        )
+                        return items
+                    else:
+                        raw_body = await response.text()
+                        self.logger.warning(
+                            "[library=%s] [user=%s] Fallback also failed: %d body=%.300s — skipping library.",
+                            library_name, user_name, response.status, raw_body
+                        )
+                        return None
+        except Exception as e:
+            self.logger.error(
+                "[library=%s] [user=%s] Fallback error: %s",
+                library_name, user_name, str(e)
+            )
+            return None
 
     
     async def get_libraries(self):

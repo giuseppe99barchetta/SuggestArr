@@ -1336,6 +1336,7 @@ export default {
 <style scoped>
 .settings-services {
   color: var(--color-text-primary);
+  padding: var(--spacing-lg);
 }
 
 /* Section Header */

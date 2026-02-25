@@ -757,6 +757,7 @@ export default {
 <style scoped>
 .settings-advanced {
   color: var(--color-text-primary);
+  padding: var(--spacing-lg);
 }
 
 .section-header {

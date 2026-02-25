@@ -162,6 +162,15 @@ export const jobsApi = {
   async getLlmStatus() {
     const response = await axios.get('/api/jobs/llm-status');
     return response.data;
+  },
+
+  /**
+   * Get the current Seer delivery queue status.
+   * @returns {Promise<Object>} Response with queued/submitting/submitted/failed counts.
+   */
+  async getQueueStatus() {
+    const response = await axios.get('/api/jobs/queue-status');
+    return response.data;
   }
 };
 

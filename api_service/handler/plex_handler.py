@@ -240,7 +240,7 @@ class PlexHandler:
         """Request similar media (movie/TV show) via Overseer."""
         self.logger.debug(f"Requesting {max_items} similar media (anime={is_anime})")
         if not media_ids:
-            self.logger.info("No media IDs provided for similar media request.")
+            self.logger.debug("No similar media found after filtering for source %s.", source_tmdb_obj.get('id') if isinstance(source_tmdb_obj, dict) else '?')
             return
 
         if not isinstance(source_tmdb_obj, dict):

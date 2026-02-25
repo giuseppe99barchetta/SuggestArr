@@ -368,21 +368,17 @@ class RecommendationAutomation:
         exec_id = self.repository.log_execution_start(self.job_id)
 
         try:
-            # Get initial request count
-            initial_count = self._get_request_count()
-
             # Process recent items (this is the main recommendation logic)
             await self.media_handler.process_recent_items()
 
-            # Calculate how many new requests were made
-            final_count = self._get_request_count()
-            requested_count = max(0, final_count - initial_count)
+            # Use the handler's own request_count, which is incremented synchronously
+            # as each Seer request is confirmed. The previous approach counted DB rows
+            # before/after, but SeerClient delivers requests asynchronously so the DB
+            # hadn't been written yet when the final count was read — always giving 0.
+            requested_count = getattr(self.media_handler, 'request_count', 0)
+            results_count = requested_count
 
-            # For results_count, we use the number of items processed
-            # This is an estimate since handlers don't return this directly
-            results_count = requested_count  # Approximation
-
-            self.logger.info(f"Job completed: approximately {requested_count} new requests")
+            self.logger.info(f"Job completed: {requested_count} new requests")
 
             # Log success
             self.repository.log_execution_end(
@@ -418,18 +414,6 @@ class RecommendationAutomation:
                 requested_count=0,
                 error_message=error_msg
             )
-
-    def _get_request_count(self) -> int:
-        """Get current request count from database."""
-        try:
-            with self.db_manager.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM requests")
-                result = cursor.fetchone()
-                return result[0] if result else 0
-        except Exception:
-            return 0
-
 
 async def execute_recommendation_job(job_id: int) -> ExecutionResult:
     """

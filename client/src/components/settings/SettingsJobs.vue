@@ -5,8 +5,43 @@
       <p>Configure automated content discovery and recommendations</p>
     </div>
 
+    <!-- Seer delivery queue banner -->
+    <transition name="queue-banner">
+      <div v-if="queueStatus.total_pending > 0 && !queueBannerDismissed" class="queue-banner">
+        <div class="queue-banner-icon">
+          <i class="fas fa-circle-notch fa-spin"></i>
+        </div>
+        <div class="queue-banner-body">
+          <strong>Delivering to Seer…</strong>
+          <span>
+            {{ queueStatus.total_pending }} item{{ queueStatus.total_pending !== 1 ? 's' : '' }} queued
+            <template v-if="queueStatus.submitting > 0"> · {{ queueStatus.submitting }} sending</template>
+            <template v-if="queueStatus.failed > 0"> · <span class="queue-failed">{{ queueStatus.failed }} failed</span></template>
+          </span>
+        </div>
+        <div class="queue-banner-spinner">
+          <i class="fas fa-circle-notch fa-spin"></i>
+        </div>
+        <button class="queue-banner-close" @click="dismissQueueBanner" title="Dismiss">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div v-else-if="queueStatus.submitted > 0 && queueStatus.total_pending === 0 && !queueBannerDismissed" class="queue-banner queue-banner--done">
+        <div class="queue-banner-icon">
+          <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="queue-banner-body">
+          <strong>All requests delivered</strong>
+          <span>{{ queueStatus.submitted }} item{{ queueStatus.submitted !== 1 ? 's' : '' }} sent to Seer successfully</span>
+        </div>
+        <button class="queue-banner-close queue-banner-close--done" @click="dismissQueueBanner" title="Dismiss">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </transition>
+
     <!-- Info Box explaining both job types -->
-    <div class="info-box">
+    <div v-if="showInfoBox" class="info-box">
       <div class="info-icon">
         <i class="fas fa-info-circle"></i>
       </div>
@@ -23,6 +58,9 @@
           </div>
         </div>
       </div>
+      <button class="info-box-close" @click="dismissInfoBox" title="Dismiss">
+        <i class="fas fa-times"></i>
+      </button>
     </div>
 
     <div class="jobs-container">
@@ -216,12 +254,22 @@ export default {
       showCreateModal: false,
       showHistoryModal: false,
       editingJob: null,
-      jobToDelete: null
+      jobToDelete: null,
+      queueStatus: { queued: 0, submitting: 0, submitted: 0, failed: 0, total_pending: 0 },
+      queuePollInterval: null,
+      queueBannerDismissed: localStorage.getItem('sj_queue_banner_dismissed') === '1',
+      showInfoBox: localStorage.getItem('sj_info_box_hidden') !== '1'
     };
   },
   async mounted() {
     await this.loadJobs();
     await this.loadHistory();
+    await this.pollQueueStatus();
+  },
+  beforeUnmount() {
+    if (this.queuePollInterval) {
+      clearInterval(this.queuePollInterval);
+    }
   },
   methods: {
     async loadJobs() {
@@ -276,6 +324,25 @@ export default {
       }
     },
 
+    async pollQueueStatus() {
+      try {
+        const response = await jobsApi.getQueueStatus();
+        if (response.status === 'success') {
+          this.queueStatus = response;
+          if (response.total_pending > 0 && !this.queuePollInterval) {
+            this.queueBannerDismissed = false;
+            localStorage.removeItem('sj_queue_banner_dismissed');
+            this.queuePollInterval = setInterval(this.pollQueueStatus, 5000);
+          } else if (response.total_pending === 0 && this.queuePollInterval) {
+            clearInterval(this.queuePollInterval);
+            this.queuePollInterval = null;
+          }
+        }
+      } catch {
+        // Non-fatal: queue status is informational only
+      }
+    },
+
     async runJob(job) {
       this.isRunning[job.id] = true;
       try {
@@ -286,11 +353,13 @@ export default {
         const response = await jobsApi.runJobNow(job.id);
         if (response.status === 'success') {
           this.$toast.open({
-            message: `Job completed: ${response.results_count} found, ${response.requested_count} requested`,
+            message: `Job completed: ${response.results_count} found, ${response.requested_count} enqueued for Seer`,
             type: 'success',
             duration: 10000
           });
           await this.loadHistory();
+          // Start polling so the queue banner appears immediately
+          await this.pollQueueStatus();
         } else {
           this.$toast.open({
             message: response.message || 'Job failed',
@@ -372,6 +441,16 @@ export default {
       }
     },
 
+    dismissQueueBanner() {
+      this.queueBannerDismissed = true;
+      localStorage.setItem('sj_queue_banner_dismissed', '1');
+    },
+
+    dismissInfoBox() {
+      this.showInfoBox = false;
+      localStorage.setItem('sj_info_box_hidden', '1');
+    },
+
     closeModal() {
       this.showCreateModal = false;
       this.editingJob = null;
@@ -435,22 +514,22 @@ export default {
 <style scoped>
 .settings-jobs {
   padding: 0;
+  padding: var(--spacing-lg);
 }
 
 .section-header {
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .section-header h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
   color: var(--color-text-primary);
-  margin-bottom: 0.25rem;
 }
 
 .section-header p {
-  color: var(--color-text-secondary);
-  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  font-size: 1rem;
 }
 
 /* Info Box */
@@ -462,6 +541,24 @@ export default {
   border: 1px solid rgba(6, 182, 212, 0.2);
   border-radius: var(--radius-md, 8px);
   margin-bottom: 1.5rem;
+  align-items: flex-start;
+}
+
+.info-box-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #22d3ee;
+  cursor: pointer;
+  padding: 0.15rem;
+  font-size: 0.8rem;
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
+  margin-left: auto;
+}
+
+.info-box-close:hover {
+  opacity: 1;
 }
 
 .info-icon {
@@ -1023,5 +1120,102 @@ export default {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+/* Queue delivery banner */
+.queue-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.875rem 1.25rem;
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  border-radius: var(--radius-md, 8px);
+  margin-bottom: 1.25rem;
+}
+
+.queue-banner--done {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.queue-banner-icon {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  color: #eab308;
+}
+
+.queue-banner--done .queue-banner-icon {
+  color: #22c55e;
+}
+
+.queue-banner-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.875rem;
+}
+
+.queue-banner-body strong {
+  color: var(--color-text-primary, #fff);
+  font-weight: 600;
+}
+
+.queue-banner-body span {
+  color: var(--color-text-secondary);
+}
+
+.queue-failed {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.queue-banner-spinner {
+  flex-shrink: 0;
+  color: #eab308;
+  font-size: 1rem;
+}
+
+.queue-banner-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #eab308;
+  cursor: pointer;
+  padding: 0.25rem;
+  font-size: 0.85rem;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+  margin-left: 0.25rem;
+}
+
+.queue-banner-close:hover {
+  opacity: 1;
+}
+
+.queue-banner-close--done {
+  color: #22c55e;
+}
+
+/* Slide-down transition for the queue banner */
+.queue-banner-enter-active,
+.queue-banner-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.queue-banner-enter-from,
+.queue-banner-leave-to {
+  opacity: 0;
+  max-height: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.queue-banner-enter-to,
+.queue-banner-leave-from {
+  opacity: 1;
+  max-height: 80px;
 }
 </style>

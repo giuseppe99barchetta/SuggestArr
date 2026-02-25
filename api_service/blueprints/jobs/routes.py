@@ -596,6 +596,51 @@ def get_job_defaults():
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
+@jobs_bp.route('/queue-status', methods=['GET'])
+def get_queue_status():
+    """
+    Return the current Seer delivery queue status.
+
+    Counts rows in pending_requests by status so the frontend can show a
+    persistent banner while items are waiting to be sent to Seer.
+
+    Returns:
+        JSON with:
+          - queued:     items waiting to be picked up by the worker
+          - submitting: items currently being submitted
+          - submitted:  items successfully delivered this session
+          - failed:     items that exhausted retries
+          - total_pending: queued + submitting (items not yet delivered)
+    """
+    try:
+        from api_service.db.database_manager import DatabaseManager
+        db = DatabaseManager()
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT status, COUNT(*) FROM pending_requests GROUP BY status"
+            )
+            rows = cursor.fetchall()
+
+        counts = {row[0]: row[1] for row in rows}
+        queued = counts.get('queued', 0)
+        submitting = counts.get('submitting', 0)
+        submitted = counts.get('submitted', 0)
+        failed = counts.get('failed', 0)
+
+        return jsonify({
+            'status': 'success',
+            'queued': queued,
+            'submitting': submitting,
+            'submitted': submitted,
+            'failed': failed,
+            'total_pending': queued + submitting,
+        }), 200
+    except Exception as e:
+        logger.error(f"Error retrieving queue status: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
+
+
 @jobs_bp.route('/llm-status', methods=['GET'])
 def get_llm_status():
     """

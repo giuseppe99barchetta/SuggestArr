@@ -465,6 +465,7 @@ export default {
 <style scoped>
 .settings-database {
   color: var(--color-text-primary);
+  padding: var(--spacing-lg);
 }
 
 .section-header {
