@@ -107,7 +107,7 @@
           v-model="localFilters.include_no_rating"
           type="checkbox"
         />
-        <span class="toggle-label-modal">
+        <span class="toggle-label-jobs">
           {{ localFilters.rating_source !== 'tmdb' ? 'Include content without IMDB rating' : 'Include content without rating' }}
         </span>
       </label>

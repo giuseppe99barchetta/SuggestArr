@@ -150,7 +150,7 @@
               v-model="localFilters.exclude_downloaded"
               type="checkbox"
             />
-            <span class="toggle-label">
+            <span class="toggle-label-modal">
               <i class="fas fa-download"></i>
               Exclude Downloaded Content
             </span>
@@ -162,7 +162,7 @@
               v-model="localFilters.exclude_requested"
               type="checkbox"
             />
-            <span class="toggle-label">
+            <span class="toggle-label-modal">
               <i class="fas fa-clock"></i>
               Exclude Requested Content
             </span>
@@ -174,7 +174,7 @@
               v-model="localFilters.honor_jellyseer_discovery"
               type="checkbox"
             />
-            <span class="toggle-label">
+            <span class="toggle-label-modal">
               <i class="fas fa-compass"></i>
               Honor Jellyseer Discovery
             </span>
