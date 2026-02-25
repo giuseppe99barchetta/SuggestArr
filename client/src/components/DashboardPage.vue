@@ -595,9 +595,16 @@ export default {
 
     parseMarkdown(markdown) {
       if (!markdown) return '';
-      
-      // Basic markdown to HTML conversion
-      return markdown
+
+      // Escape HTML entities first to prevent XSS
+      const escaped = markdown
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+
+      // Basic markdown to HTML conversion (on escaped input)
+      return escaped
         // Headers
         .replace(/^### (.*$)/gim, '<h4>$1</h4>')
         .replace(/^## (.*$)/gim, '<h3>$1</h3>')
@@ -606,7 +613,7 @@ export default {
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         // Italic
         .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        // Links
+        // Links (href is already entity-encoded from the escape step)
         .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
         // Line breaks
         .replace(/\n/g, '<br>')

@@ -155,9 +155,8 @@
           id="selectedService"
         />
 
-        <!-- Plex fields -->
-        <!-- Plex: wizard mode → OAuth flow via Plex webapp -->
-        <template v-if="localConfig.SELECTED_SERVICE === 'plex' && wizardMode">
+        <!-- Plex: OAuth flow (both wizard and dashboard) -->
+        <template v-if="localConfig.SELECTED_SERVICE === 'plex'">
           <!-- Step 1: not yet logged in → show Sign in button -->
           <div v-if="!plexOAuthLoggedIn" class="form-group">
             <button
@@ -191,20 +190,21 @@
               <label for="plexTokenWizard">Plex Token</label>
               <div class="input-group">
                 <input
-                  id="plexTokenWizard"
+                  id="plexTokenManual"
                   v-model="localConfig.PLEX_TOKEN"
                   :type="showPlexToken ? 'text' : 'password'"
                   placeholder="Enter your Plex token"
                   class="form-control"
+                  :disabled="isLoading"
                 />
-                <button @click="showPlexToken = !showPlexToken" type="button" class="btn btn-outline btn-sm">
+                <button @click="showPlexToken = !showPlexToken" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
                   <i :class="showPlexToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
                 </button>
               </div>
             </div>
             <div class="form-group">
-              <label for="plexApiUrlWizard">API URL</label>
-              <input id="plexApiUrlWizard" v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="form-control" />
+              <label for="plexApiUrlManual">API URL</label>
+              <input id="plexApiUrlManual" v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="form-control" :disabled="isLoading" />
             </div>
             <button
               @click="testAndFetchPlex"
@@ -252,39 +252,6 @@
           </template>
         </template>
 
-        <!-- Plex: dashboard mode → manual token entry -->
-        <template v-if="localConfig.SELECTED_SERVICE === 'plex' && !wizardMode">
-          <div class="form-group">
-            <label for="plexToken">Plex Token</label>
-            <div class="input-group">
-              <input
-                id="plexToken"
-                v-model="localConfig.PLEX_TOKEN"
-                :type="showPlexToken ? 'text' : 'password'"
-                placeholder="Enter your Plex token"
-                class="form-control"
-                :disabled="isLoading"
-              />
-              <button @click="showPlexToken = !showPlexToken" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
-                <i :class="showPlexToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-              </button>
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="plexApiUrl">API URL</label>
-            <input id="plexApiUrl" v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="form-control" :disabled="isLoading" />
-          </div>
-          <button
-            @click="testAndFetchPlex"
-            class="btn btn-outline btn-block"
-            :disabled="isLoading || !localConfig.PLEX_TOKEN || !localConfig.PLEX_API_URL || plexFetching"
-          >
-            <i v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
-            <i v-else-if="plexConnected" class="fas fa-check"></i>
-            <i v-else class="fas fa-plug"></i>
-            {{ plexFetching ? 'Connecting...' : (plexConnected ? 'Connected' : 'Test & Load') }}
-          </button>
-        </template>
 
         <!-- Jellyfin / Emby fields -->
         <template v-if="localConfig.SELECTED_SERVICE === 'jellyfin' || localConfig.SELECTED_SERVICE === 'emby'">
@@ -893,6 +860,9 @@ export default {
     const service = this.localConfig.SELECTED_SERVICE;
     if (service === 'plex' && this.localConfig.PLEX_TOKEN && this.localConfig.PLEX_API_URL) {
       await this.testAndFetchPlex(true);
+      if (this.plexConnected) {
+        this.plexOAuthLoggedIn = true;
+      }
     } else if ((service === 'jellyfin' || service === 'emby') &&
                this.localConfig.JELLYFIN_TOKEN && this.localConfig.JELLYFIN_API_URL) {
       await this.testAndFetchJellyfin(true);
@@ -917,7 +887,7 @@ export default {
       return !this.wizardSection || this.wizardSection === section;
     },
 
-    // ── Plex OAuth (wizard mode) ──────────────────────────────────────────
+    // ── Plex OAuth ────────────────────────────────────────────────────────
     async loginWithPlexOAuth() {
       this.plexOAuthLoading = true;
       try {
