@@ -1,6 +1,6 @@
 <template>
   <div class="settings-database">
-    <div class="section-header">
+    <div v-if="!wizardMode" class="section-header">
       <h2>Database Configuration</h2>
       <p>Configure your database connection settings</p>
     </div>
@@ -244,8 +244,8 @@
       </div>
     </div>
 
-    <!-- Save Button -->
-    <div class="settings-actions">
+    <!-- Save Button (hidden in wizard mode) -->
+    <div v-if="!wizardMode" class="settings-actions">
       <button
         @click="saveSettings"
         class="btn btn-primary"
@@ -290,8 +290,13 @@ export default {
         database: false,
       }),
     },
+    // Wizard mode: hides save button and enables config-changed / validation-changed emits
+    wizardMode: {
+      type: Boolean,
+      default: false,
+    },
   },
-  emits: ['save-section', 'test-connection'],
+  emits: ['save-section', 'test-connection', 'validation-changed', 'config-changed'],
   data() {
     return {
       localConfig: {},
@@ -340,8 +345,17 @@ export default {
       handler(newConfig) {
         this.localConfig = { ...newConfig };
         this.originalConfig = { ...newConfig };
+        // SQLite is always valid; emit immediately in wizard mode
+        if (this.wizardMode && newConfig.DB_TYPE === 'sqlite') {
+          this.$emit('validation-changed', true);
+        }
       },
     },
+  },
+  beforeUnmount() {
+    if (this.wizardMode) {
+      this.$emit('config-changed', { ...this.localConfig });
+    }
   },
   methods: {
     onDbTypeChange() {
@@ -352,25 +366,52 @@ export default {
         this.localConfig.DB_NAME = null;
         this.localConfig.DB_USER = null;
         this.localConfig.DB_PASSWORD = null;
-      } else if (this.localConfig.DB_TYPE === 'postgres') {
-        this.localConfig.DB_PORT = this.localConfig.DB_PORT || 5432;
-      } else if (this.localConfig.DB_TYPE === 'mysql') {
-        this.localConfig.DB_PORT = this.localConfig.DB_PORT || 3306;
+        // SQLite is always valid
+        if (this.wizardMode) this.$emit('validation-changed', true);
+      } else {
+        if (this.localConfig.DB_TYPE === 'postgres') {
+          this.localConfig.DB_PORT = this.localConfig.DB_PORT || 5432;
+        } else if (this.localConfig.DB_TYPE === 'mysql') {
+          this.localConfig.DB_PORT = this.localConfig.DB_PORT || 3306;
+        }
+        // Non-SQLite requires a successful test
+        if (this.wizardMode) this.$emit('validation-changed', false);
       }
     },
 
     async testDatabaseConnection() {
       try {
-        await this.$emit('test-connection', 'database', {
-          DB_TYPE: this.localConfig.DB_TYPE,
-          DB_HOST: this.localConfig.DB_HOST,
-          DB_PORT: this.localConfig.DB_PORT,
-          DB_NAME: this.localConfig.DB_NAME,
-          DB_USER: this.localConfig.DB_USER,
-          DB_PASSWORD: this.localConfig.DB_PASSWORD,
-        });
+        if (this.wizardMode) {
+          // Self-contained test in wizard mode
+          const axios = (await import('axios')).default;
+          const res = await axios.post('/api/config/test-db-connection', {
+            DB_TYPE: this.localConfig.DB_TYPE,
+            DB_HOST: this.localConfig.DB_HOST,
+            DB_PORT: this.localConfig.DB_PORT,
+            DB_NAME: this.localConfig.DB_NAME,
+            DB_USER: this.localConfig.DB_USER,
+            DB_PASSWORD: this.localConfig.DB_PASSWORD,
+          });
+          if (res.status === 200) {
+            if (this.$toast) this.$toast.success('Database connection successful!', { position: 'top-right', duration: 3000 });
+            this.$emit('validation-changed', true);
+          }
+        } else {
+          await this.$emit('test-connection', 'database', {
+            DB_TYPE: this.localConfig.DB_TYPE,
+            DB_HOST: this.localConfig.DB_HOST,
+            DB_PORT: this.localConfig.DB_PORT,
+            DB_NAME: this.localConfig.DB_NAME,
+            DB_USER: this.localConfig.DB_USER,
+            DB_PASSWORD: this.localConfig.DB_PASSWORD,
+          });
+        }
       } catch (error) {
         console.error('Error testing database connection:', error);
+        if (this.wizardMode) {
+          if (this.$toast) this.$toast.error('Database connection failed. Check your settings.', { position: 'top-right', duration: 5000 });
+          this.$emit('validation-changed', false);
+        }
       }
     },
 

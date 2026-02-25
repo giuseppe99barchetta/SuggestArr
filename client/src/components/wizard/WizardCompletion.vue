@@ -41,9 +41,13 @@ export default {
 .completion-wrapper {
   text-align: center;
   max-width: 600px;
-  margin: 2rem auto; /* Aggiunto margine verticale */
-  padding: 0 1rem;
+  margin: 2rem auto;
+  padding: 2rem 2rem;
   box-sizing: border-box;
+  background: rgba(15, 20, 30, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
 }
 
 .success-icon {

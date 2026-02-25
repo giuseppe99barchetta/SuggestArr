@@ -1,8 +1,5 @@
 <template>
     <div>
-        <h3 class="text-xl font-bold text-gray-200 mb-2">Select Your Media Service</h3>
-        <p class="text-sm text-gray-400 mb-6">Choose the platform where your media library is hosted</p>
-        
         <div class="media-services grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div v-for="service in services" 
                  :key="service.name"
@@ -14,27 +11,29 @@
                  @keypress.space.prevent="selectService(service)"
                  :class="[
                      'service-box',
-                     { 
+                     {
                          'selected': config.SELECTED_SERVICE === service.value && !service.comingSoon,
-                         'coming-soon': service.comingSoon 
+                         'coming-soon': service.comingSoon
                      }
                  ]"
-                 :style="{ backgroundImage: `url(${service.logo})` }" 
                  @click="selectService(service)">
-                
+
+                <!-- Logo image -->
+                <img :src="service.logo" :alt="service.name" class="service-logo" />
+
                 <!-- Coming Soon Overlay -->
                 <div v-if="service.comingSoon" class="coming-soon-overlay">
                     <i class="fas fa-lock mb-2"></i>
                     <p>Coming Soon</p>
                 </div>
-                
+
                 <!-- New Badge -->
                 <div v-if="service.isNew && !service.comingSoon" class="new-badge">
                     ✨ NEW
                 </div>
 
                 <!-- Selected Checkmark -->
-                <div v-if="config.SELECTED_SERVICE === service.value && !service.comingSoon" 
+                <div v-if="config.SELECTED_SERVICE === service.value && !service.comingSoon"
                      class="selected-checkmark">
                     <i class="fas fa-check-circle"></i>
                 </div>
@@ -42,8 +41,8 @@
             </div>
         </div>
 
-        <!-- Navigation Buttons -->
-        <div class="flex justify-between mt-8 gap-4">
+        <!-- Navigation Buttons (hidden in wizard mode — wizard shell provides navigation) -->
+        <div v-if="!wizardMode" class="flex justify-between mt-8 gap-4">
           <button
             @click="$emit('previous-step')"
             class="btn-secondary w-full flex items-center justify-center gap-2 py-4 px-8"
@@ -51,7 +50,7 @@
             <i class="fas fa-arrow-left"></i>
             Back
           </button>
-      
+
           <button
             @click="$emit('next-step')"
             :disabled="!config.SELECTED_SERVICE"
@@ -67,7 +66,13 @@
 
 <script>
 export default {
-    props: ['config'],
+    props: {
+        config: { type: Object, required: true },
+        // When true, the component's own nav buttons are hidden.
+        // The wizard shell provides Back / Continue navigation instead.
+        wizardMode: { type: Boolean, default: false },
+    },
+    emits: ['update-config', 'next-step', 'previous-step'],
     data() {
         return {
             services: [
@@ -99,16 +104,23 @@ export default {
 
 .service-box {
     position: relative;
-    height: 180px;
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    background-color: rgba(45, 55, 72, 0.5);
+    height: 120px;
+    background-color: rgba(15, 20, 30, 0.82);
     border: 2px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     cursor: pointer;
     transition: all 0.3s ease;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.service-logo {
+    width: 85%;
+    height: 85%;
+    object-fit: contain;
+    pointer-events: none;
 }
 
 .service-box:hover:not(.coming-soon) {
@@ -205,9 +217,9 @@ export default {
 
 @media (max-width: 640px) {
     .service-box {
-        height: 150px;
+        height: 100px;
     }
-    
+
     .service-name {
         font-size: 1rem;
     }

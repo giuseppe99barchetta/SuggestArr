@@ -1,16 +1,25 @@
 <template>
     <div class="config-section">
-        <h3 class="section-title">Advanced Filter Configuration</h3>
-        <p class="section-description">
-            Set up advanced filters to customize your content recommendations. Each field below allows you to narrow down suggestions based on specific criteria. All fields are optional.
+        <!-- Full header shown only in dashboard mode -->
+        <template v-if="!wizardMode">
+            <h3 class="section-title">Advanced Filter Configuration</h3>
+            <p class="section-description">
+                Set up advanced filters to customize your content recommendations. Each field below allows you to narrow down suggestions based on specific criteria. All fields are optional.
+            </p>
+        </template>
+
+        <!-- Wizard-mode intro (simplified) -->
+        <p v-if="wizardMode" class="wizard-filters-intro">
+            <i class="fas fa-info-circle"></i>
+            All settings below are optional and use sensible defaults. You can fine-tune everything anytime from <strong>Settings → Jobs</strong>.
         </p>
 
         <!-- Rating & Votes Card -->
         <div class="settings-card">
             <h4 class="card-title">Rating & Popularity Filters</h4>
 
-            <!-- Rating Source Selector -->
-            <div class="form-group">
+            <!-- Rating Source Selector (dashboard only) -->
+            <div v-if="!wizardMode" class="form-group">
                 <label class="form-label">Rating Source</label>
                 <div class="rating-source-tabs">
                     <button
@@ -31,15 +40,15 @@
             </div>
 
             <!-- TMDB Rating fields -->
-            <div v-if="ratingSource !== 'imdb'">
-                <p class="source-section-label">TMDB Rating</p>
+            <div v-if="wizardMode || ratingSource !== 'imdb'">
+                <p v-if="!wizardMode" class="source-section-label">TMDB Rating</p>
                 <div class="form-row">
                     <div class="form-group flex-1">
-                        <label for="FILTER_TMDB_THRESHOLD" class="form-label">Minimum Rating (0-100)</label>
+                        <label for="FILTER_TMDB_THRESHOLD" class="form-label">Minimum Rating (0–100)</label>
                         <input type="number" :value="config.FILTER_TMDB_THRESHOLD"
                             @input="validateThreshold($event.target.value)"
                             class="form-input"
-                            id="FILTER_TMDB_THRESHOLD" placeholder="60" min="0" max="100">
+                            id="FILTER_TMDB_THRESHOLD" placeholder="Leave empty to allow all ratings" min="0" max="100">
                         <span v-if="errors.FILTER_TMDB_THRESHOLD" class="form-error">{{ errors.FILTER_TMDB_THRESHOLD }}</span>
                     </div>
 
@@ -48,14 +57,18 @@
                         <input type="number" :value="config.FILTER_TMDB_MIN_VOTES"
                             @input="validateMinVotes($event.target.value)"
                             class="form-input"
-                            id="FILTER_TMDB_MIN_VOTES" placeholder="20" min="0">
+                            id="FILTER_TMDB_MIN_VOTES" placeholder="Leave empty to allow all" min="0">
                         <span v-if="errors.FILTER_TMDB_MIN_VOTES" class="form-error">{{ errors.FILTER_TMDB_MIN_VOTES }}</span>
                     </div>
                 </div>
+                <p v-if="wizardMode" class="form-help">
+                    <i class="fas fa-info-circle"></i>
+                    Based on TMDB community ratings. Leave empty to include all content regardless of rating.
+                </p>
             </div>
 
-            <!-- IMDB Rating fields -->
-            <div v-if="ratingSource !== 'tmdb'">
+            <!-- IMDB Rating fields (dashboard only) -->
+            <div v-if="!wizardMode && ratingSource !== 'tmdb'">
                 <p class="source-section-label">IMDB Rating <span class="omdb-note">(via OMDb API)</span></p>
                 <div class="form-row">
                     <div class="form-group flex-1">
@@ -125,8 +138,8 @@
             </div>
         </div>
 
-        <!-- Genre & Content Type Card -->
-        <div class="settings-card">
+        <!-- Genre & Content Type Card (dashboard only) -->
+        <div v-if="!wizardMode" class="settings-card">
             <h4 class="card-title">Genre & Content Filters</h4>
 
             <div class="form-group">
@@ -167,8 +180,8 @@
             </p>
         </div>
 
-        <!-- Streaming & Region Card -->
-        <div class="settings-card">
+        <!-- Streaming & Region Card (dashboard only) -->
+        <div v-if="!wizardMode" class="settings-card">
             <h4 class="card-title">Streaming & Regional Filters</h4>
 
             <div class="form-row">
@@ -201,8 +214,8 @@
             </p>
         </div>
 
-        <!-- Language & Year Card -->
-        <div class="settings-card">
+        <!-- Language & Year Card (dashboard only) -->
+        <div v-if="!wizardMode" class="settings-card">
             <h4 class="card-title">Language & Release Date</h4>
 
             <div class="form-row">
@@ -231,8 +244,14 @@
             </p>
         </div>
 
-        <!-- Navigation Buttons -->
-        <div class="flex justify-between mt-8 gap-4">
+        <!-- Wizard-mode note about advanced options -->
+        <p v-if="wizardMode" class="wizard-advanced-note">
+            <i class="fas fa-sliders-h"></i>
+            More advanced filters (genres, language, streaming services, runtime) are available in <strong>Settings → Jobs</strong> after setup.
+        </p>
+
+        <!-- Navigation Buttons (hidden in wizard mode — wizard shell provides navigation) -->
+        <div v-if="!wizardMode" class="flex justify-between mt-8 gap-4">
             <button @click="$emit('previous-step')"
                 class="btn-secondary w-full flex items-center justify-center gap-2 py-4 px-8">
                 <i class="fas fa-arrow-left"></i>
@@ -259,7 +278,11 @@ export default {
     components: {
         'vue-multiselect': Multiselect
     },
-    props: ['config'],
+    props: {
+        config: { type: Object, required: true },
+        wizardMode: { type: Boolean, default: false },
+    },
+    emits: ['update-config', 'next-step', 'previous-step', 'skip-step', 'validation-changed'],
     data() {
         return {
             genres: [],
@@ -291,6 +314,24 @@ export default {
             hasErrors() {
                 return Object.values(this.errors).some(error => error !== '');
             }
+    },
+    watch: {
+        hasErrors(val) {
+            if (this.wizardMode) {
+                this.$emit('validation-changed', !val);
+            }
+        },
+        regions(newRegions) {
+            const matchedRegion = newRegions.find(region => region.iso_3166_1 === this.config.FILTER_REGION_PROVIDER);
+            if (matchedRegion) {
+                this.selectedRegion = matchedRegion;
+            } else {
+                this.selectedRegion = null;
+            }
+        },
+        selectedRegion() {
+            this.fetchStreamingServices();
+        },
     },
     methods: {
         handleUpdate(key, value) {
@@ -417,19 +458,6 @@ export default {
             }
         }
     },
-    watch: {
-        regions(newRegions) {
-            const matchedRegion = newRegions.find(region => region.iso_3166_1 === this.config.FILTER_REGION_PROVIDER);
-            if (matchedRegion) {
-                this.selectedRegion = matchedRegion;
-            } else {
-                this.selectedRegion = null;
-            }
-        },
-        selectedRegion() {
-            this.fetchStreamingServices();
-        }
-    },
     mounted() {
         this.fetchGenres();
         this.fetchLanguages();
@@ -443,6 +471,34 @@ export default {
 .config-section {
   display: flex;
   flex-direction: column;
+}
+
+/* Wizard-mode intro & footer note */
+.wizard-filters-intro,
+.wizard-advanced-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  margin-bottom: 1.25rem;
+}
+
+.wizard-filters-intro i,
+.wizard-advanced-note i {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  opacity: 0.7;
+}
+
+.wizard-advanced-note {
+  margin-top: 1rem;
+  margin-bottom: 0;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
 }
 
 .section-title {
