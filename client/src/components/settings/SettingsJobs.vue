@@ -1,6 +1,6 @@
 <template>
   <div class="settings-jobs">
-    <div class="section-header">
+    <div class="section-header" data-tour-id="jobs-section-header">
       <h2>Automation Jobs</h2>
       <p>Configure automated content discovery and recommendations</p>
     </div>
@@ -41,7 +41,7 @@
     </transition>
 
     <!-- Info Box explaining both job types -->
-    <div v-if="showInfoBox" class="info-box">
+    <div v-if="showInfoBox" class="info-box" data-tour-id="jobs-info-box">
       <div class="info-icon">
         <i class="fas fa-info-circle"></i>
       </div>
@@ -66,13 +66,16 @@
     <div class="jobs-container">
       <!-- Actions Bar -->
       <div class="jobs-actions">
-        <button @click="showCreateModal = true" class="btn btn-primary">
+        <button @click="showCreateModal = true" class="btn btn-primary" data-tour-id="jobs-new-btn">
           <i class="fas fa-plus"></i>
           New Job
         </button>
         <button @click="loadJobs" class="btn btn-outline" :disabled="isLoading">
           <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i>
           Refresh
+        </button>
+        <button @click="restartJobsTour" class="btn btn-outline btn-tour-hint" title="Replay the Jobs tour">
+          <i class="fas fa-question-circle"></i>
         </button>
       </div>
 
@@ -93,7 +96,13 @@
       </div>
 
       <div v-else class="jobs-grid">
-        <div v-for="job in jobs" :key="job.id" class="job-card" :class="{ disabled: !job.enabled }">
+        <div
+          v-for="(job, index) in jobs"
+          :key="job.id"
+          class="job-card"
+          :class="{ disabled: !job.enabled }"
+          :data-tour-id="index === 0 ? 'jobs-first-card' : null"
+        >
           <div class="job-header">
             <div class="job-info">
               <h3>{{ job.name }}</h3>
@@ -114,7 +123,7 @@
             </div>
           </div>
 
-          <div class="job-details">
+          <div class="job-details" :data-tour-id="index === 0 ? 'jobs-first-card-details' : null">
             <div class="detail-row">
               <span class="detail-label"><i class="fas fa-clock"></i> Schedule</span>
               <span class="detail-value">{{ formatSchedule(job) }}</span>
@@ -148,7 +157,7 @@
             </div>
           </div>
 
-          <div class="job-actions">
+          <div class="job-actions" :data-tour-id="index === 0 ? 'jobs-first-card-actions' : null">
             <button @click="toggleJob(job)" class="btn btn-sm" :class="job.enabled ? 'btn-outline' : 'btn-secondary'" :disabled="isToggling[job.id]">
               <i :class="isToggling[job.id] ? 'fas fa-spinner fa-spin' : (job.enabled ? 'fas fa-pause' : 'fas fa-play')"></i>
               {{ job.enabled ? 'Disable' : 'Enable' }}
@@ -169,7 +178,7 @@
       </div>
 
       <!-- Recent History Preview -->
-      <div v-if="recentHistory.length > 0" class="history-preview">
+      <div v-if="recentHistory.length > 0" class="history-preview" data-tour-id="jobs-history">
         <div class="history-header">
           <h3><i class="fas fa-history"></i> Recent Executions</h3>
           <button @click="showHistoryModal = true" class="text-btn">View All</button>
@@ -192,6 +201,7 @@
     <!-- Create/Edit Job Modal -->
     <JobModal
       v-if="showCreateModal || editingJob"
+      ref="jobModal"
       :job="editingJob"
       @close="closeModal"
       @save="saveJob"
@@ -228,6 +238,14 @@
       :history="allHistory"
       @close="showHistoryModal = false"
     />
+
+    <!-- Jobs Onboarding Tour -->
+    <OnboardingTour
+      :active="showJobsTour"
+      :steps="jobsTourSteps"
+      @done="onJobsTourDone"
+      @step-changed="onJobsTourStep"
+    />
   </div>
 </template>
 
@@ -235,12 +253,20 @@
 import { jobsApi } from '@/api/jobsApi';
 import JobModal from './jobs/JobModal.vue';
 import JobHistoryModal from './jobs/JobHistoryModal.vue';
+import OnboardingTour from '@/components/OnboardingTour.vue';
+
+const JOBS_TOUR_KEY = 'suggestarr_jobs_tour_done';
+// Index of the first step that targets elements inside the job modal
+const MODAL_STEP_START = 7;
+// Index of the first step that requires the advanced section to be expanded
+const ADVANCED_STEP_START = 11;
 
 export default {
   name: 'SettingsJobs',
   components: {
     JobModal,
-    JobHistoryModal
+    JobHistoryModal,
+    OnboardingTour
   },
   data() {
     return {
@@ -258,13 +284,98 @@ export default {
       queueStatus: { queued: 0, submitting: 0, submitted: 0, failed: 0, total_pending: 0 },
       queuePollInterval: null,
       queueBannerDismissed: localStorage.getItem('sj_queue_banner_dismissed') === '1',
-      showInfoBox: localStorage.getItem('sj_info_box_hidden') !== '1'
+      showInfoBox: localStorage.getItem('sj_info_box_hidden') !== '1',
+      showJobsTour: false,
+      jobsTourSteps: [
+        {
+          targetId: 'jobs-section-header',
+          title: 'Automation Jobs',
+          description: 'This is where you control when and how SuggestArr automatically finds new content for your library.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'jobs-info-box',
+          title: 'Two Types of Jobs',
+          description: 'Discover Jobs search TMDb catalogs using filters (genre, rating, year) — completely independent from your users. Recommendation Jobs analyse watch history to suggest similar content.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'jobs-new-btn',
+          title: 'Create a Job',
+          description: 'Click here to create a new automation job. You can have as many jobs as you like, each on its own schedule and with its own filters.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'jobs-first-card',
+          title: 'Job Card',
+          description: 'Each card summarises a job: its type badge (Discover or Recommendation), media target, and whether it is currently active.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'jobs-first-card-details',
+          title: 'Schedule & Details',
+          description: 'At a glance you can see the schedule, the maximum number of results per run, and when the job will run next.',
+          position: 'right'
+        },
+        {
+          targetId: 'jobs-first-card-actions',
+          title: 'Job Controls',
+          description: 'Enable or disable a job without deleting it, trigger an immediate run, open the editor, or remove the job entirely.',
+          position: 'top'
+        },
+        {
+          targetId: 'jobs-history',
+          title: 'Execution History',
+          description: 'Every run is logged here with the number of titles found and requested. Click "View All" to explore the full history.',
+          position: 'top'
+        },
+        {
+          targetId: 'job-modal-type-selector',
+          title: 'Job Type',
+          description: 'Choose Discover to find new content via TMDb filters, or Recommendation to suggest titles based on what your users have already watched.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'job-modal-basic-info',
+          title: 'Name & Media Type',
+          description: 'Give your job a descriptive name and pick whether it should target Movies, TV Shows, or both.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'job-modal-schedule',
+          title: 'Schedule',
+          description: 'Pick a preset interval (hourly, daily, weekly…) or enter a custom cron expression for full control over when the job fires.',
+          position: 'top'
+        },
+        {
+          targetId: 'job-modal-advanced-toggle',
+          title: 'Advanced Settings',
+          description: 'Expand this section to configure quality filters, rating thresholds, language restrictions, and the maximum number of results per run.',
+          position: 'top'
+        },
+        {
+          targetId: 'job-modal-max-results',
+          title: 'Max Results',
+          description: 'Controls how many items the job processes per run. For Discover jobs this is the total titles found; for Recommendation jobs it is the limit per watched item.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'job-modal-filters',
+          title: 'Filters',
+          description: 'Narrow down what gets requested: minimum TMDb rating, minimum vote count, original language, year range, and genre exclusions. Only content matching all active filters will be sent to Jellyseer/Overseer.',
+          position: 'top'
+        },
+      ]
     };
   },
   async mounted() {
     await this.loadJobs();
     await this.loadHistory();
     await this.pollQueueStatus();
+
+    if (!localStorage.getItem(JOBS_TOUR_KEY)) {
+      setTimeout(() => this.startJobsTour(), 600);
+    }
   },
   beforeUnmount() {
     if (this.queuePollInterval) {
@@ -449,6 +560,52 @@ export default {
     dismissInfoBox() {
       this.showInfoBox = false;
       localStorage.setItem('sj_info_box_hidden', '1');
+    },
+
+    startJobsTour() {
+      // Make sure the info box is visible so its tour step has a target
+      this.showInfoBox = true;
+      this.showJobsTour = true;
+    },
+
+    restartJobsTour() {
+      localStorage.removeItem(JOBS_TOUR_KEY);
+      this.showJobsTour = false;
+      this.$nextTick(() => this.startJobsTour());
+    },
+
+    onJobsTourStep(index) {
+      if (index >= MODAL_STEP_START) {
+        // Open a job for the modal-step portion of the tour
+        if (!this.editingJob && !this.showCreateModal) {
+          if (this.jobs.length > 0) {
+            this.editJob(this.jobs[0]);
+          } else {
+            this.showCreateModal = true;
+          }
+        }
+        // Expand the advanced section one step early (at the toggle button, step 10)
+        // so that the advanced-section DOM elements are rendered before scrollAndUpdate()
+        // fires for the first advanced step (step 11). Calling this synchronously ensures
+        // Vue batches the DOM update together with the currentIndex change.
+        if (index >= ADVANCED_STEP_START - 1) {
+          this.$refs.jobModal?.openAdvanced();
+        }
+      } else {
+        // Going back to main-page steps — close the modal if the tour opened it
+        if (this.editingJob || this.showCreateModal) {
+          this.closeModal();
+        }
+      }
+    },
+
+    onJobsTourDone() {
+      this.showJobsTour = false;
+      localStorage.setItem(JOBS_TOUR_KEY, '1');
+      // Close the modal if it was opened by the tour
+      if (this.editingJob || this.showCreateModal) {
+        this.closeModal();
+      }
     },
 
     closeModal() {
@@ -680,6 +837,16 @@ export default {
 .jobs-actions {
   display: flex;
   gap: 0.75rem;
+}
+
+.btn-tour-hint {
+  flex-shrink: 0;
+  padding: 0.625rem 0.75rem;
+  color: var(--color-text-muted, #888);
+}
+
+.btn-tour-hint:hover:not(:disabled) {
+  color: var(--color-text-primary, #fff);
 }
 
 .loading-state,

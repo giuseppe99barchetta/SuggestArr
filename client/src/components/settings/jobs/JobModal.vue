@@ -12,7 +12,7 @@
       <form @submit.prevent="handleSubmit" class="modal-form">
         <div class="modal-body">
           <!-- Job Type Selector -->
-          <div class="settings-group">
+          <div class="settings-group" data-tour-id="job-modal-type-selector">
             <h4>Job Type</h4>
             <div class="job-type-selector">
               <button
@@ -54,7 +54,7 @@
           </div>
 
           <!-- Basic Info -->
-          <div class="settings-group">
+          <div class="settings-group" data-tour-id="job-modal-basic-info">
             <h4>Basic Information</h4>
 
             <div class="form-group">
@@ -111,13 +111,13 @@
           </div>
 
           <!-- Schedule -->
-          <div class="settings-group">
+          <div class="settings-group" data-tour-id="job-modal-schedule">
             <h4>Schedule</h4>
             <SchedulePicker v-model="schedule" />
           </div>
 
           <!-- Advanced Settings Toggle -->
-          <button type="button" class="advanced-toggle" @click="showAdvanced = !showAdvanced">
+          <button type="button" class="advanced-toggle" data-tour-id="job-modal-advanced-toggle" @click="showAdvanced = !showAdvanced">
             <i :class="showAdvanced ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
             {{ showAdvanced ? 'Hide Advanced Settings' : 'Show Advanced Settings' }}
           </button>
@@ -126,7 +126,7 @@
           <transition name="slide">
             <div v-if="showAdvanced" class="advanced-section">
               <!-- Max Results -->
-              <div class="settings-group">
+              <div class="settings-group" data-tour-id="job-modal-max-results">
                 <h4>Results</h4>
                 <div class="form-group">
                   <label for="maxResults">Max Results: {{ form.max_results }}</label>
@@ -146,7 +146,7 @@
               </div>
 
               <!-- Filters -->
-              <div class="settings-group filters-section">
+              <div class="settings-group filters-section" data-tour-id="job-modal-filters">
                 <h4>{{ form.job_type === 'discover' ? 'Discovery Filters' : 'Quality Filters' }}</h4>
                 <JobFilters v-model="form.filters" :media-type="form.media_type" />
               </div>
@@ -265,6 +265,10 @@ export default {
     }
   },
   methods: {
+    openAdvanced() {
+      this.showAdvanced = true;
+    },
+
     setJobType(jobType) {
       this.form.job_type = jobType;
       // Reset media_type if switching from recommendation to discover and 'both' was selected

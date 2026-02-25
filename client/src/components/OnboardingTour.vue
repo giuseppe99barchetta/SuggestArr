@@ -67,13 +67,14 @@ export default {
     },
   },
 
-  emits: ['done'],
+  emits: ['done', 'step-changed'],
 
   data() {
     return {
       currentIndex: 0,
       targetRect: null,
       resizeHandler: null,
+      scrollHandler: null,
     };
   },
 
@@ -161,6 +162,7 @@ export default {
     active(val) {
       if (val) {
         this.currentIndex = 0;
+        this.$emit('step-changed', 0);
         this.$nextTick(() => this.scrollAndUpdate());
       }
     },
@@ -184,12 +186,19 @@ export default {
     },
 
     next() {
-      if (this.isLast) this.finish();
-      else this.currentIndex++;
+      if (this.isLast) {
+        this.finish();
+      } else {
+        this.currentIndex++;
+        this.$emit('step-changed', this.currentIndex);
+      }
     },
 
     prev() {
-      if (this.currentIndex > 0) this.currentIndex--;
+      if (this.currentIndex > 0) {
+        this.currentIndex--;
+        this.$emit('step-changed', this.currentIndex);
+      }
     },
 
     skip() {
@@ -209,10 +218,20 @@ export default {
     }
     this.resizeHandler = () => { if (this.active) this.scrollAndUpdate(); };
     window.addEventListener('resize', this.resizeHandler);
+
+    // Re-read the target rect on any scroll (capture phase catches inner scrollable containers)
+    // so the spotlight stays locked to the element even when the user scrolls inside a modal.
+    this.scrollHandler = () => {
+      if (!this.active || !this.currentStep) return;
+      const el = document.querySelector(`[data-tour-id="${this.currentStep.targetId}"]`);
+      if (el) this.targetRect = el.getBoundingClientRect();
+    };
+    window.addEventListener('scroll', this.scrollHandler, { capture: true, passive: true });
   },
 
   beforeUnmount() {
     window.removeEventListener('resize', this.resizeHandler);
+    window.removeEventListener('scroll', this.scrollHandler, { capture: true });
   },
 };
 </script>
