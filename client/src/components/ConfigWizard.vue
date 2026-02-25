@@ -548,8 +548,8 @@ export default {
       }
     }
 
-    function goToSettings() { router.push('/dashboard'); }
-    function goToRequests() { router.push('/requests'); }
+    function goToSettings() { router.push('/dashboard?tour=1'); }
+    function goToRequests() { router.push('/dashboard?tour=1'); }
 
     // ─── Step Class Helpers ───────────────────────────────────────────────────
     function getStepItemClass(absoluteIndex) {

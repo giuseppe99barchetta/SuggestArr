@@ -30,10 +30,11 @@
 
       <!-- Navigation Tabs -->
       <!-- Desktop Navigation -->
-      <div class="tabs-navigation desktop-nav">
+      <div class="tabs-navigation desktop-nav" data-tour-id="nav-tabs">
         <button
           v-for="tab in tabs"
           :key="tab.id"
+          :data-tour-id="tab.tourId || null"
           @click="activeTab = tab.id"
           :class="['tab-button', { active: activeTab === tab.id }]"
         >
@@ -106,12 +107,19 @@
       <!-- Action Footer -->
       <div class="settings-footer">
         <div class="footer-info">
-          <button 
-                @click="showChangelog" 
+          <button
+                @click="showChangelog"
                 class="changelog-btn"
                 title="View changelog for current version"
               >
           <i class="fas fa-info-circle"></i>
+          </button>
+          <button
+            @click="restartTour"
+            class="changelog-btn"
+            title="Replay the onboarding tour"
+          >
+            <i class="fas fa-question-circle"></i>
           </button>
           <div class="version-info">
             <div class="version-text-container">
@@ -136,7 +144,7 @@
           </div>
         </div>
         
-        <div class="footer-actions">
+        <div class="footer-actions" data-tour-id="footer-actions">
           <button
             @click="exportConfig"
             class="btn btn-outline"
@@ -145,7 +153,7 @@
             <i class="fas fa-download"></i>
             <span>Export</span>
           </button>
-          
+
           <button
             @click="importConfig"
             class="btn btn-outline"
@@ -154,7 +162,7 @@
             <i class="fas fa-upload"></i>
             <span>Import</span>
           </button>
-          
+
           <button
             @click="resetConfig"
             class="btn btn-danger"
@@ -163,10 +171,11 @@
             <i class="fas fa-undo"></i>
             <span>Reset</span>
           </button>
-          
+
           <button
             @click="forceRunAutomation"
             class="btn btn-secondary"
+            data-tour-id="footer-force-run"
             :disabled="isForceRunning"
             title="Force run automation script now">
             <i :class="isForceRunning ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
@@ -280,12 +289,20 @@
 
       <Footer />
     </div>
+
+    <!-- Onboarding Tour -->
+    <OnboardingTour
+      :active="showTour"
+      :steps="tourSteps"
+      @done="showTour = false"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
 import Footer from './AppFooter.vue';
+import OnboardingTour from './OnboardingTour.vue';
 import { useBackgroundImage } from '@/composables/useBackgroundImage';
 import { useVersionCheck } from '@/composables/useVersionCheck';
 import '@/assets/styles/dashboardPage.css';
@@ -299,10 +316,13 @@ import SettingsJobs from './settings/SettingsJobs.vue';
 import AiSearchPage from './settings/AiSearchPage.vue';
 import LogsComponent from './LogsComponent.vue';
 
+const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
+
 export default {
   name: 'SettingsPage',
   components: {
     Footer,
+    OnboardingTour,
     SettingsServices,
     SettingsDatabase,
     SettingsAdvanced,
@@ -343,6 +363,7 @@ export default {
       changelogError: null,
       requestCount: 0,
       showMobileDropdown: false,
+      showTour: false,
       // Cache per migliorare performance
       testingConnections: {
         tmdb: false,
@@ -352,13 +373,75 @@ export default {
         database: false,
       },
       tabs: [
-        { id: 'requests', name: 'Requests', icon: 'fas fa-paper-plane' },
-        { id: 'ai_search', name: 'AI Search', icon: 'fas fa-magic', isBeta: true },
-        { id: 'services', name: 'Services', icon: 'fas fa-plug' },
-        { id: 'jobs', name: 'Jobs', icon: 'fas fa-briefcase' },
-        { id: 'database', name: 'Database', icon: 'fas fa-database' },
-        { id: 'advanced', name: 'Advanced', icon: 'fas fa-sliders-h' },
-        { id: 'logs', name: 'Logs', icon: 'fas fa-file-alt' },
+        { id: 'requests',  name: 'Requests',  icon: 'fas fa-paper-plane', tourId: 'tab-requests' },
+        { id: 'ai_search', name: 'AI Search', icon: 'fas fa-magic',       isBeta: true,           tourId: 'tab-ai-search' },
+        { id: 'services',  name: 'Services',  icon: 'fas fa-plug',         tourId: 'tab-services' },
+        { id: 'jobs',      name: 'Jobs',       icon: 'fas fa-briefcase',   tourId: 'tab-jobs' },
+        { id: 'database',  name: 'Database',  icon: 'fas fa-database',     tourId: 'tab-database' },
+        { id: 'advanced',  name: 'Advanced',  icon: 'fas fa-sliders-h',   tourId: 'tab-advanced' },
+        { id: 'logs',      name: 'Logs',       icon: 'fas fa-file-alt',    tourId: 'tab-logs' },
+      ],
+      tourSteps: [
+        {
+          targetId: 'nav-tabs',
+          title: 'Welcome to SuggestArr!',
+          description: 'These tabs give you access to all features. Let\'s take a quick look at each one.',
+          position: 'bottom',
+        },
+        {
+          targetId: 'tab-requests',
+          title: 'Requests',
+          description: 'Every time SuggestArr runs, it submits content requests to Overseerr / Jellyseerr. You can track them all here — what was requested, when, and for which user.',
+          position: 'bottom',
+        },
+        {
+          targetId: 'tab-jobs',
+          title: 'Jobs',
+          description: 'Jobs control when and how SuggestArr runs. You can create multiple jobs with different schedules, filters, media types, and user selections.',
+          position: 'bottom',
+        },
+        {
+          targetId: 'tab-services',
+          title: 'Services',
+          description: 'Update your API keys and connection settings for TMDB, your media server (Jellyfin, Plex…), and Jellyseerr / Overseerr here.',
+          position: 'bottom',
+        },
+        {
+          targetId: 'tab-ai-search',
+          title: 'AI Search',
+          description: 'Describe what you\'re in the mood for in plain language — "a tense thriller set in space" — and SuggestArr uses an LLM to find and request matching titles for you.',
+          position: 'bottom',
+        },
+        {
+          targetId: 'tab-database',
+          title: 'Database',
+          description: 'By default SuggestArr uses SQLite (zero setup). Switch here to PostgreSQL, MySQL, or MariaDB if you need a shared or more scalable database.',
+          position: 'bottom',
+        },
+        {
+          targetId: 'tab-advanced',
+          title: 'Advanced',
+          description: 'Fine-tune behaviour: configure an LLM for AI-enhanced recommendations, adjust the recommendation algorithm, set a custom base path, and more.',
+          position: 'bottom',
+        },
+        {
+          targetId: 'tab-logs',
+          title: 'Logs',
+          description: 'View real-time application logs to debug issues, monitor job execution, or check why a specific request was skipped.',
+          position: 'bottom',
+        },
+        {
+          targetId: 'footer-force-run',
+          title: 'Force Run',
+          description: 'Trigger SuggestArr immediately without waiting for the next scheduled job — great for testing your setup right after configuration.',
+          position: 'top',
+        },
+        {
+          targetId: 'footer-actions',
+          title: 'Backup & Restore',
+          description: 'Export your full configuration to a JSON file and import it on another instance or after a reset. You can replay this tour anytime with the ? button.',
+          position: 'top',
+        },
       ],
     };
   },
@@ -410,11 +493,18 @@ export default {
   async mounted() {
     try {
       await this.loadConfig();
-      
+
       this.loadRequestCount();
-      
+
       if (!this.config.ENABLE_STATIC_BACKGROUND && this.config.TMDB_API_KEY) {
         this.startBackgroundImageRotation(this.config.TMDB_API_KEY);
+      }
+
+      // Auto-start tour on first visit or when ?tour=1 is in the URL
+      const tourDone = localStorage.getItem(TOUR_STORAGE_KEY);
+      const tourForced = window.location.search.includes('tour=1');
+      if (!tourDone || tourForced) {
+        setTimeout(() => { this.showTour = true; }, 900);
       }
     } catch (error) {
       console.error('Error during component mount:', error);
@@ -422,6 +512,10 @@ export default {
     }
   },
   methods: {
+    restartTour() {
+      localStorage.removeItem(TOUR_STORAGE_KEY);
+      this.showTour = true;
+    },
     selectMobileTab(tabId) {
       this.activeTab = tabId;
       this.showMobileDropdown = false;
