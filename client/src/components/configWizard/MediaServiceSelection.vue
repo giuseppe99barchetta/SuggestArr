@@ -21,6 +21,9 @@
                 <!-- Logo image -->
                 <img :src="service.logo" :alt="service.name" class="service-logo" />
 
+                <!-- Service Name -->
+                <div class="service-name">{{ service.name }}</div>
+
                 <!-- Coming Soon Overlay -->
                 <div v-if="service.comingSoon" class="coming-soon-overlay">
                     <i class="fas fa-lock mb-2"></i>
@@ -76,9 +79,9 @@ export default {
     data() {
         return {
             services: [
-                { name: 'Jellyfin', value: 'jellyfin', logo: require('@/assets/logos/jellyfin-logo.png'), comingSoon: false, isNew: false },
-                { name: 'Plex', value: 'plex', logo: require('@/assets/logos/plex-logo.png'), comingSoon: false, isNew: false },
-                { name: 'Emby', value: 'emby', logo: require('@/assets/logos/emby-logo.png'), comingSoon: false, isNew: false },
+                { name: 'Jellyfin', value: 'jellyfin', logo: require('@/assets/logos/jellyfin-logo.svg'), comingSoon: false, isNew: false },
+                { name: 'Plex', value: 'plex', logo: require('@/assets/logos/plex-logo.svg'), comingSoon: false, isNew: false },
+                { name: 'Emby', value: 'emby', logo: require('@/assets/logos/emby-logo.svg'), comingSoon: false, isNew: false },
             ]
         };
     },
@@ -112,13 +115,16 @@ export default {
     transition: all 0.3s ease;
     overflow: hidden;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 6px;
+    padding-bottom: 8px;
 }
 
 .service-logo {
-    width: 85%;
-    height: 85%;
+    width: 55%;
+    height: 55%;
     object-fit: contain;
     pointer-events: none;
 }
@@ -134,9 +140,9 @@ export default {
 }
 
 .selected {
-    border-color: rgb(150, 149, 160);
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3);
-    background-color: rgba(79, 70, 229, 0.1);
+    border-color: rgb(79, 70, 229);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.25);
+    background-color: rgba(79, 70, 229, 0.06);
 }
 
 .coming-soon-overlay {
@@ -201,18 +207,11 @@ export default {
 }
 
 .service-name {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
-    color: white;
+    color: rgba(255, 255, 255, 0.85);
     text-align: center;
-    padding: 16px 8px 12px;
-    font-size: 1.1rem;
-    font-weight: 600;
-    border-bottom-left-radius: 12px;
-    border-bottom-right-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
 }
 
 @media (max-width: 640px) {
@@ -221,7 +220,7 @@ export default {
     }
 
     .service-name {
-        font-size: 1rem;
+        font-size: 0.8rem;
     }
 }
 </style>

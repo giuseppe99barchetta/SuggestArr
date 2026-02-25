@@ -856,30 +856,43 @@ export default {
       this.$emit('config-changed', { ...this.localConfig });
     }
   },
-  async mounted() {
-    const service = this.localConfig.SELECTED_SERVICE;
-    if (service === 'plex' && this.localConfig.PLEX_TOKEN && this.localConfig.PLEX_API_URL) {
-      await this.testAndFetchPlex(true);
-      if (this.plexConnected) {
-        this.plexOAuthLoggedIn = true;
-      }
-    } else if ((service === 'jellyfin' || service === 'emby') &&
-               this.localConfig.JELLYFIN_TOKEN && this.localConfig.JELLYFIN_API_URL) {
-      await this.testAndFetchJellyfin(true);
-    }
-
-    if (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN) {
-      await this.testSeerAndFetchUsers(true);
-      if (this.seerConnected && this.localConfig.SEER_SESSION_TOKEN) {
-        await this.fetchArrServers();
-      }
-    }
-
-    if (this.localConfig.OMDB_API_KEY) {
-      await this.testOmdbConnection(true);
-    }
+  mounted() {
+    this._runAutoTests();
   },
   methods: {
+    // Runs all silent connection tests in parallel on mount so they don't block each other.
+    _runAutoTests() {
+      const service = this.localConfig.SELECTED_SERVICE;
+      const tasks = [];
+
+      if (service === 'plex' && this.localConfig.PLEX_TOKEN && this.localConfig.PLEX_API_URL) {
+        tasks.push(
+          this.testAndFetchPlex(true).then(() => {
+            if (this.plexConnected) this.plexOAuthLoggedIn = true;
+          }),
+        );
+      } else if ((service === 'jellyfin' || service === 'emby') &&
+                 this.localConfig.JELLYFIN_TOKEN && this.localConfig.JELLYFIN_API_URL) {
+        tasks.push(this.testAndFetchJellyfin(true));
+      }
+
+      if (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN) {
+        tasks.push(
+          this.testSeerAndFetchUsers(true).then(async () => {
+            if (this.seerConnected && this.localConfig.SEER_SESSION_TOKEN) {
+              await this.fetchArrServers();
+            }
+          }),
+        );
+      }
+
+      if (this.localConfig.OMDB_API_KEY) {
+        tasks.push(this.testOmdbConnection(true));
+      }
+
+      Promise.allSettled(tasks);
+    },
+
     // Returns true when this section should be visible.
     // In dashboard mode (wizardSection null): always true.
     // In wizard mode: only the matching section is visible.
