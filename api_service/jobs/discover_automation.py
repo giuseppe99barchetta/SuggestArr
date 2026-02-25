@@ -122,8 +122,17 @@ class DiscoverAutomation:
         exec_id = self.repository.log_execution_start(self.job_id)
 
         try:
-            # Fetch discover results
-            results = await self.fetch_discover_results()
+            from contextlib import AsyncExitStack
+            async with AsyncExitStack() as stack:
+                if self.seer_client:
+                    await stack.enter_async_context(self.seer_client)
+                if self.tmdb_discover:
+                    await stack.enter_async_context(self.tmdb_discover)
+                    if self.tmdb_discover.omdb_client:
+                        await stack.enter_async_context(self.tmdb_discover.omdb_client)
+
+                # Fetch discover results
+                results = await self.fetch_discover_results()
             results_count = len(results)
 
             self.logger.info(f"Discovered {results_count} items")

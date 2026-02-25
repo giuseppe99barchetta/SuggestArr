@@ -31,6 +31,22 @@ class JellyfinClient:
         self.libraries = library_ids
         self.headers = {"X-Emby-Token": token}
         self.existing_content = {}
+        self.session = None
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self.session is None or self.session.closed:
+            self.session = aiohttp.ClientSession()
+        return self.session
+
+    async def close(self):
+        if self.session and not self.session.closed:
+            await self.session.close()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
         
     async def init_existing_content(self):
         self.logger.info('Initializing existing content.')
@@ -45,13 +61,13 @@ class JellyfinClient:
         url = f"{self.api_url}/Users"
         self.logger.debug(f'Requesting all users from {url}')
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        self.logger.debug(f'Users retrieved: {data}')
-                        return [{"id": user["Id"], "name": user["Name"], "policy": user["Policy"]} for user in data]
-                    self.logger.error("Failed to retrieve users: %d", response.status)
+            session = await self._get_session()
+            async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    self.logger.debug(f'Users retrieved: {data}')
+                    return [{"id": user["Id"], "name": user["Name"], "policy": user["Policy"]} for user in data]
+                self.logger.error("Failed to retrieve users: %d", response.status)
         except aiohttp.ClientError as e:
             self.logger.error("An error occurred while retrieving users: %s", str(e))
 
@@ -102,44 +118,44 @@ class JellyfinClient:
             )
 
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        f"{self.api_url}/Items",
-                        headers=self.headers,
-                        params=params,
-                        timeout=aiohttp.ClientTimeout(total=LIBRARY_FETCH_TIMEOUT)
-                    ) as response:
-                        if response.status != 200:
-                            self.logger.error(
-                                "Failed to get items for library %s: %d",
-                                library_name, response.status
-                            )
+                session = await self._get_session()
+                async with session.get(
+                    f"{self.api_url}/Items",
+                    headers=self.headers,
+                    params=params,
+                    timeout=aiohttp.ClientTimeout(total=LIBRARY_FETCH_TIMEOUT)
+                ) as response:
+                    if response.status != 200:
+                        self.logger.error(
+                            "Failed to get items for library %s: %d",
+                            library_name, response.status
+                        )
+                        continue
+
+                    data = await response.json()
+                    items = data.get("Items", [])
+
+                    added = 0
+                    for item in items:
+                        item_type = item.get("Type")
+
+                        if item_type not in ("Movie", "Series"):
                             continue
 
-                        data = await response.json()
-                        items = data.get("Items", [])
+                        tmdb_id = item.get("ProviderIds", {}).get("Tmdb")
+                        if not tmdb_id:
+                            continue
 
-                        added = 0
-                        for item in items:
-                            item_type = item.get("Type")
+                        item["tmdb_id"] = tmdb_id
+                        bucket = "tv" if item_type == "Series" else "movie"
+                        results_by_library[bucket].append(item)
+                        added += 1
 
-                            if item_type not in ("Movie", "Series"):
-                                continue
-
-                            tmdb_id = item.get("ProviderIds", {}).get("Tmdb")
-                            if not tmdb_id:
-                                continue
-
-                            item["tmdb_id"] = tmdb_id
-                            bucket = "tv" if item_type == "Series" else "movie"
-                            results_by_library[bucket].append(item)
-                            added += 1
-
-                        self.logger.info(
-                            "Retrieved %d valid items in %s",
-                            added,
-                            library_name
-                        )
+                    self.logger.info(
+                        "Retrieved %d valid items in %s",
+                        added,
+                        library_name
+                    )
 
             except (aiohttp.ClientError, TimeoutError) as e:
                 self.logger.error(
@@ -191,53 +207,53 @@ class JellyfinClient:
             )
 
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
-                        if response.status == 200:
-                            library_items = await response.json()
-                            items = library_items.get('Items', [])
-                            self.logger.debug(
-                                "[library=%s] [user=%s] Raw item count: %d",
-                                library_name, user_name, len(items)
-                            )
+                session = await self._get_session()
+                async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status == 200:
+                        library_items = await response.json()
+                        items = library_items.get('Items', [])
+                        self.logger.debug(
+                            "[library=%s] [user=%s] Raw item count: %d",
+                            library_name, user_name, len(items)
+                        )
 
-                            filtered_items = []
-                            for item in items:
-                                if len(filtered_items) >= int(self.max_content_fetch):
-                                    break
-                                if item['Type'] == 'Episode':
-                                    series_title = item['SeriesName']
-                                    if series_title not in seen_series:
-                                        seen_series.add(series_title)
-                                        filtered_items.append(item)
-                                else:
+                        filtered_items = []
+                        for item in items:
+                            if len(filtered_items) >= int(self.max_content_fetch):
+                                break
+                            if item['Type'] == 'Episode':
+                                series_title = item['SeriesName']
+                                if series_title not in seen_series:
+                                    seen_series.add(series_title)
                                     filtered_items.append(item)
+                            else:
+                                filtered_items.append(item)
 
-                            results_by_library[library_name] = filtered_items
-                            self.logger.info(
-                                "Retrieved %d watched items in %s for user %s",
-                                len(filtered_items), library_name, user_name
-                            )
+                        results_by_library[library_name] = filtered_items
+                        self.logger.info(
+                            "Retrieved %d watched items in %s for user %s",
+                            len(filtered_items), library_name, user_name
+                        )
 
-                        elif response.status == 404:
-                            raw_body = await response.text()
-                            self.logger.warning(
-                                "[library=%s] [user=%s] Recent items returned 404 — library may not be "
-                                "visible to this user or does not support DatePlayed sorting. "
-                                "URL=%s body=%.300s. Trying fallback query.",
-                                library_name, user_name, url, raw_body
-                            )
-                            fallback_items = await self._fallback_recent_items(
-                                user_id, user_name, library_id, library_name
-                            )
-                            if fallback_items is not None:
-                                results_by_library[library_name] = fallback_items
+                    elif response.status == 404:
+                        raw_body = await response.text()
+                        self.logger.warning(
+                            "[library=%s] [user=%s] Recent items returned 404 — library may not be "
+                            "visible to this user or does not support DatePlayed sorting. "
+                            "URL=%s body=%.300s. Trying fallback query.",
+                            library_name, user_name, url, raw_body
+                        )
+                        fallback_items = await self._fallback_recent_items(
+                            user_id, user_name, library_id, library_name
+                        )
+                        if fallback_items is not None:
+                            results_by_library[library_name] = fallback_items
 
-                        else:
-                            self.logger.error(
-                                "Failed to get recent items for library %s (user %s): %d",
-                                library_name, user_name, response.status
-                            )
+                    else:
+                        self.logger.error(
+                            "Failed to get recent items for library %s (user %s): %d",
+                            library_name, user_name, response.status
+                        )
 
             except aiohttp.ClientError as e:
                 self.logger.error(
@@ -275,23 +291,23 @@ class JellyfinClient:
         )
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        items = data.get('Items', [])
-                        self.logger.info(
-                            "[library=%s] [user=%s] Fallback retrieved %d items",
-                            library_name, user_name, len(items)
-                        )
-                        return items
-                    else:
-                        raw_body = await response.text()
-                        self.logger.warning(
-                            "[library=%s] [user=%s] Fallback also failed: %d body=%.300s — skipping library.",
-                            library_name, user_name, response.status, raw_body
-                        )
-                        return None
+            session = await self._get_session()
+            async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    items = data.get('Items', [])
+                    self.logger.info(
+                        "[library=%s] [user=%s] Fallback retrieved %d items",
+                        library_name, user_name, len(items)
+                    )
+                    return items
+                else:
+                    raw_body = await response.text()
+                    self.logger.warning(
+                        "[library=%s] [user=%s] Fallback also failed: %d body=%.300s — skipping library.",
+                        library_name, user_name, response.status, raw_body
+                    )
+                    return None
         except Exception as e:
             self.logger.error(
                 "[library=%s] [user=%s] Fallback error: %s",
@@ -310,15 +326,15 @@ class JellyfinClient:
         self.logger.debug(f'Requesting libraries from {url}')
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status == 200:
-                        libraries = await response.json()
-                        self.logger.debug(f'Libraries retrieved: {libraries}')
-                        return libraries
-                    self.logger.error(
-                        "Failed to get libraries %d", response.status)
+            session = await self._get_session()
+            async with session.get(
+                url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
+                if response.status == 200:
+                    libraries = await response.json()
+                    self.logger.debug(f'Libraries retrieved: {libraries}')
+                    return libraries
+                self.logger.error(
+                    "Failed to get libraries %d", response.status)
         except aiohttp.ClientError as e:
             self.logger.error(
                 "An error occurred while retrieving libraries: %s", str(e))

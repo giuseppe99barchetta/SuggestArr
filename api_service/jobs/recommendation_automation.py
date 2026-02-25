@@ -369,7 +369,24 @@ class RecommendationAutomation:
 
         try:
             # Process recent items (this is the main recommendation logic)
-            await self.media_handler.process_recent_items()
+            from contextlib import AsyncExitStack
+            async with AsyncExitStack() as stack:
+                if hasattr(self.media_handler, 'jellyseer_client'):
+                    await stack.enter_async_context(self.media_handler.jellyseer_client)
+                elif hasattr(self.media_handler, 'seer_client'):
+                    await stack.enter_async_context(self.media_handler.seer_client)
+
+                if hasattr(self.media_handler, 'tmdb_client'):
+                    await stack.enter_async_context(self.media_handler.tmdb_client)
+                    if self.media_handler.tmdb_client.omdb_client:
+                        await stack.enter_async_context(self.media_handler.tmdb_client.omdb_client)
+
+                if hasattr(self.media_handler, 'jellyfin_client'):
+                    await stack.enter_async_context(self.media_handler.jellyfin_client)
+                elif hasattr(self.media_handler, 'plex_client'):
+                    await stack.enter_async_context(self.media_handler.plex_client)
+
+                await self.media_handler.process_recent_items()
 
             # Use the handler's own request_count, which is incremented synchronously
             # as each Seer request is confirmed. The previous approach counted DB rows

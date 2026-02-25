@@ -67,13 +67,8 @@ def test_tmdb_connection():
                     'message': 'An unexpected error occurred'
                 }
 
-        # Run the async function
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(test_connection())
-        finally:
-            loop.close()
+        from api_service.blueprints.jobs.routes import run_async
+        result = run_async(test_connection())
 
         if result['status'] == 'success':
             return jsonify(result), 200
@@ -126,13 +121,8 @@ def get_movie_genres():
                     'message': 'Error fetching genres'
                 }
 
-        # Run the async function
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(fetch_genres())
-        finally:
-            loop.close()
+        from api_service.blueprints.jobs.routes import run_async
+        result = run_async(fetch_genres())
 
         if result['status'] == 'success':
             return jsonify(result), 200
@@ -185,13 +175,8 @@ def get_tv_genres():
                     'message': 'Error fetching genres'
                 }
 
-        # Run the async function
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(fetch_genres())
-        finally:
-            loop.close()
+        from api_service.blueprints.jobs.routes import run_async
+        result = run_async(fetch_genres())
 
         if result['status'] == 'success':
             return jsonify(result), 200

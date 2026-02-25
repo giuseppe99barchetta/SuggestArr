@@ -21,13 +21,13 @@ async def get_users():
             return jsonify({'message': 'API key is required', 'type': 'error'}), 400
 
         # Initialize JellyseerClient with the provided API key
-        jellyseer_client = SeerClient(api_url=api_url, api_key=api_key, session_token=session_token)
-        users = await jellyseer_client.get_all_users()
+        async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as jellyseer_client:
+            users = await jellyseer_client.get_all_users()
 
-        if not users:
-            return jsonify({'message': 'Failed to fetch users', 'type': 'error'}), 404
+            if not users:
+                return jsonify({'message': 'Failed to fetch users', 'type': 'error'}), 404
 
-        return jsonify({'message': 'Users fetched successfully', 'users': users}), 200
+            return jsonify({'message': 'Users fetched successfully', 'users': users}), 200
     except Exception as e:
         logger.error(f'Error fetching Jellyseer/Overseer users: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error fetching users', 'type': 'error'}), 500
@@ -103,38 +103,38 @@ async def test_seer_connection():
 
         # If HTTP test passed, try the more comprehensive test with the client
         try:
-            jellyseer_client = SeerClient(api_url=api_url, api_key=api_key, session_token=session_token)
-            users = await jellyseer_client.get_all_users()
+            async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as jellyseer_client:
+                users = await jellyseer_client.get_all_users()
 
-            # Check if we got a valid response with actual users data
-            if users and isinstance(users, list) and len(users) > 0:
-                return jsonify({
-                    'message': 'Overseer/Jellyseer connection successful!',
-                    'status': 'success',
-                    'data': {
-                        'users_count': len(users),
-                        'server_url': api_url,
-                        **http_data
-                    }
-                }), 200
-            elif users and isinstance(users, list):
-                # Empty list but connection succeeded
-                return jsonify({
-                    'message': 'Overseer/Jellyseer connection successful but no users found',
-                    'status': 'success',
-                    'data': {
-                        'users_count': 0,
-                        'server_url': api_url,
-                        **http_data
-                    }
-                }), 200
-            else:
-                # HTTP test passed but client test failed
-                return jsonify({
-                    'message': 'HTTP connection successful but API authentication failed',
-                    'status': 'error',
-                    'data': http_data
-                }), 400
+                # Check if we got a valid response with actual users data
+                if users and isinstance(users, list) and len(users) > 0:
+                    return jsonify({
+                        'message': 'Overseer/Jellyseer connection successful!',
+                        'status': 'success',
+                        'data': {
+                            'users_count': len(users),
+                            'server_url': api_url,
+                            **http_data
+                        }
+                    }), 200
+                elif users and isinstance(users, list):
+                    # Empty list but connection succeeded
+                    return jsonify({
+                        'message': 'Overseer/Jellyseer connection successful but no users found',
+                        'status': 'success',
+                        'data': {
+                            'users_count': 0,
+                            'server_url': api_url,
+                            **http_data
+                        }
+                    }), 200
+                else:
+                    # HTTP test passed but client test failed
+                    return jsonify({
+                        'message': 'HTTP connection successful but API authentication failed',
+                        'status': 'error',
+                        'data': http_data
+                    }), 400
 
         except Exception as client_error:
             logger.error(f'Overseer/Jellyseer client test failed: {str(client_error)}', exc_info=True)
@@ -167,22 +167,22 @@ async def login_seer():
             return jsonify({'message': 'Username and password are required', 'type': 'error'}), 400
 
         # Initialize the Jellyseer/Overseer client with the credentials provided
-        jellyseer_client = SeerClient(
+        async with SeerClient(
             api_url=api_url, api_key=api_key, seer_user_name=username, seer_password=password
-        )
+        ) as jellyseer_client:
 
-        # Perform the login
-        await jellyseer_client.login()
+            # Perform the login
+            await jellyseer_client.login()
 
-        # Check if the login was successful by verifying the session token
-        if jellyseer_client.session_token:
-            return jsonify({
-                'message': 'Login successful',
-                'type': 'success',
-                'session_token': jellyseer_client.session_token
-            }), 200
-        else:
-            return jsonify({'message': 'Login failed', 'type': 'error'}), 401
+            # Check if the login was successful by verifying the session token
+            if jellyseer_client.session_token:
+                return jsonify({
+                    'message': 'Login successful',
+                    'type': 'success',
+                    'session_token': jellyseer_client.session_token
+                }), 200
+            else:
+                return jsonify({'message': 'Login failed', 'type': 'error'}), 401
 
     except Exception as e:
         logger.error(f'An error occurred during login: {str(e)}')
@@ -204,10 +204,9 @@ async def get_radarr_servers():
         if not api_key or not api_url:
             return jsonify({'message': 'API key and URL are required', 'type': 'error'}), 400
 
-        seer_client = SeerClient(api_url=api_url, api_key=api_key, session_token=session_token)
-        servers = await seer_client.get_radarr_servers()
-
-        return jsonify({'servers': servers or []}), 200
+        async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as seer_client:
+            servers = await seer_client.get_radarr_servers()
+            return jsonify({'servers': servers or []}), 200
     except Exception as e:
         logger.error(f'Error fetching Radarr servers: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error fetching Radarr servers', 'type': 'error'}), 500
@@ -228,10 +227,9 @@ async def get_sonarr_servers():
         if not api_key or not api_url:
             return jsonify({'message': 'API key and URL are required', 'type': 'error'}), 400
 
-        seer_client = SeerClient(api_url=api_url, api_key=api_key, session_token=session_token)
-        servers = await seer_client.get_sonarr_servers()
-
-        return jsonify({'servers': servers or []}), 200
+        async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as seer_client:
+            servers = await seer_client.get_sonarr_servers()
+            return jsonify({'servers': servers or []}), 200
     except Exception as e:
         logger.error(f'Error fetching Sonarr servers: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error fetching Sonarr servers', 'type': 'error'}), 500

@@ -33,7 +33,23 @@ class TMDbDiscover:
         self.api_key = api_key
         self.omdb_client = omdb_client
         self.tmdb_api_url = "https://api.themoviedb.org/3"
+        self.session = None
         self.logger.debug("TMDbDiscover initialized")
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self.session is None or self.session.closed:
+            self.session = aiohttp.ClientSession()
+        return self.session
+
+    async def close(self):
+        if self.session and not self.session.closed:
+            await self.session.close()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
 
     async def discover_movies(
         self,
@@ -174,14 +190,14 @@ class TMDbDiscover:
         self.logger.debug(f"Fetching URL: {url[:100]}...")
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        return await response.json()
-                    else:
-                        self.logger.error(
-                            f"Error fetching discover {media_type}: {response.status}"
-                        )
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    return await response.json()
+                else:
+                    self.logger.error(
+                        f"Error fetching discover {media_type}: {response.status}"
+                    )
         except aiohttp.ClientError as e:
             self.logger.error(f"HTTP error during discover: {str(e)}")
         except asyncio.TimeoutError:
@@ -206,11 +222,11 @@ class TMDbDiscover:
             else:
                 url = f"{self.tmdb_api_url}/tv/{tmdb_id}/external_ids?api_key={self.api_key}"
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        data = await response.json()
-                        return data.get('imdb_id')
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    data = await response.json()
+                    return data.get('imdb_id')
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             self.logger.debug("Failed to fetch IMDB ID for %s %s: %s", media_type, tmdb_id, e)
         return None
@@ -391,13 +407,13 @@ class TMDbDiscover:
         url = f"{self.tmdb_api_url}/genre/{media_type}/list?api_key={self.api_key}"
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        data = await response.json()
-                        return data.get('genres', [])
-                    else:
-                        self.logger.error(f"Error fetching genres: {response.status}")
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    data = await response.json()
+                    return data.get('genres', [])
+                else:
+                    self.logger.error(f"Error fetching genres: {response.status}")
         except aiohttp.ClientError as e:
             self.logger.error(f"HTTP error fetching genres: {str(e)}")
 
@@ -413,12 +429,12 @@ class TMDbDiscover:
         url = f"{self.tmdb_api_url}/configuration/languages?api_key={self.api_key}"
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        return await response.json()
-                    else:
-                        self.logger.error(f"Error fetching languages: {response.status}")
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    return await response.json()
+                else:
+                    self.logger.error(f"Error fetching languages: {response.status}")
         except aiohttp.ClientError as e:
             self.logger.error(f"HTTP error fetching languages: {str(e)}")
 
@@ -434,13 +450,13 @@ class TMDbDiscover:
         url = f"{self.tmdb_api_url}/watch/providers/regions?api_key={self.api_key}"
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        data = await response.json()
-                        return sorted(data.get('results', []), key=lambda x: x.get('english_name', ''))
-                    else:
-                        self.logger.error(f"Error fetching watch regions: {response.status}")
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    data = await response.json()
+                    return sorted(data.get('results', []), key=lambda x: x.get('english_name', ''))
+                else:
+                    self.logger.error(f"Error fetching watch regions: {response.status}")
         except aiohttp.ClientError as e:
             self.logger.error(f"HTTP error fetching watch regions: {str(e)}")
 
@@ -459,16 +475,16 @@ class TMDbDiscover:
         url = f"{self.tmdb_api_url}/watch/providers/movie?api_key={self.api_key}&watch_region={region}"
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
-                    if response.status in HTTP_OK:
-                        data = await response.json()
-                        return sorted(
-                            data.get('results', []),
-                            key=lambda x: x.get('display_priority', 999)
-                        )
-                    else:
-                        self.logger.error(f"Error fetching streaming providers: {response.status}")
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    data = await response.json()
+                    return sorted(
+                        data.get('results', []),
+                        key=lambda x: x.get('display_priority', 999)
+                    )
+                else:
+                    self.logger.error(f"Error fetching streaming providers: {response.status}")
         except aiohttp.ClientError as e:
             self.logger.error(f"HTTP error fetching streaming providers: {str(e)}")
 
