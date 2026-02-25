@@ -505,8 +505,9 @@ export default {
 
     function handleConfigChanged(partialConfig) {
       // SELECTED_SERVICE is owned by MediaServiceSelection — never let a child snapshot override it
-      const { SELECTED_SERVICE: _ignored, ...rest } = partialConfig;
-      Object.assign(config.value, rest);
+      const copy = { ...partialConfig };
+      delete copy.SELECTED_SERVICE;
+      Object.assign(config.value, copy);
     }
 
     function handleValidationChanged(isValid) {

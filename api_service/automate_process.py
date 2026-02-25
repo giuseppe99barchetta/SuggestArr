@@ -217,8 +217,26 @@ class ContentAutomation:
         """Main entry point to start the automation process."""
         self.logger.info("Starting content automation process")
         try:
-            await self.media_handler.process_recent_items()
+            from contextlib import AsyncExitStack
+            async with AsyncExitStack() as stack:
+                if hasattr(self.media_handler, 'jellyseer_client'):
+                    await stack.enter_async_context(self.media_handler.jellyseer_client)
+                elif hasattr(self.media_handler, 'seer_client'):
+                    await stack.enter_async_context(self.media_handler.seer_client)
+
+                if hasattr(self.media_handler, 'tmdb_client'):
+                    await stack.enter_async_context(self.media_handler.tmdb_client)
+                    if self.media_handler.tmdb_client.omdb_client:
+                        await stack.enter_async_context(self.media_handler.tmdb_client.omdb_client)
+
+                if hasattr(self.media_handler, 'jellyfin_client'):
+                    await stack.enter_async_context(self.media_handler.jellyfin_client)
+                elif hasattr(self.media_handler, 'plex_client'):
+                    await stack.enter_async_context(self.media_handler.plex_client)
+
+                await self.media_handler.process_recent_items()
             self.logger.info("Content automation process completed successfully")
         except Exception as e:
             self.logger.error(f"Content automation process failed: {str(e)}", exc_info=True)
             raise
+
