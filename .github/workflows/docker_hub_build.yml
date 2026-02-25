@@ -7,6 +7,8 @@ on:
 
 jobs:
   bump-version:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     outputs:
       new_version: ${{ steps.bump_version.outputs.new_version }}
@@ -77,6 +79,8 @@ jobs:
           git push origin "${{ steps.bump_version.outputs.new_version }}"
 
   build:
+    permissions:
+      contents: read
     needs: bump-version
     strategy:
       fail-fast: false
@@ -125,6 +129,8 @@ jobs:
             DOCKER_TAG=${{ needs.bump-version.outputs.new_version }}
 
   merge:
+    permissions:
+      contents: read
     needs: [bump-version, build]
     runs-on: ubuntu-latest
 
@@ -163,6 +169,8 @@ jobs:
           done
 
   recreate-nightly:
+    permissions:
+      contents: write
     needs: merge
     runs-on: ubuntu-latest
 
