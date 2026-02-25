@@ -60,3 +60,7 @@ class SeerClientError(APIClientError):
     """General error for Seer client operations."""
     def __init__(self, message):
         super().__init__(message, "Seer")
+
+
+class LLMValidationError(Exception):
+    """Raised when the LLM response fails Pydantic validation after all retries."""
