@@ -128,6 +128,25 @@ export const jobsApi = {
   },
 
   /**
+   * Get available watch provider regions from TMDb.
+   * @returns {Promise<Object>} Response with regions array.
+   */
+  async getWatchRegions() {
+    const response = await axios.get('/api/jobs/watch-regions');
+    return response.data;
+  },
+
+  /**
+   * Get available streaming providers for a region from TMDb.
+   * @param {string} region - ISO 3166-1 region code (e.g. 'IT').
+   * @returns {Promise<Object>} Response with providers array.
+   */
+  async getWatchProviders(region) {
+    const response = await axios.get('/api/jobs/watch-providers', { params: { region } });
+    return response.data;
+  },
+
+  /**
    * Check if LLM is configured for AI-enhanced recommendations.
    * @returns {Promise<Object>} Response with configured boolean.
    */

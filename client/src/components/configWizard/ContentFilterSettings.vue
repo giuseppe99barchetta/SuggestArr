@@ -193,7 +193,11 @@
             </div>
             <p class="form-help">
                 <i class="fas fa-info-circle"></i>
-                Filter by region and exclude specific streaming services
+                Filter by region and exclude specific streaming services.
+                <strong>Note:</strong> TMDB's provider data may be inaccurate for Amazon — "Amazon Video"
+                can include content from Amazon Channels (e.g. Paramount+ via Amazon), which require
+                an additional subscription beyond basic Prime Video. Use the most specific provider
+                entry for your subscription to reduce false exclusions.
             </p>
         </div>
 

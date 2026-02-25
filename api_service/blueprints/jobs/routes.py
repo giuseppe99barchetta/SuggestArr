@@ -503,6 +503,59 @@ def get_languages():
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
+@jobs_bp.route('/watch-regions', methods=['GET'])
+def get_watch_regions():
+    """
+    Get available watch provider regions from TMDb.
+
+    Returns:
+        JSON list of regions with iso_3166_1 and english_name.
+    """
+    try:
+        from api_service.config.config import load_env_vars
+        from api_service.services.tmdb.tmdb_discover import TMDbDiscover
+
+        env_vars = load_env_vars()
+        tmdb = TMDbDiscover(env_vars['TMDB_API_KEY'])
+        regions = run_async(tmdb.get_watch_regions())
+
+        return jsonify({'status': 'success', 'regions': regions}), 200
+
+    except Exception as e:
+        logger.error(f"Error retrieving watch regions: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
+
+
+@jobs_bp.route('/watch-providers', methods=['GET'])
+def get_watch_providers():
+    """
+    Get available streaming providers for a region from TMDb.
+
+    Query params:
+        region: ISO 3166-1 region code (e.g. 'IT').
+
+    Returns:
+        JSON list of providers with provider_id and provider_name.
+    """
+    try:
+        region = request.args.get('region', '').upper()
+        if not region:
+            return jsonify({'status': 'error', 'message': 'region query parameter is required'}), 400
+
+        from api_service.config.config import load_env_vars
+        from api_service.services.tmdb.tmdb_discover import TMDbDiscover
+
+        env_vars = load_env_vars()
+        tmdb = TMDbDiscover(env_vars['TMDB_API_KEY'])
+        providers = run_async(tmdb.get_streaming_providers(region))
+
+        return jsonify({'status': 'success', 'providers': providers}), 200
+
+    except Exception as e:
+        logger.error(f"Error retrieving watch providers: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
+
+
 @jobs_bp.route('/llm-status', methods=['GET'])
 def get_llm_status():
     """

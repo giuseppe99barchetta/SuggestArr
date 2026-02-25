@@ -450,9 +450,17 @@ class TMDbClient:
                     if response.status in HTTP_OK:
                         data = await response.json()
                         if "results" in data and self.region_provider in data["results"]:
-                            providers = data["results"][self.region_provider]['flatrate']
+                            region_data = data["results"][self.region_provider]
+                            providers = region_data.get('flatrate', [])
+                            if self.logger.isEnabledFor(10):  # DEBUG level
+                                found_names = [p.get('provider_name') for p in providers]
+                                self.logger.debug(
+                                    "Watch providers (flatrate) for %s ID %s in %s: %s",
+                                    content_type, content_id, self.region_provider,
+                                    found_names if found_names else "none"
+                                )
                             for provider in providers:
-                                if any(provider['provider_id'] == excluded['provider_id'] for excluded in self.excluded_streaming_services):
+                                if any(str(provider['provider_id']) == str(excluded['provider_id']) for excluded in self.excluded_streaming_services):
                                     self.logger.debug("Content ID %s is in excluded streaming service: %s", content_id, provider['provider_name'])
                                     return True, provider['provider_name']
                         else:

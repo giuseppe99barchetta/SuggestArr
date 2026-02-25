@@ -172,6 +172,44 @@
       />
     </div>
 
+    <!-- Streaming Region & Provider Exclusion -->
+    <div class="form-group dropdown-wrapper">
+      <BaseDropdown
+        v-model="localFilters.watch_region"
+        :options="watchRegions"
+        label="Streaming Region"
+        placeholder="Use global setting"
+        option-key="iso_3166_1"
+        option-label="english_name"
+        option-value="iso_3166_1"
+        @update:modelValue="onRegionChange"
+      />
+      <small class="form-help">Region used to check streaming availability</small>
+    </div>
+
+    <div class="form-group">
+      <label>Streaming Services to Exclude</label>
+      <div v-if="localFilters.watch_region && watchProviders.length > 0" class="genre-grid">
+        <button
+          v-for="provider in watchProviders"
+          :key="provider.provider_id"
+          type="button"
+          class="genre-btn"
+          :class="{ active: isProviderExcluded(provider.provider_id) }"
+          @click="toggleProvider(provider)"
+        >
+          {{ provider.provider_name }}
+        </button>
+      </div>
+      <p v-else-if="localFilters.watch_region && watchProviders.length === 0" class="loading-text">
+        <i class="fas fa-spinner fa-spin"></i> Loading providers...
+      </p>
+      <p v-else class="form-help" style="padding: 0.75rem 1rem; background: var(--color-bg-overlay-light); border-radius: var(--radius-sm); border: 1px solid var(--color-border-light);">
+        Select a region above to choose which streaming services to exclude
+      </p>
+      <small class="form-help">Content already available on these services will be skipped</small>
+    </div>
+
     <!-- Genre Filters -->
     <div class="form-group">
       <label>Genres to Exclude</label>
@@ -231,6 +269,8 @@ export default {
     return {
       localFilters: { rating_source: 'tmdb', ...this.modelValue },
       genres: [],
+      watchRegions: [],
+      watchProviders: [],
       isUpdating: false,
       ratingSourceOptions: [
         {
@@ -336,7 +376,13 @@ export default {
     }
   },
   async mounted() {
-    await this.loadGenres();
+    await Promise.all([
+      this.loadGenres(),
+      this.loadWatchRegions()
+    ]);
+    if (this.localFilters.watch_region) {
+      await this.loadWatchProviders(this.localFilters.watch_region);
+    }
   },
   methods: {
     async loadGenres() {
@@ -387,6 +433,59 @@ export default {
               { id: 10768, name: 'War & Politics' },
               { id: 37, name: 'Western' }
             ];
+      }
+    },
+
+    async loadWatchRegions() {
+      try {
+        const response = await jobsApi.getWatchRegions();
+        if (response.status === 'success') {
+          this.watchRegions = response.regions;
+        }
+      } catch (error) {
+        console.error('Failed to load watch regions:', error);
+      }
+    },
+
+    async loadWatchProviders(region) {
+      this.watchProviders = [];
+      if (!region) return;
+      try {
+        const response = await jobsApi.getWatchProviders(region);
+        if (response.status === 'success') {
+          this.watchProviders = response.providers.slice().sort((a, b) =>
+            a.provider_name.localeCompare(b.provider_name)
+          );
+        }
+      } catch (error) {
+        console.error('Failed to load watch providers:', error);
+      }
+    },
+
+    async onRegionChange(region) {
+      this.localFilters.with_watch_providers = [];
+      await this.loadWatchProviders(region);
+    },
+
+    isProviderExcluded(providerId) {
+      const excluded = this.localFilters.with_watch_providers || [];
+      return excluded.some(p => String(p.provider_id) === String(providerId));
+    },
+
+    toggleProvider(provider) {
+      if (!this.localFilters.with_watch_providers) {
+        this.localFilters.with_watch_providers = [];
+      }
+      const idx = this.localFilters.with_watch_providers.findIndex(
+        p => String(p.provider_id) === String(provider.provider_id)
+      );
+      if (idx === -1) {
+        this.localFilters.with_watch_providers.push({
+          provider_id: provider.provider_id,
+          provider_name: provider.provider_name
+        });
+      } else {
+        this.localFilters.with_watch_providers.splice(idx, 1);
       }
     },
 
@@ -625,7 +724,7 @@ input[type="date"] {
   cursor: pointer;
 }
 
-.toggle-label-modal {
+.toggle-label-jobs {
   font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
   flex-direction: row !important;

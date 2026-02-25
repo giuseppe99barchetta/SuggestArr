@@ -423,3 +423,53 @@ class TMDbDiscover:
             self.logger.error(f"HTTP error fetching languages: {str(e)}")
 
         return []
+
+    async def get_watch_regions(self) -> List[Dict[str, Any]]:
+        """
+        Get the list of available watch provider regions from TMDb.
+
+        Returns:
+            List of region dicts with iso_3166_1 and english_name keys.
+        """
+        url = f"{self.tmdb_api_url}/watch/providers/regions?api_key={self.api_key}"
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status in HTTP_OK:
+                        data = await response.json()
+                        return sorted(data.get('results', []), key=lambda x: x.get('english_name', ''))
+                    else:
+                        self.logger.error(f"Error fetching watch regions: {response.status}")
+        except aiohttp.ClientError as e:
+            self.logger.error(f"HTTP error fetching watch regions: {str(e)}")
+
+        return []
+
+    async def get_streaming_providers(self, region: str) -> List[Dict[str, Any]]:
+        """
+        Get the list of available streaming providers for a region from TMDb.
+
+        Args:
+            region: ISO 3166-1 region code (e.g. 'IT', 'US').
+
+        Returns:
+            List of provider dicts with provider_id and provider_name keys.
+        """
+        url = f"{self.tmdb_api_url}/watch/providers/movie?api_key={self.api_key}&watch_region={region}"
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                    if response.status in HTTP_OK:
+                        data = await response.json()
+                        return sorted(
+                            data.get('results', []),
+                            key=lambda x: x.get('display_priority', 999)
+                        )
+                    else:
+                        self.logger.error(f"Error fetching streaming providers: {response.status}")
+        except aiohttp.ClientError as e:
+            self.logger.error(f"HTTP error fetching streaming providers: {str(e)}")
+
+        return []
