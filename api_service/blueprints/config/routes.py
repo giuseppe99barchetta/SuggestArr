@@ -33,7 +33,7 @@ def save_config():
     try:
         config_data = request.json
         save_env_vars(config_data)
-        DatabaseManager().initialize_db()
+        DatabaseManager().refresh_config()
         return jsonify({'message': 'Configuration saved successfully!', 'status': 'success'}), 200
     except Exception as e:
         logger.error(f'Error saving configuration: {str(e)}', exc_info=True)

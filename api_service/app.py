@@ -157,11 +157,6 @@ def register_routes(app): # pylint: disable=redefined-outer-name
 app = create_app()
 app.wsgi_app = SubpathMiddleware(app.wsgi_app)
 asgi_app = WsgiToAsgi(app)
-env_vars = load_env_vars()
-if env_vars.get('CRON_TIMES'):
-    from api_service.config.cron_jobs import start_cron_job
-    start_cron_job(env_vars)
-
 # Initialize database and jobs scheduler
 try:
     from api_service.db.database_manager import DatabaseManager
@@ -171,9 +166,10 @@ try:
     from api_service.jobs.system_job_sync import sync_system_job_from_config
     from api_service.jobs.queue_worker import run_queue_worker
 
-    # Initialize database tables (including discover_jobs)
+    # Initialize database tables (including discover_jobs).
+    # DatabaseManager.__init__ already calls initialize_db(), so no need to
+    # call it a second time here.
     db_manager = DatabaseManager()
-    db_manager.initialize_db()
 
     # Sync system job from YAML config (backwards compatibility)
     sync_result = sync_system_job_from_config()

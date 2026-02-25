@@ -3,7 +3,6 @@ import yaml
 import json
 from croniter import croniter
 from api_service.config.logger_manager import LoggerManager
-from api_service.config.cron_jobs import start_cron_job
 
 logger = LoggerManager.get_logger("Config")
 
@@ -188,12 +187,6 @@ def save_env_vars(config_data):
             yaml.safe_dump(env_vars, f)
             logger.debug(f"Environment variables saved: {env_vars}")
 
-        # Reload environment variables after saving
-        load_env_vars()
-        
-        # Update the cron job
-        start_cron_job(env_vars)
-        
     except Exception as e:
         logger.error(f"Error saving environment variables: {e}")
         raise

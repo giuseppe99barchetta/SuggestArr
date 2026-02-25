@@ -34,16 +34,29 @@ class DatabaseManager:
         """Initialize database manager (only once)."""
         if hasattr(self, '_initialized') and self._initialized:
             return
-            
-        self.logger = LoggerManager.get_logger(self.__class__.__name__) 
+
+        self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.db_path = DB_PATH
         self.env_vars = load_env_vars()
         self.db_type = self.env_vars.get('DB_TYPE', 'sqlite')
         self.logger.debug(f"Initialized DatabaseManager with {self.db_type} direct connections")
+        self.initialize_db()
+        # Only mark as initialized after a successful initialize_db() call so
+        # that a failed first attempt can be retried on the next instantiation.
         self._initialized = True
+
+    def refresh_config(self):
+        """Re-read configuration and re-initialize the database.
+
+        Call this after the application config is saved so that any change to
+        DB_TYPE, DB_HOST, credentials, etc. is reflected in subsequent
+        database connections without requiring a full process restart.
+        """
+        self.env_vars = load_env_vars()
+        self.db_type = self.env_vars.get('DB_TYPE', 'sqlite')
+        self.logger.debug(f"DatabaseManager config refreshed (db_type={self.db_type})")
         self.initialize_db()
 
-    
     @contextmanager
     def get_connection(self):
         """Context manager for getting a database connection."""
