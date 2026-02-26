@@ -166,6 +166,19 @@ class DatabaseManager:
                     FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
                 )
             """,
+            'user_media_profiles': """
+                CREATE TABLE IF NOT EXISTS user_media_profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    provider TEXT NOT NULL,
+                    external_user_id TEXT NOT NULL,
+                    external_username TEXT NOT NULL,
+                    access_token TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE,
+                    UNIQUE (user_id, provider)
+                )
+            """,
             'users': """
                 CREATE TABLE IF NOT EXISTS users (
                     user_id TEXT PRIMARY KEY,
@@ -1709,3 +1722,229 @@ class DatabaseManager:
         except Exception as exc:
             self.logger.error("Failed to clean up refresh tokens: %s", exc)
             return 0
+
+    # ---------------------------------------------------------------------------
+    # Auth user management methods
+    # ---------------------------------------------------------------------------
+
+    def get_all_auth_users(self) -> List[Dict[str, Any]]:
+        """
+        Return all SuggestArr auth users, excluding password hashes.
+
+        Returns:
+            list[dict]: Each dict has keys id, username, role, is_active,
+                        created_at, last_login.
+        """
+        query = (
+            "SELECT id, username, role, is_active, created_at, last_login "
+            "FROM auth_users ORDER BY id"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        return [
+            {
+                "id": row[0],
+                "username": row[1],
+                "role": row[2],
+                "is_active": bool(row[3]),
+                "created_at": row[4],
+                "last_login": row[5],
+            }
+            for row in rows
+        ]
+
+    def update_auth_user(self, user_id: int, updates: Dict[str, Any]) -> bool:
+        """
+        Update allowed fields of an auth user record.
+
+        Only 'role' and 'is_active' may be changed through this method.
+
+        Args:
+            user_id: Primary key of the user to update.
+            updates: Dict containing any subset of {'role', 'is_active'}.
+
+        Returns:
+            bool: True if a row was updated, False if the user was not found.
+        """
+        allowed = {'role', 'is_active'}
+        fields = {k: v for k, v in updates.items() if k in allowed}
+        if not fields:
+            return False
+        ph = self._ph()
+        set_clause = ", ".join(f"{k} = {ph}" for k in fields)
+        query = f"UPDATE auth_users SET {set_clause} WHERE id = {ph}"
+        values = list(fields.values()) + [user_id]
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, values)
+            updated = cursor.rowcount
+            conn.commit()
+        return updated > 0
+
+    def delete_auth_user(self, user_id: int) -> bool:
+        """
+        Permanently delete a SuggestArr auth user.
+
+        Cascade deletes their refresh_tokens and user_media_profiles.
+
+        Args:
+            user_id: Primary key of the user to remove.
+
+        Returns:
+            bool: True if a row was deleted, False if the user was not found.
+        """
+        ph = self._ph()
+        query = f"DELETE FROM auth_users WHERE id = {ph}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id,))
+            deleted = cursor.rowcount
+            conn.commit()
+        return deleted > 0
+
+    def get_admin_count(self) -> int:
+        """
+        Count active admin accounts.
+
+        Used to prevent removing the last active admin.
+
+        Returns:
+            int: Number of auth_users rows where role='admin' AND is_active=1.
+        """
+        query = "SELECT COUNT(*) FROM auth_users WHERE role = 'admin' AND is_active = 1"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            row = cursor.fetchone()
+        return row[0] if row else 0
+
+    # ---------------------------------------------------------------------------
+    # User media profile methods
+    # ---------------------------------------------------------------------------
+
+    def create_user_media_profile(
+        self,
+        user_id: int,
+        provider: str,
+        external_user_id: str,
+        external_username: str,
+        access_token: Optional[str] = None,
+    ) -> None:
+        """
+        Insert or replace a media profile link for a SuggestArr user.
+
+        The UNIQUE (user_id, provider) constraint ensures only one link per
+        provider per user.  A second call for the same user+provider replaces
+        the existing record.
+
+        Args:
+            user_id:           Primary key of the auth user.
+            provider:          One of 'jellyfin', 'plex', 'emby'.
+            external_user_id:  The user's ID on the external media server.
+            external_username: Human-readable name on the external server.
+            access_token:      Optional token for the external server (nullable).
+        """
+        ph = self._ph()
+        # SQLite uses INSERT OR REPLACE; PostgreSQL/MySQL use INSERT … ON CONFLICT.
+        if self.db_type == 'sqlite':
+            query = (
+                f"INSERT OR REPLACE INTO user_media_profiles "
+                f"(user_id, provider, external_user_id, external_username, access_token) "
+                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph})"
+            )
+        else:
+            # PostgreSQL / MySQL syntax
+            query = (
+                f"INSERT INTO user_media_profiles "
+                f"(user_id, provider, external_user_id, external_username, access_token) "
+                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}) "
+                f"ON CONFLICT (user_id, provider) DO UPDATE SET "
+                f"external_user_id = EXCLUDED.external_user_id, "
+                f"external_username = EXCLUDED.external_username, "
+                f"access_token = EXCLUDED.access_token, "
+                f"created_at = CURRENT_TIMESTAMP"
+            )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id, provider, external_user_id, external_username, access_token))
+            conn.commit()
+
+    def get_user_media_profiles(self, user_id: int) -> List[Dict[str, Any]]:
+        """
+        Return all media profile links for a SuggestArr user.
+
+        Access tokens are intentionally excluded from the result so they are
+        never serialised into API responses.
+
+        Args:
+            user_id: Primary key of the auth user.
+
+        Returns:
+            list[dict]: Each dict has keys id, provider, external_username,
+                        created_at.
+        """
+        ph = self._ph()
+        query = (
+            f"SELECT id, provider, external_username, created_at "
+            f"FROM user_media_profiles WHERE user_id = {ph} ORDER BY provider"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id,))
+            rows = cursor.fetchall()
+        return [
+            {
+                "id": row[0],
+                "provider": row[1],
+                "external_username": row[2],
+                "created_at": row[3],
+            }
+            for row in rows
+        ]
+
+    def get_user_media_profile_token(self, user_id: int, provider: str) -> Optional[str]:
+        """
+        Retrieve the access token for a specific media profile link.
+
+        This method is intentionally separate from get_user_media_profiles so
+        that tokens are only fetched when explicitly needed (not on every list).
+
+        Args:
+            user_id:  Primary key of the auth user.
+            provider: Provider name ('jellyfin', 'plex', 'emby').
+
+        Returns:
+            str | None: Raw access token, or None if no link exists.
+        """
+        ph = self._ph()
+        query = (
+            f"SELECT access_token FROM user_media_profiles "
+            f"WHERE user_id = {ph} AND provider = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id, provider))
+            row = cursor.fetchone()
+        return row[0] if row else None
+
+    def delete_user_media_profile(self, user_id: int, provider: str) -> bool:
+        """
+        Remove a media profile link.
+
+        Args:
+            user_id:  Primary key of the auth user.
+            provider: Provider to unlink ('jellyfin', 'plex', 'emby').
+
+        Returns:
+            bool: True if a row was deleted, False if no link existed.
+        """
+        ph = self._ph()
+        query = f"DELETE FROM user_media_profiles WHERE user_id = {ph} AND provider = {ph}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id, provider))
+            deleted = cursor.rowcount
+            conn.commit()
+        return deleted > 0

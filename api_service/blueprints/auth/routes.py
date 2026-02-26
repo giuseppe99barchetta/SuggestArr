@@ -304,6 +304,56 @@ def logout():
 # Protected: current-user identity
 # ---------------------------------------------------------------------------
 
+@auth_bp.route('/register', methods=['POST'])
+@limiter.limit("5 per hour")
+def register():
+    """
+    Self-registration endpoint for new user accounts.
+
+    Gated by the ALLOW_REGISTRATION config flag.  When disabled (the default),
+    this endpoint always returns 403 so that only admins can create accounts.
+    When enabled, anyone can create a viewer-level account with role='user'.
+
+    Rate-limited to 5 attempts per hour per IP to limit abuse.
+
+    Request JSON:
+      username  (str) — desired login name
+      password  (str) — must be >= MIN_PASSWORD_LENGTH characters
+
+    Response (201): { "message": "Account created" }
+    Response (400): { "error": "<validation message>" }
+    Response (403): { "error": "Registration is disabled" }
+    Response (409): { "error": "Username already taken" }
+    """
+    config = load_env_vars()
+    if not config.get('ALLOW_REGISTRATION', False):
+        return jsonify({"error": "Registration is disabled"}), 403
+
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+
+    if not username or not password:
+        return jsonify({"error": "Username and password are required"}), 400
+    if len(username) > 64:
+        return jsonify({"error": "Username must be 64 characters or fewer"}), 400
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return jsonify({"error": f"Password must be at least {MIN_PASSWORD_LENGTH} characters"}), 400
+
+    password_hash = AuthService.hash_password(password)
+    try:
+        DatabaseManager().create_auth_user(username, password_hash, role="user")
+    except Exception:
+        return jsonify({"error": "Username already taken"}), 409
+
+    logger.info("Self-registration: new account created: %r", username)
+    return jsonify({"message": "Account created"}), 201
+
+
+# ---------------------------------------------------------------------------
+# Protected: current-user identity
+# ---------------------------------------------------------------------------
+
 @auth_bp.route('/me', methods=['GET'])
 def me():
     """

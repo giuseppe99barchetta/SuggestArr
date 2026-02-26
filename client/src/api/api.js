@@ -109,3 +109,17 @@ export const exportConfig = () => {
 export const importConfig = (snapshot) => {
     return axios.post('/api/config/import', snapshot);
 };
+
+// User management (admin only)
+export const getUsers = () => axios.get('/api/users');
+export const createUserAdmin = (data) => axios.post('/api/users', data);
+export const updateUser = (id, data) => axios.patch(`/api/users/${id}`, data);
+export const deleteUser = (id) => axios.delete(`/api/users/${id}`);
+
+// Media profile linking (any authenticated user)
+export const getMyLinks = () => axios.get('/api/users/me/links');
+export const linkJellyfin = (data) => axios.post('/api/users/me/link/jellyfin', data);
+export const linkEmby = (data) => axios.post('/api/users/me/link/emby', data);
+export const unlinkProvider = (provider) => axios.delete(`/api/users/me/link/${provider}`);
+export const plexOAuthStart = () => axios.get('/api/users/me/link/plex/oauth-start');
+export const plexOAuthPoll = (pinId) => axios.post('/api/users/me/link/plex/oauth-poll', { pin_id: pinId });

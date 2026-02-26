@@ -41,7 +41,7 @@
       <!-- Desktop Navigation -->
       <div class="tabs-navigation desktop-nav" data-tour-id="nav-tabs">
         <button
-          v-for="tab in tabs"
+          v-for="tab in visibleTabs"
           :key="tab.id"
           :data-tour-id="tab.tourId || null"
           @click="activeTab = tab.id"
@@ -79,7 +79,7 @@
           <transition name="dropdown-slide">
             <div v-if="showMobileDropdown" class="mobile-dropdown">
               <button
-                v-for="tab in tabs"
+                v-for="tab in visibleTabs"
                 :key="tab.id"
                 @click="selectMobileTab(tab.id)"
                 :class="['mobile-dropdown-item', { active: activeTab === tab.id }]"
@@ -325,6 +325,7 @@ import SettingsRequests from './settings/SettingsRequests.vue';
 import SettingsJobs from './settings/SettingsJobs.vue';
 import AiSearchPage from './settings/AiSearchPage.vue';
 import LogsComponent from './LogsComponent.vue';
+import UserManagement from './settings/UserManagement.vue';
 import { exportConfig, importConfig } from '@/api/api';
 
 const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
@@ -341,11 +342,12 @@ export default {
     SettingsJobs,
     AiSearchPage,
     LogsComponent,
+    UserManagement,
   },
   setup() {
     const { currentBackgroundUrl, nextBackgroundUrl, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
     const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
-    const { authSetupComplete, logout } = useAuth();
+    const { authSetupComplete, currentUser, logout } = useAuth();
 
     return {
       currentBackgroundUrl,
@@ -360,6 +362,7 @@ export default {
       updateAvailable,
       checkForUpdates,
       authSetupComplete,
+      currentUser,
       logout
     };
   },
@@ -389,10 +392,11 @@ export default {
       tabs: [
         { id: 'requests',  name: 'Requests',  icon: 'fas fa-paper-plane', tourId: 'tab-requests' },
         { id: 'ai_search', name: 'AI Search', icon: 'fas fa-magic',       isBeta: true,           tourId: 'tab-ai-search' },
-        { id: 'services',  name: 'Services',  icon: 'fas fa-plug',         tourId: 'tab-services' },
+        { id: 'services',  name: 'Services',  icon: 'fas fa-plug',         tourId: 'tab-services', adminOnly: true },
         { id: 'jobs',      name: 'Jobs',       icon: 'fas fa-briefcase',   tourId: 'tab-jobs' },
-        { id: 'database',  name: 'Database',  icon: 'fas fa-database',     tourId: 'tab-database' },
+        { id: 'database',  name: 'Database',  icon: 'fas fa-database',     tourId: 'tab-database', adminOnly: true },
         { id: 'advanced',  name: 'Advanced',  icon: 'fas fa-sliders-h',   tourId: 'tab-advanced' },
+        { id: 'users',     name: 'Users',      icon: 'fas fa-users',       adminOnly: true },
         { id: 'logs',      name: 'Logs',       icon: 'fas fa-file-alt',    tourId: 'tab-logs' },
       ],
       tourSteps: [
@@ -460,6 +464,10 @@ export default {
     };
   },
   computed: {
+    visibleTabs() {
+      const isAdmin = this.currentUser?.role === 'admin';
+      return this.tabs.filter(tab => !tab.adminOnly || isAdmin);
+    },
     activeTabComponent() {
       const componentMap = {
         requests: 'SettingsRequests',
@@ -469,6 +477,7 @@ export default {
         advanced: 'SettingsAdvanced',
         logs: 'LogsComponent',
         ai_search: 'AiSearchPage',
+        users: 'UserManagement',
       };
       return componentMap[this.activeTab];
     },

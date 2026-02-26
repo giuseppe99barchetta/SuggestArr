@@ -146,6 +146,7 @@ def get_default_values():
         'DB_RETRY_DELAY': lambda: '1.0',
         'SEER_ANIME_PROFILE_CONFIG': lambda: {},
         'SEER_REQUEST_DELAY': lambda: 2,
+        'ALLOW_REGISTRATION': lambda: False,
     }
 
 def get_config_values():
@@ -244,7 +245,7 @@ def get_config_sections():
                      'ENABLE_STATIC_BACKGROUND', 'STATIC_BACKGROUND_COLOR',
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
                      'ENABLE_API_CACHING', 'OPENAI_API_KEY', 'OPENAI_BASE_URL',
-                     'LLM_MODEL', 'SUBPATH']
+                     'LLM_MODEL', 'SUBPATH', 'ALLOW_REGISTRATION']
     }
 
 def get_config_section(section_name):
