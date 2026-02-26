@@ -115,6 +115,10 @@ def fetch_config():
     DB-backed integration values (TMDB_API_KEY, JELLYFIN_TOKEN, etc.) are
     injected into the flat response so the frontend can read them directly,
     even when config.yaml does not contain them.
+
+    Secrets are returned as-is for admin users; the UI is responsible for
+    masking them (reveal-on-demand pattern).  Non-admin access is blocked
+    upstream by the require_role('admin') decorator.
     """
     try:
         config = load_env_vars()
@@ -123,7 +127,7 @@ def fetch_config():
         # Surface DB-backed keys in the flat format the frontend expects.
         _expand_integrations_into_flat(config, db_integrations)
         config['integrations'] = db_integrations
-        return jsonify(_redact_config(config)), 200
+        return jsonify(config), 200
     except Exception as e:
         logger.error(f'Error loading configuration: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error loading configuration', 'status': 'error'}), 500

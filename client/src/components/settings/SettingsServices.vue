@@ -1300,18 +1300,45 @@ export default {
       if (saved.anime_tv) { this.animeTvServerId = saved.anime_tv.serverId != null ? String(saved.anime_tv.serverId) : null; this.animeTvProfileId = saved.anime_tv.profileId != null ? String(saved.anime_tv.profileId) : null; this.animeTvRootFolder = saved.anime_tv.rootFolder || null; }
     },
 
+    // Returns the value to send for a secret field on save.
+    // If the value is unchanged from what was loaded (originalConfig), sends the
+    // sentinel '***' so the backend's _merge_secrets preserves the stored value
+    // without re-transmitting the secret over the wire.
+    // If the user cleared the field, sends null/empty to allow clearing the stored value.
+    // If the user entered a new value, sends it as-is.
+    _secretValue(key) {
+      const current = this.localConfig[key];
+      if (!current) return current || null;
+      if (current === this.originalConfig[key]) return '***';
+      return current;
+    },
+
     async saveSettings() {
       try {
-        const dataToSave = { TMDB_API_KEY: this.localConfig.TMDB_API_KEY, OMDB_API_KEY: this.localConfig.OMDB_API_KEY || '', SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE };
+        const dataToSave = {
+          TMDB_API_KEY: this._secretValue('TMDB_API_KEY'),
+          OMDB_API_KEY: this._secretValue('OMDB_API_KEY') || '',
+          SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE,
+        };
         if (this.localConfig.SELECTED_SERVICE === 'plex') {
-          Object.assign(dataToSave, { PLEX_TOKEN: this.localConfig.PLEX_TOKEN, PLEX_API_URL: this.localConfig.PLEX_API_URL, PLEX_LIBRARIES: this.localConfig.PLEX_LIBRARIES || [] });
+          Object.assign(dataToSave, {
+            PLEX_TOKEN: this._secretValue('PLEX_TOKEN'),
+            PLEX_API_URL: this.localConfig.PLEX_API_URL,
+            PLEX_LIBRARIES: this.localConfig.PLEX_LIBRARIES || [],
+          });
         } else if (this.localConfig.SELECTED_SERVICE === 'jellyfin' || this.localConfig.SELECTED_SERVICE === 'emby') {
-          Object.assign(dataToSave, { JELLYFIN_API_URL: this.localConfig.JELLYFIN_API_URL, JELLYFIN_TOKEN: this.localConfig.JELLYFIN_TOKEN, JELLYFIN_LIBRARIES: this.localConfig.JELLYFIN_LIBRARIES || [] });
+          Object.assign(dataToSave, {
+            JELLYFIN_API_URL: this.localConfig.JELLYFIN_API_URL,
+            JELLYFIN_TOKEN: this._secretValue('JELLYFIN_TOKEN'),
+            JELLYFIN_LIBRARIES: this.localConfig.JELLYFIN_LIBRARIES || [],
+          });
         }
         Object.assign(dataToSave, {
-          SEER_API_URL: this.localConfig.SEER_API_URL, SEER_TOKEN: this.localConfig.SEER_TOKEN,
-          SEER_USER_NAME: this.localConfig.SEER_USER_NAME || null, SEER_USER_PSW: this.localConfig.SEER_USER_PSW || null,
-          SEER_SESSION_TOKEN: this.localConfig.SEER_SESSION_TOKEN || null,
+          SEER_API_URL: this.localConfig.SEER_API_URL,
+          SEER_TOKEN: this._secretValue('SEER_TOKEN'),
+          SEER_USER_NAME: this.localConfig.SEER_USER_NAME || null,
+          SEER_USER_PSW: this._secretValue('SEER_USER_PSW') || null,
+          SEER_SESSION_TOKEN: this._secretValue('SEER_SESSION_TOKEN') || null,
           SEER_ANIME_PROFILE_CONFIG: this.localConfig.SEER_ANIME_PROFILE_CONFIG || {},
           SEER_REQUEST_DELAY: this.localConfig.SEER_REQUEST_DELAY ?? 2,
           SELECTED_USERS: this.localConfig.SELECTED_USERS || [],
