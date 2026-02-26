@@ -214,7 +214,7 @@ class PlexHandler:
             if not source_tmdb_obj:
                 self.logger.warning(f"Failed to fetch TMDb metadata for movie '{title}' (ID: {source_tmbd_id}). Skipping.")
                 return
-            similar_movies = await self.tmdb_client.find_similar_movies(source_tmbd_id)
+            similar_movies = await self.tmdb_client.find_similar_movies(source_tmbd_id, dry_run=self.dry_run)
             self.logger.debug(f"Found similar movies: {similar_movies}")
             await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie, source_tmdb_obj, is_anime)
         else:
@@ -233,7 +233,7 @@ class PlexHandler:
                 if not source_tmdb_obj:
                     self.logger.warning(f"Failed to fetch TMDb metadata for TV show '{title}' (ID: {source_tmbd_id}). Skipping.")
                     return
-                similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmbd_id)
+                similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmbd_id, dry_run=self.dry_run)
                 self.logger.debug(f"Found {len(similar_tvshows)} similar TV shows")
                 await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv, source_tmdb_obj, is_anime)
             else:
@@ -248,6 +248,54 @@ class PlexHandler:
 
         if not isinstance(source_tmdb_obj, dict):
             self.logger.warning(f"Invalid source_tmdb_obj (type: {type(source_tmdb_obj).__name__}), skipping similar media request.")
+            return
+
+        if self.dry_run:
+            # In dry-run mode, process all candidates so the user can see every potential
+            # recommendation alongside its filter results.
+            for media in media_ids:
+                if not isinstance(media, dict):
+                    continue
+                media_id = media.get('id')
+
+                already_requested = await self.seer_client.check_already_requested(media_id, media_type)
+                already_downloaded = await self.seer_client.check_already_downloaded(media_id, media_type, self.existing_content)
+                in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
+
+                filter_results = media.get('filter_results', {'passed': True})
+                filter_results['streaming'] = {
+                    'passed': not in_excluded_streaming_service,
+                    'label': 'Streaming',
+                    'reason': f'Excluded: {provider}' if in_excluded_streaming_service else None,
+                }
+                if in_excluded_streaming_service:
+                    filter_results['passed'] = False
+
+                would_request = (
+                    filter_results['passed']
+                    and not already_requested
+                    and not already_downloaded
+                )
+
+                title = media.get('title') or media.get('name') or 'Unknown'
+                self.logger.info(f"[DRY RUN] {'Would request' if would_request else 'Would skip'} {media_type}: {title}")
+                self.dry_run_items.append({
+                    'tmdb_id': media.get('id'),
+                    'media_type': media_type,
+                    'title': title,
+                    'release_date': media.get('release_date') or media.get('first_air_date'),
+                    'poster_path': media.get('poster_path'),
+                    'vote_average': media.get('vote_average') or media.get('rating'),
+                    'vote_count': media.get('vote_count') or media.get('votes'),
+                    'overview': media.get('overview'),
+                    'rationale': media.get('rationale'),
+                    'filter_results': filter_results,
+                    'already_requested': already_requested,
+                    'already_downloaded': already_downloaded,
+                    'would_request': would_request,
+                })
+                if would_request:
+                    self.request_count += 1
             return
 
         tasks = []

@@ -18,10 +18,14 @@
       <!-- Body -->
       <div class="modal-body">
         <!-- Summary bar -->
-        <div class="summary-bar" :class="{ empty: items.length === 0 }">
+        <div class="summary-bar" :class="{ empty: wouldRequestCount === 0 }">
           <span class="summary-count">
             <i class="fas fa-list-ul"></i>
-            <strong>{{ items.length }}</strong> item{{ items.length !== 1 ? 's' : '' }} would be requested
+            <strong>{{ wouldRequestCount }}</strong> item{{ wouldRequestCount !== 1 ? 's' : '' }} would be requested
+          </span>
+          <span v-if="filteredOutCount > 0" class="summary-filtered">
+            <i class="fas fa-filter"></i>
+            {{ filteredOutCount }} filtered out
           </span>
           <span class="summary-note">
             <i class="fas fa-shield-alt"></i>
@@ -29,8 +33,24 @@
           </span>
         </div>
 
+        <!-- View toggle (only when there are filtered items) -->
+        <div v-if="hasFilterData && filteredOutCount > 0" class="view-toggle">
+          <button
+            :class="['toggle-btn', { active: showAll }]"
+            @click="showAll = true"
+          >
+            <i class="fas fa-th-list"></i> All ({{ items.length }})
+          </button>
+          <button
+            :class="['toggle-btn', { active: !showAll }]"
+            @click="showAll = false"
+          >
+            <i class="fas fa-check-circle"></i> Would be requested ({{ wouldRequestCount }})
+          </button>
+        </div>
+
         <!-- Empty state -->
-        <div v-if="items.length === 0" class="empty-state">
+        <div v-if="displayedItems.length === 0" class="empty-state">
           <i class="fas fa-check-circle"></i>
           <p>Nothing new to request</p>
           <span>All matching content is already downloaded, requested, or the filters returned no results.</span>
@@ -38,12 +58,17 @@
 
         <!-- Items list -->
         <div v-else class="items-list">
-          <div v-for="item in items" :key="item.tmdb_id" class="item-card">
+          <div
+            v-for="item in displayedItems"
+            :key="item.tmdb_id"
+            class="item-card"
+            :class="{ 'item-filtered': !itemWouldRequest(item) }"
+          >
             <!-- Poster -->
             <div class="item-poster">
               <img
                 v-if="item.poster_path"
-                :src="`https://image.tmdb.org/t/p/w92${item.poster_path}`"
+                :src="posterUrl(item)"
                 :alt="item.title"
                 loading="lazy"
               />
@@ -54,7 +79,20 @@
 
             <!-- Info -->
             <div class="item-info">
-              <div class="item-title">{{ item.title }}</div>
+              <div class="item-header-row">
+                <div class="item-title">{{ item.title }}</div>
+                <!-- Library status badges -->
+                <span v-if="item.already_downloaded" class="status-badge downloaded">
+                  <i class="fas fa-check"></i> In Library
+                </span>
+                <span v-else-if="item.already_requested" class="status-badge requested">
+                  <i class="fas fa-clock"></i> Requested
+                </span>
+                <span v-else-if="itemWouldRequest(item)" class="status-badge will-request">
+                  <i class="fas fa-plus"></i> Will Request
+                </span>
+              </div>
+
               <div class="item-meta">
                 <span class="media-type-badge" :class="item.media_type">
                   {{ item.media_type === 'tv' ? 'TV' : 'Movie' }}
@@ -65,6 +103,23 @@
                   {{ Number(item.vote_average).toFixed(1) }}
                 </span>
               </div>
+
+              <!-- Filter badges -->
+              <div v-if="hasFilters(item)" class="filter-badges">
+                <template v-for="(filter, key) in activeFilters(item)" :key="key">
+                  <span
+                    v-if="filter.passed !== undefined"
+                    class="filter-badge"
+                    :class="filterBadgeClass(filter)"
+                    :title="filterTitle(filter)"
+                  >
+                    <i :class="filterIcon(filter)"></i>
+                    {{ filter.label }}
+                    <span v-if="filter.value != null" class="filter-value">{{ filter.value }}</span>
+                  </span>
+                </template>
+              </div>
+
               <div v-if="item.rationale" class="item-rationale">
                 <i class="fas fa-magic"></i> {{ item.rationale }}
               </div>
@@ -81,7 +136,7 @@
         <button @click="$emit('close')" class="btn btn-secondary">
           <i class="fas fa-times"></i> Close
         </button>
-        <button @click="$emit('run')" class="btn btn-primary" v-if="items.length > 0">
+        <button @click="$emit('run')" class="btn btn-primary" v-if="wouldRequestCount > 0">
           <i class="fas fa-bolt"></i> Run Job Now
         </button>
       </div>
@@ -103,7 +158,39 @@ export default {
     }
   },
   emits: ['close', 'run'],
+  data() {
+    return {
+      showAll: true,
+    };
+  },
+  computed: {
+    hasFilterData() {
+      return this.items.some(i => i.filter_results != null);
+    },
+    wouldRequestCount() {
+      return this.items.filter(i => this.itemWouldRequest(i)).length;
+    },
+    filteredOutCount() {
+      return this.items.length - this.wouldRequestCount;
+    },
+    displayedItems() {
+      if (!this.hasFilterData || this.showAll) return this.items;
+      return this.items.filter(i => this.itemWouldRequest(i));
+    },
+  },
   methods: {
+    itemWouldRequest(item) {
+      // New format: explicit would_request flag
+      if (item.would_request !== undefined) return item.would_request;
+      // Legacy format: no filter data means it passed everything
+      return true;
+    },
+    posterUrl(item) {
+      const p = item.poster_path;
+      if (!p) return null;
+      if (p.startsWith('http')) return p;
+      return `https://image.tmdb.org/t/p/w92${p}`;
+    },
     releaseYear(item) {
       const date = item.release_date;
       return date ? date.slice(0, 4) : null;
@@ -111,7 +198,32 @@ export default {
     truncate(text, maxLen) {
       if (!text) return '';
       return text.length > maxLen ? text.slice(0, maxLen) + '…' : text;
-    }
+    },
+    hasFilters(item) {
+      if (!item.filter_results) return false;
+      return Object.keys(item.filter_results).some(k => k !== 'passed');
+    },
+    activeFilters(item) {
+      if (!item.filter_results) return {};
+      const { passed, ...filters } = item.filter_results; // eslint-disable-line no-unused-vars
+      return filters;
+    },
+    filterBadgeClass(filter) {
+      if (filter.passed === true) return 'badge-pass';
+      if (filter.passed === false) return 'badge-fail';
+      return 'badge-na';
+    },
+    filterIcon(filter) {
+      if (filter.passed === true) return 'fas fa-check';
+      if (filter.passed === false) return 'fas fa-times';
+      return 'fas fa-minus';
+    },
+    filterTitle(filter) {
+      if (filter.reason) return filter.reason;
+      if (filter.passed === true) return `${filter.label}: OK`;
+      if (filter.passed === null) return `${filter.label}: not configured`;
+      return filter.label;
+    },
   }
 };
 </script>
@@ -133,7 +245,7 @@ export default {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-lg, 12px);
   width: 90%;
-  max-width: 680px;
+  max-width: 720px;
   max-height: 88vh;
   display: flex;
   flex-direction: column;
@@ -194,7 +306,7 @@ export default {
   padding: 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 /* Summary bar */
@@ -228,12 +340,52 @@ export default {
   opacity: 0.7;
 }
 
+.summary-filtered {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: #fb923c;
+}
+
 .summary-note {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   font-size: 0.78rem;
   color: var(--color-text-muted, #888);
+}
+
+/* View toggle */
+.view-toggle {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-muted, #888);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toggle-btn.active {
+  background: rgba(34, 211, 238, 0.12);
+  border-color: rgba(34, 211, 238, 0.35);
+  color: #22d3ee;
+}
+
+.toggle-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-primary, #fff);
 }
 
 /* Empty state */
@@ -287,6 +439,15 @@ export default {
   border-color: rgba(255, 255, 255, 0.14);
 }
 
+.item-card.item-filtered {
+  opacity: 0.6;
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.item-card.item-filtered:hover {
+  opacity: 0.8;
+}
+
 /* Poster */
 .item-poster {
   flex-shrink: 0;
@@ -322,6 +483,14 @@ export default {
   gap: 0.3rem;
 }
 
+.item-header-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .item-title {
   font-size: 0.92rem;
   font-weight: 600;
@@ -329,6 +498,37 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 0.12rem 0.4rem;
+  border-radius: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.status-badge.will-request {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.status-badge.downloaded {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+}
+
+.status-badge.requested {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
 }
 
 .item-meta {
@@ -368,6 +568,53 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+/* Filter badges row */
+.filter-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.1rem;
+}
+
+.filter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.62rem;
+  font-weight: 500;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.filter-badge i {
+  font-size: 0.55rem;
+}
+
+.filter-value {
+  opacity: 0.75;
+  font-weight: 400;
+}
+
+.badge-pass {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.badge-fail {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.badge-na {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-muted, #888);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .item-rationale {

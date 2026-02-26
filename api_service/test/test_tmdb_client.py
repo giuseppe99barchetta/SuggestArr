@@ -96,58 +96,58 @@ class TestApplyFilters(unittest.TestCase):
 
     def test_passes_item_with_good_rating_and_votes(self):
         client = _make_client(tmdb_threshold=60, tmdb_min_votes=10)
-        self.assertTrue(client._apply_filters(_MOVIE_ITEM, 'movie'))
+        self.assertTrue(client._apply_filters(_MOVIE_ITEM, 'movie')['passed'])
 
     def test_excludes_when_missing_rating_and_include_no_ratings_false(self):
         client = _make_client(include_no_ratings=False)
         item = {**_MOVIE_ITEM, 'vote_average': None, 'vote_count': None}
-        self.assertFalse(client._apply_filters(item, 'movie'))
+        self.assertFalse(client._apply_filters(item, 'movie')['passed'])
 
     def test_passes_when_missing_rating_and_include_no_ratings_true(self):
         client = _make_client(include_no_ratings=True)
         item = {**_MOVIE_ITEM, 'vote_average': None, 'vote_count': None}
-        self.assertTrue(client._apply_filters(item, 'movie'))
+        self.assertTrue(client._apply_filters(item, 'movie')['passed'])
 
     def test_excludes_when_rating_below_threshold(self):
         client = _make_client(tmdb_threshold=90, include_no_ratings=False)
         item = {**_MOVIE_ITEM, 'vote_average': 5.0, 'vote_count': 1000}
-        self.assertFalse(client._apply_filters(item, 'movie'))
+        self.assertFalse(client._apply_filters(item, 'movie')['passed'])
 
     def test_excludes_when_votes_below_minimum(self):
         client = _make_client(tmdb_min_votes=50000, include_no_ratings=False)
         item = {**_MOVIE_ITEM, 'vote_average': 9.0, 'vote_count': 100}
-        self.assertFalse(client._apply_filters(item, 'movie'))
+        self.assertFalse(client._apply_filters(item, 'movie')['passed'])
 
     def test_excludes_when_language_not_in_filter(self):
         client = _make_client(filter_language=[{'id': 'it', 'english_name': 'Italian'}])
         item = {**_MOVIE_ITEM, 'original_language': 'en'}
-        self.assertFalse(client._apply_filters(item, 'movie'))
+        self.assertFalse(client._apply_filters(item, 'movie')['passed'])
 
     def test_passes_when_language_in_filter(self):
         client = _make_client(filter_language=[{'id': 'en', 'english_name': 'English'}])
-        self.assertTrue(client._apply_filters(_MOVIE_ITEM, 'movie'))
+        self.assertTrue(client._apply_filters(_MOVIE_ITEM, 'movie')['passed'])
 
     def test_excludes_when_release_year_before_filter(self):
         client = _make_client(filter_release_year=2020)
         item = {**_MOVIE_ITEM, 'release_date': '2010-01-01'}
-        self.assertFalse(client._apply_filters(item, 'movie'))
+        self.assertFalse(client._apply_filters(item, 'movie')['passed'])
 
     def test_excludes_when_genre_in_exclude_list(self):
         client = _make_client(filter_genre=[{'id': 28, 'name': 'Action'}])
         item = {**_MOVIE_ITEM, 'genre_ids': [28]}
-        self.assertFalse(client._apply_filters(item, 'movie'))
+        self.assertFalse(client._apply_filters(item, 'movie')['passed'])
 
     def test_passes_when_genre_not_in_exclude_list(self):
         client = _make_client(filter_genre=[{'id': 99, 'name': 'Comedy'}])
         item = {**_MOVIE_ITEM, 'genre_ids': [28]}
-        self.assertTrue(client._apply_filters(item, 'movie'))
+        self.assertTrue(client._apply_filters(item, 'movie')['passed'])
 
     def test_skips_tmdb_rating_check_when_rating_source_is_imdb(self):
         """When rating_source='imdb', TMDB rating/votes filters should be skipped."""
         client = _make_client(tmdb_threshold=90, tmdb_min_votes=100000, rating_source='imdb')
         item = {**_MOVIE_ITEM, 'vote_average': 1.0, 'vote_count': 1}
         # Should pass because TMDB rating check is skipped
-        self.assertTrue(client._apply_filters(item, 'movie'))
+        self.assertTrue(client._apply_filters(item, 'movie')['passed'])
 
 
 # ---------------------------------------------------------------------------

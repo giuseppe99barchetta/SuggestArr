@@ -154,7 +154,7 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
         mock_tmdb = MagicMock()
         mock_tmdb.search_movie = AsyncMock(return_value=[_tmdb_item(1, 'Se7en')])
         mock_tmdb.search_tv   = AsyncMock(return_value=[])
-        mock_tmdb._apply_filters = MagicMock(return_value=True)
+        mock_tmdb._apply_filters = MagicMock(return_value={'passed': True})
         mock_tmdb.omdb_client = None
         # Async context manager support
         mock_tmdb.__aenter__ = AsyncMock(return_value=mock_tmdb)

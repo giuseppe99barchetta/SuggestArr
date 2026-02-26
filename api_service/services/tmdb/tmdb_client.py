@@ -77,11 +77,16 @@ class TMDbClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
-    async def _fetch_recommendations(self, content_id, content_type):
+    async def _fetch_recommendations(self, content_id, content_type, dry_run=False):
         """
         Fetches recommendations for a specific movie or TV show by applying filters.
+
+        :param dry_run: When True, returns ALL candidates (including those that fail filters)
+                        with a 'filter_results' dict attached to each item so the caller can
+                        display which filters passed or failed. The search_size cap is not
+                        applied in dry-run mode (all items from the fetched pages are returned).
         """
-        self.logger.debug("Fetching recommendations for %s with ID %s", content_type, content_id)
+        self.logger.debug("Fetching recommendations for %s with ID %s (dry_run=%s)", content_type, content_id, dry_run)
         search = []
         for page in range(1, self.pages + 1):
             self.logger.debug("Fetching page %d of recommendations", page)
@@ -91,40 +96,85 @@ class TMDbClient:
                 break
 
             for item in data['results']:
-                if self._apply_filters(item, content_type):
-                    needs_detail_call = self.filter_min_runtime or self.rating_source in ('imdb', 'both')
-                    imdb_id = None
+                filter_result = self._apply_filters(item, content_type)
+                core_passed = filter_result['passed']
 
-                    if needs_detail_call:
-                        details = await self._get_item_details(item['id'], content_type)
-                        runtime = details.get('runtime') if details else None
-                        imdb_id = details.get('imdb_id') if details else None
+                # In normal mode skip failing items early (no detail API calls wasted)
+                if not dry_run and not core_passed:
+                    continue
 
-                        if self.filter_min_runtime and runtime is not None and runtime < self.filter_min_runtime:
+                needs_detail_call = self.filter_min_runtime or self.rating_source in ('imdb', 'both')
+                runtime = None
+                imdb_id = None
+
+                # Only make detail API calls when the item passes core filters or we're in
+                # dry-run mode (so we can show runtime/IMDB results for passing items).
+                if needs_detail_call and (core_passed or dry_run):
+                    details = await self._get_item_details(item['id'], content_type)
+                    runtime = details.get('runtime') if details else None
+                    imdb_id = details.get('imdb_id') if details else None
+
+                # Runtime check
+                if self.filter_min_runtime:
+                    if runtime is not None:
+                        runtime_passed = runtime >= self.filter_min_runtime
+                        if dry_run:
+                            filter_result['runtime'] = {
+                                'passed': runtime_passed, 'label': 'Runtime',
+                                'value': f'{runtime}min',
+                                'reason': f'Below {self.filter_min_runtime}min' if not runtime_passed else None,
+                            }
+                            if not runtime_passed:
+                                filter_result['passed'] = False
+                        elif not runtime_passed:
                             self._log_exclusion_reason(
                                 item,
                                 f"runtime {runtime}min below minimum {self.filter_min_runtime}min",
-                                content_type
+                                content_type,
                             )
                             continue
+                    elif dry_run and core_passed:
+                        filter_result['runtime'] = {'passed': None, 'label': 'Runtime', 'reason': 'Unknown runtime'}
 
-                    if self.rating_source in ('imdb', 'both') and self.omdb_client:
-                        if imdb_id:
-                            imdb_data = await self.omdb_client.get_rating(imdb_id)
-                            if not self._apply_imdb_filter(imdb_data, item, content_type):
-                                continue
-                        elif not self.include_no_ratings:
-                            self._log_exclusion_reason(item, "no IMDB ID found", content_type)
+                # IMDB rating check
+                if self.rating_source in ('imdb', 'both') and self.omdb_client:
+                    if imdb_id:
+                        imdb_data = await self.omdb_client.get_rating(imdb_id)
+                        if dry_run:
+                            imdb_result = self._get_imdb_filter_result(imdb_data)
+                            filter_result['imdb_rating'] = imdb_result
+                            if not imdb_result['passed']:
+                                filter_result['passed'] = False
+                        elif not self._apply_imdb_filter(imdb_data, item, content_type):
                             continue
+                    else:
+                        if not self.include_no_ratings:
+                            if dry_run:
+                                filter_result['imdb_rating'] = {
+                                    'passed': False, 'label': 'IMDB',
+                                    'reason': 'No IMDB ID found',
+                                }
+                                filter_result['passed'] = False
+                            else:
+                                self._log_exclusion_reason(item, "no IMDB ID found", content_type)
+                                continue
+                        elif dry_run and core_passed:
+                            filter_result['imdb_rating'] = {
+                                'passed': None, 'label': 'IMDB',
+                                'reason': 'No IMDB ID',
+                            }
 
-                    search.append(self._format_result(item, content_type))
+                formatted = self._format_result(item, content_type)
+                if dry_run:
+                    formatted['filter_results'] = filter_result
+                search.append(formatted)
 
-                # Stop if we reach the search size limit
-                if len(search) >= self.search_size:
+                # Stop once we reach the target in normal mode
+                if not dry_run and len(search) >= self.search_size:
                     self.logger.debug("Reached search size limit of %d", self.search_size)
                     break
 
-            if len(search) >= self.search_size:
+            if not dry_run and len(search) >= self.search_size:
                 break
 
             # Sleep to avoid rate limiting
@@ -132,8 +182,8 @@ class TMDbClient:
                 self.logger.debug("Sleeping for %f seconds to avoid rate limiting", RATE_LIMIT_SLEEP)
                 await asyncio.sleep(RATE_LIMIT_SLEEP)
 
-        self.logger.debug("Returning %d recommendations", len(search))
-        return search[:self.search_size]
+        self.logger.debug("Returning %d recommendations (dry_run=%s)", len(search), dry_run)
+        return search if dry_run else search[:self.search_size]
 
     async def _fetch_page_data(self, content_id, content_type, page):
         """
@@ -197,29 +247,65 @@ class TMDbClient:
 
     def _apply_filters(self, item, content_type):
         """
-        Applies rating, country, release year, and genre filters to a content item.
-        Returns True if the item passes all filters, False otherwise.
+        Applies rating, language, release year, and genre filters to a content item.
+        Returns a dict with per-filter results and an overall 'passed' key.
+
+        Each filter entry has at minimum {'passed': bool|None, 'label': str}.
+        Optional keys: 'value' (current value), 'reason' (why it failed).
+        'passed' is None when the filter is not configured / not applicable.
 
         When rating_source is 'imdb', TMDB vote_average/vote_count checks are skipped
         (IMDB rating will be checked separately via OMDb). All other TMDB filters
-        (language, genre, year, streaming) are always applied.
+        (language, genre, year) are always applied.
         """
+        results = {}
+        overall = True
+
         # Support both raw TMDB API keys (vote_average / vote_count) and the
-        # formatted keys produced by _format_result (rating / votes) so that
-        # _apply_filters works correctly whether called on raw or formatted items.
+        # formatted keys produced by _format_result (rating / votes).
         rating = item.get('vote_average') if item.get('vote_average') is not None else item.get('rating')
         votes = item.get('vote_count') if item.get('vote_count') is not None else item.get('votes')
 
-        # Only apply TMDB rating/votes filters when TMDB ratings are used
+        # TMDB rating / votes — only when TMDB ratings are used
         if self.rating_source != 'imdb':
-            # Exclude items that have no rating data only when the user has opted out
-            # of including unrated content (include_no_ratings=False means "require ratings").
             if not self.include_no_ratings and (rating is None or votes is None):
                 self._log_exclusion_reason(item, "missing rating or votes", content_type)
-                return False
+                results['tmdb_rating'] = {'passed': False, 'label': 'Rating', 'reason': 'Missing rating/votes'}
+                overall = False
+            else:
+                rating_pass = rating is None or rating >= self.tmdb_threshold / 10
+                votes_pass = votes is None or votes >= self.tmdb_min_votes
 
+                if not rating_pass:
+                    self._log_exclusion_reason(item, f"TMDB rating below threshold of {int(self.tmdb_threshold)}%", content_type)
+                    results['tmdb_rating'] = {
+                        'passed': False, 'label': 'Rating',
+                        'value': round(rating, 1),
+                        'reason': f'Below {self.tmdb_threshold}%',
+                    }
+                    overall = False
+                else:
+                    results['tmdb_rating'] = {
+                        'passed': True, 'label': 'Rating',
+                        'value': round(rating, 1) if rating is not None else None,
+                    }
+
+                if not votes_pass:
+                    self._log_exclusion_reason(item, f"TMDB votes below minimum threshold of {self.tmdb_min_votes}", content_type)
+                    results['tmdb_votes'] = {
+                        'passed': False, 'label': 'Votes',
+                        'value': votes,
+                        'reason': f'Below {self.tmdb_min_votes}',
+                    }
+                    overall = False
+                else:
+                    results['tmdb_votes'] = {
+                        'passed': True, 'label': 'Votes',
+                        'value': votes,
+                    }
+
+        # Language filter
         original_language = item.get('original_language')
-        
         if self.language_filter:
             selected_language_ids = []
             selected_language_names = []
@@ -230,36 +316,44 @@ class TMDbClient:
                 else:
                     selected_language_ids.append(lang)
                     selected_language_names.append(str(lang))
-            
+
             if original_language not in selected_language_ids:
                 names_str = ', '.join(selected_language_names)
                 self._log_exclusion_reason(
                     item,
                     f"language '{original_language}' not in selected languages: {names_str}",
-                    content_type
+                    content_type,
                 )
-                return False
+                results['language'] = {
+                    'passed': False, 'label': 'Language',
+                    'value': original_language,
+                    'reason': f'Not in [{names_str}]',
+                }
+                overall = False
+            else:
+                results['language'] = {'passed': True, 'label': 'Language', 'value': original_language}
 
-        if self.rating_source != 'imdb':
-            if rating is not None and rating < self.tmdb_threshold / 10:
-                self._log_exclusion_reason(item, f"TMDB rating below threshold of {int(self.tmdb_threshold)}%", content_type)
-                return False
-
-            if votes is not None and votes < self.tmdb_min_votes:
-                self._log_exclusion_reason(item, f"TMDB votes below minimum threshold of {self.tmdb_min_votes}", content_type)
-                return False
-
+        # Release year filter
         release_date = item.get('release_date') if content_type == 'movie' else item.get('first_air_date')
-        if release_date and int(release_date[:4]) < self.release_year_filter:
-            self._log_exclusion_reason(item, f"release year {release_date[:4]} before {self.release_year_filter}", content_type)
-            return False
+        if release_date:
+            year_str = release_date[:4]
+            if int(year_str) < self.release_year_filter:
+                self._log_exclusion_reason(item, f"release year {year_str} before {self.release_year_filter}", content_type)
+                results['release_year'] = {
+                    'passed': False, 'label': 'Year',
+                    'value': year_str,
+                    'reason': f'Before {self.release_year_filter}',
+                }
+                overall = False
+            else:
+                results['release_year'] = {'passed': True, 'label': 'Year', 'value': year_str}
 
-        item_genres = item.get('genre_ids', [])
-        
+        # Genre exclusion filter
         if self.genre_filter:
+            item_genres = item.get('genre_ids', [])
             genre_ids_to_exclude = []
             excluded_genres_names = []
-            
+
             for genre in self.genre_filter:
                 if isinstance(genre, dict):
                     genre_id = genre.get('id')
@@ -267,7 +361,6 @@ class TMDbClient:
                     if genre_id in item_genres:
                         excluded_genres_names.append(genre.get('name', str(genre_id)))
                 else:
-                    # Primitive integer
                     try:
                         genre_id = int(genre)
                         genre_ids_to_exclude.append(genre_id)
@@ -278,9 +371,16 @@ class TMDbClient:
 
             if any(genre_id in item_genres for genre_id in genre_ids_to_exclude):
                 self._log_exclusion_reason(item, f"excluded genres: {', '.join(excluded_genres_names)}", content_type)
-                return False
+                results['genres'] = {
+                    'passed': False, 'label': 'Genres',
+                    'reason': f'Excluded: {", ".join(excluded_genres_names)}',
+                }
+                overall = False
+            else:
+                results['genres'] = {'passed': True, 'label': 'Genres'}
 
-        return True
+        results['passed'] = overall
+        return results
 
     async def _get_item_details(self, content_id, content_type):
         """
@@ -341,6 +441,37 @@ class TMDbClient:
         except aiohttp.ClientError as e:
             self.logger.warning("Error fetching external IDs for TV ID %s: %s", tv_id, str(e).replace(self.api_key, "***"))
         return None
+
+    def _get_imdb_filter_result(self, imdb_data):
+        """
+        Returns a filter-result dict for the IMDB rating check (used in dry-run mode).
+
+        :param imdb_data: Result from OmdbClient.get_rating(); may be None.
+        :return: dict with 'passed' (bool|None), 'label', and optional 'value'/'reason'.
+        """
+        if imdb_data is None:
+            if not self.include_no_ratings:
+                return {'passed': False, 'label': 'IMDB', 'reason': 'No IMDB data available'}
+            return {'passed': None, 'label': 'IMDB', 'reason': 'No data (allowed)'}
+
+        imdb_rating = imdb_data.get('imdb_rating')
+        imdb_votes = imdb_data.get('imdb_votes')
+
+        if imdb_rating is not None and imdb_rating < self.imdb_threshold / 10:
+            return {
+                'passed': False, 'label': 'IMDB',
+                'value': imdb_rating,
+                'reason': f'Below {self.imdb_threshold / 10:.1f}',
+            }
+
+        if imdb_votes is not None and imdb_votes < self.imdb_min_votes:
+            return {
+                'passed': False, 'label': 'IMDB Votes',
+                'value': imdb_votes,
+                'reason': f'Below {self.imdb_min_votes}',
+            }
+
+        return {'passed': True, 'label': 'IMDB', 'value': imdb_rating}
 
     def _apply_imdb_filter(self, imdb_data, item, content_type):
         """
@@ -407,19 +538,23 @@ class TMDbClient:
         }
 
 
-    async def find_similar_movies(self, movie_id):
+    async def find_similar_movies(self, movie_id, dry_run=False):
         """
         Finds movies similar to the one with the given movie_id.
-        """
-        self.logger.debug("Finding similar movies for movie ID %s", movie_id)
-        return await self._fetch_recommendations(movie_id, 'movie')
 
-    async def find_similar_tvshows(self, tvshow_id):
+        :param dry_run: When True, returns all candidates with filter metadata attached.
+        """
+        self.logger.debug("Finding similar movies for movie ID %s (dry_run=%s)", movie_id, dry_run)
+        return await self._fetch_recommendations(movie_id, 'movie', dry_run=dry_run)
+
+    async def find_similar_tvshows(self, tvshow_id, dry_run=False):
         """
         Finds TV shows similar to the one with the given tvshow_id.
+
+        :param dry_run: When True, returns all candidates with filter metadata attached.
         """
-        self.logger.debug("Finding similar TV shows for TV show ID %s", tvshow_id)
-        return await self._fetch_recommendations(tvshow_id, 'tv')
+        self.logger.debug("Finding similar TV shows for TV show ID %s (dry_run=%s)", tvshow_id, dry_run)
+        return await self._fetch_recommendations(tvshow_id, 'tv', dry_run=dry_run)
 
     async def find_tmdb_id_from_tvdb(self, tvdb_id):
         """

@@ -200,7 +200,7 @@ class JellyfinHandler:
         if not source_tmdb_obj:
             self.logger.warning(f"Movie skipped: failed to fetch TMDb metadata for ID {source_tmdb_id}")
             return
-        similar_movies = await self.tmdb_client.find_similar_movies(source_tmdb_id)
+        similar_movies = await self.tmdb_client.find_similar_movies(source_tmdb_id, dry_run=self.dry_run)
 
         await self.request_similar_media(
             similar_movies,
@@ -230,7 +230,7 @@ class JellyfinHandler:
         if not source_tmdb_obj:
             self.logger.warning(f"Series skipped: failed to fetch TMDb metadata for ID {source_tmdb_id}")
             return
-        similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmdb_id)
+        similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmdb_id, dry_run=self.dry_run)
 
         await self.request_similar_media(
             similar_tvshows,
@@ -252,6 +252,57 @@ class JellyfinHandler:
             self.logger.warning(f"Invalid source_tmdb_obj (type: {type(source_tmdb_obj).__name__}), skipping similar media request.")
             return
 
+        if self.dry_run:
+            # In dry-run mode, process all candidates (not just max_items) so the user
+            # can see every potential recommendation alongside its filter results.
+            for media in media_ids:
+                if not isinstance(media, dict):
+                    continue
+                media_id = media.get('id')
+                media_title = media.get('title') or media.get('name') or 'Unknown'
+
+                already_requested = await self.jellyseer_client.check_already_requested(media_id, media_type)
+                already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content)
+                in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
+
+                # Merge streaming result into the filter_results dict from TMDb
+                filter_results = media.get('filter_results', {'passed': True})
+                filter_results['streaming'] = {
+                    'passed': not in_excluded_streaming_service,
+                    'label': 'Streaming',
+                    'reason': f'Excluded: {provider}' if in_excluded_streaming_service else None,
+                }
+                if in_excluded_streaming_service:
+                    filter_results['passed'] = False
+
+                # would_request = passes all configured filters AND not already in library
+                would_request = (
+                    filter_results['passed']
+                    and not already_requested
+                    and not already_downloaded
+                )
+
+                title = media.get('title') or media.get('name') or 'Unknown'
+                self.logger.info(f"[DRY RUN] {'Would request' if would_request else 'Would skip'} {media_type}: {title}")
+                self.dry_run_items.append({
+                    'tmdb_id': media.get('id'),
+                    'media_type': media_type,
+                    'title': title,
+                    'release_date': media.get('release_date') or media.get('first_air_date'),
+                    'poster_path': media.get('poster_path'),
+                    'vote_average': media.get('vote_average') or media.get('rating'),
+                    'vote_count': media.get('vote_count') or media.get('votes'),
+                    'overview': media.get('overview'),
+                    'rationale': media.get('rationale'),
+                    'filter_results': filter_results,
+                    'already_requested': already_requested,
+                    'already_downloaded': already_downloaded,
+                    'would_request': would_request,
+                })
+                if would_request:
+                    self.request_count += 1
+            return
+
         tasks = []
         for media in media_ids[:max_items]:
             if not isinstance(media, dict):
@@ -259,7 +310,7 @@ class JellyfinHandler:
                 continue
             media_id = media.get('id')
             media_title = media.get('title') or media.get('name') or 'Unknown'
-            
+
             self.logger.debug(f"Processing similar media: '{media_title}' with ID: '{media_id}'")
 
             # Check if already downloaded, requested, or in an excluded streaming service

@@ -160,7 +160,7 @@ class AiSearchService:
                 continue
             if exclude_watched and self._is_watched(tmdb_item, watched_titles):
                 continue
-            if not tmdb_client._apply_filters(tmdb_item, media_type):
+            if not tmdb_client._apply_filters(tmdb_item, media_type)['passed']:
                 continue
             seen_ids.add(item_id)
             tmdb_item["rationale"] = suggestion.get("rationale", "")
