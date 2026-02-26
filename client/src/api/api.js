@@ -1,9 +1,8 @@
 import axios from 'axios';
 
-// Function to test the TMDB API key
+// Function to test the TMDB API key via the backend proxy (key never exposed client-side)
 export const testTmdbApi = (apiKey) => {
-    const tmdbApiUrl = `https://api.themoviedb.org/3/movie/550?api_key=${apiKey}`; // Movie ID 550 is Fight Club
-    return axios.get(tmdbApiUrl);
+    return axios.post('/api/tmdb/test', { api_key: apiKey });
 };
 
 // Function to test the OMDb API key (IMDB ratings integration)

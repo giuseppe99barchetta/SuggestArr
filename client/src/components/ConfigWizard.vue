@@ -392,20 +392,11 @@ export default {
     });
 
     // ─── Watchers ────────────────────────────────────────────────────────────
-    watch(() => config.value.TMDB_API_KEY, (newKey) => {
-      if (!config.value.ENABLE_STATIC_BACKGROUND && newKey) {
-        stopBackgroundImageRotation();
-        startBackgroundImageRotation(newKey);
-      }
-    });
-
     watch(() => config.value.ENABLE_STATIC_BACKGROUND, (enabled) => {
       if (enabled) {
         stopBackgroundImageRotation();
-      } else if (config.value.TMDB_API_KEY) {
-        startBackgroundImageRotation(config.value.TMDB_API_KEY);
       } else {
-        startDefaultImageRotation();
+        startBackgroundImageRotation();
       }
     });
 
@@ -580,8 +571,8 @@ export default {
 
     // ─── Initialization ───────────────────────────────────────────────────────
     fetchConfig().then(() => {
-      if (!config.value.ENABLE_STATIC_BACKGROUND && !config.value.TMDB_API_KEY) {
-        startDefaultImageRotation();
+      if (!config.value.ENABLE_STATIC_BACKGROUND) {
+        startBackgroundImageRotation();
       }
       preValidateFromConfig();
     });

@@ -485,10 +485,8 @@ export default {
       handler(newValue) {
         if (newValue) {
           this.stopBackgroundImageRotation();
-        } else if (this.config.TMDB_API_KEY) {
-          this.startBackgroundImageRotation(this.config.TMDB_API_KEY);
         } else {
-          this.startDefaultImageRotation();
+          this.startBackgroundImageRotation();
         }
       }
     },
@@ -509,8 +507,8 @@ export default {
 
       this.loadRequestCount();
 
-      if (!this.config.ENABLE_STATIC_BACKGROUND && this.config.TMDB_API_KEY) {
-        this.startBackgroundImageRotation(this.config.TMDB_API_KEY);
+      if (!this.config.ENABLE_STATIC_BACKGROUND) {
+        this.startBackgroundImageRotation();
       }
 
       // Auto-start tour on first visit or when ?tour=1 is in the URL
