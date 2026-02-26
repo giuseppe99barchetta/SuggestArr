@@ -29,6 +29,7 @@ from api_service.blueprints.omdb.routes import omdb_bp
 from api_service.blueprints.jobs.routes import jobs_bp
 from api_service.blueprints.ai_search.routes import ai_search_bp
 from api_service.blueprints.health.routes import health_bp
+from api_service.blueprints.admin.routes import admin_bp
 
 class SubpathMiddleware:
     """
@@ -155,6 +156,7 @@ def create_app():
     application.register_blueprint(jobs_bp, url_prefix='/api/jobs')
     application.register_blueprint(ai_search_bp, url_prefix='/api/ai-search')
     application.register_blueprint(health_bp, url_prefix='/api/health')
+    application.register_blueprint(admin_bp, url_prefix='/api/admin')
 
     # Register routes
     register_routes(application)

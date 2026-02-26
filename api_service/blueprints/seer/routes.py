@@ -38,7 +38,7 @@ async def get_users():
             return jsonify({'message': 'Seer API URL and token are not configured', 'type': 'error'}), 400
 
         try:
-            validate_url(api_url)
+            validate_url(api_url, allow_private=True)
         except ValueError as exc:
             return jsonify({'message': str(exc), 'type': 'error'}), 400
 
@@ -111,7 +111,7 @@ async def test_seer_connection():
             }), 400
 
         try:
-            validate_url(api_url)
+            validate_url(api_url, allow_private=True)
         except ValueError as exc:
             return jsonify({'message': str(exc), 'status': 'error'}), 400
 
@@ -187,7 +187,7 @@ async def login_seer():
             return jsonify({'message': 'Username, password and URL are required', 'type': 'error'}), 400
 
         try:
-            validate_url(api_url)
+            validate_url(api_url, allow_private=True)
         except ValueError as exc:
             return jsonify({'message': str(exc), 'type': 'error'}), 400
 
@@ -224,7 +224,7 @@ async def get_radarr_servers():
             return jsonify({'message': 'Seer API URL and token are not configured', 'type': 'error'}), 400
 
         try:
-            validate_url(api_url)
+            validate_url(api_url, allow_private=True)
         except ValueError as exc:
             return jsonify({'message': str(exc), 'type': 'error'}), 400
 
@@ -249,7 +249,7 @@ async def get_sonarr_servers():
             return jsonify({'message': 'Seer API URL and token are not configured', 'type': 'error'}), 400
 
         try:
-            validate_url(api_url)
+            validate_url(api_url, allow_private=True)
         except ValueError as exc:
             return jsonify({'message': str(exc), 'type': 'error'}), 400
 

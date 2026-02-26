@@ -15,6 +15,15 @@ from api_service.exceptions.database_exceptions import DatabaseError
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 DB_PATH = os.path.join(BASE_DIR, 'config', 'config_files', 'requests.db')
 
+# Required fields that must be non-empty for an integration to be considered valid.
+_INTEGRATION_REQUIRED_FIELDS: Dict[str, List[str]] = {
+    'jellyfin': ['api_url', 'api_key'],
+    'seer':     ['api_url', 'api_key'],
+    'tmdb':     ['api_key'],
+    'omdb':     ['api_key'],
+}
+
+
 class DatabaseManager:
     """Singleton database manager with connection pooling."""
     
@@ -465,6 +474,20 @@ class DatabaseManager:
             return None
         return json.loads(row[0])
 
+    def get_all_integrations(self) -> dict:
+        """
+        Retrieve all service integrations from the database.
+
+        Returns:
+            dict mapping service name to its config dict.
+        """
+        query = "SELECT service, config_json FROM integrations"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        return {row[0]: json.loads(row[1]) for row in rows}
+
     def set_integration(self, service: str, config: dict) -> None:
         """
         Insert or replace the config for a named service integration.
@@ -501,14 +524,31 @@ class DatabaseManager:
             cursor.execute(query, params)
             conn.commit()
 
+    @staticmethod
+    def _is_integration_valid(service: str, config: dict) -> bool:
+        """
+        Return True if *config* contains all required non-empty fields for *service*.
+
+        Args:
+            service: Integration service name (e.g. 'jellyfin', 'tmdb').
+            config:  Stored config dict retrieved from the integrations table.
+
+        Returns:
+            True when every required field is present and non-empty.
+        """
+        required = _INTEGRATION_REQUIRED_FIELDS.get(service, [])
+        return all(config.get(field) for field in required)
+
     def migrate_integrations_from_config(self) -> None:
         """
-        One-time startup migration: seed the integrations table from config.yaml.
+        Startup migration: seed or repair the integrations table from config.yaml.
 
-        For each known service, if no row exists in the integrations table,
-        credentials from config.yaml are inserted. Existing DB entries are
-        never overwritten, so this is idempotent and safe to call on every
-        application startup.
+        Rules applied per service:
+        - Row does not exist            → insert from config (if config has required fields).
+        - Row exists but invalid/empty  → update from config (if config has required fields).
+        - Row exists and valid          → leave untouched.
+
+        This is safe to call on every startup.
         """
         env_vars = load_env_vars()
         candidates = {
@@ -528,14 +568,31 @@ class DatabaseManager:
                 'api_key': env_vars.get('OMDB_API_KEY', ''),
             },
         }
+
         for service, config in candidates.items():
-            if self.get_integration(service) is not None:
-                self.logger.debug("Integration '%s' already in DB — skipping migration", service)
+            existing = self.get_integration(service)
+
+            if existing is not None and self._is_integration_valid(service, existing):
+                self.logger.debug(
+                    "Integration '%s' already in DB with valid credentials — skipping migration", service
+                )
                 continue
-            if not any(v for v in config.values() if v):
-                self.logger.debug("No credentials for '%s' in config.yaml — skipping", service)
+
+            # Check whether config.yaml provides the required fields.
+            required = _INTEGRATION_REQUIRED_FIELDS.get(service, [])
+            if not all(config.get(field) for field in required):
+                self.logger.debug(
+                    "Integration '%s': config.yaml missing required fields %s — skipping",
+                    service, required,
+                )
                 continue
-            self.logger.info("Migrating '%s' credentials from config.yaml to integrations table", service)
+
+            action = "Updating" if existing is not None else "Migrating"
+            safe_log = {k: v for k, v in config.items() if k not in ('api_key', 'session_token')}
+            self.logger.info(
+                "%s '%s' credentials from config.yaml → integrations table %s",
+                action, service, safe_log,
+            )
             self.set_integration(service, config)
 
     def ensure_connection(self):

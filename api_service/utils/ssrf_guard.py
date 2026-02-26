@@ -19,20 +19,13 @@ _BLOCKED_HOSTNAMES = {
 }
 
 
-def validate_url(url: str) -> None:
+def validate_url(url: str, allow_private: bool = False) -> None:
     """
     Validate a user-supplied URL against SSRF attack vectors.
 
-    Checks that the URL uses an allowed scheme (http/https), has a resolvable
-    hostname that does not point to a loopback, private, link-local, or
-    multicast address.
-
     Args:
         url: The URL string to validate.
-
-    Raises:
-        ValueError: If the URL is invalid, uses a disallowed scheme, or
-                    resolves to a blocked address.
+        allow_private: If True, private/internal IPs are allowed.
     """
     try:
         parsed = urlparse(url)
@@ -48,7 +41,7 @@ def validate_url(url: str) -> None:
     if not hostname:
         raise ValueError("URL has no hostname")
 
-    if hostname.lower() in _BLOCKED_HOSTNAMES:
+    if hostname.lower() in _BLOCKED_HOSTNAMES and not allow_private:
         raise ValueError("Connections to internal hosts are not allowed")
 
     try:
@@ -63,12 +56,15 @@ def validate_url(url: str) -> None:
         except ValueError:
             continue
 
-        if (
-            ip.is_loopback
-            or ip.is_private
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_reserved
-            or ip.is_unspecified
-        ):
-            raise ValueError("Connections to internal/private addresses are not allowed")
+        if not allow_private:
+            if (
+                ip.is_loopback
+                or ip.is_private
+                or ip.is_link_local
+                or ip.is_multicast
+                or ip.is_reserved
+                or ip.is_unspecified
+            ):
+                raise ValueError(
+                    "Connections to internal/private addresses are not allowed"
+                )
