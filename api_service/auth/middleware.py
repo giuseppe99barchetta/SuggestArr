@@ -68,6 +68,7 @@ PUBLIC_ROUTES: frozenset[str] = frozenset({
                             # (tells the SPA which screen to show).
     "/api/config/status",   # Minimal setup-completion flags needed by the
                             # SPA on every cold start (no secrets returned).
+    "/api/auth/logout",     # Token revocation (guarded internally by user-count check).
 })
 
 # ---------------------------------------------------------------------------
