@@ -298,6 +298,12 @@ class JellyfinHandler:
                     'already_requested': already_requested,
                     'already_downloaded': already_downloaded,
                     'would_request': would_request,
+                    'source': {
+                        'tmdb_id': source_tmdb_obj.get('id'),
+                        'title': source_tmdb_obj.get('title') or source_tmdb_obj.get('name', ''),
+                        'poster_path': source_tmdb_obj.get('poster_path'),
+                        'media_type': media_type,
+                    },
                 })
                 if would_request:
                     self.request_count += 1

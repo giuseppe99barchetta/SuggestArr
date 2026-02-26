@@ -170,6 +170,14 @@
               <i :class="isDryRunning[job.id] ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>
               Preview
             </button>
+            <button
+              v-if="lastDryRunCache[job.id]"
+              @click="reopenDryRun(job)"
+              class="btn btn-sm btn-outline btn-reopen"
+              title="Re-open last preview result"
+            >
+              <i class="fas fa-history"></i>
+            </button>
             <button @click="editJob(job)" class="btn btn-sm btn-outline" title="Edit job">
               <i class="fas fa-edit"></i>
               Edit
@@ -248,6 +256,7 @@
       v-if="dryRunResult"
       :job="dryRunResult.job"
       :items="dryRunResult.items"
+      :cached-at="dryRunResult.cachedAt"
       @close="dryRunResult = null"
       @run="onDryRunConfirm"
     />
@@ -296,6 +305,7 @@ export default {
       showCreateModal: false,
       showHistoryModal: false,
       dryRunResult: null,
+      lastDryRunCache: {},
       editingJob: null,
       jobToDelete: null,
       queueStatus: { queued: 0, submitting: 0, submitted: 0, failed: 0, total_pending: 0 },
@@ -515,7 +525,9 @@ export default {
         });
         const response = await jobsApi.dryRunJob(job.id);
         if (response.status === 'success') {
-          this.dryRunResult = { job, items: response.items || [] };
+          const result = { job, items: response.items || [], cachedAt: Date.now() };
+          this.lastDryRunCache[job.id] = result;
+          this.dryRunResult = result;
         } else {
           this.$toast.open({
             message: response.message || 'Dry run failed',
@@ -531,6 +543,10 @@ export default {
       } finally {
         this.isDryRunning[job.id] = false;
       }
+    },
+
+    reopenDryRun(job) {
+      this.dryRunResult = this.lastDryRunCache[job.id];
     },
 
     async onDryRunConfirm() {
@@ -1099,6 +1115,19 @@ export default {
 .btn-preview:hover:not(:disabled) {
   background: rgba(6, 182, 212, 0.08);
   border-color: rgba(6, 182, 212, 0.45);
+}
+
+.btn-reopen {
+  color: rgba(34, 211, 238, 0.6);
+  border-color: rgba(6, 182, 212, 0.15);
+  padding-left: 0.55rem;
+  padding-right: 0.55rem;
+}
+
+.btn-reopen:hover {
+  color: #22d3ee;
+  background: rgba(6, 182, 212, 0.08);
+  border-color: rgba(6, 182, 212, 0.35);
 }
 
 /* History Preview */

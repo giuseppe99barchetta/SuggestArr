@@ -7,7 +7,12 @@
           <i class="fas fa-eye header-icon"></i>
           <div>
             <h2>Dry Run Preview</h2>
-            <span class="job-subtitle">{{ job.name }}</span>
+            <span class="job-subtitle">
+              {{ job.name }}
+              <span v-if="cachedAt" class="cached-label">
+                &middot; from {{ formatCachedAt(cachedAt) }}
+              </span>
+            </span>
           </div>
         </div>
         <button @click="$emit('close')" class="close-btn" title="Close">
@@ -35,17 +40,11 @@
 
         <!-- View toggle (only when there are filtered items) -->
         <div v-if="hasFilterData && filteredOutCount > 0" class="view-toggle">
-          <button
-            :class="['toggle-btn', { active: showAll }]"
-            @click="showAll = true"
-          >
+          <button :class="['toggle-btn', { active: showAll }]" @click="showAll = true">
             <i class="fas fa-th-list"></i> All ({{ items.length }})
           </button>
-          <button
-            :class="['toggle-btn', { active: !showAll }]"
-            @click="showAll = false"
-          >
-            <i class="fas fa-check-circle"></i> Would be requested ({{ wouldRequestCount }})
+          <button :class="['toggle-btn', { active: !showAll }]" @click="showAll = false">
+            <i class="fas fa-check-circle"></i> Would request ({{ wouldRequestCount }})
           </button>
         </div>
 
@@ -66,12 +65,7 @@
           >
             <!-- Poster -->
             <div class="item-poster">
-              <img
-                v-if="item.poster_path"
-                :src="posterUrl(item)"
-                :alt="item.title"
-                loading="lazy"
-              />
+              <img v-if="item.poster_path" :src="posterUrl(item.poster_path)" :alt="item.title" loading="lazy" />
               <div v-else class="poster-placeholder">
                 <i :class="item.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"></i>
               </div>
@@ -79,20 +73,21 @@
 
             <!-- Info -->
             <div class="item-info">
+              <!-- Title row + status badge -->
               <div class="item-header-row">
                 <div class="item-title">{{ item.title }}</div>
-                <!-- Library status badges -->
                 <span v-if="item.already_downloaded" class="status-badge downloaded">
                   <i class="fas fa-check"></i> In Library
                 </span>
                 <span v-else-if="item.already_requested" class="status-badge requested">
-                  <i class="fas fa-clock"></i> Requested
+                  <i class="fas fa-clock"></i> Already Requested
                 </span>
                 <span v-else-if="itemWouldRequest(item)" class="status-badge will-request">
                   <i class="fas fa-plus"></i> Will Request
                 </span>
               </div>
 
+              <!-- Meta row -->
               <div class="item-meta">
                 <span class="media-type-badge" :class="item.media_type">
                   {{ item.media_type === 'tv' ? 'TV' : 'Movie' }}
@@ -120,11 +115,32 @@
                 </template>
               </div>
 
+              <!-- Skip reason (for items that won't be requested) -->
+              <div v-if="!itemWouldRequest(item)" class="skip-reason">
+                <i class="fas fa-ban"></i>
+                {{ skipReason(item) }}
+              </div>
+
+              <!-- AI rationale -->
               <div v-if="item.rationale" class="item-rationale">
                 <i class="fas fa-magic"></i> {{ item.rationale }}
               </div>
+
+              <!-- Overview -->
               <div v-if="item.overview" class="item-overview">
-                {{ truncate(item.overview, 130) }}
+                {{ truncate(item.overview, 120) }}
+              </div>
+
+              <!-- Source -->
+              <div v-if="item.source && item.source.title" class="item-source">
+                <span class="source-label">Similar to</span>
+                <img
+                  v-if="item.source.poster_path"
+                  :src="posterUrl(item.source.poster_path)"
+                  :alt="item.source.title"
+                  class="source-poster"
+                />
+                <span class="source-title">{{ item.source.title }}</span>
               </div>
             </div>
           </div>
@@ -148,20 +164,13 @@
 export default {
   name: 'DryRunResultModal',
   props: {
-    job: {
-      type: Object,
-      required: true
-    },
-    items: {
-      type: Array,
-      default: () => []
-    }
+    job: { type: Object, required: true },
+    items: { type: Array, default: () => [] },
+    cachedAt: { type: Number, default: null },
   },
   emits: ['close', 'run'],
   data() {
-    return {
-      showAll: true,
-    };
+    return { showAll: true };
   },
   computed: {
     hasFilterData() {
@@ -180,16 +189,13 @@ export default {
   },
   methods: {
     itemWouldRequest(item) {
-      // New format: explicit would_request flag
       if (item.would_request !== undefined) return item.would_request;
-      // Legacy format: no filter data means it passed everything
       return true;
     },
-    posterUrl(item) {
-      const p = item.poster_path;
-      if (!p) return null;
-      if (p.startsWith('http')) return p;
-      return `https://image.tmdb.org/t/p/w92${p}`;
+    posterUrl(path) {
+      if (!path) return null;
+      if (path.startsWith('http')) return path;
+      return `https://image.tmdb.org/t/p/w92${path}`;
     },
     releaseYear(item) {
       const date = item.release_date;
@@ -224,7 +230,26 @@ export default {
       if (filter.passed === null) return `${filter.label}: not configured`;
       return filter.label;
     },
-  }
+    skipReason(item) {
+      if (item.already_downloaded) return 'Already in your library';
+      if (item.already_requested) return 'Already pending request';
+      // Find first failing filter
+      const fr = item.filter_results;
+      if (fr) {
+        for (const [key, f] of Object.entries(fr)) {
+          if (key === 'passed') continue;
+          if (f && f.passed === false) {
+            return f.reason ? `${f.label}: ${f.reason}` : `Filtered by ${f.label}`;
+          }
+        }
+      }
+      return 'Filtered out';
+    },
+    formatCachedAt(ts) {
+      const d = new Date(ts);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    },
+  },
 };
 </script>
 
@@ -285,6 +310,11 @@ export default {
   color: var(--color-text-muted, #888);
 }
 
+.cached-label {
+  font-size: 0.75rem;
+  color: rgba(34, 211, 238, 0.6);
+}
+
 .close-btn {
   background: none;
   border: none;
@@ -336,9 +366,7 @@ export default {
   font-weight: 500;
 }
 
-.summary-count i {
-  opacity: 0.7;
-}
+.summary-count i { opacity: 0.7; }
 
 .summary-filtered {
   display: flex;
@@ -435,18 +463,14 @@ export default {
   transition: border-color 0.15s;
 }
 
-.item-card:hover {
-  border-color: rgba(255, 255, 255, 0.14);
-}
+.item-card:hover { border-color: rgba(255, 255, 255, 0.14); }
 
 .item-card.item-filtered {
   opacity: 0.6;
   border-color: rgba(255, 255, 255, 0.04);
 }
 
-.item-card.item-filtered:hover {
-  opacity: 0.8;
-}
+.item-card.item-filtered:hover { opacity: 0.8; }
 
 /* Poster */
 .item-poster {
@@ -480,7 +504,7 @@ export default {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.28rem;
 }
 
 .item-header-row {
@@ -531,6 +555,7 @@ export default {
   color: #fbbf24;
 }
 
+/* Meta */
 .item-meta {
   display: flex;
   align-items: center;
@@ -570,12 +595,12 @@ export default {
   gap: 0.25rem;
 }
 
-/* Filter badges row */
+/* Filter badges */
 .filter-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
-  margin-top: 0.1rem;
+  margin-top: 0.05rem;
 }
 
 .filter-badge {
@@ -590,14 +615,8 @@ export default {
   white-space: nowrap;
 }
 
-.filter-badge i {
-  font-size: 0.55rem;
-}
-
-.filter-value {
-  opacity: 0.75;
-  font-weight: 400;
-}
+.filter-badge i { font-size: 0.55rem; }
+.filter-value { opacity: 0.75; font-weight: 400; }
 
 .badge-pass {
   background: rgba(34, 197, 94, 0.12);
@@ -617,6 +636,19 @@ export default {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Skip reason */
+.skip-reason {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.73rem;
+  color: #fb923c;
+  opacity: 0.85;
+}
+
+.skip-reason i { font-size: 0.65rem; }
+
+/* AI rationale */
 .item-rationale {
   font-size: 0.78rem;
   color: #c084fc;
@@ -631,10 +663,46 @@ export default {
   margin-top: 0.1rem;
 }
 
+/* Overview */
 .item-overview {
   font-size: 0.78rem;
   color: var(--color-text-muted, #888);
   line-height: 1.4;
+}
+
+/* Source */
+.item-source {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.1rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.source-label {
+  font-size: 0.65rem;
+  color: var(--color-text-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.source-poster {
+  width: 16px;
+  height: 24px;
+  border-radius: 2px;
+  object-fit: cover;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.source-title {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Footer */
@@ -647,7 +715,6 @@ export default {
   flex-shrink: 0;
 }
 
-/* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -661,10 +728,7 @@ export default {
   transition: all 0.2s ease;
 }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-primary {
   background: var(--color-primary, #636363);
@@ -692,18 +756,10 @@ export default {
     border-radius: 0;
   }
 
-  .summary-bar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+  .summary-bar { flex-direction: column; align-items: flex-start; }
 
-  .modal-footer {
-    flex-direction: column-reverse;
-  }
+  .modal-footer { flex-direction: column-reverse; }
 
-  .modal-footer .btn {
-    width: 100%;
-    justify-content: center;
-  }
+  .modal-footer .btn { width: 100%; justify-content: center; }
 }
 </style>
