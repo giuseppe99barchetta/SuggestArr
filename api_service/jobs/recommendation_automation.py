@@ -170,6 +170,11 @@ class RecommendationAutomation:
         if filter_min_runtime is None:
             filter_min_runtime = self.env_vars.get('FILTER_MIN_RUNTIME', None)
 
+        # TVOD filter — job filter overrides global config
+        job_include_tvod = job_filters.get('include_tvod')
+        filter_include_tvod = bool(job_include_tvod) if job_include_tvod is not None \
+            else (self.env_vars.get('FILTER_INCLUDE_TVOD', False) is True)
+
         # IMDB / OMDb rating filter settings — job filter overrides global config
         rating_source = job_filters.get('rating_source', self.env_vars.get('FILTER_RATING_SOURCE', 'tmdb'))
 
@@ -245,6 +250,7 @@ class RecommendationAutomation:
             imdb_threshold=imdb_threshold,
             imdb_min_votes=imdb_min_votes,
             omdb_client=omdb_client,
+            include_tvod=filter_include_tvod,
         )
 
         # Determine which users to process

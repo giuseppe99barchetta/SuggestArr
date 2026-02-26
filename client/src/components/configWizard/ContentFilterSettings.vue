@@ -212,6 +212,19 @@
                 an additional subscription beyond basic Prime Video. Use the most specific provider
                 entry for your subscription to reduce false exclusions.
             </p>
+
+            <div class="toggle-item" style="margin-top: 0.75rem;">
+                <div class="toggle-info">
+                    <h4 class="toggle-title">Include rent/buy (TVOD) availability</h4>
+                    <p class="toggle-description">Also match providers available for rent or purchase, not just subscription (flatrate)</p>
+                </div>
+                <label class="switch">
+                    <input type="checkbox"
+                        :checked="config.FILTER_INCLUDE_TVOD"
+                        @change="handleUpdate('FILTER_INCLUDE_TVOD', $event.target.checked)">
+                    <span class="slider round"></span>
+                </label>
+            </div>
         </div>
 
         <!-- Language & Year Card (dashboard only) -->

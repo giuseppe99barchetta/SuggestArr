@@ -83,6 +83,7 @@ class ContentAutomation:
         filter_streaming_services = filter_streaming_raw if isinstance(filter_streaming_raw, list) else []
 
         filter_min_runtime = env_vars.get('FILTER_MIN_RUNTIME', None)
+        filter_include_tvod = env_vars.get('FILTER_INCLUDE_TVOD', False) is True
 
         # IMDB / OMDb rating filter settings
         rating_source = env_vars.get('FILTER_RATING_SOURCE', 'tmdb')
@@ -142,6 +143,7 @@ class ContentAutomation:
             imdb_threshold=imdb_threshold,
             imdb_min_votes=imdb_min_votes,
             omdb_client=omdb_client,
+            include_tvod=filter_include_tvod,
         )
         instance.logger.info("TMDb client initialized successfully")
 

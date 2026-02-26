@@ -210,6 +210,18 @@
       <small class="form-help">Content already available on these services will be skipped</small>
     </div>
 
+    <!-- Include TVOD Toggle -->
+    <div class="form-group">
+      <label class="toggle-item inline">
+        <input
+          v-model="localFilters.include_tvod"
+          type="checkbox"
+        />
+        <span class="toggle-label-jobs">Include rent/buy (TVOD) availability</span>
+      </label>
+      <small class="form-help">Also match providers available for rent or purchase, not just subscription (flatrate)</small>
+    </div>
+
     <!-- Genre Filters -->
     <div class="form-group">
       <label>Genres to Exclude</label>

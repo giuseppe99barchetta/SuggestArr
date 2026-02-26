@@ -34,6 +34,7 @@ def _make_client(
     filter_region_provider=None,
     filter_streaming_services=None,
     rating_source='tmdb',
+    include_tvod=False,
 ):
     return TMDbClient(
         api_key='fake_tmdb_key',
@@ -47,6 +48,7 @@ def _make_client(
         filter_region_provider=filter_region_provider,
         filter_streaming_services=filter_streaming_services,
         rating_source=rating_source,
+        include_tvod=include_tvod,
     )
 
 
@@ -384,13 +386,13 @@ class TestGetWatchProviders(unittest.IsolatedAsyncioTestCase):
 
     async def test_returns_true_when_excluded_service_found_via_rent(self):
         """
-        Regression: Amazon Video appears under 'rent', not 'flatrate'.
-        The old code only checked 'flatrate' and missed this, causing rent-only
-        providers to never be matched even when the user had them excluded.
+        When include_tvod=True, a provider available only under 'rent' is matched
+        against the excluded-services list and correctly flagged.
         """
         client = _make_client(
             filter_region_provider='IT',
             filter_streaming_services=[{'provider_id': '10'}],
+            include_tvod=True,
         )
         payload = {
             'results': {
@@ -407,10 +409,11 @@ class TestGetWatchProviders(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(name, 'Amazon Video')
 
     async def test_returns_true_when_excluded_service_found_via_buy(self):
-        """Provider available only for purchase should still be detected as excluded."""
+        """When include_tvod=True, a provider available only under 'buy' is detected as excluded."""
         client = _make_client(
             filter_region_provider='IT',
             filter_streaming_services=[{'provider_id': '10'}],
+            include_tvod=True,
         )
         payload = {
             'results': {
@@ -428,7 +431,7 @@ class TestGetWatchProviders(unittest.IsolatedAsyncioTestCase):
 
     async def test_prime_with_ads_not_excluded_but_amazon_video_rent_is(self):
         """
-        Regression for reported bug:
+        When include_tvod=True:
         - Amazon Prime Video with Ads (id=119) is NOT in the excluded list.
         - Amazon Video (id=10) IS in the excluded list.
         - Movie has Prime-with-Ads on flatrate AND Amazon Video on rent.
@@ -437,12 +440,64 @@ class TestGetWatchProviders(unittest.IsolatedAsyncioTestCase):
         client = _make_client(
             filter_region_provider='IT',
             filter_streaming_services=[{'provider_id': '10'}],  # Amazon Video only
+            include_tvod=True,
         )
         payload = {
             'results': {
                 'IT': {
                     'flatrate': [{'provider_id': 119, 'provider_name': 'Amazon Prime Video with Ads'}],
                     'rent': [{'provider_id': 10, 'provider_name': 'Amazon Video'}],
+                }
+            }
+        }
+        resp = _mock_response(200, payload)
+        session = _mock_session(resp)
+        with patch.object(client, '_get_session', AsyncMock(return_value=session)):
+            is_excluded, name = await client.get_watch_providers(155, 'movie')
+        self.assertTrue(is_excluded)
+        self.assertEqual(name, 'Amazon Video')
+
+
+    async def test_tvod_disabled_rent_only_provider_not_excluded(self):
+        """
+        Case A: include_tvod=False (default).
+        Movie is available only under 'rent' for Amazon Video.
+        The provider should NOT be matched → (False, None).
+        """
+        client = _make_client(
+            filter_region_provider='IT',
+            filter_streaming_services=[{'provider_id': '10'}],
+            include_tvod=False,
+        )
+        payload = {
+            'results': {
+                'IT': {
+                    'rent': [{'provider_id': 10, 'provider_name': 'Amazon Video'}]
+                }
+            }
+        }
+        resp = _mock_response(200, payload)
+        session = _mock_session(resp)
+        with patch.object(client, '_get_session', AsyncMock(return_value=session)):
+            is_excluded, name = await client.get_watch_providers(155, 'movie')
+        self.assertFalse(is_excluded)
+        self.assertIsNone(name)
+
+    async def test_tvod_enabled_rent_only_provider_is_excluded(self):
+        """
+        Case B: include_tvod=True.
+        Movie is available only under 'rent' for Amazon Video.
+        The provider SHOULD be matched → (True, 'Amazon Video').
+        """
+        client = _make_client(
+            filter_region_provider='IT',
+            filter_streaming_services=[{'provider_id': '10'}],
+            include_tvod=True,
+        )
+        payload = {
+            'results': {
+                'IT': {
+                    'rent': [{'provider_id': 10, 'provider_name': 'Amazon Video'}]
                 }
             }
         }

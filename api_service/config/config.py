@@ -102,6 +102,9 @@ def get_default_values():
         'FILTER_STREAMING_SERVICES': lambda: [],
         'FILTER_REGION_PROVIDER': lambda: None,
         'FILTER_MIN_RUNTIME': lambda: None,
+        # Include pay-per-view availability (rent/buy) in streaming checks
+        # Default: false (only subscription-based flatrate providers are considered)
+        'FILTER_INCLUDE_TVOD': lambda: False,
         'SUBPATH': lambda: None,
         'DB_TYPE': lambda: 'sqlite',
         'DB_HOST': lambda: None,
@@ -234,7 +237,7 @@ def get_config_sections():
                            'HONOR_JELLYSEER_DISCOVERY', 'FILTER_RELEASE_YEAR', 'FILTER_INCLUDE_NO_RATING',
                            'FILTER_LANGUAGE', 'FILTER_NUM_SEASONS', 'FILTER_STREAMING_SERVICES',
                            'FILTER_REGION_PROVIDER', 'EXCLUDE_DOWNLOADED', 'EXCLUDE_REQUESTED',
-                           'FILTER_MIN_RUNTIME'],
+                           'FILTER_MIN_RUNTIME', 'FILTER_INCLUDE_TVOD'],
         'advanced': ['SELECTED_USERS', 'LOG_LEVEL', 'ENABLE_BETA_FEATURES',
                      'ENABLE_ADVANCED_ALGORITHM', 'ENABLE_SOCIAL_FEATURES',
                      'ENABLE_DEBUG_MODE', 'ENABLE_PERFORMANCE_MONITORING', 'ENABLE_VISUAL_EFFECTS',

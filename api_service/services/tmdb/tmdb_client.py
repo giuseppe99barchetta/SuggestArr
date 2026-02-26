@@ -27,7 +27,7 @@ class TMDbClient:
                 include_no_ratings, filter_release_year, filter_language, filter_genre,
                 filter_region_provider, filter_streaming_services, filter_min_runtime=None,
                 rating_source='tmdb', imdb_threshold=None, imdb_min_votes=None,
-                omdb_client=None
+                omdb_client=None, include_tvod=False
                 ):
         """
         Initializes the TMDbClient with the provided API key.
@@ -37,6 +37,8 @@ class TMDbClient:
         :param imdb_threshold: Minimum IMDB rating threshold (0-100 scale).
         :param imdb_min_votes: Minimum IMDB vote count.
         :param omdb_client: OmdbClient instance for IMDB rating lookups, or None.
+        :param include_tvod: If True, also check rent/buy availability when matching streaming providers.
+                             If False (default), only subscription-based (flatrate) providers are checked.
         """
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.api_key = api_key
@@ -55,6 +57,7 @@ class TMDbClient:
         self.imdb_threshold = int(imdb_threshold) if imdb_threshold is not None else 60
         self.imdb_min_votes = int(imdb_min_votes) if imdb_min_votes is not None else 100
         self.omdb_client = omdb_client
+        self.include_tvod = include_tvod
         self.tmdb_api_url = "https://api.themoviedb.org/3"
         self.session = None
         self.logger.debug("TMDbClient initialized with API key: ***")
@@ -446,9 +449,8 @@ class TMDbClient:
         """
         Retrieves the streaming providers for a specific movie or TV show.
 
-        Checks all TMDb availability types (flatrate, rent, buy) so that
-        transactional providers (e.g. Amazon Video for rent) are correctly
-        matched against the excluded-services list.
+        By default only subscription-based (flatrate) providers are checked.
+        When include_tvod=True, rent and buy availability types are also checked.
 
         :param content_id: The TMDb ID of the movie or TV show.
         :param content_type: The type of content ('movie' or 'tv').
@@ -482,10 +484,14 @@ class TMDbClient:
                                 excluded_ids, region_data,
                             )
 
-                        # Check all availability types: subscription, rent, and purchase.
-                        # Previously only 'flatrate' was checked, which caused rent-only
-                        # providers (e.g. Amazon Video) to be silently ignored.
-                        for availability_type in ("flatrate", "rent", "buy"):
+                        # Build the list of availability types to check.
+                        # Always include subscription (flatrate); optionally include
+                        # pay-per-view types (rent/buy) when include_tvod is enabled.
+                        availability_types = ["flatrate"]
+                        if self.include_tvod:
+                            availability_types.extend(["rent", "buy"])
+
+                        for availability_type in availability_types:
                             for provider in region_data.get(availability_type, []):
                                 if str(provider['provider_id']) in excluded_ids:
                                     self.logger.debug(
@@ -497,8 +503,9 @@ class TMDbClient:
 
                         self.logger.debug(
                             "Content ID %s not matched in any availability type for region %s. "
-                            "Counts — flatrate:%d rent:%d buy:%d",
+                            "Checked types: %s. Counts — flatrate:%d rent:%d buy:%d",
                             content_id, self.region_provider,
+                            availability_types,
                             len(region_data.get('flatrate', [])),
                             len(region_data.get('rent', [])),
                             len(region_data.get('buy', [])),
