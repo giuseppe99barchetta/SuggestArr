@@ -318,7 +318,7 @@ export default {
     },
 
     async updateUserRole(user) {
-      this.$set(this.isSaving, user.id, true);
+      this.isSaving[user.id] = true;
       try {
         await updateUser(user.id, { role: user.role });
         this.$toast.success(`Role updated for ${user.username}`);
@@ -326,12 +326,12 @@ export default {
         this.$toast.error(err.response?.data?.error || 'Failed to update role');
         await this.loadUsers();
       } finally {
-        this.$set(this.isSaving, user.id, false);
+        this.isSaving[user.id] = false;
       }
     },
 
     async toggleActive(user) {
-      this.$set(this.isSaving, user.id, true);
+      this.isSaving[user.id] = true;
       const newActive = !user.is_active;
       try {
         await updateUser(user.id, { is_active: newActive });
@@ -341,7 +341,7 @@ export default {
         this.$toast.error(err.response?.data?.error || 'Failed to update status');
         await this.loadUsers();
       } finally {
-        this.$set(this.isSaving, user.id, false);
+        this.isSaving[user.id] = false;
       }
     },
 
