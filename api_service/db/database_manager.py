@@ -5,7 +5,7 @@ import psycopg2
 import mysql.connector
 import threading
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List, Tuple
 
 from api_service.config.config import load_env_vars
@@ -131,6 +131,29 @@ class DatabaseManager:
         self.logger.debug(f"Initializing {self.db_type} database with connection pooling")
         
         queries = {
+            # auth_users MUST come before refresh_tokens (foreign key dependency).
+            'auth_users': """
+                CREATE TABLE IF NOT EXISTS auth_users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'viewer',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_login TIMESTAMP,
+                    is_active INTEGER NOT NULL DEFAULT 1
+                )
+            """,
+            'refresh_tokens': """
+                CREATE TABLE IF NOT EXISTS refresh_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    token_hash TEXT UNIQUE NOT NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    revoked INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
+                )
+            """,
             'users': """
                 CREATE TABLE IF NOT EXISTS users (
                     user_id TEXT PRIMARY KEY,
@@ -1257,4 +1280,255 @@ class DatabaseManager:
                 return reset
         except Exception as e:
             self.logger.error("Failed to reset stale in-flight rows: %s", e)
+            return 0
+
+    # ---------------------------------------------------------------------------
+    # Auth-user methods (SuggestArr internal accounts — NOT external service users)
+    # ---------------------------------------------------------------------------
+
+    def _ph(self) -> str:
+        """Return the SQL placeholder character for the current DB type."""
+        return '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+
+    def get_auth_user_count(self) -> int:
+        """
+        Return the total number of SuggestArr auth accounts.
+
+        Used by the setup-mode check in the auth middleware: if the count is 0
+        the system is in first-run mode and all routes are temporarily public.
+
+        Returns:
+            int: Number of rows in the auth_users table.
+        """
+        ph = self._ph()
+        query = "SELECT COUNT(*) FROM auth_users"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            row = cursor.fetchone()
+            return int(row[0]) if row else 0
+
+    def create_auth_user(self, username: str, password_hash: str, role: str = 'viewer') -> int:
+        """
+        Insert a new SuggestArr auth account and return its primary key.
+
+        Args:
+            username:      Unique login name.
+            password_hash: bcrypt hash string produced by AuthService.hash_password.
+            role:          'admin' or 'viewer' (default 'viewer').
+
+        Returns:
+            int: The new row's primary key (id).
+
+        Raises:
+            DatabaseError: If the username already exists or the insert fails.
+        """
+        ph = self._ph()
+
+        if self.db_type == 'postgres':
+            query = (
+                f"INSERT INTO auth_users (username, password_hash, role) "
+                f"VALUES ({ph}, {ph}, {ph}) RETURNING id"
+            )
+        else:
+            query = (
+                f"INSERT INTO auth_users (username, password_hash, role) "
+                f"VALUES ({ph}, {ph}, {ph})"
+            )
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (username, password_hash, role))
+                if self.db_type == 'postgres':
+                    row = cursor.fetchone()
+                    new_id = row[0]
+                else:
+                    new_id = cursor.lastrowid
+                conn.commit()
+                self.logger.info("Created auth user: %s (role=%s)", username, role)
+                return int(new_id)
+        except Exception as exc:
+            raise DatabaseError(
+                error=f"Failed to create auth user: {exc}",
+                db_type=self.db_type,
+            ) from exc
+
+    def get_auth_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """
+        Look up a SuggestArr auth user by their login name.
+
+        Args:
+            username: Login name to search for (case-sensitive).
+
+        Returns:
+            dict | None: Row as a dict with keys id, username, password_hash,
+                         role, is_active, last_login — or None if not found.
+        """
+        ph = self._ph()
+        query = (
+            f"SELECT id, username, password_hash, role, is_active, last_login "
+            f"FROM auth_users WHERE username = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (username,))
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row[0],
+            "username": row[1],
+            "password_hash": row[2],
+            "role": row[3],
+            "is_active": bool(row[4]),
+            "last_login": row[5],
+        }
+
+    def get_auth_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Look up a SuggestArr auth user by their primary key.
+
+        Args:
+            user_id: Integer primary key from the auth_users table.
+
+        Returns:
+            dict | None: Same shape as get_auth_user_by_username, or None.
+        """
+        ph = self._ph()
+        query = (
+            f"SELECT id, username, password_hash, role, is_active, last_login "
+            f"FROM auth_users WHERE id = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id,))
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row[0],
+            "username": row[1],
+            "password_hash": row[2],
+            "role": row[3],
+            "is_active": bool(row[4]),
+            "last_login": row[5],
+        }
+
+    def update_last_login(self, user_id: int) -> None:
+        """
+        Record the current UTC timestamp as the last successful login time.
+
+        Args:
+            user_id: Primary key of the auth user who just logged in.
+        """
+        ph = self._ph()
+        now = datetime.utcnow().isoformat()
+        query = f"UPDATE auth_users SET last_login = {ph} WHERE id = {ph}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (now, user_id))
+            conn.commit()
+
+    # ---------------------------------------------------------------------------
+    # Refresh-token methods
+    # ---------------------------------------------------------------------------
+
+    def store_refresh_token(self, user_id: int, token_hash: str, expires_at: datetime) -> None:
+        """
+        Persist the SHA-256 hash of a newly issued refresh token.
+
+        Only the hash is stored, never the raw token, so a database dump does
+        not yield usable refresh tokens.
+
+        Args:
+            user_id:    Primary key of the owning auth user.
+            token_hash: SHA-256 hex digest of the raw refresh token.
+            expires_at: Expiry timestamp (timezone-aware recommended).
+        """
+        ph = self._ph()
+        if expires_at.tzinfo is not None:
+            expires_at = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
+        query = (
+            f"INSERT INTO refresh_tokens (user_id, token_hash, expires_at) "
+            f"VALUES ({ph}, {ph}, {ph})"
+        )
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (user_id, token_hash, expires_at))
+                conn.commit()
+        except Exception as exc:
+            raise DatabaseError(
+                error=f"Failed to store refresh token: {exc}",
+                db_type=self.db_type,
+            ) from exc
+
+    def get_refresh_token(self, token_hash: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a non-revoked refresh token record by its hash.
+
+        Args:
+            token_hash: SHA-256 hex digest of the raw token received from the cookie.
+
+        Returns:
+            dict | None: Row with keys id, user_id, expires_at — or None if
+                         not found or already revoked.
+        """
+        ph = self._ph()
+        query = (
+            f"SELECT id, user_id, expires_at FROM refresh_tokens "
+            f"WHERE token_hash = {ph} AND revoked = 0"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (token_hash,))
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return {"id": row[0], "user_id": row[1], "expires_at": row[2]}
+
+    def revoke_refresh_token(self, token_hash: str) -> None:
+        """
+        Mark a refresh token as revoked so it can no longer be used.
+
+        Called on logout.  The row is kept (not deleted) so that token-reuse
+        attacks (presenting a revoked token) can be detected in the future.
+
+        Args:
+            token_hash: SHA-256 hex digest of the token to invalidate.
+        """
+        ph = self._ph()
+        query = f"UPDATE refresh_tokens SET revoked = 1 WHERE token_hash = {ph}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (token_hash,))
+            conn.commit()
+
+    def cleanup_expired_refresh_tokens(self) -> int:
+        """
+        Delete refresh tokens that have expired or been revoked.
+
+        Intended to be called periodically (e.g. daily) to keep the table small.
+
+        Returns:
+            int: Number of rows deleted.
+        """
+        ph = self._ph()
+        now = datetime.utcnow().isoformat()
+        query = (
+            f"DELETE FROM refresh_tokens "
+            f"WHERE expires_at < {ph} OR revoked = 1"
+        )
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (now,))
+                deleted = cursor.rowcount
+                conn.commit()
+                if deleted:
+                    self.logger.debug("Cleaned up %d expired/revoked refresh tokens.", deleted)
+                return deleted
+        except Exception as exc:
+            self.logger.error("Failed to clean up refresh tokens: %s", exc)
             return 0

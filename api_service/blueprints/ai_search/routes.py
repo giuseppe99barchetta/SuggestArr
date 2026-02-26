@@ -7,6 +7,7 @@ import asyncio
 import aiohttp
 from flask import Blueprint, jsonify, request
 
+from api_service.auth.limiter import limiter
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
@@ -18,6 +19,7 @@ logger = LoggerManager.get_logger("AiSearchRoute")
 
 
 @ai_search_bp.route("/query", methods=["POST"])
+@limiter.limit("10 per minute")
 async def ai_search_query():
     """Execute an AI-powered semantic search.
 
@@ -84,6 +86,7 @@ async def ai_search_query():
 
 
 @ai_search_bp.route("/request", methods=["POST"])
+@limiter.limit("20 per minute")
 async def ai_search_request():
     """Request a media item via Jellyseer/Overseer.
 

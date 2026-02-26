@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.config.config import load_env_vars
+from api_service.utils.ssrf_guard import validate_url
 
 logger = LoggerManager.get_logger("JellyfinRoute")
 jellyfin_bp = Blueprint('jellyfin', __name__)
@@ -20,6 +21,11 @@ async def get_jellyfin_library():
         if not api_url or not api_key:
             logger.warning("Missing API URL or token in Jellyfin libraries request")
             return jsonify({'message': 'API URL and token are required', 'type': 'error'}), 400
+
+        try:
+            validate_url(api_url)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'type': 'error'}), 400
 
         logger.debug(f"Connecting to Jellyfin server at: {api_url}")
         async with JellyfinClient(api_url=api_url, token=api_key) as jellyfin_client:
@@ -53,6 +59,11 @@ async def test_jellyfin_connection():
                 'message': 'API key and URL are required',
                 'status': 'error'
             }), 400
+
+        try:
+            validate_url(api_url)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'status': 'error'}), 400
 
         logger.debug(f"Testing connection to Jellyfin server at: {api_url}")
         
@@ -114,6 +125,11 @@ async def get_jellyfin_users():
         if not api_url or not api_key:
             logger.warning("Missing API URL or token in Jellyfin users request")
             return jsonify({'message': 'API URL and token are required', 'type': 'error'}), 400
+
+        try:
+            validate_url(api_url)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'type': 'error'}), 400
 
         async with JellyfinClient(api_url=api_url, token=api_key) as jellyfin_client:
             users = await jellyfin_client.get_all_users()

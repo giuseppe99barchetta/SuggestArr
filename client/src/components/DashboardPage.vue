@@ -25,6 +25,15 @@
           <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank" rel="noopener noreferrer">
             <img src="@/assets/logo.png" alt="SuggestArr Logo" class="logo">
           </a>
+          <button
+            v-if="authSetupComplete"
+            @click="handleLogout"
+            class="btn btn-outline btn-sm logout-btn"
+            title="Sign out"
+          >
+            <i class="fas fa-sign-out-alt"></i>
+            <span class="logout-label">Sign out</span>
+          </button>
         </div>
       </div>
 
@@ -305,6 +314,7 @@ import Footer from './AppFooter.vue';
 import OnboardingTour from './OnboardingTour.vue';
 import { useBackgroundImage } from '@/composables/useBackgroundImage';
 import { useVersionCheck } from '@/composables/useVersionCheck';
+import { useAuth } from '@/composables/useAuth';
 import '@/assets/styles/dashboardPage.css';
 
 // Import tab components
@@ -334,7 +344,8 @@ export default {
   setup() {
     const { currentBackgroundUrl, nextBackgroundUrl, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
     const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
-    
+    const { authSetupComplete, logout } = useAuth();
+
     return {
       currentBackgroundUrl,
       nextBackgroundUrl,
@@ -346,7 +357,9 @@ export default {
       currentImageTag,
       currentBuildDate,
       updateAvailable,
-      checkForUpdates
+      checkForUpdates,
+      authSetupComplete,
+      logout
     };
   },
     data() {
@@ -512,6 +525,10 @@ export default {
     }
   },
   methods: {
+    async handleLogout() {
+      await this.logout();
+      this.$router.push('/login');
+    },
     restartTour() {
       localStorage.removeItem(TOUR_STORAGE_KEY);
       this.showTour = true;

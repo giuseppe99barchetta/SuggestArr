@@ -3,8 +3,9 @@ Main Flask application for managing environment variables and running processes.
 """
 from concurrent.futures import ThreadPoolExecutor
 import os
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 from asgiref.wsgi import WsgiToAsgi
 import logging
 import atexit
@@ -13,6 +14,10 @@ from api_service.utils.utils import AppUtils
 from api_service.config.logger_manager import LoggerManager
 from api_service.config.config import load_env_vars
 
+from api_service.auth.middleware import enforce_authentication
+from api_service.auth.limiter import limiter
+
+from api_service.blueprints.auth.routes import auth_bp
 from api_service.blueprints.jellyfin.routes import jellyfin_bp
 from api_service.blueprints.seer.routes import seer_bp
 from api_service.blueprints.plex.routes import plex_bp
@@ -63,8 +68,82 @@ def create_app():
         AppUtils.print_welcome_message() # Print only for last worker
 
     application = Flask(__name__, static_folder='../static')
-    CORS(application)
 
+    # ------------------------------------------------------------------
+    # Reverse-proxy trust
+    # Trust one hop of X-Forwarded-For / X-Forwarded-Proto so that:
+    #   - Rate limiting uses the real client IP (not the proxy IP).
+    #   - Secure cookie detection works correctly behind HTTPS terminators.
+    # ------------------------------------------------------------------
+    application.wsgi_app = ProxyFix(application.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+    # ------------------------------------------------------------------
+    # CORS
+    # Default: allow all origins so existing LAN deployments keep working.
+    # Operators who expose SuggestArr to the internet SHOULD restrict this
+    # via the SUGGESTARR_ALLOWED_ORIGINS env var (comma-separated list).
+    # Example: SUGGESTARR_ALLOWED_ORIGINS=https://suggestarr.home.example.com
+    # ------------------------------------------------------------------
+    allowed_origins_env = os.environ.get('SUGGESTARR_ALLOWED_ORIGINS', '').strip()
+    if allowed_origins_env:
+        allowed_origins = [o.strip() for o in allowed_origins_env.split(',') if o.strip()]
+        CORS(application,
+             origins=allowed_origins,
+             supports_credentials=True,
+             allow_headers=["Authorization", "Content-Type"],
+             methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+        logger.info("CORS restricted to: %s", allowed_origins)
+    else:
+        # Wildcard — backward-compatible default for LAN deployments.
+        CORS(application)
+
+    # ------------------------------------------------------------------
+    # Rate limiter
+    # ------------------------------------------------------------------
+    limiter.init_app(application)
+
+    # ------------------------------------------------------------------
+    # Authentication middleware
+    # Runs before every request and enforces JWT on all /api/* routes
+    # except those explicitly listed in auth.middleware.PUBLIC_ROUTES.
+    # ------------------------------------------------------------------
+    if os.environ.get("SUGGESTARR_AUTH_DISABLED", "").lower() == "true":
+        logger.warning("=" * 60)
+        logger.warning("!! SECURITY WARNING: Authentication is DISABLED !!")
+        logger.warning("!! All API endpoints are publicly accessible.   !!")
+        logger.warning("!! Set SUGGESTARR_AUTH_DISABLED=false to re-enable.")
+        logger.warning("=" * 60)
+
+    application.before_request(enforce_authentication)
+
+    # ------------------------------------------------------------------
+    # JSON error handlers — never leak stack traces or internal state
+    # ------------------------------------------------------------------
+    @application.errorhandler(401)
+    def handle_401(exc):
+        return jsonify({"error": "Authentication required"}), 401
+
+    @application.errorhandler(403)
+    def handle_403(exc):
+        return jsonify({"error": "Insufficient permissions"}), 403
+
+    @application.errorhandler(404)
+    def handle_404(exc):
+        return jsonify({"error": "Not found"}), 404
+
+    @application.errorhandler(429)
+    def handle_429(exc):
+        return jsonify({"error": "Too many requests — please try again later"}), 429
+
+    @application.errorhandler(500)
+    def handle_500(exc):
+        logger.error("Unhandled internal error: %s", exc, exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+    # ------------------------------------------------------------------
+    # Blueprint registration
+    # ------------------------------------------------------------------
+    application.register_blueprint(auth_bp, url_prefix='/api/auth')
     application.register_blueprint(jellyfin_bp, url_prefix='/api/jellyfin')
     application.register_blueprint(seer_bp, url_prefix='/api/seer')
     application.register_blueprint(plex_bp, url_prefix='/api/plex')

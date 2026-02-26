@@ -2,6 +2,7 @@ import os
 from flask import Blueprint, request, jsonify
 import yaml
 import requests
+from api_service.auth.middleware import require_role
 from api_service.config.config import (
     load_env_vars, save_env_vars, clear_env_vars,
     get_config_sections, get_config_section, save_config_section,
@@ -13,25 +14,53 @@ from api_service.db.database_manager import DatabaseManager
 logger = LoggerManager.get_logger("ConfigRoute")
 config_bp = Blueprint('config', __name__)
 
+# Keys whose plaintext values must never appear in API responses.
+_SECRET_KEYS = frozenset({
+    'TMDB_API_KEY', 'OMDB_API_KEY',
+    'PLEX_TOKEN', 'JELLYFIN_TOKEN',
+    'SEER_TOKEN', 'SEER_USER_PSW', 'SEER_SESSION_TOKEN',
+    'DB_PASSWORD',
+    'OPENAI_API_KEY',
+    'TRAKT_CLIENT_SECRET', 'TRAKT_ACCESS_TOKEN', 'TRAKT_REFRESH_TOKEN',
+})
+
+_REDACTED = "***"
+
+
+def _redact_config(config: dict) -> dict:
+    """Return a copy of config with non-empty secret values replaced by '***'."""
+    return {k: (_REDACTED if k in _SECRET_KEYS and v else v) for k, v in config.items()}
+
+
+def _merge_secrets(incoming: dict, existing: dict) -> dict:
+    """Replace '***' sentinel values in incoming with the real value from existing config."""
+    merged = dict(incoming)
+    for key in _SECRET_KEYS:
+        if merged.get(key) == _REDACTED:
+            merged[key] = existing.get(key)
+    return merged
+
 @config_bp.route('/fetch', methods=['GET'])
+@require_role('admin')
 def fetch_config():
     """
     Load current configuration in JSON format.
     """
     try:
         config = load_env_vars()
-        return jsonify(config), 200
+        return jsonify(_redact_config(config)), 200
     except Exception as e:
         logger.error(f'Error loading configuration: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error loading configuration', 'status': 'error'}), 500
 
 @config_bp.route('/save', methods=['POST'])
+@require_role('admin')
 def save_config():
     """
     Save environment variables.
     """
     try:
-        config_data = request.json
+        config_data = _merge_secrets(request.json or {}, load_env_vars())
         save_env_vars(config_data)
         DatabaseManager().refresh_config()
         return jsonify({'message': 'Configuration saved successfully!', 'status': 'success'}), 200
@@ -40,6 +69,7 @@ def save_config():
         return jsonify({'message': 'Error saving configuration', 'status': 'error'}), 500
 
 @config_bp.route('/reset', methods=['POST'])
+@require_role('admin')
 def reset_config():
     """
     Reset environment variables.
@@ -52,6 +82,7 @@ def reset_config():
         return jsonify({'message': 'Error clearing configuration', 'status': 'error'}), 500
 
 @config_bp.route('/test-db-connection', methods=['POST'])
+@require_role('admin')
 def test_db_connection():
     """
     Test database connection.
@@ -79,12 +110,14 @@ def test_db_connection():
         return jsonify({'message': 'Error testing database connection', 'status': 'error'}), 500
 
 @config_bp.route('/sections', methods=['GET'])
-def get_config_sections():
+@require_role('admin')
+def get_config_sections_endpoint():
     """
     Get available configuration sections.
     """
     try:
-        sections = get_config_sections()
+        from api_service.config.config import get_config_sections as _get_sections
+        sections = _get_sections()
         return jsonify({
             'sections': sections,
             'status': 'success'
@@ -94,6 +127,7 @@ def get_config_sections():
         return jsonify({'message': 'Error getting configuration sections', 'status': 'error'}), 500
 
 @config_bp.route('/section/<section_name>', methods=['GET'])
+@require_role('admin')
 def get_config_section_endpoint(section_name):
     """
     Get a specific configuration section.
@@ -102,7 +136,7 @@ def get_config_section_endpoint(section_name):
         section_data = get_config_section(section_name)
         return jsonify({
             'section': section_name,
-            'data': section_data,
+            'data': _redact_config(section_data),
             'status': 'success'
         }), 200
     except ValueError as e:
@@ -113,6 +147,7 @@ def get_config_section_endpoint(section_name):
         return jsonify({'message': 'Error getting configuration section', 'status': 'error'}), 500
 
 @config_bp.route('/section/<section_name>', methods=['POST'])
+@require_role('admin')
 def save_config_section_endpoint(section_name):
     """
     Save a specific configuration section.
@@ -122,6 +157,7 @@ def save_config_section_endpoint(section_name):
         if not section_data:
             return jsonify({'message': 'No configuration data provided', 'status': 'error'}), 400
 
+        section_data = _merge_secrets(section_data, load_env_vars())
         save_config_section(section_name, section_data)
         return jsonify({
             'message': f'Configuration section {section_name} saved successfully!',
@@ -145,12 +181,6 @@ def get_setup_status():
         setup_completed = config.get('SETUP_COMPLETED', False)
         is_complete = is_setup_complete(config)
 
-        # Auto-update setup completion if it's actually complete but not marked
-        if not setup_completed and is_complete:
-            config['SETUP_COMPLETED'] = True
-            save_env_vars(config)
-            setup_completed = True
-
         return jsonify({
             'setup_completed': setup_completed,
             'is_complete': is_complete,
@@ -163,6 +193,7 @@ def get_setup_status():
         return jsonify({'message': 'Error getting setup status', 'status': 'error'}), 500
 
 @config_bp.route('/complete-setup', methods=['POST'])
+@require_role('admin')
 def complete_setup():
     """
     Mark setup as completed.
@@ -189,6 +220,7 @@ def complete_setup():
         return jsonify({'message': 'Error completing setup', 'status': 'error'}), 500
 
 @config_bp.route('/log-level', methods=['GET'])
+@require_role('admin')
 def get_log_level():
     """
     Get current log level.
@@ -205,6 +237,7 @@ def get_log_level():
         return jsonify({'message': 'Error getting log level', 'status': 'error'}), 500
 
 @config_bp.route('/log-level', methods=['POST'])
+@require_role('admin')
 def set_log_level():
     """
     Set log level.
@@ -233,6 +266,7 @@ def set_log_level():
         return jsonify({'message': 'Error setting log level', 'status': 'error'}), 500
 
 @config_bp.route('/pool-stats', methods=['GET'])
+@require_role('admin')
 def get_pool_statistics():
     """
     Get database connection pool statistics.
@@ -253,6 +287,7 @@ def get_pool_statistics():
         return jsonify({'message': 'Error getting pool statistics', 'status': 'error'}), 500
 
 @config_bp.route('/force_run', methods=['POST'])
+@require_role('admin')
 def force_run_automation():
     """
     Force run the automation script immediately.
@@ -273,6 +308,7 @@ def force_run_automation():
         return jsonify({'message': 'Error forcing automation run', 'status': 'error'}), 500
 
 @config_bp.route('/test-db', methods=['POST'])
+@require_role('admin')
 def test_database_connection():
     """
     Test database connection with current configuration.

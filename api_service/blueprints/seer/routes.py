@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 import aiohttp
 from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.config.logger_manager import LoggerManager
+from api_service.utils.ssrf_guard import validate_url
 
 logger = LoggerManager().get_logger("SeerRoute")
 seer_bp = Blueprint('seer', __name__)
@@ -17,8 +18,13 @@ async def get_users():
         api_key = config_data.get('SEER_TOKEN')
         session_token = config_data.get('SEER_SESSION_TOKEN')
 
-        if not api_key:
-            return jsonify({'message': 'API key is required', 'type': 'error'}), 400
+        if not api_key or not api_url:
+            return jsonify({'message': 'API key and URL are required', 'type': 'error'}), 400
+
+        try:
+            validate_url(api_url)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'type': 'error'}), 400
 
         # Initialize JellyseerClient with the provided API key
         async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as jellyseer_client:
@@ -92,6 +98,11 @@ async def test_seer_connection():
                 'status': 'error'
             }), 400
 
+        try:
+            validate_url(api_url)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'status': 'error'}), 400
+
         # First do a simple HTTP connectivity test
         http_success, http_message, http_data = await _simple_seer_http_test(api_url, api_key)
 
@@ -163,8 +174,13 @@ async def login_seer():
         username = config_data.get('SEER_USER_NAME')
         password = config_data.get('SEER_PASSWORD')
 
-        if not username or not password:
-            return jsonify({'message': 'Username and password are required', 'type': 'error'}), 400
+        if not username or not password or not api_url:
+            return jsonify({'message': 'Username, password and URL are required', 'type': 'error'}), 400
+
+        try:
+            validate_url(api_url)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'type': 'error'}), 400
 
         # Initialize the Jellyseer/Overseer client with the credentials provided
         async with SeerClient(
@@ -204,6 +220,11 @@ async def get_radarr_servers():
         if not api_key or not api_url:
             return jsonify({'message': 'API key and URL are required', 'type': 'error'}), 400
 
+        try:
+            validate_url(api_url)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'type': 'error'}), 400
+
         async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as seer_client:
             servers = await seer_client.get_radarr_servers()
             return jsonify({'servers': servers or []}), 200
@@ -226,6 +247,11 @@ async def get_sonarr_servers():
 
         if not api_key or not api_url:
             return jsonify({'message': 'API key and URL are required', 'type': 'error'}), 400
+
+        try:
+            validate_url(api_url)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'type': 'error'}), 400
 
         async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as seer_client:
             servers = await seer_client.get_sonarr_servers()

@@ -7,6 +7,8 @@ import threading
 import traceback
 from flask import Blueprint, jsonify, request
 
+from api_service.auth.limiter import limiter
+from api_service.auth.middleware import require_role
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
@@ -117,6 +119,7 @@ def get_job(job_id: int):
 
 
 @jobs_bp.route('', methods=['POST'])
+@require_role('admin')
 def create_job():
     """
     Create a new job (discover or recommendation).
@@ -191,6 +194,7 @@ def create_job():
 
 
 @jobs_bp.route('/<int:job_id>', methods=['PUT'])
+@require_role('admin')
 def update_job(job_id: int):
     """
     Update an existing discover job.
@@ -254,6 +258,7 @@ def update_job(job_id: int):
 
 
 @jobs_bp.route('/<int:job_id>', methods=['DELETE'])
+@require_role('admin')
 def delete_job(job_id: int):
     """
     Delete a discover job.
@@ -291,6 +296,7 @@ def delete_job(job_id: int):
 
 
 @jobs_bp.route('/<int:job_id>/toggle', methods=['POST'])
+@require_role('admin')
 def toggle_job(job_id: int):
     """
     Toggle a discover job's enabled status.
@@ -336,6 +342,8 @@ def toggle_job(job_id: int):
 
 
 @jobs_bp.route('/<int:job_id>/run', methods=['POST'])
+@require_role('admin')
+@limiter.limit("5 per minute")
 def run_job_now(job_id: int):
     """
     Execute a job immediately.
@@ -382,6 +390,8 @@ def run_job_now(job_id: int):
 
 
 @jobs_bp.route('/<int:job_id>/dry-run', methods=['POST'])
+@require_role('admin')
+@limiter.limit("10 per minute")
 def dry_run_job(job_id: int):
     """
     Simulate job execution without making actual requests to download clients.
@@ -464,6 +474,8 @@ def _run_all_jobs_in_background():
 
 
 @jobs_bp.route('/run-all', methods=['POST'])
+@require_role('admin')
+@limiter.limit("5 per minute")
 def run_all_jobs():
     """
     Execute all enabled jobs immediately in a background thread.
@@ -800,6 +812,7 @@ def get_llm_status():
 
 
 @jobs_bp.route('/sync-ai-setting', methods=['POST'])
+@require_role('admin')
 def sync_ai_setting():
     """
     Sync the use_llm flag across all recommendation jobs based on ENABLE_ADVANCED_ALGORITHM config.
@@ -844,6 +857,8 @@ def sync_ai_setting():
 
 
 @jobs_bp.route('/llm-test', methods=['POST'])
+@require_role('admin')
+@limiter.limit("5 per minute")
 def test_llm_connection():
     """
     Test the LLM connection by making a real API call with the provided configuration.
@@ -887,6 +902,7 @@ def test_llm_connection():
 
 
 @jobs_bp.route('/import-config', methods=['POST'])
+@require_role('admin')
 def import_config():
     """
     One-time import of YAML config settings into the database.
