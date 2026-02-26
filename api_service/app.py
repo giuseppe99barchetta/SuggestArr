@@ -250,6 +250,10 @@ try:
     # call it a second time here.
     db_manager = DatabaseManager()
 
+    # One-time migration: copy integration credentials from config.yaml into
+    # the integrations table if not already present.
+    db_manager.migrate_integrations_from_config()
+
     # Sync system job from YAML config (backwards compatibility)
     sync_result = sync_system_job_from_config()
     if sync_result['status'] == 'success':

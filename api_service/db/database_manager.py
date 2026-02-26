@@ -234,6 +234,14 @@ class DatabaseManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(tmdb_id, media_type)
                 )
+            """,
+            'integrations': """
+                CREATE TABLE IF NOT EXISTS integrations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    service TEXT UNIQUE NOT NULL,
+                    config_json TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
             """
         }
         
@@ -431,6 +439,98 @@ class DatabaseManager:
             except Exception as e:
                 self.logger.error(f"Failed to migrate discover_jobs table: {e}")
                 # Don't raise - table might not exist yet
+
+    # ------------------------------------------------------------------
+    # Integrations helpers
+    # ------------------------------------------------------------------
+
+    def get_integration(self, service: str) -> Optional[dict]:
+        """
+        Retrieve the stored config for a named service integration.
+
+        Args:
+            service: Integration service name (e.g. 'jellyfin', 'seer').
+
+        Returns:
+            dict with stored config, or None if no row exists.
+        """
+        query = "SELECT config_json FROM integrations WHERE service = ?"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type in ['mysql', 'mariadb', 'postgres']:
+                query = query.replace("?", "%s")
+            cursor.execute(query, (service,))
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return json.loads(row[0])
+
+    def set_integration(self, service: str, config: dict) -> None:
+        """
+        Insert or replace the config for a named service integration.
+
+        Args:
+            service: Integration service name.
+            config: Configuration dict to persist as JSON.
+        """
+        config_json = json.dumps(config)
+        now = datetime.utcnow()
+
+        if self.db_type == 'sqlite':
+            query = (
+                "INSERT OR REPLACE INTO integrations (service, config_json, updated_at) "
+                "VALUES (?, ?, ?)"
+            )
+            params = (service, config_json, now)
+        elif self.db_type == 'postgres':
+            query = (
+                "INSERT INTO integrations (service, config_json, updated_at) VALUES (%s, %s, %s) "
+                "ON CONFLICT (service) DO UPDATE SET config_json = EXCLUDED.config_json, "
+                "updated_at = EXCLUDED.updated_at"
+            )
+            params = (service, config_json, now)
+        else:  # mysql / mariadb
+            query = (
+                "INSERT INTO integrations (service, config_json, updated_at) VALUES (%s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE config_json = VALUES(config_json), updated_at = VALUES(updated_at)"
+            )
+            params = (service, config_json, now)
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+
+    def migrate_integrations_from_config(self) -> None:
+        """
+        One-time startup migration: seed the integrations table from config.yaml.
+
+        For each known service, if no row exists in the integrations table,
+        credentials from config.yaml are inserted. Existing DB entries are
+        never overwritten, so this is idempotent and safe to call on every
+        application startup.
+        """
+        env_vars = load_env_vars()
+        candidates = {
+            'jellyfin': {
+                'api_url': env_vars.get('JELLYFIN_API_URL', ''),
+                'api_key': env_vars.get('JELLYFIN_TOKEN', ''),
+            },
+            'seer': {
+                'api_url': env_vars.get('SEER_API_URL', ''),
+                'api_key': env_vars.get('SEER_TOKEN', ''),
+                'session_token': env_vars.get('SEER_SESSION_TOKEN'),
+            },
+        }
+        for service, config in candidates.items():
+            if self.get_integration(service) is not None:
+                self.logger.debug("Integration '%s' already in DB — skipping migration", service)
+                continue
+            if not any(v for v in config.values() if v):
+                self.logger.debug("No credentials for '%s' in config.yaml — skipping", service)
+                continue
+            self.logger.info("Migrating '%s' credentials from config.yaml to integrations table", service)
+            self.set_integration(service, config)
 
     def ensure_connection(self):
         """Legacy method - now handled by connection pool."""

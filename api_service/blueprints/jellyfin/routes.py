@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.config.logger_manager import LoggerManager
-from api_service.config.config import load_env_vars
+from api_service.db.database_manager import DatabaseManager
 from api_service.utils.ssrf_guard import validate_url
 
 logger = LoggerManager.get_logger("JellyfinRoute")
@@ -10,13 +10,15 @@ jellyfin_bp = Blueprint('jellyfin', __name__)
 
 def _load_jellyfin_config():
     """
-    Load Jellyfin credentials from global config.
+    Load Jellyfin credentials from the integrations table.
 
     Returns:
         tuple: (api_url, api_key) — both strings, may be empty.
     """
-    env_vars = load_env_vars()
-    return env_vars.get('JELLYFIN_API_URL', ''), env_vars.get('JELLYFIN_TOKEN', '')
+    config = DatabaseManager().get_integration('jellyfin')
+    if config is None:
+        return '', ''
+    return config.get('api_url', ''), config.get('api_key', '')
 
 
 @jellyfin_bp.route('/libraries', methods=['GET'])

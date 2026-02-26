@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 import aiohttp
 from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.config.logger_manager import LoggerManager
-from api_service.config.config import load_env_vars
+from api_service.db.database_manager import DatabaseManager
 from api_service.utils.ssrf_guard import validate_url
 
 logger = LoggerManager().get_logger("SeerRoute")
@@ -11,16 +11,18 @@ seer_bp = Blueprint('seer', __name__)
 
 def _load_seer_config():
     """
-    Load Seer credentials from global config.
+    Load Seer credentials from the integrations table.
 
     Returns:
         tuple: (api_url, api_key, session_token) — strings, may be empty/None.
     """
-    env_vars = load_env_vars()
+    config = DatabaseManager().get_integration('seer')
+    if config is None:
+        return '', '', None
     return (
-        env_vars.get('SEER_API_URL', ''),
-        env_vars.get('SEER_TOKEN', ''),
-        env_vars.get('SEER_SESSION_TOKEN'),
+        config.get('api_url', ''),
+        config.get('api_key', ''),
+        config.get('session_token'),
     )
 
 
