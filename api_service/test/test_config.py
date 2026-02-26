@@ -79,6 +79,7 @@ class TestConfig(unittest.TestCase):
         "OPENAI_BASE_URL": "https://api.openai.com/v1",
         "LLM_MODEL": "gpt-4-0613",
         "SEER_REQUEST_DELAY": 0.5,
+        "FILTER_INCLUDE_TVOD": "false",
     }
 
     def test_save_default_env_vars(self):

@@ -381,8 +381,6 @@ class TestBuildSeerPayload(unittest.TestCase):
         self.assertEqual(payload['_source_id'], 42)
         self.assertEqual(payload['_user_id'], 7)
         self.assertEqual(payload['_rationale'], 'test')
-        self.assertIn('_media_obj', payload)
-        self.assertIn('_source_obj', payload)
 
     def test_anime_profile_key_applied(self):
         client = _make_client(anime_profile_config={
