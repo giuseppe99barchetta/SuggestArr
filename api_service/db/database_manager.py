@@ -521,6 +521,12 @@ class DatabaseManager:
                 'api_key': env_vars.get('SEER_TOKEN', ''),
                 'session_token': env_vars.get('SEER_SESSION_TOKEN'),
             },
+            'tmdb': {
+                'api_key': env_vars.get('TMDB_API_KEY', ''),
+            },
+            'omdb': {
+                'api_key': env_vars.get('OMDB_API_KEY', ''),
+            },
         }
         for service, config in candidates.items():
             if self.get_integration(service) is not None:

@@ -1070,12 +1070,12 @@ export default {
       this.jellyfinFetching = true;
       this.jellyfinConnected = false;
       try {
-        const libRes = await fetchJellyfinLibraries(this.localConfig.JELLYFIN_API_URL.trim(), this.localConfig.JELLYFIN_TOKEN.trim());
+        const libRes = await fetchJellyfinLibraries();
         this.jellyfinLibraries = libRes.data.items || [];
         this.jellyfinConnected = true;
         this.loadSavedJellyfinLibraries();
         try {
-          const userRes = await fetchJellyfinUsers(this.localConfig.JELLYFIN_API_URL.trim(), this.localConfig.JELLYFIN_TOKEN.trim());
+          const userRes = await fetchJellyfinUsers();
           this.jellyfinUsers = userRes.data.users || [];
           this.loadSavedJellyfinUsers();
         } catch (e) { console.error('Error fetching Jellyfin users:', e); }
@@ -1103,12 +1103,12 @@ export default {
       this.plexFetching = true;
       this.plexConnected = false;
       try {
-        const libRes = await fetchPlexLibraries(this.localConfig.PLEX_API_URL.trim(), this.localConfig.PLEX_TOKEN.trim());
+        const libRes = await fetchPlexLibraries();
         this.plexLibraries = libRes.data.items || [];
         this.plexConnected = true;
         this.loadSavedPlexLibraries();
         try {
-          const userRes = await fetchPlexUsers(this.localConfig.PLEX_API_URL.trim(), this.localConfig.PLEX_TOKEN.trim());
+          const userRes = await fetchPlexUsers();
           this.plexUsers = userRes.data.users || [];
           this.loadSavedPlexUsers();
         } catch (e) { console.error('Error fetching Plex users:', e); }
@@ -1218,7 +1218,7 @@ export default {
       this.seerConnected = false;
       this.seerUsers = [];
       try {
-        const response = await testJellyseerApi(this.localConfig.SEER_API_URL.trim(), this.localConfig.SEER_TOKEN.trim());
+        const response = await testJellyseerApi();
         this.seerUsers = (response.data.users || []).filter(user => user.isLocal);
         this.seerConnected = true;
         this.loadSavedSeerUser();
@@ -1263,8 +1263,8 @@ export default {
       this.serversLoaded = false;
       try {
         const [radarrRes, sonarrRes] = await Promise.all([
-          fetchRadarrServers(this.localConfig.SEER_API_URL, this.localConfig.SEER_TOKEN, this.localConfig.SEER_SESSION_TOKEN),
-          fetchSonarrServers(this.localConfig.SEER_API_URL, this.localConfig.SEER_TOKEN, this.localConfig.SEER_SESSION_TOKEN)
+          fetchRadarrServers(),
+          fetchSonarrServers()
         ]);
         this.radarrServers = radarrRes.data.servers || [];
         this.sonarrServers = sonarrRes.data.servers || [];
