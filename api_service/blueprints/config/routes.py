@@ -10,6 +10,7 @@ from api_service.config.config import (
 )
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.config_service import ConfigService
 
 logger = LoggerManager.get_logger("ConfigRoute")
 config_bp = Blueprint('config', __name__)
@@ -456,3 +457,71 @@ def get_docker_digest(tag):
     except requests.exceptions.RequestException as e:
         logger.error(f'Docker digest API error for {tag}: {e}', exc_info=True)
         return jsonify({'status': 'error', 'message': 'Failed to retrieve Docker digest'}), 500
+
+
+@config_bp.route('/export', methods=['GET'])
+@require_role('admin')
+def export_config():
+    """
+    Export the full application configuration as a portable JSON snapshot.
+
+    Requires admin role.  The response includes API keys in plain text so that
+    a configuration backup can be fully restored; callers must treat the
+    response as sensitive.
+
+    Returns:
+        200 JSON with keys: version, integrations, settings.
+        500 on unexpected server error.
+    """
+    try:
+        snapshot = ConfigService.export_config()
+        logger.info("Admin config export requested by user '%s'", _current_username())
+        return jsonify(snapshot), 200
+    except Exception as e:
+        logger.error('Error exporting configuration: %s', e, exc_info=True)
+        return jsonify({'message': 'Error exporting configuration', 'status': 'error'}), 500
+
+
+@config_bp.route('/import', methods=['POST'])
+@require_role('admin')
+def import_config():
+    """
+    Import a configuration snapshot produced by the export endpoint.
+
+    Requires admin role.  Accepts a JSON body matching the export format
+    (version, integrations, settings).  Integrations are upserted into the DB;
+    settings are merged into config.yaml.
+
+    Returns:
+        200 on success.
+        400 if the body is missing, not JSON, or the version is unsupported.
+        500 on unexpected server error.
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({'message': 'Request body must be valid JSON', 'status': 'error'}), 400
+
+        ConfigService.import_config(data)
+        logger.info("Admin config import completed by user '%s'", _current_username())
+        return jsonify({'message': 'Configuration imported successfully', 'status': 'success'}), 200
+    except ValueError as e:
+        logger.warning('Config import rejected: %s', e)
+        return jsonify({'message': str(e), 'status': 'error'}), 400
+    except Exception as e:
+        logger.error('Error importing configuration: %s', e, exc_info=True)
+        return jsonify({'message': 'Error importing configuration', 'status': 'error'}), 500
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _current_username() -> str:
+    """Return the username of the authenticated user, or '<unknown>'."""
+    try:
+        from flask import g
+        user = getattr(g, 'current_user', None)
+        return user.get('username', '<unknown>') if user else '<unknown>'
+    except Exception:
+        return '<unknown>'

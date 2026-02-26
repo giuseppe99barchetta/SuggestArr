@@ -325,6 +325,7 @@ import SettingsRequests from './settings/SettingsRequests.vue';
 import SettingsJobs from './settings/SettingsJobs.vue';
 import AiSearchPage from './settings/AiSearchPage.vue';
 import LogsComponent from './LogsComponent.vue';
+import { exportConfig, importConfig } from '@/api/api';
 
 const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
 
@@ -826,26 +827,30 @@ export default {
     async exportConfig() {
       this.loadingMessage = 'Exporting configuration...';
       this.isLoading = true;
+    
       try {
-        const response = await axios.get('/api/config/fetch');
+        const response = await exportConfig();
         const configData = response.data;
-
-        const blob = new Blob([JSON.stringify(configData, null, 2)], {
-          type: 'application/json',
-        });
+      
+        const blob = new Blob(
+          [JSON.stringify(configData, null, 2)],
+          { type: 'application/json' }
+        );
+      
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
         link.download = `suggestarr-config-${new Date().toISOString().split('T')[0]}.json`;
         link.click();
         URL.revokeObjectURL(url);
-
+      
         this.$toast.open({
           message: 'Configuration exported successfully!',
           type: 'success',
           duration: 3000,
           position: 'top-right'
         });
+      
       } catch (error) {
         this.$toast.open({
           message: 'Failed to export configuration',
@@ -853,6 +858,7 @@ export default {
           duration: 5000,
           position: 'top-right'
         });
+      
         console.error('Error exporting config:', error);
       } finally {
         this.isLoading = false;
@@ -869,26 +875,27 @@ export default {
 
       this.loadingMessage = 'Importing configuration...';
       this.isLoading = true;
-      
+
       try {
         const text = await file.text();
         const configData = JSON.parse(text);
 
-        await axios.post('/api/config/save', configData);
+        await importConfig(configData);
+
         await this.loadConfig();
 
         this.$toast.open({
           message: 'Configuration imported successfully!',
           type: 'success',
           duration: 3000,
-          position: 'top-right'
+          position: 'top-right',
         });
       } catch (error) {
         this.$toast.open({
-          message: 'Failed to import: Invalid file format',
+          message: 'Failed to import configuration',
           type: 'error',
           duration: 5000,
-          position: 'top-right'
+          position: 'top-right',
         });
         console.error('Error importing config:', error);
       } finally {

@@ -99,3 +99,13 @@ export const aiSearchRequest = (tmdbId, mediaType, rationale = '', metadata = {}
 export const aiSearchStatus = () => {
     return axios.get('/api/ai-search/status');
 };
+
+// Config export: download a full configuration snapshot (admin only, includes API keys)
+export const exportConfig = () => {
+    return axios.get('/api/config/export', { responseType: 'json' });
+};
+
+// Config import: restore a configuration snapshot (admin only)
+export const importConfig = (snapshot) => {
+    return axios.post('/api/config/import', snapshot);
+};
