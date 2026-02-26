@@ -27,6 +27,61 @@ _SECRET_KEYS = frozenset({
 
 _REDACTED = "***"
 
+# Bidirectional mapping between flat config keys (YAML / API format) and the
+# DB integrations table (service / field format).
+_INTEGRATION_TO_FLAT: dict = {
+    'tmdb':     {'api_key': 'TMDB_API_KEY'},
+    'jellyfin': {'api_url': 'JELLYFIN_API_URL', 'api_key': 'JELLYFIN_TOKEN'},
+    'seer':     {'api_url': 'SEER_API_URL', 'api_key': 'SEER_TOKEN',
+                 'session_token': 'SEER_SESSION_TOKEN'},
+    'omdb':     {'api_key': 'OMDB_API_KEY'},
+}
+_FLAT_TO_INTEGRATION: dict = {
+    flat_key: (service, db_field)
+    for service, field_map in _INTEGRATION_TO_FLAT.items()
+    for db_field, flat_key in field_map.items()
+}
+
+
+def _expand_integrations_into_flat(flat: dict, integrations: dict) -> None:
+    """Inject non-empty DB integration values into a flat config dict (in-place).
+
+    The integrations table is authoritative for the keys in ``_INTEGRATION_TO_FLAT``.
+    Only non-empty values from the DB override the flat dict, so YAML-only keys
+    (e.g. PLEX_TOKEN) are left untouched.
+
+    Args:
+        flat: Flat config dict to update (e.g. from ``load_env_vars``).
+        integrations: Nested dict returned by ``get_all_integrations``.
+    """
+    for service, field_map in _INTEGRATION_TO_FLAT.items():
+        svc_cfg = integrations.get(service) or {}
+        for db_field, flat_key in field_map.items():
+            val = svc_cfg.get(db_field)
+            if val:
+                flat[flat_key] = val
+
+
+def _sync_integrations_from_flat(db, flat: dict) -> None:
+    """Upsert DB integration rows from a flat config dict.
+
+    Only keys present in *flat* with a non-empty, non-redacted value are written.
+    Missing keys leave the existing DB row untouched (merge, not replace).
+
+    Args:
+        db: ``DatabaseManager`` instance.
+        flat: Flat config dict (e.g. from ``request.json`` or ``load_env_vars``).
+    """
+    service_updates: dict = {}
+    for flat_key, (service, db_field) in _FLAT_TO_INTEGRATION.items():
+        val = flat.get(flat_key)
+        if val and val != _REDACTED:
+            service_updates.setdefault(service, {})[db_field] = val
+
+    for service, changes in service_updates.items():
+        existing = db.get_integration(service) or {}
+        db.set_integration(service, {**existing, **changes})
+
 
 def _redact_config(config: dict) -> dict:
     """Return a copy of config with non-empty secret values replaced by '***'."""
@@ -34,36 +89,56 @@ def _redact_config(config: dict) -> dict:
 
 
 def _merge_secrets(incoming: dict, existing: dict) -> dict:
-    """Replace '***' sentinel values in incoming with the real value from existing config."""
+    """Replace '***' sentinel values in incoming with the real value from existing config.
+
+    Falls back to the DB integrations table for keys that are only stored there
+    (not in config.yaml / ``existing``).
+    """
     merged = dict(incoming)
+    # Build a flat view of DB-backed values as a fallback for redacted secrets.
+    db_flat: dict = {}
+    try:
+        _expand_integrations_into_flat(db_flat, DatabaseManager().get_all_integrations())
+    except Exception:
+        pass
     for key in _SECRET_KEYS:
         if merged.get(key) == _REDACTED:
-            merged[key] = existing.get(key)
+            merged[key] = existing.get(key) or db_flat.get(key)
     return merged
 
 @config_bp.route('/fetch', methods=['GET'])
 @require_role('admin')
 def fetch_config():
     """
-    Load current configuration in JSON format.
+    Load current configuration in JSON format (admin sees real keys).
+
+    DB-backed integration values (TMDB_API_KEY, JELLYFIN_TOKEN, etc.) are
+    injected into the flat response so the frontend can read them directly,
+    even when config.yaml does not contain them.
     """
     try:
         config = load_env_vars()
-        return jsonify(_redact_config(config)), 200
+        db = DatabaseManager()
+        db_integrations = db.get_all_integrations()
+        # Surface DB-backed keys in the flat format the frontend expects.
+        _expand_integrations_into_flat(config, db_integrations)
+        config['integrations'] = db_integrations
+        return jsonify(config), 200
     except Exception as e:
         logger.error(f'Error loading configuration: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error loading configuration', 'status': 'error'}), 500
-
 @config_bp.route('/save', methods=['POST'])
 @require_role('admin')
 def save_config():
     """
-    Save environment variables.
+    Save environment variables and sync the DB integrations table.
     """
     try:
         config_data = _merge_secrets(request.json or {}, load_env_vars())
         save_env_vars(config_data)
-        DatabaseManager().refresh_config()
+        db = DatabaseManager()
+        _sync_integrations_from_flat(db, config_data)
+        db.refresh_config()
         return jsonify({'message': 'Configuration saved successfully!', 'status': 'success'}), 200
     except Exception as e:
         logger.error(f'Error saving configuration: {str(e)}', exc_info=True)
@@ -131,13 +206,17 @@ def get_config_sections_endpoint():
 @require_role('admin')
 def get_config_section_endpoint(section_name):
     """
-    Get a specific configuration section.
+    Get a specific configuration section (admin only – real keys, no redaction).
+
+    DB-backed integration values are injected so the response is always
+    up-to-date even when config.yaml is stale or missing those keys.
     """
     try:
         section_data = get_config_section(section_name)
+        _expand_integrations_into_flat(section_data, DatabaseManager().get_all_integrations())
         return jsonify({
             'section': section_name,
-            'data': _redact_config(section_data),
+            'data': section_data,
             'status': 'success'
         }), 200
     except ValueError as e:
@@ -151,7 +230,7 @@ def get_config_section_endpoint(section_name):
 @require_role('admin')
 def save_config_section_endpoint(section_name):
     """
-    Save a specific configuration section.
+    Save a specific configuration section and sync the DB integrations table.
     """
     try:
         section_data = request.json
@@ -160,6 +239,9 @@ def save_config_section_endpoint(section_name):
 
         section_data = _merge_secrets(section_data, load_env_vars())
         save_config_section(section_name, section_data)
+        # Keep the integrations table in sync whenever service credentials are saved.
+        db = DatabaseManager()
+        _sync_integrations_from_flat(db, section_data)
         return jsonify({
             'message': f'Configuration section {section_name} saved successfully!',
             'section': section_name,
@@ -176,9 +258,18 @@ def save_config_section_endpoint(section_name):
 def get_setup_status():
     """
     Get setup completion status.
+
+    The integrations table is checked as a fallback so that ``has_tmdb_key``
+    and ``is_complete`` remain accurate even when config.yaml is missing
+    DB-backed keys (e.g. after an import or a clean migration).
     """
     try:
         config = load_env_vars()
+        # Inject DB-backed values so is_setup_complete sees the real state.
+        try:
+            _expand_integrations_into_flat(config, DatabaseManager().get_all_integrations())
+        except Exception:
+            pass
         setup_completed = config.get('SETUP_COMPLETED', False)
         is_complete = is_setup_complete(config)
 
