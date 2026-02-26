@@ -123,10 +123,11 @@ def fetch_config():
         # Surface DB-backed keys in the flat format the frontend expects.
         _expand_integrations_into_flat(config, db_integrations)
         config['integrations'] = db_integrations
-        return jsonify(config), 200
+        return jsonify(_redact_config(config)), 200
     except Exception as e:
         logger.error(f'Error loading configuration: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error loading configuration', 'status': 'error'}), 500
+    
 @config_bp.route('/save', methods=['POST'])
 @require_role('admin')
 def save_config():
