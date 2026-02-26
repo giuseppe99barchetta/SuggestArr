@@ -75,7 +75,15 @@ async def _run_worker() -> int:
             tmdb_id = item['tmdb_id']
             media_type = item['media_type']
             retry_count = item['retry_count']
-            payload = json.loads(item['payload'])
+            try:
+                payload = json.loads(item['payload'])
+            except (json.JSONDecodeError, TypeError) as exc:
+                logger.error(
+                    "Queue worker: corrupt payload for %s tmdb:%s (row %s) — %s. Marking as failed.",
+                    media_type, tmdb_id, row_id, exc,
+                )
+                db.mark_pending_failed(row_id, retry_count)
+                continue
 
             # Skip if the item was submitted by another path while it sat in the queue
             if db.check_request_exists(media_type, tmdb_id):

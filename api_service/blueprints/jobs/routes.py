@@ -3,6 +3,7 @@ API routes for managing jobs (discover and recommendation).
 Provides CRUD operations and job execution endpoints.
 """
 import asyncio
+import threading
 import traceback
 from flask import Blueprint, jsonify, request
 
@@ -16,6 +17,9 @@ from api_service.jobs.recommendation_automation import execute_recommendation_jo
 logger = LoggerManager.get_logger("JobsRoute")
 jobs_bp = Blueprint('jobs', __name__)
 jobs_bp.strict_slashes = False
+
+_run_all_lock = threading.Lock()
+_run_all_running = False
 
 
 def run_async(coro):
@@ -375,6 +379,70 @@ def run_job_now(job_id: int):
     except Exception as e:
         logger.error(f"Error running job {job_id}: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
+
+
+def _run_all_jobs_in_background():
+    """
+    Run all enabled jobs sequentially in a background thread.
+    Each job is executed with its own event loop to avoid conflicts.
+    """
+    global _run_all_running
+    try:
+        repository = JobRepository()
+        jobs = [j for j in repository.get_all_jobs() if j.get('enabled', True)]
+        logger.info(f"Force run all: executing {len(jobs)} job(s)")
+
+        for job in jobs:
+            job_id = job['id']
+            job_type = job.get('job_type', 'discover')
+            try:
+                logger.info(f"Force run all: starting {job_type} job {job_id} ({job.get('name', '')})")
+                if job_type == 'recommendation':
+                    asyncio.run(execute_recommendation_job(job_id))
+                else:
+                    asyncio.run(execute_discover_job(job_id))
+                logger.info(f"Force run all: job {job_id} completed")
+            except Exception as e:
+                logger.error(f"Force run all: error in job {job_id}: {e}", exc_info=True)
+
+        logger.info("Force run all: finished")
+    finally:
+        with _run_all_lock:
+            _run_all_running = False
+
+
+@jobs_bp.route('/run-all', methods=['POST'])
+def run_all_jobs():
+    """
+    Execute all enabled jobs immediately in a background thread.
+    Returns immediately (202) while jobs run asynchronously.
+
+    Returns:
+        JSON with status and number of jobs started, or 409 if already running,
+        or 404 if no enabled jobs exist.
+    """
+    global _run_all_running
+    with _run_all_lock:
+        if _run_all_running:
+            return jsonify({'status': 'busy', 'message': 'A force run is already in progress.'}), 409
+        _run_all_running = True
+
+    repository = JobRepository()
+    jobs = [j for j in repository.get_all_jobs() if j.get('enabled', True)]
+
+    if not jobs:
+        with _run_all_lock:
+            _run_all_running = False
+        return jsonify({'status': 'error', 'message': 'No enabled jobs found.'}), 404
+
+    thread = threading.Thread(target=_run_all_jobs_in_background, daemon=True)
+    thread.start()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Running {len(jobs)} job(s) in the background.',
+        'jobs_count': len(jobs)
+    }), 202
 
 
 @jobs_bp.route('/<int:job_id>/history', methods=['GET'])

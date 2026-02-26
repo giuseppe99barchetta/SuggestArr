@@ -108,7 +108,7 @@ class JellyfinClient:
 
             params = {
                 "Recursive": "true",
-                "IncludeItemTypes": "Movie,Episode",
+                "IncludeItemTypes": "Movie,Series",
                 "Fields": "ProviderIds",
                 "ParentID": library_id
             }
@@ -198,7 +198,7 @@ class JellyfinClient:
                 "IncludeItemTypes": "Movie,Episode",
                 "Limit": self.max_content_fetch,
                 "ParentId": library_id,
-                "Fields": "ProviderIds",
+                "Fields": "ProviderIds,SeriesProviderIds",
             }
 
             self.logger.debug(
@@ -282,7 +282,7 @@ class JellyfinClient:
             "IncludeItemTypes": "Movie,Episode",
             "Limit": self.max_content_fetch,
             "ParentId": library_id,
-            "Fields": "ProviderIds",
+            "Fields": "ProviderIds,SeriesProviderIds",
         }
 
         self.logger.debug(

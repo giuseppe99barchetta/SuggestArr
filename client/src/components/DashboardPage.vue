@@ -888,12 +888,13 @@ export default {
 
     async forceRunAutomation() {
       this.isForceRunning = true;
-      this.loadingMessage = 'Manually running fetch...';
+      this.loadingMessage = 'Manually running jobs...';
 
       try {
-        await axios.post('/api/automation/force_run');
+        const response = await axios.post('/api/jobs/run-all');
+        const count = response.data?.jobs_count ?? '';
         this.$toast.open({
-          message: 'Force run started in the background!',
+          message: count ? `Running ${count} job(s) in the background!` : 'Jobs started in the background!',
           type: 'success',
           duration: 3000,
           position: 'top-right'
@@ -906,6 +907,13 @@ export default {
             duration: 4000,
             position: 'top-right'
           });
+        } else if (error.response && error.response.status === 404) {
+          this.$toast.open({
+            message: 'No enabled jobs found. Create a job first.',
+            type: 'warning',
+            duration: 5000,
+            position: 'top-right'
+          });
         } else {
           this.$toast.open({
             message: 'Force run failed, see logs for details.',
@@ -913,7 +921,7 @@ export default {
             duration: 5000,
             position: 'top-right'
           });
-          console.error('Error force running automation:', error);
+          console.error('Error force running jobs:', error);
         }
       } finally {
         this.isForceRunning = false;

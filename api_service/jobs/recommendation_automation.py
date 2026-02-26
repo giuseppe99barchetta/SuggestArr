@@ -114,6 +114,12 @@ class RecommendationAutomation:
         max_similar_movie = job_filters.get('max_similar_movie', int(self.env_vars.get('MAX_SIMILAR_MOVIE', '3')))
         max_similar_tv = job_filters.get('max_similar_tv', int(self.env_vars.get('MAX_SIMILAR_TV', '2')))
         max_content = job_filters.get('max_content', int(self.env_vars.get('MAX_CONTENT_CHECKS', '10')))
+
+        # Enforce media_type restriction: zero out the unwanted type
+        if media_type == 'movie':
+            max_similar_tv = 0
+        elif media_type == 'tv':
+            max_similar_movie = 0
         search_size = job_filters.get('search_size', int(self.env_vars.get('SEARCH_SIZE', '20')))
 
         # TMDB filters from job configuration

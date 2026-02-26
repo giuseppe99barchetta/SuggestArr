@@ -240,8 +240,12 @@ class SeerClient:
         data["_user_id"] = user.get('id') if user else None
         data["_rationale"] = rationale
         data["_is_anime"] = is_anime
-        data["_media_obj"] = media    # worker needs this for save_metadata
-        data["_source_obj"] = source  # worker needs this for save_metadata
+        # Store only fields required by save_metadata to keep the payload compact
+        _meta_fields = ('id', 'title', 'name', 'overview', 'release_date',
+                        'poster_path', 'rating', 'votes', 'origin_country',
+                        'genre_ids', 'logo_path', 'backdrop_path')
+        data["_media_obj"] = {k: media[k] for k in _meta_fields if k in media}
+        data["_source_obj"] = {k: source[k] for k in _meta_fields if k in source} if source else None
 
         return data
 
