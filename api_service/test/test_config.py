@@ -1,4 +1,7 @@
+import os
+import tempfile
 import unittest
+from unittest.mock import patch
 
 from test import _verbose_dict_compare
 from api_service.config.config import load_env_vars, save_env_vars, get_default_values
@@ -81,6 +84,17 @@ class TestConfig(unittest.TestCase):
         "SEER_REQUEST_DELAY": 0.5,
         "FILTER_INCLUDE_TVOD": "false",
     }
+
+    def setUp(self):
+        """Redirect all config I/O to a temporary file so the real config is never touched."""
+        self._tmp = tempfile.NamedTemporaryFile(suffix='.yaml', delete=False)
+        self._tmp.close()
+        self._patch = patch('api_service.config.config.CONFIG_PATH', self._tmp.name)
+        self._patch.start()
+
+    def tearDown(self):
+        self._patch.stop()
+        os.unlink(self._tmp.name)
 
     def test_save_default_env_vars(self):
         """The default values should be able to be saved/loaded."""
