@@ -21,6 +21,7 @@ class ExecutionResult:
     results_count: int
     requested_count: int
     error_message: Optional[str] = None
+    dry_run_items: Optional[List[Dict[str, Any]]] = None
 
 
 class DiscoverAutomation:
@@ -103,12 +104,17 @@ class DiscoverAutomation:
         instance.logger.info("DiscoverAutomation initialized successfully")
         return instance
 
-    async def run(self) -> ExecutionResult:
+    async def run(self, dry_run: bool = False) -> ExecutionResult:
         """
         Execute the discover job.
 
+        Args:
+            dry_run: If True, simulate execution without making actual requests.
+                     Returns items that would be queued without touching download clients.
+
         Returns:
-            ExecutionResult with execution details.
+            ExecutionResult with execution details. When dry_run=True, dry_run_items
+            contains the list of media that would have been requested.
         """
         if not self.job_data:
             return ExecutionResult(
@@ -118,8 +124,8 @@ class DiscoverAutomation:
                 error_message="Job not initialized"
             )
 
-        self.logger.info(f"Starting discover job: {self.job_data['name']}")
-        exec_id = self.repository.log_execution_start(self.job_id)
+        self.logger.info(f"{'[DRY RUN] ' if dry_run else ''}Starting discover job: {self.job_data['name']}")
+        exec_id = None if dry_run else self.repository.log_execution_start(self.job_id)
 
         try:
             from contextlib import AsyncExitStack
@@ -137,23 +143,27 @@ class DiscoverAutomation:
 
             self.logger.info(f"Discovered {results_count} items")
 
-            # Filter and request content
-            requested_count = await self.filter_and_request(results)
+            # Filter and (optionally) request content
+            requested_count, dry_run_items = await self.filter_and_request(results, dry_run=dry_run)
 
-            self.logger.info(f"Job completed: {results_count} found, {requested_count} requested")
-
-            # Log success
-            self.repository.log_execution_end(
-                exec_id=exec_id,
-                status='completed',
-                results_count=results_count,
-                requested_count=requested_count
+            self.logger.info(
+                f"{'[DRY RUN] ' if dry_run else ''}Job completed: "
+                f"{results_count} found, {requested_count} {'would be ' if dry_run else ''}requested"
             )
+
+            if not dry_run:
+                self.repository.log_execution_end(
+                    exec_id=exec_id,
+                    status='completed',
+                    results_count=results_count,
+                    requested_count=requested_count
+                )
 
             return ExecutionResult(
                 success=True,
                 results_count=results_count,
-                requested_count=requested_count
+                requested_count=requested_count,
+                dry_run_items=dry_run_items
             )
 
         except Exception as e:
@@ -161,14 +171,14 @@ class DiscoverAutomation:
             self.logger.error(f"Job failed: {error_msg}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
 
-            # Log failure
-            self.repository.log_execution_end(
-                exec_id=exec_id,
-                status='failed',
-                results_count=0,
-                requested_count=0,
-                error_message=error_msg
-            )
+            if not dry_run and exec_id is not None:
+                self.repository.log_execution_end(
+                    exec_id=exec_id,
+                    status='failed',
+                    results_count=0,
+                    requested_count=0,
+                    error_message=error_msg
+                )
 
             return ExecutionResult(
                 success=False,
@@ -195,17 +205,22 @@ class DiscoverAutomation:
         else:
             return await self.tmdb_discover.discover_tv(filters, max_results)
 
-    async def filter_and_request(self, results: List[Dict[str, Any]]) -> int:
+    async def filter_and_request(
+        self, results: List[Dict[str, Any]], dry_run: bool = False
+    ):
         """
-        Filter discovered content and request via Seer.
+        Filter discovered content and request via Seer (or simulate in dry-run mode).
 
         Args:
             results: List of discovered content items.
+            dry_run: If True, collect qualifying items without making any requests.
 
         Returns:
-            Number of items successfully requested.
+            Tuple of (requested_count, dry_run_items).
+            dry_run_items is a list of normalised item dicts when dry_run=True, else None.
         """
         requested_count = 0
+        dry_run_items: Optional[List[Dict[str, Any]]] = [] if dry_run else None
         media_type = self.job_data.get('media_type', 'movie')
 
         for item in results:
@@ -234,11 +249,14 @@ class DiscoverAutomation:
                     self.logger.debug(f"Skipping {title}: already requested in Seer")
                     continue
 
+                if dry_run:
+                    self.logger.info(f"[DRY RUN] Would request {media_type}: {title} (ID: {tmdb_id})")
+                    dry_run_items.append(self._format_dry_run_item(media_type, item))
+                    requested_count += 1
+                    continue
+
                 # Request the content
                 self.logger.info(f"Requesting {media_type}: {title} (ID: {tmdb_id})")
-
-                # Pass the full item dict to request_media (it needs title for save_metadata)
-                # For discover jobs: source=None (no source media), user=None (no user)
                 success = await self.seer_client.request_media(media_type, item, source=None, user=None)
 
                 if success:
@@ -251,7 +269,30 @@ class DiscoverAutomation:
                 self.logger.error(f"Error processing {title}: {str(e)}")
                 continue
 
-        return requested_count
+        return requested_count, dry_run_items
+
+    @staticmethod
+    def _format_dry_run_item(media_type: str, item: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Normalise a TMDb item dict for dry-run output.
+
+        Args:
+            media_type: 'movie' or 'tv'.
+            item: Raw TMDb item dict.
+
+        Returns:
+            Normalised dict with consistent field names.
+        """
+        return {
+            'tmdb_id': item.get('id'),
+            'media_type': media_type,
+            'title': item.get('title') or item.get('name'),
+            'release_date': item.get('release_date') or item.get('first_air_date'),
+            'poster_path': item.get('poster_path'),
+            'vote_average': item.get('vote_average'),
+            'vote_count': item.get('vote_count'),
+            'overview': item.get('overview'),
+        }
 
     async def _save_metadata(self, item: Dict[str, Any], media_type: str) -> None:
         """

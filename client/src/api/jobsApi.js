@@ -171,6 +171,17 @@ export const jobsApi = {
   async getQueueStatus() {
     const response = await axios.get('/api/jobs/queue-status');
     return response.data;
+  },
+
+  /**
+   * Simulate job execution without making actual requests.
+   * Returns the list of media items that would have been queued.
+   * @param {number} jobId - Job ID.
+   * @returns {Promise<Object>} Response with items_count and items array.
+   */
+  async dryRunJob(jobId) {
+    const response = await axios.post(`/api/jobs/${jobId}/dry-run`);
+    return response.data;
   }
 };
 

@@ -8,7 +8,7 @@ from api_service.config.config import load_env_vars
 from api_service.services.llm.llm_service import get_llm_client, get_recommendations_from_history
 
 class JellyfinHandler:
-    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0):
+    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, dry_run=False):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client
@@ -21,6 +21,7 @@ class JellyfinHandler:
         :param library_anime_map: Dict mapping library name to is_anime boolean
         :param use_llm: Override for LLM mode. If None, falls back to global ENABLE_ADVANCED_ALGORITHM setting.
         :param request_delay: Seconds to wait between consecutive Jellyseerr requests (0 = concurrent).
+        :param dry_run: If True, simulate requests without touching download clients.
         """
         self.jellyfin_client = jellyfin_client
         self.jellyseer_client = jellyseer_client
@@ -34,6 +35,8 @@ class JellyfinHandler:
         self.selected_users = selected_users
         self.library_anime_map = library_anime_map or {}
         self.request_delay = request_delay
+        self.dry_run = dry_run
+        self.dry_run_items = []
 
         if use_llm is not None:
             self.use_llm = use_llm
@@ -291,6 +294,22 @@ class JellyfinHandler:
     async def _request_media_and_log(self, media_type, media, source_tmdb_obj, user, is_anime=False):
         """Helper method to request media and log the result."""
         self.logger.debug(f"Requesting media: {media} (anime={is_anime})")
+        if self.dry_run:
+            title = media.get('title') or media.get('name') or 'Unknown'
+            self.logger.info(f"[DRY RUN] Would request {media_type}: {title}")
+            self.dry_run_items.append({
+                'tmdb_id': media.get('id'),
+                'media_type': media_type,
+                'title': title,
+                'release_date': media.get('release_date') or media.get('first_air_date'),
+                'poster_path': media.get('poster_path'),
+                'vote_average': media.get('vote_average'),
+                'vote_count': media.get('vote_count'),
+                'overview': media.get('overview'),
+                'rationale': media.get('rationale'),
+            })
+            self.request_count += 1
+            return
         if await self.jellyseer_client.request_media(media_type=media_type, media=media, source=source_tmdb_obj, user=user, is_anime=is_anime, rationale=media.get('rationale')):
             self.request_count += 1
             self.logger.info(f"Requested {media_type}: {media.get('title') or media.get('name') or 'Unknown'}")

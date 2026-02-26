@@ -19,7 +19,7 @@ def to_ascii(value):
     return unicodedata.normalize('NFKD', value)
 
 class PlexHandler:
-    def __init__(self, plex_client: PlexClient, seer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0):
+    def __init__(self, plex_client: PlexClient, seer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, dry_run=False):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -31,6 +31,7 @@ class PlexHandler:
         :param library_anime_map: Dict mapping library section ID to is_anime boolean
         :param use_llm: Override for LLM mode. If None, falls back to global ENABLE_ADVANCED_ALGORITHM setting.
         :param request_delay: Seconds to wait between consecutive Jellyseerr requests (0 = concurrent).
+        :param dry_run: If True, simulate requests without touching download clients.
         """
         self.plex_client = plex_client
         self.seer_client = seer_client
@@ -42,6 +43,8 @@ class PlexHandler:
         self.existing_content = plex_client.existing_content
         self.library_anime_map = library_anime_map or {}
         self.request_delay = request_delay
+        self.dry_run = dry_run
+        self.dry_run_items = []
 
         if use_llm is not None:
             self.use_llm = use_llm
@@ -294,6 +297,22 @@ class PlexHandler:
     async def _request_media_and_log(self, media_type, media, source_tmdb_obj, is_anime=False):
         """Helper method to request media and log the result."""
         self.logger.debug(f"Requesting media: {media} of type: {media_type} (anime={is_anime})")
+        if self.dry_run:
+            title = media.get('title') or media.get('name') or 'Unknown'
+            self.logger.info(f"[DRY RUN] Would request {media_type}: {title}")
+            self.dry_run_items.append({
+                'tmdb_id': media.get('id'),
+                'media_type': media_type,
+                'title': title,
+                'release_date': media.get('release_date') or media.get('first_air_date'),
+                'poster_path': media.get('poster_path'),
+                'vote_average': media.get('vote_average'),
+                'vote_count': media.get('vote_count'),
+                'overview': media.get('overview'),
+                'rationale': media.get('rationale'),
+            })
+            self.request_count += 1
+            return
         if await self.seer_client.request_media(media_type, media, source_tmdb_obj, is_anime=is_anime, rationale=media.get('rationale')):
             self.request_count += 1
             title_for_log = media.get('title') or media.get('name') or ''

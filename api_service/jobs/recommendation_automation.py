@@ -25,6 +25,7 @@ class ExecutionResult:
     results_count: int
     requested_count: int
     error_message: Optional[str] = None
+    dry_run_items: Optional[List[Dict[str, Any]]] = None
 
 
 class RecommendationAutomation:
@@ -49,12 +50,13 @@ class RecommendationAutomation:
         self.env_vars: Optional[Dict[str, Any]] = None
 
     @classmethod
-    async def create(cls, job_id: int) -> 'RecommendationAutomation':
+    async def create(cls, job_id: int, dry_run: bool = False) -> 'RecommendationAutomation':
         """
         Async factory method to create and initialize RecommendationAutomation.
 
         Args:
             job_id: ID of the recommendation job to execute.
+            dry_run: If True, initialize handlers in dry-run mode (no actual requests).
 
         Returns:
             Initialized RecommendationAutomation instance.
@@ -66,6 +68,7 @@ class RecommendationAutomation:
         instance.job_id = job_id
         instance.repository = JobRepository()
         instance.db_manager = DatabaseManager()
+        instance.dry_run = dry_run
 
         # Load job data
         instance.job_data = instance.repository.get_job(job_id)
@@ -81,12 +84,12 @@ class RecommendationAutomation:
         instance.env_vars = load_env_vars()
 
         # Initialize components based on job configuration
-        await instance._initialize_components()
+        await instance._initialize_components(dry_run=dry_run)
 
         instance.logger.info("RecommendationAutomation initialized successfully")
         return instance
 
-    async def _initialize_components(self):
+    async def _initialize_components(self, dry_run: bool = False):
         """Initialize all required components for the recommendation job."""
         job_filters = self.job_data.get('filters', {})
         job_user_ids = self.job_data.get('user_ids', [])
@@ -251,12 +254,12 @@ class RecommendationAutomation:
         if selected_service in ('jellyfin', 'emby'):
             await self._init_jellyfin_handler(
                 seer_client, tmdb_client, max_similar_movie, max_similar_tv,
-                selected_users, max_content, job_use_llm
+                selected_users, max_content, job_use_llm, dry_run=dry_run
             )
         elif selected_service == 'plex':
             await self._init_plex_handler(
                 seer_client, tmdb_client, max_similar_movie, max_similar_tv,
-                selected_users, max_content, job_use_llm
+                selected_users, max_content, job_use_llm, dry_run=dry_run
             )
         else:
             raise ValueError(f"Unsupported service: {selected_service}")
@@ -294,7 +297,7 @@ class RecommendationAutomation:
 
     async def _init_jellyfin_handler(
         self, seer_client, tmdb_client, max_similar_movie, max_similar_tv,
-        selected_users, max_content, use_llm=None
+        selected_users, max_content, use_llm=None, dry_run=False
     ):
         """Initialize Jellyfin handler."""
         self.logger.info("Initializing Jellyfin client")
@@ -319,13 +322,13 @@ class RecommendationAutomation:
         self.media_handler = JellyfinHandler(
             jellyfin_client, seer_client, tmdb_client, self.logger,
             max_similar_movie, max_similar_tv,
-            selected_users, jellyfin_anime_map, use_llm=use_llm
+            selected_users, jellyfin_anime_map, use_llm=use_llm, dry_run=dry_run
         )
         self.logger.info("Jellyfin handler initialized")
 
     async def _init_plex_handler(
         self, seer_client, tmdb_client, max_similar_movie, max_similar_tv,
-        selected_users, max_content, use_llm=None
+        selected_users, max_content, use_llm=None, dry_run=False
     ):
         """Initialize Plex handler."""
         self.logger.info("Initializing Plex client")
@@ -351,16 +354,21 @@ class RecommendationAutomation:
         self.media_handler = PlexHandler(
             plex_client, seer_client, tmdb_client, self.logger,
             max_similar_movie, max_similar_tv,
-            plex_anime_map, use_llm=use_llm
+            plex_anime_map, use_llm=use_llm, dry_run=dry_run
         )
         self.logger.info("Plex handler initialized")
 
-    async def run(self) -> ExecutionResult:
+    async def run(self, dry_run: bool = False) -> ExecutionResult:
         """
         Execute the recommendation job.
 
+        Args:
+            dry_run: If True, simulate execution without making actual requests.
+                     Returns items that would be queued without touching download clients.
+
         Returns:
-            ExecutionResult with execution details.
+            ExecutionResult with execution details. When dry_run=True, dry_run_items
+            contains the list of media that would have been requested.
         """
         if not self.job_data:
             return ExecutionResult(
@@ -370,8 +378,10 @@ class RecommendationAutomation:
                 error_message="Job not initialized"
             )
 
-        self.logger.info(f"Starting recommendation job: {self.job_data['name']}")
-        exec_id = self.repository.log_execution_start(self.job_id)
+        self.logger.info(
+            f"{'[DRY RUN] ' if dry_run else ''}Starting recommendation job: {self.job_data['name']}"
+        )
+        exec_id = None if dry_run else self.repository.log_execution_start(self.job_id)
 
         try:
             # Process recent items (this is the main recommendation logic)
@@ -394,27 +404,28 @@ class RecommendationAutomation:
 
                 await self.media_handler.process_recent_items()
 
-            # Use the handler's own request_count, which is incremented synchronously
-            # as each Seer request is confirmed. The previous approach counted DB rows
-            # before/after, but SeerClient delivers requests asynchronously so the DB
-            # hadn't been written yet when the final count was read — always giving 0.
             requested_count = getattr(self.media_handler, 'request_count', 0)
             results_count = requested_count
+            dry_run_items = getattr(self.media_handler, 'dry_run_items', None) if dry_run else None
 
-            self.logger.info(f"Job completed: {requested_count} new requests")
-
-            # Log success
-            self.repository.log_execution_end(
-                exec_id=exec_id,
-                status='completed',
-                results_count=results_count,
-                requested_count=requested_count
+            self.logger.info(
+                f"{'[DRY RUN] ' if dry_run else ''}Job completed: "
+                f"{requested_count} {'would be ' if dry_run else ''}requested"
             )
+
+            if not dry_run:
+                self.repository.log_execution_end(
+                    exec_id=exec_id,
+                    status='completed',
+                    results_count=results_count,
+                    requested_count=requested_count
+                )
 
             return ExecutionResult(
                 success=True,
                 results_count=results_count,
-                requested_count=requested_count
+                requested_count=requested_count,
+                dry_run_items=dry_run_items
             )
 
         except Exception as e:
@@ -422,14 +433,14 @@ class RecommendationAutomation:
             self.logger.error(f"Job failed: {error_msg}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
 
-            # Log failure
-            self.repository.log_execution_end(
-                exec_id=exec_id,
-                status='failed',
-                results_count=0,
-                requested_count=0,
-                error_message=error_msg
-            )
+            if not dry_run and exec_id is not None:
+                self.repository.log_execution_end(
+                    exec_id=exec_id,
+                    status='failed',
+                    results_count=0,
+                    requested_count=0,
+                    error_message=error_msg
+                )
 
             return ExecutionResult(
                 success=False,

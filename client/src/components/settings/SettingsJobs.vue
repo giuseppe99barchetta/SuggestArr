@@ -162,9 +162,13 @@
               <i :class="isToggling[job.id] ? 'fas fa-spinner fa-spin' : (job.enabled ? 'fas fa-pause' : 'fas fa-play')"></i>
               {{ job.enabled ? 'Disable' : 'Enable' }}
             </button>
-            <button @click="runJob(job)" class="btn btn-sm btn-outline" :disabled="isRunning[job.id]">
+            <button @click="runJob(job)" class="btn btn-sm btn-outline" :disabled="isRunning[job.id] || isDryRunning[job.id]">
               <i :class="isRunning[job.id] ? 'fas fa-spinner fa-spin' : 'fas fa-bolt'"></i>
               Run
+            </button>
+            <button @click="dryRunJob(job)" class="btn btn-sm btn-outline btn-preview" :disabled="isDryRunning[job.id] || isRunning[job.id]" title="Preview what this job would request">
+              <i :class="isDryRunning[job.id] ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>
+              Preview
             </button>
             <button @click="editJob(job)" class="btn btn-sm btn-outline" title="Edit job">
               <i class="fas fa-edit"></i>
@@ -239,6 +243,15 @@
       @close="showHistoryModal = false"
     />
 
+    <!-- Dry Run Result Modal -->
+    <DryRunResultModal
+      v-if="dryRunResult"
+      :job="dryRunResult.job"
+      :items="dryRunResult.items"
+      @close="dryRunResult = null"
+      @run="onDryRunConfirm"
+    />
+
     <!-- Jobs Onboarding Tour -->
     <OnboardingTour
       :active="showJobsTour"
@@ -253,6 +266,7 @@
 import { jobsApi } from '@/api/jobsApi';
 import JobModal from './jobs/JobModal.vue';
 import JobHistoryModal from './jobs/JobHistoryModal.vue';
+import DryRunResultModal from './jobs/DryRunResultModal.vue';
 import OnboardingTour from '@/components/OnboardingTour.vue';
 
 const JOBS_TOUR_KEY = 'suggestarr_jobs_tour_done';
@@ -266,6 +280,7 @@ export default {
   components: {
     JobModal,
     JobHistoryModal,
+    DryRunResultModal,
     OnboardingTour
   },
   data() {
@@ -276,9 +291,11 @@ export default {
       isLoading: false,
       isToggling: {},
       isRunning: {},
+      isDryRunning: {},
       isDeleting: false,
       showCreateModal: false,
       showHistoryModal: false,
+      dryRunResult: null,
       editingJob: null,
       jobToDelete: null,
       queueStatus: { queued: 0, submitting: 0, submitted: 0, failed: 0, total_pending: 0 },
@@ -485,6 +502,42 @@ export default {
         });
       } finally {
         this.isRunning[job.id] = false;
+      }
+    },
+
+    async dryRunJob(job) {
+      this.isDryRunning[job.id] = true;
+      try {
+        this.$toast.open({
+          message: `Previewing job: ${job.name}…`,
+          type: 'info',
+          duration: 3000
+        });
+        const response = await jobsApi.dryRunJob(job.id);
+        if (response.status === 'success') {
+          this.dryRunResult = { job, items: response.items || [] };
+        } else {
+          this.$toast.open({
+            message: response.message || 'Dry run failed',
+            type: 'error'
+          });
+        }
+      } catch (error) {
+        console.error('Dry run failed:', error);
+        this.$toast.open({
+          message: error.response?.data?.message || 'Dry run failed',
+          type: 'error'
+        });
+      } finally {
+        this.isDryRunning[job.id] = false;
+      }
+    },
+
+    async onDryRunConfirm() {
+      const job = this.dryRunResult?.job;
+      this.dryRunResult = null;
+      if (job) {
+        await this.runJob(job);
       }
     },
 
@@ -1036,6 +1089,16 @@ export default {
 .job-actions .btn-danger {
   flex: 0 0 auto;
   padding: 0.5rem 0.75rem;
+}
+
+.btn-preview {
+  color: #22d3ee;
+  border-color: rgba(6, 182, 212, 0.25);
+}
+
+.btn-preview:hover:not(:disabled) {
+  background: rgba(6, 182, 212, 0.08);
+  border-color: rgba(6, 182, 212, 0.45);
 }
 
 /* History Preview */

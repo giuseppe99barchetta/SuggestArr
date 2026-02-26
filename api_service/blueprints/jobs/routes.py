@@ -11,8 +11,8 @@ from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
 from api_service.jobs.job_manager import JobManager
-from api_service.jobs.discover_automation import execute_discover_job
-from api_service.jobs.recommendation_automation import execute_recommendation_job
+from api_service.jobs.discover_automation import DiscoverAutomation, execute_discover_job
+from api_service.jobs.recommendation_automation import RecommendationAutomation, execute_recommendation_job
 
 logger = LoggerManager.get_logger("JobsRoute")
 jobs_bp = Blueprint('jobs', __name__)
@@ -378,6 +378,58 @@ def run_job_now(job_id: int):
 
     except Exception as e:
         logger.error(f"Error running job {job_id}: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
+
+
+@jobs_bp.route('/<int:job_id>/dry-run', methods=['POST'])
+def dry_run_job(job_id: int):
+    """
+    Simulate job execution without making actual requests to download clients.
+
+    Runs the full pipeline — provider checks, TMDb discovery/recommendations,
+    all configured filters — but skips enqueueing to Seer. No history entry
+    is written.
+
+    Args:
+        job_id: ID of the job to preview.
+
+    Returns:
+        JSON with the list of media items that would have been requested.
+    """
+    try:
+        repository = JobRepository()
+
+        job = repository.get_job(job_id)
+        if not job:
+            return jsonify({'status': 'error', 'message': 'Job not found'}), 404
+
+        job_type = job.get('job_type', 'discover')
+        logger.info(f"Dry-run for {job_type} job {job_id} ({job.get('name', '')})")
+
+        async def _run():
+            if job_type == 'recommendation':
+                automation = await RecommendationAutomation.create(job_id, dry_run=True)
+            else:
+                automation = await DiscoverAutomation.create(job_id)
+            return await automation.run(dry_run=True)
+
+        result = run_async(_run())
+
+        if result.success:
+            return jsonify({
+                'status': 'success',
+                'dry_run': True,
+                'items_count': result.results_count,
+                'items': result.dry_run_items or [],
+            }), 200
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': result.error_message or 'Dry run failed',
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Error during dry-run for job {job_id}: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
