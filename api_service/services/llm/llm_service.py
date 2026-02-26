@@ -18,9 +18,9 @@ from typing import Any, Dict, List, Optional, Type, TypeVar
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
-from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.api_exceptions import LLMValidationError
+from api_service.services.config_service import ConfigService
 from api_service.services.llm.schemas import (
     DiscoverParams,
     RecommendationList,
@@ -53,7 +53,7 @@ def get_llm_client() -> Optional[AsyncOpenAI]:
     :return: Configured :class:`AsyncOpenAI` instance, or ``None`` when the
         provider is not set up.
     """
-    config = load_env_vars()
+    config = ConfigService.get_runtime_config()
     api_key = config.get("OPENAI_API_KEY")
     base_url = config.get("OPENAI_BASE_URL")
 
@@ -265,7 +265,7 @@ async def get_recommendations_from_history(
         logger.info("No history provided for LLM recommendations.")
         return []
 
-    config = load_env_vars()
+    config = ConfigService.get_runtime_config()
     model = config.get("LLM_MODEL", "gpt-4o-mini")
     max_retries = int(config.get("LLM_MAX_RETRIES", 2))
 
@@ -407,7 +407,7 @@ async def interpret_search_query(
         logger.info("LLM not configured — cannot interpret search query.")
         return {}
 
-    config = load_env_vars()
+    config = ConfigService.get_runtime_config()
     model = config.get("LLM_MODEL", "gpt-4o-mini")
     max_retries = int(config.get("LLM_MAX_RETRIES", 2))
 

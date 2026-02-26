@@ -35,6 +35,7 @@ _INTEGRATION_TO_FLAT: dict = {
     'seer':     {'api_url': 'SEER_API_URL', 'api_key': 'SEER_TOKEN',
                  'session_token': 'SEER_SESSION_TOKEN'},
     'omdb':     {'api_key': 'OMDB_API_KEY'},
+    'openai':   {'api_key': 'OPENAI_API_KEY', 'base_url': 'OPENAI_BASE_URL', 'model': 'LLM_MODEL'},
 }
 _FLAT_TO_INTEGRATION: dict = {
     flat_key: (service, db_field)

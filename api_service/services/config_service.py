@@ -29,6 +29,9 @@ _DB_INTEGRATION_KEYS: frozenset = frozenset({
     'SEER_TOKEN',
     'SEER_SESSION_TOKEN',
     'OMDB_API_KEY',
+    'OPENAI_API_KEY',
+    'OPENAI_BASE_URL',
+    'LLM_MODEL',
 })
 
 # Mapping from DB service/field to flat config key.  Used by
@@ -42,6 +45,7 @@ _INTEGRATION_TO_FLAT: dict = {
     'seer':     {'api_url': 'SEER_API_URL', 'api_key': 'SEER_TOKEN',
                  'session_token': 'SEER_SESSION_TOKEN'},
     'omdb':     {'api_key': 'OMDB_API_KEY'},
+    'openai':   {'api_key': 'OPENAI_API_KEY', 'base_url': 'OPENAI_BASE_URL', 'model': 'LLM_MODEL'},
 }
 
 # All valid top-level setting keys (resolved once at module load).

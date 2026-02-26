@@ -21,6 +21,9 @@ _INTEGRATION_REQUIRED_FIELDS: Dict[str, List[str]] = {
     'seer':     ['api_url', 'api_key'],
     'tmdb':     ['api_key'],
     'omdb':     ['api_key'],
+    # OpenAI/LLM: no hard required fields — either api_key (cloud) or base_url (local) is sufficient.
+    # An existing row (even empty) is considered valid to prevent overwriting user configuration.
+    'openai':   [],
 }
 
 
@@ -568,6 +571,17 @@ class DatabaseManager:
                 'api_key': env_vars.get('OMDB_API_KEY', ''),
             },
         }
+
+        # AI provider: only seed the DB when YAML already has a key or base_url configured.
+        # No required fields are enforced (either api_key for cloud or base_url for local providers).
+        _openai_key = env_vars.get('OPENAI_API_KEY', '')
+        _openai_base = env_vars.get('OPENAI_BASE_URL', '')
+        if _openai_key or _openai_base:
+            candidates['openai'] = {
+                'api_key': _openai_key,
+                'base_url': _openai_base,
+                'model': env_vars.get('LLM_MODEL', ''),
+            }
 
         for service, config in candidates.items():
             existing = self.get_integration(service)
