@@ -6,8 +6,8 @@ rating filtering, and history-based deduplication to power the AI Search tab.
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.config_service import ConfigService
 from api_service.services.llm.llm_service import interpret_search_query
 from api_service.services.tmdb.tmdb_client import TMDbClient
 
@@ -30,8 +30,13 @@ class AiSearchService:
     """
 
     def __init__(self):
-        """Initialise AiSearchService from the current application configuration."""
-        self.config = load_env_vars()
+        """Initialise AiSearchService from the current application configuration.
+
+        Uses get_runtime_config() so that DB-backed integration credentials
+        (TMDB_API_KEY, JELLYFIN_TOKEN, SEER_TOKEN, etc.) are always present
+        even after a config import that only writes keys to the DB.
+        """
+        self.config = ConfigService.get_runtime_config()
 
     # ------------------------------------------------------------------
     # Public API
@@ -216,6 +221,7 @@ class AiSearchService:
 
         api_url = self.config.get("JELLYFIN_API_URL", "")
         token = self.config.get("JELLYFIN_TOKEN", "")
+        logger.debug("Jellyfin URL: %s, Token: %s", api_url, "SET" if token else "EMPTY")
         if not api_url or not token:
             logger.warning("Jellyfin not configured; skipping history fetch.")
             return []
@@ -310,6 +316,7 @@ class AiSearchService:
     def _make_tmdb_client(self) -> TMDbClient:
         """Instantiate TMDbClient from the current configuration."""
         c = self.config
+        logger.debug("TMDb API key: %s", "SET" if c.get("TMDB_API_KEY") else "EMPTY")
         tmdb_threshold = int(c.get("FILTER_TMDB_THRESHOLD") or 60)
         tmdb_min_votes = int(c.get("FILTER_TMDB_MIN_VOTES") or 20)
         include_no_ratings = c.get("FILTER_INCLUDE_NO_RATING", True) is True

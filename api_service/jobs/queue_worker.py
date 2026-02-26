@@ -8,8 +8,8 @@ import asyncio
 import json
 from datetime import datetime, timedelta
 
-from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.jellyseer.seer_client import SeerClient
 
@@ -54,7 +54,7 @@ async def _run_worker() -> int:
 
     logger.info("Queue worker: processing %d item(s).", len(items))
 
-    env = load_env_vars()
+    env = ConfigService.get_runtime_config()
     seer = SeerClient(
         env.get('SEER_API_URL', ''),
         env.get('SEER_TOKEN', ''),

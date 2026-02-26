@@ -1,5 +1,5 @@
-from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.config_service import ConfigService
 from api_service.handler.jellyfin_handler import JellyfinHandler
 from api_service.handler.plex_handler import PlexHandler
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
@@ -26,7 +26,7 @@ class ContentAutomation:
         """Async factory method to initialize ContentAutomation asynchronously."""
         instance = cls.__new__(cls)
         instance.logger.info("Initializing ContentAutomation")
-        env_vars = load_env_vars()
+        env_vars = ConfigService.get_runtime_config()
 
         instance.selected_service = env_vars['SELECTED_SERVICE']
         instance.max_content = env_vars.get('MAX_CONTENT_CHECKS', 10)

@@ -31,6 +31,19 @@ _DB_INTEGRATION_KEYS: frozenset = frozenset({
     'OMDB_API_KEY',
 })
 
+# Mapping from DB service/field to flat config key.  Used by
+# get_runtime_config() to overlay DB-backed credentials on top of the
+# YAML-sourced config so that service clients always see real keys even
+# when config.yaml does not contain them (e.g. after a config import).
+# Must be kept in sync with _INTEGRATION_TO_FLAT in blueprints/config/routes.py.
+_INTEGRATION_TO_FLAT: dict = {
+    'tmdb':     {'api_key': 'TMDB_API_KEY'},
+    'jellyfin': {'api_url': 'JELLYFIN_API_URL', 'api_key': 'JELLYFIN_TOKEN'},
+    'seer':     {'api_url': 'SEER_API_URL', 'api_key': 'SEER_TOKEN',
+                 'session_token': 'SEER_SESSION_TOKEN'},
+    'omdb':     {'api_key': 'OMDB_API_KEY'},
+}
+
 # All valid top-level setting keys (resolved once at module load).
 _VALID_SETTING_KEYS: frozenset = frozenset(get_default_values().keys()) - _DB_INTEGRATION_KEYS
 
@@ -40,6 +53,36 @@ class ConfigService:
 
     No instances needed – all methods are static/class-level.
     """
+
+    @staticmethod
+    def get_runtime_config() -> dict:
+        """Return the full runtime configuration merged from YAML and the DB integrations table.
+
+        ``load_env_vars()`` reads config.yaml, which does not contain integration
+        API keys (those are stored exclusively in the DB integrations table after
+        a config import or initial setup).  This method overlays the DB values on
+        top of the YAML config so that service clients (TMDb, Jellyfin, Seer,
+        OMDb) always receive real credentials regardless of whether the YAML has
+        been updated.
+
+        Only non-empty DB values override the flat dict; YAML-only keys (e.g.
+        PLEX_TOKEN) are left untouched.
+
+        Returns:
+            dict: Flat configuration dict ready for service client initialisation.
+        """
+        config = load_env_vars()
+        try:
+            integrations = DatabaseManager().get_all_integrations()
+            for service, field_map in _INTEGRATION_TO_FLAT.items():
+                svc_cfg = integrations.get(service) or {}
+                for db_field, flat_key in field_map.items():
+                    val = svc_cfg.get(db_field)
+                    if val:
+                        config[flat_key] = val
+        except Exception as exc:
+            logger.warning("Could not load DB integrations for runtime config: %s", exc)
+        return config
 
     @staticmethod
     def export_config() -> dict:

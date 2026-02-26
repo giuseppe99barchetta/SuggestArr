@@ -8,10 +8,10 @@ import aiohttp
 from flask import Blueprint, jsonify, request
 
 from api_service.auth.limiter import limiter
-from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.ai_search.ai_search_service import AiSearchService
+from api_service.services.config_service import ConfigService
 from api_service.services.llm.llm_service import get_llm_client
 
 ai_search_bp = Blueprint("ai_search", __name__)
@@ -122,7 +122,7 @@ async def ai_search_request():
         if media_type not in ("movie", "tv"):
             return jsonify({"status": "error", "message": "media_type must be 'movie' or 'tv'"}), 400
 
-        config = load_env_vars()
+        config = ConfigService.get_runtime_config()
         seer_url = (config.get("SEER_API_URL") or "").rstrip("/")
         seer_token = config.get("SEER_TOKEN", "")
         seer_session = config.get("SEER_SESSION_TOKEN", "")

@@ -6,8 +6,8 @@ import traceback
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.db.job_repository import JobRepository
 from api_service.services.jellyseer.seer_client import SeerClient
@@ -66,8 +66,8 @@ class DiscoverAutomation:
 
         instance.logger.info(f"Initializing DiscoverAutomation for job: {instance.job_data['name']}")
 
-        # Load environment variables
-        env_vars = load_env_vars()
+        # Load environment variables (merges DB integration keys on top of YAML)
+        env_vars = ConfigService.get_runtime_config()
 
         # Initialize Seer client
         number_of_seasons = env_vars.get('FILTER_NUM_SEASONS') or "all"

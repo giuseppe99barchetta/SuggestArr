@@ -121,7 +121,7 @@ class _BaseCreateTest(unittest.IsolatedAsyncioTestCase):
         self.omdb_instance = _make_async_cm()
 
         self.MockEnv = patch(
-            'api_service.automate_process.load_env_vars',
+            'api_service.automate_process.ConfigService.get_runtime_config',
             return_value=self.mock_env,
         ).start()
         self.MockSeer = patch(
