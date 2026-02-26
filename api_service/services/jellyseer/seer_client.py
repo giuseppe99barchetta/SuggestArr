@@ -219,7 +219,9 @@ class SeerClient:
 
         Private meta-keys (prefixed with ``_``) are stripped before the payload is
         sent to Seer but are preserved in the queue row so the worker can call
-        ``save_request`` / ``save_metadata`` correctly after a successful submission.
+        ``save_request`` correctly after a successful submission.
+        Metadata objects are intentionally excluded — they are persisted via
+        ``save_metadata`` at enqueue time so the payload stays small.
 
         :return: payload dict ready for JSON serialisation.
         """
@@ -240,12 +242,6 @@ class SeerClient:
         data["_user_id"] = user.get('id') if user else None
         data["_rationale"] = rationale
         data["_is_anime"] = is_anime
-        # Store only fields required by save_metadata to keep the payload compact
-        _meta_fields = ('id', 'title', 'name', 'overview', 'release_date',
-                        'poster_path', 'rating', 'votes', 'origin_country',
-                        'genre_ids', 'logo_path', 'backdrop_path')
-        data["_media_obj"] = {k: media[k] for k in _meta_fields if k in media}
-        data["_source_obj"] = {k: source[k] for k in _meta_fields if k in source} if source else None
 
         return data
 
@@ -285,6 +281,18 @@ class SeerClient:
 
         if user:
             db.save_user(user)
+
+        # Persist metadata immediately while the full objects are available in memory,
+        # so the payload stored in the queue table stays compact (no large text blobs).
+        try:
+            db.save_metadata(media, media_type)
+        except Exception:
+            pass  # non-critical — metadata is display-only cache
+        if source:
+            try:
+                db.save_metadata(source, media_type)
+            except Exception:
+                pass
 
         enqueued = db.enqueue_request(tmdb_id, media_type, user_id, payload)
         if enqueued:

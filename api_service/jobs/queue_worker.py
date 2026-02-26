@@ -102,21 +102,15 @@ async def _run_worker() -> int:
                 success = False
 
             if success:
-                # Persist to the canonical requests table (idempotent INSERT OR IGNORE)
+                # Persist to the canonical requests table (idempotent INSERT OR IGNORE).
+                # Metadata was already saved at enqueue time by SeerClient.request_media.
                 source_id = payload.get('_source_id')
                 user_id = payload.get('_user_id')
                 rationale = payload.get('_rationale')
                 is_anime = bool(payload.get('_is_anime', False))
-                media_obj = payload.get('_media_obj') or {}
-                source_obj = payload.get('_source_obj')
 
                 db.save_request(media_type, tmdb_id, source_id, user_id,
                                 is_anime=is_anime, rationale=rationale)
-
-                if source_obj and source_obj.get('id'):
-                    db.save_metadata(source_obj, media_type)
-                if media_obj:
-                    db.save_metadata(media_obj, media_type)
 
                 db.mark_pending_submitted(row_id, retry_count)
                 logger.info("Queue worker: submitted %s tmdb:%s.", media_type, tmdb_id)
