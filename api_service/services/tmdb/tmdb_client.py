@@ -446,6 +446,10 @@ class TMDbClient:
         """
         Retrieves the streaming providers for a specific movie or TV show.
 
+        Checks all TMDb availability types (flatrate, rent, buy) so that
+        transactional providers (e.g. Amazon Video for rent) are correctly
+        matched against the excluded-services list.
+
         :param content_id: The TMDb ID of the movie or TV show.
         :param content_type: The type of content ('movie' or 'tv').
         :return: A tuple (is_excluded, provider_name), where:
@@ -456,9 +460,12 @@ class TMDbClient:
         if not self.region_provider or not self.excluded_streaming_services:
             self.logger.debug("Skipping watch providers check: region_provider or excluded_streaming_services not set.")
             return False, None
-        
+
         url = f"{self.tmdb_api_url}/{content_type}/{content_id}/watch/providers?api_key={self.api_key}"
         self.logger.debug("Fetching watch providers for %s with ID %s", content_type, content_id)
+
+        # Build a set of excluded provider IDs once for O(1) lookups
+        excluded_ids = {str(e['provider_id']) for e in self.excluded_streaming_services}
 
         try:
             session = await self._get_session()
@@ -467,18 +474,35 @@ class TMDbClient:
                     data = await response.json()
                     if "results" in data and self.region_provider in data["results"]:
                         region_data = data["results"][self.region_provider]
-                        providers = region_data.get('flatrate', [])
+
                         if self.logger.isEnabledFor(10):  # DEBUG level
-                            found_names = [p.get('provider_name') for p in providers]
                             self.logger.debug(
-                                "Watch providers (flatrate) for %s ID %s in %s: %s",
+                                "watch_providers | content=%s/%s region=%s excluded_ids=%s raw=%s",
                                 content_type, content_id, self.region_provider,
-                                found_names if found_names else "none"
+                                excluded_ids, region_data,
                             )
-                        for provider in providers:
-                            if any(str(provider['provider_id']) == str(excluded['provider_id']) for excluded in self.excluded_streaming_services):
-                                self.logger.debug("Content ID %s is in excluded streaming service: %s", content_id, provider['provider_name'])
-                                return True, provider['provider_name']
+
+                        # Check all availability types: subscription, rent, and purchase.
+                        # Previously only 'flatrate' was checked, which caused rent-only
+                        # providers (e.g. Amazon Video) to be silently ignored.
+                        for availability_type in ("flatrate", "rent", "buy"):
+                            for provider in region_data.get(availability_type, []):
+                                if str(provider['provider_id']) in excluded_ids:
+                                    self.logger.debug(
+                                        "Content ID %s excluded via '%s': provider=%s (id=%s)",
+                                        content_id, availability_type,
+                                        provider['provider_name'], provider['provider_id'],
+                                    )
+                                    return True, provider['provider_name']
+
+                        self.logger.debug(
+                            "Content ID %s not matched in any availability type for region %s. "
+                            "Counts — flatrate:%d rent:%d buy:%d",
+                            content_id, self.region_provider,
+                            len(region_data.get('flatrate', [])),
+                            len(region_data.get('rent', [])),
+                            len(region_data.get('buy', [])),
+                        )
                     else:
                         self.logger.debug("No watch providers found for content ID %s in region %s.", content_id, self.region_provider)
                         return False, None
