@@ -298,7 +298,7 @@ export default {
     // Config management
     const { config, hasExistingConfig, fetchConfig, saveConfig: saveConfigFn } = useConfigManager();
     const { isImporting, fileInput, importConfig: importConfigFn, handleFileImport: handleFileImportFn } = useConfigImport(fetchConfig);
-    const { currentBackgroundUrl, nextBackgroundUrl, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
+    const { currentBackgroundUrl, nextBackgroundUrl, isTransitioning, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
 
     // ─── Step Definitions ────────────────────────────────────────────────────
     const allSteps = computed(() => {
