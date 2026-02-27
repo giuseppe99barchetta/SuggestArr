@@ -503,5 +503,152 @@ class TestRefreshTokenMethods(_DBBase):
         self.assertIsNotNone(self.db.get_refresh_token('aware_h'))
 
 
+# ---------------------------------------------------------------------------
+# create_user_media_profile / get_user_media_profiles / delete_user_media_profile
+# ---------------------------------------------------------------------------
+
+class TestCreateUserMediaProfile(_DBBase):
+    """Tests for create_user_media_profile (insert-or-replace semantics)."""
+
+    def setUp(self):
+        super().setUp()
+        self._uid = self._make_user('alice', 'admin')
+
+    def test_create_profile_no_error(self):
+        """Inserting a new profile must not raise."""
+        self.db.create_user_media_profile(
+            self._uid, 'jellyfin', 'jf-001', 'alice_jf'
+        )
+
+    def test_created_profile_is_retrievable(self):
+        self.db.create_user_media_profile(
+            self._uid, 'jellyfin', 'jf-001', 'alice_jf'
+        )
+        profiles = self.db.get_user_media_profiles(self._uid)
+        self.assertEqual(len(profiles), 1)
+        self.assertEqual(profiles[0]['provider'], 'jellyfin')
+        self.assertEqual(profiles[0]['external_username'], 'alice_jf')
+
+    def test_create_with_access_token(self):
+        self.db.create_user_media_profile(
+            self._uid, 'plex', 'plex-001', 'alice_plex', access_token='tok-xyz'
+        )
+        token = self.db.get_user_media_profile_token(self._uid, 'plex')
+        self.assertEqual(token, 'tok-xyz')
+
+    def test_create_without_access_token_stores_null(self):
+        self.db.create_user_media_profile(
+            self._uid, 'emby', 'emby-001', 'alice_emby'
+        )
+        token = self.db.get_user_media_profile_token(self._uid, 'emby')
+        self.assertIsNone(token)
+
+    def test_second_insert_same_provider_updates_existing(self):
+        """ON CONFLICT / upsert must update, not duplicate."""
+        self.db.create_user_media_profile(self._uid, 'jellyfin', 'old-id', 'old_name')
+        self.db.create_user_media_profile(self._uid, 'jellyfin', 'new-id', 'new_name')
+        profiles = self.db.get_user_media_profiles(self._uid)
+        self.assertEqual(len(profiles), 1)
+        self.assertEqual(profiles[0]['external_username'], 'new_name')
+
+    def test_multiple_providers_stored_independently(self):
+        self.db.create_user_media_profile(self._uid, 'jellyfin', 'jf-001', 'alice_jf')
+        self.db.create_user_media_profile(self._uid, 'plex', 'plex-001', 'alice_plex')
+        profiles = self.db.get_user_media_profiles(self._uid)
+        self.assertEqual(len(profiles), 2)
+        providers = {p['provider'] for p in profiles}
+        self.assertIn('jellyfin', providers)
+        self.assertIn('plex', providers)
+
+    def test_different_users_profiles_are_independent(self):
+        uid2 = self._make_user('bob', 'user')
+        self.db.create_user_media_profile(self._uid, 'jellyfin', 'jf-a', 'alice_jf')
+        self.db.create_user_media_profile(uid2, 'jellyfin', 'jf-b', 'bob_jf')
+        alice_profiles = self.db.get_user_media_profiles(self._uid)
+        bob_profiles = self.db.get_user_media_profiles(uid2)
+        self.assertEqual(len(alice_profiles), 1)
+        self.assertEqual(len(bob_profiles), 1)
+        self.assertEqual(alice_profiles[0]['external_username'], 'alice_jf')
+        self.assertEqual(bob_profiles[0]['external_username'], 'bob_jf')
+
+
+class TestGetUserMediaProfiles(_DBBase):
+
+    def setUp(self):
+        super().setUp()
+        self._uid = self._make_user('alice', 'admin')
+
+    def test_returns_empty_list_when_no_profiles(self):
+        profiles = self.db.get_user_media_profiles(self._uid)
+        self.assertEqual(profiles, [])
+
+    def test_result_excludes_access_token(self):
+        self.db.create_user_media_profile(
+            self._uid, 'plex', 'plex-001', 'alice_plex', access_token='secret-tok'
+        )
+        profiles = self.db.get_user_media_profiles(self._uid)
+        self.assertEqual(len(profiles), 1)
+        self.assertNotIn('access_token', profiles[0])
+
+    def test_result_includes_expected_keys(self):
+        self.db.create_user_media_profile(self._uid, 'jellyfin', 'jf-001', 'alice_jf')
+        profiles = self.db.get_user_media_profiles(self._uid)
+        row = profiles[0]
+        for key in ('id', 'provider', 'external_username', 'created_at'):
+            self.assertIn(key, row)
+
+    def test_returns_empty_for_unknown_user(self):
+        profiles = self.db.get_user_media_profiles(99999)
+        self.assertEqual(profiles, [])
+
+    def test_results_ordered_by_provider(self):
+        self.db.create_user_media_profile(self._uid, 'plex', 'plex-001', 'alice_plex')
+        self.db.create_user_media_profile(self._uid, 'emby', 'emby-001', 'alice_emby')
+        self.db.create_user_media_profile(self._uid, 'jellyfin', 'jf-001', 'alice_jf')
+        profiles = self.db.get_user_media_profiles(self._uid)
+        provider_order = [p['provider'] for p in profiles]
+        self.assertEqual(provider_order, sorted(provider_order))
+
+
+class TestDeleteUserMediaProfile(_DBBase):
+
+    def setUp(self):
+        super().setUp()
+        self._uid = self._make_user('alice', 'admin')
+        self.db.create_user_media_profile(self._uid, 'jellyfin', 'jf-001', 'alice_jf')
+
+    def test_delete_existing_profile_returns_true(self):
+        result = self.db.delete_user_media_profile(self._uid, 'jellyfin')
+        self.assertTrue(result)
+
+    def test_deleted_profile_no_longer_retrievable(self):
+        self.db.delete_user_media_profile(self._uid, 'jellyfin')
+        profiles = self.db.get_user_media_profiles(self._uid)
+        self.assertEqual(profiles, [])
+
+    def test_delete_nonexistent_profile_returns_false(self):
+        result = self.db.delete_user_media_profile(self._uid, 'plex')
+        self.assertFalse(result)
+
+    def test_second_delete_returns_false(self):
+        self.db.delete_user_media_profile(self._uid, 'jellyfin')
+        result = self.db.delete_user_media_profile(self._uid, 'jellyfin')
+        self.assertFalse(result)
+
+    def test_delete_one_provider_leaves_others_intact(self):
+        self.db.create_user_media_profile(self._uid, 'plex', 'plex-001', 'alice_plex')
+        self.db.delete_user_media_profile(self._uid, 'jellyfin')
+        profiles = self.db.get_user_media_profiles(self._uid)
+        self.assertEqual(len(profiles), 1)
+        self.assertEqual(profiles[0]['provider'], 'plex')
+
+    def test_delete_user_profile_not_affect_other_users(self):
+        uid2 = self._make_user('bob', 'user')
+        self.db.create_user_media_profile(uid2, 'jellyfin', 'jf-bob', 'bob_jf')
+        self.db.delete_user_media_profile(self._uid, 'jellyfin')
+        bob_profiles = self.db.get_user_media_profiles(uid2)
+        self.assertEqual(len(bob_profiles), 1)
+
+
 if __name__ == '__main__':
     unittest.main()
