@@ -36,7 +36,7 @@ _DEFAULT_CONFIG = {
 
 
 def _make_service():
-    with patch('api_service.services.ai_search.ai_search_service.load_env_vars',
+    with patch('api_service.services.ai_search.ai_search_service.ConfigService.get_runtime_config',
                return_value=_DEFAULT_CONFIG):
         return AiSearchService()
 
@@ -259,6 +259,298 @@ class TestSearch(unittest.IsolatedAsyncioTestCase):
 
         mock_ss.assert_awaited_once()
         self.assertEqual(result, expected)
+
+
+# ---------------------------------------------------------------------------
+# Additional _is_watched edge cases (lines 362, 368)
+# ---------------------------------------------------------------------------
+
+class TestIsWatchedEdgeCases(unittest.TestCase):
+
+    def test_empty_watched_entry_is_skipped(self):
+        # '' in watched_titles set → triggers `continue` on line 362
+        watched = {'', 'inception'}
+        item = {'title': 'Inception'}
+        self.assertTrue(AiSearchService._is_watched(item, watched))
+
+    def test_item_title_contained_in_longer_watched_title(self):
+        # `title in watched` (both ≥ 5 chars) → True on line 368
+        watched = {'breaking bad season finale extended'}
+        item = {'title': 'Breaking Bad'}
+        self.assertTrue(AiSearchService._is_watched(item, watched))
+
+
+# ---------------------------------------------------------------------------
+# search() – 'both' mode leftover append (line 81)
+# ---------------------------------------------------------------------------
+
+class TestSearchBothLeftovers(unittest.IsolatedAsyncioTestCase):
+
+    async def test_leftover_items_appended_when_lists_differ_in_length(self):
+        service = _make_service()
+        movie_result = {
+            'results': [{'id': 1, 'title': 'Movie A'}, {'id': 2, 'title': 'Movie B'}],
+            'query_interpretation': {},
+            'total': 2,
+        }
+        tv_result = {
+            'results': [{'id': 3, 'title': 'Show C'}],
+            'query_interpretation': {},
+            'total': 1,
+        }
+        with patch.object(service, '_search_single', AsyncMock(side_effect=[movie_result, tv_result])):
+            result = await service.search('q', media_type='both', max_results=10)
+        ids = [r['id'] for r in result['results']]
+        self.assertIn(2, ids)   # leftover from longer movie list
+        self.assertEqual(len(ids), 3)
+
+
+# ---------------------------------------------------------------------------
+# _search_single branch coverage (lines 113-114, 126-127, 145, 163, 169)
+# ---------------------------------------------------------------------------
+
+class TestSearchSingleBranchCoverage(unittest.IsolatedAsyncioTestCase):
+
+    def _mock_tmdb(self, *, filter_pass=True, search_return=None, omdb_client=None):
+        mock = MagicMock()
+        mock.search_movie = AsyncMock(return_value=search_return if search_return is not None else [_tmdb_item(1)])
+        mock.search_tv = AsyncMock(return_value=[])
+        mock._apply_filters = MagicMock(return_value={'passed': filter_pass})
+        mock.omdb_client = omdb_client
+        mock.__aenter__ = AsyncMock(return_value=mock)
+        mock.__aexit__ = AsyncMock(return_value=False)
+        return mock
+
+    async def test_history_exception_is_caught_and_search_continues(self):
+        # lines 113-114: exception from _get_history is swallowed
+        service = _make_service()
+        interp = {'discover_params': {}, 'suggested_titles': [{'title': 'Film', 'year': 2020, 'rationale': 'ok'}]}
+        with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
+                   AsyncMock(return_value=interp)), \
+             patch.object(service, '_get_history', AsyncMock(side_effect=Exception('history boom'))), \
+             patch.object(service, '_make_tmdb_client', return_value=self._mock_tmdb()), \
+             patch('api_service.db.database_manager.DatabaseManager') as MockDB:
+            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            result = await service._search_single('q', 'movie', None, 12, use_history=True)
+        self.assertIn('results', result)
+
+    async def test_db_exception_is_caught_and_search_continues(self):
+        # lines 126-127: exception from DatabaseManager is swallowed
+        service = _make_service()
+        interp = {'discover_params': {}, 'suggested_titles': [{'title': 'Film', 'year': 2020}]}
+        with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
+                   AsyncMock(return_value=interp)), \
+             patch.object(service, '_get_history', AsyncMock(return_value=[])), \
+             patch.object(service, '_make_tmdb_client', return_value=self._mock_tmdb()), \
+             patch('api_service.db.database_manager.DatabaseManager',
+                   side_effect=Exception('db boom')):
+            result = await service._search_single('q', 'movie', None, 12)
+        self.assertIn('results', result)
+
+    async def test_item_without_id_is_skipped(self):
+        # line 163: not item_id → continue
+        service = _make_service()
+        no_id_item = {'title': 'No ID Film', 'vote_average': 7.0}   # no 'id' key
+        interp = {'discover_params': {}, 'suggested_titles': [{'title': 'Film', 'year': 2020}]}
+        with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
+                   AsyncMock(return_value=interp)), \
+             patch.object(service, '_get_history', AsyncMock(return_value=[])), \
+             patch.object(service, '_make_tmdb_client', return_value=self._mock_tmdb(search_return=[no_id_item])), \
+             patch('api_service.db.database_manager.DatabaseManager') as MockDB:
+            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            result = await service._search_single('q', 'movie', None, 12)
+        self.assertEqual(len(result['results']), 0)
+
+    async def test_filter_failure_excludes_item(self):
+        # line 169: _apply_filters returns False → continue
+        service = _make_service()
+        interp = {'discover_params': {}, 'suggested_titles': [{'title': 'Film', 'year': 2020}]}
+        with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
+                   AsyncMock(return_value=interp)), \
+             patch.object(service, '_get_history', AsyncMock(return_value=[])), \
+             patch.object(service, '_make_tmdb_client', return_value=self._mock_tmdb(filter_pass=False)), \
+             patch('api_service.db.database_manager.DatabaseManager') as MockDB:
+            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            result = await service._search_single('q', 'movie', None, 12, exclude_watched=False)
+        self.assertEqual(len(result['results']), 0)
+
+    async def test_omdb_client_context_manager_entered_when_present(self):
+        # line 145: omdb_client async context manager is entered
+        service = _make_service()
+        mock_omdb = MagicMock()
+        mock_omdb.__aenter__ = AsyncMock(return_value=mock_omdb)
+        mock_omdb.__aexit__ = AsyncMock(return_value=False)
+        interp = {'discover_params': {}, 'suggested_titles': [{'title': 'Film', 'year': 2020, 'rationale': 'ok'}]}
+        with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
+                   AsyncMock(return_value=interp)), \
+             patch.object(service, '_get_history', AsyncMock(return_value=[])), \
+             patch.object(service, '_make_tmdb_client',
+                          return_value=self._mock_tmdb(omdb_client=mock_omdb)), \
+             patch('api_service.db.database_manager.DatabaseManager') as MockDB:
+            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            await service._search_single('q', 'movie', None, 12)
+        mock_omdb.__aenter__.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# _get_history routing (lines 206-216)
+# ---------------------------------------------------------------------------
+
+class TestGetHistoryRouting(unittest.IsolatedAsyncioTestCase):
+
+    def _service_with_service(self, selected_service):
+        config = {**_DEFAULT_CONFIG, 'SELECTED_SERVICE': selected_service}
+        with patch('api_service.services.ai_search.ai_search_service.ConfigService.get_runtime_config',
+                   return_value=config):
+            return AiSearchService()
+
+    async def test_routes_to_plex(self):
+        service = self._service_with_service('plex')
+        with patch.object(service, '_get_plex_history', AsyncMock(return_value=[])) as mock:
+            await service._get_history(None)
+        mock.assert_awaited_once()
+
+    async def test_emby_routes_to_jellyfin(self):
+        service = self._service_with_service('emby')
+        with patch.object(service, '_get_jellyfin_history', AsyncMock(return_value=[])) as mock:
+            await service._get_history(None)
+        mock.assert_awaited_once()
+
+    async def test_no_service_returns_empty_list(self):
+        service = self._service_with_service('')
+        result = await service._get_history(None)
+        self.assertEqual(result, [])
+
+
+# ---------------------------------------------------------------------------
+# _get_jellyfin_history (lines 220-272)
+# ---------------------------------------------------------------------------
+
+class TestGetJellyfinHistory(unittest.IsolatedAsyncioTestCase):
+
+    def _service(self, api_url='http://jf', token='tok'):
+        config = {
+            **_DEFAULT_CONFIG,
+            'SELECTED_SERVICE': 'jellyfin',
+            'JELLYFIN_API_URL': api_url,
+            'JELLYFIN_TOKEN': token,
+            'JELLYFIN_LIBRARIES': [],
+        }
+        with patch('api_service.services.ai_search.ai_search_service.ConfigService.get_runtime_config',
+                   return_value=config):
+            return AiSearchService()
+
+    async def test_no_credentials_returns_empty(self):
+        service = self._service(api_url='', token='')
+        result = await service._get_jellyfin_history(None)
+        self.assertEqual(result, [])
+
+    async def test_movie_and_episode_items_with_user_ids(self):
+        service = self._service()
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get_recent_items = AsyncMock(return_value={
+            'lib': [
+                {'Type': 'Movie', 'Name': 'Se7en', 'ProductionYear': 1995},
+                {'Type': 'Episode', 'SeriesName': 'Breaking Bad', 'Name': 'Ep1', 'ProductionYear': 2008},
+            ]
+        })
+        with patch('api_service.services.jellyfin.jellyfin_client.JellyfinClient',
+                   return_value=mock_client):
+            result = await service._get_jellyfin_history([{'id': '1', 'name': 'User'}])
+        titles = {r['title'] for r in result}
+        types = {r['type'] for r in result}
+        self.assertIn('Se7en', titles)
+        self.assertIn('Breaking Bad', titles)
+        self.assertIn('movie', types)
+        self.assertIn('tv', types)
+
+    async def test_get_all_users_exception_returns_empty(self):
+        service = self._service()
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get_all_users = AsyncMock(side_effect=Exception('users fail'))
+        with patch('api_service.services.jellyfin.jellyfin_client.JellyfinClient',
+                   return_value=mock_client):
+            result = await service._get_jellyfin_history(None)
+        self.assertEqual(result, [])
+
+
+# ---------------------------------------------------------------------------
+# _get_plex_history (lines 276-314)
+# ---------------------------------------------------------------------------
+
+class TestGetPlexHistory(unittest.IsolatedAsyncioTestCase):
+
+    def _service(self, token='tok'):
+        config = {
+            **_DEFAULT_CONFIG,
+            'PLEX_TOKEN': token,
+            'PLEX_API_URL': 'http://plex',
+            'PLEX_LIBRARIES': [],
+        }
+        with patch('api_service.services.ai_search.ai_search_service.ConfigService.get_runtime_config',
+                   return_value=config):
+            return AiSearchService()
+
+    async def test_no_token_returns_empty(self):
+        service = self._service(token='')
+        result = await service._get_plex_history(None)
+        self.assertEqual(result, [])
+
+    async def test_movie_and_episode_items(self):
+        service = self._service()
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get_recent_items = AsyncMock(return_value=[
+            {'type': 'movie', 'title': 'Inception', 'year': 2010},
+            {'type': 'episode', 'grandparentTitle': 'Breaking Bad', 'year': 2008},
+        ])
+        with patch('api_service.services.plex.plex_client.PlexClient',
+                   return_value=mock_client):
+            result = await service._get_plex_history(None)
+        titles = {r['title'] for r in result}
+        types = {r['type'] for r in result}
+        self.assertIn('movie', types)
+        self.assertIn('tv', types)
+        self.assertIn('Inception', titles)
+        self.assertIn('Breaking Bad', titles)
+
+    async def test_get_recent_items_exception_returns_empty(self):
+        service = self._service()
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get_recent_items = AsyncMock(side_effect=Exception('plex fail'))
+        with patch('api_service.services.plex.plex_client.PlexClient',
+                   return_value=mock_client):
+            result = await service._get_plex_history(None)
+        self.assertEqual(result, [])
+
+
+# ---------------------------------------------------------------------------
+# _make_tmdb_client (lines 318-336)
+# ---------------------------------------------------------------------------
+
+class TestMakeTmdbClient(unittest.TestCase):
+
+    def test_returns_tmdb_client_instance(self):
+        from api_service.services.tmdb.tmdb_client import TMDbClient
+        service = _make_service()
+        client = service._make_tmdb_client()
+        self.assertIsInstance(client, TMDbClient)
+
+    def test_imdb_rating_source_creates_omdb_client(self):
+        config = {**_DEFAULT_CONFIG, 'FILTER_RATING_SOURCE': 'imdb', 'OMDB_API_KEY': 'omdb_key'}
+        with patch('api_service.services.ai_search.ai_search_service.ConfigService.get_runtime_config',
+                   return_value=config):
+            service = AiSearchService()
+        with patch('api_service.services.omdb.omdb_client.OmdbClient') as MockOmdb:
+            service._make_tmdb_client()
+        MockOmdb.assert_called_once_with('omdb_key')
 
 
 if __name__ == '__main__':

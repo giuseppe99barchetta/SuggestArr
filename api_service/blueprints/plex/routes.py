@@ -5,6 +5,7 @@ from api_service.services.plex.plex_auth import PlexAuth
 from api_service.services.plex.plex_client import PlexClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.utils.error_handling import handle_api_errors, validate_request_data, success_response
+from api_service.utils.ssrf_guard import validate_url
 
 logger = LoggerManager.get_logger("PlexRoute")
 plex_bp = Blueprint('plex', __name__)
@@ -24,6 +25,11 @@ async def get_plex_libraries():
         if not api_url or not api_token:
             logger.warning("Missing API URL or token in Plex libraries request")
             return jsonify({'message': 'API URL and token are required', 'type': 'error'}), 400
+
+        try:
+            validate_url(api_url, allow_private=True)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'type': 'error'}), 400
 
         logger.debug(f"Connecting to Plex server at: {api_url}")
         async with PlexClient(api_url=api_url, token=api_token) as plex_client:
@@ -120,6 +126,11 @@ async def test_plex_connection():
                 'status': 'error'
             }), 400
 
+        try:
+            validate_url(api_url, allow_private=True)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'status': 'error'}), 400
+
         logger.debug(f"Testing connection to Plex server at: {api_url}")
         
         try:
@@ -179,6 +190,12 @@ async def get_plex_users():
 
         if not api_token:
             return jsonify({'message': 'API token is required', 'type': 'error'}), 400
+
+        if api_url:
+            try:
+                validate_url(api_url, allow_private=True)
+            except ValueError as exc:
+                return jsonify({'message': str(exc), 'type': 'error'}), 400
 
         async with PlexClient(token=api_token, client_id=client_id, api_url=api_url) as plex_client:
             users = await plex_client.get_all_users()

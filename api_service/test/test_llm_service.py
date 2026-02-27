@@ -328,7 +328,7 @@ class TestGetRecommendationsFromHistory(unittest.IsolatedAsyncioTestCase):
     async def test_returns_empty_list_when_no_history(self):
         mock_client = AsyncMock()
         with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
-             patch("api_service.services.llm.llm_service.load_env_vars", return_value=_DEFAULT_CONFIG):
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_DEFAULT_CONFIG):
             result = await get_recommendations_from_history([], max_results=3)
         self.assertEqual(result, [])
 
@@ -343,7 +343,7 @@ class TestGetRecommendationsFromHistory(unittest.IsolatedAsyncioTestCase):
         )
         history = [{"title": "Inception", "year": 2010}]
         with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
-             patch("api_service.services.llm.llm_service.load_env_vars", return_value=_DEFAULT_CONFIG):
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_DEFAULT_CONFIG):
             result = await get_recommendations_from_history(history, max_results=5)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["title"], "Interstellar")
@@ -359,7 +359,7 @@ class TestGetRecommendationsFromHistory(unittest.IsolatedAsyncioTestCase):
         )
         history = [{"title": "Inception", "year": 2010}]
         with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
-             patch("api_service.services.llm.llm_service.load_env_vars", return_value=_DEFAULT_CONFIG):
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_DEFAULT_CONFIG):
             result = await get_recommendations_from_history(history, max_results=5)
         titles = [r["title"] for r in result]
         self.assertNotIn("Inception", titles)
@@ -375,7 +375,7 @@ class TestGetRecommendationsFromHistory(unittest.IsolatedAsyncioTestCase):
         # max_retries=0 → single attempt, then LLMValidationError caught internally
         config = {**_DEFAULT_CONFIG, "LLM_MAX_RETRIES": 0}
         with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
-             patch("api_service.services.llm.llm_service.load_env_vars", return_value=config):
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=config):
             result = await get_recommendations_from_history(history, max_results=5)
         self.assertEqual(result, [])
 
@@ -388,7 +388,7 @@ class TestGetRecommendationsFromHistory(unittest.IsolatedAsyncioTestCase):
         )
         history = [{"title": "Inception", "year": 2010}]
         with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
-             patch("api_service.services.llm.llm_service.load_env_vars", return_value=_DEFAULT_CONFIG):
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_DEFAULT_CONFIG):
             result = await get_recommendations_from_history(history, max_results=5)
         self.assertEqual(len(result), 1)
 
@@ -420,7 +420,7 @@ class TestInterpretSearchQuery(unittest.IsolatedAsyncioTestCase):
             return_value=_mock_openai_response(self._valid_interpretation_payload())
         )
         with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
-             patch("api_service.services.llm.llm_service.load_env_vars", return_value=_DEFAULT_CONFIG):
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_DEFAULT_CONFIG):
             result = await interpret_search_query("dark psychological thriller from 90s", [])
 
         self.assertIn("discover_params", result)
@@ -435,7 +435,7 @@ class TestInterpretSearchQuery(unittest.IsolatedAsyncioTestCase):
         )
         config = {**_DEFAULT_CONFIG, "LLM_MAX_RETRIES": 0}
         with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
-             patch("api_service.services.llm.llm_service.load_env_vars", return_value=config):
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=config):
             with self.assertRaises(LLMValidationError):
                 await interpret_search_query("thriller", [])
 
@@ -450,7 +450,7 @@ class TestInterpretSearchQuery(unittest.IsolatedAsyncioTestCase):
             ]
         )
         with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
-             patch("api_service.services.llm.llm_service.load_env_vars", return_value=_DEFAULT_CONFIG):
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_DEFAULT_CONFIG):
             result = await interpret_search_query("thriller", [])
 
         self.assertEqual(len(result["suggested_titles"]), 2)
@@ -463,7 +463,7 @@ class TestInterpretSearchQuery(unittest.IsolatedAsyncioTestCase):
             return_value=_mock_openai_response(self._valid_interpretation_payload())
         )
         with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
-             patch("api_service.services.llm.llm_service.load_env_vars", return_value=_DEFAULT_CONFIG):
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_DEFAULT_CONFIG):
             result = await interpret_search_query("thriller", [])
 
         # Should not raise

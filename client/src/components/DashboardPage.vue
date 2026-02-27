@@ -25,6 +25,15 @@
           <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank" rel="noopener noreferrer">
             <img src="@/assets/logo.png" alt="SuggestArr Logo" class="logo">
           </a>
+          <button
+            v-if="authSetupComplete"
+            @click="handleLogout"
+            class="btn btn-outline btn-sm logout-btn"
+            title="Sign out"
+          >
+            <i class="fas fa-sign-out-alt"></i>
+            <span class="logout-label">Sign out</span>
+          </button>
         </div>
       </div>
 
@@ -32,7 +41,7 @@
       <!-- Desktop Navigation -->
       <div class="tabs-navigation desktop-nav" data-tour-id="nav-tabs">
         <button
-          v-for="tab in tabs"
+          v-for="tab in visibleTabs"
           :key="tab.id"
           :data-tour-id="tab.tourId || null"
           @click="activeTab = tab.id"
@@ -70,7 +79,7 @@
           <transition name="dropdown-slide">
             <div v-if="showMobileDropdown" class="mobile-dropdown">
               <button
-                v-for="tab in tabs"
+                v-for="tab in visibleTabs"
                 :key="tab.id"
                 @click="selectMobileTab(tab.id)"
                 :class="['mobile-dropdown-item', { active: activeTab === tab.id }]"
@@ -305,6 +314,7 @@ import Footer from './AppFooter.vue';
 import OnboardingTour from './OnboardingTour.vue';
 import { useBackgroundImage } from '@/composables/useBackgroundImage';
 import { useVersionCheck } from '@/composables/useVersionCheck';
+import { useAuth } from '@/composables/useAuth';
 import '@/assets/styles/dashboardPage.css';
 
 // Import tab components
@@ -315,6 +325,9 @@ import SettingsRequests from './settings/SettingsRequests.vue';
 import SettingsJobs from './settings/SettingsJobs.vue';
 import AiSearchPage from './settings/AiSearchPage.vue';
 import LogsComponent from './LogsComponent.vue';
+import UserManagement from './settings/UserManagement.vue';
+import UserProfile from './settings/UserProfile.vue';
+import { exportConfig, importConfig } from '@/api/api';
 
 const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
 
@@ -330,11 +343,14 @@ export default {
     SettingsJobs,
     AiSearchPage,
     LogsComponent,
+    UserManagement,
+    UserProfile,
   },
   setup() {
     const { currentBackgroundUrl, nextBackgroundUrl, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
     const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
-    
+    const { authSetupComplete, currentUser, logout } = useAuth();
+
     return {
       currentBackgroundUrl,
       nextBackgroundUrl,
@@ -346,7 +362,10 @@ export default {
       currentImageTag,
       currentBuildDate,
       updateAvailable,
-      checkForUpdates
+      checkForUpdates,
+      authSetupComplete,
+      currentUser,
+      logout
     };
   },
     data() {
@@ -375,10 +394,12 @@ export default {
       tabs: [
         { id: 'requests',  name: 'Requests',  icon: 'fas fa-paper-plane', tourId: 'tab-requests' },
         { id: 'ai_search', name: 'AI Search', icon: 'fas fa-magic',       isBeta: true,           tourId: 'tab-ai-search' },
-        { id: 'services',  name: 'Services',  icon: 'fas fa-plug',         tourId: 'tab-services' },
+        { id: 'services',  name: 'Services',  icon: 'fas fa-plug',         tourId: 'tab-services', adminOnly: true },
         { id: 'jobs',      name: 'Jobs',       icon: 'fas fa-briefcase',   tourId: 'tab-jobs' },
-        { id: 'database',  name: 'Database',  icon: 'fas fa-database',     tourId: 'tab-database' },
+        { id: 'database',  name: 'Database',  icon: 'fas fa-database',     tourId: 'tab-database', adminOnly: true },
         { id: 'advanced',  name: 'Advanced',  icon: 'fas fa-sliders-h',   tourId: 'tab-advanced' },
+        { id: 'users',     name: 'Users',      icon: 'fas fa-users',       adminOnly: true },
+        { id: 'profile',   name: 'Profile',    icon: 'fas fa-user-circle', nonAdminOnly: true },
         { id: 'logs',      name: 'Logs',       icon: 'fas fa-file-alt',    tourId: 'tab-logs' },
       ],
       tourSteps: [
@@ -446,6 +467,14 @@ export default {
     };
   },
   computed: {
+    visibleTabs() {
+      const isAdmin = this.currentUser?.role === 'admin';
+      return this.tabs.filter(tab => {
+        if (tab.adminOnly && !isAdmin) return false;
+        if (tab.nonAdminOnly && isAdmin) return false;
+        return true;
+      });
+    },
     activeTabComponent() {
       const componentMap = {
         requests: 'SettingsRequests',
@@ -455,6 +484,8 @@ export default {
         advanced: 'SettingsAdvanced',
         logs: 'LogsComponent',
         ai_search: 'AiSearchPage',
+        users: 'UserManagement',
+        profile: 'UserProfile',
       };
       return componentMap[this.activeTab];
     },
@@ -472,10 +503,8 @@ export default {
       handler(newValue) {
         if (newValue) {
           this.stopBackgroundImageRotation();
-        } else if (this.config.TMDB_API_KEY) {
-          this.startBackgroundImageRotation(this.config.TMDB_API_KEY);
         } else {
-          this.startDefaultImageRotation();
+          this.startBackgroundImageRotation();
         }
       }
     },
@@ -496,8 +525,8 @@ export default {
 
       this.loadRequestCount();
 
-      if (!this.config.ENABLE_STATIC_BACKGROUND && this.config.TMDB_API_KEY) {
-        this.startBackgroundImageRotation(this.config.TMDB_API_KEY);
+      if (!this.config.ENABLE_STATIC_BACKGROUND) {
+        this.startBackgroundImageRotation();
       }
 
       // Auto-start tour on first visit or when ?tour=1 is in the URL
@@ -512,6 +541,10 @@ export default {
     }
   },
   methods: {
+    async handleLogout() {
+      await this.logout();
+      this.$router.push('/login');
+    },
     restartTour() {
       localStorage.removeItem(TOUR_STORAGE_KEY);
       this.showTour = true;
@@ -811,26 +844,30 @@ export default {
     async exportConfig() {
       this.loadingMessage = 'Exporting configuration...';
       this.isLoading = true;
+    
       try {
-        const response = await axios.get('/api/config/fetch');
+        const response = await exportConfig();
         const configData = response.data;
-
-        const blob = new Blob([JSON.stringify(configData, null, 2)], {
-          type: 'application/json',
-        });
+      
+        const blob = new Blob(
+          [JSON.stringify(configData, null, 2)],
+          { type: 'application/json' }
+        );
+      
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
         link.download = `suggestarr-config-${new Date().toISOString().split('T')[0]}.json`;
         link.click();
         URL.revokeObjectURL(url);
-
+      
         this.$toast.open({
           message: 'Configuration exported successfully!',
           type: 'success',
           duration: 3000,
           position: 'top-right'
         });
+      
       } catch (error) {
         this.$toast.open({
           message: 'Failed to export configuration',
@@ -838,6 +875,7 @@ export default {
           duration: 5000,
           position: 'top-right'
         });
+      
         console.error('Error exporting config:', error);
       } finally {
         this.isLoading = false;
@@ -854,26 +892,27 @@ export default {
 
       this.loadingMessage = 'Importing configuration...';
       this.isLoading = true;
-      
+
       try {
         const text = await file.text();
         const configData = JSON.parse(text);
 
-        await axios.post('/api/config/save', configData);
+        await importConfig(configData);
+
         await this.loadConfig();
 
         this.$toast.open({
           message: 'Configuration imported successfully!',
           type: 'success',
           duration: 3000,
-          position: 'top-right'
+          position: 'top-right',
         });
       } catch (error) {
         this.$toast.open({
-          message: 'Failed to import: Invalid file format',
+          message: 'Failed to import configuration',
           type: 'error',
           duration: 5000,
-          position: 'top-right'
+          position: 'top-right',
         });
         console.error('Error importing config:', error);
       } finally {

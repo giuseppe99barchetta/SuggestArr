@@ -70,6 +70,24 @@
 
 .header-content {
   text-align: center;
+  position: relative;
+}
+
+.logout-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 480px) {
+  .logout-label {
+    display: none;
+  }
 }
 
 .back-button {

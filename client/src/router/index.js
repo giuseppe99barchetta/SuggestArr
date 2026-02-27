@@ -4,11 +4,13 @@ import { createApp } from 'vue';
 import App from '../App.vue';
 import 'vue-toast-notification/dist/theme-bootstrap.css';
 import ToastPlugin from 'vue-toast-notification';
+import { useAuth, setAuthRouter } from '@/composables/useAuth';
 
 // Lazy load components for code splitting
 const RequestsPage = () => import('@/components/RequestsPage.vue');
 const ConfigWizard = () => import('@/components/ConfigWizard.vue');
 const DashboardPage = () => import('@/components/DashboardPage.vue');
+const LoginPage = () => import('@/components/LoginPage.vue');
 
 function readSubpathFromMeta() {
     const metaTag = document.querySelector('meta[name="suggestarr-subpath"]');
@@ -46,7 +48,22 @@ async function checkSetupStatus() {
 async function createAppRouter() {
     const subpath = readSubpathFromMeta();
     configureAxiosSubpath(subpath);
-    await loadConfig();
+
+    const auth = useAuth();
+
+    // Set up axios interceptors before any API calls (router ref added after creation)
+    auth.setupInterceptors();
+
+    // Check auth status — public endpoint, always works
+    const authStatus = await auth.getAuthStatus().catch(() => ({ auth_setup_complete: false, app_setup_complete: false }));
+
+    // If auth is enforced, try to restore session via the httpOnly refresh cookie
+    if (authStatus.auth_setup_complete) {
+        await auth.tryRefresh();
+    }
+
+    // Load app config — skip silently if not authenticated yet (will reload after login)
+    await loadConfig().catch(() => {});
     await checkSetupStatus();
 
     const routes = [
@@ -80,6 +97,11 @@ async function createAppRouter() {
             component: DashboardPage,
             meta: { requiresSetup: true }
         },
+        {
+            path: `/login`,
+            name: 'Login',
+            component: LoginPage,
+        },
         // Redirect legacy routes
         {
             path: `/wizard`,
@@ -91,6 +113,9 @@ async function createAppRouter() {
         history: createWebHistory(subpath || '/'),
         routes
     });
+
+    // Give the auth module a router reference for 401 redirects
+    setAuthRouter(router);
 
     // Add navigation guards
     router.beforeEach(async (to, from, next) => {
@@ -109,6 +134,18 @@ async function createAppRouter() {
         // If setup is completed and route is setup-only, redirect to settings
         if (to.meta.setupOnly && currentStatus.setup_completed) {
             return next('/dashboard');
+        }
+
+        // Auth guard — only enforce when an admin account exists
+        if (auth.authSetupComplete.value) {
+            if (to.name === 'Login') {
+                // Already authenticated → skip login page
+                if (auth.accessToken.value) return next('/dashboard');
+                return next();
+            }
+            if (!auth.accessToken.value) {
+                return next({ name: 'Login', query: { redirect: to.fullPath } });
+            }
         }
 
         next();

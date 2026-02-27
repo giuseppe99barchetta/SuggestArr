@@ -1,25 +1,43 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, jsonify
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.config.logger_manager import LoggerManager
-from api_service.config.config import load_env_vars
+from api_service.db.database_manager import DatabaseManager
+from api_service.utils.ssrf_guard import validate_url
 
 logger = LoggerManager.get_logger("JellyfinRoute")
 jellyfin_bp = Blueprint('jellyfin', __name__)
 
-@jellyfin_bp.route('/libraries', methods=['POST'])
+
+def _load_jellyfin_config():
+    """
+    Load Jellyfin credentials from the integrations table.
+
+    Returns:
+        tuple: (api_url, api_key) — both strings, may be empty.
+    """
+    config = DatabaseManager().get_integration('jellyfin')
+    if config is None:
+        return '', ''
+    return config.get('api_url', ''), config.get('api_key', '')
+
+
+@jellyfin_bp.route('/libraries', methods=['GET'])
 async def get_jellyfin_library():
     """
-    Fetch Jellyfin libraries using the provided API key and server URL.
+    Fetch Jellyfin libraries using the globally configured API key and server URL.
     """
     logger.info("Received request to fetch Jellyfin libraries")
     try:
-        config_data = request.json
-        api_url = config_data.get('JELLYFIN_API_URL')
-        api_key = config_data.get('JELLYFIN_TOKEN')
+        api_url, api_key = _load_jellyfin_config()
 
         if not api_url or not api_key:
-            logger.warning("Missing API URL or token in Jellyfin libraries request")
-            return jsonify({'message': 'API URL and token are required', 'type': 'error'}), 400
+            logger.warning("Jellyfin credentials not configured")
+            return jsonify({'message': 'Jellyfin API URL and token are not configured', 'type': 'error'}), 400
+
+        try:
+            validate_url(api_url, allow_private=True)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'type': 'error'}), 400
 
         logger.debug(f"Connecting to Jellyfin server at: {api_url}")
         async with JellyfinClient(api_url=api_url, token=api_key) as jellyfin_client:
@@ -36,33 +54,35 @@ async def get_jellyfin_library():
         logger.error(f'Error fetching Jellyfin libraries: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error fetching Jellyfin libraries', 'type': 'error'}), 500
 
-@jellyfin_bp.route('/test', methods=['POST'])
+
+@jellyfin_bp.route('/test', methods=['GET'])
 async def test_jellyfin_connection():
     """
-    Test Jellyfin server connection using the provided API key and URL.
+    Test Jellyfin server connection using the globally configured API key and URL.
     """
     logger.info("Received request to test Jellyfin connection")
     try:
-        config_data = request.json
-        api_url = config_data.get('api_url')
-        api_key = config_data.get('token')
+        api_url, api_key = _load_jellyfin_config()
 
-        if not api_key or not api_url:
-            logger.warning("Missing API key or URL in Jellyfin connection test request")
+        if not api_url or not api_key:
+            logger.warning("Jellyfin credentials not configured")
             return jsonify({
-                'message': 'API key and URL are required',
+                'message': 'Jellyfin API URL and token are not configured',
                 'status': 'error'
             }), 400
 
+        try:
+            validate_url(api_url, allow_private=True)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'status': 'error'}), 400
+
         logger.debug(f"Testing connection to Jellyfin server at: {api_url}")
-        
+
         try:
             async with JellyfinClient(api_url=api_url, token=api_key) as jellyfin_client:
-                # Try to get libraries as a connection test
                 libraries = await jellyfin_client.get_libraries()
                 logger.debug(f"Connection test response: {type(libraries)} - {len(libraries) if libraries else 0} libraries")
 
-                # Check if we got a valid response with actual libraries data
                 if libraries and isinstance(libraries, list):
                     logger.info(f"Jellyfin connection test successful - found {len(libraries)} libraries")
                     return jsonify({
@@ -74,8 +94,7 @@ async def test_jellyfin_connection():
                         }
                     }), 200
                 else:
-                    # None or invalid response means connection failed
-                    logger.warning(f"Jellyfin connection test failed - invalid response from server")
+                    logger.warning("Jellyfin connection test failed - invalid response from server")
                     return jsonify({
                         'message': 'Failed to connect to Jellyfin server - invalid token or server unreachable',
                         'status': 'error'
@@ -95,25 +114,23 @@ async def test_jellyfin_connection():
             'status': 'error'
         }), 500
 
-@jellyfin_bp.route('/users', methods=['POST', 'GET'])
+
+@jellyfin_bp.route('/users', methods=['GET'])
 async def get_jellyfin_users():
     """
-    Fetch Jellyfin users using the provided API key and server URL.
+    Fetch Jellyfin users using the globally configured API key and server URL.
     """
     try:
-        if request.method == 'POST':
-            config_data = request.json
-            api_url = config_data.get('JELLYFIN_API_URL')
-            api_key = config_data.get('JELLYFIN_TOKEN')
-        else:
-            # For GET requests, use saved configuration
-            env_vars = load_env_vars()
-            api_url = env_vars.get('JELLYFIN_API_URL')
-            api_key = env_vars.get('JELLYFIN_TOKEN')
+        api_url, api_key = _load_jellyfin_config()
 
         if not api_url or not api_key:
-            logger.warning("Missing API URL or token in Jellyfin users request")
-            return jsonify({'message': 'API URL and token are required', 'type': 'error'}), 400
+            logger.warning("Jellyfin credentials not configured")
+            return jsonify({'message': 'Jellyfin API URL and token are not configured', 'type': 'error'}), 400
+
+        try:
+            validate_url(api_url, allow_private=True)
+        except ValueError as exc:
+            return jsonify({'message': str(exc), 'type': 'error'}), 400
 
         async with JellyfinClient(api_url=api_url, token=api_key) as jellyfin_client:
             users = await jellyfin_client.get_all_users()

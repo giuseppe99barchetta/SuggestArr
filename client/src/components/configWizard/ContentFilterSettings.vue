@@ -372,7 +372,7 @@ export default {
         },
         async fetchGenres() {
             try {
-                const response = await axios.get(`https://api.themoviedb.org/3/genre/movie/list?api_key=${this.config.TMDB_API_KEY}`);
+                const response = await axios.get('/api/tmdb/genres/movie');
                 this.genres = response.data.genres;
             } catch (error) {
                 console.error("Error fetching genres:", error);
@@ -380,15 +380,15 @@ export default {
         },
         async fetchLanguages() {
             try {
-                const response = await axios.get(`https://api.themoviedb.org/3/configuration/languages?api_key=${this.config.TMDB_API_KEY}`);
-                this.languages = response.data;
+                const response = await axios.get('/api/tmdb/languages');
+                this.languages = response.data.languages;
             } catch (error) {
                 console.error("Error fetching languages:", error);
             }
         },
         async fetchRegions() {
             try {
-                const response = await axios.get(`https://api.themoviedb.org/3/watch/providers/regions?api_key=${this.config.TMDB_API_KEY}`);
+                const response = await axios.get('/api/tmdb/providers/regions');
                 this.regions = response.data.results;
             } catch (error) {
                 console.error("Error fetching regions:", error);
@@ -400,7 +400,9 @@ export default {
             const region_code = this.selectedRegion?.iso_3166_1;
 
             try {
-                const response = await axios.get(`https://api.themoviedb.org/3/watch/providers/movie?api_key=${this.config.TMDB_API_KEY}&watch_region=${region_code}`);
+                const response = await axios.get('/api/tmdb/providers/movie', {
+                    params: { watch_region: region_code },
+                });
                 this.streamingServices = response.data.results;
             } catch (error) {
                 console.error("Error fetching streaming services:", error);

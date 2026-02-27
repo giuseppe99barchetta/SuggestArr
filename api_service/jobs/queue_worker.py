@@ -6,10 +6,10 @@ max_instances=1 to prevent overlap).
 """
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
-from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.jellyseer.seer_client import SeerClient
 
@@ -28,13 +28,13 @@ def _backoff_seconds(retry_count: int) -> int:
     return min(30 * (2 ** retry_count), 3600)
 
 
-def _next_attempt_at(retry_count: int) -> str:
-    """Return an ISO-8601 UTC timestamp offset by the backoff for *retry_count*.
+def _next_attempt_at(retry_count: int) -> datetime:
+    """Return a UTC datetime offset by the backoff for *retry_count*.
 
     :param retry_count: The new retry count after incrementing.
-    :return: ISO-8601 string.
+    :return: Naive UTC datetime for the next eligible attempt.
     """
-    return (datetime.utcnow() + timedelta(seconds=_backoff_seconds(retry_count))).isoformat()
+    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=_backoff_seconds(retry_count))
 
 
 async def _run_worker() -> int:
@@ -54,7 +54,7 @@ async def _run_worker() -> int:
 
     logger.info("Queue worker: processing %d item(s).", len(items))
 
-    env = load_env_vars()
+    env = ConfigService.get_runtime_config()
     seer = SeerClient(
         env.get('SEER_API_URL', ''),
         env.get('SEER_TOKEN', ''),

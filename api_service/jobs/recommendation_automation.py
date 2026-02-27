@@ -6,8 +6,8 @@ import traceback
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.db.job_repository import JobRepository
 from api_service.handler.jellyfin_handler import JellyfinHandler
@@ -80,8 +80,8 @@ class RecommendationAutomation:
 
         instance.logger.info(f"Initializing RecommendationAutomation for job: {instance.job_data['name']}")
 
-        # Load environment variables
-        instance.env_vars = load_env_vars()
+        # Load environment variables (merges DB integration keys on top of YAML)
+        instance.env_vars = ConfigService.get_runtime_config()
 
         # Initialize components based on job configuration
         await instance._initialize_components(dry_run=dry_run)

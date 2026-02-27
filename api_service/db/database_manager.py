@@ -5,7 +5,7 @@ import psycopg2
 import mysql.connector
 import threading
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List, Tuple
 
 from api_service.config.config import load_env_vars
@@ -14,6 +14,26 @@ from api_service.exceptions.database_exceptions import DatabaseError
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 DB_PATH = os.path.join(BASE_DIR, 'config', 'config_files', 'requests.db')
+
+# Register explicit adapter/converter for datetime <-> SQLite TIMESTAMP to avoid
+# the Python 3.12 DeprecationWarning about the default datetime adapter.
+sqlite3.register_adapter(datetime, lambda dt: dt.isoformat())
+sqlite3.register_converter(
+    "TIMESTAMP",
+    lambda val: datetime.fromisoformat(val.decode()),
+)
+
+# Required fields that must be non-empty for an integration to be considered valid.
+_INTEGRATION_REQUIRED_FIELDS: Dict[str, List[str]] = {
+    'jellyfin': ['api_url', 'api_key'],
+    'seer':     ['api_url', 'api_key'],
+    'tmdb':     ['api_key'],
+    'omdb':     ['api_key'],
+    # OpenAI/LLM: no hard required fields — either api_key (cloud) or base_url (local) is sufficient.
+    # An existing row (even empty) is considered valid to prevent overwriting user configuration.
+    'openai':   [],
+}
+
 
 class DatabaseManager:
     """Singleton database manager with connection pooling."""
@@ -66,7 +86,8 @@ class DatabaseManager:
                 conn = sqlite3.connect(
                     self.db_path,
                     timeout=30,
-                    check_same_thread=False
+                    check_same_thread=False,
+                    detect_types=sqlite3.PARSE_DECLTYPES,
                 )
                 conn.row_factory = sqlite3.Row
             elif self.db_type == 'postgres':
@@ -131,6 +152,42 @@ class DatabaseManager:
         self.logger.debug(f"Initializing {self.db_type} database with connection pooling")
         
         queries = {
+            # auth_users MUST come before refresh_tokens (foreign key dependency).
+            'auth_users': """
+                CREATE TABLE IF NOT EXISTS auth_users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'user',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_login TIMESTAMP,
+                    is_active INTEGER NOT NULL DEFAULT 1
+                )
+            """,
+            'refresh_tokens': """
+                CREATE TABLE IF NOT EXISTS refresh_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    token_hash TEXT UNIQUE NOT NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    revoked INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
+                )
+            """,
+            'user_media_profiles': """
+                CREATE TABLE IF NOT EXISTS user_media_profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    provider TEXT NOT NULL,
+                    external_user_id TEXT NOT NULL,
+                    external_username TEXT NOT NULL,
+                    access_token TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE,
+                    UNIQUE (user_id, provider)
+                )
+            """,
             'users': """
                 CREATE TABLE IF NOT EXISTS users (
                     user_id TEXT PRIMARY KEY,
@@ -210,6 +267,14 @@ class DatabaseManager:
                     next_attempt_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(tmdb_id, media_type)
+                )
+            """,
+            'integrations': """
+                CREATE TABLE IF NOT EXISTS integrations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    service TEXT UNIQUE NOT NULL,
+                    config_json TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """
         }
@@ -350,6 +415,28 @@ class DatabaseManager:
         # Check and add missing columns to discover_jobs table
         self._migrate_discover_jobs_table()
 
+        # Migrate 'viewer' role to 'user' for all existing accounts
+        self._migrate_viewer_role_to_user()
+
+    def _migrate_viewer_role_to_user(self):
+        """Migrate any existing auth_users with role='viewer' to role='user'."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                ph = self._ph()
+                cursor.execute(
+                    f"UPDATE auth_users SET role = {ph} WHERE role = {ph}",
+                    ('user', 'viewer'),
+                )
+                affected = cursor.rowcount
+                conn.commit()
+                if affected:
+                    self.logger.info(
+                        "Migrated %d auth_user(s) from role 'viewer' to 'user'.", affected
+                    )
+        except Exception as e:
+            self.logger.warning("Could not migrate viewer roles (table may not exist yet): %s", e)
+
     def _migrate_discover_jobs_table(self):
         """Add missing columns to discover_jobs table for job type support."""
         self.logger.debug("Checking for missing columns in discover_jobs table...")
@@ -408,6 +495,163 @@ class DatabaseManager:
             except Exception as e:
                 self.logger.error(f"Failed to migrate discover_jobs table: {e}")
                 # Don't raise - table might not exist yet
+
+    # ------------------------------------------------------------------
+    # Integrations helpers
+    # ------------------------------------------------------------------
+
+    def get_integration(self, service: str) -> Optional[dict]:
+        """
+        Retrieve the stored config for a named service integration.
+
+        Args:
+            service: Integration service name (e.g. 'jellyfin', 'seer').
+
+        Returns:
+            dict with stored config, or None if no row exists.
+        """
+        query = "SELECT config_json FROM integrations WHERE service = ?"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type in ['mysql', 'mariadb', 'postgres']:
+                query = query.replace("?", "%s")
+            cursor.execute(query, (service,))
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return json.loads(row[0])
+
+    def get_all_integrations(self) -> dict:
+        """
+        Retrieve all service integrations from the database.
+
+        Returns:
+            dict mapping service name to its config dict.
+        """
+        query = "SELECT service, config_json FROM integrations"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        return {row[0]: json.loads(row[1]) for row in rows}
+
+    def set_integration(self, service: str, config: dict) -> None:
+        """
+        Insert or replace the config for a named service integration.
+
+        Args:
+            service: Integration service name.
+            config: Configuration dict to persist as JSON.
+        """
+        config_json = json.dumps(config)
+        now = datetime.now(timezone.utc)
+
+        if self.db_type == 'sqlite':
+            query = (
+                "INSERT OR REPLACE INTO integrations (service, config_json, updated_at) "
+                "VALUES (?, ?, ?)"
+            )
+            params = (service, config_json, now)
+        elif self.db_type == 'postgres':
+            query = (
+                "INSERT INTO integrations (service, config_json, updated_at) VALUES (%s, %s, %s) "
+                "ON CONFLICT (service) DO UPDATE SET config_json = EXCLUDED.config_json, "
+                "updated_at = EXCLUDED.updated_at"
+            )
+            params = (service, config_json, now)
+        else:  # mysql / mariadb
+            query = (
+                "INSERT INTO integrations (service, config_json, updated_at) VALUES (%s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE config_json = VALUES(config_json), updated_at = VALUES(updated_at)"
+            )
+            params = (service, config_json, now)
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+
+    @staticmethod
+    def _is_integration_valid(service: str, config: dict) -> bool:
+        """
+        Return True if *config* contains all required non-empty fields for *service*.
+
+        Args:
+            service: Integration service name (e.g. 'jellyfin', 'tmdb').
+            config:  Stored config dict retrieved from the integrations table.
+
+        Returns:
+            True when every required field is present and non-empty.
+        """
+        required = _INTEGRATION_REQUIRED_FIELDS.get(service, [])
+        return all(config.get(field) for field in required)
+
+    def migrate_integrations_from_config(self) -> None:
+        """
+        Startup migration: seed or repair the integrations table from config.yaml.
+
+        Rules applied per service:
+        - Row does not exist            → insert from config (if config has required fields).
+        - Row exists but invalid/empty  → update from config (if config has required fields).
+        - Row exists and valid          → leave untouched.
+
+        This is safe to call on every startup.
+        """
+        env_vars = load_env_vars()
+        candidates = {
+            'jellyfin': {
+                'api_url': env_vars.get('JELLYFIN_API_URL', ''),
+                'api_key': env_vars.get('JELLYFIN_TOKEN', ''),
+            },
+            'seer': {
+                'api_url': env_vars.get('SEER_API_URL', ''),
+                'api_key': env_vars.get('SEER_TOKEN', ''),
+                'session_token': env_vars.get('SEER_SESSION_TOKEN'),
+            },
+            'tmdb': {
+                'api_key': env_vars.get('TMDB_API_KEY', ''),
+            },
+            'omdb': {
+                'api_key': env_vars.get('OMDB_API_KEY', ''),
+            },
+        }
+
+        # AI provider: only seed the DB when YAML already has a key or base_url configured.
+        # No required fields are enforced (either api_key for cloud or base_url for local providers).
+        _openai_key = env_vars.get('OPENAI_API_KEY', '')
+        _openai_base = env_vars.get('OPENAI_BASE_URL', '')
+        if _openai_key or _openai_base:
+            candidates['openai'] = {
+                'api_key': _openai_key,
+                'base_url': _openai_base,
+                'model': env_vars.get('LLM_MODEL', ''),
+            }
+
+        for service, config in candidates.items():
+            existing = self.get_integration(service)
+
+            if existing is not None and self._is_integration_valid(service, existing):
+                self.logger.debug(
+                    "Integration '%s' already in DB with valid credentials — skipping migration", service
+                )
+                continue
+
+            # Check whether config.yaml provides the required fields.
+            required = _INTEGRATION_REQUIRED_FIELDS.get(service, [])
+            if not all(config.get(field) for field in required):
+                self.logger.debug(
+                    "Integration '%s': config.yaml missing required fields %s — skipping",
+                    service, required,
+                )
+                continue
+
+            action = "Updating" if existing is not None else "Migrating"
+            safe_log = {k: v for k, v in config.items() if k not in ('api_key', 'session_token')}
+            self.logger.info(
+                "%s '%s' credentials from config.yaml → integrations table %s",
+                action, service, safe_log,
+            )
+            self.set_integration(service, config)
 
     def ensure_connection(self):
         """Legacy method - now handled by connection pool."""
@@ -1039,7 +1283,7 @@ class DatabaseManager:
             elif db_type == 'sqlite':
                 # Test SQLite by opening and closing connection
                 test_path = db_config.get('DB_PATH', self.db_path)
-                conn = sqlite3.connect(test_path, timeout=5)
+                conn = sqlite3.connect(test_path, timeout=5, detect_types=sqlite3.PARSE_DECLTYPES)
                 conn.close()
 
             return {'status': 'success', 'message': 'Database connection successful!'}
@@ -1157,7 +1401,7 @@ class DatabaseManager:
         :param max_items: Maximum number of rows to return.
         :return: List of row dicts ordered by created_at ASC.
         """
-        now_iso = datetime.utcnow().isoformat()
+        now = self._utc_naive(datetime.now(timezone.utc))
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
 
         query = f"""
@@ -1172,7 +1416,7 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute(query, (now_iso, max_items))
+                cursor.execute(query, (now, max_items))
                 cols = [d[0] for d in cursor.description]
                 return [dict(zip(cols, row)) for row in cursor.fetchall()]
         except Exception as e:
@@ -1180,14 +1424,16 @@ class DatabaseManager:
             return []
 
     def _update_pending_status(self, row_id: int, status: str, retry_count: int,
-                               last_attempt_at: Optional[str] = None,
-                               next_attempt_at: Optional[str] = None) -> None:
+                               last_attempt_at: Optional[datetime] = None,
+                               next_attempt_at: Optional[datetime] = None) -> None:
         """Internal helper — update status / retry columns on a pending_requests row."""
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = (f"UPDATE pending_requests SET status={placeholder}, retry_count={placeholder}"
                  f", last_attempt_at={placeholder}, next_attempt_at={placeholder}"
                  f" WHERE id={placeholder}")
-        params = (status, retry_count, last_attempt_at, next_attempt_at, row_id)
+        db_last = self._utc_naive(last_attempt_at) if last_attempt_at is not None else None
+        db_next = self._utc_naive(next_attempt_at) if next_attempt_at is not None else None
+        params = (status, retry_count, db_last, db_next, row_id)
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
@@ -1203,7 +1449,7 @@ class DatabaseManager:
         :param retry_count: Current retry count (unchanged at this point).
         """
         self._update_pending_status(row_id, 'submitting', retry_count,
-                                    last_attempt_at=datetime.utcnow().isoformat())
+                                    last_attempt_at=datetime.now(timezone.utc))
 
     def mark_pending_submitted(self, row_id: int, retry_count: int) -> None:
         """Mark a row as successfully submitted.
@@ -1220,18 +1466,18 @@ class DatabaseManager:
         :param retry_count: Final retry count.
         """
         self._update_pending_status(row_id, 'failed', retry_count,
-                                    last_attempt_at=datetime.utcnow().isoformat())
+                                    last_attempt_at=datetime.now(timezone.utc))
 
     def increment_pending_retry(self, row_id: int, new_retry_count: int,
-                                next_attempt_at: str) -> None:
+                                next_attempt_at: datetime) -> None:
         """Bump retry counter and schedule next attempt with exponential backoff.
 
         :param row_id: Primary key of the pending_requests row.
         :param new_retry_count: Incremented retry count.
-        :param next_attempt_at: ISO-8601 UTC timestamp for next eligible attempt.
+        :param next_attempt_at: UTC datetime for next eligible attempt.
         """
         self._update_pending_status(row_id, 'queued', new_retry_count,
-                                    last_attempt_at=datetime.utcnow().isoformat(),
+                                    last_attempt_at=datetime.now(timezone.utc),
                                     next_attempt_at=next_attempt_at)
 
     def reset_stale_inflight(self, cutoff_minutes: int = 10) -> int:
@@ -1242,7 +1488,7 @@ class DatabaseManager:
         :param cutoff_minutes: Rows locked for longer than this are re-queued.
         :return: Number of rows reset.
         """
-        cutoff = (datetime.utcnow() - timedelta(minutes=cutoff_minutes)).isoformat()
+        cutoff = self._utc_naive(datetime.now(timezone.utc) - timedelta(minutes=cutoff_minutes))
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = (f"UPDATE pending_requests SET status='queued'"
                  f" WHERE status='submitting' AND last_attempt_at < {placeholder}")
@@ -1258,3 +1504,540 @@ class DatabaseManager:
         except Exception as e:
             self.logger.error("Failed to reset stale in-flight rows: %s", e)
             return 0
+
+    # ---------------------------------------------------------------------------
+    # Auth-user methods (SuggestArr internal accounts — NOT external service users)
+    # ---------------------------------------------------------------------------
+
+    def _ph(self) -> str:
+        """Return the SQL placeholder character for the current DB type."""
+        return '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+
+    @staticmethod
+    def _utc_naive(dt: datetime) -> datetime:
+        """Return a naive UTC datetime safe for all DB backends.
+
+        MySQL DATETIME rejects timezone offsets; stripping tzinfo after
+        normalising to UTC gives a value every backend accepts.
+        """
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+
+    def get_auth_user_count(self) -> int:
+        """
+        Return the total number of SuggestArr auth accounts.
+
+        Used by the setup-mode check in the auth middleware: if the count is 0
+        the system is in first-run mode and all routes are temporarily public.
+
+        Returns:
+            int: Number of rows in the auth_users table.
+        """
+        ph = self._ph()
+        query = "SELECT COUNT(*) FROM auth_users"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            row = cursor.fetchone()
+            return int(row[0]) if row else 0
+
+    def create_auth_user(self, username: str, password_hash: str, role: str = 'user') -> int:
+        """
+        Insert a new SuggestArr auth account and return its primary key.
+
+        Args:
+            username:      Unique login name.
+            password_hash: bcrypt hash string produced by AuthService.hash_password.
+            role:          'admin' or 'user' (default 'user').
+
+        Returns:
+            int: The new row's primary key (id).
+
+        Raises:
+            DatabaseError: If the username already exists or the insert fails.
+        """
+        ph = self._ph()
+
+        if self.db_type == 'postgres':
+            query = (
+                f"INSERT INTO auth_users (username, password_hash, role) "
+                f"VALUES ({ph}, {ph}, {ph}) RETURNING id"
+            )
+        else:
+            query = (
+                f"INSERT INTO auth_users (username, password_hash, role) "
+                f"VALUES ({ph}, {ph}, {ph})"
+            )
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (username, password_hash, role))
+                if self.db_type == 'postgres':
+                    row = cursor.fetchone()
+                    new_id = row[0]
+                else:
+                    new_id = cursor.lastrowid
+                conn.commit()
+                self.logger.info("Created auth user: %s (role=%s)", username, role)
+                return int(new_id)
+        except Exception as exc:
+            raise DatabaseError(
+                error=f"Failed to create auth user: {exc}",
+                db_type=self.db_type,
+            ) from exc
+
+    def get_auth_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """
+        Look up a SuggestArr auth user by their login name.
+
+        Args:
+            username: Login name to search for (case-sensitive).
+
+        Returns:
+            dict | None: Row as a dict with keys id, username, password_hash,
+                         role, is_active, last_login — or None if not found.
+        """
+        ph = self._ph()
+        query = (
+            f"SELECT id, username, password_hash, role, is_active, last_login "
+            f"FROM auth_users WHERE username = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (username,))
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row[0],
+            "username": row[1],
+            "password_hash": row[2],
+            "role": row[3],
+            "is_active": bool(row[4]),
+            "last_login": row[5],
+        }
+
+    def get_auth_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Look up a SuggestArr auth user by their primary key.
+
+        Args:
+            user_id: Integer primary key from the auth_users table.
+
+        Returns:
+            dict | None: Same shape as get_auth_user_by_username, or None.
+        """
+        ph = self._ph()
+        query = (
+            f"SELECT id, username, password_hash, role, is_active, last_login "
+            f"FROM auth_users WHERE id = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id,))
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row[0],
+            "username": row[1],
+            "password_hash": row[2],
+            "role": row[3],
+            "is_active": bool(row[4]),
+            "last_login": row[5],
+        }
+
+    def update_last_login(self, user_id: int) -> None:
+        """
+        Record the current UTC timestamp as the last successful login time.
+
+        Args:
+            user_id: Primary key of the auth user who just logged in.
+        """
+        ph = self._ph()
+        now = self._utc_naive(datetime.now(timezone.utc))
+        query = f"UPDATE auth_users SET last_login = {ph} WHERE id = {ph}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (now, user_id))
+            conn.commit()
+
+    # ---------------------------------------------------------------------------
+    # Refresh-token methods
+    # ---------------------------------------------------------------------------
+
+    def store_refresh_token(self, user_id: int, token_hash: str, expires_at: datetime) -> None:
+        """
+        Persist the SHA-256 hash of a newly issued refresh token.
+
+        Only the hash is stored, never the raw token, so a database dump does
+        not yield usable refresh tokens.
+
+        Args:
+            user_id:    Primary key of the owning auth user.
+            token_hash: SHA-256 hex digest of the raw refresh token.
+            expires_at: Expiry timestamp (timezone-aware recommended).
+        """
+        ph = self._ph()
+        if expires_at.tzinfo is not None:
+            expires_at = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
+        query = (
+            f"INSERT INTO refresh_tokens (user_id, token_hash, expires_at) "
+            f"VALUES ({ph}, {ph}, {ph})"
+        )
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (user_id, token_hash, expires_at))
+                conn.commit()
+        except Exception as exc:
+            raise DatabaseError(
+                error=f"Failed to store refresh token: {exc}",
+                db_type=self.db_type,
+            ) from exc
+
+    def get_refresh_token(self, token_hash: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a non-revoked refresh token record by its hash.
+
+        Args:
+            token_hash: SHA-256 hex digest of the raw token received from the cookie.
+
+        Returns:
+            dict | None: Row with keys id, user_id, expires_at — or None if
+                         not found or already revoked.
+        """
+        ph = self._ph()
+        query = (
+            f"SELECT id, user_id, expires_at FROM refresh_tokens "
+            f"WHERE token_hash = {ph} AND revoked = 0"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (token_hash,))
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return {"id": row[0], "user_id": row[1], "expires_at": row[2]}
+
+    def revoke_refresh_token(self, token_hash: str) -> None:
+        """
+        Mark a refresh token as revoked so it can no longer be used.
+
+        Called on logout.  The row is kept (not deleted) so that token-reuse
+        attacks (presenting a revoked token) can be detected in the future.
+
+        Args:
+            token_hash: SHA-256 hex digest of the token to invalidate.
+        """
+        ph = self._ph()
+        query = f"UPDATE refresh_tokens SET revoked = 1 WHERE token_hash = {ph}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (token_hash,))
+            conn.commit()
+
+    def cleanup_expired_refresh_tokens(self) -> int:
+        """
+        Delete refresh tokens that have expired or been revoked.
+
+        Intended to be called periodically (e.g. daily) to keep the table small.
+
+        Returns:
+            int: Number of rows deleted.
+        """
+        ph = self._ph()
+        now = self._utc_naive(datetime.now(timezone.utc))
+        query = (
+            f"DELETE FROM refresh_tokens "
+            f"WHERE expires_at < {ph} OR revoked = 1"
+        )
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (now,))
+                deleted = cursor.rowcount
+                conn.commit()
+                if deleted:
+                    self.logger.debug("Cleaned up %d expired/revoked refresh tokens.", deleted)
+                return deleted
+        except Exception as exc:
+            self.logger.error("Failed to clean up refresh tokens: %s", exc)
+            return 0
+
+    # ---------------------------------------------------------------------------
+    # Auth user management methods
+    # ---------------------------------------------------------------------------
+
+    def get_all_auth_users(self) -> List[Dict[str, Any]]:
+        """
+        Return all SuggestArr auth users, excluding password hashes.
+
+        Returns:
+            list[dict]: Each dict has keys id, username, role, is_active,
+                        created_at, last_login.
+        """
+        query = (
+            "SELECT id, username, role, is_active, created_at, last_login "
+            "FROM auth_users ORDER BY id"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        return [
+            {
+                "id": row[0],
+                "username": row[1],
+                "role": row[2],
+                "is_active": bool(row[3]),
+                "created_at": row[4],
+                "last_login": row[5],
+            }
+            for row in rows
+        ]
+
+    def update_auth_user(self, user_id: int, updates: Dict[str, Any]) -> bool:
+        """
+        Update allowed fields of an auth user record.
+
+        Only 'role' and 'is_active' may be changed through this method.
+
+        Args:
+            user_id: Primary key of the user to update.
+            updates: Dict containing any subset of {'role', 'is_active'}.
+
+        Returns:
+            bool: True if a row was updated, False if the user was not found.
+        """
+        allowed = {'role', 'is_active'}
+        fields = {k: v for k, v in updates.items() if k in allowed}
+        if not fields:
+            return False
+        ph = self._ph()
+        set_clause = ", ".join(f"{k} = {ph}" for k in fields)
+        query = f"UPDATE auth_users SET {set_clause} WHERE id = {ph}"
+        values = list(fields.values()) + [user_id]
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, values)
+            updated = cursor.rowcount
+            conn.commit()
+        return updated > 0
+
+    def update_auth_user_profile(self, user_id: int, updates: Dict[str, Any]) -> bool:
+        """
+        Update a user's own profile fields: username and/or password_hash.
+
+        This is intentionally separate from update_auth_user (which handles
+        admin-level role/active changes) so that the two call-sites stay
+        clearly distinct.
+
+        Args:
+            user_id: Primary key of the user to update.
+            updates: Dict containing any subset of {'username', 'password_hash'}.
+
+        Returns:
+            bool: True if a row was updated, False if the user was not found.
+
+        Raises:
+            Exception: Propagates DB-level unique-constraint violations
+                       (e.g. duplicate username) so the caller can handle them.
+        """
+        allowed = {'username', 'password_hash'}
+        fields = {k: v for k, v in updates.items() if k in allowed}
+        if not fields:
+            return False
+        ph = self._ph()
+        set_clause = ", ".join(f"{k} = {ph}" for k in fields)
+        query = f"UPDATE auth_users SET {set_clause} WHERE id = {ph}"
+        values = list(fields.values()) + [user_id]
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, values)
+            updated = cursor.rowcount
+            conn.commit()
+        return updated > 0
+
+    def delete_auth_user(self, user_id: int) -> bool:
+        """
+        Permanently delete a SuggestArr auth user.
+
+        Cascade deletes their refresh_tokens and user_media_profiles.
+
+        Args:
+            user_id: Primary key of the user to remove.
+
+        Returns:
+            bool: True if a row was deleted, False if the user was not found.
+        """
+        ph = self._ph()
+        query = f"DELETE FROM auth_users WHERE id = {ph}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id,))
+            deleted = cursor.rowcount
+            conn.commit()
+        return deleted > 0
+
+    def get_admin_count(self) -> int:
+        """
+        Count active admin accounts.
+
+        Used to prevent removing the last active admin.
+
+        Returns:
+            int: Number of auth_users rows where role='admin' AND is_active=1.
+        """
+        query = "SELECT COUNT(*) FROM auth_users WHERE role = 'admin' AND is_active = 1"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            row = cursor.fetchone()
+        return row[0] if row else 0
+
+    # ---------------------------------------------------------------------------
+    # User media profile methods
+    # ---------------------------------------------------------------------------
+
+    def create_user_media_profile(
+        self,
+        user_id: int,
+        provider: str,
+        external_user_id: str,
+        external_username: str,
+        access_token: Optional[str] = None,
+    ) -> None:
+        """
+        Insert or replace a media profile link for a SuggestArr user.
+
+        The UNIQUE (user_id, provider) constraint ensures only one link per
+        provider per user.  A second call for the same user+provider updates
+        the existing record in-place (preserving the row id).
+
+        Args:
+            user_id:           Primary key of the auth user.
+            provider:          One of 'jellyfin', 'plex', 'emby'.
+            external_user_id:  The user's ID on the external media server.
+            external_username: Human-readable name on the external server.
+            access_token:      Optional token for the external server (nullable).
+        """
+        ph = self._ph()
+        if self.db_type == 'sqlite':
+            query = (
+                f"INSERT INTO user_media_profiles "
+                f"(user_id, provider, external_user_id, external_username, access_token) "
+                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}) "
+                f"ON CONFLICT(user_id, provider) DO UPDATE SET "
+                f"external_user_id = excluded.external_user_id, "
+                f"external_username = excluded.external_username, "
+                f"access_token = excluded.access_token, "
+                f"created_at = CURRENT_TIMESTAMP"
+            )
+        elif self.db_type == 'postgres':
+            query = (
+                f"INSERT INTO user_media_profiles "
+                f"(user_id, provider, external_user_id, external_username, access_token) "
+                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}) "
+                f"ON CONFLICT (user_id, provider) DO UPDATE SET "
+                f"external_user_id = EXCLUDED.external_user_id, "
+                f"external_username = EXCLUDED.external_username, "
+                f"access_token = EXCLUDED.access_token, "
+                f"created_at = CURRENT_TIMESTAMP"
+            )
+        else:
+            # MySQL / MariaDB
+            query = (
+                f"INSERT INTO user_media_profiles "
+                f"(user_id, provider, external_user_id, external_username, access_token) "
+                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}) "
+                f"ON DUPLICATE KEY UPDATE "
+                f"external_user_id = VALUES(external_user_id), "
+                f"external_username = VALUES(external_username), "
+                f"access_token = VALUES(access_token), "
+                f"created_at = CURRENT_TIMESTAMP"
+            )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id, provider, external_user_id, external_username, access_token))
+            conn.commit()
+
+    def get_user_media_profiles(self, user_id: int) -> List[Dict[str, Any]]:
+        """
+        Return all media profile links for a SuggestArr user.
+
+        Access tokens are intentionally excluded from the result so they are
+        never serialised into API responses.
+
+        Args:
+            user_id: Primary key of the auth user.
+
+        Returns:
+            list[dict]: Each dict has keys id, provider, external_username,
+                        created_at.
+        """
+        ph = self._ph()
+        query = (
+            f"SELECT id, provider, external_username, created_at "
+            f"FROM user_media_profiles WHERE user_id = {ph} ORDER BY provider"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id,))
+            rows = cursor.fetchall()
+        return [
+            {
+                "id": row[0],
+                "provider": row[1],
+                "external_username": row[2],
+                "created_at": row[3],
+            }
+            for row in rows
+        ]
+
+    def get_user_media_profile_token(self, user_id: int, provider: str) -> Optional[str]:
+        """
+        Retrieve the access token for a specific media profile link.
+
+        This method is intentionally separate from get_user_media_profiles so
+        that tokens are only fetched when explicitly needed (not on every list).
+
+        Args:
+            user_id:  Primary key of the auth user.
+            provider: Provider name ('jellyfin', 'plex', 'emby').
+
+        Returns:
+            str | None: Raw access token, or None if no link exists.
+        """
+        ph = self._ph()
+        query = (
+            f"SELECT access_token FROM user_media_profiles "
+            f"WHERE user_id = {ph} AND provider = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id, provider))
+            row = cursor.fetchone()
+        return row[0] if row else None
+
+    def delete_user_media_profile(self, user_id: int, provider: str) -> bool:
+        """
+        Remove a media profile link.
+
+        Args:
+            user_id:  Primary key of the auth user.
+            provider: Provider to unlink ('jellyfin', 'plex', 'emby').
+
+        Returns:
+            bool: True if a row was deleted, False if no link existed.
+        """
+        ph = self._ph()
+        query = f"DELETE FROM user_media_profiles WHERE user_id = {ph} AND provider = {ph}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id, provider))
+            deleted = cursor.rowcount
+            conn.commit()
+        return deleted > 0

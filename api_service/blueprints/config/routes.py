@@ -2,6 +2,7 @@ import os
 from flask import Blueprint, request, jsonify
 import yaml
 import requests
+from api_service.auth.middleware import require_role
 from api_service.config.config import (
     load_env_vars, save_env_vars, clear_env_vars,
     get_config_sections, get_config_section, save_config_section,
@@ -9,37 +10,148 @@ from api_service.config.config import (
 )
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.config_service import ConfigService
 
 logger = LoggerManager.get_logger("ConfigRoute")
 config_bp = Blueprint('config', __name__)
 
+# Keys whose plaintext values must never appear in API responses.
+_SECRET_KEYS = frozenset({
+    'TMDB_API_KEY', 'OMDB_API_KEY',
+    'PLEX_TOKEN', 'JELLYFIN_TOKEN',
+    'SEER_TOKEN', 'SEER_USER_PSW', 'SEER_SESSION_TOKEN',
+    'DB_PASSWORD',
+    'OPENAI_API_KEY',
+    'TRAKT_CLIENT_SECRET', 'TRAKT_ACCESS_TOKEN', 'TRAKT_REFRESH_TOKEN',
+})
+
+_REDACTED = "***"
+
+# Bidirectional mapping between flat config keys (YAML / API format) and the
+# DB integrations table (service / field format).
+_INTEGRATION_TO_FLAT: dict = {
+    'tmdb':     {'api_key': 'TMDB_API_KEY'},
+    'jellyfin': {'api_url': 'JELLYFIN_API_URL', 'api_key': 'JELLYFIN_TOKEN'},
+    'seer':     {'api_url': 'SEER_API_URL', 'api_key': 'SEER_TOKEN',
+                 'session_token': 'SEER_SESSION_TOKEN'},
+    'omdb':     {'api_key': 'OMDB_API_KEY'},
+    'openai':   {'api_key': 'OPENAI_API_KEY', 'base_url': 'OPENAI_BASE_URL', 'model': 'LLM_MODEL'},
+}
+_FLAT_TO_INTEGRATION: dict = {
+    flat_key: (service, db_field)
+    for service, field_map in _INTEGRATION_TO_FLAT.items()
+    for db_field, flat_key in field_map.items()
+}
+
+
+def _expand_integrations_into_flat(flat: dict, integrations: dict) -> None:
+    """Inject non-empty DB integration values into a flat config dict (in-place).
+
+    The integrations table is authoritative for the keys in ``_INTEGRATION_TO_FLAT``.
+    Only non-empty values from the DB override the flat dict, so YAML-only keys
+    (e.g. PLEX_TOKEN) are left untouched.
+
+    Args:
+        flat: Flat config dict to update (e.g. from ``load_env_vars``).
+        integrations: Nested dict returned by ``get_all_integrations``.
+    """
+    for service, field_map in _INTEGRATION_TO_FLAT.items():
+        svc_cfg = integrations.get(service) or {}
+        for db_field, flat_key in field_map.items():
+            val = svc_cfg.get(db_field)
+            if val:
+                flat[flat_key] = val
+
+
+def _sync_integrations_from_flat(db, flat: dict) -> None:
+    """Upsert DB integration rows from a flat config dict.
+
+    Only keys present in *flat* with a non-empty, non-redacted value are written.
+    Missing keys leave the existing DB row untouched (merge, not replace).
+
+    Args:
+        db: ``DatabaseManager`` instance.
+        flat: Flat config dict (e.g. from ``request.json`` or ``load_env_vars``).
+    """
+    service_updates: dict = {}
+    for flat_key, (service, db_field) in _FLAT_TO_INTEGRATION.items():
+        val = flat.get(flat_key)
+        if val and val != _REDACTED:
+            service_updates.setdefault(service, {})[db_field] = val
+
+    for service, changes in service_updates.items():
+        existing = db.get_integration(service) or {}
+        db.set_integration(service, {**existing, **changes})
+
+
+def _redact_config(config: dict) -> dict:
+    """Return a copy of config with non-empty secret values replaced by '***'."""
+    return {k: (_REDACTED if k in _SECRET_KEYS and v else v) for k, v in config.items()}
+
+
+def _merge_secrets(incoming: dict, existing: dict) -> dict:
+    """Replace '***' sentinel values in incoming with the real value from existing config.
+
+    Falls back to the DB integrations table for keys that are only stored there
+    (not in config.yaml / ``existing``).
+    """
+    merged = dict(incoming)
+    # Build a flat view of DB-backed values as a fallback for redacted secrets.
+    db_flat: dict = {}
+    try:
+        _expand_integrations_into_flat(db_flat, DatabaseManager().get_all_integrations())
+    except Exception:
+        pass
+    for key in _SECRET_KEYS:
+        if merged.get(key) == _REDACTED:
+            merged[key] = existing.get(key) or db_flat.get(key)
+    return merged
+
 @config_bp.route('/fetch', methods=['GET'])
+@require_role('admin')
 def fetch_config():
     """
-    Load current configuration in JSON format.
+    Load current configuration in JSON format (admin sees real keys).
+
+    DB-backed integration values (TMDB_API_KEY, JELLYFIN_TOKEN, etc.) are
+    injected into the flat response so the frontend can read them directly,
+    even when config.yaml does not contain them.
+
+    Secrets are returned as-is for admin users; the UI is responsible for
+    masking them (reveal-on-demand pattern).  Non-admin access is blocked
+    upstream by the require_role('admin') decorator.
     """
     try:
         config = load_env_vars()
+        db = DatabaseManager()
+        db_integrations = db.get_all_integrations()
+        # Surface DB-backed keys in the flat format the frontend expects.
+        _expand_integrations_into_flat(config, db_integrations)
+        config['integrations'] = db_integrations
         return jsonify(config), 200
     except Exception as e:
         logger.error(f'Error loading configuration: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error loading configuration', 'status': 'error'}), 500
-
+    
 @config_bp.route('/save', methods=['POST'])
+@require_role('admin')
 def save_config():
     """
-    Save environment variables.
+    Save environment variables and sync the DB integrations table.
     """
     try:
-        config_data = request.json
+        config_data = _merge_secrets(request.json or {}, load_env_vars())
         save_env_vars(config_data)
-        DatabaseManager().refresh_config()
+        db = DatabaseManager()
+        _sync_integrations_from_flat(db, config_data)
+        db.refresh_config()
         return jsonify({'message': 'Configuration saved successfully!', 'status': 'success'}), 200
     except Exception as e:
         logger.error(f'Error saving configuration: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error saving configuration', 'status': 'error'}), 500
 
 @config_bp.route('/reset', methods=['POST'])
+@require_role('admin')
 def reset_config():
     """
     Reset environment variables.
@@ -52,6 +164,7 @@ def reset_config():
         return jsonify({'message': 'Error clearing configuration', 'status': 'error'}), 500
 
 @config_bp.route('/test-db-connection', methods=['POST'])
+@require_role('admin')
 def test_db_connection():
     """
     Test database connection.
@@ -79,12 +192,14 @@ def test_db_connection():
         return jsonify({'message': 'Error testing database connection', 'status': 'error'}), 500
 
 @config_bp.route('/sections', methods=['GET'])
-def get_config_sections():
+@require_role('admin')
+def get_config_sections_endpoint():
     """
     Get available configuration sections.
     """
     try:
-        sections = get_config_sections()
+        from api_service.config.config import get_config_sections as _get_sections
+        sections = _get_sections()
         return jsonify({
             'sections': sections,
             'status': 'success'
@@ -94,12 +209,17 @@ def get_config_sections():
         return jsonify({'message': 'Error getting configuration sections', 'status': 'error'}), 500
 
 @config_bp.route('/section/<section_name>', methods=['GET'])
+@require_role('admin')
 def get_config_section_endpoint(section_name):
     """
-    Get a specific configuration section.
+    Get a specific configuration section (admin only – real keys, no redaction).
+
+    DB-backed integration values are injected so the response is always
+    up-to-date even when config.yaml is stale or missing those keys.
     """
     try:
         section_data = get_config_section(section_name)
+        _expand_integrations_into_flat(section_data, DatabaseManager().get_all_integrations())
         return jsonify({
             'section': section_name,
             'data': section_data,
@@ -113,16 +233,21 @@ def get_config_section_endpoint(section_name):
         return jsonify({'message': 'Error getting configuration section', 'status': 'error'}), 500
 
 @config_bp.route('/section/<section_name>', methods=['POST'])
+@require_role('admin')
 def save_config_section_endpoint(section_name):
     """
-    Save a specific configuration section.
+    Save a specific configuration section and sync the DB integrations table.
     """
     try:
         section_data = request.json
         if not section_data:
             return jsonify({'message': 'No configuration data provided', 'status': 'error'}), 400
 
+        section_data = _merge_secrets(section_data, load_env_vars())
         save_config_section(section_name, section_data)
+        # Keep the integrations table in sync whenever service credentials are saved.
+        db = DatabaseManager()
+        _sync_integrations_from_flat(db, section_data)
         return jsonify({
             'message': f'Configuration section {section_name} saved successfully!',
             'section': section_name,
@@ -139,17 +264,20 @@ def save_config_section_endpoint(section_name):
 def get_setup_status():
     """
     Get setup completion status.
+
+    The integrations table is checked as a fallback so that ``has_tmdb_key``
+    and ``is_complete`` remain accurate even when config.yaml is missing
+    DB-backed keys (e.g. after an import or a clean migration).
     """
     try:
         config = load_env_vars()
+        # Inject DB-backed values so is_setup_complete sees the real state.
+        try:
+            _expand_integrations_into_flat(config, DatabaseManager().get_all_integrations())
+        except Exception:
+            pass
         setup_completed = config.get('SETUP_COMPLETED', False)
         is_complete = is_setup_complete(config)
-
-        # Auto-update setup completion if it's actually complete but not marked
-        if not setup_completed and is_complete:
-            config['SETUP_COMPLETED'] = True
-            save_env_vars(config)
-            setup_completed = True
 
         return jsonify({
             'setup_completed': setup_completed,
@@ -163,6 +291,7 @@ def get_setup_status():
         return jsonify({'message': 'Error getting setup status', 'status': 'error'}), 500
 
 @config_bp.route('/complete-setup', methods=['POST'])
+@require_role('admin')
 def complete_setup():
     """
     Mark setup as completed.
@@ -189,6 +318,7 @@ def complete_setup():
         return jsonify({'message': 'Error completing setup', 'status': 'error'}), 500
 
 @config_bp.route('/log-level', methods=['GET'])
+@require_role('admin')
 def get_log_level():
     """
     Get current log level.
@@ -205,6 +335,7 @@ def get_log_level():
         return jsonify({'message': 'Error getting log level', 'status': 'error'}), 500
 
 @config_bp.route('/log-level', methods=['POST'])
+@require_role('admin')
 def set_log_level():
     """
     Set log level.
@@ -233,6 +364,7 @@ def set_log_level():
         return jsonify({'message': 'Error setting log level', 'status': 'error'}), 500
 
 @config_bp.route('/pool-stats', methods=['GET'])
+@require_role('admin')
 def get_pool_statistics():
     """
     Get database connection pool statistics.
@@ -253,6 +385,7 @@ def get_pool_statistics():
         return jsonify({'message': 'Error getting pool statistics', 'status': 'error'}), 500
 
 @config_bp.route('/force_run', methods=['POST'])
+@require_role('admin')
 def force_run_automation():
     """
     Force run the automation script immediately.
@@ -273,6 +406,7 @@ def force_run_automation():
         return jsonify({'message': 'Error forcing automation run', 'status': 'error'}), 500
 
 @config_bp.route('/test-db', methods=['POST'])
+@require_role('admin')
 def test_database_connection():
     """
     Test database connection with current configuration.
@@ -420,3 +554,71 @@ def get_docker_digest(tag):
     except requests.exceptions.RequestException as e:
         logger.error(f'Docker digest API error for {tag}: {e}', exc_info=True)
         return jsonify({'status': 'error', 'message': 'Failed to retrieve Docker digest'}), 500
+
+
+@config_bp.route('/export', methods=['GET'])
+@require_role('admin')
+def export_config():
+    """
+    Export the full application configuration as a portable JSON snapshot.
+
+    Requires admin role.  The response includes API keys in plain text so that
+    a configuration backup can be fully restored; callers must treat the
+    response as sensitive.
+
+    Returns:
+        200 JSON with keys: version, integrations, settings.
+        500 on unexpected server error.
+    """
+    try:
+        snapshot = ConfigService.export_config()
+        logger.info("Admin config export requested by user '%s'", _current_username())
+        return jsonify(snapshot), 200
+    except Exception as e:
+        logger.error('Error exporting configuration: %s', e, exc_info=True)
+        return jsonify({'message': 'Error exporting configuration', 'status': 'error'}), 500
+
+
+@config_bp.route('/import', methods=['POST'])
+@require_role('admin')
+def import_config():
+    """
+    Import a configuration snapshot produced by the export endpoint.
+
+    Requires admin role.  Accepts a JSON body matching the export format
+    (version, integrations, settings).  Integrations are upserted into the DB;
+    settings are merged into config.yaml.
+
+    Returns:
+        200 on success.
+        400 if the body is missing, not JSON, or the version is unsupported.
+        500 on unexpected server error.
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({'message': 'Request body must be valid JSON', 'status': 'error'}), 400
+
+        ConfigService.import_config(data)
+        logger.info("Admin config import completed by user '%s'", _current_username())
+        return jsonify({'message': 'Configuration imported successfully', 'status': 'success'}), 200
+    except ValueError as e:
+        logger.warning('Config import rejected: %s', e)
+        return jsonify({'message': str(e), 'status': 'error'}), 400
+    except Exception as e:
+        logger.error('Error importing configuration: %s', e, exc_info=True)
+        return jsonify({'message': 'Error importing configuration', 'status': 'error'}), 500
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _current_username() -> str:
+    """Return the username of the authenticated user, or '<unknown>'."""
+    try:
+        from flask import g
+        user = getattr(g, 'current_user', None)
+        return user.get('username', '<unknown>') if user else '<unknown>'
+    except Exception:
+        return '<unknown>'

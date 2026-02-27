@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import axios from 'axios';
+import { importConfig as importConfigAPI } from '@/api/api.js'; // importa il wrapper admin-only
 
 export function useConfigImport(fetchConfig) {
   const isImporting = ref(false);
@@ -19,7 +19,10 @@ export function useConfigImport(fetchConfig) {
       const text = await file.text();
       const configData = JSON.parse(text);
 
-      await axios.post('/api/config/save', configData);
+      // usa il nuovo endpoint admin-only
+      await importConfigAPI(configData);
+
+      // ricarica la config aggiornata
       await fetchConfig();
 
       return { success: true };
