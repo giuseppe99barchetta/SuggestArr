@@ -214,7 +214,7 @@ def enforce_authentication() -> Optional[tuple]:
     g.current_user = {
         "id": payload["sub"],
         "username": payload.get("username", ""),
-        "role": payload.get("role", "viewer"),
+        "role": payload.get("role", "user"),
     }
 
     return None  # Allow the request to continue.
@@ -239,7 +239,7 @@ def require_role(*roles: str):
             ...
 
     Args:
-        *roles: Accepted role strings (e.g. 'admin', 'viewer').
+        *roles: Accepted role strings (e.g. 'admin', 'user').
 
     Returns:
         Flask response with 401/403 on failure, or the route result on success.

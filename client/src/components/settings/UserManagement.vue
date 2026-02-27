@@ -64,7 +64,6 @@
               @change="updateUserRole(user)"
             >
               <option value="admin">Admin</option>
-              <option value="viewer">Viewer</option>
               <option value="user">User</option>
             </select>
 
@@ -107,7 +106,7 @@
           <label class="checkbox-label">
             <input
               type="checkbox"
-              v-model="allowRegistration"
+              v-model="localAllowRegistration"
               @change="saveRegistration"
               :disabled="isSavingRegistration"
             />
@@ -179,12 +178,11 @@
                   class="form-control"
                   :disabled="isCreating"
                 >
-                  <option value="viewer">Viewer</option>
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                 </select>
                 <small class="form-help">
-                  Admins have full access. Viewers have read-only access.
+                  Admins have full access. Users have standard access.
                 </small>
               </div>
 
@@ -265,12 +263,12 @@ export default {
       users: [],
       isLoadingUsers: false,
       isSaving: {},
-      allowRegistration: false,
+      localAllowRegistration: false,
       isSavingRegistration: false,
 
       // Create modal
       showCreateModal: false,
-      newUser: { username: '', password: '', role: 'viewer' },
+      newUser: { username: '', password: '', role: 'user' },
       showNewPassword: false,
       createError: null,
       isCreating: false,
@@ -289,9 +287,17 @@ export default {
     },
   },
 
+  watch: {
+    'config.ALLOW_REGISTRATION': {
+      immediate: true,
+      handler(val) {
+        this.localAllowRegistration = !!val;
+      },
+    },
+  },
+
   mounted() {
     this.loadUsers();
-    this.loadRegistrationSetting();
   },
 
   methods: {
@@ -305,15 +311,6 @@ export default {
         console.error(err);
       } finally {
         this.isLoadingUsers = false;
-      }
-    },
-
-    async loadRegistrationSetting() {
-      try {
-        const res = await axios.get('/api/config/section/advanced');
-        this.allowRegistration = Boolean(res.data?.ALLOW_REGISTRATION);
-      } catch (err) {
-        console.error('Failed to load registration setting', err);
       }
     },
 
@@ -397,14 +394,14 @@ export default {
       this.isSavingRegistration = true;
       try {
         await axios.post('/api/config/section/advanced', {
-          ALLOW_REGISTRATION: this.allowRegistration,
+          ALLOW_REGISTRATION: this.localAllowRegistration,
         });
         this.$toast.success(
-          `Self-registration ${this.allowRegistration ? 'enabled' : 'disabled'}`
+          `Self-registration ${this.localAllowRegistration ? 'enabled' : 'disabled'}`
         );
       } catch (err) {
         this.$toast.error('Failed to save registration setting');
-        this.allowRegistration = !this.allowRegistration;
+        this.localAllowRegistration = !!this.config.ALLOW_REGISTRATION;
       } finally {
         this.isSavingRegistration = false;
       }
@@ -475,7 +472,7 @@ export default {
 }
 
 .accounts-group {
-  grid-column: 1 / -1;
+  grid-column: 1 / 1;
 }
 
 .group-title-row {
@@ -495,6 +492,13 @@ export default {
   margin-bottom: 1.25rem;
   line-height: 1.5;
 }
+
+.checkbox-text {
+  margin-left: 0.5rem;
+  color: #e5e7eb;
+  font-weight: 500;
+}
+
 
 /* ── Empty / loading state ─────────────────────────────────────────────── */
 .list-empty {
@@ -618,6 +622,10 @@ export default {
   cursor: not-allowed;
 }
 
+.role-select option {
+  background-color: var(--color-bg-interactive);
+  color: var(--color-text-primary);
+}
 /* ── Status chip ───────────────────────────────────────────────────────── */
 .status-chip {
   display: inline-flex;

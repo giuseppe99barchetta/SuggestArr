@@ -149,7 +149,7 @@ class DatabaseManager:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE NOT NULL,
                     password_hash TEXT NOT NULL,
-                    role TEXT NOT NULL DEFAULT 'viewer',
+                    role TEXT NOT NULL DEFAULT 'user',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_login TIMESTAMP,
                     is_active INTEGER NOT NULL DEFAULT 1
@@ -405,6 +405,28 @@ class DatabaseManager:
 
         # Check and add missing columns to discover_jobs table
         self._migrate_discover_jobs_table()
+
+        # Migrate 'viewer' role to 'user' for all existing accounts
+        self._migrate_viewer_role_to_user()
+
+    def _migrate_viewer_role_to_user(self):
+        """Migrate any existing auth_users with role='viewer' to role='user'."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                ph = self._ph()
+                cursor.execute(
+                    f"UPDATE auth_users SET role = {ph} WHERE role = {ph}",
+                    ('user', 'viewer'),
+                )
+                affected = cursor.rowcount
+                conn.commit()
+                if affected:
+                    self.logger.info(
+                        "Migrated %d auth_user(s) from role 'viewer' to 'user'.", affected
+                    )
+        except Exception as e:
+            self.logger.warning("Could not migrate viewer roles (table may not exist yet): %s", e)
 
     def _migrate_discover_jobs_table(self):
         """Add missing columns to discover_jobs table for job type support."""
@@ -1498,14 +1520,14 @@ class DatabaseManager:
             row = cursor.fetchone()
             return int(row[0]) if row else 0
 
-    def create_auth_user(self, username: str, password_hash: str, role: str = 'viewer') -> int:
+    def create_auth_user(self, username: str, password_hash: str, role: str = 'user') -> int:
         """
         Insert a new SuggestArr auth account and return its primary key.
 
         Args:
             username:      Unique login name.
             password_hash: bcrypt hash string produced by AuthService.hash_password.
-            role:          'admin' or 'viewer' (default 'viewer').
+            role:          'admin' or 'user' (default 'user').
 
         Returns:
             int: The new row's primary key (id).
@@ -1769,6 +1791,40 @@ class DatabaseManager:
             bool: True if a row was updated, False if the user was not found.
         """
         allowed = {'role', 'is_active'}
+        fields = {k: v for k, v in updates.items() if k in allowed}
+        if not fields:
+            return False
+        ph = self._ph()
+        set_clause = ", ".join(f"{k} = {ph}" for k in fields)
+        query = f"UPDATE auth_users SET {set_clause} WHERE id = {ph}"
+        values = list(fields.values()) + [user_id]
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, values)
+            updated = cursor.rowcount
+            conn.commit()
+        return updated > 0
+
+    def update_auth_user_profile(self, user_id: int, updates: Dict[str, Any]) -> bool:
+        """
+        Update a user's own profile fields: username and/or password_hash.
+
+        This is intentionally separate from update_auth_user (which handles
+        admin-level role/active changes) so that the two call-sites stay
+        clearly distinct.
+
+        Args:
+            user_id: Primary key of the user to update.
+            updates: Dict containing any subset of {'username', 'password_hash'}.
+
+        Returns:
+            bool: True if a row was updated, False if the user was not found.
+
+        Raises:
+            Exception: Propagates DB-level unique-constraint violations
+                       (e.g. duplicate username) so the caller can handle them.
+        """
+        allowed = {'username', 'password_hash'}
         fields = {k: v for k, v in updates.items() if k in allowed}
         if not fields:
             return False

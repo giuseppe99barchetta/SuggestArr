@@ -35,6 +35,7 @@ from api_service.auth.middleware import invalidate_setup_cache
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.config_service import ConfigService
 
 logger = LoggerManager.get_logger("AuthRoute")
 
@@ -69,12 +70,14 @@ def auth_status():
         db = DatabaseManager()
         auth_done = db.get_auth_user_count() > 0
 
-        config = load_env_vars()
+        config = ConfigService.get_runtime_config()
         app_done = bool(config.get('SETUP_COMPLETED', False))
+        allow_registration = bool(config.get('ALLOW_REGISTRATION', False))
 
         return jsonify({
             "auth_setup_complete": auth_done,
             "app_setup_complete": app_done,
+            "allow_registration": allow_registration,
         }), 200
     except Exception as exc:
         logger.error("Error reading auth status: %s", exc)
@@ -82,6 +85,7 @@ def auth_status():
         return jsonify({
             "auth_setup_complete": False,
             "app_setup_complete": False,
+            "allow_registration": False,
         }), 200
 
 
@@ -312,7 +316,7 @@ def register():
 
     Gated by the ALLOW_REGISTRATION config flag.  When disabled (the default),
     this endpoint always returns 403 so that only admins can create accounts.
-    When enabled, anyone can create a viewer-level account with role='user'.
+    When enabled, anyone can create a user-level account with role='user'.
 
     Rate-limited to 5 attempts per hour per IP to limit abuse.
 
@@ -325,7 +329,7 @@ def register():
     Response (403): { "error": "Registration is disabled" }
     Response (409): { "error": "Username already taken" }
     """
-    config = load_env_vars()
+    config = ConfigService.get_runtime_config()
     if not config.get('ALLOW_REGISTRATION', False):
         return jsonify({"error": "Registration is disabled"}), 403
 
@@ -366,3 +370,83 @@ def me():
       { "id": "<user_id>", "username": "<name>", "role": "<role>" }
     """
     return jsonify(g.current_user), 200
+
+
+# ---------------------------------------------------------------------------
+# Protected: update own profile
+# ---------------------------------------------------------------------------
+
+@auth_bp.route('/me', methods=['PATCH'])
+def update_me():
+    """
+    Update the authenticated user's own username and/or password.
+
+    Username change:
+      - The new username must be unique and ≤ 64 characters.
+      - A fresh JWT with the updated username is returned in the response so
+        the client can replace its in-memory token without a separate refresh.
+
+    Password change:
+      - current_password must be provided and correct.
+      - new_password must be >= MIN_PASSWORD_LENGTH characters.
+
+    Request JSON (all fields optional, at least one required):
+      username          (str) — desired new login name
+      current_password  (str) — required when new_password is provided
+      new_password      (str) — must be >= MIN_PASSWORD_LENGTH characters
+
+    Response (200):
+      { "message": "Profile updated" }
+      OR (if username changed):
+      { "message": "Profile updated", "access_token": "<new_jwt>" }
+    Response (400): { "error": "<validation message>" }
+    Response (401): { "error": "Current password is incorrect" }
+    Response (409): { "error": "Username already taken" }
+    """
+    user_id = int(g.current_user["id"])
+    data = request.get_json(silent=True) or {}
+    db = DatabaseManager()
+
+    updates = {}
+
+    # --- Username change ---
+    new_username = (data.get("username") or "").strip()
+    if new_username:
+        if len(new_username) > 64:
+            return jsonify({"error": "Username must be 64 characters or fewer"}), 400
+        updates["username"] = new_username
+
+    # --- Password change ---
+    current_password = data.get("current_password") or ""
+    new_password = data.get("new_password") or ""
+    if new_password:
+        if not current_password:
+            return jsonify({"error": "Current password is required"}), 400
+        if len(new_password) < MIN_PASSWORD_LENGTH:
+            return jsonify({"error": f"Password must be at least {MIN_PASSWORD_LENGTH} characters"}), 400
+        user = db.get_auth_user_by_id(user_id)
+        if not user or not AuthService.verify_password(current_password, user["password_hash"]):
+            return jsonify({"error": "Current password is incorrect"}), 401
+        updates["password_hash"] = AuthService.hash_password(new_password)
+
+    if not updates:
+        return jsonify({"error": "No changes provided"}), 400
+
+    try:
+        db.update_auth_user_profile(user_id, updates)
+    except Exception:
+        # Unique constraint violation on username.
+        return jsonify({"error": "Username already taken"}), 409
+
+    resp_body = {"message": "Profile updated"}
+
+    # Re-issue access token if username changed so the JWT stays accurate.
+    if "username" in updates:
+        updated_user = db.get_auth_user_by_id(user_id)
+        new_token = AuthService.create_access_token(
+            updated_user["id"], updated_user["username"], updated_user["role"]
+        )
+        resp_body["access_token"] = new_token
+
+    logger.info("User id=%d updated their profile: fields=%s", user_id, list(updates.keys()))
+    return jsonify(resp_body), 200

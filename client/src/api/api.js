@@ -118,8 +118,12 @@ export const deleteUser = (id) => axios.delete(`/api/users/${id}`);
 
 // Media profile linking (any authenticated user)
 export const getMyLinks = () => axios.get('/api/users/me/links');
+export const getMediaServerUsers = (provider) => axios.get(`/api/users/me/link/${provider}/users`);
 export const linkJellyfin = (data) => axios.post('/api/users/me/link/jellyfin', data);
 export const linkEmby = (data) => axios.post('/api/users/me/link/emby', data);
 export const unlinkProvider = (provider) => axios.delete(`/api/users/me/link/${provider}`);
 export const plexOAuthStart = () => axios.get('/api/users/me/link/plex/oauth-start');
 export const plexOAuthPoll = (pinId) => axios.post('/api/users/me/link/plex/oauth-poll', { pin_id: pinId });
+
+// Own profile update (any authenticated user)
+export const updateMyProfile = (data) => axios.patch('/api/auth/me', data);

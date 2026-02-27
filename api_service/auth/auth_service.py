@@ -97,7 +97,7 @@ class AuthService:
         Payload claims:
           sub      — user ID (string)
           username — display name
-          role     — 'admin' or 'viewer'
+          role     — 'admin' or 'user'
           iat      — issued-at timestamp
           exp      — expiry timestamp (now + ACCESS_TOKEN_EXPIRE_MINUTES)
           jti      — unique token ID (reserved for future revocation list)
@@ -105,7 +105,7 @@ class AuthService:
         Args:
             user_id:  Internal DB primary key of the authenticated user.
             username: Display name embedded in the token payload.
-            role:     User role string ('admin' | 'viewer').
+            role:     User role string ('admin' | 'user').
 
         Returns:
             str: Signed JWT string.

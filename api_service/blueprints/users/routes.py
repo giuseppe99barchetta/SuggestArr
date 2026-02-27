@@ -39,7 +39,7 @@ logger = LoggerManager.get_logger("UsersRoute")
 
 users_bp = Blueprint('users', __name__)
 
-_VALID_ROLES = {'admin', 'viewer', 'user'}
+_VALID_ROLES = {'admin', 'user'}
 _VALID_PROVIDERS = {'jellyfin', 'plex', 'emby'}
 
 # Plex application identifier — stable across instances.
@@ -98,7 +98,7 @@ def create_user():
     Request JSON:
       username  (str)  — desired login name
       password  (str)  — must be >= MIN_PASSWORD_LENGTH characters
-      role      (str)  — one of 'admin', 'viewer', 'user' (default: 'viewer')
+      role      (str)  — one of 'admin', 'user' (default: 'user')
 
     Response (201): { "id": <int>, "username": <str>, "role": <str> }
     Response (400): { "error": "<validation message>" }
@@ -107,7 +107,7 @@ def create_user():
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
-    role = (data.get("role") or "viewer").strip()
+    role = (data.get("role") or "user").strip()
 
     if not username or not password:
         return jsonify({"error": "Username and password are required"}), 400
@@ -144,7 +144,7 @@ def update_user(user_id: int):
       - The last active admin cannot be demoted or deactivated.
 
     Request JSON (all optional):
-      role       (str)  — one of 'admin', 'viewer', 'user'
+      role       (str)  — one of 'admin', 'user'
       is_active  (bool) — True to activate, False to deactivate
 
     Response (200): { "message": "User updated" }
@@ -302,72 +302,78 @@ def _link_jellyfin_or_emby(provider: str):
     """
     Shared handler for Jellyfin and Emby profile linking.
 
-    Both servers expose the same /Users/AuthenticateByName endpoint.
-    Validates credentials, stores only the external user ID and username,
-    then discards the plaintext password.
+    The frontend fetches available users from the media server via the
+    /me/link/<provider>/users endpoint (using the admin token) and shows them
+    in a dropdown.  This endpoint simply persists the user's selection —
+    no password is required or stored.
 
     Args:
         provider: 'jellyfin' or 'emby'
     """
     data = request.get_json(silent=True) or {}
-    username = (data.get("username") or "").strip()
-    password = data.get("password") or ""
-    server_url = (data.get("server_url") or "").rstrip("/")
+    external_user_id = (data.get("external_user_id") or "").strip()
+    external_username = (data.get("external_username") or "").strip()
 
-    if not username or not password:
-        return jsonify({"error": "Username and password are required"}), 400
-
-    if not server_url:
-        from api_service.services.config_service import ConfigService
-        config = ConfigService.get_runtime_config()
-        if provider == 'jellyfin':
-            server_url = (config.get('JELLYFIN_API_URL') or "").rstrip("/")
-        else:
-            # Emby doesn't have a dedicated config key; caller must provide it.
-            server_url = ""
-
-    if not server_url:
-        return jsonify({"error": "server_url is required"}), 400
-
-    auth_url = f"{server_url}/Users/AuthenticateByName"
-    # Jellyfin / Emby require a specific Authorization header format.
-    auth_header = (
-        f'MediaBrowser Client="{_PLEX_CLIENT_NAME}", '
-        f'Device="SuggestArr", '
-        f'DeviceId="{_PLEX_CLIENT_ID}", '
-        f'Version="{_PLEX_VERSION}"'
-    )
-    try:
-        resp = http_requests.post(
-            auth_url,
-            json={"Username": username, "Pw": password},
-            headers={"X-Emby-Authorization": auth_header, "Content-Type": "application/json"},
-            timeout=10,
-        )
-    except Exception as exc:
-        logger.error("%s auth request failed: %s", provider.capitalize(), exc)
-        return jsonify({"error": f"Could not reach {provider.capitalize()} server"}), 502
-
-    if resp.status_code != 200:
-        logger.warning("%s auth failed for user %r: HTTP %d", provider.capitalize(), username, resp.status_code)
-        return jsonify({"error": f"{provider.capitalize()} credentials invalid"}), 401
-
-    try:
-        body = resp.json()
-        external_user_id = body["User"]["Id"]
-        external_username = body["User"]["Name"]
-    except (KeyError, ValueError) as exc:
-        logger.error("Unexpected %s auth response: %s", provider.capitalize(), exc)
-        return jsonify({"error": "Unexpected response from server"}), 502
+    if not external_user_id or not external_username:
+        return jsonify({"error": "external_user_id and external_username are required"}), 400
 
     db = DatabaseManager()
-    # We do not store an access token for Jellyfin/Emby — password-based auth
-    # is sufficient for future re-validation if needed.
     db.create_user_media_profile(
         _current_user_id(), provider, external_user_id, external_username
     )
     logger.info("User id=%d linked %s account: %r", _current_user_id(), provider, external_username)
     return jsonify({"message": f"{provider.capitalize()} account linked", "external_username": external_username}), 200
+
+
+# ---------------------------------------------------------------------------
+# List users from the configured media server (Jellyfin / Emby)
+# ---------------------------------------------------------------------------
+
+@users_bp.route('/me/link/<provider>/users', methods=['GET'])
+def list_provider_users(provider: str):
+    """
+    Return the user list from the configured Jellyfin or Emby server.
+
+    Uses the admin API token from the application configuration so the
+    calling user does not need to supply any credentials.  The frontend
+    displays the result in a dropdown so the user can pick their own
+    account without entering a password.
+
+    Only 'jellyfin' and 'emby' are supported — Plex uses OAuth.
+    Both providers share the same JELLYFIN_API_URL / JELLYFIN_TOKEN config
+    keys since they expose the same REST API surface.
+
+    Response (200): list of { id: str, name: str }
+    Response (400): { "error": "User listing not supported for <provider>" }
+    Response (503): { "error": "Media server not configured" }
+    Response (502): { "error": "Could not reach <Provider> server" }
+    """
+    if provider not in ('jellyfin', 'emby'):
+        return jsonify({"error": f"User listing not supported for {provider}"}), 400
+
+    from api_service.services.config_service import ConfigService
+    config = ConfigService.get_runtime_config()
+
+    server_url = (config.get('JELLYFIN_API_URL') or "").rstrip("/")
+    api_key = config.get('JELLYFIN_TOKEN') or ""
+
+    if not server_url or not api_key:
+        return jsonify({"error": "Media server not configured"}), 503
+
+    try:
+        resp = http_requests.get(
+            f"{server_url}/Users",
+            headers={"X-Emby-Token": api_key},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        users_data = resp.json()
+    except Exception as exc:
+        logger.error("Failed to list %s users: %s", provider.capitalize(), exc)
+        return jsonify({"error": f"Could not reach {provider.capitalize()} server"}), 502
+
+    users = [{"id": u["Id"], "name": u["Name"]} for u in users_data]
+    return jsonify(users), 200
 
 
 # ---------------------------------------------------------------------------

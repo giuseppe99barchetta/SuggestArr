@@ -95,12 +95,12 @@ class TestAuthService(unittest.TestCase):
 
     def test_valid_token_round_trips(self):
         from api_service.auth.auth_service import AuthService
-        token = AuthService.create_access_token(42, "bob", "viewer")
+        token = AuthService.create_access_token(42, "bob", "user")
         payload = AuthService.verify_access_token(token)
         self.assertIsNotNone(payload)
         self.assertEqual(payload["sub"], "42")
         self.assertEqual(payload["username"], "bob")
-        self.assertEqual(payload["role"], "viewer")
+        self.assertEqual(payload["role"], "user")
 
     def test_expired_token_returns_none(self):
         from api_service.auth.auth_service import AuthService
@@ -325,7 +325,7 @@ class TestRequireRole(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
 
     def test_wrong_role_returns_403(self):
-        app = self._app_with_route(["admin"], {"id": "2", "username": "b", "role": "viewer"})
+        app = self._app_with_route(["admin"], {"id": "2", "username": "b", "role": "user"})
         resp = app.test_client().get('/test')
         self.assertEqual(resp.status_code, 403)
         self.assertIn("error", resp.get_json())
@@ -347,8 +347,8 @@ class TestRequireRole(unittest.TestCase):
 
     def test_multiple_roles_any_match(self):
         app = self._app_with_route(
-            ["admin", "viewer"],
-            {"id": "3", "username": "c", "role": "viewer"},
+            ["admin", "user"],
+            {"id": "3", "username": "c", "role": "user"},
         )
         resp = app.test_client().get('/test')
         self.assertEqual(resp.status_code, 200)
@@ -404,7 +404,7 @@ class _AuthBlueprintBase(unittest.TestCase):
             def get_auth_user_count(self_inner):
                 return len(users)
 
-            def create_auth_user(self_inner, username, password_hash, role='viewer'):
+            def create_auth_user(self_inner, username, password_hash, role='user'):
                 uid = next(uid_seq)
                 users[username] = {
                     "id": uid, "username": username,
