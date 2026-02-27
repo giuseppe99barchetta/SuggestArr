@@ -6,7 +6,7 @@ max_instances=1 to prevent overlap).
 """
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
@@ -34,7 +34,7 @@ def _next_attempt_at(retry_count: int) -> str:
     :param retry_count: The new retry count after incrementing.
     :return: ISO-8601 string.
     """
-    return (datetime.utcnow() + timedelta(seconds=_backoff_seconds(retry_count))).isoformat()
+    return (datetime.now(timezone.utc) + timedelta(seconds=_backoff_seconds(retry_count))).isoformat()
 
 
 async def _run_worker() -> int:

@@ -113,7 +113,7 @@ class TestAuthService(unittest.TestCase):
         fake = pyjwt.encode(
             {"sub": "1", "username": "x", "role": "admin",
              "iat": now, "exp": now + timedelta(minutes=15), "jti": "y"},
-            "wrong-secret", algorithm="HS256",
+            "wrong-secret-that-is-long-enough-for-hs256-minimum", algorithm="HS256",
         )
         self.assertIsNone(AuthService.verify_access_token(fake))
 
@@ -425,7 +425,7 @@ class _AuthBlueprintBase(unittest.TestCase):
             def update_last_login(self_inner, user_id):
                 for u in users.values():
                     if u["id"] == user_id:
-                        u["last_login"] = datetime.utcnow().isoformat()
+                        u["last_login"] = datetime.now(timezone.utc).isoformat()
 
             def store_refresh_token(self_inner, user_id, token_hash, expires_at):
                 tokens[token_hash] = {

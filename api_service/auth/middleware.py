@@ -83,6 +83,12 @@ _setup_mode_lock = threading.Lock()
 _setup_mode_cache: dict = {"value": None, "expires_at": 0.0}
 _SETUP_CACHE_TTL_S = 5.0
 
+# Module-level reference to DatabaseManager; resolved lazily on first use of
+# _is_setup_mode() to avoid a circular import at load time.
+# Exposed at module level so tests can patch
+# 'api_service.auth.middleware.DatabaseManager'.
+DatabaseManager = None  # type: ignore[assignment]
+
 
 def _is_setup_mode() -> bool:
     """
@@ -94,14 +100,19 @@ def _is_setup_mode() -> bool:
     Returns:
         bool: True if the system has not yet had an admin account created.
     """
+    global DatabaseManager
+
     now = time.monotonic()
     with _setup_mode_lock:
         cached = _setup_mode_cache
         if cached["value"] is not None and now < cached["expires_at"]:
             return cached["value"]  # type: ignore[return-value]
 
-    # Import here to avoid a circular import at module load time.
-    from api_service.db.database_manager import DatabaseManager
+    # Resolve lazily to avoid a circular import at module load time.
+    if DatabaseManager is None:
+        from api_service.db.database_manager import DatabaseManager as _DM
+        DatabaseManager = _DM
+
     try:
         count = DatabaseManager().get_auth_user_count()
         result = count == 0

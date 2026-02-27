@@ -83,6 +83,7 @@ class TestConfig(unittest.TestCase):
         "LLM_MODEL": "gpt-4-0613",
         "SEER_REQUEST_DELAY": 0.5,
         "FILTER_INCLUDE_TVOD": "false",
+        "ALLOW_REGISTRATION": False,
     }
 
     def setUp(self):

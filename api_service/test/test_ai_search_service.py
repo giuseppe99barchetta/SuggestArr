@@ -36,7 +36,7 @@ _DEFAULT_CONFIG = {
 
 
 def _make_service():
-    with patch('api_service.services.ai_search.ai_search_service.load_env_vars',
+    with patch('api_service.services.ai_search.ai_search_service.ConfigService.get_runtime_config',
                return_value=_DEFAULT_CONFIG):
         return AiSearchService()
 
