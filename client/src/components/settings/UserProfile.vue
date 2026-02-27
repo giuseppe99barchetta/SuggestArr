@@ -41,7 +41,7 @@
           </div>
           <button
             type="submit"
-            class="btn btn-primary btn-sm"
+            class="btn btn-outline btn-sm"
             :disabled="isSavingUsername || !usernameForm.value.trim()"
           >
             <i :class="isSavingUsername ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
@@ -100,7 +100,7 @@
           </div>
           <button
             type="submit"
-            class="btn btn-primary btn-sm"
+            class="btn btn-outline btn-sm"
             :disabled="isSavingPassword || !passwordForm.current || !passwordForm.new || !passwordForm.confirm"
           >
             <i :class="isSavingPassword ? 'fas fa-spinner fa-spin' : 'fas fa-lock'"></i>
@@ -159,22 +159,13 @@
               No users found on {{ providerLabel }}.
             </div>
             <div v-else class="form-group">
-              <label for="serverUserSelect">Select your {{ providerLabel }} account</label>
-              <select
-                id="serverUserSelect"
-                v-model="selectedServerUser"
-                class="form-control"
+              <label>Select your {{ providerLabel }} account</label>
+              <BaseDropdown
+                v-model="selectedServerUserId"
+                :options="serverUserOptions"
+                placeholder="— choose an account —"
                 :disabled="isLinking"
-              >
-                <option value="" disabled>— choose an account —</option>
-                <option
-                  v-for="u in serverUsers"
-                  :key="u.id"
-                  :value="u"
-                >
-                  {{ u.name }}
-                </option>
-              </select>
+              />
             </div>
             <div v-if="linkError" class="error-banner">
               <i class="fas fa-exclamation-circle"></i>
@@ -182,8 +173,8 @@
             </div>
             <button
               type="button"
-              class="btn btn-primary btn-sm"
-              :disabled="isLinking || !selectedServerUser"
+              class="btn btn-outline btn-sm"
+              :disabled="isLinking || !selectedServerUserId"
               @click="linkAccount"
             >
               <i :class="isLinking ? 'fas fa-spinner fa-spin' : 'fas fa-link'"></i>
@@ -241,6 +232,7 @@ import {
   plexOAuthPoll,
   updateMyProfile,
 } from '@/api/api';
+import BaseDropdown from '@/components/common/BaseDropdown.vue';
 
 const PROVIDER_META = {
   jellyfin: { label: 'Jellyfin', icon: 'fas fa-server' },
@@ -250,6 +242,8 @@ const PROVIDER_META = {
 
 export default {
   name: 'UserProfile',
+
+  components: { BaseDropdown },
 
   props: {
     config: Object,
@@ -280,7 +274,7 @@ export default {
       serverUsers: [],
       isLoadingServerUsers: false,
       serverUsersError: null,
-      selectedServerUser: '',
+      selectedServerUserId: '',
 
       // Linking / unlinking state
       isLinking: false,
@@ -313,6 +307,10 @@ export default {
 
     currentLink() {
       return this.links.find(l => l.provider === this.selectedService) || null;
+    },
+
+    serverUserOptions() {
+      return this.serverUsers.map(u => ({ label: u.name, value: u.id }));
     },
   },
 
@@ -354,13 +352,14 @@ export default {
     },
 
     async linkAccount() {
-      if (!this.selectedServerUser) return;
+      if (!this.selectedServerUserId) return;
       this.linkError = null;
       this.isLinking = true;
       try {
+        const user = this.serverUsers.find(u => u.id === this.selectedServerUserId);
         const payload = {
-          external_user_id: this.selectedServerUser.id,
-          external_username: this.selectedServerUser.name,
+          external_user_id: user.id,
+          external_username: user.name,
         };
         if (this.selectedService === 'jellyfin') {
           await linkJellyfin(payload);
@@ -368,7 +367,7 @@ export default {
           await linkEmby(payload);
         }
         this.$toast.success(`${this.providerLabel} account linked`);
-        this.selectedServerUser = '';
+        this.selectedServerUserId = '';
         await this.loadLinks();
       } catch (err) {
         this.linkError = err.response?.data?.error || `Failed to link ${this.providerLabel} account`;

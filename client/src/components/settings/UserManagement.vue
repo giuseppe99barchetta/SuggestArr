@@ -56,17 +56,6 @@
               </div>
             </div>
 
-            <!-- Role select -->
-            <select
-              v-model="user.role"
-              :disabled="user.id === currentUserId || !!isSaving[user.id]"
-              class="role-select"
-              @change="updateUserRole(user)"
-            >
-              <option value="admin">Admin</option>
-              <option value="user">User</option>
-            </select>
-
             <!-- Status chip -->
             <button
               :disabled="user.id === currentUserId || !!isSaving[user.id]"
@@ -76,6 +65,16 @@
               <i :class="user.is_active ? 'fas fa-circle' : 'far fa-circle'"></i>
               {{ user.is_active ? 'Active' : 'Inactive' }}
             </button>
+
+            <!-- Role select -->
+            <div class="role-dropdown-wrap">
+              <BaseDropdown
+                v-model="user.role"
+                :options="roleOptions"
+                :disabled="user.id === currentUserId || !!isSaving[user.id]"
+                @change="() => updateUserRole(user)"
+              />
+            </div>
 
             <!-- Delete -->
             <button
@@ -244,9 +243,12 @@
 import { useAuth } from '@/composables/useAuth';
 import { getUsers, createUserAdmin, updateUser, deleteUser } from '@/api/api';
 import axios from 'axios';
+import BaseDropdown from '@/components/common/BaseDropdown.vue';
 
 export default {
   name: 'UserManagement',
+
+  components: { BaseDropdown },
 
   props: {
     config: Object,
@@ -277,6 +279,11 @@ export default {
       showDeleteModal: false,
       deleteTarget: null,
       isDeleting: false,
+
+      roleOptions: [
+        { label: 'Admin', value: 'admin' },
+        { label: 'User', value: 'user' },
+      ],
     };
   },
 
@@ -599,33 +606,12 @@ export default {
   color: var(--color-text-muted);
 }
 
-/* ── Role select ───────────────────────────────────────────────────────── */
-.role-select {
-  background: var(--color-bg-interactive);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
-  padding: 0.35rem 0.6rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: var(--transition-base);
+/* ── Role dropdown ─────────────────────────────────────────────────────── */
+.role-dropdown-wrap {
+  width: 140px;
   flex-shrink: 0;
 }
 
-.role-select:focus {
-  outline: none;
-  border-color: var(--color-primary);
-}
-
-.role-select:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.role-select option {
-  background-color: var(--color-bg-interactive);
-  color: var(--color-text-primary);
-}
 /* ── Status chip ───────────────────────────────────────────────────────── */
 .status-chip {
   display: inline-flex;
