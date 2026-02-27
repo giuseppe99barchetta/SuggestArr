@@ -1392,7 +1392,7 @@ class DatabaseManager:
         :param max_items: Maximum number of rows to return.
         :return: List of row dicts ordered by created_at ASC.
         """
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now = self._utc_naive(datetime.now(timezone.utc))
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
 
         query = f"""
@@ -1407,7 +1407,7 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute(query, (now_iso, max_items))
+                cursor.execute(query, (now, max_items))
                 cols = [d[0] for d in cursor.description]
                 return [dict(zip(cols, row)) for row in cursor.fetchall()]
         except Exception as e:
@@ -1415,14 +1415,16 @@ class DatabaseManager:
             return []
 
     def _update_pending_status(self, row_id: int, status: str, retry_count: int,
-                               last_attempt_at: Optional[str] = None,
-                               next_attempt_at: Optional[str] = None) -> None:
+                               last_attempt_at: Optional[datetime] = None,
+                               next_attempt_at: Optional[datetime] = None) -> None:
         """Internal helper — update status / retry columns on a pending_requests row."""
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = (f"UPDATE pending_requests SET status={placeholder}, retry_count={placeholder}"
                  f", last_attempt_at={placeholder}, next_attempt_at={placeholder}"
                  f" WHERE id={placeholder}")
-        params = (status, retry_count, last_attempt_at, next_attempt_at, row_id)
+        db_last = self._utc_naive(last_attempt_at) if last_attempt_at is not None else None
+        db_next = self._utc_naive(next_attempt_at) if next_attempt_at is not None else None
+        params = (status, retry_count, db_last, db_next, row_id)
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
@@ -1438,7 +1440,7 @@ class DatabaseManager:
         :param retry_count: Current retry count (unchanged at this point).
         """
         self._update_pending_status(row_id, 'submitting', retry_count,
-                                    last_attempt_at=datetime.now(timezone.utc).isoformat())
+                                    last_attempt_at=datetime.now(timezone.utc))
 
     def mark_pending_submitted(self, row_id: int, retry_count: int) -> None:
         """Mark a row as successfully submitted.
@@ -1455,18 +1457,18 @@ class DatabaseManager:
         :param retry_count: Final retry count.
         """
         self._update_pending_status(row_id, 'failed', retry_count,
-                                    last_attempt_at=datetime.now(timezone.utc).isoformat())
+                                    last_attempt_at=datetime.now(timezone.utc))
 
     def increment_pending_retry(self, row_id: int, new_retry_count: int,
-                                next_attempt_at: str) -> None:
+                                next_attempt_at: datetime) -> None:
         """Bump retry counter and schedule next attempt with exponential backoff.
 
         :param row_id: Primary key of the pending_requests row.
         :param new_retry_count: Incremented retry count.
-        :param next_attempt_at: ISO-8601 UTC timestamp for next eligible attempt.
+        :param next_attempt_at: UTC datetime for next eligible attempt.
         """
         self._update_pending_status(row_id, 'queued', new_retry_count,
-                                    last_attempt_at=datetime.now(timezone.utc).isoformat(),
+                                    last_attempt_at=datetime.now(timezone.utc),
                                     next_attempt_at=next_attempt_at)
 
     def reset_stale_inflight(self, cutoff_minutes: int = 10) -> int:
@@ -1477,7 +1479,7 @@ class DatabaseManager:
         :param cutoff_minutes: Rows locked for longer than this are re-queued.
         :return: Number of rows reset.
         """
-        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=cutoff_minutes)).isoformat()
+        cutoff = self._utc_naive(datetime.now(timezone.utc) - timedelta(minutes=cutoff_minutes))
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = (f"UPDATE pending_requests SET status='queued'"
                  f" WHERE status='submitting' AND last_attempt_at < {placeholder}")
@@ -1501,6 +1503,17 @@ class DatabaseManager:
     def _ph(self) -> str:
         """Return the SQL placeholder character for the current DB type."""
         return '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+
+    @staticmethod
+    def _utc_naive(dt: datetime) -> datetime:
+        """Return a naive UTC datetime safe for all DB backends.
+
+        MySQL DATETIME rejects timezone offsets; stripping tzinfo after
+        normalising to UTC gives a value every backend accepts.
+        """
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
 
     def get_auth_user_count(self) -> int:
         """
@@ -1635,7 +1648,7 @@ class DatabaseManager:
             user_id: Primary key of the auth user who just logged in.
         """
         ph = self._ph()
-        now = datetime.now(timezone.utc).isoformat()
+        now = self._utc_naive(datetime.now(timezone.utc))
         query = f"UPDATE auth_users SET last_login = {ph} WHERE id = {ph}"
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -1727,7 +1740,7 @@ class DatabaseManager:
             int: Number of rows deleted.
         """
         ph = self._ph()
-        now = datetime.now(timezone.utc).isoformat()
+        now = self._utc_naive(datetime.now(timezone.utc))
         query = (
             f"DELETE FROM refresh_tokens "
             f"WHERE expires_at < {ph} OR revoked = 1"

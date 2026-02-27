@@ -28,13 +28,13 @@ def _backoff_seconds(retry_count: int) -> int:
     return min(30 * (2 ** retry_count), 3600)
 
 
-def _next_attempt_at(retry_count: int) -> str:
-    """Return an ISO-8601 UTC timestamp offset by the backoff for *retry_count*.
+def _next_attempt_at(retry_count: int) -> datetime:
+    """Return a UTC datetime offset by the backoff for *retry_count*.
 
     :param retry_count: The new retry count after incrementing.
-    :return: ISO-8601 string.
+    :return: Naive UTC datetime for the next eligible attempt.
     """
-    return (datetime.now(timezone.utc) + timedelta(seconds=_backoff_seconds(retry_count))).isoformat()
+    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=_backoff_seconds(retry_count))
 
 
 async def _run_worker() -> int:
