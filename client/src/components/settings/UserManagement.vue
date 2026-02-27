@@ -355,7 +355,7 @@ export default {
     },
 
     openCreateModal() {
-      this.newUser = { username: '', password: '', role: 'viewer' };
+      this.newUser = { username: '', password: '', role: 'user' };
       this.createError = null;
       this.showNewPassword = false;
       this.showCreateModal = true;

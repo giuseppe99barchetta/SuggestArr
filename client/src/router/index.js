@@ -125,6 +125,19 @@ async function createAppRouter() {
         }
 
         const currentStatus = await checkSetupStatus();
+        const authConfiguredOrAuthenticated = auth.authSetupComplete.value || !!auth.accessToken.value;
+
+        // First-run flow:
+        // - No auth users yet: force all routes to Login (setup-admin form lives there).
+        // - Auth exists + app setup incomplete: keep Login out of the way and use /setup wizard.
+        if (!currentStatus.setup_completed) {
+            if (!authConfiguredOrAuthenticated && to.name !== 'Login') {
+                return next({ name: 'Login', query: { redirect: to.fullPath } });
+            }
+            if (authConfiguredOrAuthenticated && to.name === 'Login') {
+                return next('/setup');
+            }
+        }
 
         // If setup is not completed and route requires setup, redirect to setup
         if (to.meta.requiresSetup && !currentStatus.setup_completed) {
