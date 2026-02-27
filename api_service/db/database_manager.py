@@ -1892,8 +1892,8 @@ class DatabaseManager:
         Insert or replace a media profile link for a SuggestArr user.
 
         The UNIQUE (user_id, provider) constraint ensures only one link per
-        provider per user.  A second call for the same user+provider replaces
-        the existing record.
+        provider per user.  A second call for the same user+provider updates
+        the existing record in-place (preserving the row id).
 
         Args:
             user_id:           Primary key of the auth user.
@@ -1903,15 +1903,18 @@ class DatabaseManager:
             access_token:      Optional token for the external server (nullable).
         """
         ph = self._ph()
-        # SQLite uses INSERT OR REPLACE; PostgreSQL/MySQL use INSERT … ON CONFLICT.
         if self.db_type == 'sqlite':
             query = (
-                f"INSERT OR REPLACE INTO user_media_profiles "
+                f"INSERT INTO user_media_profiles "
                 f"(user_id, provider, external_user_id, external_username, access_token) "
-                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph})"
+                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}) "
+                f"ON CONFLICT(user_id, provider) DO UPDATE SET "
+                f"external_user_id = excluded.external_user_id, "
+                f"external_username = excluded.external_username, "
+                f"access_token = excluded.access_token, "
+                f"created_at = CURRENT_TIMESTAMP"
             )
-        else:
-            # PostgreSQL / MySQL syntax
+        elif self.db_type == 'postgres':
             query = (
                 f"INSERT INTO user_media_profiles "
                 f"(user_id, provider, external_user_id, external_username, access_token) "
@@ -1920,6 +1923,18 @@ class DatabaseManager:
                 f"external_user_id = EXCLUDED.external_user_id, "
                 f"external_username = EXCLUDED.external_username, "
                 f"access_token = EXCLUDED.access_token, "
+                f"created_at = CURRENT_TIMESTAMP"
+            )
+        else:
+            # MySQL / MariaDB
+            query = (
+                f"INSERT INTO user_media_profiles "
+                f"(user_id, provider, external_user_id, external_username, access_token) "
+                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}) "
+                f"ON DUPLICATE KEY UPDATE "
+                f"external_user_id = VALUES(external_user_id), "
+                f"external_username = VALUES(external_username), "
+                f"access_token = VALUES(access_token), "
                 f"created_at = CURRENT_TIMESTAMP"
             )
         with self.get_connection() as conn:

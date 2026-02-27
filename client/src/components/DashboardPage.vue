@@ -399,7 +399,7 @@ export default {
         { id: 'database',  name: 'Database',  icon: 'fas fa-database',     tourId: 'tab-database', adminOnly: true },
         { id: 'advanced',  name: 'Advanced',  icon: 'fas fa-sliders-h',   tourId: 'tab-advanced' },
         { id: 'users',     name: 'Users',      icon: 'fas fa-users',       adminOnly: true },
-        { id: 'profile',   name: 'Profile',    icon: 'fas fa-user-circle' },
+        { id: 'profile',   name: 'Profile',    icon: 'fas fa-user-circle', nonAdminOnly: true },
         { id: 'logs',      name: 'Logs',       icon: 'fas fa-file-alt',    tourId: 'tab-logs' },
       ],
       tourSteps: [
@@ -469,7 +469,11 @@ export default {
   computed: {
     visibleTabs() {
       const isAdmin = this.currentUser?.role === 'admin';
-      return this.tabs.filter(tab => !tab.adminOnly || isAdmin);
+      return this.tabs.filter(tab => {
+        if (tab.adminOnly && !isAdmin) return false;
+        if (tab.nonAdminOnly && isAdmin) return false;
+        return true;
+      });
     },
     activeTabComponent() {
       const componentMap = {

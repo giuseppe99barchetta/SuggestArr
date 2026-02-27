@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-users">
+  <div class="settings-users" :class="{ 'settings-users--embedded': embedded }">
     <div class="section-header">
       <h2>My Profile</h2>
       <p>Update your account credentials and link your media server account.</p>
@@ -248,6 +248,7 @@ export default {
   props: {
     config: Object,
     isLoading: Boolean,
+    embedded: Boolean,
   },
 
   setup() {
@@ -491,6 +492,10 @@ export default {
 .settings-users {
   color: var(--color-text-primary);
   padding: var(--spacing-lg);
+}
+
+.settings-users--embedded {
+  padding: 0;
 }
 
 /* ── Section header ────────────────────────────────────────────────────── */

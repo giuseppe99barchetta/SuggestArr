@@ -1,6 +1,10 @@
 <template>
   <div class="settings-users">
-    <div class="section-header">
+
+    <!-- Admin's own profile -->
+    <UserProfile :config="config" :isLoading="isLoading" embedded />
+
+    <div class="admin-section-divider">
       <h2>User Management</h2>
       <p>Manage SuggestArr accounts, roles, and access.</p>
     </div>
@@ -244,11 +248,12 @@ import { useAuth } from '@/composables/useAuth';
 import { getUsers, createUserAdmin, updateUser, deleteUser } from '@/api/api';
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import UserProfile from './UserProfile.vue';
 
 export default {
   name: 'UserManagement',
 
-  components: { BaseDropdown },
+  components: { BaseDropdown, UserProfile },
 
   props: {
     config: Object,
@@ -436,18 +441,21 @@ export default {
   padding: var(--spacing-lg);
 }
 
-/* ── Section header ────────────────────────────────────────────────────── */
-.section-header {
+/* ── Admin section divider ─────────────────────────────────────────────── */
+.admin-section-divider {
+  margin-top: 2.5rem;
   margin-bottom: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.section-header h2 {
+.admin-section-divider h2 {
   font-size: 1.8rem;
   margin-bottom: 0.5rem;
   color: var(--color-text-primary);
 }
 
-.section-header p {
+.admin-section-divider p {
   color: var(--color-text-muted);
   font-size: 1rem;
   margin: 0;
