@@ -24,7 +24,7 @@ class SQLiteAdapter(DatabaseAdapter):
         try:
             # Ensure directory exists
             os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-            self.connection = sqlite3.connect(self.db_path)
+            self.connection = sqlite3.connect(self.db_path, detect_types=sqlite3.PARSE_DECLTYPES)
             self.connection.row_factory = sqlite3.Row  # Enable dict-like access
             self.logger.info(f"Connected to SQLite database at {self.db_path}")
         except Exception as e:

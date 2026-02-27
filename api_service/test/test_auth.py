@@ -405,6 +405,8 @@ class _AuthBlueprintBase(unittest.TestCase):
                 return len(users)
 
             def create_auth_user(self_inner, username, password_hash, role='user'):
+                if username in users:
+                    raise Exception("UNIQUE constraint failed: auth_users.username")
                 uid = next(uid_seq)
                 users[username] = {
                     "id": uid, "username": username,
@@ -514,6 +516,12 @@ class TestAuthSetupEndpoint(_AuthBlueprintBase):
         resp = self.client.post('/api/auth/setup',
                                 json={"username": "admin",
                                       "password": "x" * (MIN_PASSWORD_LENGTH - 1)})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_setup_enforces_max_username_length(self):
+        resp = self.client.post('/api/auth/setup',
+                                json={"username": "a" * 65,
+                                      "password": "StrongPass1!"})
         self.assertEqual(resp.status_code, 400)
 
 
@@ -665,6 +673,311 @@ class TestAuthStatusEndpoint(_AuthBlueprintBase):
         resp = self.client.get('/api/auth/status')
         data = resp.get_json()
         self.assertTrue(data["auth_setup_complete"])
+
+
+# ===========================================================================
+# Extended base: FakeDB with extra methods for /me PATCH and /register
+# ===========================================================================
+
+class _ExtendedAuthBlueprintBase(_AuthBlueprintBase):
+    """
+    Like _AuthBlueprintBase but the FakeDB also implements
+    update_auth_user_profile — required for testing PATCH /api/auth/me.
+    """
+
+    def _build_fake_db(self):
+        super()._build_fake_db()          # Builds self.FakeDB via the parent
+        users = self._users               # Capture closure for the extension
+        ParentFakeDB = self.FakeDB
+
+        class ExtendedFakeDB(ParentFakeDB):
+
+            def update_auth_user_profile(self_inner, user_id, updates):
+                # Find the target by id.
+                target = None
+                old_username = None
+                for uname, u in list(users.items()):
+                    if u["id"] == user_id:
+                        target = u
+                        old_username = uname
+                        break
+                if target is None:
+                    return False
+
+                new_username = updates.get('username')
+                if new_username and new_username != old_username:
+                    if new_username in users:
+                        raise Exception("UNIQUE constraint failed: auth_users.username")
+                    target['username'] = new_username
+                    users[new_username] = users.pop(old_username)
+
+                if 'password_hash' in updates:
+                    target['password_hash'] = updates['password_hash']
+
+                return True
+
+        self.FakeDB = ExtendedFakeDB
+
+
+# ---------------------------------------------------------------------------
+# Login with disabled account
+# ---------------------------------------------------------------------------
+
+class TestAuthLoginDisabledAccount(_AuthBlueprintBase):
+
+    def test_disabled_account_returns_403(self):
+        """A user whose is_active is False must receive 403, not 200 or 401."""
+        from api_service.auth.auth_service import AuthService
+        db = self.FakeDB()
+        pw_hash = AuthService.hash_password("StrongPass1!")
+        db.create_auth_user("disabled_user", pw_hash, role="user")
+        # Manually flip the is_active flag in the in-memory store.
+        self._users["disabled_user"]["is_active"] = False
+
+        resp = self.client.post('/api/auth/login',
+                                json={"username": "disabled_user",
+                                      "password": "StrongPass1!"})
+        self.assertEqual(resp.status_code, 403)
+        data = resp.get_json()
+        self.assertIn("error", data)
+
+    def test_active_account_still_returns_200(self):
+        """Sanity-check: active account continues to work alongside a disabled one."""
+        self._create_user("active_user", "StrongPass1!", role="user")
+        resp = self._login("active_user", "StrongPass1!")
+        self.assertEqual(resp.status_code, 200)
+
+
+# ---------------------------------------------------------------------------
+# last_login tracked after successful login
+# ---------------------------------------------------------------------------
+
+class TestAuthLastLoginTracking(_AuthBlueprintBase):
+
+    def test_last_login_updated_after_successful_login(self):
+        """
+        After a successful login the in-memory FakeDB must show a non-None
+        last_login value for that user.
+        """
+        self._create_user("alice", "StrongPass1!")
+        # Verify it starts out as None.
+        self.assertIsNone(self._users["alice"]["last_login"])
+
+        resp = self._login("alice", "StrongPass1!")
+        self.assertEqual(resp.status_code, 200)
+
+        # FakeDB.update_last_login stores the ISO string; must be non-None.
+        self.assertIsNotNone(self._users["alice"]["last_login"])
+
+    def test_last_login_not_updated_on_wrong_password(self):
+        """A failed login must NOT update last_login."""
+        self._create_user("alice", "StrongPass1!")
+        self._login("alice", "WrongPassword!")
+        self.assertIsNone(self._users["alice"]["last_login"])
+
+    def test_login_returns_username_and_role_in_body(self):
+        """Response body must include username and role fields."""
+        self._create_user("alice", "StrongPass1!", role="admin")
+        resp = self._login("alice", "StrongPass1!")
+        data = resp.get_json()
+        self.assertEqual(data["username"], "alice")
+        self.assertEqual(data["role"], "admin")
+
+    def test_access_token_is_valid_jwt(self):
+        """The returned access_token must decode with the test secret."""
+        from api_service.auth.auth_service import AuthService
+        self._create_user("alice", "StrongPass1!")
+        resp = self._login("alice", "StrongPass1!")
+        token = resp.get_json()["access_token"]
+        payload = AuthService.verify_access_token(token)
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload["username"], "alice")
+
+
+# ---------------------------------------------------------------------------
+# /register endpoint
+# ---------------------------------------------------------------------------
+
+class TestAuthRegisterEndpoint(_AuthBlueprintBase):
+    """
+    /api/auth/register is gated by ALLOW_REGISTRATION config flag.
+    Uses patch to control the flag for each test.
+    """
+
+    def _with_registration(self, enabled: bool):
+        """Context manager that patches ConfigService.get_runtime_config."""
+        from unittest.mock import patch as _patch
+        return _patch(
+            'api_service.blueprints.auth.routes.ConfigService.get_runtime_config',
+            return_value={'ALLOW_REGISTRATION': enabled},
+        )
+
+    def test_register_disabled_by_default_returns_403(self):
+        with self._with_registration(False):
+            resp = self.client.post('/api/auth/register',
+                                    json={"username": "newbie",
+                                          "password": "StrongPass1!"})
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn("error", resp.get_json())
+
+    def test_register_enabled_creates_user(self):
+        with self._with_registration(True):
+            resp = self.client.post('/api/auth/register',
+                                    json={"username": "newbie",
+                                          "password": "StrongPass1!"})
+        self.assertEqual(resp.status_code, 201)
+        self.assertIn("message", resp.get_json())
+
+    def test_register_duplicate_username_returns_409(self):
+        self._create_user("existing", "StrongPass1!")
+        with self._with_registration(True):
+            resp = self.client.post('/api/auth/register',
+                                    json={"username": "existing",
+                                          "password": "StrongPass1!"})
+        self.assertEqual(resp.status_code, 409)
+
+    def test_register_short_password_returns_400(self):
+        from api_service.auth.auth_service import MIN_PASSWORD_LENGTH
+        with self._with_registration(True):
+            resp = self.client.post('/api/auth/register',
+                                    json={"username": "newbie",
+                                          "password": "x" * (MIN_PASSWORD_LENGTH - 1)})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_register_missing_fields_returns_400(self):
+        with self._with_registration(True):
+            resp = self.client.post('/api/auth/register', json={})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_register_too_long_username_returns_400(self):
+        with self._with_registration(True):
+            resp = self.client.post('/api/auth/register',
+                                    json={"username": "a" * 65,
+                                          "password": "StrongPass1!"})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_registered_user_role_is_user(self):
+        with self._with_registration(True):
+            self.client.post('/api/auth/register',
+                             json={"username": "viewer",
+                                   "password": "StrongPass1!"})
+        self.assertEqual(self._users["viewer"]["role"], "user")
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/auth/me
+# ---------------------------------------------------------------------------
+
+class TestAuthMePatchEndpoint(_ExtendedAuthBlueprintBase):
+    """
+    Tests for the PATCH /api/auth/me endpoint.
+
+    Middleware is enabled (SUGGESTARR_AUTH_DISABLED removed) so that
+    g.current_user is populated by the JWT, just like in production.
+    """
+
+    def setUp(self):
+        super().setUp()
+        # Create user with id=1 in the FakeDB (uid_seq starts at 1).
+        self._uid = self._create_user("alice", "StrongPass1!", role="admin")
+        # Enable real middleware so g.current_user is populated from JWT.
+        from api_service.auth.middleware import invalidate_setup_cache
+        invalidate_setup_cache()
+        os.environ.pop('SUGGESTARR_AUTH_DISABLED', None)
+
+    def tearDown(self):
+        super().tearDown()
+
+    def _auth_headers(self, user_id=None, username="alice", role="admin"):
+        uid = user_id if user_id is not None else self._uid
+        token = _make_valid_token(user_id=uid, username=username, role=role)
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_patch_me_update_username(self):
+        resp = self.client.patch(
+            '/api/auth/me',
+            json={"username": "alice_new"},
+            headers=self._auth_headers(),
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertIn("message", data)
+        # A fresh access_token must be issued when the username changes.
+        self.assertIn("access_token", data)
+
+    def test_patch_me_update_password(self):
+        resp = self.client.patch(
+            '/api/auth/me',
+            json={
+                "current_password": "StrongPass1!",
+                "new_password": "NewSecurePass2!",
+            },
+            headers=self._auth_headers(),
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertIn("message", data)
+
+    def test_patch_me_wrong_current_password_returns_401(self):
+        resp = self.client.patch(
+            '/api/auth/me',
+            json={
+                "current_password": "WrongPassword!",
+                "new_password": "NewSecurePass2!",
+            },
+            headers=self._auth_headers(),
+        )
+        self.assertEqual(resp.status_code, 401)
+
+    def test_patch_me_new_password_without_current_returns_400(self):
+        resp = self.client.patch(
+            '/api/auth/me',
+            json={"new_password": "NewSecurePass2!"},
+            headers=self._auth_headers(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_patch_me_short_new_password_returns_400(self):
+        from api_service.auth.auth_service import MIN_PASSWORD_LENGTH
+        resp = self.client.patch(
+            '/api/auth/me',
+            json={
+                "current_password": "StrongPass1!",
+                "new_password": "x" * (MIN_PASSWORD_LENGTH - 1),
+            },
+            headers=self._auth_headers(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_patch_me_no_changes_returns_400(self):
+        resp = self.client.patch(
+            '/api/auth/me',
+            json={},
+            headers=self._auth_headers(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_patch_me_duplicate_username_returns_409(self):
+        # Create a second user with a different name.
+        self._create_user("bob", "StrongPass1!", role="user")
+        resp = self.client.patch(
+            '/api/auth/me',
+            json={"username": "bob"},
+            headers=self._auth_headers(),
+        )
+        self.assertEqual(resp.status_code, 409)
+
+    def test_patch_me_too_long_username_returns_400(self):
+        resp = self.client.patch(
+            '/api/auth/me',
+            json={"username": "a" * 65},
+            headers=self._auth_headers(),
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_patch_me_without_token_returns_401(self):
+        resp = self.client.patch('/api/auth/me', json={"username": "hacker"})
+        self.assertEqual(resp.status_code, 401)
 
 
 if __name__ == '__main__':

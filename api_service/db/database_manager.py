@@ -15,6 +15,14 @@ from api_service.exceptions.database_exceptions import DatabaseError
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 DB_PATH = os.path.join(BASE_DIR, 'config', 'config_files', 'requests.db')
 
+# Register explicit adapter/converter for datetime <-> SQLite TIMESTAMP to avoid
+# the Python 3.12 DeprecationWarning about the default datetime adapter.
+sqlite3.register_adapter(datetime, lambda dt: dt.isoformat())
+sqlite3.register_converter(
+    "TIMESTAMP",
+    lambda val: datetime.fromisoformat(val.decode()),
+)
+
 # Required fields that must be non-empty for an integration to be considered valid.
 _INTEGRATION_REQUIRED_FIELDS: Dict[str, List[str]] = {
     'jellyfin': ['api_url', 'api_key'],
@@ -78,7 +86,8 @@ class DatabaseManager:
                 conn = sqlite3.connect(
                     self.db_path,
                     timeout=30,
-                    check_same_thread=False
+                    check_same_thread=False,
+                    detect_types=sqlite3.PARSE_DECLTYPES,
                 )
                 conn.row_factory = sqlite3.Row
             elif self.db_type == 'postgres':
@@ -1274,7 +1283,7 @@ class DatabaseManager:
             elif db_type == 'sqlite':
                 # Test SQLite by opening and closing connection
                 test_path = db_config.get('DB_PATH', self.db_path)
-                conn = sqlite3.connect(test_path, timeout=5)
+                conn = sqlite3.connect(test_path, timeout=5, detect_types=sqlite3.PARSE_DECLTYPES)
                 conn.close()
 
             return {'status': 'success', 'message': 'Database connection successful!'}
