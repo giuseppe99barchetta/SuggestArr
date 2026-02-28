@@ -172,21 +172,15 @@ async def test_plex_connection():
             'status': 'error'
         }), 500
 
-@plex_bp.route('/users', methods=['GET', 'POST'])
+@plex_bp.route('/users', methods=['POST'])
 async def get_plex_users():
     """
     Fetch Plex users using the provided API token.
-    Accepts both GET and POST methods for flexibility.
     """
     try:
-        # Handle both GET and POST request data
-        if request.method == 'POST':
-            config_data = request.json
-            api_token = config_data.get('PLEX_TOKEN')
-            api_url = config_data.get('PLEX_API_URL')
-        else:  # GET method
-            api_token = request.args.get('PLEX_TOKEN')
-            api_url = request.args.get('PLEX_API_URL')
+        config_data = request.get_json(silent=True) or {}
+        api_token = config_data.get('PLEX_TOKEN')
+        api_url = config_data.get('PLEX_API_URL')
 
         if not api_token:
             return jsonify({'message': 'API token is required', 'type': 'error'}), 400

@@ -58,6 +58,7 @@ logger = LoggerManager.get_logger("AuthMiddleware")
 # Keep this list as short as possible — every entry is a potential attack
 # surface that bypasses authentication.
 PUBLIC_ROUTES: frozenset[str] = frozenset({
+    "/api/health",          # General health check
     "/api/health/live",     # Docker / reverse-proxy liveness probe — must
                             # always respond even during startup/shutdown.
     "/api/auth/login",      # Credential exchange endpoint.

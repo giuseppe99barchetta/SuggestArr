@@ -51,8 +51,8 @@ export function fetchPlexLibraries() {
 }
 
 // Function to fetch Plex Users
-export function fetchPlexUsers() {
-    return axios.get('/api/plex/users');
+export function fetchPlexUsers(payload) {
+    return axios.post('/api/plex/users', payload);
 }
 
 // Function to fetch Radarr servers from Overseerr for anime profile configuration

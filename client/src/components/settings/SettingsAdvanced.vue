@@ -630,18 +630,18 @@ export default {
         }
 
         if (endpoint) {
-          let url = endpoint;
-          let params = {};
+          let response;
 
-          // Add required parameters for Plex
+          // Send Plex credentials in request body, not query params
           if (service === 'plex') {
-            params.PLEX_TOKEN = this.localConfig.PLEX_TOKEN;
-            if (this.localConfig.PLEX_API_URL) {
-              params.PLEX_API_URL = this.localConfig.PLEX_API_URL;
-            }
+            response = await axios.post(endpoint, {
+              PLEX_TOKEN: this.localConfig.PLEX_TOKEN,
+              PLEX_API_URL: this.localConfig.PLEX_API_URL || '',
+            });
+          } else {
+            response = await axios.get(endpoint);
           }
 
-          const response = await axios.get(url, { params });
           this.availableUsers = response.data.users || response.data || [];
         }
       } catch (error) {

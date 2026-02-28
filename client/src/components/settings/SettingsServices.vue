@@ -1108,7 +1108,10 @@ export default {
         this.plexConnected = true;
         this.loadSavedPlexLibraries();
         try {
-          const userRes = await fetchPlexUsers();
+          const userRes = await fetchPlexUsers({
+            PLEX_API_URL: this.localConfig.PLEX_API_URL,
+            PLEX_TOKEN: this.localConfig.PLEX_TOKEN,
+          });
           this.plexUsers = userRes.data.users || [];
           this.loadSavedPlexUsers();
         } catch (e) { console.error('Error fetching Plex users:', e); }
