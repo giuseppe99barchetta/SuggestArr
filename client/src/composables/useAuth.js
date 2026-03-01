@@ -26,6 +26,37 @@ function isTokenExpired(token) {
     }
 }
 
+/**
+ * Decode JWT payload for client-side identity state.
+ * Signature is verified server-side only; here we use it to keep UI state in sync.
+ */
+function decodeTokenPayload(token) {
+    if (!token) return null
+    try {
+        return JSON.parse(atob(token.split('.')[1]))
+    } catch {
+        return null
+    }
+}
+
+/**
+ * Keep access token + current user aligned from a single source of truth (JWT).
+ */
+function setSessionFromAccessToken(token) {
+    accessToken.value = token || null
+    const payload = decodeTokenPayload(token)
+    if (!payload) {
+        currentUser.value = null
+        return
+    }
+
+    currentUser.value = {
+        id: payload.sub ? Number(payload.sub) : undefined,
+        username: payload.username || '',
+        role: payload.role || 'user',
+    }
+}
+
 export function setAuthRouter(router) {
     _router = router
 }
@@ -42,11 +73,11 @@ export function useAuth() {
         _refreshPromise = axios
             .post('/api/auth/refresh', {}, { _skipAuth: true })
             .then(res => {
-                accessToken.value = res.data.access_token
+                setSessionFromAccessToken(res.data.access_token)
                 return true
             })
             .catch(() => {
-                accessToken.value = null
+                setSessionFromAccessToken(null)
                 _refreshFailed = true  // Block further refresh attempts until next login
                 return false
             })
@@ -58,8 +89,7 @@ export function useAuth() {
 
     async function login(username, password) {
         const res = await axios.post('/api/auth/login', { username, password }, { _skipAuth: true })
-        accessToken.value = res.data.access_token
-        currentUser.value = { username: res.data.username, role: res.data.role }
+        setSessionFromAccessToken(res.data.access_token)
         _refreshFailed = false  // Allow refresh attempts again after a fresh login
         return res.data
     }
@@ -69,8 +99,7 @@ export function useAuth() {
             // _skipAuth: true prevents the 401 interceptor from re-entering this path
             await axios.post('/api/auth/logout', {}, { _skipAuth: true })
         } finally {
-            accessToken.value = null
-            currentUser.value = null
+            setSessionFromAccessToken(null)
             _refreshFailed = false  // Allow refresh after the user logs in again
         }
     }
@@ -140,8 +169,7 @@ export function useAuth() {
                         await logout()
                     } else {
                         // Not authenticated at all; just clear any stale state
-                        accessToken.value = null
-                        currentUser.value = null
+                        setSessionFromAccessToken(null)
                     }
 
                     if (_router && _router.currentRoute.value.name !== 'Login') {
