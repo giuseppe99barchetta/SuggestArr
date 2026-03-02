@@ -1,5 +1,4 @@
 import os
-import uuid
 from flask import Blueprint, request, jsonify
 from api_service.services.plex.plex_auth import PlexAuth
 from api_service.services.plex.plex_client import PlexClient
@@ -9,7 +8,7 @@ from api_service.utils.ssrf_guard import validate_url
 
 logger = LoggerManager.get_logger("PlexRoute")
 plex_bp = Blueprint('plex', __name__)
-client_id = os.getenv('PLEX_CLIENT_ID', str(uuid.uuid4()))
+client_id = os.getenv('PLEX_CLIENT_ID', 'suggestarr')
 
 @plex_bp.route('/libraries', methods=['POST'])
 async def get_plex_libraries():
@@ -97,7 +96,7 @@ async def get_plex_servers_async_route():
         if not auth_token:
             return jsonify({'message': 'Auth token is required', 'type': 'error'}), 400
 
-        async with PlexClient(token=auth_token, client_id=os.getenv('PLEX_CLIENT_ID', str(uuid.uuid4()))) as plex_client:
+        async with PlexClient(token=auth_token, client_id=client_id) as plex_client:
             servers = await plex_client.get_servers()
 
             if servers:
