@@ -1,9 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import axios from "axios";
-import { createApp } from "vue";
-import App from "../App.vue";
 import "vue-toast-notification/dist/theme-bootstrap.css";
-import ToastPlugin from "vue-toast-notification";
 import { useAuth, setAuthRouter } from "@/composables/useAuth";
 
 // Lazy load components for code splitting
