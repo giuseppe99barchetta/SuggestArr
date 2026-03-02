@@ -8,7 +8,7 @@ uvicorn==0.41.0
 asgiref==3.11.1
 
 aiohttp==3.13.3
-redis==7.2.0
+redis==7.2.1
 amqp==5.3.1
 billiard==4.2.4
 kombu==5.6.2
@@ -18,7 +18,7 @@ croniter==6.0.0
 
 concurrent-log-handler==0.9.29
 requests==2.32.5
-python-dotenv==1.2.1
+python-dotenv==1.2.2
 PyYAML==6.0.3
 pytz==2025.2
 tzdata==2025.3
