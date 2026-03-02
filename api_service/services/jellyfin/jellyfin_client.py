@@ -6,6 +6,7 @@ Classes:
     - JellyfinClient: A class that handles communication with the Jellyfin API.
 """
 import aiohttp
+import asyncio
 from api_service.config.logger_manager import LoggerManager
 
 # Constants
@@ -97,71 +98,68 @@ class JellyfinClient:
             self.logger.error("No libraries found.")
             return None
 
-        for library in libraries:
-            self.logger.debug(f"Processing library - type: {type(library)}, content: {library}")
-            library_id = library.get('id') if isinstance(library, dict) else None
-            library_name = library.get('name') if isinstance(library, dict) else None
+        session = await self._get_session()
+        tasks = [
+            self._fetch_library_items(session, library, results_by_library)
+            for library in libraries
+        ]
+        await asyncio.gather(*tasks)
 
-            if not library_id:
-                self.logger.error(f"Library item is not a dict or missing 'id': {library}")
-                continue
+        return results_by_library
 
-            params = {
-                "Recursive": "true",
-                "IncludeItemTypes": "Movie,Series",
-                "Fields": "ProviderIds",
-                "ParentID": library_id
-            }
+    async def _fetch_library_items(self, session, library, results_by_library):
+        """
+        Fetch items for a single library and update results_by_library.
+        """
+        library_id = library.get('id') if isinstance(library, dict) else None
+        library_name = library.get('name') if isinstance(library, dict) else None
 
-            self.logger.debug(
-                f"Requesting items for library {library_name} with params: {params}"
-            )
+        if not library_id:
+            self.logger.error(f"Library item is missing 'id': {library}")
+            return
 
-            try:
-                session = await self._get_session()
-                async with session.get(
-                    f"{self.api_url}/Items",
-                    headers=self.headers,
-                    params=params,
-                    timeout=aiohttp.ClientTimeout(total=LIBRARY_FETCH_TIMEOUT)
-                ) as response:
-                    if response.status != 200:
-                        self.logger.error(
-                            "Failed to get items for library %s: %d",
-                            library_name, response.status
-                        )
+        params = {
+            "Recursive": "true",
+            "IncludeItemTypes": "Movie,Series",
+            "Fields": "ProviderIds",
+            "ParentID": library_id
+        }
+
+        self.logger.debug(f"Requesting items for library {library_name} with params: {params}")
+
+        try:
+            async with session.get(
+                f"{self.api_url}/Items",
+                headers=self.headers,
+                params=params,
+                timeout=aiohttp.ClientTimeout(total=LIBRARY_FETCH_TIMEOUT)
+            ) as response:
+                if response.status != 200:
+                    self.logger.error("Failed to get items for library %s: %d", library_name, response.status)
+                    return
+
+                data = await response.json()
+                items = data.get("Items", [])
+
+                added = 0
+                for item in items:
+                    item_type = item.get("Type")
+                    if item_type not in ("Movie", "Series"):
                         continue
 
-                    data = await response.json()
-                    items = data.get("Items", [])
+                    tmdb_id = item.get("ProviderIds", {}).get("Tmdb")
+                    if not tmdb_id:
+                        continue
 
-                    added = 0
-                    for item in items:
-                        item_type = item.get("Type")
+                    item["tmdb_id"] = tmdb_id
+                    bucket = "tv" if item_type == "Series" else "movie"
+                    results_by_library[bucket].append(item)
+                    added += 1
 
-                        if item_type not in ("Movie", "Series"):
-                            continue
+                self.logger.info("Retrieved %d valid items in %s", added, library_name)
 
-                        tmdb_id = item.get("ProviderIds", {}).get("Tmdb")
-                        if not tmdb_id:
-                            continue
-
-                        item["tmdb_id"] = tmdb_id
-                        bucket = "tv" if item_type == "Series" else "movie"
-                        results_by_library[bucket].append(item)
-                        added += 1
-
-                    self.logger.info(
-                        "Retrieved %d valid items in %s",
-                        added,
-                        library_name
-                    )
-
-            except (aiohttp.ClientError, TimeoutError) as e:
-                self.logger.error(
-                    "Error retrieving items for library %s: %s",
-                    library_name, str(e)
-                )
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            self.logger.error("Error retrieving items for library %s: %s", library_name, str(e))
 
         return results_by_library
 

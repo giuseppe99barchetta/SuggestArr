@@ -6,7 +6,7 @@ import mysql.connector
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Tuple, Set
 
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
@@ -728,6 +728,33 @@ class DatabaseManager:
             cursor.execute(query, params)
             result = cursor.fetchone()
             return result is not None
+
+    def check_requests_exist_batch(self, media_type: str, media_ids: List[str]) -> Set[str]:
+        """Check which of the provided media IDs already have requests in the database.
+        
+        :param media_type: 'movie' or 'tv'.
+        :param media_ids: List of TMDB IDs as strings.
+        :return: Set of TMDB IDs that already exist in the database.
+        """
+        if not media_ids:
+            return set()
+
+        self.logger.debug("Checking bulk requests exists: %s for %d items", media_type, len(media_ids))
+        
+        placeholders = ', '.join(['%s' if self.db_type in ['mysql', 'postgres'] else '?' for _ in media_ids])
+        query = f"SELECT tmdb_request_id FROM requests WHERE media_type = ? AND tmdb_request_id IN ({placeholders})"
+        
+        params = [media_type] + [str(mid) for mid in media_ids]
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if self.db_type in ['mysql', 'postgres']:
+                query = query.replace("?", "%s", 1) # Only replace the first ? for media_type
+            
+            cursor.execute(query, params)
+            results = cursor.fetchall()
+            return {str(row[0]) for row in results}
     
     def try_acquire_submission_lock(self, tmdb_id: str, media_type: str, ttl_seconds: int = 60) -> bool:
         """Attempt to acquire a per-media submission lock to prevent cross-process duplicates.

@@ -1,5 +1,6 @@
 import aiohttp
 import asyncio
+from typing import List, Set
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 
@@ -340,6 +341,17 @@ class SeerClient:
         
         return False
 
+    async def check_requests_exist_batch(self, media_type: str, tmdb_ids: List[str]) -> Set[str]:
+        """Check which of the provided TMDB IDs already have requests in the database."""
+        if not self.exclude_requested or not tmdb_ids:
+            return set()
+        
+        try:
+            return DatabaseManager().check_requests_exist_batch(media_type, tmdb_ids)
+        except Exception as e:
+            self.logger.error("Error in bulk check requests: %s", e)
+            return set()
+
     async def check_already_downloaded(self, tmdb_id, media_type, local_content=None):
         """Check if a media item has already been downloaded based on local content."""
         if self.exclude_downloaded:
@@ -349,19 +361,21 @@ class SeerClient:
                 self.logger.warning("local_content is None, skipping downloaded check")
                 return False
 
+            # Optimization: If local_content is a list, we should ideally have a set for O(1) lookup.
+            # However, since this is called per item, we'll check if we can optimize the caller side later.
+            # For now, let's at least make sure we don't do redundant work here.
             items = local_content.get(media_type, [])
+            if isinstance(items, set):
+                return str(tmdb_id) in items
+            
             if not isinstance(items, list):
-                self.logger.warning("Expected list for media_type '%s', but got %s", media_type, type(items))
+                self.logger.warning("Expected list or set for media_type '%s', but got %s", media_type, type(items))
                 return False
 
             for item in items:
-                if not isinstance(item, dict):
-                    self.logger.warning("Skipping invalid item in local_content: %s", item)
-                    continue
-                if 'tmdb_id' not in item:
-                    self.logger.warning("Skipping item without 'tmdb_id': %s", item)
-                    continue
-                if item['tmdb_id'] == str(tmdb_id):
+                if isinstance(item, dict) and item.get('tmdb_id') == str(tmdb_id):
+                    return True
+                if isinstance(item, str) and item == str(tmdb_id):
                     return True
         else:
             self.logger.info("Skipping check for already downloaded media.")

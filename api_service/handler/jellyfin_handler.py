@@ -31,12 +31,18 @@ class JellyfinHandler:
         self.max_similar_tv = max_similar_tv
         self.processed_series = set()
         self.request_count = 0
-        self.existing_content = jellyfin_client.existing_content
+        # Optimization: Pre-process existing_content into sets for O(1) lookups
+        self.existing_content_sets = {}
+        if jellyfin_client.existing_content:
+            for media_type, items in jellyfin_client.existing_content.items():
+                self.existing_content_sets[media_type] = {str(item.get('tmdb_id')) for item in items if item.get('tmdb_id')}
+
         self.selected_users = selected_users
         self.library_anime_map = library_anime_map or {}
         self.request_delay = request_delay
         self.dry_run = dry_run
         self.dry_run_items = []
+        self._dry_run_processed_ids = set()
 
         if use_llm is not None:
             self.use_llm = use_llm
@@ -259,10 +265,18 @@ class JellyfinHandler:
                 if not isinstance(media, dict):
                     continue
                 media_id = media.get('id')
+                if not media_id:
+                    continue
+                
+                # Deduplicate dry-run items
+                dry_run_key = (str(media_id), media_type)
+                if dry_run_key in self._dry_run_processed_ids:
+                    continue
+                self._dry_run_processed_ids.add(dry_run_key)
                 media_title = media.get('title') or media.get('name') or 'Unknown'
 
                 already_requested = await self.jellyseer_client.check_already_requested(media_id, media_type)
-                already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content)
+                already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content_sets)
                 in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
 
                 # Merge streaming result into the filter_results dict from TMDb
@@ -309,33 +323,43 @@ class JellyfinHandler:
                     self.request_count += 1
             return
 
+        # Non-dry-run optimization: Batch check and avoid redundant API calls
+        media_to_process = media_ids[:max_items]
+        if not media_to_process:
+            return
+
+        # 1. Batch check already requested in DB
+        tmdb_ids_to_check = [str(m.get('id')) for m in media_to_process if m.get('id')]
+        already_requested_set = await self.jellyseer_client.check_requests_exist_batch(media_type, tmdb_ids_to_check)
+
+        # 2. Get watch providers once
+        in_excluded_streaming_service = False
+        provider = None
+        if source_tmdb_obj.get('id') != 0:
+            in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
+        
+        if in_excluded_streaming_service:
+            self.logger.info(f"Skipping all similar {media_type} for source {source_tmdb_obj.get('id')}: source is on excluded service {provider}")
+            return
+
         tasks = []
-        for media in media_ids[:max_items]:
+        local_content_set = self.existing_content_sets.get(media_type, set())
+
+        for media in media_to_process:
             if not isinstance(media, dict):
-                self.logger.warning(f"Skipping invalid media item (type: {type(media).__name__}): {media}")
                 continue
-            media_id = media.get('id')
+            
+            media_id = str(media.get('id'))
             media_title = media.get('title') or media.get('name') or 'Unknown'
 
-            self.logger.debug(f"Processing similar media: '{media_title}' with ID: '{media_id}'")
-
-            # Check if already downloaded, requested, or in an excluded streaming service
-            already_requested = await self.jellyseer_client.check_already_requested(media_id, media_type)
-            self.logger.debug(f"Already requested check for {media_title}: {already_requested}")
-            if already_requested:
-                self.logger.debug(f"Skipping [{media_type}, {media_title}]: already requested.")
+            # Check batch results
+            if media_id in already_requested_set:
+                self.logger.debug(f"Skipping [{media_type}, {media_title}]: already requested (batch check).")
                 continue
 
-            already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content)
-            self.logger.debug(f"Already downloaded check for {media_title}: {already_downloaded}")
-            if already_downloaded:
-                self.logger.debug(f"Skipping [{media_type}, {media_title}]: already downloaded.")
-                continue
-
-            in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
-            self.logger.debug(f"Excluded streaming service check for {media_title}: {in_excluded_streaming_service}, {provider}")
-            if in_excluded_streaming_service:
-                self.logger.debug(f"Skipping [{media_type}, {media_title}]: excluded by streaming service: {provider}")
+            # Check optimized local content set
+            if media_id in local_content_set:
+                self.logger.debug(f"Skipping [{media_type}, {media_title}]: already downloaded (local set check).")
                 continue
 
             # Add to tasks if it passes all checks
@@ -346,7 +370,8 @@ class JellyfinHandler:
                 await task
                 await asyncio.sleep(self.request_delay)
         else:
-            await asyncio.gather(*tasks)
+            if tasks:
+                await asyncio.gather(*tasks)
 
     async def _request_media_and_log(self, media_type, media, source_tmdb_obj, user, is_anime=False):
         """Helper method to request media and log the result."""

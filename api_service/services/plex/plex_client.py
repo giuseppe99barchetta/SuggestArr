@@ -347,11 +347,12 @@ class PlexClient:
             return
     
         url = f"{self.api_url}/library/sections/{library_id}/all"
+        params = {"includeGuids": 1}
 
         try:
             safe_headers = {k: '***' if k == 'X-Plex-Token' else v for k, v in self.headers.items()}
-            self.logger.debug(f"Requesting URL: {url} with headers: {safe_headers} and timeout: {REQUEST_TIMEOUT}")
-            async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
+            self.logger.debug(f"Requesting URL: {url} with headers: {safe_headers}, params: {params} and timeout: {REQUEST_TIMEOUT}")
+            async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     library_items = await self._safe_json_decode(response)
                     items = library_items.get('MediaContainer', {}).get('Metadata', [])
@@ -361,16 +362,25 @@ class PlexClient:
                         processed_items = []
                         library_type = None
                         for item in items:
-                            library_type = 'tv' if item.get('type') == 'show' else 'movie'
-                            item_id = item.get('key').replace('/children', '')
-                            tmdb_id = await self.get_metadata_provider_id(item_id)
+                            current_item_type = item.get('type')
+                            library_type = 'tv' if current_item_type == 'show' else 'movie'
+                            
+                            # Extract TMDB ID from Guids if present (bulk fetch)
+                            guids = item.get('Guid', [])
+                            tmdb_id = None
+                            for guid in guids:
+                                guid_id = guid.get('id', '')
+                                if guid_id.startswith('tmdb://'):
+                                    tmdb_id = guid_id.split('tmdb://')[-1]
+                                    break
+                            
                             if tmdb_id:
                                 item['tmdb_id'] = tmdb_id
                             processed_items.append(item)
 
                         if library_type:
                             results_by_library.setdefault(library_type, []).extend(processed_items)
-                        self.logger.info(f"Retrieved {len(processed_items)} items in {library_type} with TMDB IDs")
+                        self.logger.info(f"Retrieved {len(processed_items)} items in {library_name} with TMDB IDs")
 
                     else:
                         self.logger.error(f"Expected list for items, got {type(items)}")

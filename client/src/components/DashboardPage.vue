@@ -28,11 +28,11 @@
           <button
             v-if="authSetupComplete"
             @click="handleLogout"
-            class="btn btn-outline btn-sm logout-btn"
-            title="Sign out"
+            class="logout-btn"
+            title="Log out"
           >
             <i class="fas fa-sign-out-alt"></i>
-            <span class="logout-label">Sign out</span>
+            <span class="logout-label">Log out</span>
           </button>
         </div>
       </div>
