@@ -394,6 +394,8 @@ class DatabaseManager:
                     self.logger.debug("Adding column is_anime...")
                     if self.db_type in ['mysql', 'mariadb']:
                         cursor.execute("ALTER TABLE requests ADD COLUMN is_anime TINYINT(1) DEFAULT 0;")
+                    elif self.db_type == 'postgres':
+                        cursor.execute("ALTER TABLE requests ADD COLUMN is_anime BOOLEAN DEFAULT FALSE;")
                     else:
                         cursor.execute("ALTER TABLE requests ADD COLUMN is_anime BOOLEAN DEFAULT 0;")
                     conn.commit()
@@ -668,7 +670,7 @@ class DatabaseManager:
             INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, tmdb_source_id, requested_by, user_id, is_anime, rationale)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """
-        params = (media_type, str(media_id), source, 'SuggestArr', user_id, 1 if is_anime else 0, rationale)
+        params = (media_type, str(media_id), source, 'SuggestArr', user_id, is_anime, rationale)
         
         with self.get_connection() as conn:
             cursor = conn.cursor()
