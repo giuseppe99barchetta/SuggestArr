@@ -1,170 +1,184 @@
-import { createRouter, createWebHistory } from 'vue-router';
-import axios from 'axios';
-import { createApp } from 'vue';
-import App from '../App.vue';
-import 'vue-toast-notification/dist/theme-bootstrap.css';
-import ToastPlugin from 'vue-toast-notification';
-import { useAuth, setAuthRouter } from '@/composables/useAuth';
+import { createRouter, createWebHistory } from "vue-router";
+import axios from "axios";
+import { createApp } from "vue";
+import App from "../App.vue";
+import "vue-toast-notification/dist/theme-bootstrap.css";
+import ToastPlugin from "vue-toast-notification";
+import { useAuth, setAuthRouter } from "@/composables/useAuth";
 
 // Lazy load components for code splitting
-const RequestsPage = () => import('@/components/RequestsPage.vue');
-const ConfigWizard = () => import('@/components/ConfigWizard.vue');
-const DashboardPage = () => import('@/components/DashboardPage.vue');
-const LoginPage = () => import('@/components/LoginPage.vue');
+const RequestsPage = () => import("@/components/RequestsPage.vue");
+const ConfigWizard = () => import("@/components/ConfigWizard.vue");
+const DashboardPage = () => import("@/components/DashboardPage.vue");
+const LoginPage = () => import("@/components/LoginPage.vue");
 
 function readSubpathFromMeta() {
-    const metaTag = document.querySelector('meta[name="suggestarr-subpath"]');
-    return metaTag ? (metaTag.getAttribute('content') || '') : '';
+  const metaTag = document.querySelector('meta[name="suggestarr-subpath"]');
+  return metaTag ? metaTag.getAttribute("content") || "" : "";
 }
 
 function configureAxiosSubpath(subpath) {
-    if (process.env.NODE_ENV === 'development') {
-        axios.defaults.baseURL = 'http://localhost:5000' + subpath;
-    } else {
-        axios.defaults.baseURL = subpath || '/';
-    }
+  if (process.env.NODE_ENV === "development") {
+    axios.defaults.baseURL = "http://localhost:5000" + subpath;
+  } else {
+    axios.defaults.baseURL = subpath || "/";
+  }
 }
 
 async function loadConfig() {
-    try {
-        const response = await axios.get('/api/config/fetch');
-        localStorage.setItem('suggestarr_config', JSON.stringify(response.data));
-        return response.data.SUBPATH || '';
-    } catch (error) {
-        throw new Error('Unable to load the configuration file');
-    }
+  try {
+    const response = await axios.get("/api/config/fetch");
+    localStorage.setItem("suggestarr_config", JSON.stringify(response.data));
+    return response.data.SUBPATH || "";
+  } catch (error) {
+    throw new Error("Unable to load the configuration file");
+  }
 }
 
+let _statusCache = null;
+let _statusCacheTimestamp = 0;
+const STATUS_CACHE_TTL = 1000; // 1 second cache
+
 async function checkSetupStatus() {
-    try {
-        const response = await axios.get('/api/config/status');
-        return response.data;
-    } catch (error) {
-        console.error('Error checking setup status:', error);
-        return { setup_completed: false, is_complete: false };
-    }
+  const now = Date.now();
+  if (_statusCache && now - _statusCacheTimestamp < STATUS_CACHE_TTL) {
+    return _statusCache;
+  }
+
+  try {
+    const response = await axios.get("/api/config/status");
+    _statusCache = response.data;
+    _statusCacheTimestamp = now;
+    return response.data;
+  } catch (error) {
+    console.error("Error checking setup status:", error);
+    return { setup_completed: false, is_complete: false };
+  }
 }
 
 async function createAppRouter() {
-    const subpath = readSubpathFromMeta();
-    configureAxiosSubpath(subpath);
+  const subpath = readSubpathFromMeta();
+  configureAxiosSubpath(subpath);
 
-    const auth = useAuth();
+  const auth = useAuth();
 
-    // Set up axios interceptors before any API calls (router ref added after creation)
-    auth.setupInterceptors();
+  // Set up axios interceptors before any API calls (router ref added after creation)
+  auth.setupInterceptors();
 
-    // Check auth status — public endpoint, always works
-    const authStatus = await auth.getAuthStatus().catch(() => ({ auth_setup_complete: false, app_setup_complete: false }));
+  // Check auth status — public endpoint, always works
+  const authStatus = await auth
+    .getAuthStatus()
+    .catch(() => ({ auth_setup_complete: false, app_setup_complete: false }));
 
-    // If auth is enforced, try to restore session via the httpOnly refresh cookie
-    if (authStatus.auth_setup_complete) {
-        await auth.tryRefresh();
+  // If auth is enforced, try to restore session via the httpOnly refresh cookie
+  if (authStatus.auth_setup_complete) {
+    await auth.tryRefresh();
+  }
+
+  // Load app config — skip silently if not authenticated yet (will reload after login)
+  await loadConfig().catch(() => {});
+  await checkSetupStatus();
+
+  const routes = [
+    {
+      path: `/requests`,
+      name: "RequestsPage",
+      component: RequestsPage,
+      meta: { requiresSetup: true },
+    },
+    {
+      path: `/`,
+      name: "Home",
+      component: DashboardPage,
+      meta: { requiresSetup: true },
+    },
+    {
+      path: `/setup`,
+      name: "Setup",
+      component: ConfigWizard,
+      meta: { setupOnly: true },
+    },
+    {
+      path: `/dashboard`,
+      name: "Dashboard",
+      component: DashboardPage,
+      meta: { requiresSetup: true },
+    },
+    {
+      path: `/dashboard/:tab?`,
+      name: "DashboardTab",
+      component: DashboardPage,
+      meta: { requiresSetup: true },
+    },
+    {
+      path: `/login`,
+      name: "Login",
+      component: LoginPage,
+    },
+    // Redirect legacy routes
+    {
+      path: `/wizard`,
+      redirect: "/setup",
+    },
+  ];
+
+  const router = createRouter({
+    history: createWebHistory(subpath || "/"),
+    routes,
+  });
+
+  // Give the auth module a router reference for 401 redirects
+  setAuthRouter(router);
+
+  // Add navigation guards
+  router.beforeEach(async (to, from, next) => {
+    // For development, we might want to skip setup checks
+    if (process.env.NODE_ENV === "development" && to.query.skipSetup) {
+      return next();
     }
 
-    // Load app config — skip silently if not authenticated yet (will reload after login)
-    await loadConfig().catch(() => {});
-    await checkSetupStatus();
+    const currentStatus = await checkSetupStatus();
+    const authConfiguredOrAuthenticated =
+      auth.authSetupComplete.value || !!auth.accessToken.value;
 
-    const routes = [
-        {
-            path: `/requests`,
-            name: 'RequestsPage',
-            component: RequestsPage,
-            meta: { requiresSetup: true }
-        },
-        {
-            path: `/`,
-            name: 'Home',
-            component: DashboardPage,
-            meta: { requiresSetup: true }
-        },
-        {
-            path: `/setup`,
-            name: 'Setup',
-            component: ConfigWizard,
-            meta: { setupOnly: true }
-        },
-        {
-            path: `/dashboard`,
-            name: 'Dashboard',
-            component: DashboardPage,
-            meta: { requiresSetup: true }
-        },
-        {
-            path: `/dashboard/:tab?`,
-            name: 'DashboardTab',
-            component: DashboardPage,
-            meta: { requiresSetup: true }
-        },
-        {
-            path: `/login`,
-            name: 'Login',
-            component: LoginPage,
-        },
-        // Redirect legacy routes
-        {
-            path: `/wizard`,
-            redirect: '/setup'
-        }
-    ];
+    // First-run flow:
+    // - No auth users yet: force all routes to Login (setup-admin form lives there).
+    // - Auth exists + app setup incomplete: keep Login out of the way and use /setup wizard.
+    if (!currentStatus.setup_completed) {
+      if (!authConfiguredOrAuthenticated && to.name !== "Login") {
+        return next({ name: "Login", query: { redirect: to.fullPath } });
+      }
+      if (authConfiguredOrAuthenticated && to.name === "Login") {
+        return next("/setup");
+      }
+    }
 
-    const router = createRouter({
-        history: createWebHistory(subpath || '/'),
-        routes
-    });
+    // If setup is not completed and route requires setup, redirect to setup
+    if (to.meta.requiresSetup && !currentStatus.setup_completed) {
+      return next("/setup");
+    }
 
-    // Give the auth module a router reference for 401 redirects
-    setAuthRouter(router);
+    // If setup is completed and route is setup-only, redirect to settings
+    if (to.meta.setupOnly && currentStatus.setup_completed) {
+      return next("/dashboard");
+    }
 
-    // Add navigation guards
-    router.beforeEach(async (to, from, next) => {
-        // For development, we might want to skip setup checks
-        if (process.env.NODE_ENV === 'development' && to.query.skipSetup) {
-            return next();
-        }
+    // Auth guard — only enforce when an admin account exists
+    if (auth.authSetupComplete.value) {
+      if (to.name === "Login") {
+        // Already authenticated → skip login page
+        if (auth.accessToken.value) return next("/dashboard");
+        return next();
+      }
+      if (!auth.accessToken.value) {
+        return next({ name: "Login", query: { redirect: to.fullPath } });
+      }
+    }
 
-        const currentStatus = await checkSetupStatus();
-        const authConfiguredOrAuthenticated = auth.authSetupComplete.value || !!auth.accessToken.value;
+    next();
+  });
 
-        // First-run flow:
-        // - No auth users yet: force all routes to Login (setup-admin form lives there).
-        // - Auth exists + app setup incomplete: keep Login out of the way and use /setup wizard.
-        if (!currentStatus.setup_completed) {
-            if (!authConfiguredOrAuthenticated && to.name !== 'Login') {
-                return next({ name: 'Login', query: { redirect: to.fullPath } });
-            }
-            if (authConfiguredOrAuthenticated && to.name === 'Login') {
-                return next('/setup');
-            }
-        }
-
-        // If setup is not completed and route requires setup, redirect to setup
-        if (to.meta.requiresSetup && !currentStatus.setup_completed) {
-            return next('/setup');
-        }
-
-        // If setup is completed and route is setup-only, redirect to settings
-        if (to.meta.setupOnly && currentStatus.setup_completed) {
-            return next('/dashboard');
-        }
-
-        // Auth guard — only enforce when an admin account exists
-        if (auth.authSetupComplete.value) {
-            if (to.name === 'Login') {
-                // Already authenticated → skip login page
-                if (auth.accessToken.value) return next('/dashboard');
-                return next();
-            }
-            if (!auth.accessToken.value) {
-                return next({ name: 'Login', query: { redirect: to.fullPath } });
-            }
-        }
-
-        next();
-    });
-
-    return router;
+  return router;
 }
 
 // If a subpath is configured but the browser is already on the wrong base URL,
@@ -172,27 +186,29 @@ async function createAppRouter() {
 // Router mounts the app while the page is simultaneously being unloaded.
 const _earlySubpath = readSubpathFromMeta();
 if (_earlySubpath && !window.location.pathname.startsWith(_earlySubpath)) {
-    window.location.replace(_earlySubpath + '/');
+  window.location.replace(_earlySubpath + "/");
 } else {
-    createAppRouter().then(router => {
-        const app = createApp(App);
-        app.use(router);
-        app.mount('#app');
-        const options = {
-            position: 'top-right',
-            timeout: 5000,
-            closeOnClick: false,
-            pauseOnHover: true,
-            draggable: false,
-            showCloseButtonOnHover: true,
-            closeButton: 'button',
-            icon: true,
-            rtl: false,
-        };
+  createAppRouter()
+    .then((router) => {
+      const app = createApp(App);
+      app.use(router);
+      app.mount("#app");
+      const options = {
+        position: "top-right",
+        timeout: 5000,
+        closeOnClick: false,
+        pauseOnHover: true,
+        draggable: false,
+        showCloseButtonOnHover: true,
+        closeButton: "button",
+        icon: true,
+        rtl: false,
+      };
 
-        app.use(ToastPlugin, options);
-        return router;
-    }).catch(error => {
-        console.error('Error loading router:', error);
+      app.use(ToastPlugin, options);
+      return router;
+    })
+    .catch((error) => {
+      console.error("Error loading router:", error);
     });
 }
