@@ -32,6 +32,7 @@ class TestConfig(unittest.TestCase):
         "MAX_SIMILAR_MOVIE": 5,
         "MAX_SIMILAR_TV": 2,
         "PLEX_API_URL": "https://totally.legit.url.tld",
+        "PLEX_CLIENT_ID": "mock-uuid-1234",
         "PLEX_LIBRARIES": ["1", "2"],
         "PLEX_TOKEN": "7h349fh349fj3",
         "SEARCH_SIZE": 20,

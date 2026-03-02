@@ -55,6 +55,7 @@ _DUMMY_HASH = "$2b$12$invalidhashpadding000000000000000000000000000000000000000"
 # ---------------------------------------------------------------------------
 
 @auth_bp.route('/status', methods=['GET'])
+@limiter.exempt
 def auth_status():
     """
     Return the current setup state so the SPA can decide which screen to show.

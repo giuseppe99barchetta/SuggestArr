@@ -260,7 +260,10 @@ def save_config_section_endpoint(section_name):
         logger.error(f'Error saving configuration section {section_name}: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error saving configuration section', 'status': 'error'}), 500
 
+from api_service.auth.limiter import limiter
+
 @config_bp.route('/status', methods=['GET'])
+@limiter.exempt
 def get_setup_status():
     """
     Get setup completion status.
