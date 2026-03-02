@@ -251,7 +251,8 @@ async def get_sonarr_servers():
         try:
             validate_url(api_url, allow_private=True)
         except ValueError as exc:
-            return jsonify({'message': str(exc), 'type': 'error'}), 400
+            logger.warning(f'Invalid Seer API URL configuration: {exc}', exc_info=True)
+            return jsonify({'message': 'Seer API URL is invalid or not allowed', 'type': 'error'}), 400
 
         async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as seer_client:
             servers = await seer_client.get_sonarr_servers()
