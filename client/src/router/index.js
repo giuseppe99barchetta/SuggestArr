@@ -60,6 +60,21 @@ let _statusCacheTimestamp = 0;
 let _statusPromise = null;
 const STATUS_CACHE_TTL = 1000; // 1 second cache
 
+function isAbortLikeError(error) {
+  const code = error?.code || error?.message?.code;
+  if (code === "ECONNABORTED" || code === "ERR_CANCELED") return true;
+  if (error?.name === "CanceledError") return true;
+
+  const rawMessage =
+    typeof error?.message === "string"
+      ? error.message
+      : typeof error?.message?.message === "string"
+        ? error.message.message
+        : "";
+  const message = rawMessage.toLowerCase();
+  return message.includes("aborted") || message.includes("canceled");
+}
+
 async function checkSetupStatus() {
   const now = Date.now();
   if (_statusCache && now - _statusCacheTimestamp < STATUS_CACHE_TTL) {
@@ -81,7 +96,7 @@ async function checkSetupStatus() {
     })
     .catch((error) => {
       // Don't report abortions (often due to navigation redirects) as noisy errors
-      if (error.code !== "ECONNABORTED") {
+      if (!isAbortLikeError(error)) {
         console.error("Error checking setup status:", error.message);
       }
       return { setup_completed: false, is_complete: false };
@@ -108,7 +123,8 @@ export async function createAppRouter() {
     .catch(() => ({ auth_setup_complete: false, app_setup_complete: false }));
 
   // If an admin account exists, try refreshing the session from the cookie.
-  if (authStatus.auth_setup_complete) {
+  const hadSessionHint = localStorage.getItem("suggestarr_had_session") === "1";
+  if (authStatus.auth_setup_complete && hadSessionHint) {
     await auth.tryRefresh();
   }
 
@@ -179,17 +195,16 @@ export async function createAppRouter() {
     }
 
     const currentStatus = await checkSetupStatus();
-    const authConfiguredOrAuthenticated =
-      auth.authSetupComplete.value || !!auth.accessToken.value;
+    const isAuthenticated = !!auth.accessToken.value;
 
     // First-run flow:
     // - No auth users yet: force all routes to Login (setup-admin form lives there).
     // - Auth exists + app setup incomplete: keep Login out of the way and use /setup wizard.
     if (!currentStatus.setup_completed) {
-      if (!authConfiguredOrAuthenticated && to.name !== "Login") {
+      if (!isAuthenticated && to.name !== "Login") {
         return { name: "Login", query: { redirect: to.fullPath } };
       }
-      if (authConfiguredOrAuthenticated && to.name === "Login") {
+      if (isAuthenticated && to.name === "Login") {
         return "/setup";
       }
     }
