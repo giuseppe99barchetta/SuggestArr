@@ -50,17 +50,17 @@ export function useBackgroundImage() {
     }, 10000);
   }
 
-  function startBackgroundImageRotation(apiKey) {
+  function startBackgroundImageRotation() {
     stopBackgroundImageRotation();
     // Load the first image immediately
-    fetchRandomMovieImageAsync(apiKey);
+    fetchRandomMovieImageAsync();
     // Then start the interval
-    intervalId.value = setInterval(() => fetchRandomMovieImageAsync(apiKey), 10000);
+    intervalId.value = setInterval(() => fetchRandomMovieImageAsync(), 10000);
   }
 
-  async function fetchRandomMovieImageAsync(apiKey) {
+  async function fetchRandomMovieImageAsync() {
     try {
-      const imageUrl = await fetchRandomMovieImage(apiKey);
+      const imageUrl = await fetchRandomMovieImage();
       if (imageUrl) {
         await changeBackground(imageUrl);
       }

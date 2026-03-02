@@ -58,12 +58,8 @@ def test_omdb_connection():
                 return {'status': 'error',
                         'message': 'Failed to connect to OMDb API'}
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(_test())
-        finally:
-            loop.close()
+        from api_service.blueprints.jobs.routes import run_async
+        result = run_async(_test())
 
         status_code = 200 if result['status'] == 'success' else 400
         return jsonify(result), status_code

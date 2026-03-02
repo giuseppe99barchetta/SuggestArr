@@ -1,5 +1,5 @@
-from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.config_service import ConfigService
 from api_service.handler.jellyfin_handler import JellyfinHandler
 from api_service.handler.plex_handler import PlexHandler
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
@@ -26,7 +26,7 @@ class ContentAutomation:
         """Async factory method to initialize ContentAutomation asynchronously."""
         instance = cls.__new__(cls)
         instance.logger.info("Initializing ContentAutomation")
-        env_vars = load_env_vars()
+        env_vars = ConfigService.get_runtime_config()
 
         instance.selected_service = env_vars['SELECTED_SERVICE']
         instance.max_content = env_vars.get('MAX_CONTENT_CHECKS', 10)
@@ -83,6 +83,7 @@ class ContentAutomation:
         filter_streaming_services = filter_streaming_raw if isinstance(filter_streaming_raw, list) else []
 
         filter_min_runtime = env_vars.get('FILTER_MIN_RUNTIME', None)
+        filter_include_tvod = env_vars.get('FILTER_INCLUDE_TVOD', False) is True
 
         # IMDB / OMDb rating filter settings
         rating_source = env_vars.get('FILTER_RATING_SOURCE', 'tmdb')
@@ -142,6 +143,7 @@ class ContentAutomation:
             imdb_threshold=imdb_threshold,
             imdb_min_votes=imdb_min_votes,
             omdb_client=omdb_client,
+            include_tvod=filter_include_tvod,
         )
         instance.logger.info("TMDb client initialized successfully")
 
@@ -217,8 +219,26 @@ class ContentAutomation:
         """Main entry point to start the automation process."""
         self.logger.info("Starting content automation process")
         try:
-            await self.media_handler.process_recent_items()
+            from contextlib import AsyncExitStack
+            async with AsyncExitStack() as stack:
+                if hasattr(self.media_handler, 'jellyseer_client'):
+                    await stack.enter_async_context(self.media_handler.jellyseer_client)
+                elif hasattr(self.media_handler, 'seer_client'):
+                    await stack.enter_async_context(self.media_handler.seer_client)
+
+                if hasattr(self.media_handler, 'tmdb_client'):
+                    await stack.enter_async_context(self.media_handler.tmdb_client)
+                    if self.media_handler.tmdb_client.omdb_client:
+                        await stack.enter_async_context(self.media_handler.tmdb_client.omdb_client)
+
+                if hasattr(self.media_handler, 'jellyfin_client'):
+                    await stack.enter_async_context(self.media_handler.jellyfin_client)
+                elif hasattr(self.media_handler, 'plex_client'):
+                    await stack.enter_async_context(self.media_handler.plex_client)
+
+                await self.media_handler.process_recent_items()
             self.logger.info("Content automation process completed successfully")
         except Exception as e:
             self.logger.error(f"Content automation process failed: {str(e)}", exc_info=True)
             raise
+

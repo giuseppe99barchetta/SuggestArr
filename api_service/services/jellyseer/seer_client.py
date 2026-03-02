@@ -1,5 +1,6 @@
 import aiohttp
 import asyncio
+from typing import List, Set
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 
@@ -35,7 +36,23 @@ class SeerClient:
         self.exclude_downloaded = exclude_downloaded
         self.exclude_requested = exclude_watched
         self.anime_profile_config = anime_profile_config or {}
+        self.session = None
         self.logger.debug("SeerClient initialized with API URL: %s", api_url)
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self.session is None or self.session.closed:
+            self.session = aiohttp.ClientSession()
+        return self.session
+
+    async def close(self):
+        if self.session and not self.session.closed:
+            await self.session.close()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
         
     async def init(self):
         """
@@ -65,38 +82,41 @@ class SeerClient:
 
         for attempt in range(retries):
             self.logger.debug("Attempt %d for request to %s", attempt + 1, url)
-            async with aiohttp.ClientSession(headers=headers, cookies=cookies) as session:
-                try:
-                    async with session.request(method, url, json=data, timeout=REQUEST_TIMEOUT) as response:
-                        self.logger.debug("Received response with status %d for request to %s", response.status, url)
-                        if response.status in HTTP_OK:
-                            return await response.json()
-                        elif response.status == 403:
-                            resp = await response.json()
-                            message = resp.get('message') or resp.get('error', '')
-                            self.logger.error(
-                                f"Request to {url} failed with status: {response.status}, {message}"
-                            )
-                            # Quota-exceeded errors won't be resolved by re-logging in; abort immediately
-                            if 'quota' in message.lower():
-                                return None
-                            # Otherwise treat as auth failure and retry with login
-                            if attempt < retries - 1:
-                                self.logger.debug("Retrying login due to 403")
-                                await self.login()
-                            else:
-                                return None
-                        elif response.status == 404 and attempt < retries - 1:
-                            self.logger.debug("Retrying login due to status 404")
+            
+            # Use shared session but override headers/cookies for this request
+            # since aiohttp allows passing request-level headers/cookies
+            session = await self._get_session()
+            try:
+                async with session.request(method, url, json=data, headers=headers, cookies=cookies, timeout=REQUEST_TIMEOUT) as response:
+                    self.logger.debug("Received response with status %d for request to %s", response.status, url)
+                    if response.status in HTTP_OK:
+                        return await response.json()
+                    elif response.status == 403:
+                        resp = await response.json()
+                        message = resp.get('message') or resp.get('error', '')
+                        self.logger.error(
+                            f"Request to {url} failed with status: {response.status}, {message}"
+                        )
+                        # Quota-exceeded errors won't be resolved by re-logging in; abort immediately
+                        if 'quota' in message.lower():
+                            return None
+                        # Otherwise treat as auth failure and retry with login
+                        if attempt < retries - 1:
+                            self.logger.debug("Retrying login due to 403")
                             await self.login()
                         else:
-                            resp = await response.json()
-                            self.logger.error(
-                                f"Request to {url} failed with status: {response.status}, {resp.get('message') or resp.get('error', 'Unknown error')}"
-                            )
-                except aiohttp.ClientError as e:
-                    self.logger.error(f"Client error during request to {url}: {e}")
-                await asyncio.sleep(delay)
+                            return None
+                    elif response.status == 404 and attempt < retries - 1:
+                        self.logger.debug("Retrying login due to status 404")
+                        await self.login()
+                    else:
+                        resp = await response.json()
+                        self.logger.error(
+                            f"Request to {url} failed with status: {response.status}, {resp.get('message') or resp.get('error', 'Unknown error')}"
+                        )
+            except aiohttp.ClientError as e:
+                self.logger.error(f"Client error during request to {url}: {e}")
+            await asyncio.sleep(delay)
         return None
 
     async def login(self):
@@ -111,18 +131,18 @@ class SeerClient:
 
         login_url = f"{self.api_url}/api/v1/auth/local"
         self.logger.debug("Logging in to %s", login_url)
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=REQUEST_TIMEOUT) as response:
-                    self.logger.debug("Login response status: %d", response.status)
-                    if response.status == 200 and 'connect.sid' in response.cookies:
-                        self.session_token = response.cookies['connect.sid'].value
-                        self.is_logged_in = True
-                        self.logger.info("Successfully logged in as %s", self.username)
-                    else:
-                        self.logger.error("Login failed: %d", response.status)
-            except asyncio.TimeoutError:
-                self.logger.error("Login request to %s timed out.", login_url)
+        session = await self._get_session()
+        try:
+            async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=REQUEST_TIMEOUT) as response:
+                self.logger.debug("Login response status: %d", response.status)
+                if response.status == 200 and 'connect.sid' in response.cookies:
+                    self.session_token = response.cookies['connect.sid'].value
+                    self.is_logged_in = True
+                    self.logger.info("Successfully logged in as %s", self.username)
+                else:
+                    self.logger.error("Login failed: %d", response.status)
+        except asyncio.TimeoutError:
+            self.logger.error("Login request to %s timed out.", login_url)
 
     async def get_all_users(self, max_users=100):
         """Fetch all users from Jellyseer API, returning a list of user IDs, names, and local status."""
@@ -200,7 +220,9 @@ class SeerClient:
 
         Private meta-keys (prefixed with ``_``) are stripped before the payload is
         sent to Seer but are preserved in the queue row so the worker can call
-        ``save_request`` / ``save_metadata`` correctly after a successful submission.
+        ``save_request`` correctly after a successful submission.
+        Metadata objects are intentionally excluded — they are persisted via
+        ``save_metadata`` at enqueue time so the payload stays small.
 
         :return: payload dict ready for JSON serialisation.
         """
@@ -221,8 +243,6 @@ class SeerClient:
         data["_user_id"] = user.get('id') if user else None
         data["_rationale"] = rationale
         data["_is_anime"] = is_anime
-        data["_media_obj"] = media    # worker needs this for save_metadata
-        data["_source_obj"] = source  # worker needs this for save_metadata
 
         return data
 
@@ -262,6 +282,18 @@ class SeerClient:
 
         if user:
             db.save_user(user)
+
+        # Persist metadata immediately while the full objects are available in memory,
+        # so the payload stored in the queue table stays compact (no large text blobs).
+        try:
+            db.save_metadata(media, media_type)
+        except Exception:
+            pass  # non-critical — metadata is display-only cache
+        if source:
+            try:
+                db.save_metadata(source, media_type)
+            except Exception:
+                pass
 
         enqueued = db.enqueue_request(tmdb_id, media_type, user_id, payload)
         if enqueued:
@@ -309,6 +341,17 @@ class SeerClient:
         
         return False
 
+    async def check_requests_exist_batch(self, media_type: str, tmdb_ids: List[str]) -> Set[str]:
+        """Check which of the provided TMDB IDs already have requests in the database."""
+        if not self.exclude_requested or not tmdb_ids:
+            return set()
+        
+        try:
+            return DatabaseManager().check_requests_exist_batch(media_type, tmdb_ids)
+        except Exception as e:
+            self.logger.error("Error in bulk check requests: %s", e)
+            return set()
+
     async def check_already_downloaded(self, tmdb_id, media_type, local_content=None):
         """Check if a media item has already been downloaded based on local content."""
         if self.exclude_downloaded:
@@ -318,19 +361,21 @@ class SeerClient:
                 self.logger.warning("local_content is None, skipping downloaded check")
                 return False
 
+            # Optimization: If local_content is a list, we should ideally have a set for O(1) lookup.
+            # However, since this is called per item, we'll check if we can optimize the caller side later.
+            # For now, let's at least make sure we don't do redundant work here.
             items = local_content.get(media_type, [])
+            if isinstance(items, set):
+                return str(tmdb_id) in items
+            
             if not isinstance(items, list):
-                self.logger.warning("Expected list for media_type '%s', but got %s", media_type, type(items))
+                self.logger.warning("Expected list or set for media_type '%s', but got %s", media_type, type(items))
                 return False
 
             for item in items:
-                if not isinstance(item, dict):
-                    self.logger.warning("Skipping invalid item in local_content: %s", item)
-                    continue
-                if 'tmdb_id' not in item:
-                    self.logger.warning("Skipping item without 'tmdb_id': %s", item)
-                    continue
-                if item['tmdb_id'] == str(tmdb_id):
+                if isinstance(item, dict) and item.get('tmdb_id') == str(tmdb_id):
+                    return True
+                if isinstance(item, str) and item == str(tmdb_id):
                     return True
         else:
             self.logger.info("Skipping check for already downloaded media.")

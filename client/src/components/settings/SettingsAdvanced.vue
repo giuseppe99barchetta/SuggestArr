@@ -6,61 +6,6 @@
     </div>
 
     <div class="settings-grid">
-      <!-- User Selection -->
-      <div class="settings-group">
-        <h3>
-          <i class="fas fa-users"></i>
-          User Selection
-        </h3>
-
-        <div class="form-group">
-          <label for="selectedUsers">Selected Users</label>
-          <div v-if="isLoadingUsers" class="loading-users">
-            <i class="fas fa-spinner fa-spin"></i>
-            Loading users...
-          </div>
-          <div v-else class="user-grid">
-            <div
-              v-for="user in availableUsers"
-              :key="user.id"
-              :class="['user-card', { 'selected': isUserSelected(user.id) }]"
-              @click="toggleUserSelection(user.id)"
-            >
-              <div class="user-avatar">
-                <img v-if="user.avatar" :src="user.avatar" :alt="user.name" />
-                <i v-else class="fas fa-user"></i>
-              </div>
-              <div class="user-info">
-                <div class="user-name">{{ user.name }}</div>
-                <div class="user-type">{{ user.type || 'User' }}</div>
-              </div>
-              <div class="user-selection-indicator">
-                <i class="fas fa-check"></i>
-              </div>
-            </div>
-            <div v-if="availableUsers.length === 0" class="no-users">
-              <i class="fas fa-users-slash"></i>
-              <p>No users available</p>
-              <small>Please configure your media service first</small>
-            </div>
-          </div>
-          <small class="form-help">
-            Click on users to select/deselect them for suggestion generation. Leave empty to include all users.
-          </small>
-        </div>
-
-        <div class="form-group">
-          <button
-            @click="refreshUsers"
-            class="btn btn-outline btn-sm"
-            :disabled="isLoading || isLoadingUsers"
-          >
-            <i class="fas fa-sync"></i>
-            Refresh Users
-          </button>
-        </div>
-      </div>
-
       <!-- Experimental Features -->
       <div class="settings-group experimental">
         <h3>
@@ -570,8 +515,14 @@ export default {
         this.localConfig = { ...newConfig };
         this.originalConfig = { ...newConfig };
 
-        // Ensure arrays are properly initialized
-        if (!Array.isArray(this.localConfig.SELECTED_USERS)) {
+        // Ensure SELECTED_USERS is always a parsed array
+        if (typeof this.localConfig.SELECTED_USERS === 'string') {
+          try {
+            this.localConfig.SELECTED_USERS = JSON.parse(this.localConfig.SELECTED_USERS);
+          } catch {
+            this.localConfig.SELECTED_USERS = [];
+          }
+        } else if (!Array.isArray(this.localConfig.SELECTED_USERS)) {
           this.localConfig.SELECTED_USERS = [];
         }
 
@@ -679,18 +630,18 @@ export default {
         }
 
         if (endpoint) {
-          let url = endpoint;
-          let params = {};
+          let response;
 
-          // Add required parameters for Plex
+          // Send Plex credentials in request body, not query params
           if (service === 'plex') {
-            params.PLEX_TOKEN = this.localConfig.PLEX_TOKEN;
-            if (this.localConfig.PLEX_API_URL) {
-              params.PLEX_API_URL = this.localConfig.PLEX_API_URL;
-            }
+            response = await axios.post(endpoint, {
+              PLEX_TOKEN: this.localConfig.PLEX_TOKEN,
+              PLEX_API_URL: this.localConfig.PLEX_API_URL || '',
+            });
+          } else {
+            response = await axios.get(endpoint);
           }
 
-          const response = await axios.get(url, { params });
           this.availableUsers = response.data.users || response.data || [];
         }
       } catch (error) {
@@ -806,6 +757,7 @@ export default {
 <style scoped>
 .settings-advanced {
   color: var(--color-text-primary);
+  padding: var(--spacing-lg);
 }
 
 .section-header {

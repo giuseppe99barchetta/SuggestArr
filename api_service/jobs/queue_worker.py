@@ -6,10 +6,10 @@ max_instances=1 to prevent overlap).
 """
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
-from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.jellyseer.seer_client import SeerClient
 
@@ -28,13 +28,13 @@ def _backoff_seconds(retry_count: int) -> int:
     return min(30 * (2 ** retry_count), 3600)
 
 
-def _next_attempt_at(retry_count: int) -> str:
-    """Return an ISO-8601 UTC timestamp offset by the backoff for *retry_count*.
+def _next_attempt_at(retry_count: int) -> datetime:
+    """Return a UTC datetime offset by the backoff for *retry_count*.
 
     :param retry_count: The new retry count after incrementing.
-    :return: ISO-8601 string.
+    :return: Naive UTC datetime for the next eligible attempt.
     """
-    return (datetime.utcnow() + timedelta(seconds=_backoff_seconds(retry_count))).isoformat()
+    return datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=_backoff_seconds(retry_count))
 
 
 async def _run_worker() -> int:
@@ -54,7 +54,7 @@ async def _run_worker() -> int:
 
     logger.info("Queue worker: processing %d item(s).", len(items))
 
-    env = load_env_vars()
+    env = ConfigService.get_runtime_config()
     seer = SeerClient(
         env.get('SEER_API_URL', ''),
         env.get('SEER_TOKEN', ''),
@@ -65,70 +65,73 @@ async def _run_worker() -> int:
         exclude_downloaded=False,
         exclude_watched=False,  # pre-checks already done at enqueue time
     )
-    await seer.init()
+    async with seer:
+        await seer.init()
 
-    submitted = 0
+        submitted = 0
 
-    for item in items:
-        row_id = item['id']
-        tmdb_id = item['tmdb_id']
-        media_type = item['media_type']
-        retry_count = item['retry_count']
-        payload = json.loads(item['payload'])
-
-        # Skip if the item was submitted by another path while it sat in the queue
-        if db.check_request_exists(media_type, tmdb_id):
-            logger.debug("Queue worker: %s tmdb:%s already in requests, marking submitted.", media_type, tmdb_id)
-            db.mark_pending_submitted(row_id, retry_count)
-            continue
-
-        # Mark in-flight so a concurrent worker invocation skips this row
-        db.mark_pending_submitting(row_id, retry_count)
-
-        try:
-            success = await seer.submit_queued_request(payload)
-        except Exception as exc:
-            logger.error("Queue worker: unexpected error submitting %s tmdb:%s — %s",
-                         media_type, tmdb_id, exc, exc_info=True)
-            success = False
-
-        if success:
-            # Persist to the canonical requests table (idempotent INSERT OR IGNORE)
-            source_id = payload.get('_source_id')
-            user_id = payload.get('_user_id')
-            rationale = payload.get('_rationale')
-            is_anime = bool(payload.get('_is_anime', False))
-            media_obj = payload.get('_media_obj') or {}
-            source_obj = payload.get('_source_obj')
-
-            db.save_request(media_type, tmdb_id, source_id, user_id,
-                            is_anime=is_anime, rationale=rationale)
-
-            if source_obj and source_obj.get('id'):
-                db.save_metadata(source_obj, media_type)
-            if media_obj:
-                db.save_metadata(media_obj, media_type)
-
-            db.mark_pending_submitted(row_id, retry_count)
-            logger.info("Queue worker: submitted %s tmdb:%s.", media_type, tmdb_id)
-            submitted += 1
-        else:
-            new_retry = retry_count + 1
-            if new_retry >= MAX_RETRIES:
-                db.mark_pending_failed(row_id, new_retry)
+        for item in items:
+            row_id = item['id']
+            tmdb_id = item['tmdb_id']
+            media_type = item['media_type']
+            retry_count = item['retry_count']
+            try:
+                payload = json.loads(item['payload'])
+            except (json.JSONDecodeError, TypeError) as exc:
                 logger.error(
-                    "Queue worker: %s tmdb:%s permanently failed after %d retries.",
-                    media_type, tmdb_id, new_retry,
+                    "Queue worker: corrupt payload for %s tmdb:%s (row %s) — %s. Marking as failed.",
+                    media_type, tmdb_id, row_id, exc,
                 )
-            else:
-                next_at = _next_attempt_at(new_retry)
-                db.increment_pending_retry(row_id, new_retry, next_at)
-                logger.warning(
-                    "Queue worker: %s tmdb:%s retry %d scheduled at %s.",
-                    media_type, tmdb_id, new_retry, next_at,
-                )
+                db.mark_pending_failed(row_id, retry_count)
+                continue
 
-    return submitted
+            # Skip if the item was submitted by another path while it sat in the queue
+            if db.check_request_exists(media_type, tmdb_id):
+                logger.debug("Queue worker: %s tmdb:%s already in requests, marking submitted.", media_type, tmdb_id)
+                db.mark_pending_submitted(row_id, retry_count)
+                continue
+
+            # Mark in-flight so a concurrent worker invocation skips this row
+            db.mark_pending_submitting(row_id, retry_count)
+
+            try:
+                success = await seer.submit_queued_request(payload)
+            except Exception as exc:
+                logger.error("Queue worker: unexpected error submitting %s tmdb:%s — %s",
+                             media_type, tmdb_id, exc, exc_info=True)
+                success = False
+
+            if success:
+                # Persist to the canonical requests table (idempotent INSERT OR IGNORE).
+                # Metadata was already saved at enqueue time by SeerClient.request_media.
+                source_id = payload.get('_source_id')
+                user_id = payload.get('_user_id')
+                rationale = payload.get('_rationale')
+                is_anime = bool(payload.get('_is_anime', False))
+
+                db.save_request(media_type, tmdb_id, source_id, user_id,
+                                is_anime=is_anime, rationale=rationale)
+
+                db.mark_pending_submitted(row_id, retry_count)
+                logger.info("Queue worker: submitted %s tmdb:%s.", media_type, tmdb_id)
+                submitted += 1
+            else:
+                new_retry = retry_count + 1
+                if new_retry >= MAX_RETRIES:
+                    db.mark_pending_failed(row_id, new_retry)
+                    logger.error(
+                        "Queue worker: %s tmdb:%s permanently failed after %d retries.",
+                        media_type, tmdb_id, new_retry,
+                    )
+                else:
+                    next_at = _next_attempt_at(new_retry)
+                    db.increment_pending_retry(row_id, new_retry, next_at)
+                    logger.warning(
+                        "Queue worker: %s tmdb:%s retry %d scheduled at %s.",
+                        media_type, tmdb_id, new_retry, next_at,
+                    )
+
+        return submitted
 
 
 def run_queue_worker() -> None:

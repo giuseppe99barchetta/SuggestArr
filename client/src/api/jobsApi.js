@@ -128,11 +128,59 @@ export const jobsApi = {
   },
 
   /**
+   * Get available watch provider regions from TMDb.
+   * @returns {Promise<Object>} Response with regions array.
+   */
+  async getWatchRegions() {
+    const response = await axios.get('/api/jobs/watch-regions');
+    return response.data;
+  },
+
+  /**
+   * Get available streaming providers for a region from TMDb.
+   * @param {string} region - ISO 3166-1 region code (e.g. 'IT').
+   * @returns {Promise<Object>} Response with providers array.
+   */
+  async getWatchProviders(region) {
+    const response = await axios.get('/api/jobs/watch-providers', { params: { region } });
+    return response.data;
+  },
+
+  /**
+   * Get default filter values for new jobs (derived from global config).
+   * @returns {Promise<Object>} Response with defaults object.
+   */
+  async getDefaultFilters() {
+    const response = await axios.get('/api/jobs/defaults');
+    return response.data;
+  },
+
+  /**
    * Check if LLM is configured for AI-enhanced recommendations.
    * @returns {Promise<Object>} Response with configured boolean.
    */
   async getLlmStatus() {
     const response = await axios.get('/api/jobs/llm-status');
+    return response.data;
+  },
+
+  /**
+   * Get the current Seer delivery queue status.
+   * @returns {Promise<Object>} Response with queued/submitting/submitted/failed counts.
+   */
+  async getQueueStatus() {
+    const response = await axios.get('/api/jobs/queue-status');
+    return response.data;
+  },
+
+  /**
+   * Simulate job execution without making actual requests.
+   * Returns the list of media items that would have been queued.
+   * @param {number} jobId - Job ID.
+   * @returns {Promise<Object>} Response with items_count and items array.
+   */
+  async dryRunJob(jobId) {
+    const response = await axios.post(`/api/jobs/${jobId}/dry-run`);
     return response.data;
   }
 };

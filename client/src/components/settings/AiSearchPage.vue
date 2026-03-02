@@ -2,7 +2,7 @@
   <div class="ai-search-page">
     <!-- Header -->
     <div class="section-header">
-      <h2><i class="fas fa-magic"></i> AI Search</h2>
+      <h2>AI Search</h2>
       <p>Describe what you want to watch and the AI will find it for you, personalised to your viewing history.</p>
     </div>
 
@@ -524,3 +524,17 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+
+.section-header h2 {
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-text-primary);
+}
+
+.section-header p {
+  color: var(--color-text-muted);
+  font-size: 1rem;
+}
+</style>

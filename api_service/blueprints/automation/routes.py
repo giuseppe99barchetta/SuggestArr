@@ -2,6 +2,8 @@ import asyncio
 import threading
 import traceback
 from flask import Blueprint, jsonify, request
+from api_service.auth.limiter import limiter
+from api_service.auth.middleware import require_role
 from api_service.automate_process import ContentAutomation
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
@@ -31,6 +33,8 @@ def _run_automation_in_background():
 
 
 @automation_bp.route('/force_run', methods=['POST'])
+@require_role('admin')
+@limiter.limit("5 per minute")
 def run_now():
     """
     Endpoint to execute the automation process in a background thread.

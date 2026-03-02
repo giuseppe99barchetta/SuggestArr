@@ -6,8 +6,8 @@ rating filtering, and history-based deduplication to power the AI Search tab.
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.config_service import ConfigService
 from api_service.services.llm.llm_service import interpret_search_query
 from api_service.services.tmdb.tmdb_client import TMDbClient
 
@@ -30,8 +30,13 @@ class AiSearchService:
     """
 
     def __init__(self):
-        """Initialise AiSearchService from the current application configuration."""
-        self.config = load_env_vars()
+        """Initialise AiSearchService from the current application configuration.
+
+        Uses get_runtime_config() so that DB-backed integration credentials
+        (TMDB_API_KEY, JELLYFIN_TOKEN, SEER_TOKEN, etc.) are always present
+        even after a config import that only writes keys to the DB.
+        """
+        self.config = ConfigService.get_runtime_config()
 
     # ------------------------------------------------------------------
     # Public API
@@ -133,12 +138,18 @@ class AiSearchService:
         # 4. Build TMDb client from config
         tmdb_client = self._make_tmdb_client()
 
-        # 5. Resolve each suggested title on TMDB in parallel
-        title_tasks = [
-            self._resolve_suggested_title(t, media_type, tmdb_client)
-            for t in suggested_titles
-        ]
-        title_results: List[Optional[Dict]] = list(await asyncio.gather(*title_tasks))
+        from contextlib import AsyncExitStack
+        async with AsyncExitStack() as stack:
+            await stack.enter_async_context(tmdb_client)
+            if tmdb_client.omdb_client:
+                await stack.enter_async_context(tmdb_client.omdb_client)
+
+            # 5. Resolve each suggested title on TMDB in parallel
+            title_tasks = [
+                self._resolve_suggested_title(t, media_type, tmdb_client)
+                for t in suggested_titles
+            ]
+            title_results: List[Optional[Dict]] = list(await asyncio.gather(*title_tasks))
 
         # 6. Build result list: AI suggestions only, filtered & deduped
         seen_ids: set = set()
@@ -154,7 +165,7 @@ class AiSearchService:
                 continue
             if exclude_watched and self._is_watched(tmdb_item, watched_titles):
                 continue
-            if not tmdb_client._apply_filters(tmdb_item, media_type):
+            if not tmdb_client._apply_filters(tmdb_item, media_type)['passed']:
                 continue
             seen_ids.add(item_id)
             tmdb_item["rationale"] = suggestion.get("rationale", "")
@@ -210,6 +221,7 @@ class AiSearchService:
 
         api_url = self.config.get("JELLYFIN_API_URL", "")
         token = self.config.get("JELLYFIN_TOKEN", "")
+        logger.debug("Jellyfin URL: %s, Token: %s", api_url, "SET" if token else "EMPTY")
         if not api_url or not token:
             logger.warning("Jellyfin not configured; skipping history fetch.")
             return []
@@ -224,39 +236,40 @@ class AiSearchService:
             library_ids=libraries,
         )
 
-        # Determine which users to query
-        if user_ids:
-            users = [
-                u if isinstance(u, dict) else {"id": u, "name": str(u)}
-                for u in user_ids
-            ]
-        else:
-            try:
-                users = await client.get_all_users()
-            except Exception as exc:
-                logger.warning("Could not fetch Jellyfin users: %s", exc)
-                return []
+        async with client:
+            # Determine which users to query
+            if user_ids:
+                users = [
+                    u if isinstance(u, dict) else {"id": u, "name": str(u)}
+                    for u in user_ids
+                ]
+            else:
+                try:
+                    users = await client.get_all_users()
+                except Exception as exc:
+                    logger.warning("Could not fetch Jellyfin users: %s", exc)
+                    return []
 
-        history: List[Dict] = []
-        for user in users:
-            try:
-                items_by_library = await client.get_recent_items(user)
-                for items in items_by_library.values():
-                    for item in items:
-                        item_type_raw = item.get("Type", "").lower()
-                        if item_type_raw == "episode":
-                            title = item.get("SeriesName") or item.get("Name")
-                            media_type = "tv"
-                        else:
-                            title = item.get("Name")
-                            media_type = "movie"
-                        year = item.get("ProductionYear")
-                        if title:
-                            history.append({"title": title, "year": year, "type": media_type})
-            except Exception as exc:
-                logger.warning("Error fetching history for Jellyfin user %s: %s", user, exc)
+            history: List[Dict] = []
+            for user in users:
+                try:
+                    items_by_library = await client.get_recent_items(user)
+                    for items in items_by_library.values():
+                        for item in items:
+                            item_type_raw = item.get("Type", "").lower()
+                            if item_type_raw == "episode":
+                                title = item.get("SeriesName") or item.get("Name")
+                                media_type = "tv"
+                            else:
+                                title = item.get("Name")
+                                media_type = "movie"
+                            year = item.get("ProductionYear")
+                            if title:
+                                history.append({"title": title, "year": year, "type": media_type})
+                except Exception as exc:
+                    logger.warning("Error fetching history for Jellyfin user %s: %s", user, exc)
 
-        return history
+            return history
 
     async def _get_plex_history(self, user_ids: Optional[List]) -> List[Dict]:
         """Fetch history from Plex."""
@@ -279,29 +292,31 @@ class AiSearchService:
             user_ids=user_ids or [],
         )
 
-        try:
-            items = await client.get_recent_items()
-        except Exception as exc:
-            logger.warning("Error fetching Plex history: %s", exc)
-            return []
+        async with client:
+            try:
+                items = await client.get_recent_items()
+            except Exception as exc:
+                logger.warning("Error fetching Plex history: %s", exc)
+                return []
 
-        history: List[Dict] = []
-        for item in items:
-            if item.get("type") == "episode":
-                title = item.get("grandparentTitle") or item.get("title")
-                media_type = "tv"
-            else:
-                title = item.get("title")
-                media_type = "movie"
-            year = item.get("year")
-            if title:
-                history.append({"title": title, "year": year, "type": media_type})
+            history: List[Dict] = []
+            for item in items:
+                if item.get("type") == "episode":
+                    title = item.get("grandparentTitle") or item.get("title")
+                    media_type = "tv"
+                else:
+                    title = item.get("title")
+                    media_type = "movie"
+                year = item.get("year")
+                if title:
+                    history.append({"title": title, "year": year, "type": media_type})
 
-        return history
+            return history
 
     def _make_tmdb_client(self) -> TMDbClient:
         """Instantiate TMDbClient from the current configuration."""
         c = self.config
+        logger.debug("TMDb API key: %s", "SET" if c.get("TMDB_API_KEY") else "EMPTY")
         tmdb_threshold = int(c.get("FILTER_TMDB_THRESHOLD") or 60)
         tmdb_min_votes = int(c.get("FILTER_TMDB_MIN_VOTES") or 20)
         include_no_ratings = c.get("FILTER_INCLUDE_NO_RATING", True) is True

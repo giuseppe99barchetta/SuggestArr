@@ -1,16 +1,17 @@
 <template>
   <div class="settings-services">
-    <div class="section-header">
+    <!-- Section header hidden in wizard mode (wizard shell provides its own header) -->
+    <div v-if="!wizardMode" class="section-header">
       <h2>Service Configuration</h2>
       <p>Configure external service connections</p>
     </div>
 
     <div class="services-stack">
-      <!-- TMDB + OMDb side by side -->
-      <div class="rating-apis-row">
+      <!-- TMDB + OMDb: side by side in dashboard, single card in wizard -->
+      <div v-if="showSection('tmdb') || showSection('omdb')" :class="!wizardMode ? 'rating-apis-row' : ''">
         <!-- TMDB -->
-        <div class="service-card">
-          <div class="service-header">
+        <div v-if="showSection('tmdb')" :class="wizardMode ? '' : 'service-card'">
+          <div v-if="!wizardMode" class="service-header">
             <h3><i class="fas fa-film"></i> TMDB API</h3>
             <span class="status-badge" :class="getTmdbStatus">
               <span class="status-dot"></span>
@@ -41,17 +42,18 @@
           <button
             @click="testTmdbConnection"
             class="btn btn-outline btn-block"
-            :disabled="isLoading || !localConfig.TMDB_API_KEY || testingConnections.tmdb"
+            :disabled="isLoading || !localConfig.TMDB_API_KEY || isTmdbTesting"
           >
-            <i v-if="testingConnections.tmdb" class="fas fa-spinner fa-spin"></i>
+            <i v-if="isTmdbTesting" class="fas fa-spinner fa-spin"></i>
+            <i v-else-if="wizardMode && wizardTmdbConnected" class="fas fa-check"></i>
             <i v-else class="fas fa-plug"></i>
-            {{ testingConnections.tmdb ? 'Testing...' : 'Test Connection' }}
+            {{ isTmdbTesting ? 'Testing...' : (wizardMode && wizardTmdbConnected ? 'Connected ✓' : 'Test Connection') }}
           </button>
         </div>
 
         <!-- OMDb (IMDB ratings) -->
-        <div class="service-card">
-          <div class="service-header">
+        <div v-if="showSection('omdb')" :class="wizardMode ? '' : 'service-card'">
+          <div v-if="!wizardMode" class="service-header">
             <h3><i class="fas fa-star"></i> IMDB (via OMDb)</h3>
             <span class="status-badge" :class="getOmdbStatus">
               <span class="status-dot"></span>
@@ -134,8 +136,8 @@
       </div>
 
       <!-- Media Server -->
-      <div class="service-card">
-        <div class="service-header">
+      <div v-if="showSection('media-server')" :class="wizardMode ? '' : 'service-card'">
+        <div v-if="!wizardMode" class="service-header">
           <h3><i class="fas fa-server"></i> Media Server</h3>
           <span class="status-badge" :class="getMediaServerStatus">
             <span class="status-dot"></span>
@@ -144,6 +146,7 @@
         </div>
 
         <BaseDropdown
+          v-if="!wizardMode"
           v-model="localConfig.SELECTED_SERVICE"
           :options="serviceOptions"
           label="Service"
@@ -152,39 +155,103 @@
           id="selectedService"
         />
 
-        <!-- Plex fields -->
+        <!-- Plex: OAuth flow (both wizard and dashboard) -->
         <template v-if="localConfig.SELECTED_SERVICE === 'plex'">
-          <div class="form-group">
-            <label for="plexToken">Plex Token</label>
-            <div class="input-group">
-              <input
-                id="plexToken"
-                v-model="localConfig.PLEX_TOKEN"
-                :type="showPlexToken ? 'text' : 'password'"
-                placeholder="Enter your Plex token"
-                class="form-control"
-                :disabled="isLoading"
-              />
-              <button @click="showPlexToken = !showPlexToken" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
-                <i :class="showPlexToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-              </button>
+          <!-- Step 1: not yet logged in → show Sign in button -->
+          <div v-if="!plexOAuthLoggedIn" class="form-group">
+            <button
+              @click="loginWithPlexOAuth"
+              class="btn btn-plex btn-block"
+              :disabled="plexOAuthLoading"
+            >
+              <i v-if="plexOAuthLoading" class="fas fa-spinner fa-spin"></i>
+              <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="width:18px;height:18px;fill:currentColor;flex-shrink:0">
+                <path d="M18 18h12v12H18z"/><path d="M6 6h12v12H6zM30 6h12v12H30zM6 30h12v12H6zM30 30h12v12H30z"/>
+              </svg>
+              {{ plexOAuthLoading ? 'Waiting for Plex authorisation…' : 'Sign in with Plex' }}
+            </button>
+            <small class="form-help" style="text-align:center;display:block">
+              <i class="fas fa-lock"></i> Opens Plex.tv in a new window for secure authentication.
+            </small>
+            <!-- Manual token fallback toggle -->
+            <button
+              @click="plexOAuthManualMode = !plexOAuthManualMode"
+              class="text-btn"
+              style="margin-top:0.5rem"
+            >
+              <i class="fas fa-keyboard"></i>
+              {{ plexOAuthManualMode ? 'Use Plex login instead' : 'Enter token manually' }}
+            </button>
+          </div>
+
+          <!-- Manual token fallback (also shown when user toggles it) -->
+          <template v-if="plexOAuthManualMode">
+            <div class="form-group">
+              <label for="plexTokenWizard">Plex Token</label>
+              <div class="input-group">
+                <input
+                  id="plexTokenManual"
+                  v-model="localConfig.PLEX_TOKEN"
+                  :type="showPlexToken ? 'text' : 'password'"
+                  placeholder="Enter your Plex token"
+                  class="form-control"
+                  :disabled="isLoading"
+                />
+                <button @click="showPlexToken = !showPlexToken" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
+                  <i :class="showPlexToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                </button>
+              </div>
             </div>
-          </div>
-          <div class="form-group">
-            <label for="plexApiUrl">API URL</label>
-            <input id="plexApiUrl" v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="form-control" :disabled="isLoading" />
-          </div>
-          <button
-            @click="testAndFetchPlex"
-            class="btn btn-outline btn-block"
-            :disabled="isLoading || !localConfig.PLEX_TOKEN || !localConfig.PLEX_API_URL || plexFetching"
-          >
-            <i v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
-            <i v-else-if="plexConnected" class="fas fa-check"></i>
-            <i v-else class="fas fa-plug"></i>
-            {{ plexFetching ? 'Connecting...' : (plexConnected ? 'Connected' : 'Test & Load') }}
-          </button>
+            <div class="form-group">
+              <label for="plexApiUrlManual">API URL</label>
+              <input id="plexApiUrlManual" v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="form-control" :disabled="isLoading" />
+            </div>
+            <button
+              @click="testAndFetchPlex"
+              class="btn btn-outline btn-block"
+              :disabled="!localConfig.PLEX_TOKEN || !localConfig.PLEX_API_URL || plexFetching"
+            >
+              <i v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
+              <i v-else-if="plexConnected" class="fas fa-check"></i>
+              <i v-else class="fas fa-plug"></i>
+              {{ plexFetching ? 'Connecting...' : (plexConnected ? 'Connected' : 'Test & Load') }}
+            </button>
+          </template>
+
+          <!-- Step 2: logged in via OAuth → server selection -->
+          <template v-if="plexOAuthLoggedIn && !plexOAuthManualMode">
+            <div class="form-group">
+              <div class="oauth-success">
+                <i class="fas fa-check-circle"></i> Authenticated with Plex
+              </div>
+            </div>
+            <!-- Multiple servers: dropdown -->
+            <div v-if="plexOAuthConnectionOptions.length > 1" class="form-group">
+              <label>Select Server Connection</label>
+              <BaseDropdown
+                v-model="plexOAuthSelectedConnIdx"
+                :options="plexOAuthConnectionOptions"
+                placeholder="Choose a server connection…"
+                @update:modelValue="onPlexOAuthServerSelect"
+              />
+            </div>
+            <div class="form-group">
+              <label>Or enter URL manually</label>
+              <div class="input-group">
+                <input v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="form-control" />
+                <button
+                  @click="testAndFetchPlex"
+                  class="btn btn-outline btn-sm"
+                  :disabled="!localConfig.PLEX_API_URL || plexFetching"
+                >
+                  <i v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
+                  <i v-else class="fas fa-plug"></i>
+                </button>
+              </div>
+            </div>
+          </template>
         </template>
+
 
         <!-- Jellyfin / Emby fields -->
         <template v-if="localConfig.SELECTED_SERVICE === 'jellyfin' || localConfig.SELECTED_SERVICE === 'emby'">
@@ -285,8 +352,8 @@
       </div>
 
       <!-- Overseerr -->
-      <div class="service-card">
-        <div class="service-header">
+      <div v-if="showSection('seer')" :class="wizardMode ? '' : 'service-card'">
+        <div v-if="!wizardMode" class="service-header">
           <h3><i class="fas fa-list-alt"></i> Overseerr</h3>
           <span class="status-badge" :class="getSeerStatus">
             <span class="status-dot"></span>
@@ -448,8 +515,8 @@
       </div>
     </div>
 
-    <!-- Save Button -->
-    <div class="settings-actions">
+    <!-- Save Button (hidden in wizard mode — wizard shell handles saving) -->
+    <div v-if="!wizardMode" class="settings-actions">
       <button
         @click="saveSettings"
         class="btn btn-primary"
@@ -472,11 +539,12 @@
 </template>
 
 <script>
+import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import {
   testJellyseerApi, authenticateUser, fetchRadarrServers, fetchSonarrServers,
   fetchJellyfinLibraries, fetchJellyfinUsers, fetchPlexLibraries, fetchPlexUsers,
-  testOmdbApi
+  testOmdbApi, testTmdbApi
 } from '@/api/api';
 
 export default {
@@ -497,8 +565,19 @@ export default {
       type: Object,
       default: () => ({}),
     },
+    // Wizard mode: hides save button and enables config-changed / validation-changed emits
+    wizardMode: {
+      type: Boolean,
+      default: false,
+    },
+    // When set, only the matching section is rendered (used by the wizard)
+    // Values: 'tmdb' | 'omdb' | 'media-server' | 'seer' | null (show all)
+    wizardSection: {
+      type: String,
+      default: null,
+    },
   },
-  emits: ['save-section', 'test-connection'],
+  emits: ['save-section', 'test-connection', 'validation-changed', 'config-changed'],
   data() {
     return {
       localConfig: {},
@@ -508,6 +587,9 @@ export default {
       showPlexToken: false,
       showJellyfinToken: false,
       showSeerToken: false,
+      // Wizard-mode self-contained TMDB test state
+      wizardTmdbTesting: false,
+      wizardTmdbConnected: false,
       // OMDb connection test
       omdbTesting: false,
       omdbConnected: false,
@@ -558,6 +640,13 @@ export default {
       plexUsers: [],
       selectedPlexLibraries: [],
       selectedPlexUsers: [],
+      // Plex OAuth (wizard mode)
+      plexOAuthLoading: false,
+      plexOAuthLoggedIn: false,
+      plexOAuthServers: [],
+      plexOAuthSelectedConnIdx: null,
+      plexOAuthManualMode: false,
+      plexOAuthPollTimer: null,
     };
   },
   computed: {
@@ -586,10 +675,47 @@ export default {
       if (this.localConfig.SELECTED_SERVICE === 'plex') return this.selectedPlexUsers;
       return this.selectedJellyfinUsers;
     },
+    // Plex OAuth: flattened list of server connections for the dropdown
+    plexOAuthConnectionOptions() {
+      const opts = [];
+      this.plexOAuthServers.forEach(server => {
+        (server.connections || [])
+          .filter(c => !c.relay)
+          .sort((a, b) => {
+            const aL = a.local === true || a.local === 1;
+            const bL = b.local === true || b.local === 1;
+            if (aL !== bL) return bL - aL;
+            return (b.protocol === 'https' ? 1 : 0) - (a.protocol === 'https' ? 1 : 0);
+          })
+          .slice(0, 3)
+          .forEach(c => {
+            opts.push({
+              label: `${server.name}${(c.local === true || c.local === 1) ? ' [Local]' : ' [Remote]'} — ${c.protocol}://${c.address}:${c.port}`,
+              value: `${c.protocol}://${c.address}:${c.port}`,
+            });
+          });
+      });
+      return opts;
+    },
+    // Wizard-mode TMDB test state
+    isTmdbTesting() {
+      return this.wizardMode ? this.wizardTmdbTesting : (this.testingConnections?.tmdb || false);
+    },
+    isTmdbConnected() {
+      return this.wizardMode ? this.wizardTmdbConnected : !!this.localConfig.TMDB_API_KEY;
+    },
     getTmdbStatus() {
+      if (this.wizardMode) {
+        if (this.wizardTmdbConnected) return 'status-connected';
+        return this.localConfig.TMDB_API_KEY ? 'status-warning' : 'status-disconnected';
+      }
       return this.localConfig.TMDB_API_KEY ? 'status-connected' : 'status-disconnected';
     },
     getTmdbStatusText() {
+      if (this.wizardMode) {
+        if (this.wizardTmdbConnected) return 'Connected';
+        return this.localConfig.TMDB_API_KEY ? 'Not Tested' : 'Not Set';
+      }
       return this.localConfig.TMDB_API_KEY ? 'Connected' : 'Not Set';
     },
     getOmdbStatus() {
@@ -703,28 +829,125 @@ export default {
         this.loadSavedSeerState();
       },
     },
-  },
-  async mounted() {
-    const service = this.localConfig.SELECTED_SERVICE;
-    if (service === 'plex' && this.localConfig.PLEX_TOKEN && this.localConfig.PLEX_API_URL) {
-      await this.testAndFetchPlex(true);
-    } else if ((service === 'jellyfin' || service === 'emby') &&
-               this.localConfig.JELLYFIN_TOKEN && this.localConfig.JELLYFIN_API_URL) {
-      await this.testAndFetchJellyfin(true);
-    }
-
-    if (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN) {
-      await this.testSeerAndFetchUsers(true);
-      if (this.seerConnected && this.localConfig.SEER_SESSION_TOKEN) {
-        await this.fetchArrServers();
+    // Wizard-mode validation signals
+    jellyfinConnected(val) {
+      if (this.wizardMode && this.wizardSection === 'media-server') {
+        this.$emit('validation-changed', val);
       }
+    },
+    plexConnected(val) {
+      if (this.wizardMode && this.wizardSection === 'media-server') {
+        this.$emit('validation-changed', val);
+      }
+    },
+    seerConnected(val) {
+      if (this.wizardMode && this.wizardSection === 'seer') {
+        this.$emit('validation-changed', val);
+      }
+    },
+  },
+  beforeUnmount() {
+    // Clean up Plex OAuth poll timer if active
+    if (this.plexOAuthPollTimer) {
+      clearInterval(this.plexOAuthPollTimer);
     }
-
-    if (this.localConfig.OMDB_API_KEY) {
-      await this.testOmdbConnection(true);
+    // Snapshot local config back to the wizard when unmounting a wizard step
+    if (this.wizardMode) {
+      this.$emit('config-changed', { ...this.localConfig });
     }
+  },
+  mounted() {
+    this._runAutoTests();
   },
   methods: {
+    // Runs all silent connection tests in parallel on mount so they don't block each other.
+    _runAutoTests() {
+      const service = this.localConfig.SELECTED_SERVICE;
+      const tasks = [];
+
+      if (service === 'plex' && this.localConfig.PLEX_TOKEN && this.localConfig.PLEX_API_URL) {
+        tasks.push(
+          this.testAndFetchPlex(true).then(() => {
+            if (this.plexConnected) this.plexOAuthLoggedIn = true;
+          }),
+        );
+      } else if ((service === 'jellyfin' || service === 'emby') &&
+                 this.localConfig.JELLYFIN_TOKEN && this.localConfig.JELLYFIN_API_URL) {
+        tasks.push(this.testAndFetchJellyfin(true));
+      }
+
+      if (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN) {
+        tasks.push(
+          this.testSeerAndFetchUsers(true).then(async () => {
+            if (this.seerConnected && this.localConfig.SEER_SESSION_TOKEN) {
+              await this.fetchArrServers();
+            }
+          }),
+        );
+      }
+
+      if (this.localConfig.OMDB_API_KEY) {
+        tasks.push(this.testOmdbConnection(true));
+      }
+
+      Promise.allSettled(tasks);
+    },
+
+    // Returns true when this section should be visible.
+    // In dashboard mode (wizardSection null): always true.
+    // In wizard mode: only the matching section is visible.
+    showSection(section) {
+      return !this.wizardSection || this.wizardSection === section;
+    },
+
+    // ── Plex OAuth ────────────────────────────────────────────────────────
+    async loginWithPlexOAuth() {
+      this.plexOAuthLoading = true;
+      try {
+        const res = await axios.post('/api/plex/auth');
+        const { pin_id, auth_url } = res.data;
+        window.open(auth_url, '_blank', 'width=800,height=600');
+        this.plexOAuthPollTimer = setInterval(() => this.pollPlexOAuth(pin_id), 3000);
+      } catch {
+        this.$toast.error('Error starting Plex login.');
+        this.plexOAuthLoading = false;
+      }
+    },
+    async pollPlexOAuth(pinId) {
+      try {
+        const res = await axios.get(`/api/plex/check-auth/${pinId}`);
+        if (res.data.auth_token) {
+          clearInterval(this.plexOAuthPollTimer);
+          this.plexOAuthPollTimer = null;
+          this.localConfig.PLEX_TOKEN = res.data.auth_token;
+          this.plexOAuthLoggedIn = true;
+          await this.fetchPlexOAuthServers(res.data.auth_token);
+        }
+      } catch (e) {
+        console.error('Plex auth poll error:', e);
+      } finally {
+        this.plexOAuthLoading = false;
+      }
+    },
+    async fetchPlexOAuthServers(authToken) {
+      try {
+        const res = await axios.post('/api/plex/servers', { auth_token: authToken });
+        this.plexOAuthServers = res.data.servers || [];
+        // Auto-connect if only one connection option
+        if (this.plexOAuthConnectionOptions.length === 1) {
+          const url = this.plexOAuthConnectionOptions[0].value;
+          this.plexOAuthSelectedConnIdx = url;
+          await this.onPlexOAuthServerSelect(url);
+        }
+      } catch {
+        this.$toast.error('Error fetching Plex servers.');
+      }
+    },
+    async onPlexOAuthServerSelect(url) {
+      this.localConfig.PLEX_API_URL = url;
+      await this.testAndFetchPlex();
+    },
+
     // Unified library/user helpers for the template
     isLibSelected(id) {
       return this.currentSelectedLibraries.some(l => l.id === id);
@@ -763,9 +986,28 @@ export default {
 
     async testTmdbConnection() {
       if (!this.localConfig.TMDB_API_KEY) return;
-      await this.$emit('test-connection', 'tmdb', {
-        api_key: this.localConfig.TMDB_API_KEY.trim(),
-      });
+
+      if (this.wizardMode) {
+        // Self-contained test in wizard mode (no parent delegation needed)
+        this.wizardTmdbTesting = true;
+        this.wizardTmdbConnected = false;
+        try {
+          await testTmdbApi(this.localConfig.TMDB_API_KEY.trim());
+          this.wizardTmdbConnected = true;
+          if (this.$toast) this.$toast.success('TMDB API key validated!', { position: 'top-right', duration: 3000 });
+          this.$emit('validation-changed', true);
+        } catch (error) {
+          this.wizardTmdbConnected = false;
+          if (this.$toast) this.$toast.error('Invalid TMDB API key. Please check and try again.', { position: 'top-right', duration: 5000 });
+          this.$emit('validation-changed', false);
+        } finally {
+          this.wizardTmdbTesting = false;
+        }
+      } else {
+        await this.$emit('test-connection', 'tmdb', {
+          api_key: this.localConfig.TMDB_API_KEY.trim(),
+        });
+      }
     },
 
     async testOmdbConnection(silent = false) {
@@ -828,12 +1070,12 @@ export default {
       this.jellyfinFetching = true;
       this.jellyfinConnected = false;
       try {
-        const libRes = await fetchJellyfinLibraries(this.localConfig.JELLYFIN_API_URL.trim(), this.localConfig.JELLYFIN_TOKEN.trim());
+        const libRes = await fetchJellyfinLibraries();
         this.jellyfinLibraries = libRes.data.items || [];
         this.jellyfinConnected = true;
         this.loadSavedJellyfinLibraries();
         try {
-          const userRes = await fetchJellyfinUsers(this.localConfig.JELLYFIN_API_URL.trim(), this.localConfig.JELLYFIN_TOKEN.trim());
+          const userRes = await fetchJellyfinUsers();
           this.jellyfinUsers = userRes.data.users || [];
           this.loadSavedJellyfinUsers();
         } catch (e) { console.error('Error fetching Jellyfin users:', e); }
@@ -861,12 +1103,15 @@ export default {
       this.plexFetching = true;
       this.plexConnected = false;
       try {
-        const libRes = await fetchPlexLibraries(this.localConfig.PLEX_API_URL.trim(), this.localConfig.PLEX_TOKEN.trim());
+        const libRes = await fetchPlexLibraries();
         this.plexLibraries = libRes.data.items || [];
         this.plexConnected = true;
         this.loadSavedPlexLibraries();
         try {
-          const userRes = await fetchPlexUsers(this.localConfig.PLEX_API_URL.trim(), this.localConfig.PLEX_TOKEN.trim());
+          const userRes = await fetchPlexUsers({
+            PLEX_API_URL: this.localConfig.PLEX_API_URL,
+            PLEX_TOKEN: this.localConfig.PLEX_TOKEN,
+          });
           this.plexUsers = userRes.data.users || [];
           this.loadSavedPlexUsers();
         } catch (e) { console.error('Error fetching Plex users:', e); }
@@ -976,7 +1221,7 @@ export default {
       this.seerConnected = false;
       this.seerUsers = [];
       try {
-        const response = await testJellyseerApi(this.localConfig.SEER_API_URL.trim(), this.localConfig.SEER_TOKEN.trim());
+        const response = await testJellyseerApi();
         this.seerUsers = (response.data.users || []).filter(user => user.isLocal);
         this.seerConnected = true;
         this.loadSavedSeerUser();
@@ -1021,8 +1266,8 @@ export default {
       this.serversLoaded = false;
       try {
         const [radarrRes, sonarrRes] = await Promise.all([
-          fetchRadarrServers(this.localConfig.SEER_API_URL, this.localConfig.SEER_TOKEN, this.localConfig.SEER_SESSION_TOKEN),
-          fetchSonarrServers(this.localConfig.SEER_API_URL, this.localConfig.SEER_TOKEN, this.localConfig.SEER_SESSION_TOKEN)
+          fetchRadarrServers(),
+          fetchSonarrServers()
         ]);
         this.radarrServers = radarrRes.data.servers || [];
         this.sonarrServers = sonarrRes.data.servers || [];
@@ -1058,18 +1303,45 @@ export default {
       if (saved.anime_tv) { this.animeTvServerId = saved.anime_tv.serverId != null ? String(saved.anime_tv.serverId) : null; this.animeTvProfileId = saved.anime_tv.profileId != null ? String(saved.anime_tv.profileId) : null; this.animeTvRootFolder = saved.anime_tv.rootFolder || null; }
     },
 
+    // Returns the value to send for a secret field on save.
+    // If the value is unchanged from what was loaded (originalConfig), sends the
+    // sentinel '***' so the backend's _merge_secrets preserves the stored value
+    // without re-transmitting the secret over the wire.
+    // If the user cleared the field, sends null/empty to allow clearing the stored value.
+    // If the user entered a new value, sends it as-is.
+    _secretValue(key) {
+      const current = this.localConfig[key];
+      if (!current) return current || null;
+      if (current === this.originalConfig[key]) return '***';
+      return current;
+    },
+
     async saveSettings() {
       try {
-        const dataToSave = { TMDB_API_KEY: this.localConfig.TMDB_API_KEY, OMDB_API_KEY: this.localConfig.OMDB_API_KEY || '', SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE };
+        const dataToSave = {
+          TMDB_API_KEY: this._secretValue('TMDB_API_KEY'),
+          OMDB_API_KEY: this._secretValue('OMDB_API_KEY') || '',
+          SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE,
+        };
         if (this.localConfig.SELECTED_SERVICE === 'plex') {
-          Object.assign(dataToSave, { PLEX_TOKEN: this.localConfig.PLEX_TOKEN, PLEX_API_URL: this.localConfig.PLEX_API_URL, PLEX_LIBRARIES: this.localConfig.PLEX_LIBRARIES || [] });
+          Object.assign(dataToSave, {
+            PLEX_TOKEN: this._secretValue('PLEX_TOKEN'),
+            PLEX_API_URL: this.localConfig.PLEX_API_URL,
+            PLEX_LIBRARIES: this.localConfig.PLEX_LIBRARIES || [],
+          });
         } else if (this.localConfig.SELECTED_SERVICE === 'jellyfin' || this.localConfig.SELECTED_SERVICE === 'emby') {
-          Object.assign(dataToSave, { JELLYFIN_API_URL: this.localConfig.JELLYFIN_API_URL, JELLYFIN_TOKEN: this.localConfig.JELLYFIN_TOKEN, JELLYFIN_LIBRARIES: this.localConfig.JELLYFIN_LIBRARIES || [] });
+          Object.assign(dataToSave, {
+            JELLYFIN_API_URL: this.localConfig.JELLYFIN_API_URL,
+            JELLYFIN_TOKEN: this._secretValue('JELLYFIN_TOKEN'),
+            JELLYFIN_LIBRARIES: this.localConfig.JELLYFIN_LIBRARIES || [],
+          });
         }
         Object.assign(dataToSave, {
-          SEER_API_URL: this.localConfig.SEER_API_URL, SEER_TOKEN: this.localConfig.SEER_TOKEN,
-          SEER_USER_NAME: this.localConfig.SEER_USER_NAME || null, SEER_USER_PSW: this.localConfig.SEER_USER_PSW || null,
-          SEER_SESSION_TOKEN: this.localConfig.SEER_SESSION_TOKEN || null,
+          SEER_API_URL: this.localConfig.SEER_API_URL,
+          SEER_TOKEN: this._secretValue('SEER_TOKEN'),
+          SEER_USER_NAME: this.localConfig.SEER_USER_NAME || null,
+          SEER_USER_PSW: this._secretValue('SEER_USER_PSW') || null,
+          SEER_SESSION_TOKEN: this._secretValue('SEER_SESSION_TOKEN') || null,
           SEER_ANIME_PROFILE_CONFIG: this.localConfig.SEER_ANIME_PROFILE_CONFIG || {},
           SEER_REQUEST_DELAY: this.localConfig.SEER_REQUEST_DELAY ?? 2,
           SELECTED_USERS: this.localConfig.SELECTED_USERS || [],
@@ -1107,6 +1379,7 @@ export default {
 <style scoped>
 .settings-services {
   color: var(--color-text-primary);
+  padding: var(--spacing-lg);
 }
 
 /* Section Header */
@@ -1650,5 +1923,33 @@ export default {
   .form-control { padding: 0.75rem; }
   .btn { padding: 0.75rem; }
   .chip { padding: 0.4rem 0.6rem; font-size: 0.75rem; }
+}
+
+/* ── Plex OAuth wizard button ─────────────────────────────────────────────── */
+.btn-plex {
+  background: #e5a00d;
+  color: #1a1a1a;
+  font-weight: 700;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  justify-content: center;
+}
+.btn-plex:hover:not(:disabled) {
+  background: #cc8f0b;
+}
+.btn-plex:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.oauth-success {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #10b981;
+  font-weight: 600;
+  font-size: 0.95rem;
 }
 </style>

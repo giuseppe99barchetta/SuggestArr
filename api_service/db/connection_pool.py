@@ -101,7 +101,8 @@ class DatabaseConnectionPool:
                 conn = sqlite3.connect(
                     self.config['DB_PATH'],
                     timeout=self.pool_config.connection_timeout,
-                    check_same_thread=False
+                    check_same_thread=False,
+                    detect_types=sqlite3.PARSE_DECLTYPES,
                 )
                 conn.row_factory = sqlite3.Row
                 

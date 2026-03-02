@@ -1,12 +1,47 @@
 <template>
   <div class="settings-jobs">
-    <div class="section-header">
+    <div class="section-header" data-tour-id="jobs-section-header">
       <h2>Automation Jobs</h2>
       <p>Configure automated content discovery and recommendations</p>
     </div>
 
+    <!-- Seer delivery queue banner -->
+    <transition name="queue-banner">
+      <div v-if="queueStatus.total_pending > 0 && !queueBannerDismissed" class="queue-banner">
+        <div class="queue-banner-icon">
+          <i class="fas fa-circle-notch fa-spin"></i>
+        </div>
+        <div class="queue-banner-body">
+          <strong>Delivering to Seer…</strong>
+          <span>
+            {{ queueStatus.total_pending }} item{{ queueStatus.total_pending !== 1 ? 's' : '' }} queued
+            <template v-if="queueStatus.submitting > 0"> · {{ queueStatus.submitting }} sending</template>
+            <template v-if="queueStatus.failed > 0"> · <span class="queue-failed">{{ queueStatus.failed }} failed</span></template>
+          </span>
+        </div>
+        <div class="queue-banner-spinner">
+          <i class="fas fa-circle-notch fa-spin"></i>
+        </div>
+        <button class="queue-banner-close" @click="dismissQueueBanner" title="Dismiss">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div v-else-if="queueStatus.submitted > 0 && queueStatus.total_pending === 0 && !queueBannerDismissed" class="queue-banner queue-banner--done">
+        <div class="queue-banner-icon">
+          <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="queue-banner-body">
+          <strong>All requests delivered</strong>
+          <span>{{ queueStatus.submitted }} item{{ queueStatus.submitted !== 1 ? 's' : '' }} sent to Seer successfully</span>
+        </div>
+        <button class="queue-banner-close queue-banner-close--done" @click="dismissQueueBanner" title="Dismiss">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </transition>
+
     <!-- Info Box explaining both job types -->
-    <div class="info-box">
+    <div v-if="showInfoBox" class="info-box" data-tour-id="jobs-info-box">
       <div class="info-icon">
         <i class="fas fa-info-circle"></i>
       </div>
@@ -23,18 +58,24 @@
           </div>
         </div>
       </div>
+      <button class="info-box-close" @click="dismissInfoBox" title="Dismiss">
+        <i class="fas fa-times"></i>
+      </button>
     </div>
 
     <div class="jobs-container">
       <!-- Actions Bar -->
       <div class="jobs-actions">
-        <button @click="showCreateModal = true" class="btn btn-primary">
+        <button @click="showCreateModal = true" class="btn btn-primary" data-tour-id="jobs-new-btn">
           <i class="fas fa-plus"></i>
           New Job
         </button>
         <button @click="loadJobs" class="btn btn-outline" :disabled="isLoading">
           <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i>
           Refresh
+        </button>
+        <button @click="restartJobsTour" class="btn btn-outline btn-tour-hint" title="Replay the Jobs tour">
+          <i class="fas fa-question-circle"></i>
         </button>
       </div>
 
@@ -55,7 +96,13 @@
       </div>
 
       <div v-else class="jobs-grid">
-        <div v-for="job in jobs" :key="job.id" class="job-card" :class="{ disabled: !job.enabled }">
+        <div
+          v-for="(job, index) in jobs"
+          :key="job.id"
+          class="job-card"
+          :class="{ disabled: !job.enabled }"
+          :data-tour-id="index === 0 ? 'jobs-first-card' : null"
+        >
           <div class="job-header">
             <div class="job-info">
               <h3>{{ job.name }}</h3>
@@ -76,7 +123,7 @@
             </div>
           </div>
 
-          <div class="job-details">
+          <div class="job-details" :data-tour-id="index === 0 ? 'jobs-first-card-details' : null">
             <div class="detail-row">
               <span class="detail-label"><i class="fas fa-clock"></i> Schedule</span>
               <span class="detail-value">{{ formatSchedule(job) }}</span>
@@ -110,14 +157,26 @@
             </div>
           </div>
 
-          <div class="job-actions">
+          <div class="job-actions" :data-tour-id="index === 0 ? 'jobs-first-card-actions' : null">
             <button @click="toggleJob(job)" class="btn btn-sm" :class="job.enabled ? 'btn-outline' : 'btn-secondary'" :disabled="isToggling[job.id]">
               <i :class="isToggling[job.id] ? 'fas fa-spinner fa-spin' : (job.enabled ? 'fas fa-pause' : 'fas fa-play')"></i>
               {{ job.enabled ? 'Disable' : 'Enable' }}
             </button>
-            <button @click="runJob(job)" class="btn btn-sm btn-outline" :disabled="isRunning[job.id]">
+            <button @click="runJob(job)" class="btn btn-sm btn-outline" :disabled="isRunning[job.id] || isDryRunning[job.id]">
               <i :class="isRunning[job.id] ? 'fas fa-spinner fa-spin' : 'fas fa-bolt'"></i>
               Run
+            </button>
+            <button @click="dryRunJob(job)" class="btn btn-sm btn-outline btn-preview" :disabled="isDryRunning[job.id] || isRunning[job.id]" title="Preview what this job would request">
+              <i :class="isDryRunning[job.id] ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>
+              Preview
+            </button>
+            <button
+              v-if="lastDryRunCache[job.id]"
+              @click="reopenDryRun(job)"
+              class="btn btn-sm btn-outline btn-reopen"
+              title="Re-open last preview result"
+            >
+              <i class="fas fa-history"></i>
             </button>
             <button @click="editJob(job)" class="btn btn-sm btn-outline" title="Edit job">
               <i class="fas fa-edit"></i>
@@ -131,7 +190,7 @@
       </div>
 
       <!-- Recent History Preview -->
-      <div v-if="recentHistory.length > 0" class="history-preview">
+      <div v-if="recentHistory.length > 0" class="history-preview" data-tour-id="jobs-history">
         <div class="history-header">
           <h3><i class="fas fa-history"></i> Recent Executions</h3>
           <button @click="showHistoryModal = true" class="text-btn">View All</button>
@@ -154,6 +213,7 @@
     <!-- Create/Edit Job Modal -->
     <JobModal
       v-if="showCreateModal || editingJob"
+      ref="jobModal"
       :job="editingJob"
       @close="closeModal"
       @save="saveJob"
@@ -190,6 +250,24 @@
       :history="allHistory"
       @close="showHistoryModal = false"
     />
+
+    <!-- Dry Run Result Modal -->
+    <DryRunResultModal
+      v-if="dryRunResult"
+      :job="dryRunResult.job"
+      :items="dryRunResult.items"
+      :cached-at="dryRunResult.cachedAt"
+      @close="dryRunResult = null"
+      @run="onDryRunConfirm"
+    />
+
+    <!-- Jobs Onboarding Tour -->
+    <OnboardingTour
+      :active="showJobsTour"
+      :steps="jobsTourSteps"
+      @done="onJobsTourDone"
+      @step-changed="onJobsTourStep"
+    />
   </div>
 </template>
 
@@ -197,12 +275,22 @@
 import { jobsApi } from '@/api/jobsApi';
 import JobModal from './jobs/JobModal.vue';
 import JobHistoryModal from './jobs/JobHistoryModal.vue';
+import DryRunResultModal from './jobs/DryRunResultModal.vue';
+import OnboardingTour from '@/components/OnboardingTour.vue';
+
+const JOBS_TOUR_KEY = 'suggestarr_jobs_tour_done';
+// Index of the first step that targets elements inside the job modal
+const MODAL_STEP_START = 7;
+// Index of the first step that requires the advanced section to be expanded
+const ADVANCED_STEP_START = 11;
 
 export default {
   name: 'SettingsJobs',
   components: {
     JobModal,
-    JobHistoryModal
+    JobHistoryModal,
+    DryRunResultModal,
+    OnboardingTour
   },
   data() {
     return {
@@ -212,16 +300,114 @@ export default {
       isLoading: false,
       isToggling: {},
       isRunning: {},
+      isDryRunning: {},
       isDeleting: false,
       showCreateModal: false,
       showHistoryModal: false,
+      dryRunResult: null,
+      lastDryRunCache: {},
       editingJob: null,
-      jobToDelete: null
+      jobToDelete: null,
+      queueStatus: { queued: 0, submitting: 0, submitted: 0, failed: 0, total_pending: 0 },
+      queuePollInterval: null,
+      queueBannerDismissed: localStorage.getItem('sj_queue_banner_dismissed') === '1',
+      showInfoBox: localStorage.getItem('sj_info_box_hidden') !== '1',
+      showJobsTour: false,
+      jobsTourSteps: [
+        {
+          targetId: 'jobs-section-header',
+          title: 'Automation Jobs',
+          description: 'This is where you control when and how SuggestArr automatically finds new content for your library.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'jobs-info-box',
+          title: 'Two Types of Jobs',
+          description: 'Discover Jobs search TMDb catalogs using filters (genre, rating, year) — completely independent from your users. Recommendation Jobs analyse watch history to suggest similar content.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'jobs-new-btn',
+          title: 'Create a Job',
+          description: 'Click here to create a new automation job. You can have as many jobs as you like, each on its own schedule and with its own filters.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'jobs-first-card',
+          title: 'Job Card',
+          description: 'Each card summarises a job: its type badge (Discover or Recommendation), media target, and whether it is currently active.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'jobs-first-card-details',
+          title: 'Schedule & Details',
+          description: 'At a glance you can see the schedule, the maximum number of results per run, and when the job will run next.',
+          position: 'right'
+        },
+        {
+          targetId: 'jobs-first-card-actions',
+          title: 'Job Controls',
+          description: 'Enable or disable a job without deleting it, trigger an immediate run, open the editor, or remove the job entirely.',
+          position: 'top'
+        },
+        {
+          targetId: 'jobs-history',
+          title: 'Execution History',
+          description: 'Every run is logged here with the number of titles found and requested. Click "View All" to explore the full history.',
+          position: 'top'
+        },
+        {
+          targetId: 'job-modal-type-selector',
+          title: 'Job Type',
+          description: 'Choose Discover to find new content via TMDb filters, or Recommendation to suggest titles based on what your users have already watched.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'job-modal-basic-info',
+          title: 'Name & Media Type',
+          description: 'Give your job a descriptive name and pick whether it should target Movies, TV Shows, or both.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'job-modal-schedule',
+          title: 'Schedule',
+          description: 'Pick a preset interval (hourly, daily, weekly…) or enter a custom cron expression for full control over when the job fires.',
+          position: 'top'
+        },
+        {
+          targetId: 'job-modal-advanced-toggle',
+          title: 'Advanced Settings',
+          description: 'Expand this section to configure quality filters, rating thresholds, language restrictions, and the maximum number of results per run.',
+          position: 'top'
+        },
+        {
+          targetId: 'job-modal-max-results',
+          title: 'Max Results',
+          description: 'Controls how many items the job processes per run. For Discover jobs this is the total titles found; for Recommendation jobs it is the limit per watched item.',
+          position: 'bottom'
+        },
+        {
+          targetId: 'job-modal-filters',
+          title: 'Filters',
+          description: 'Narrow down what gets requested: minimum TMDb rating, minimum vote count, original language, year range, and genre exclusions. Only content matching all active filters will be sent to Jellyseer/Overseer.',
+          position: 'top'
+        },
+      ]
     };
   },
   async mounted() {
     await this.loadJobs();
     await this.loadHistory();
+    await this.pollQueueStatus();
+
+    if (!localStorage.getItem(JOBS_TOUR_KEY)) {
+      setTimeout(() => this.startJobsTour(), 600);
+    }
+  },
+  beforeUnmount() {
+    if (this.queuePollInterval) {
+      clearInterval(this.queuePollInterval);
+    }
   },
   methods: {
     async loadJobs() {
@@ -276,6 +462,25 @@ export default {
       }
     },
 
+    async pollQueueStatus() {
+      try {
+        const response = await jobsApi.getQueueStatus();
+        if (response.status === 'success') {
+          this.queueStatus = response;
+          if (response.total_pending > 0 && !this.queuePollInterval) {
+            this.queueBannerDismissed = false;
+            localStorage.removeItem('sj_queue_banner_dismissed');
+            this.queuePollInterval = setInterval(this.pollQueueStatus, 5000);
+          } else if (response.total_pending === 0 && this.queuePollInterval) {
+            clearInterval(this.queuePollInterval);
+            this.queuePollInterval = null;
+          }
+        }
+      } catch {
+        // Non-fatal: queue status is informational only
+      }
+    },
+
     async runJob(job) {
       this.isRunning[job.id] = true;
       try {
@@ -286,11 +491,13 @@ export default {
         const response = await jobsApi.runJobNow(job.id);
         if (response.status === 'success') {
           this.$toast.open({
-            message: `Job completed: ${response.results_count} found, ${response.requested_count} requested`,
+            message: `Job completed: ${response.results_count} found, ${response.requested_count} enqueued for Seer`,
             type: 'success',
             duration: 10000
           });
           await this.loadHistory();
+          // Start polling so the queue banner appears immediately
+          await this.pollQueueStatus();
         } else {
           this.$toast.open({
             message: response.message || 'Job failed',
@@ -305,6 +512,48 @@ export default {
         });
       } finally {
         this.isRunning[job.id] = false;
+      }
+    },
+
+    async dryRunJob(job) {
+      this.isDryRunning[job.id] = true;
+      try {
+        this.$toast.open({
+          message: `Previewing job: ${job.name}…`,
+          type: 'info',
+          duration: 3000
+        });
+        const response = await jobsApi.dryRunJob(job.id);
+        if (response.status === 'success') {
+          const result = { job, items: response.items || [], cachedAt: Date.now() };
+          this.lastDryRunCache[job.id] = result;
+          this.dryRunResult = result;
+        } else {
+          this.$toast.open({
+            message: response.message || 'Dry run failed',
+            type: 'error'
+          });
+        }
+      } catch (error) {
+        console.error('Dry run failed:', error);
+        this.$toast.open({
+          message: error.response?.data?.message || 'Dry run failed',
+          type: 'error'
+        });
+      } finally {
+        this.isDryRunning[job.id] = false;
+      }
+    },
+
+    reopenDryRun(job) {
+      this.dryRunResult = this.lastDryRunCache[job.id];
+    },
+
+    async onDryRunConfirm() {
+      const job = this.dryRunResult?.job;
+      this.dryRunResult = null;
+      if (job) {
+        await this.runJob(job);
       }
     },
 
@@ -372,6 +621,62 @@ export default {
       }
     },
 
+    dismissQueueBanner() {
+      this.queueBannerDismissed = true;
+      localStorage.setItem('sj_queue_banner_dismissed', '1');
+    },
+
+    dismissInfoBox() {
+      this.showInfoBox = false;
+      localStorage.setItem('sj_info_box_hidden', '1');
+    },
+
+    startJobsTour() {
+      // Make sure the info box is visible so its tour step has a target
+      this.showInfoBox = true;
+      this.showJobsTour = true;
+    },
+
+    restartJobsTour() {
+      localStorage.removeItem(JOBS_TOUR_KEY);
+      this.showJobsTour = false;
+      this.$nextTick(() => this.startJobsTour());
+    },
+
+    onJobsTourStep(index) {
+      if (index >= MODAL_STEP_START) {
+        // Open a job for the modal-step portion of the tour
+        if (!this.editingJob && !this.showCreateModal) {
+          if (this.jobs.length > 0) {
+            this.editJob(this.jobs[0]);
+          } else {
+            this.showCreateModal = true;
+          }
+        }
+        // Expand the advanced section one step early (at the toggle button, step 10)
+        // so that the advanced-section DOM elements are rendered before scrollAndUpdate()
+        // fires for the first advanced step (step 11). Calling this synchronously ensures
+        // Vue batches the DOM update together with the currentIndex change.
+        if (index >= ADVANCED_STEP_START - 1) {
+          this.$refs.jobModal?.openAdvanced();
+        }
+      } else {
+        // Going back to main-page steps — close the modal if the tour opened it
+        if (this.editingJob || this.showCreateModal) {
+          this.closeModal();
+        }
+      }
+    },
+
+    onJobsTourDone() {
+      this.showJobsTour = false;
+      localStorage.setItem(JOBS_TOUR_KEY, '1');
+      // Close the modal if it was opened by the tour
+      if (this.editingJob || this.showCreateModal) {
+        this.closeModal();
+      }
+    },
+
     closeModal() {
       this.showCreateModal = false;
       this.editingJob = null;
@@ -435,22 +740,22 @@ export default {
 <style scoped>
 .settings-jobs {
   padding: 0;
+  padding: var(--spacing-lg);
 }
 
 .section-header {
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .section-header h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
   color: var(--color-text-primary);
-  margin-bottom: 0.25rem;
 }
 
 .section-header p {
-  color: var(--color-text-secondary);
-  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  font-size: 1rem;
 }
 
 /* Info Box */
@@ -462,6 +767,24 @@ export default {
   border: 1px solid rgba(6, 182, 212, 0.2);
   border-radius: var(--radius-md, 8px);
   margin-bottom: 1.5rem;
+  align-items: flex-start;
+}
+
+.info-box-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #22d3ee;
+  cursor: pointer;
+  padding: 0.15rem;
+  font-size: 0.8rem;
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
+  margin-left: auto;
+}
+
+.info-box-close:hover {
+  opacity: 1;
 }
 
 .info-icon {
@@ -583,6 +906,16 @@ export default {
 .jobs-actions {
   display: flex;
   gap: 0.75rem;
+}
+
+.btn-tour-hint {
+  flex-shrink: 0;
+  padding: 0.625rem 0.75rem;
+  color: var(--color-text-muted, #888);
+}
+
+.btn-tour-hint:hover:not(:disabled) {
+  color: var(--color-text-primary, #fff);
 }
 
 .loading-state,
@@ -772,6 +1105,29 @@ export default {
 .job-actions .btn-danger {
   flex: 0 0 auto;
   padding: 0.5rem 0.75rem;
+}
+
+.btn-preview {
+  color: #22d3ee;
+  border-color: rgba(6, 182, 212, 0.25);
+}
+
+.btn-preview:hover:not(:disabled) {
+  background: rgba(6, 182, 212, 0.08);
+  border-color: rgba(6, 182, 212, 0.45);
+}
+
+.btn-reopen {
+  color: rgba(34, 211, 238, 0.6);
+  border-color: rgba(6, 182, 212, 0.15);
+  padding-left: 0.55rem;
+  padding-right: 0.55rem;
+}
+
+.btn-reopen:hover {
+  color: #22d3ee;
+  background: rgba(6, 182, 212, 0.08);
+  border-color: rgba(6, 182, 212, 0.35);
 }
 
 /* History Preview */
@@ -1023,5 +1379,102 @@ export default {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+/* Queue delivery banner */
+.queue-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.875rem 1.25rem;
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  border-radius: var(--radius-md, 8px);
+  margin-bottom: 1.25rem;
+}
+
+.queue-banner--done {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.queue-banner-icon {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  color: #eab308;
+}
+
+.queue-banner--done .queue-banner-icon {
+  color: #22c55e;
+}
+
+.queue-banner-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.875rem;
+}
+
+.queue-banner-body strong {
+  color: var(--color-text-primary, #fff);
+  font-weight: 600;
+}
+
+.queue-banner-body span {
+  color: var(--color-text-secondary);
+}
+
+.queue-failed {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.queue-banner-spinner {
+  flex-shrink: 0;
+  color: #eab308;
+  font-size: 1rem;
+}
+
+.queue-banner-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #eab308;
+  cursor: pointer;
+  padding: 0.25rem;
+  font-size: 0.85rem;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+  margin-left: 0.25rem;
+}
+
+.queue-banner-close:hover {
+  opacity: 1;
+}
+
+.queue-banner-close--done {
+  color: #22c55e;
+}
+
+/* Slide-down transition for the queue banner */
+.queue-banner-enter-active,
+.queue-banner-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.queue-banner-enter-from,
+.queue-banner-leave-to {
+  opacity: 0;
+  max-height: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.queue-banner-enter-to,
+.queue-banner-leave-from {
+  opacity: 1;
+  max-height: 80px;
 }
 </style>

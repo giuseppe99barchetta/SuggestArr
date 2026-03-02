@@ -70,6 +70,44 @@
 
 .header-content {
   text-align: center;
+  position: relative;
+}
+
+.logout-btn {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: transform 0.3s ease, color 0.3s ease;
+  padding: 0.5rem;
+}
+
+.logout-btn:hover {
+  transform: translateY(-50%) scale(1.05);
+  color: var(--color-text-primary);
+}
+
+.logout-label {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.logout-btn:hover .logout-label {
+  transform: translateX(2px);
+  opacity: 1;
+}
+
+@media (max-width: 480px) {
+  .logout-label {
+    display: none;
+  }
 }
 
 .back-button {
@@ -217,7 +255,6 @@
 }
 
 @keyframes pulse {
-
   0%,
   100% {
     opacity: 1;
@@ -433,9 +470,15 @@
 }
 
 @keyframes betaPulse {
-  0% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.6); }
-  70% { box-shadow: 0 0 0 6px rgba(255, 87, 34, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(255, 87, 34, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 87, 34, 0);
+  }
 }
 
 /* Loading Overlay */
@@ -1132,7 +1175,6 @@
 
 .floating-log-btn:hover {
   background: var(--color-bg-active);
-  transform: scale(1.1);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 

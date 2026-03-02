@@ -50,7 +50,6 @@
           <i class="fas fa-history"></i>
           Recent Requests
         </h3>
-        
       </div>
 
       <!-- Skeleton Loading State -->
@@ -343,40 +342,6 @@ export default {
   font-size: 1.25rem;
   color: #f3f4f6;
   margin: 0;
-}
-
-/* Quick Filters */
-.quick-filters {
-  display: flex;
-  gap: 0.625rem;
-  flex-wrap: wrap;
-}
-
-.filter-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: #9ca3af;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.filter-badge:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #cbd5e1;
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
-.filter-badge.active {
-  background: rgba(59, 130, 246, 0.2);
-  color: #93c5fd;
-  border-color: rgba(59, 130, 246, 0.3);
 }
 
 /* Skeleton Loading */
@@ -676,15 +641,6 @@ export default {
 
   .preview-header {
     gap: 1rem;
-  }
-
-  .quick-filters {
-    gap: 0.5rem;
-  }
-
-  .filter-badge {
-    padding: 0.375rem 0.75rem;
-    font-size: 0.75rem;
   }
 
   .requests-grid-preview {
