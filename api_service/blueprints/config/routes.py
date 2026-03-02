@@ -604,7 +604,7 @@ def import_config():
         return jsonify({'message': 'Configuration imported successfully', 'status': 'success'}), 200
     except ValueError as e:
         logger.warning('Config import rejected: %s', e)
-        return jsonify({'message': str(e), 'status': 'error'}), 400
+        return jsonify({'message': 'Invalid configuration payload', 'status': 'error'}), 400
     except Exception as e:
         logger.error('Error importing configuration: %s', e, exc_info=True)
         return jsonify({'message': 'Error importing configuration', 'status': 'error'}), 500
