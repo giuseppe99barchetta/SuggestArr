@@ -5,11 +5,27 @@ import { ref } from "vue";
 const accessToken = ref(null);
 const currentUser = ref(null); // { username, role }
 const authSetupComplete = ref(false);
+const SESSION_HINT_KEY = "suggestarr_had_session";
 
 let _refreshPromise = null;
 let _interceptorsSetup = false;
 let _router = null;
 let _refreshFailed = false; // Once true, no further refresh attempts until login
+
+function isAbortLikeError(error) {
+  const code = error?.code || error?.message?.code;
+  if (code === "ECONNABORTED" || code === "ERR_CANCELED") return true;
+  if (error?.name === "CanceledError") return true;
+
+  const rawMessage =
+    typeof error?.message === "string"
+      ? error.message
+      : typeof error?.message?.message === "string"
+        ? error.message.message
+        : "";
+  const message = rawMessage.toLowerCase();
+  return message.includes("aborted") || message.includes("canceled");
+}
 
 /**
  * Decode a JWT and check whether it has already expired.
@@ -74,11 +90,17 @@ export function useAuth() {
       .post("/api/auth/refresh", {}, { _skipAuth: true })
       .then((res) => {
         setSessionFromAccessToken(res.data.access_token);
+        localStorage.setItem(SESSION_HINT_KEY, "1");
         return true;
       })
-      .catch(() => {
+      .catch((error) => {
         setSessionFromAccessToken(null);
-        _refreshFailed = true; // Block further refresh attempts until next login
+        // Keep retry capability for transient abort/cancel/timeouts.
+        // Permanently stop auto-refresh for this session on auth failures.
+        if (!isAbortLikeError(error)) {
+          _refreshFailed = true; // Block further refresh attempts until next login
+          localStorage.removeItem(SESSION_HINT_KEY);
+        }
         return false;
       })
       .finally(() => {
@@ -95,6 +117,7 @@ export function useAuth() {
     );
     setSessionFromAccessToken(res.data.access_token);
     _refreshFailed = false; // Allow refresh attempts again after a fresh login
+    localStorage.setItem(SESSION_HINT_KEY, "1");
     return res.data;
   }
 
@@ -105,6 +128,7 @@ export function useAuth() {
     } finally {
       setSessionFromAccessToken(null);
       _refreshFailed = false; // Allow refresh after the user logs in again
+      localStorage.removeItem(SESSION_HINT_KEY);
     }
   }
 

@@ -53,10 +53,23 @@ def load_env_vars():
     """
     Load variables from the config.yaml file and return them as a dictionary.
     """
-    logger.debug("Loading environment variables from config.yaml")
     if not os.path.exists(CONFIG_PATH):
-        logger.warning(f"{CONFIG_PATH} not found. Creating a new one with default values.")
-        return get_config_values()
+        # We only try to create the default config if the directory exists,
+        # otherwise we just return the defaults to avoid a crash.
+        defaults = get_config_values()
+        try:
+            config_dir = os.path.dirname(CONFIG_PATH)
+            if not os.path.exists(config_dir):
+                os.makedirs(config_dir, exist_ok=True)
+            
+            # Simple check to avoid write-spam if multiple threads hit this simultaneously
+            if not os.path.exists(CONFIG_PATH):
+                logger.warning(f"{CONFIG_PATH} not found. Creating a new one with default values.")
+                with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+                    yaml.safe_dump({k: v for k, v in defaults.items() if v not in [None, '']}, f)
+        except Exception as e:
+            logger.error(f"Failed to create default config file: {e}")
+        return defaults
 
     with open(CONFIG_PATH, 'r', encoding='utf-8') as file:
         config_data = yaml.safe_load(file)
