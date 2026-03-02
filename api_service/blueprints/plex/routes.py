@@ -29,7 +29,8 @@ async def get_plex_libraries():
         try:
             validate_url(api_url, allow_private=True)
         except ValueError as exc:
-            return jsonify({'message': str(exc), 'type': 'error'}), 400
+            logger.warning("Invalid API URL provided for Plex libraries request", exc_info=True)
+            return jsonify({'message': 'Invalid API URL', 'type': 'error'}), 400
 
         logger.debug(f"Connecting to Plex server at: {api_url}")
         async with PlexClient(api_url=api_url, token=api_token) as plex_client:
