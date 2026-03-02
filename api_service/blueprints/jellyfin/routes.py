@@ -21,14 +21,21 @@ def _load_jellyfin_config():
     return config.get('api_url', ''), config.get('api_key', '')
 
 
-@jellyfin_bp.route('/libraries', methods=['GET'])
+@jellyfin_bp.route('/libraries', methods=['GET', 'POST'])
 async def get_jellyfin_library():
     """
-    Fetch Jellyfin libraries using the globally configured API key and server URL.
+    Fetch Jellyfin libraries using the globally configured API key and server URL,
+    or credentials provided in the request body (e.g. during initial setup).
     """
     logger.info("Received request to fetch Jellyfin libraries")
     try:
-        api_url, api_key = _load_jellyfin_config()
+        config_data = request.get_json(silent=True) or {}
+        api_url = config_data.get('JELLYFIN_API_URL')
+        api_key = config_data.get('JELLYFIN_TOKEN')
+
+        # Fallback to database config if not provided in request
+        if not api_url or not api_key:
+            api_url, api_key = _load_jellyfin_config()
 
         if not api_url or not api_key:
             logger.warning("Jellyfin credentials not configured")
@@ -115,13 +122,20 @@ async def test_jellyfin_connection():
         }), 500
 
 
-@jellyfin_bp.route('/users', methods=['GET'])
+@jellyfin_bp.route('/users', methods=['GET', 'POST'])
 async def get_jellyfin_users():
     """
-    Fetch Jellyfin users using the globally configured API key and server URL.
+    Fetch Jellyfin users using the globally configured API key and server URL,
+    or credentials provided in the request body (e.g. during initial setup).
     """
     try:
-        api_url, api_key = _load_jellyfin_config()
+        config_data = request.get_json(silent=True) or {}
+        api_url = config_data.get('JELLYFIN_API_URL')
+        api_key = config_data.get('JELLYFIN_TOKEN')
+
+        # Fallback to database config if not provided in request
+        if not api_url or not api_key:
+            api_url, api_key = _load_jellyfin_config()
 
         if not api_url or not api_key:
             logger.warning("Jellyfin credentials not configured")

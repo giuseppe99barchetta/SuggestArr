@@ -1070,12 +1070,17 @@ export default {
       this.jellyfinFetching = true;
       this.jellyfinConnected = false;
       try {
-        const libRes = await fetchJellyfinLibraries();
+        const fetchPayload = {
+          JELLYFIN_API_URL: this.localConfig.JELLYFIN_API_URL,
+          JELLYFIN_TOKEN: this.localConfig.JELLYFIN_TOKEN,
+        };
+
+        const libRes = await fetchJellyfinLibraries(fetchPayload);
         this.jellyfinLibraries = libRes.data.items || [];
         this.jellyfinConnected = true;
         this.loadSavedJellyfinLibraries();
         try {
-          const userRes = await fetchJellyfinUsers();
+          const userRes = await fetchJellyfinUsers(fetchPayload);
           this.jellyfinUsers = userRes.data.users || [];
           this.loadSavedJellyfinUsers();
         } catch (e) { console.error('Error fetching Jellyfin users:', e); }

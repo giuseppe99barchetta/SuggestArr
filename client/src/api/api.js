@@ -36,13 +36,13 @@ export const authenticateUser = (url, token, userName, password) => {
 };
 
 // Function to fetch Jellyfin libraries
-export function fetchJellyfinLibraries() {
-    return axios.get('/api/jellyfin/libraries');
+export function fetchJellyfinLibraries(payload) {
+    return axios.post('/api/jellyfin/libraries', payload);
 }
 
 // Function to fetch Jellyfin Users
-export function fetchJellyfinUsers() {
-    return axios.get('/api/jellyfin/users');
+export function fetchJellyfinUsers(payload) {
+    return axios.post('/api/jellyfin/users', payload);
 }
 
 // Function to fetch Plex libraries
