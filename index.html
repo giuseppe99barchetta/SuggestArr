@@ -4,155 +4,265 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <!-- Primary Meta Tags -->
+    <title>SuggestArr | Automate Your Media Requests</title>
+    <meta name="title" content="SuggestArr | Automate Your Media Requests">
+    <meta name="description"
+        content="SuggestArr is the ultimate media automation tool. It connects Jellyfin, Plex, or Emby with Jellyseerr or Overseerr to provide automated media recommendations and download requests.">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://giuseppe99barchetta.github.io/SuggestArr/">
+    <meta property="og:title" content="SuggestArr | Automate Your Media Requests">
+    <meta property="og:description"
+        content="SuggestArr connects Jellyfin, Plex, or Emby with Jellyseerr or Overseerr for an automated media experience.">
+    <meta property="og:image" content="https://github.com/user-attachments/assets/73da2f66-3792-4b63-9897-92ab10f61d28">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://giuseppe99barchetta.github.io/SuggestArr/">
+    <meta property="twitter:title" content="SuggestArr | Automate Your Media Requests">
+    <meta property="twitter:description"
+        content="SuggestArr connects Jellyfin, Plex, or Emby with Jellyseerr or Overseerr for an automated media experience.">
+    <meta property="twitter:image"
+        content="https://github.com/user-attachments/assets/73da2f66-3792-4b63-9897-92ab10f61d28">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+    <!-- Links & Scripts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <title>SuggestArr</title>
-    <style>
-        body {
-            background-color: #2d3748; /* Dark background color */
-            font-family: 'Montserrat', sans-serif;
-        }
 
-        .hero-content {
-            backdrop-filter: blur(5px);
-            background-color: rgba(0, 0, 0, 0.6);
-            padding: 4rem;
-            border-radius: 0.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .feature-card {
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .feature-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-        }
-
-        .release-item {
-            padding: 1.5rem;
-            background-color: #3b3f47; /* Darker background for release items */
-            border-radius: 0.5rem;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-            transition: transform 0.2s;
-            margin-bottom: 1.5rem; /* Increased space between release items */
-        }
-
-        .release-item:hover {
-            transform: scale(1.05);
-        }
-
-        h3 {
-            font-size: 1.1rem;
-        }
-
-        .release-title {
-            font-size: 1.5rem; /* Increased font size for titles */
-            color: #3b82f6; /* Tailwind color for blue */
-        }
-
-        .release-body {
-            color: #d1fae5; /* Tailwind color for light text */
-            margin-top: 0.5rem; /* Space above the body text */
-            font-size: 0.875rem; /* Smaller font size for body */
-        }
-
-        .spacer {
-            margin-bottom: 1.5rem; /* Adds spacing between sections */
-        }
-    </style>
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="landing-page.css">
 </head>
 
 <body>
-    <header class="text-center py-20 hero-content">
-        <h1 class="text-6xl font-bold text-white animate__animated animate__fadeInDown">Welcome to SuggestArr</h1>
-        <p class="text-lg mt-4 text-gray-300 animate__animated animate__fadeIn">Automate your media content requests effortlessly!</p>
-        <a href="https://github.com/giuseppe99barchetta/SuggestArr"
-            class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full mt-5 inline-block transition duration-300 ease-in-out transform hover:scale-105">Get Started</a>
+    <div class="gradient-bg"></div>
+
+    <header>
+        <div class="container">
+            <nav>
+                <div class="logo">
+                    <img src="img/logo.8e3a4916.png" alt="SuggestArr Logo">
+                </div>
+                <div class="nav-links">
+                    <a href="#features">Features</a>
+                    <a href="#how">How it Works</a>
+                    <a href="#releases">Releases</a>
+                    <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank">GitHub</a>
+                </div>
+            </nav>
+        </div>
     </header>
 
-    <section class="max-w-6xl mx-auto text-center my-10 bg-gray-800 p-10 rounded-lg shadow-lg">
-        <h2 class="text-4xl font-bold mb-6 text-blue-500">✨ Features</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-5">
-            <div class="p-5 feature-card bg-gray-700 rounded-lg text-gray-200">
-                <h3 class="text-xl font-semibold">🎥 Multi-Media Support</h3>
-                <p>Integrates seamlessly with Plex, Emby, and Jellyfin for a unified experience.</p>
+    <main>
+        <section class="hero">
+            <div class="container">
+                <span class="hero-tagline">Self-hosted automation for media enthusiasts</span>
+                <h1>Automate Your Media <br><span style="color: #3b82f6;">Discovery & Requests</span></h1>
+                <p>SuggestArr connects your media library with request services to automatically suggest and download
+                    content based on what your users are watching.</p>
+                <div class="cta-group">
+                    <a href="https://github.com/giuseppe99barchetta/SuggestArr" class="btn btn-primary" target="_blank">
+                        <i class="fab fa-github"></i> Get Started on GitHub
+                    </a>
+                    <a href="https://hub.docker.com/r/ciuse99/suggestarr" class="btn btn-secondary" target="_blank">
+                        <i class="fab fa-docker"></i> View on Docker Hub
+                    </a>
+                </div>
             </div>
-            <div class="p-5 feature-card bg-gray-700 rounded-lg text-gray-200">
-                <h3 class="text-xl font-semibold">🔄 Automated Requests</h3>
-                <p>Set and forget—let SuggestArr handle the rest automatically.</p>
+        </section>
+
+        <section id="features" class="features">
+            <div class="container">
+                <div class="section-title">
+                    <h2>Powerful Features</h2>
+                    <p>Everything you need to automate your media request workflow.</p>
+                </div>
+
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fas fa-server"></i></div>
+                        <h3>Multi-Media Server Support</h3>
+                        <p>Seamlessly integrates with Plex, Emby, and Jellyfin. Connect your existing library in
+                            minutes.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fas fa-magic"></i></div>
+                        <h3>Intelligent Recommendations</h3>
+                        <p>Uses TMDb API to analyze watch history and find perfectly matched similar titles.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fas fa-rocket"></i></div>
+                        <h3>Automated Workflows</h3>
+                        <p>Automatically sends requests to Jellyseerr or Overseer without lifting a finger.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fas fa-terminal"></i></div>
+                        <h3>Real-Time Management</h3>
+                        <p>Monitor logs, manage cron schedules, and configure multi-user support from a sleek web UI.
+                        </p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fas fa-user-check"></i></div>
+                        <h3>User Selection</h3>
+                        <p>Choose specific users to initiate requests, allowing granular management and approval.</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon"><i class="fas fa-shield-halved"></i></div>
+                        <h3>Config Validation</h3>
+                        <p>Automatically validates API keys and URLs during setup to ensure everything works perfectly.
+                        </p>
+                    </div>
+                </div>
             </div>
-            <div class="p-5 feature-card bg-gray-700 rounded-lg text-gray-200">
-                <h3 class="text-xl font-semibold">📊 Real-Time Logs</h3>
-                <p>Monitor your requests with live updates and comprehensive logs.</p>
+        </section>
+
+        <section id="ai" class="ai-section">
+            <div class="container">
+                <div class="section-title">
+                    <div class="ai-badge"><i class="fas fa-brain"></i> Advanced AI</div>
+                    <h2>Next-Gen Intelligence</h2>
+                    <p>Supercharge your media server with cutting-edge Large Language Models.</p>
+                </div>
+
+                <div class="features-grid">
+                    <div class="feature-card ai-card">
+                        <div class="feature-icon"
+                            style="background: rgba(139, 92, 246, 0.1); color: var(--ai-primary);"><i
+                                class="fas fa-robot"></i></div>
+                        <h3>LLM Provider Integration</h3>
+                        <p>Connect ChatGPT (OpenAI), Ollama, OpenRouter, LiteLLM, or any OpenAI-compatible endpoint with
+                            ease.</p>
+                    </div>
+
+                    <div class="feature-card ai-card">
+                        <div class="feature-icon"
+                            style="background: rgba(139, 92, 246, 0.1); color: var(--ai-primary);"><i
+                                class="fas fa-magnifying-glass-chart"></i></div>
+                        <h3>AI-Powered Search</h3>
+                        <p>Natural language search that understands what you want to watch. Personalized to your
+                            history and TMDb data.</p>
+                    </div>
+
+                    <div class="feature-card ai-card">
+                        <div class="feature-icon"
+                            style="background: rgba(139, 92, 246, 0.1); color: var(--ai-primary);"><i
+                                class="fas fa-lightbulb"></i></div>
+                        <h3>AI Rationale Display</h3>
+                        <p>Don't just get suggested, get explained. Each recommendation includes an "AI Reasoning"
+                            section.</p>
+                    </div>
+
+                    <div class="feature-card ai-card">
+                        <div class="feature-icon"
+                            style="background: rgba(139, 92, 246, 0.1); color: var(--ai-primary);"><i
+                                class="fas fa-sliders"></i></div>
+                        <h3>Enhanced Config</h3>
+                        <p>Granular settings for AI providers, including custom base URLs and improved visibility for
+                            all parameters.</p>
+                    </div>
+
+                    <div class="feature-card ai-card">
+                        <div class="feature-icon"
+                            style="background: rgba(139, 92, 246, 0.1); color: var(--ai-primary);"><i
+                                class="fas fa-clock-rotate-left"></i></div>
+                        <h3>Smart Context</h3>
+                        <p>Utilizes recent search history and automatic exclusion of already requested IDs for perfect
+                            results.</p>
+                    </div>
+
+                    <div class="feature-card ai-card">
+                        <div class="feature-icon"
+                            style="background: rgba(139, 92, 246, 0.1); color: var(--ai-primary);"><i
+                                class="fas fa-sync"></i></div>
+                        <h3>Arr Profile Sync</h3>
+                        <p>Import and distinguish download profiles directly from Sonarr and Radarr automatically.</p>
+                    </div>
+                </div>
             </div>
-            <div class="p-5 feature-card bg-gray-700 rounded-lg text-gray-200">
-                <h3 class="text-xl font-semibold">👨‍👩‍👧‍👦 Multi-User Support</h3>
-                <p>Manage requests for different users on your media server seamlessly.</p>
+        </section>
+
+        <section id="how" class="how-it-works">
+            <div class="container">
+                <div class="section-title">
+                    <h2>Simplify Your Library Growth</h2>
+                    <p>Set it up once and enjoy a self-maintaining media collection.</p>
+                </div>
+
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Connect Servers</h3>
+                            <p>Link your media server (Plex, Emby, or Jellyfin) and your request service (Jellyseerr or
+                                Overseer).</p>
+                        </div>
+                    </div>
+
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Define Rules</h3>
+                            <p>Set your schedules and preferences. Choose which users' history should trigger new
+                                requests.</p>
+                        </div>
+                    </div>
+
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Relax & Watch</h3>
+                            <p>Sit back while SuggestArr finds new content, checks availability, and triggers downloads
+                                automatically.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="p-5 feature-card bg-gray-700 rounded-lg text-gray-200">
-                <h3 class="text-xl font-semibold">🛠️ Cron Job Management</h3>
-                <p>Easily configure and manage your request schedule from the web interface.</p>
+        </section>
+
+        <section id="releases" class="releases">
+            <div class="container">
+                <div class="section-title">
+                    <h2>Latest Updates</h2>
+                    <p>See what's new in the latest versions of SuggestArr.</p>
+                </div>
+
+                <div id="releases-list">
+                    <!-- Populated by JavaScript -->
+                    <p style="text-align: center; color: var(--text-dim);">Fetching latest releases...</p>
+                </div>
             </div>
-            <div class="p-5 feature-card bg-gray-700 rounded-lg text-gray-200">
-                <h3 class="text-xl font-semibold">🔍 Configuration Pre-testing</h3>
-                <p>Automatically validate your API keys and URLs before proceeding.</p>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="social-links">
+                <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank"><i
+                        class="fab fa-github"></i></a>
+                <a href="https://hub.docker.com/r/ciuse99/suggestarr" target="_blank"><i class="fab fa-docker"></i></a>
             </div>
+            <p style="margin-bottom: 1rem;">&copy; 2024 SuggestArr. Open-source under MIT License.</p>
+            <p style="font-size: 0.875rem; color: var(--text-dim);">Built for home lab enthusiasts everywhere.</p>
         </div>
-    </section>
-
-    <section class="max-w-6xl mx-auto text-center my-10 bg-gray-800 p-10 rounded-lg shadow-lg">
-        <h2 class="text-4xl font-bold mb-6 text-blue-500">🔧 How It Works</h2>
-        <p class="mb-4 text-gray-300">With SuggestArr, you can automate your media requests in just a few simple steps:</p>
-        <ol class="list-decimal list-inside text-left mx-auto max-w-xl mb-6 text-gray-300">
-            <li class="mb-2">Connect your media server (Plex, Emby, Jellyfin).</li>
-            <li class="mb-2">Set your preferences for requests.</li>
-            <li class="mb-2">Let SuggestArr do the work for you!</li>
-        </ol>
-    </section>
-
-    <section class="max-w-6xl mx-auto text-center my-10 bg-gray-800 p-10 rounded-lg shadow-lg">
-        <h2 class="text-4xl font-bold mb-6 text-blue-500">📜 Latest Releases</h2>
-        <ul id="releases-list" class="space-y-4 text-left"></ul>
-    </section>
-    
-    <footer class="text-center py-5 bg-black bg-opacity-60">
-        <p class="text-gray-300">&copy; 2024 SuggestArr. All rights reserved.</p>
-        <a href="https://github.com/giuseppe99barchetta/SuggestArr" class="text-blue-400 underline">Contribute on GitHub</a>
     </footer>
-    
-    <script>
-        async function fetchReleases() {
-            const response = await fetch('https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases');
-            const releases = await response.json();
-    
-            // Limit to the last two releases
-            const lastTwoReleases = releases.slice(0, 2);
-    
-            lastTwoReleases.forEach(release => {
-                const releasesList = document.getElementById('releases-list'); // Define releasesList here
-                const li = document.createElement('li');
-                li.className = 'release-item p-4 bg-gray-900 rounded-lg shadow-lg transition-transform duration-300 ease-in-out hover:shadow-xl mb-4'; // Terminal style
-                
-                const title = document.createElement('h3');
-                title.className = 'release-title text-green-300 font-mono text-xl'; // Increased size for title
-                title.innerHTML = `<span class="text-yellow-400">➜</span> - <a href="${release.html_url}" target="_blank" class="text-green-300">${release.name}</a> - ${new Date(release.published_at).toLocaleDateString()}`; // Added hyphen before title
-                
-                const body = document.createElement('div');
-                body.className = 'release-body text-gray-400 font-mono text-sm'; // Terminal style for body
-                body.innerHTML = marked.parse(release.body || 'No description provided for this release.'); 
-                
-                li.appendChild(title);
-                li.appendChild(body);
-                releasesList.appendChild(li);
-            });
-        }
-    
-        fetchReleases();
-    </script>
+
+    <!-- Scripts -->
+    <script src="landing-page.js"></script>
 </body>
 
 </html>
