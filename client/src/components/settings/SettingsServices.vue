@@ -1103,7 +1103,10 @@ export default {
       this.plexFetching = true;
       this.plexConnected = false;
       try {
-        const libRes = await fetchPlexLibraries();
+        const libRes = await fetchPlexLibraries({
+          PLEX_API_URL: this.localConfig.PLEX_API_URL,
+          PLEX_TOKEN: this.localConfig.PLEX_TOKEN,
+        });
         this.plexLibraries = libRes.data.items || [];
         this.plexConnected = true;
         this.loadSavedPlexLibraries();

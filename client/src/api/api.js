@@ -46,8 +46,8 @@ export function fetchJellyfinUsers() {
 }
 
 // Function to fetch Plex libraries
-export function fetchPlexLibraries() {
-    return axios.get('/api/plex/libraries');
+export function fetchPlexLibraries(payload) {
+    return axios.post('/api/plex/libraries', payload);
 }
 
 // Function to fetch Plex Users
