@@ -130,7 +130,8 @@ async def get_jellyfin_users():
         try:
             validate_url(api_url, allow_private=True)
         except ValueError as exc:
-            return jsonify({'message': str(exc), 'type': 'error'}), 400
+            logger.error(f'Invalid Jellyfin API URL: {str(exc)}', exc_info=True)
+            return jsonify({'message': 'Invalid Jellyfin API URL', 'type': 'error'}), 400
 
         async with JellyfinClient(api_url=api_url, token=api_key) as jellyfin_client:
             users = await jellyfin_client.get_all_users()
