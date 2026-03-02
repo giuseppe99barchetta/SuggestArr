@@ -1,6 +1,7 @@
 import os
 import yaml
 import json
+import uuid
 from croniter import croniter
 from api_service.config.logger_manager import LoggerManager
 
@@ -88,6 +89,7 @@ def get_default_values():
         'JELLYFIN_LIBRARIES': lambda: [],
         'PLEX_TOKEN': lambda: '',
         'PLEX_API_URL': lambda: '',
+        'PLEX_CLIENT_ID': lambda: str(uuid.uuid4()),
         'PLEX_LIBRARIES': lambda: [],
         'SELECTED_SERVICE': lambda: '',
         'FILTER_TMDB_THRESHOLD': lambda: None,
@@ -225,7 +227,7 @@ def get_config_sections():
     Returns a dictionary of configuration sections and their associated keys.
     """
     return {
-        'services': ['TMDB_API_KEY', 'OMDB_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL',
+        'services': ['TMDB_API_KEY', 'OMDB_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL', 'PLEX_CLIENT_ID',
                     'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
                     'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_USER_PSW',
                     'SEER_SESSION_TOKEN', 'SEER_ANIME_PROFILE_CONFIG', 'SEER_REQUEST_DELAY',

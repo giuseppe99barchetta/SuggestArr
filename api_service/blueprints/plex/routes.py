@@ -4,11 +4,12 @@ from api_service.services.plex.plex_auth import PlexAuth
 from api_service.services.plex.plex_client import PlexClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.utils.error_handling import handle_api_errors, validate_request_data, success_response
+from api_service.utils.error_handling import handle_api_errors, validate_request_data, success_response
 from api_service.utils.ssrf_guard import validate_url
+from api_service.services.config_service import ConfigService
 
 logger = LoggerManager.get_logger("PlexRoute")
 plex_bp = Blueprint('plex', __name__)
-client_id = os.getenv('PLEX_CLIENT_ID', 'suggestarr')
 
 @plex_bp.route('/libraries', methods=['POST'])
 async def get_plex_libraries():
@@ -49,6 +50,7 @@ async def get_plex_libraries():
 
 @plex_bp.route('/auth', methods=['POST'])
 def plex_login():
+    client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
     plex_auth = PlexAuth(client_id=client_id)
     pin_id, auth_url = plex_auth.get_authentication_pin()
     return jsonify({'pin_id': pin_id, 'auth_url': auth_url})
@@ -56,6 +58,7 @@ def plex_login():
 @plex_bp.route('/callback', methods=['POST'])
 def check_plex_authentication():
     pin_id = request.json.get('pin_id')
+    client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
     plex_auth = PlexAuth(client_id=client_id)
     
     auth_token = plex_auth.check_authentication(pin_id)
@@ -77,6 +80,7 @@ def login_with_plex():
 @plex_bp.route('/check-auth/<int:pin_id>', methods=['GET'])
 def check_plex_auth(pin_id):
     """Check if Plex login has been completed and get the token."""
+    client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
     plex_auth = PlexAuth(client_id=client_id)
     auth_token = plex_auth.check_authentication(pin_id)
     
@@ -96,6 +100,7 @@ async def get_plex_servers_async_route():
         if not auth_token:
             return jsonify({'message': 'Auth token is required', 'type': 'error'}), 400
 
+        client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
         async with PlexClient(token=auth_token, client_id=client_id) as plex_client:
             servers = await plex_client.get_servers()
 
@@ -134,6 +139,7 @@ async def test_plex_connection():
         logger.debug(f"Testing connection to Plex server at: {api_url}")
         
         try:
+            client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
             async with PlexClient(token=api_token, client_id=client_id, api_url=api_url) as plex_client:
                 # Try to get server information or libraries as a connection test
                 libraries = await plex_client.get_libraries()
@@ -191,6 +197,7 @@ async def get_plex_users():
             except ValueError as exc:
                 return jsonify({'message': str(exc), 'type': 'error'}), 400
 
+        client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
         async with PlexClient(token=api_token, client_id=client_id, api_url=api_url) as plex_client:
             users = await plex_client.get_all_users()
 

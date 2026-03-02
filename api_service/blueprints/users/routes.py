@@ -43,7 +43,6 @@ _VALID_ROLES = {'admin', 'user'}
 _VALID_PROVIDERS = {'jellyfin', 'plex', 'emby'}
 
 # Plex application identifier — stable across instances.
-_PLEX_CLIENT_ID = "suggestarr"
 _PLEX_CLIENT_NAME = "SuggestArr"
 _PLEX_PRODUCT = "SuggestArr"
 _PLEX_VERSION = "1.0"
@@ -60,8 +59,10 @@ def _current_user_id() -> int:
 
 def _plex_headers() -> dict:
     """Return the headers required by Plex.tv API calls."""
+    from api_service.services.config_service import ConfigService
+    client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
     return {
-        "X-Plex-Client-Identifier": _PLEX_CLIENT_ID,
+        "X-Plex-Client-Identifier": client_id,
         "X-Plex-Product": _PLEX_PRODUCT,
         "X-Plex-Version": _PLEX_VERSION,
         "Accept": "application/json",
@@ -431,9 +432,12 @@ def plex_oauth_start():
 
     pin_id = body["id"]
     pin_code = body["code"]
+    
+    from api_service.services.config_service import ConfigService
+    client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
     auth_url = (
         f"https://app.plex.tv/auth#?"
-        f"clientID={_PLEX_CLIENT_ID}"
+        f"clientID={client_id}"
         f"&code={pin_code}"
         f"&context%5Bdevice%5D%5Bproduct%5D={_PLEX_PRODUCT}"
     )
