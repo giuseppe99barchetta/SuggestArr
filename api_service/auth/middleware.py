@@ -261,6 +261,10 @@ def require_role(*roles: str):
         def wrapped(*args, **kwargs):
             user = getattr(g, 'current_user', None)
             if user is None:
+                # Setup mode: if no admin account exists yet, allow everything so the
+                # first-run wizard can configure the application.
+                if _is_setup_mode():
+                    return f(*args, **kwargs)
                 # Should not happen on protected routes, but guard anyway.
                 return jsonify({"error": "Authentication required"}), 401
             if user["role"] not in roles:
