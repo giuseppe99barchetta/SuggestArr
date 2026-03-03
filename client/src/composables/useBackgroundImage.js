@@ -63,9 +63,14 @@ export function useBackgroundImage() {
       const imageUrl = await fetchRandomMovieImage();
       if (imageUrl) {
         await changeBackground(imageUrl);
+      } else if (imageUrl === null) {
+        // Stop polling TMDB if it is not configured or fails repeatedly
+        console.warn("TMDB not configured or no image, falling back to default rotation.");
+        startDefaultImageRotation();
       }
     } catch (error) {
       console.error("Background rotation error:", error);
+      startDefaultImageRotation();
     }
   }
 
