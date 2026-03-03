@@ -1229,7 +1229,11 @@ export default {
       this.seerConnected = false;
       this.seerUsers = [];
       try {
-        const response = await testJellyseerApi();
+        const payload = {
+          SEER_API_URL: this.localConfig.SEER_API_URL.trim(),
+          SEER_TOKEN: this.localConfig.SEER_TOKEN.trim()
+        };
+        const response = await testJellyseerApi(payload);
         this.seerUsers = (response.data.users || []).filter(user => user.isLocal);
         this.seerConnected = true;
         this.loadSavedSeerUser();
@@ -1273,9 +1277,14 @@ export default {
       this.loadingServers = true;
       this.serversLoaded = false;
       try {
+        const payload = {
+          SEER_API_URL: this.localConfig.SEER_API_URL,
+          SEER_TOKEN: this.localConfig.SEER_TOKEN,
+          SEER_SESSION_TOKEN: this.localConfig.SEER_SESSION_TOKEN
+        };
         const [radarrRes, sonarrRes] = await Promise.all([
-          fetchRadarrServers(),
-          fetchSonarrServers()
+          fetchRadarrServers(payload),
+          fetchSonarrServers(payload)
         ]);
         this.radarrServers = radarrRes.data.servers || [];
         this.sonarrServers = sonarrRes.data.servers || [];
