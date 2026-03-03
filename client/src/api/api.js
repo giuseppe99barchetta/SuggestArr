@@ -21,7 +21,10 @@ export const testJellyfinApi = (url, token) => {
 };
 
 // Function to test the Jellyseer/Overseer configuration and fetch users
-export const testJellyseerApi = () => {
+export const testJellyseerApi = (payload = null) => {
+    if (payload) {
+        return axios.post('/api/seer/get_users', payload);
+    }
     return axios.get('/api/seer/get_users');
 };
 
@@ -56,12 +59,18 @@ export function fetchPlexUsers(payload) {
 }
 
 // Function to fetch Radarr servers from Overseerr for anime profile configuration
-export const fetchRadarrServers = () => {
+export const fetchRadarrServers = (payload = null) => {
+    if (payload) {
+        return axios.post('/api/seer/radarr-servers', payload);
+    }
     return axios.get('/api/seer/radarr-servers');
 };
 
 // Function to fetch Sonarr servers from Overseerr for anime profile configuration
-export const fetchSonarrServers = () => {
+export const fetchSonarrServers = (payload = null) => {
+    if (payload) {
+        return axios.post('/api/seer/sonarr-servers', payload);
+    }
     return axios.get('/api/seer/sonarr-servers');
 };
 

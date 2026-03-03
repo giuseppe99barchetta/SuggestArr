@@ -26,13 +26,19 @@ def _load_seer_config():
     )
 
 
-@seer_bp.route('/get_users', methods=['GET'])
+@seer_bp.route('/get_users', methods=['GET', 'POST'])
 async def get_users():
     """
     Fetch Jellyseer/Overseer users using the globally configured API key.
     """
     try:
-        api_url, api_key, session_token = _load_seer_config()
+        config_data = request.get_json(silent=True) or {}
+        api_url = config_data.get('SEER_API_URL')
+        api_key = config_data.get('SEER_TOKEN')
+        session_token = config_data.get('SEER_SESSION_TOKEN')
+
+        if not api_url or not api_key:
+            api_url, api_key, session_token = _load_seer_config()
 
         if not api_key or not api_url:
             return jsonify({'message': 'Seer API URL and token are not configured', 'type': 'error'}), 400
@@ -96,13 +102,19 @@ async def _simple_seer_http_test(api_url, api_key):
         return False, "Unexpected error occurred", {}
 
 
-@seer_bp.route('/test', methods=['GET'])
+@seer_bp.route('/test', methods=['GET', 'POST'])
 async def test_seer_connection():
     """
     Test Overseer/Jellyseer API connection using the globally configured API key and URL.
     """
     try:
-        api_url, api_key, session_token = _load_seer_config()
+        config_data = request.get_json(silent=True) or {}
+        api_url = config_data.get('SEER_API_URL')
+        api_key = config_data.get('SEER_TOKEN')
+        session_token = config_data.get('SEER_SESSION_TOKEN')
+
+        if not api_url or not api_key:
+            api_url, api_key, session_token = _load_seer_config()
 
         if not api_key or not api_url:
             return jsonify({
@@ -211,14 +223,20 @@ async def login_seer():
         return jsonify({'message': 'An internal error has occurred', 'type': 'error'}), 500
 
 
-@seer_bp.route('/radarr-servers', methods=['GET'])
+@seer_bp.route('/radarr-servers', methods=['GET', 'POST'])
 async def get_radarr_servers():
     """
     Fetch available Radarr servers from Overseerr using the globally configured credentials.
     Returns servers with their quality profiles, root folders, and tags.
     """
     try:
-        api_url, api_key, session_token = _load_seer_config()
+        config_data = request.get_json(silent=True) or {}
+        api_url = config_data.get('SEER_API_URL')
+        api_key = config_data.get('SEER_TOKEN')
+        session_token = config_data.get('SEER_SESSION_TOKEN')
+
+        if not api_url or not api_key:
+            api_url, api_key, session_token = _load_seer_config()
 
         if not api_key or not api_url:
             return jsonify({'message': 'Seer API URL and token are not configured', 'type': 'error'}), 400
@@ -236,14 +254,20 @@ async def get_radarr_servers():
         return jsonify({'message': 'Error fetching Radarr servers', 'type': 'error'}), 500
 
 
-@seer_bp.route('/sonarr-servers', methods=['GET'])
+@seer_bp.route('/sonarr-servers', methods=['GET', 'POST'])
 async def get_sonarr_servers():
     """
     Fetch available Sonarr servers from Overseerr using the globally configured credentials.
     Returns servers with their quality profiles, root folders, and tags.
     """
     try:
-        api_url, api_key, session_token = _load_seer_config()
+        config_data = request.get_json(silent=True) or {}
+        api_url = config_data.get('SEER_API_URL')
+        api_key = config_data.get('SEER_TOKEN')
+        session_token = config_data.get('SEER_SESSION_TOKEN')
+
+        if not api_url or not api_key:
+            api_url, api_key, session_token = _load_seer_config()
 
         if not api_key or not api_url:
             return jsonify({'message': 'Seer API URL and token are not configured', 'type': 'error'}), 400
