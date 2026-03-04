@@ -111,10 +111,10 @@
   box-sizing: border-box;
 }
 
-.form-input:focus {
+.form-input:focus-visible {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  box-shadow: var(--focus-ring);
 }
 
 .form-input:disabled {
@@ -400,10 +400,10 @@ select option {
   width: 100%;
 }
 
-.input-field:focus {
+.input-field:focus-visible {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: var(--focus-ring);
 }
 
 .input-field::placeholder {

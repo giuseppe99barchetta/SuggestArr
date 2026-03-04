@@ -8,13 +8,24 @@
     </label>
     
     <div 
+      ref="dropdownTrigger"
       class="custom-dropdown" 
       :class="{ 
         'is-open': isOpen, 
         'is-disabled': disabled, 
         'has-error': error 
       }"
+      :tabindex="disabled ? -1 : 0"
+      :aria-expanded="isOpen.toString()"
+      :aria-haspopup="'menu'"
+      :aria-controls="dropdownMenuId"
+      role="button"
       @click="toggleDropdown"
+      @keydown.enter.prevent="handleTriggerKeyDown"
+      @keydown.space.prevent="handleTriggerKeyDown"
+      @keydown.escape="handleEscapeKey"
+      @keydown.down.prevent="handleArrowDown"
+      @keydown.up.prevent="handleArrowUp"
     >
       <!-- Selected value display -->
       <div class="dropdown-trigger">
@@ -34,19 +45,33 @@
       
       <!-- Custom dropdown menu -->
       <transition name="dropdown-slide">
-        <div v-if="isOpen" class="dropdown-menu">
+        <div 
+          v-if="isOpen" 
+          :id="dropdownMenuId"
+          ref="dropdownMenu"
+          class="dropdown-menu"
+          role="menu"
+          :aria-labelledby="id"
+        >
           <div class="dropdown-menu-inner">
             <div class="dropdown-scroll">
               <div
                 v-for="(option, index) in options"
                 :key="getOptionKey(option)"
+                :ref="el => { if (el) menuItemRefs[index] = el }"
                 class="dropdown-item"
+                role="menuitem"
+                :tabindex="highlightedIndex === index ? 0 : -1"
+                :aria-selected="isSelected(option).toString()"
+                :aria-disabled="option.disabled ? 'true' : undefined"
                 :class="{ 
                   'is-selected': isSelected(option),
                   'is-disabled': option.disabled,
                   'is-highlighted': highlightedIndex === index
                 }"
                 @click.stop="selectOption(option)"
+                @keydown.enter.prevent="selectOption(option)"
+                @keydown.space.prevent="selectOption(option)"
                 @mouseenter="highlightedIndex = index"
               >
                 <div class="item-content">
@@ -140,10 +165,14 @@ export default {
   data() {
     return {
       isOpen: false,
-      highlightedIndex: -1
+      highlightedIndex: -1,
+      menuItemRefs: []
     };
   },
   computed: {
+    dropdownMenuId() {
+      return `${this.id}-menu`;
+    },
     selectedLabel() {
       const selected = this.options.find(opt => 
         this.getOptionValue(opt) === this.modelValue
@@ -160,18 +189,114 @@ export default {
       }
       return undefined;
     },
+    handleTriggerKeyDown() {
+      if (this.disabled) return;
+      if (!this.isOpen) {
+        this.openDropdown();
+      } else {
+        this.closeDropdown();
+      }
+    },
+    handleEscapeKey() {
+      if (this.isOpen) {
+        this.closeDropdown();
+      }
+    },
+    handleArrowDown() {
+      if (!this.isOpen) {
+        this.openDropdown();
+      } else {
+        this.navigateNext();
+      }
+    },
+    handleArrowUp() {
+      if (!this.isOpen) {
+        this.openDropdown();
+      } else {
+        this.navigatePrevious();
+      }
+    },
+    navigateNext() {
+      const enabledOptions = this.options.filter(opt => !opt.disabled);
+      if (enabledOptions.length === 0) return;
+      
+      let nextIndex = this.highlightedIndex + 1;
+      while (nextIndex < this.options.length && this.options[nextIndex].disabled) {
+        nextIndex++;
+      }
+      
+      if (nextIndex >= this.options.length) {
+        nextIndex = this.options.findIndex(opt => !opt.disabled);
+      }
+      
+      this.highlightedIndex = nextIndex;
+      this.focusMenuItem(nextIndex);
+    },
+    navigatePrevious() {
+      const enabledOptions = this.options.filter(opt => !opt.disabled);
+      if (enabledOptions.length === 0) return;
+      
+      let prevIndex = this.highlightedIndex - 1;
+      while (prevIndex >= 0 && this.options[prevIndex].disabled) {
+        prevIndex--;
+      }
+      
+      if (prevIndex < 0) {
+        for (let i = this.options.length - 1; i >= 0; i--) {
+          if (!this.options[i].disabled) {
+            prevIndex = i;
+            break;
+          }
+        }
+      }
+      
+      this.highlightedIndex = prevIndex;
+      this.focusMenuItem(prevIndex);
+    },
+    focusMenuItem(index) {
+      this.$nextTick(() => {
+        const menuItem = this.menuItemRefs[index];
+        if (menuItem && typeof menuItem.focus === 'function') {
+          menuItem.focus();
+        }
+      });
+    },
+    openDropdown() {
+      if (this.disabled) return;
+      this.isOpen = true;
+      this.$nextTick(() => {
+        this.scrollToSelected();
+        // Focus the first enabled item or the selected item
+        const selectedIndex = this.options.findIndex(opt => this.isSelected(opt) && !opt.disabled);
+        if (selectedIndex !== -1) {
+          this.highlightedIndex = selectedIndex;
+          this.focusMenuItem(selectedIndex);
+        } else {
+          const firstEnabledIndex = this.options.findIndex(opt => !opt.disabled);
+          if (firstEnabledIndex !== -1) {
+            this.highlightedIndex = firstEnabledIndex;
+            this.focusMenuItem(firstEnabledIndex);
+          }
+        }
+      });
+    },
     toggleDropdown() {
       if (this.disabled) return;
-      this.isOpen = !this.isOpen;
       if (this.isOpen) {
-        this.$nextTick(() => {
-          this.scrollToSelected();
-        });
+        this.closeDropdown();
+      } else {
+        this.openDropdown();
       }
     },
     closeDropdown() {
       this.isOpen = false;
       this.highlightedIndex = -1;
+      // Return focus to trigger
+      this.$nextTick(() => {
+        if (this.$refs.dropdownTrigger) {
+          this.$refs.dropdownTrigger.focus();
+        }
+      });
     },
     selectOption(option) {
       if (option.disabled) return;
@@ -188,7 +313,7 @@ export default {
       const selectedIndex = this.options.findIndex(opt => 
         this.getOptionValue(opt) === this.modelValue
       );
-      if (selectedIndex !== -1) {
+      if (selectedIndex !== -1 && !this.options[selectedIndex].disabled) {
         this.highlightedIndex = selectedIndex;
       }
     },

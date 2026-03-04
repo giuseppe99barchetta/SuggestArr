@@ -99,11 +99,12 @@
 
 /* ────────────────────────────────────────────────────────────────────
    CLOSE BUTTON
+   WCAG 2.5.5 Target Size: Minimum 44x44px for touch accessibility
    ──────────────────────────────────────────────────────────────────── */
 .modal-close {
   margin-left: auto;
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -145,11 +145,10 @@ select option:hover {
 }
 
 /* Cambia l'aspetto del select quando è in focus */
-select:focus {
-    /* Rimuove il bordo di default */
+select:focus-visible {
     outline: none;
-    /* Aggiunge un bordo blu quando è in focus */
-    border: 1px solid var(--color-primary-light);
+    border-color: var(--color-primary);
+    box-shadow: var(--focus-ring);
 }
 
 .fade-enter-active,
