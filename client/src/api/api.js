@@ -21,8 +21,8 @@ export const testJellyfinApi = (url, token) => {
 };
 
 // Function to test the Jellyseer/Overseer configuration and fetch users
-export const testJellyseerApi = () => {
-    return axios.get('/api/seer/get_users');
+export const testJellyseerApi = (payload) => {
+    return axios.post('/api/seer/get_users', payload);
 };
 
 // Function to authenticate a user in Jellyseer/Overseer

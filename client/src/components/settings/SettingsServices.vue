@@ -1217,9 +1217,29 @@ export default {
 
     // Seer connection test + user fetch
     async testSeerAndFetchUsers(silent = false) {
-      if (!this.localConfig.SEER_API_URL || !this.localConfig.SEER_TOKEN) return;
+      let seerUrl = (this.localConfig.SEER_API_URL || '').trim();
+      let seerToken = (this.localConfig.SEER_TOKEN || '').trim();
+
+      // Browser autofill can populate password inputs without updating v-model.
+      // Read from DOM as a fallback so test requests still include the token.
+      if (!seerUrl) {
+        const domUrl = (document.getElementById('seerApiUrl')?.value || '').trim();
+        if (domUrl) {
+          seerUrl = domUrl;
+          this.localConfig.SEER_API_URL = domUrl;
+        }
+      }
+      if (!seerToken) {
+        const domToken = (document.getElementById('seerToken')?.value || '').trim();
+        if (domToken) {
+          seerToken = domToken;
+          this.localConfig.SEER_TOKEN = domToken;
+        }
+      }
+
+      if (!seerUrl || !seerToken) return;
       try {
-        const url = this.localConfig.SEER_API_URL.trim();
+        const url = seerUrl;
         new URL(url.startsWith('http') ? url : `http://${url}`);
       } catch (e) {
         if (!silent && this.$toast) this.$toast.error('Invalid URL format.', { position: 'top-right', duration: 4000 });
@@ -1229,7 +1249,10 @@ export default {
       this.seerConnected = false;
       this.seerUsers = [];
       try {
-        const response = await testJellyseerApi();
+        const response = await testJellyseerApi({
+          SEER_API_URL: seerUrl,
+          SEER_TOKEN: seerToken,
+        });
         this.seerUsers = (response.data.users || []).filter(user => user.isLocal);
         this.seerConnected = true;
         this.loadSavedSeerUser();
