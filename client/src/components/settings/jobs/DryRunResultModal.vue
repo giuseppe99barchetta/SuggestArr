@@ -264,7 +264,7 @@ export default {
 
 .header-icon {
   font-size: 1.4rem;
-  color: #22d3ee;
+  color: var(--color-info-light);
 }
 
 .job-subtitle {
@@ -300,7 +300,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #22d3ee;
+  color: var(--color-info-light);
   font-weight: 500;
 }
 
@@ -346,7 +346,7 @@ export default {
 .toggle-btn.active {
   background: rgba(34, 211, 238, 0.12);
   border-color: rgba(34, 211, 238, 0.35);
-  color: #22d3ee;
+  color: var(--color-info-light);
 }
 
 .toggle-btn:hover:not(.active) {

@@ -531,57 +531,6 @@ export default {
   border: none;
 }
 
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.25rem 2rem;
-  background: var(--color-bg-content);
-  flex-shrink: 0;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-medium);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition: var(--transition-base);
-  font-size: 0.9rem;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
-}
-
-.btn-secondary {
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-medium);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--color-bg-active);
-  border-color: var(--color-primary);
-}
-
 /* Advanced Toggle */
 .advanced-toggle {
   display: flex;
@@ -636,52 +585,15 @@ export default {
   max-height: 2000px;
 }
 
-@media (max-width: 850px) {
-  .modal {
-    max-width: 95%;
-  }
-}
+
 
 @media (max-width: 600px) {
-  .modal-overlay {
-    padding: 0;
-  }
-
-  .modal {
-    max-width: 100%;
-    max-height: 100vh;
-    height: 100vh;
-    border-radius: 0;
-  }
-
-  .modal-header {
-    padding: 1rem 1.25rem;
-  }
-
-  .modal-body {
-    padding: 0.5rem 1.25rem 1.5rem;
-  }
-
-  .modal-title {
-    font-size: 1.1rem;
-  }
-
   .media-type-selector {
     flex-direction: column;
   }
 
   .job-type-selector {
     flex-direction: column;
-  }
-
-  .modal-footer {
-    padding: 1rem 1.25rem;
-    gap: 0.5rem;
-  }
-
-  .btn {
-    flex: 1;
-    padding: 0.75rem 1rem;
   }
 
   .settings-group {

@@ -774,7 +774,7 @@ export default {
   flex-shrink: 0;
   background: none;
   border: none;
-  color: #22d3ee;
+  color: var(--color-info-light);
   cursor: pointer;
   padding: 0.15rem;
   font-size: 0.8rem;
@@ -789,7 +789,7 @@ export default {
 
 .info-icon {
   flex-shrink: 0;
-  color: #22d3ee;
+  color: var(--color-info-light);
   font-size: 1.25rem;
 }
 

@@ -133,7 +133,6 @@ export default {
         const response = await axios.get('/api/auth/status')
         isSetupMode.value = !response.data.auth_setup_complete
         allowRegistration.value = !!response.data.allow_registration
-        console.log('allow_registration:', response.data.allow_registration)
       } catch {
         isSetupMode.value = false
         allowRegistration.value = false
