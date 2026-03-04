@@ -982,7 +982,7 @@ export default {
 
 .um-modal-content {
   position: relative;
-  background: var(--surface-elevated);
+  background: var(--surface-elevated-solid);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
   width: 100%;

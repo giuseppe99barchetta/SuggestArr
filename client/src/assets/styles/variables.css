@@ -57,13 +57,17 @@
        - surface-elevated: Modals, dialogs
        - surface-overlay: Dropdowns, popovers, tooltips
        - surface-interactive: Hover states, active elements
+       - surface-hover: Subtle hover effect for dark backgrounds
+       - surface-hover-solid: Strong hover effect for dark backgrounds
      ──────────────────────────────────────────────────────────────────── */
   --surface-base: rgba(0, 0, 0, 0.6);
   --surface-raised: rgba(34, 34, 36, 0.9);
   --surface-elevated: rgba(0, 0, 0, 0.8);
+  --surface-elevated-solid: rgba(37, 37, 37, 0.92);
   --surface-overlay: rgba(0, 0, 0, 0.85);
   --surface-interactive: rgba(255, 255, 255, 0.1);
   --surface-hover: rgba(255, 255, 255, 0.15);
+  --surface-hover-solid: rgba(37, 37, 37, 0.92);
 
   /* Legacy aliases (deprecated - use surface-* instead) */
   --color-bg-primary: var(--surface-base);

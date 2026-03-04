@@ -546,13 +546,6 @@ export default {
 
 
 /* Form elements */
-.form-group {
-  margin-bottom: 1.5rem;
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
 
 .form-group label {
   display: block;
