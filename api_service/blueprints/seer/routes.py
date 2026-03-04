@@ -29,7 +29,8 @@ def _load_seer_config():
 @seer_bp.route('/get_users', methods=['GET', 'POST'])
 async def get_users():
     """
-    Fetch Jellyseer/Overseer users using the globally configured API key.
+    Fetch Jellyseer/Overseer users using the globally configured API key and URL,
+    or credentials provided in the request body (e.g. during initial setup).
     """
     try:
         config_data = request.get_json(silent=True) or {}
@@ -37,8 +38,11 @@ async def get_users():
         api_key = config_data.get('SEER_TOKEN')
         session_token = config_data.get('SEER_SESSION_TOKEN')
 
+        # Fallback to database config if not provided in request
         if not api_url or not api_key:
-            api_url, api_key, session_token = _load_seer_config()
+            api_url, api_key, db_session_token = _load_seer_config()
+            if not session_token:
+                session_token = db_session_token
 
         if not api_key or not api_url:
             return jsonify({'message': 'Seer API URL and token are not configured', 'type': 'error'}), 400

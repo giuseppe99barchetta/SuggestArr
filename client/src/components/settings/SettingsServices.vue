@@ -860,25 +860,36 @@ export default {
     this._runAutoTests();
   },
   methods: {
+    _notifyError(message, opts = { position: 'top-right', duration: 5000 }) {
+      if (this.$toast) {
+        this.$toast.error(message, opts);
+        return;
+      }
+      if (this.wizardMode && typeof window !== 'undefined' && typeof window.alert === 'function') {
+        window.alert(message);
+      }
+    },
+
     // Runs all silent connection tests in parallel on mount so they don't block each other.
     _runAutoTests() {
       const service = this.localConfig.SELECTED_SERVICE;
       const tasks = [];
+      const silent = !this.wizardMode;
 
       if (service === 'plex' && this.localConfig.PLEX_TOKEN && this.localConfig.PLEX_API_URL) {
         tasks.push(
-          this.testAndFetchPlex(true).then(() => {
+          this.testAndFetchPlex(silent).then(() => {
             if (this.plexConnected) this.plexOAuthLoggedIn = true;
           }),
         );
       } else if ((service === 'jellyfin' || service === 'emby') &&
                  this.localConfig.JELLYFIN_TOKEN && this.localConfig.JELLYFIN_API_URL) {
-        tasks.push(this.testAndFetchJellyfin(true));
+        tasks.push(this.testAndFetchJellyfin(silent));
       }
 
       if (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN) {
         tasks.push(
-          this.testSeerAndFetchUsers(true).then(async () => {
+          this.testSeerAndFetchUsers(silent).then(async () => {
             if (this.seerConnected && this.localConfig.SEER_SESSION_TOKEN) {
               await this.fetchArrServers();
             }
@@ -887,7 +898,7 @@ export default {
       }
 
       if (this.localConfig.OMDB_API_KEY) {
-        tasks.push(this.testOmdbConnection(true));
+        tasks.push(this.testOmdbConnection(silent));
       }
 
       Promise.allSettled(tasks);
@@ -909,7 +920,7 @@ export default {
         window.open(auth_url, '_blank', 'width=800,height=600');
         this.plexOAuthPollTimer = setInterval(() => this.pollPlexOAuth(pin_id), 3000);
       } catch {
-        this.$toast.error('Error starting Plex login.');
+        this._notifyError('Error starting Plex login.');
         this.plexOAuthLoading = false;
       }
     },
@@ -940,7 +951,7 @@ export default {
           await this.onPlexOAuthServerSelect(url);
         }
       } catch {
-        this.$toast.error('Error fetching Plex servers.');
+        this._notifyError('Error fetching Plex servers.');
       }
     },
     async onPlexOAuthServerSelect(url) {
@@ -998,7 +1009,7 @@ export default {
           this.$emit('validation-changed', true);
         } catch (error) {
           this.wizardTmdbConnected = false;
-          if (this.$toast) this.$toast.error('Invalid TMDB API key. Please check and try again.', { position: 'top-right', duration: 5000 });
+          this._notifyError('Invalid TMDB API key. Please check and try again.');
           this.$emit('validation-changed', false);
         } finally {
           this.wizardTmdbTesting = false;
@@ -1020,7 +1031,7 @@ export default {
         if (!silent && this.$toast) this.$toast.success('OMDb API key validated!', { position: 'top-right', duration: 3000 });
       } catch (error) {
         this.omdbConnected = false;
-        if (!silent && this.$toast) this.$toast.error('Invalid OMDb API key. Please check and try again.', { position: 'top-right', duration: 5000 });
+        if (!silent) this._notifyError('Invalid OMDb API key. Please check and try again.');
       } finally {
         this.omdbTesting = false;
       }
@@ -1033,7 +1044,7 @@ export default {
         const testUrl = url.startsWith('http') ? url : `http://${url}`;
         new URL(testUrl);
       } catch (e) {
-        if (this.$toast) this.$toast.error('Invalid URL format.', { position: 'top-right', duration: 4000 });
+        this._notifyError('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
       await this.$emit('test-connection', 'jellyfin', {
@@ -1049,7 +1060,7 @@ export default {
         const testUrl = url.startsWith('http') ? url : `http://${url}`;
         new URL(testUrl);
       } catch (e) {
-        if (this.$toast) this.$toast.error('Invalid URL format.', { position: 'top-right', duration: 4000 });
+        this._notifyError('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
       await this.$emit('test-connection', 'plex', {
@@ -1064,7 +1075,7 @@ export default {
         const url = this.localConfig.JELLYFIN_API_URL.trim();
         new URL(url.startsWith('http') ? url : `http://${url}`);
       } catch (e) {
-        if (!silent && this.$toast) this.$toast.error('Invalid URL format.', { position: 'top-right', duration: 4000 });
+        if (!silent) this._notifyError('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
       this.jellyfinFetching = true;
@@ -1090,7 +1101,7 @@ export default {
         this.jellyfinConnected = false;
         this.jellyfinLibraries = [];
         this.jellyfinUsers = [];
-        if (!silent && this.$toast) this.$toast.error('Failed to connect. Check your URL and token.', { position: 'top-right', duration: 5000 });
+        if (!silent) this._notifyError('Failed to connect. Check your URL and token.');
       } finally {
         this.jellyfinFetching = false;
       }
@@ -1102,7 +1113,7 @@ export default {
         const url = this.localConfig.PLEX_API_URL.trim();
         new URL(url.startsWith('http') ? url : `http://${url}`);
       } catch (e) {
-        if (!silent && this.$toast) this.$toast.error('Invalid URL format.', { position: 'top-right', duration: 4000 });
+        if (!silent) this._notifyError('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
       this.plexFetching = true;
@@ -1129,7 +1140,7 @@ export default {
         this.plexConnected = false;
         this.plexLibraries = [];
         this.plexUsers = [];
-        if (!silent && this.$toast) this.$toast.error('Failed to connect. Check your URL and token.', { position: 'top-right', duration: 5000 });
+        if (!silent) this._notifyError('Failed to connect. Check your URL and token.');
       } finally {
         this.plexFetching = false;
       }
@@ -1217,23 +1228,42 @@ export default {
 
     // Seer connection test + user fetch
     async testSeerAndFetchUsers(silent = false) {
-      if (!this.localConfig.SEER_API_URL || !this.localConfig.SEER_TOKEN) return;
+      let seerUrl = (this.localConfig.SEER_API_URL || '').trim();
+      let seerToken = (this.localConfig.SEER_TOKEN || '').trim();
+
+      // Browser autofill can populate password inputs without updating v-model.
+      // Read from DOM as a fallback so test requests still include the token.
+      if (!seerUrl) {
+        const domUrl = (document.getElementById('seerApiUrl')?.value || '').trim();
+        if (domUrl) {
+          seerUrl = domUrl;
+          this.localConfig.SEER_API_URL = domUrl;
+        }
+      }
+      if (!seerToken) {
+        const domToken = (document.getElementById('seerToken')?.value || '').trim();
+        if (domToken) {
+          seerToken = domToken;
+          this.localConfig.SEER_TOKEN = domToken;
+        }
+      }
+
+      if (!seerUrl || !seerToken) return;
       try {
-        const url = this.localConfig.SEER_API_URL.trim();
+        const url = seerUrl;
         new URL(url.startsWith('http') ? url : `http://${url}`);
       } catch (e) {
-        if (!silent && this.$toast) this.$toast.error('Invalid URL format.', { position: 'top-right', duration: 4000 });
+        if (!silent) this._notifyError('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
       this.seerTesting = true;
       this.seerConnected = false;
       this.seerUsers = [];
       try {
-        const payload = {
-          SEER_API_URL: this.localConfig.SEER_API_URL.trim(),
-          SEER_TOKEN: this.localConfig.SEER_TOKEN.trim()
-        };
-        const response = await testJellyseerApi(payload);
+        const response = await testJellyseerApi({
+          SEER_API_URL: seerUrl,
+          SEER_TOKEN: seerToken,
+        });
         this.seerUsers = (response.data.users || []).filter(user => user.isLocal);
         this.seerConnected = true;
         this.loadSavedSeerUser();
@@ -1241,7 +1271,7 @@ export default {
       } catch (error) {
         console.error('Seer connection test failed:', error);
         this.seerConnected = false;
-        if (!silent && this.$toast) this.$toast.error('Failed to connect. Verify URL and API Key.', { position: 'top-right', duration: 5000 });
+        if (!silent) this._notifyError('Failed to connect. Verify URL and API Key.');
       } finally {
         this.seerTesting = false;
       }
@@ -1261,7 +1291,7 @@ export default {
       } catch (error) {
         console.error('Authentication error:', error);
         this.seerAuthenticated = false;
-        if (this.$toast) this.$toast.error('Incorrect username or password', { position: 'top-right', duration: 5000 });
+        this._notifyError('Incorrect username or password');
       } finally {
         this.seerAuthenticating = false;
       }
@@ -1293,7 +1323,7 @@ export default {
         console.error('Error fetching Radarr/Sonarr servers:', error);
         this.radarrServers = [];
         this.sonarrServers = [];
-        if (this.$toast) this.$toast.error('Failed to fetch servers.', { position: 'top-right', duration: 5000 });
+        this._notifyError('Failed to fetch servers.');
       } finally {
         this.loadingServers = false;
         this.serversLoaded = true;
