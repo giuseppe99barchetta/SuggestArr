@@ -16,8 +16,8 @@
 
 .multiselect__tag {
     /* Red for excluded tags */
-    background-color: #b84141;
-    color: var(--color-text-primary) !important;
+    background-color: var(--multiselect-tag-bg);
+    color: var(--multiselect-tag-text);
     margin: 2px;
     font-size: 0.875rem;
     border-radius: var(--border-radius-sm);
@@ -39,7 +39,7 @@
 }
 
 .multiselect__content-wrapper {
-    background-color: #323233;
+    background-color: var(--color-bg-content-secondary);
     backdrop-filter: blur(50px);
     border: 1px solid var(--color-border-medium);
     border-radius: var(--border-radius-sm);
@@ -67,13 +67,13 @@
 }
 
 .multiselect__option--selected {
-    background-color: #b84141;
-    color: var(--color-text-primary);
+    background-color: var(--multiselect-tag-bg);
+    color: var(--multiselect-tag-text);
 }
 
 .multiselect__option--selected.multiselect__option--highlight {
-    background-color: #b84141;
-    color: var(--color-text-primary);
+    background-color: var(--multiselect-tag-bg);
+    color: var(--multiselect-tag-text);
 }
 
 .multiselect__select,
@@ -92,9 +92,9 @@
 }
 
 .multiselect-genres .multiselect__tag {
-    background-color: #b84141;
-    /* Rosso per i tag dei generi esclusi */
-    color: var(--color-text-primary) !important;
+    background-color: var(--multiselect-tag-bg);
+    /* Red for excluded genre tags */
+    color: var(--multiselect-tag-text);
 }
 
 /* Tag verde per il multiselect delle lingue */

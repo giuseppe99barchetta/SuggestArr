@@ -168,6 +168,18 @@ def update_user(user_id: int):
 
     if "is_active" in data:
         updates["is_active"] = 1 if data["is_active"] else 0
+        
+    if "can_manage_ai" in data:
+        updates["can_manage_ai"] = 1 if data["can_manage_ai"] else 0
+        
+    if "visible_tabs" in data:
+        tabs = str(data["visible_tabs"]).strip()
+        # Basic validation: ensure it's a comma-separated list of allowed tabs
+        allowed_tabs = {"requests", "jobs", "profile", "admin"}
+        provided_tabs = {t.strip() for t in tabs.split(",")} if tabs else set()
+        if not provided_tabs.issubset(allowed_tabs):
+            return jsonify({"error": f"visible_tabs contains invalid entries. Allowed: {', '.join(allowed_tabs)}"}), 400
+        updates["visible_tabs"] = tabs
 
     if not updates:
         return jsonify({"error": "No valid fields to update"}), 400
@@ -228,6 +240,44 @@ def delete_user(user_id: int):
     db.delete_auth_user(user_id)
     logger.info("Admin %r deleted user id=%d (%r)", g.current_user["username"], user_id, target["username"])
     return jsonify({"message": "User deleted"}), 200
+
+# ---------------------------------------------------------------------------
+# Admin: link provider instance to user
+# ---------------------------------------------------------------------------
+
+@users_bp.route('/<int:user_id>/link/<provider>', methods=['POST'])
+@require_role('admin')
+def admin_link_provider(user_id: int, provider: str):
+    """
+    Admin-force a media server username map for any user profile.
+
+    Request JSON:
+      external_user_id   (str)
+      external_username  (str)
+
+    Response (200): { "message": "Account linked" }
+    """
+    if provider not in _VALID_PROVIDERS:
+        return jsonify({"error": f"Invalid provider. Must be one of: {', '.join(sorted(_VALID_PROVIDERS))}"}), 400
+
+    data = request.get_json(silent=True) or {}
+    external_user_id = (data.get("external_user_id") or "").strip()
+    external_username = (data.get("external_username") or "").strip()
+
+    if not external_user_id or not external_username:
+        return jsonify({"error": "external_user_id and external_username are required"}), 400
+
+    db = DatabaseManager()
+    
+    target = db.get_auth_user_by_id(user_id)
+    if not target:
+        return jsonify({"error": "User not found"}), 404
+
+    db.create_user_media_profile(
+        user_id, provider, external_user_id, external_username
+    )
+    logger.info("Admin %r linked %s account for user id=%d: %r", g.current_user["username"], provider, user_id, external_username)
+    return jsonify({"message": f"{provider.capitalize()} account linked for user"}), 200
 
 
 # ===========================================================================

@@ -28,6 +28,17 @@
   --color-bg-interactive: rgba(255, 255, 255, 0.1);
   --color-bg-active: rgba(255, 255, 255, 0.15);
 
+  /* Form/Input Heights (standardized) */
+  --input-height: 40px;
+  --btn-height: 40px;
+  
+  /* Multiselect & Select styling */
+  --select-bg: var(--color-bg-content-secondary);
+  --select-text: var(--color-text-primary);
+  --select-border: var(--color-border-medium);
+  --multiselect-tag-bg: #b84141;
+  --multiselect-tag-text: var(--color-text-primary);
+
   /* Common Values */
   --border-radius-sm: 0.5rem;
   --border-radius-md: 0.75rem;
@@ -75,11 +86,59 @@
   color: var(--color-text-primary);
 }
 
+/* Shared page background and overlay patterns */
+.page-bg-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  z-index: 0;
+}
+
+.page-bg-layer.fade-transition {
+  transition: opacity 0.8s ease-in-out;
+}
+
+.page-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(15px);
+  z-index: 1;
+}
+
+.page-overlay.hidden {
+  display: none;
+}
+
+.page-content {
+  position: relative;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(15px);
+  border: 1px solid var(--color-border-light);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.page-content.static-bg-active {
+  background: transparent;
+  backdrop-filter: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 /* Forms and Layout */
 .form-input {
   flex: 1;
   min-width: 200px;
-  min-height: 40px;
+  min-height: var(--input-height);
   background: var(--color-bg-interactive);
   border: 1px solid var(--color-border-medium);
   border-radius: var(--border-radius-sm);
@@ -87,8 +146,8 @@
   color: var(--color-text-primary);
   font-size: 0.9rem;
   transition: var(--transition-base);
-  width: 100%;           /* Forza l'input a occupare tutto il contenitore */
-  display: block;         /* Si assicura che si comporti come un blocco */
+  width: 100%;
+  display: block;
   box-sizing: border-box;
 }
 
@@ -122,34 +181,6 @@
   flex-wrap: wrap;
 }
 
-.form-input {
-  flex: 1;
-  min-width: 200px;
-  min-height: 40px;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-medium);
-  border-radius: var(--border-radius-sm);
-  padding: 0 1rem;
-  color: var(--color-text-primary);
-  font-size: 0.9rem;
-  transition: var(--transition-base);
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-}
-
-.form-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.form-input::placeholder {
-  color: var(--color-text-muted);
-}
-
 .form-help {
   color: var(--color-text-muted);
   font-size: 0.8rem;
@@ -159,20 +190,16 @@
   gap: 0.5rem;
 }
 
-.form-input select {
-  background-color: #1f2937 !important; /* bg-gray-800 */
-  color: #f9fafb !important; /* text-gray-100 */
-  border-color: #4b5563 !important; /* border-gray-600 */
+/* Select element theming */
+select {
+  background-color: var(--color-bg-content-secondary);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-medium);
 }
 
-.form-input select option {
-  background-color: #1f2937 !important;
-  color: #f9fafb !important;
-}
-
-.dark .form-input select {
-  background-color: #111827 !important; /* bg-gray-900 dark */
-  color: #f9fafb !important;
+select option {
+  background-color: var(--color-bg-content-secondary);
+  color: var(--color-text-primary);
 }
 
 /* Settings Card */
@@ -281,14 +308,14 @@
 .btn-sm {
   padding: 0.5rem 1rem !important;
   font-size: 0.875rem;
-  min-height: 40px;
-  height: 40px;
+  min-height: var(--btn-height);
+  height: var(--btn-height);
 }
 
 /* Button in input group - ensure same height as input */
 .input-group .btn {
-  min-height: 40px;
-  height: 40px;
+  min-height: var(--btn-height);
+  height: var(--btn-height);
   padding: 0.5rem 1rem;
 }
 

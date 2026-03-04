@@ -47,15 +47,45 @@ _RETRY_SYSTEM_MESSAGE = (
 # Client factory
 # ---------------------------------------------------------------------------
 
-def get_llm_client() -> Optional[AsyncOpenAI]:
+def get_llm_client(user_id: Optional[int] = None) -> Optional[AsyncOpenAI]:
     """Initialize and return the OpenAI-compatible async client if configured.
+    
+    Checks for user-specific OpenAI config first (if user_id provided and user has
+    can_manage_ai permission), then falls back to global admin config.
 
+    :param user_id: Optional user ID to check for per-user OpenAI config
     :return: Configured :class:`AsyncOpenAI` instance, or ``None`` when the
         provider is not set up.
     """
-    config = ConfigService.get_runtime_config()
-    api_key = config.get("OPENAI_API_KEY")
-    base_url = config.get("OPENAI_BASE_URL")
+    api_key = None
+    base_url = None
+    
+    # Try to load user-specific config first
+    if user_id is not None:
+        try:
+            from api_service.db.database_manager import DatabaseManager
+            db = DatabaseManager()
+            token = db.get_user_media_profile_token(user_id, 'openai')
+            if token:
+                import json
+                try:
+                    user_config = json.loads(token)
+                    api_key = user_config.get('api_key')
+                    base_url = user_config.get('base_url')
+                    if api_key or base_url:
+                        logger.debug(f"Using per-user OpenAI config for user_id={user_id}")
+                except json.JSONDecodeError:
+                    logger.warning(f"Invalid JSON in user OpenAI config for user_id={user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to load user OpenAI config for user_id={user_id}: {e}")
+    
+    # Fall back to global config if no user-specific config
+    if not api_key and not base_url:
+        config = ConfigService.get_runtime_config()
+        api_key = config.get("OPENAI_API_KEY")
+        base_url = config.get("OPENAI_BASE_URL")
+        if api_key or base_url:
+            logger.debug("Using global OpenAI config")
 
     if not api_key:
         if base_url:

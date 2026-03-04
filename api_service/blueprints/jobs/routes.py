@@ -1,11 +1,10 @@
-"""
-API routes for managing jobs (discover and recommendation).
+""" API routes for managing jobs (discover and recommendation).
 Provides CRUD operations and job execution endpoints.
 """
 import asyncio
 import threading
 import traceback
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, g
 
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_role
@@ -62,6 +61,9 @@ def get_job_manager() -> JobManager:
 def get_jobs():
     """
     Get all discover jobs.
+    
+    Admin users see all jobs.
+    Normal users only see jobs they own (where owner_id matches their user ID).
 
     Returns:
         JSON list of all jobs.
@@ -69,6 +71,12 @@ def get_jobs():
     try:
         repository = JobRepository()
         jobs = repository.get_all_jobs()
+        
+        # Apply RBAC: non-admin users only see their own jobs
+        current_user = getattr(g, 'current_user', None)
+        if current_user and current_user.get('role') != 'admin':
+            user_id = int(current_user['id'])
+            jobs = [job for job in jobs if job.get('owner_id') == user_id]
 
         # Add next run time from scheduler
         manager = get_job_manager()
@@ -88,12 +96,15 @@ def get_jobs():
 def get_job(job_id: int):
     """
     Get a single discover job by ID.
+    
+    Admin users can view any job.
+    Normal users can only view jobs they own.
 
     Args:
         job_id: ID of the job to retrieve.
 
     Returns:
-        JSON job object or 404 if not found.
+        JSON job object or 404 if not found (or not owned by current user).
     """
     try:
         repository = JobRepository()
@@ -101,6 +112,14 @@ def get_job(job_id: int):
 
         if not job:
             return jsonify({'status': 'error', 'message': 'Job not found'}), 404
+        
+        # Apply RBAC: non-admin users can only see their own jobs
+        current_user = getattr(g, 'current_user', None)
+        if current_user and current_user.get('role') != 'admin':
+            user_id = int(current_user['id'])
+            if job.get('owner_id') != user_id:
+                # Return 404 to avoid leaking existence of jobs
+                return jsonify({'status': 'error', 'message': 'Job not found'}), 404
 
         # Add next run time from scheduler
         manager = get_job_manager()
@@ -158,6 +177,14 @@ def create_job():
                 'message': 'job_type must be "discover" or "recommendation"'
             }), 400
         data['job_type'] = job_type
+        
+        # Set owner_id from current user - never allow client to override
+        current_user = getattr(g, 'current_user', None)
+        if current_user:
+            data['owner_id'] = int(current_user['id'])
+        else:
+            # Fallback: should not happen on protected routes
+            data['owner_id'] = None
 
         # Validate media_type
         valid_media_types = ['movie', 'tv'] if job_type == 'discover' else ['movie', 'tv', 'both']
@@ -198,6 +225,9 @@ def create_job():
 def update_job(job_id: int):
     """
     Update an existing discover job.
+    
+    Admin users can update any job.
+    Normal users can only update jobs they own.
 
     Args:
         job_id: ID of the job to update.
@@ -216,6 +246,13 @@ def update_job(job_id: int):
         existing = repository.get_job(job_id)
         if not existing:
             return jsonify({'status': 'error', 'message': 'Job not found'}), 404
+        
+        # Apply RBAC: non-admin users can only update their own jobs
+        current_user = getattr(g, 'current_user', None)
+        if current_user and current_user.get('role') != 'admin':
+            user_id = int(current_user['id'])
+            if existing.get('owner_id') != user_id:
+                return jsonify({'status': 'error', 'message': 'Insufficient permissions'}), 403
 
         # Validate media_type if provided
         job_type = data.get('job_type', existing.get('job_type', 'discover'))
@@ -262,6 +299,9 @@ def update_job(job_id: int):
 def delete_job(job_id: int):
     """
     Delete a discover job.
+    
+    Admin users can delete any job.
+    Normal users can only delete jobs they own.
 
     Args:
         job_id: ID of the job to delete.
@@ -276,6 +316,13 @@ def delete_job(job_id: int):
         existing = repository.get_job(job_id)
         if not existing:
             return jsonify({'status': 'error', 'message': 'Job not found'}), 404
+        
+        # Apply RBAC: non-admin users can only delete their own jobs
+        current_user = getattr(g, 'current_user', None)
+        if current_user and current_user.get('role') != 'admin':
+            user_id = int(current_user['id'])
+            if existing.get('owner_id') != user_id:
+                return jsonify({'status': 'error', 'message': 'Insufficient permissions'}), 403
 
         # Unschedule first
         manager = get_job_manager()
@@ -300,6 +347,9 @@ def delete_job(job_id: int):
 def toggle_job(job_id: int):
     """
     Toggle a discover job's enabled status.
+    
+    Admin users can toggle any job.
+    Normal users can only toggle jobs they own.
 
     Args:
         job_id: ID of the job to toggle.
@@ -314,6 +364,13 @@ def toggle_job(job_id: int):
         job = repository.get_job(job_id)
         if not job:
             return jsonify({'status': 'error', 'message': 'Job not found'}), 404
+        
+        # Apply RBAC: non-admin users can only toggle their own jobs
+        current_user = getattr(g, 'current_user', None)
+        if current_user and current_user.get('role') != 'admin':
+            user_id = int(current_user['id'])
+            if job.get('owner_id') != user_id:
+                return jsonify({'status': 'error', 'message': 'Insufficient permissions'}), 403
 
         # Toggle enabled status
         new_enabled = not job['enabled']
@@ -347,6 +404,9 @@ def toggle_job(job_id: int):
 def run_job_now(job_id: int):
     """
     Execute a job immediately.
+    
+    Admin users can run any job.
+    Normal users can only run jobs they own.
 
     Args:
         job_id: ID of the job to run.
@@ -361,6 +421,13 @@ def run_job_now(job_id: int):
         job = repository.get_job(job_id)
         if not job:
             return jsonify({'status': 'error', 'message': 'Job not found'}), 404
+        
+        # Apply RBAC: non-admin users can only run their own jobs
+        current_user = getattr(g, 'current_user', None)
+        if current_user and current_user.get('role') != 'admin':
+            user_id = int(current_user['id'])
+            if job.get('owner_id') != user_id:
+                return jsonify({'status': 'error', 'message': 'Insufficient permissions'}), 403
 
         job_type = job.get('job_type', 'discover')
         logger.info(f"Running {job_type} job {job_id} immediately")
@@ -399,6 +466,9 @@ def dry_run_job(job_id: int):
     Runs the full pipeline — provider checks, TMDb discovery/recommendations,
     all configured filters — but skips enqueueing to Seer. No history entry
     is written.
+    
+    Admin users can dry-run any job.
+    Normal users can only dry-run jobs they own.
 
     Args:
         job_id: ID of the job to preview.
@@ -412,6 +482,13 @@ def dry_run_job(job_id: int):
         job = repository.get_job(job_id)
         if not job:
             return jsonify({'status': 'error', 'message': 'Job not found'}), 404
+        
+        # Apply RBAC: non-admin users can only dry-run their own jobs
+        current_user = getattr(g, 'current_user', None)
+        if current_user and current_user.get('role') != 'admin':
+            user_id = int(current_user['id'])
+            if job.get('owner_id') != user_id:
+                return jsonify({'status': 'error', 'message': 'Insufficient permissions'}), 403
 
         job_type = job.get('job_type', 'discover')
         logger.info(f"Dry-run for {job_type} job {job_id} ({job.get('name', '')})")

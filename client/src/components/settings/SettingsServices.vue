@@ -1790,13 +1790,6 @@ export default {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.input-group {
-  display: flex;
-  gap: 0.5rem;
-}
-.input-group .form-control {
-  flex: 1;
-}
 .form-help {
   display: block;
   margin-top: 0.25rem;
@@ -1823,8 +1816,6 @@ export default {
   min-width: 44px;
 }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: var(--color-primary); color: white; }
-.btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); }
 .btn-outline { background: var(--color-bg-interactive); color: var(--color-text-primary); border: 1px solid var(--color-border-medium); }
 .btn-outline:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.5); }
 .btn-success { background: #10b981; color: white; border: 1px solid #10b981; }

@@ -555,15 +555,6 @@ export default {
   cursor: not-allowed;
 }
 
-.input-group {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.input-group .form-control {
-  flex: 1;
-}
-
 .select-wrapper {
   position: relative;
   display: flex;

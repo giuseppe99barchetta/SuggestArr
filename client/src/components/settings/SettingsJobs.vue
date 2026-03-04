@@ -1238,15 +1238,6 @@ export default {
   cursor: not-allowed;
 }
 
-.btn-primary {
-  background: var(--color-primary, #636363);
-  color: #fff;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover, #4a4a4a);
-}
-
 .btn-secondary {
   background: rgba(255, 255, 255, 0.08);
   color: var(--color-text-primary, #fff);
