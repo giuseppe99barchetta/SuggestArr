@@ -4,6 +4,7 @@
  */
 
 @import './variables.css';
+@import './primitives/modal.css';
 
 /* ========== Reset & Base ========== */
 * {

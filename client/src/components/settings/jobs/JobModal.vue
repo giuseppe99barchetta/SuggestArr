@@ -1,10 +1,10 @@
 <template>
   <div class="modal-overlay" @click.self="$emit('close')">
-    <div class="modal-content">
+    <div class="modal">
       <!-- Minimal Header -->
       <div class="modal-header">
         <h3 class="modal-title">{{ isEditing ? 'Edit Job' : 'Create New Job' }}</h3>
-        <button @click="$emit('close')" class="close-btn" aria-label="Close">
+        <button @click="$emit('close')" class="modal-close" aria-label="Close">
           <i class="fas fa-times"></i>
         </button>
       </div>
@@ -300,95 +300,7 @@ export default {
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--color-bg-overlay-heavy);
-  backdrop-filter: blur(8px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: var(--z-modal);
-  padding: 1rem;
-}
-
-.modal-content {
-  background: var(--color-bg-content);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 20px 50px -12px rgba(0, 0, 0, 0.5);
-  max-width: 800px;
-  width: 100%;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.25rem 2rem;
-  flex-shrink: 0;
-}
-
-.modal-title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  font-size: 1.25rem;
-  cursor: pointer;
-  padding: 0.5rem;
-  transition: var(--transition-base);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-}
-
-.close-btn:hover {
-  background: var(--color-bg-overlay-light);
-  color: var(--color-text-primary);
-}
-
-.modal-form {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-.modal-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0.5rem 2rem 2rem;
-}
-
-.modal-body::-webkit-scrollbar {
-  width: 10px;
-}
-
-.modal-body::-webkit-scrollbar-track {
-  background: var(--color-bg-overlay-light);
-}
-
-.modal-body::-webkit-scrollbar-thumb {
-  background: var(--color-primary);
-  border-radius: var(--radius-sm);
-}
+/* Component-specific styles only */
 
 /* Job Type Selector */
 .job-type-selector {
@@ -725,7 +637,7 @@ export default {
 }
 
 @media (max-width: 850px) {
-  .modal-content {
+  .modal {
     max-width: 95%;
   }
 }
@@ -735,7 +647,7 @@ export default {
     padding: 0;
   }
 
-  .modal-content {
+  .modal {
     max-width: 100%;
     max-height: 100vh;
     height: 100vh;

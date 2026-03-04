@@ -136,19 +136,19 @@
     <!-- ── Create User Modal ── -->
     <teleport to="body">
       <transition name="modal-fade">
-        <div v-if="showCreateModal" class="um-modal-overlay" @click.self="showCreateModal = false">
-          <div class="um-modal-content" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
-            <div class="um-modal-header">
-              <div class="um-modal-title-wrap">
-                <h3 id="create-user-title"><i class="fas fa-user-plus"></i> Create Account</h3>
-                <p>Set secure credentials and access level for a new SuggestArr user.</p>
+        <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
+          <div class="modal" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
+            <div class="modal-header">
+              <div class="modal-title-wrap">
+                <h3 class="modal-title" id="create-user-title"><i class="fas fa-user-plus"></i> Create Account</h3>
+                <p class="modal-subtitle">Set secure credentials and access level for a new SuggestArr user.</p>
               </div>
-              <button type="button" class="um-modal-close" aria-label="Close create account modal" @click="showCreateModal = false">
+              <button type="button" class="modal-close" aria-label="Close create account modal" @click="showCreateModal = false">
                 <i class="fas fa-times"></i>
               </button>
             </div>
 
-            <div class="um-modal-body">
+            <div class="modal-body">
               <section class="um-section-card">
                 <div class="um-section-head">
                   <h4><i class="fas fa-id-badge"></i> Account details</h4>
@@ -163,7 +163,7 @@
                       v-model="newUser.username"
                       type="text"
                       class="form-control"
-                      placeholder="e.g. alex.morgan"
+                      placeholder="e.g. giuseppe.barchetta"
                       maxlength="64"
                       :disabled="isCreating"
                       @keydown.enter="submitCreate"
@@ -226,7 +226,7 @@
               </div>
             </div>
 
-            <div class="um-modal-footer">
+            <div class="modal-footer">
               <button class="btn btn-outline" :disabled="isCreating" @click="showCreateModal = false">
                 Cancel
               </button>
@@ -243,19 +243,19 @@
     <!-- ── Delete Confirm Modal ── -->
     <teleport to="body">
       <transition name="modal-fade">
-        <div v-if="showDeleteModal" class="um-modal-overlay" @click.self="showDeleteModal = false">
-          <div class="um-modal-content um-modal-content--sm" role="dialog" aria-modal="true" aria-labelledby="delete-user-title">
-            <div class="um-modal-header um-modal-header--danger">
-              <div class="um-modal-title-wrap">
-                <h3 id="delete-user-title"><i class="fas fa-exclamation-triangle"></i> Delete Account</h3>
-                <p>This action is permanent and immediately revokes user access.</p>
+        <div v-if="showDeleteModal" class="modal-overlay" @click.self="showDeleteModal = false">
+          <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="delete-user-title">
+            <div class="modal-header modal-header--danger">
+              <div class="modal-title-wrap">
+                <h3 class="modal-title" id="delete-user-title"><i class="fas fa-exclamation-triangle"></i> Delete Account</h3>
+                <p class="modal-subtitle">This action is permanent and immediately revokes user access.</p>
               </div>
-              <button type="button" class="um-modal-close" aria-label="Close delete account modal" @click="showDeleteModal = false">
+              <button type="button" class="modal-close" aria-label="Close delete account modal" @click="showDeleteModal = false">
                 <i class="fas fa-times"></i>
               </button>
             </div>
 
-            <div class="um-modal-body">
+            <div class="modal-body">
               <section class="um-section-card um-section-card--danger">
                 <div class="um-section-head">
                   <h4><i class="fas fa-trash"></i> Confirm deletion</h4>
@@ -267,7 +267,7 @@
               </section>
             </div>
 
-            <div class="um-modal-footer">
+            <div class="modal-footer">
               <button class="btn btn-outline" :disabled="isDeleting" @click="showDeleteModal = false">
                 Cancel
               </button>
@@ -280,23 +280,22 @@
         </div>
       </transition>
     </teleport>
-
     <!-- ── Edit Permissions Modal ── -->
     <teleport to="body">
       <transition name="modal-fade">
-        <div v-if="showPermissionsModal" class="um-modal-overlay" @click.self="showPermissionsModal = false">
-          <div class="um-modal-content" role="dialog" aria-modal="true" aria-labelledby="permissions-title">
-            <div class="um-modal-header">
-              <div class="um-modal-title-wrap">
-                <h3 id="permissions-title"><i class="fas fa-user-shield"></i> Edit Permissions</h3>
-                <p>Control feature permissions and navigation visibility for this account.</p>
+        <div v-if="showPermissionsModal" class="modal-overlay" @click.self="showPermissionsModal = false">
+          <div class="modal" role="dialog" aria-modal="true" aria-labelledby="permissions-title">
+            <div class="modal-header">
+              <div class="modal-title-wrap">
+                <h3 class="modal-title" id="permissions-title"><i class="fas fa-user-shield"></i> Edit Permissions</h3>
+                <p class="modal-subtitle">Control feature permissions and navigation visibility for this account.</p>
               </div>
-              <button type="button" class="um-modal-close" aria-label="Close permissions modal" @click="showPermissionsModal = false">
+              <button type="button" class="modal-close" aria-label="Close permissions modal" @click="showPermissionsModal = false">
                 <i class="fas fa-times"></i>
               </button>
             </div>
 
-            <div class="um-modal-body">
+            <div class="modal-body">
               <section class="permissions-user-info">
                 <div class="user-avatar">
                   <i class="fas fa-user"></i>
@@ -363,7 +362,7 @@
               </div>
             </div>
 
-            <div class="um-modal-footer">
+            <div class="modal-footer">
               <button class="btn btn-outline" :disabled="isSavingPermissions" @click="showPermissionsModal = false">
                 Cancel
               </button>
@@ -968,118 +967,6 @@ export default {
 }
 
 /* ── UserManagement modal redesign ─────────────────────────────────────── */
-.um-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--surface-overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: var(--spacing-md);
-  overflow-y: auto;
-}
-
-.um-modal-content {
-  position: relative;
-  background: var(--surface-elevated-solid);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 620px;
-  max-height: 90vh;
-  overflow: hidden;
-  box-shadow: var(--shadow-xl);
-  margin: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-.um-modal-content--sm {
-  max-width: 520px;
-}
-
-.um-modal-header {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-md);
-  padding: calc(var(--spacing-lg) - calc(var(--spacing-sm) * 0.3)) var(--spacing-lg);
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.um-modal-title-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--spacing-sm) * 0.6);
-  flex: 1;
-  min-width: 0;
-}
-
-.um-modal-header h3 {
-  margin: 0;
-  font-size: calc(var(--font-size-base) * 1.15);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.um-modal-title-wrap p {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  line-height: 1.4;
-  color: var(--color-text-muted);
-}
-
-.um-modal-close {
-  margin-left: auto;
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--surface-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  color: var(--color-text-muted);
-  font-size: calc(var(--font-size-base) * 0.95);
-  transition: var(--transition-base);
-}
-
-.um-modal-close:hover {
-  background-color: var(--surface-hover);
-  border-color: var(--color-border-medium);
-  color: var(--color-text-primary);
-}
-
-.um-modal-close:focus-visible {
-  outline: none;
-  box-shadow: var(--shadow-focus);
-}
-
-.um-modal-body {
-  padding: calc(var(--spacing-lg) - calc(var(--spacing-sm) * 0.3)) var(--spacing-lg);
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--spacing-md) + calc(var(--spacing-xs) * 0.4));
-  overflow-y: auto;
-}
-
-.um-modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md) var(--spacing-lg) var(--font-size-xl);
-  border-top: 1px solid var(--color-border-light);
-}
-
-.um-modal-footer .btn {
-  min-height: var(--btn-height-md);
-}
-
 .um-btn-primary {
   min-width: 150px;
 }
@@ -1214,16 +1101,6 @@ export default {
   margin: 0;
   line-height: 1.5;
   color: var(--color-text-primary);
-}
-
-/* ── Modal transition ──────────────────────────────────────────────────── */
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
 }
 
 .permissions-user-info {

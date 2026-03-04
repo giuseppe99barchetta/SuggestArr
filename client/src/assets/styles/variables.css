@@ -45,9 +45,9 @@
   --color-error-light: #f87171;
 
   /* Info */
-  --color-info: #06b6d4;
-  --color-info-hover: #0891b2;
-  --color-info-light: #22d3ee;
+  --color-info: #616161;
+  --color-info-hover: #424242;
+  --color-info-light: #90a4ae;
 
   /* ────────────────────────────────────────────────────────────────────
      Surface Hierarchy (Background Layers)
@@ -63,11 +63,11 @@
   --surface-base: rgba(0, 0, 0, 0.6);
   --surface-raised: rgba(34, 34, 36, 0.9);
   --surface-elevated: rgba(0, 0, 0, 0.8);
-  --surface-elevated-solid: rgba(37, 37, 37, 0.92);
+  --surface-elevated-solid: rgba(37, 37, 37);
   --surface-overlay: rgba(0, 0, 0, 0.85);
   --surface-interactive: rgba(255, 255, 255, 0.1);
   --surface-hover: rgba(255, 255, 255, 0.15);
-  --surface-hover-solid: rgba(37, 37, 37, 0.92);
+  --surface-hover-solid: rgba(37, 37, 37);
 
   /* Legacy aliases (deprecated - use surface-* instead) */
   --color-bg-primary: var(--surface-base);
