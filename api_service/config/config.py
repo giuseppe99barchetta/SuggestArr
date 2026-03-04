@@ -2,6 +2,8 @@ import os
 import yaml
 import json
 import uuid
+import copy
+import threading
 from croniter import croniter
 from api_service.config.logger_manager import LoggerManager
 
@@ -10,6 +12,56 @@ logger = LoggerManager.get_logger("Config")
 # Constants for environment variables
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 CONFIG_PATH = os.path.join(BASE_DIR, 'config', 'config_files', 'config.yaml')
+
+INTEGRATION_TO_FLAT: dict = {
+    'tmdb':     {'api_key': 'TMDB_API_KEY'},
+    'jellyfin': {'api_url': 'JELLYFIN_API_URL', 'api_key': 'JELLYFIN_TOKEN'},
+    'seer':     {'api_url': 'SEER_API_URL', 'api_key': 'SEER_TOKEN',
+                 'session_token': 'SEER_SESSION_TOKEN'},
+    'omdb':     {'api_key': 'OMDB_API_KEY'},
+    'openai':   {'api_key': 'OPENAI_API_KEY', 'base_url': 'OPENAI_BASE_URL', 'model': 'LLM_MODEL'},
+}
+
+_CONFIG_CACHE_LOCK = threading.Lock()
+_CONFIG_CACHE: dict | None = None
+
+
+def invalidate_config_cache():
+    """Clear in-memory runtime config cache."""
+    global _CONFIG_CACHE
+    with _CONFIG_CACHE_LOCK:
+        _CONFIG_CACHE = None
+
+
+def merge_db_integrations_into_flat(flat: dict, integrations: dict | None = None) -> dict:
+    """
+    Inject non-empty DB integration values into a flat config dict.
+
+    Args:
+        flat: Flat config dictionary (mutated in place).
+        integrations: Optional preloaded integrations payload.
+
+    Returns:
+        The same ``flat`` dict, for convenience.
+    """
+    if integrations is None:
+        from api_service.db.database_manager import DatabaseManager
+        db_instance = getattr(DatabaseManager, '_instance', None)
+        if db_instance is not None and not getattr(db_instance, '_initialized', False):
+            return flat
+        try:
+            integrations = DatabaseManager().get_all_integrations()
+        except Exception as exc:
+            logger.debug("Skipping DB integration merge in load_env_vars: %s", exc)
+            return flat
+
+    for service, field_map in INTEGRATION_TO_FLAT.items():
+        svc_cfg = integrations.get(service) or {}
+        for db_field, flat_key in field_map.items():
+            val = svc_cfg.get(db_field)
+            if val:
+                flat[flat_key] = val
+    return flat
 
 def _parse_json_fields(config_data):
     """
@@ -49,10 +101,19 @@ def _parse_json_fields(config_data):
 
     return config_data
 
-def load_env_vars():
+def load_env_vars(force_reload: bool = False):
     """
-    Load variables from the config.yaml file and return them as a dictionary.
+    Load variables from config.yaml merged with DB integration secrets.
+
+    The merged result is cached in memory and invalidated by config/DB writes.
     """
+    global _CONFIG_CACHE
+
+    if not force_reload:
+        with _CONFIG_CACHE_LOCK:
+            if _CONFIG_CACHE is not None:
+                return copy.deepcopy(_CONFIG_CACHE)
+
     if not os.path.exists(CONFIG_PATH):
         # We only try to create the default config if the directory exists,
         # otherwise we just return the defaults to avoid a crash.
@@ -69,15 +130,21 @@ def load_env_vars():
                     yaml.safe_dump({k: v for k, v in defaults.items() if v not in [None, '']}, f)
         except Exception as e:
             logger.error(f"Failed to create default config file: {e}")
-        return defaults
+        resolved_config = merge_db_integrations_into_flat(defaults)
+        with _CONFIG_CACHE_LOCK:
+            _CONFIG_CACHE = copy.deepcopy(resolved_config)
+        return copy.deepcopy(resolved_config)
 
     with open(CONFIG_PATH, 'r', encoding='utf-8') as file:
-        config_data = yaml.safe_load(file)
+        config_data = yaml.safe_load(file) or {}
         logger.debug("Correctly loaded stored config.yaml")
         resolved_config = {key: config_data.get(key, default_value()) for key, default_value in get_default_values().items()}
         # Parse JSON string fields
         resolved_config = _parse_json_fields(resolved_config)
-        return resolved_config
+        resolved_config = merge_db_integrations_into_flat(resolved_config)
+        with _CONFIG_CACHE_LOCK:
+            _CONFIG_CACHE = copy.deepcopy(resolved_config)
+        return copy.deepcopy(resolved_config)
 
 
 def get_default_values():
@@ -205,6 +272,7 @@ def save_env_vars(config_data):
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             yaml.safe_dump(env_vars, f)
             logger.debug(f"Environment variables saved: {env_vars}")
+        invalidate_config_cache()
 
     except Exception as e:
         logger.error(f"Error saving environment variables: {e}")
@@ -221,6 +289,7 @@ def clear_env_vars():
         try:
             os.remove(CONFIG_PATH)
             logger.info("Configuration cleared successfully.")
+            invalidate_config_cache()
         except OSError as e:
             logger.error(f"Error deleting {CONFIG_PATH}: {e}")
 
@@ -234,6 +303,7 @@ def save_session_token(token):
         yaml.dump(config_data, file)
         file.truncate()
         logger.debug("Session token saved successfully")
+    invalidate_config_cache()
 
 def get_config_sections():
     """

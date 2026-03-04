@@ -329,8 +329,23 @@ class TMDbDiscover:
         for filter_key, api_key in param_mapping.items():
             if skip_tmdb_rating and filter_key in ('vote_average_gte', 'vote_count_gte'):
                 continue
-            if filter_key in filters and filters[filter_key] is not None:
-                params[api_key] = filters[filter_key]
+            if filter_key not in filters:
+                continue
+
+            value = filters[filter_key]
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+
+            if filter_key == 'with_original_language':
+                normalized = self._normalize_language_code(value)
+                if not normalized:
+                    continue
+                params[api_key] = normalized
+                continue
+
+            params[api_key] = value
 
         # Handle genres (can be list or comma-separated string)
         if 'with_genres' in filters and filters['with_genres']:
@@ -357,6 +372,32 @@ class TMDbDiscover:
 
         self.logger.debug(f"Built query params: {params}")
         return params
+
+    @staticmethod
+    def _normalize_language_code(value: Any) -> Optional[str]:
+        """Normalize language filter values to ISO 639-1/2 code when possible."""
+        if isinstance(value, dict):
+            for key in ('iso_639_1', 'id', 'code'):
+                if key in value:
+                    return TMDbDiscover._normalize_language_code(value.get(key))
+            return None
+
+        if isinstance(value, list):
+            if not value:
+                return None
+            return TMDbDiscover._normalize_language_code(value[0])
+
+        if not isinstance(value, str):
+            return None
+
+        normalized = value.strip().lower()
+        if not normalized:
+            return None
+        if normalized in ('any language', 'any', 'all'):
+            return None
+        if not normalized.isalpha() or len(normalized) not in (2, 3):
+            return None
+        return normalized
 
     def _format_result(self, item: Dict[str, Any], media_type: str) -> Dict[str, Any]:
         """

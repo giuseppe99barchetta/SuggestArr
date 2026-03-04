@@ -72,7 +72,7 @@ class DatabaseManager:
         DB_TYPE, DB_HOST, credentials, etc. is reflected in subsequent
         database connections without requiring a full process restart.
         """
-        self.env_vars = load_env_vars()
+        self.env_vars = load_env_vars(force_reload=True)
         self.db_type = self.env_vars.get('DB_TYPE', 'sqlite')
         self.logger.debug(f"DatabaseManager config refreshed (db_type={self.db_type})")
         self.initialize_db()
@@ -572,6 +572,9 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute(query, params)
             conn.commit()
+        # Keep runtime config cache coherent with DB-backed secret updates.
+        from api_service.config.config import invalidate_config_cache
+        invalidate_config_cache()
 
     @staticmethod
     def _is_integration_valid(service: str, config: dict) -> bool:

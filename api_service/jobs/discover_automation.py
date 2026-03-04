@@ -198,6 +198,16 @@ class DiscoverAutomation:
         media_type = self.job_data.get('media_type', 'movie')
         max_results = self.job_data.get('max_results', 20)
 
+        raw_language_filter = filters.get('with_original_language')
+        normalized_language_filter = self.tmdb_discover._normalize_language_code(raw_language_filter)
+        if normalized_language_filter:
+            self.logger.info("Applying original language filter: %s", normalized_language_filter)
+        elif raw_language_filter not in (None, '', []):
+            self.logger.warning(
+                "Ignoring invalid original language filter value: %s",
+                raw_language_filter
+            )
+
         self.logger.debug(f"Fetching {media_type} with filters: {filters}")
 
         if media_type == 'movie':

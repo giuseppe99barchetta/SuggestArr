@@ -5,7 +5,7 @@ from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 from api_service.config.config import load_env_vars
-from api_service.services.llm.llm_service import get_llm_client, get_recommendations_from_history
+from api_service.services.llm.llm_service import is_llm_configured, get_recommendations_from_history
 
 class JellyfinHandler:
     def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, dry_run=False):
@@ -49,7 +49,7 @@ class JellyfinHandler:
         else:
             config = load_env_vars()
             if config.get('ENABLE_ADVANCED_ALGORITHM', False):
-                if get_llm_client() is not None:
+                if is_llm_configured(config):
                     self.use_llm = True
                 else:
                     self.logger.warning(
@@ -155,7 +155,16 @@ class JellyfinHandler:
 
         self.logger.info(f"Delegating {max_results} {item_type} recommendations to LLM service for user {user['name']}.")
 
-        llm_recommendations = await get_recommendations_from_history(history_items, max_results, item_type)
+        llm_recommendations = await get_recommendations_from_history(
+            history_items,
+            max_results,
+            item_type,
+            filters={
+                "with_original_language": self.tmdb_client.language_filter,
+                "release_year_gte": self.tmdb_client.release_year_filter,
+                "vote_average_gte": self.tmdb_client.tmdb_threshold / 10 if self.tmdb_client.tmdb_threshold else None,
+            },
+        )
 
         if not llm_recommendations:
             self.logger.warning("LLM returned no recommendations.")
@@ -178,6 +187,16 @@ class JellyfinHandler:
             if not rec_results:
                 continue
             best_match = rec_results[0]
+            filter_result = self.tmdb_client._apply_filters(best_match, item_type)
+            best_match['filter_results'] = filter_result
+            if not filter_result.get('passed', False):
+                self.logger.info(
+                    "Skipping LLM %s recommendation '%s': failed configured filters (%s)",
+                    item_type,
+                    best_match.get('title') or best_match.get('name') or 'Unknown',
+                    ', '.join(k for k, v in filter_result.items() if k != 'passed' and isinstance(v, dict) and v.get('passed') is False)
+                )
+                continue
             best_match['rationale'] = rec.get('rationale')
             request_tasks.append(self.request_similar_media([best_match], item_type, 1, source_obj, user))
 
