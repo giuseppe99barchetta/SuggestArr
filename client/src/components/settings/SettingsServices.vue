@@ -1296,9 +1296,14 @@ export default {
       this.loadingServers = true;
       this.serversLoaded = false;
       try {
+        const payload = {
+          SEER_API_URL: this.localConfig.SEER_API_URL,
+          SEER_TOKEN: this.localConfig.SEER_TOKEN,
+          SEER_SESSION_TOKEN: this.localConfig.SEER_SESSION_TOKEN
+        };
         const [radarrRes, sonarrRes] = await Promise.all([
-          fetchRadarrServers(),
-          fetchSonarrServers()
+          fetchRadarrServers(payload),
+          fetchSonarrServers(payload)
         ]);
         this.radarrServers = radarrRes.data.servers || [];
         this.sonarrServers = sonarrRes.data.servers || [];
