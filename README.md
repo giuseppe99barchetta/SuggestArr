@@ -18,7 +18,7 @@ SuggestArr is a project designed to automate media content recommendations and d
 - **TMDb Integration**: Searches for similar movies and TV shows on TMDb.
 - **AI-Powered Recommendations** *(beta)*: Uses any OpenAI-compatible LLM (OpenAI, Ollama, Gemini, LiteLLM…) to generate hyper-personalized suggestions based on watch history, complete with AI reasoning for each pick.
 - **AI Search** *(beta)*: Describe in natural language what you want to watch and let the AI find matching titles, personalised to your viewing history, with one-click request to Seer.
-- **Automated Requests**: Sends download requests for recommended content to seer (or Jellyseerr or Overseerr).
+- **Automated Requests**: Sends download requests for recommended content to seerr (or Jellyseerr or Overseerr).
 - **Web Interface**: A user-friendly interface for configuration and management.
 - **Real-Time Logs**: View and filter logs in real time (e.g., `INFO`, `ERROR`, `DEBUG`).
 - **User Selection**: Choose specific users to initiate requests, allowing management and approval of auto-requested content.
