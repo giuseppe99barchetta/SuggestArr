@@ -392,6 +392,26 @@ class TestGetRecommendationsFromHistory(unittest.IsolatedAsyncioTestCase):
             result = await get_recommendations_from_history(history, max_results=5)
         self.assertEqual(len(result), 1)
 
+    async def test_includes_filter_constraints_in_prompt(self):
+        recs = [{"title": "Dogman", "year": 2018, "source_title": "Gomorra", "rationale": "ok"}]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response(_wrap_recs(recs))
+        )
+        history = [{"title": "Gomorra", "year": 2008}]
+        with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_DEFAULT_CONFIG):
+            await get_recommendations_from_history(
+                history,
+                max_results=3,
+                item_type="movie",
+                filters={"with_original_language": "it"},
+            )
+
+        messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
+        user_prompt = messages[1]["content"]
+        self.assertIn("ORIGINAL language code is 'it'", user_prompt)
+
 
 # ---------------------------------------------------------------------------
 # interpret_search_query (async)

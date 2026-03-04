@@ -230,7 +230,10 @@ class RecommendationAutomation:
             exclude_requested,
             anime_profile_config
         )
-        await seer_client.init()
+        if dry_run:
+            self.logger.info("Dry-run mode: skipping Seer request cache sync.")
+        else:
+            await seer_client.init()
 
         # Initialize TMDb client with job-specific filters
         self.logger.info("Initializing TMDb client with job filters")

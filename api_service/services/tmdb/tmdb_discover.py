@@ -339,10 +339,8 @@ class TMDbDiscover:
                 continue
 
             if filter_key == 'with_original_language':
-                if not isinstance(value, str):
-                    continue
-                normalized = value.strip().lower()
-                if not normalized.isalpha() or len(normalized) not in (2, 3):
+                normalized = self._normalize_language_code(value)
+                if not normalized:
                     continue
                 params[api_key] = normalized
                 continue
@@ -374,6 +372,32 @@ class TMDbDiscover:
 
         self.logger.debug(f"Built query params: {params}")
         return params
+
+    @staticmethod
+    def _normalize_language_code(value: Any) -> Optional[str]:
+        """Normalize language filter values to ISO 639-1/2 code when possible."""
+        if isinstance(value, dict):
+            for key in ('iso_639_1', 'id', 'code'):
+                if key in value:
+                    return TMDbDiscover._normalize_language_code(value.get(key))
+            return None
+
+        if isinstance(value, list):
+            if not value:
+                return None
+            return TMDbDiscover._normalize_language_code(value[0])
+
+        if not isinstance(value, str):
+            return None
+
+        normalized = value.strip().lower()
+        if not normalized:
+            return None
+        if normalized in ('any language', 'any', 'all'):
+            return None
+        if not normalized.isalpha() or len(normalized) not in (2, 3):
+            return None
+        return normalized
 
     def _format_result(self, item: Dict[str, Any], media_type: str) -> Dict[str, Any]:
         """

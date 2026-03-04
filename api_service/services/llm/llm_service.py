@@ -246,12 +246,14 @@ async def get_recommendations_from_history(
     history_items: List[Dict],
     max_results: int = 5,
     item_type: str = "movie",
+    filters: Optional[Dict[str, Any]] = None,
 ) -> List[Dict]:
     """Generate recommendations based on a user's watch history using an LLM.
 
     :param history_items: List of dicts with 'title' and ideally 'year'.
     :param max_results: Number of recommendations to generate.
     :param item_type: 'movie' or 'tv'.
+    :param filters: Optional recommendation constraints (e.g. language/year/rating).
     :raises LLMValidationError: When the LLM persistently returns invalid JSON.
     :return: List of recommendation dicts with 'title', 'year', 'rationale',
         and 'source_title'.
@@ -285,11 +287,65 @@ async def get_recommendations_from_history(
         for item in history_items
     )
 
+    def _normalize_language_constraint(raw: Any) -> Optional[str]:
+        if isinstance(raw, list):
+            if not raw:
+                return None
+            raw = raw[0]
+        if isinstance(raw, dict):
+            raw = raw.get("iso_639_1") or raw.get("id") or raw.get("code")
+        if not isinstance(raw, str):
+            return None
+        code = raw.strip().lower()
+        if not code or not code.isalpha() or len(code) not in (2, 3):
+            return None
+        return code
+
+    def _to_float(value: Any) -> Optional[float]:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    constraint_lines: List[str] = []
+    if filters:
+        lang = _normalize_language_constraint(
+            filters.get("with_original_language")
+            or filters.get("original_language")
+            or filters.get("language")
+        )
+        if lang:
+            constraint_lines.append(
+                f"- ONLY recommend titles whose ORIGINAL language code is '{lang}'."
+            )
+
+        year_from = filters.get("release_year_gte") or filters.get("year_from")
+        try:
+            if year_from is not None:
+                constraint_lines.append(
+                    f"- Only recommend titles released from year {int(year_from)} onward."
+                )
+        except (TypeError, ValueError):
+            pass
+
+        min_rating = _to_float(filters.get("vote_average_gte") or filters.get("min_rating"))
+        if min_rating is not None:
+            if min_rating > 10:
+                min_rating = min_rating / 10
+            constraint_lines.append(
+                f"- Only recommend titles with TMDB rating >= {min_rating:.1f}."
+            )
+
+    constraints_block = ""
+    if constraint_lines:
+        constraints_block = "\nApply these hard constraints:\n" + "\n".join(constraint_lines) + "\n"
+
     prompt = f"""
         You are an expert film and television recommendation system.
         The user has recently watched and enjoyed the following {list_type}:
 
         {history_text}
+        {constraints_block}
 
         Analyze the themes, genres, pacing, and tone of these {list_type} to build a taste profile.
         Based on this profile, recommend exactly {max_results} similar {list_type} that the user is highly likely to enjoy.
@@ -318,7 +374,7 @@ async def get_recommendations_from_history(
         {"role": "user", "content": prompt},
     ]
 
-    logger.info(
+    logger.debug(
         "Sending LLM request (%s) for %d unique %s history items.",
         model,
         len(history_items),
@@ -348,7 +404,7 @@ async def get_recommendations_from_history(
         rec_title = rec.title.strip().lower()
 
         if _is_duplicate_of_history(rec_title, history_titles_lower):
-            logger.info(
+            logger.debug(
                 "Filtered duplicate recommendation already in watch history: %s", rec.title
             )
             continue
@@ -374,7 +430,7 @@ async def get_recommendations_from_history(
             "rationale": rec.rationale or "No rationale provided by LLM.",
             "source_title": source_title,
         }
-        logger.info(
+        logger.debug(
             "[%s (%s)] LLM Rationale: %s", rec.title, rec.year, rec_dict["rationale"]
         )
         valid_recommendations.append(rec_dict)

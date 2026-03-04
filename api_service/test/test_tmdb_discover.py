@@ -123,6 +123,16 @@ class TestBuildQueryParams(unittest.TestCase):
         params = self.disc._build_query_params({'with_original_language': 'Any Language'})
         self.assertNotIn('with_original_language', params)
 
+    def test_with_original_language_dict_iso_639_1_is_supported(self):
+        params = self.disc._build_query_params({'with_original_language': {'iso_639_1': 'IT'}})
+        self.assertEqual(params['with_original_language'], 'it')
+
+    def test_with_original_language_list_legacy_is_supported(self):
+        params = self.disc._build_query_params({
+            'with_original_language': [{'id': 'ja', 'english_name': 'Japanese'}]
+        })
+        self.assertEqual(params['with_original_language'], 'ja')
+
 
 # ---------------------------------------------------------------------------
 # _check_imdb_filter
