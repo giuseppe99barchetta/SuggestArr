@@ -9,6 +9,7 @@ from api_service.config.config import (
     load_env_vars, save_env_vars, get_default_values,
     get_config_values, get_config_sections, get_config_section,
     save_config_section, clear_env_vars, save_session_token, is_setup_complete,
+    invalidate_config_cache,
 )
 
 
@@ -98,8 +99,14 @@ class TestConfig(unittest.TestCase):
         self._tmp.close()
         self._patch = patch('api_service.config.config.CONFIG_PATH', self._tmp.name)
         self._patch.start()
+        self._db_patch = patch('api_service.db.database_manager.DatabaseManager')
+        self._db_manager_cls = self._db_patch.start()
+        self._db_manager_cls.return_value.get_all_integrations.return_value = {}
+        invalidate_config_cache()
 
     def tearDown(self):
+        invalidate_config_cache()
+        self._db_patch.stop()
         self._patch.stop()
         os.unlink(self._tmp.name)
 
@@ -142,6 +149,34 @@ class TestConfig(unittest.TestCase):
         yaml.safe_dump({'SELECTED_USERS': 'not-valid-json{'}, open(self._tmp.name, 'w'))
         config = load_env_vars()
         self.assertEqual(config['SELECTED_USERS'], [])
+
+    def test_load_env_vars_merges_db_integrations_into_flat_config(self):
+        yaml.safe_dump({'TMDB_API_KEY': 'file_tmdb'}, open(self._tmp.name, 'w'))
+        self._db_manager_cls.return_value.get_all_integrations.return_value = {
+            'tmdb': {'api_key': 'db_tmdb'},
+            'jellyfin': {'api_url': 'http://jf', 'api_key': 'jf_token'},
+        }
+        config = load_env_vars(force_reload=True)
+        self.assertEqual(config['TMDB_API_KEY'], 'db_tmdb')
+        self.assertEqual(config['JELLYFIN_API_URL'], 'http://jf')
+        self.assertEqual(config['JELLYFIN_TOKEN'], 'jf_token')
+
+    def test_load_env_vars_cache_is_used_until_invalidated(self):
+        self._db_manager_cls.return_value.get_all_integrations.return_value = {
+            'tmdb': {'api_key': 'first_key'},
+        }
+        first = load_env_vars(force_reload=True)
+        self.assertEqual(first['TMDB_API_KEY'], 'first_key')
+
+        self._db_manager_cls.return_value.get_all_integrations.return_value = {
+            'tmdb': {'api_key': 'second_key'},
+        }
+        cached = load_env_vars()
+        self.assertEqual(cached['TMDB_API_KEY'], 'first_key')
+
+        invalidate_config_cache()
+        refreshed = load_env_vars()
+        self.assertEqual(refreshed['TMDB_API_KEY'], 'second_key')
 
     # ------------------------------------------------------------------
     # get_config_values

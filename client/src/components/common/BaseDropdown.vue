@@ -152,6 +152,14 @@ export default {
     }
   },
   methods: {
+    getFirstDefinedProp(option, propNames) {
+      for (const prop of propNames) {
+        if (Object.prototype.hasOwnProperty.call(option, prop)) {
+          return option[prop];
+        }
+      }
+      return undefined;
+    },
     toggleDropdown() {
       if (this.disabled) return;
       this.isOpen = !this.isOpen;
@@ -186,19 +194,19 @@ export default {
     },
     getOptionKey(option) {
       if (typeof option === 'object' && option !== null) {
-        return option[this.optionKey] || option[this.optionValue] || option[this.optionLabel];
+        return this.getFirstDefinedProp(option, [this.optionKey, this.optionValue, this.optionLabel]);
       }
       return option;
     },
     getOptionLabel(option) {
       if (typeof option === 'object' && option !== null) {
-        return option[this.optionLabel] || option[this.optionValue] || option[this.optionKey];
+        return this.getFirstDefinedProp(option, [this.optionLabel, this.optionValue, this.optionKey]);
       }
       return option;
     },
     getOptionValue(option) {
       if (typeof option === 'object' && option !== null) {
-        return option[this.optionValue] || option[this.optionKey] || option[this.optionLabel];
+        return this.getFirstDefinedProp(option, [this.optionValue, this.optionKey, this.optionLabel]);
       }
       return option;
     }

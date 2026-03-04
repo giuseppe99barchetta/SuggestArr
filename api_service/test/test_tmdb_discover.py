@@ -115,6 +115,14 @@ class TestBuildQueryParams(unittest.TestCase):
             self.assertNotIn('imdb', key.lower())
             self.assertNotIn('rating_source', key)
 
+    def test_with_original_language_normalized_and_mapped(self):
+        params = self.disc._build_query_params({'with_original_language': ' EN '})
+        self.assertEqual(params['with_original_language'], 'en')
+
+    def test_with_original_language_invalid_value_is_ignored(self):
+        params = self.disc._build_query_params({'with_original_language': 'Any Language'})
+        self.assertNotIn('with_original_language', params)
+
 
 # ---------------------------------------------------------------------------
 # _check_imdb_filter

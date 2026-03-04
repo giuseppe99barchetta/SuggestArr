@@ -5,7 +5,7 @@ import requests
 from api_service.auth.middleware import require_role
 from api_service.config.config import (
     load_env_vars, save_env_vars, clear_env_vars,
-    get_config_sections, get_config_section, save_config_section,
+    get_config_sections, get_config_section, save_config_section, INTEGRATION_TO_FLAT,
     is_setup_complete
 )
 from api_service.config.logger_manager import LoggerManager
@@ -29,17 +29,9 @@ _REDACTED = "***"
 
 # Bidirectional mapping between flat config keys (YAML / API format) and the
 # DB integrations table (service / field format).
-_INTEGRATION_TO_FLAT: dict = {
-    'tmdb':     {'api_key': 'TMDB_API_KEY'},
-    'jellyfin': {'api_url': 'JELLYFIN_API_URL', 'api_key': 'JELLYFIN_TOKEN'},
-    'seer':     {'api_url': 'SEER_API_URL', 'api_key': 'SEER_TOKEN',
-                 'session_token': 'SEER_SESSION_TOKEN'},
-    'omdb':     {'api_key': 'OMDB_API_KEY'},
-    'openai':   {'api_key': 'OPENAI_API_KEY', 'base_url': 'OPENAI_BASE_URL', 'model': 'LLM_MODEL'},
-}
 _FLAT_TO_INTEGRATION: dict = {
     flat_key: (service, db_field)
-    for service, field_map in _INTEGRATION_TO_FLAT.items()
+    for service, field_map in INTEGRATION_TO_FLAT.items()
     for db_field, flat_key in field_map.items()
 }
 
@@ -55,7 +47,7 @@ def _expand_integrations_into_flat(flat: dict, integrations: dict) -> None:
         flat: Flat config dict to update (e.g. from ``load_env_vars``).
         integrations: Nested dict returned by ``get_all_integrations``.
     """
-    for service, field_map in _INTEGRATION_TO_FLAT.items():
+    for service, field_map in INTEGRATION_TO_FLAT.items():
         svc_cfg = integrations.get(service) or {}
         for db_field, flat_key in field_map.items():
             val = svc_cfg.get(db_field)

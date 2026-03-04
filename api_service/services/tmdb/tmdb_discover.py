@@ -329,8 +329,25 @@ class TMDbDiscover:
         for filter_key, api_key in param_mapping.items():
             if skip_tmdb_rating and filter_key in ('vote_average_gte', 'vote_count_gte'):
                 continue
-            if filter_key in filters and filters[filter_key] is not None:
-                params[api_key] = filters[filter_key]
+            if filter_key not in filters:
+                continue
+
+            value = filters[filter_key]
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+
+            if filter_key == 'with_original_language':
+                if not isinstance(value, str):
+                    continue
+                normalized = value.strip().lower()
+                if not normalized.isalpha() or len(normalized) not in (2, 3):
+                    continue
+                params[api_key] = normalized
+                continue
+
+            params[api_key] = value
 
         # Handle genres (can be list or comma-separated string)
         if 'with_genres' in filters and filters['with_genres']:
