@@ -1,0 +1,57 @@
+{
+  "customSyntax": "postcss-html",
+  "rules": {
+    "declaration-property-value-disallowed-list": {
+      "/^(color|background|background-color|border-color|outline-color|text-decoration-color|fill|stroke)$/": [
+        [
+          "/#[0-9a-fA-F]{3,8}\\b/",
+          {
+            "message": "Use design tokens (var(--color-*) / var(--surface-*)) instead of hardcoded hex colors.",
+            "severity": "warning"
+          }
+        ],
+        [
+          "/\\brgba?\\(/i",
+          {
+            "message": "Use design tokens (alpha/color tokens) instead of rgb/rgba literals.",
+            "severity": "warning"
+          }
+        ],
+        [
+          "/\\bhsla?\\(/i",
+          {
+            "message": "Use design tokens instead of hsl/hsla literals.",
+            "severity": "warning"
+          }
+        ]
+      ],
+      "/^(margin(|-(top|right|bottom|left))|padding(|-(top|right|bottom|left))|gap|row-gap|column-gap)$/": [
+        [
+          "/^(?!0$|auto$|var\\(|calc\\().*\\d(\\.\\d+)?(px|rem|em)\\b/i",
+          {
+            "message": "Use spacing tokens (var(--spacing-*) or calc(...)) for spacing values.",
+            "severity": "warning"
+          }
+        ]
+      ],
+      "/^border-radius$|^border-(top-left|top-right|bottom-left|bottom-right)-radius$/": [
+        [
+          "/^(?!0$|var\\(|calc\\()).*\\d(\\.\\d+)?(px|rem|em|%)\\b/i",
+          {
+            "message": "Use radius tokens (var(--radius-*) / var(--input-border-radius) / var(--btn-border-radius)).",
+            "severity": "warning"
+          }
+        ]
+      ],
+      "/^font-size$/": [
+        [
+          "/^(?!var\\(|calc\\()).*\\d(\\.\\d+)?(px|rem|em)\\b/i",
+          {
+            "message": "Use typography tokens (var(--font-size-*) / var(--input-font-size-*)).",
+            "severity": "warning"
+          }
+        ]
+      ]
+    }
+  }
+}

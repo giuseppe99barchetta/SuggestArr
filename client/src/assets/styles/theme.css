@@ -1,56 +1,16 @@
-:root {
-  /* Background Colors - Blueish Theme */
-  --color-bg-primary: rgba(0, 0, 0, 0.6);
-  --color-bg-content: #222224e7;
-  --color-bg-content-secondary: rgba(45, 55, 72, 0.8);
-  --color-bg-overlay-light: rgba(0, 0, 0, 0.6);
-  --color-bg-overlay-heavy: rgba(0, 0, 0, 0.75);
-
-  /* Text Colors */
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #e2e8f0;
-  --color-text-muted: #9ca3af;
-
-  /* Accent Colors */
-  --color-primary: #99999b94;
-  --color-primary-hover: #3430aa;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-
-  --button-primary-bg: #42424286;
-  --button-primary-bg-hover: #61616862;
-  --button-active-bg: #99999b94;
-
-  /* Border & UI Elements */
-  --color-border-light: rgba(255, 255, 255, 0.2);
-  --color-border-medium: rgba(255, 255, 255, 0.3);
-  --color-bg-interactive: rgba(255, 255, 255, 0.1);
-  --color-bg-active: rgba(255, 255, 255, 0.15);
-
-  /* Form/Input Heights (standardized) */
-  --input-height: 40px;
-  --btn-height: 40px;
-  
-  /* Multiselect & Select styling */
-  --select-bg: var(--color-bg-content-secondary);
-  --select-text: var(--color-text-primary);
-  --select-border: var(--color-border-medium);
-  --multiselect-tag-bg: #b84141;
-  --multiselect-tag-text: var(--color-text-primary);
-
-  /* Common Values */
-  --border-radius-sm: 0.5rem;
-  --border-radius-md: 0.75rem;
-  --border-radius-lg: 1rem;
-  --border-radius-xl: 1.5rem;
-  --transition-base: all 0.3s ease;
-  --shadow-base: 0 4px 10px rgba(0, 0, 0, 0.2);
-}
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Theme Component Styles
+ * 
+ * ⚠️  All CSS variables are now imported from variables.css
+ * ⚠️  DO NOT define duplicate :root variables here
+ * ⚠️  Use canonical design tokens from variables.css
+ * 
+ * Last Updated: 2026-03-04 (Phase 2 Migration)
+ * ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Base Container Styles */
 .app-container {
-  background-color: var(--color-bg-primary);
+  background-color: var(--surface-base);
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
@@ -70,17 +30,17 @@
 }
 
 .content-container {
-  background-color: var(--color-bg-content);
+  background-color: var(--surface-raised);
   backdrop-filter: blur(10px);
-  border-radius: var(--border-radius-lg);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--color-border-light);
-  box-shadow: var(--shadow-base);
+  box-shadow: var(--shadow-md);
   padding: 2rem;
 }
 
 .card {
   background-color: var(--color-bg-content-secondary);
-  border-radius: var(--border-radius-md);
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border-light);
   padding: 1.5rem;
   color: var(--color-text-primary);
@@ -138,14 +98,14 @@
 .form-input {
   flex: 1;
   min-width: 200px;
-  min-height: var(--input-height);
-  background: var(--color-bg-interactive);
+  min-height: var(--input-height-md);
+  background: var(--surface-interactive);
   border: 1px solid var(--color-border-medium);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
   padding: 0 1rem;
   color: var(--color-text-primary);
   font-size: 0.9rem;
-  transition: var(--transition-base);
+  transition: var(--transition-all);
   width: 100%;
   display: block;
   box-sizing: border-box;
@@ -178,7 +138,6 @@
   display: flex;
   gap: 0.75rem;
   align-items: center;
-  flex-wrap: wrap;
 }
 
 .form-help {
@@ -206,7 +165,7 @@ select option {
 .settings-card {
   background-color: hsla(0,0%,100%,.05);
   border: 1px solid var(--color-border-medium);
-  border-radius: var(--border-radius-md);
+  border-radius: var(--radius-md);
   padding: 1.5rem;
   margin-bottom: 1.5rem;
 }
@@ -244,9 +203,9 @@ select option {
 .help-content {
   margin-top: 0.75rem;
   padding: 1rem;
-  background: var(--color-bg-interactive);
+  background: var(--surface-interactive);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
 }
 
 .help-list {
@@ -275,10 +234,10 @@ select option {
 
 /* Interactive Elements */
 .btn-primary {
-  background-color: var(--button-primary-bg);
+  background-color: var(--surface-interactive);
   color: var(--color-text-primary);
-  border-radius: var(--border-radius-sm);
-  transition: var(--transition-base);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-all);
   border: none;
   padding: 0.75rem 1.5rem;
   font-weight: 500;
@@ -292,8 +251,8 @@ select option {
 .btn-secondary {
   background-color: #6b7280;
   color: var(--color-text-primary);
-  border-radius: var(--border-radius-sm);
-  transition: var(--transition-base);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-all);
   border: none;
   padding: 0.75rem 1.5rem;
   font-weight: 500;
@@ -308,37 +267,37 @@ select option {
 .btn-sm {
   padding: 0.5rem 1rem !important;
   font-size: 0.875rem;
-  min-height: var(--btn-height);
-  height: var(--btn-height);
+  min-height: var(--btn-height-md);
+  height: var(--btn-height-md);
 }
 
 /* Button in input group - ensure same height as input */
 .input-group .btn {
-  min-height: var(--btn-height);
-  height: var(--btn-height);
+  min-height: var(--btn-height-md);
+  height: var(--btn-height-md);
   padding: 0.5rem 1rem;
 }
 
 .btn-outline {
-  background: var(--color-bg-interactive);
+  background: var(--surface-interactive);
   color: var(--color-text-primary);
   border: 1px solid var(--color-border-medium);
-  border-radius: var(--border-radius-sm);
-  transition: var(--transition-base);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-all);
   padding: 0.75rem 1.5rem;
   font-weight: 500;
   cursor: pointer;
 }
 
 .btn-outline:hover:not(:disabled) {
-  background-color: var(--color-bg-interactive);
+  background-color: var(--surface-interactive);
 }
 
 .btn-danger {
-  background-color: var(--color-danger);
+  background-color: var(--color-error);
   color: var(--color-text-primary);
-  border-radius: var(--border-radius-sm);
-  transition: var(--transition-base);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-all);
   border: none;
   padding: 0.75rem 1.5rem;
   font-weight: 500;
@@ -364,8 +323,8 @@ select option {
   gap: 0.5rem;
   font-weight: 600;
   font-size: 0.9rem;
-  border-radius: var(--border-radius-sm);
-  transition: var(--transition-base);
+  border-radius: var(--radius-sm);
+  transition: var(--transition-all);
   border: none;
   cursor: pointer;
   white-space: nowrap;
@@ -406,13 +365,13 @@ select option {
   align-items: center;
   gap: 0.75rem;
   padding: 1rem;
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
   font-size: 0.9rem;
   margin-bottom: 1rem;
 }
 
 .alert-info {
-  background: var(--color-bg-content);
+  background: var(--surface-raised);
   border: 1px solid var(--color-primary);
   color: var(--color-primary);
 }
@@ -425,8 +384,8 @@ select option {
 
 .alert-danger {
   background: rgba(239, 68, 68, 0.1);
-  border: 1px solid var(--color-danger);
-  color: var(--color-danger);
+  border: 1px solid var(--color-error);
+  color: var(--color-error);
 }
 
 /* Form Elements */
@@ -434,10 +393,10 @@ select option {
   background-color: var(--color-bg-content-secondary);
   color: var(--color-text-primary);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
   padding: 0.75rem 1rem;
   font-size: 1rem;
-  transition: var(--transition-base);
+  transition: var(--transition-all);
   width: 100%;
 }
 
@@ -461,13 +420,13 @@ select option {
 }
 
 .tab-button {
-  background-color: var(--color-bg-interactive);
+  background-color: var(--surface-interactive);
   border: 1px solid var(--color-border-light);
   color: var(--color-text-muted);
   padding: 0.75rem 1.5rem;
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: var(--transition-base);
+  transition: var(--transition-all);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -475,14 +434,14 @@ select option {
 }
 
 .tab-button:hover {
-  background-color: var(--color-bg-active);
+  background-color: var(--surface-hover);
   color: var(--color-text-primary);
 }
 
 .tab-button.active {
   color: var(--color-text-primary);
-  border-color: var(--button-active-bg);
-  background-color: var(--button-active-bg);
+  border-color: var(--surface-hover);
+  background-color: var(--surface-hover);
   backdrop-filter: blur(200px);
 }
 
@@ -493,7 +452,7 @@ select option {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--color-bg-overlay-heavy);
+  background-color: var(--surface-overlay);
   display: flex;
   flex-direction: column;
   justify-content: center;

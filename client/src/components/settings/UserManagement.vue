@@ -646,21 +646,21 @@ export default {
 
 /* ── Admin section divider ─────────────────────────────────────────────── */
 .admin-section-divider {
-  margin-top: 2rem;
-  margin-bottom: 2rem;
-  padding-top: 2rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: var(--spacing-xl);
+  margin-bottom: var(--spacing-xl);
+  padding-top: var(--spacing-xl);
+  border-top: 1px solid var(--color-border-light);
 }
 
 .admin-section-divider h2 {
-  font-size: 1.8rem;
-  margin-bottom: 0.5rem;
+  font-size: var(--font-size-3xl);
+  margin-bottom: var(--spacing-sm);
   color: var(--color-text-primary);
 }
 
 .admin-section-divider p {
   color: var(--color-text-muted);
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   margin: 0;
 }
 
@@ -668,25 +668,25 @@ export default {
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 2rem;
-  margin-bottom: 2rem;
+  gap: var(--spacing-xl);
+  margin-bottom: var(--spacing-xl);
 }
 
 /* ── Settings group card ───────────────────────────────────────────────── */
 .settings-group {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--border-radius-md);
-  padding: 1.5rem;
+  background: var(--surface-interactive);
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
 }
 
 .settings-group h3 {
-  font-size: 1.2rem;
-  margin-bottom: 1rem;
+  font-size: var(--font-size-xl);
+  margin-bottom: var(--spacing-md);
   color: var(--color-text-primary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .accounts-group {
@@ -697,7 +697,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-lg);
 }
 
 .group-title-row h3 {
@@ -706,14 +706,14 @@ export default {
 
 .card-desc {
   color: var(--color-text-muted);
-  font-size: 0.9rem;
-  margin-bottom: 1.5rem;
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-lg);
   line-height: 1.5;
 }
 
 /* ── Form controls (match other settings modals) ─────────────────────── */
 .form-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-lg);
 }
 
 .form-group:last-child {
@@ -723,23 +723,23 @@ export default {
 .form-group label {
   display: block;
   margin-top: 0;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #e5e7eb;
+  margin-bottom: var(--spacing-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: calc(var(--spacing-sm) + var(--spacing-xs));
   cursor: pointer;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--spacing-sm);
 }
 
 .checkbox-label input[type='checkbox'] {
   vertical-align: middle;
-  width: 1.25rem;
-  height: 1.25rem;
+  width: var(--font-size-xl);
+  height: var(--font-size-xl);
   accent-color: var(--color-primary);
   flex-shrink: 0;
 }
@@ -747,42 +747,42 @@ export default {
 .checkbox-text {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
   vertical-align: middle;
-  margin-left: 0.25rem;
-  color: #e5e7eb;
-  font-weight: 500;
+  margin-left: var(--spacing-xs);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
 }
 
 .checkbox-text--stack {
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.15rem;
+  gap: calc(var(--spacing-sm) * 0.3);
 }
 
 .checkbox-text small {
   color: var(--color-text-muted);
-  font-size: 0.8rem;
-  font-weight: 400;
+  font-size: calc(var(--font-size-base) * 0.8);
+  font-weight: var(--font-weight-normal);
 }
 
 .form-control {
   width: 100%;
-  padding: 0.625rem 0.75rem;
-  background: var(--color-bg-interactive);
+  padding: 0 var(--input-padding-x-md);
+  background: var(--surface-interactive);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--input-border-radius);
   color: var(--color-text-primary);
-  font-size: 1rem;
+  font-size: var(--input-font-size-md);
   transition: var(--transition-base);
-  min-height: 40px;
+  min-height: var(--input-height-md);
 }
 
 .form-control:focus {
   outline: none;
   border-color: var(--color-primary);
-  background: var(--color-bg-active);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background: var(--surface-hover);
+  box-shadow: var(--shadow-focus);
 }
 
 .form-control:disabled {
@@ -792,8 +792,8 @@ export default {
 
 .form-help {
   display: block;
-  margin-top: 0.25rem;
-  font-size: 0.875rem;
+  margin-top: var(--spacing-xs);
+  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   line-height: 1.4;
 }
@@ -803,35 +803,35 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  padding: 2rem 1rem;
+  gap: calc(var(--spacing-sm) + var(--spacing-xs));
+  padding: var(--spacing-xl) var(--spacing-md);
   color: var(--color-text-muted);
-  font-size: 0.95rem;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
-  border-radius: var(--border-radius-sm);
+  font-size: calc(var(--font-size-base) * 0.95);
+  border: 1px dashed var(--color-border-medium);
+  border-radius: var(--radius-sm);
 }
 
 /* ── User list ─────────────────────────────────────────────────────────── */
 .user-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .user-row {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: var(--border-radius-sm);
+  gap: var(--spacing-md);
+  padding: calc(var(--spacing-sm) + var(--spacing-xs)) var(--spacing-md);
+  background: var(--surface-base);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
   transition: var(--transition-base);
 }
 
 .user-row:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--surface-interactive);
+  border-color: var(--color-border-medium);
 }
 
 .user-row--inactive {
@@ -842,7 +842,7 @@ export default {
 .user-identity {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: calc(var(--spacing-sm) + var(--spacing-xs));
   flex: 1;
   min-width: 0;
 }
@@ -850,31 +850,31 @@ export default {
 .user-avatar {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full);
+  background: var(--surface-interactive);
+  border: 1px solid var(--color-border-medium);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--color-text-muted);
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   flex-shrink: 0;
 }
 
 .user-info {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: calc(var(--spacing-sm) * 0.3);
   min-width: 0;
 }
 
 .user-name {
-  font-weight: 600;
-  font-size: 0.95rem;
+  font-weight: var(--font-weight-semibold);
+  font-size: calc(var(--font-size-base) * 0.95);
   color: var(--color-text-primary);
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: calc(var(--spacing-sm) * 0.8);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -882,18 +882,18 @@ export default {
 
 .you-badge {
   background: var(--color-primary);
-  color: #fff;
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.1rem 0.4rem;
-  border-radius: 999px;
+  color: var(--color-text-primary);
+  font-size: calc(var(--font-size-base) * 0.65);
+  font-weight: var(--font-weight-bold);
+  padding: calc(var(--spacing-sm) * 0.2) calc(var(--spacing-sm) * 0.8);
+  border-radius: var(--radius-full);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   flex-shrink: 0;
 }
 
 .user-meta {
-  font-size: 0.78rem;
+  font-size: calc(var(--font-size-base) * 0.78);
   color: var(--color-text-muted);
 }
 
@@ -907,11 +907,11 @@ export default {
 .status-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
+  gap: calc(var(--spacing-sm) * 0.7);
+  padding: calc(var(--spacing-sm) * 0.6) calc(var(--spacing-sm) * 1.4);
+  border-radius: var(--radius-full);
+  font-size: calc(var(--font-size-base) * 0.78);
+  font-weight: var(--font-weight-semibold);
   border: 1px solid;
   cursor: pointer;
   flex-shrink: 0;
@@ -920,22 +920,22 @@ export default {
 
 .status-chip--active {
   color: var(--color-success);
-  border-color: rgba(16, 185, 129, 0.35);
-  background: rgba(16, 185, 129, 0.1);
+  border-color: var(--color-success);
+  background: var(--color-success-alpha-10);
 }
 
 .status-chip--active:hover:not(:disabled) {
-  background: rgba(16, 185, 129, 0.18);
+  background: var(--color-success-alpha-20);
 }
 
 .status-chip--inactive {
   color: var(--color-text-muted);
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-medium);
+  background: var(--surface-base);
 }
 
 .status-chip--inactive:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-interactive);
 }
 
 .status-chip:disabled {
@@ -958,33 +958,33 @@ export default {
 .error-banner {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  color: var(--color-danger);
-  font-size: 0.875rem;
-  padding: 0.6rem 0.75rem;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: var(--border-radius-sm);
+  gap: var(--spacing-sm);
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+  padding: calc(var(--spacing-sm) * 1.2) calc(var(--spacing-sm) + var(--spacing-xs));
+  background: var(--color-error-alpha-10);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-sm);
 }
 
 /* ── UserManagement modal redesign ─────────────────────────────────────── */
 .um-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
+  background: var(--surface-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 1rem;
+  padding: var(--spacing-md);
   overflow-y: auto;
 }
 
 .um-modal-content {
   position: relative;
-  background: var(--surface-elevated, var(--color-bg-content));
+  background: var(--surface-elevated);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-lg);
+  border-radius: var(--radius-lg);
   width: 100%;
   max-width: 620px;
   max-height: 90vh;
@@ -1002,32 +1002,32 @@ export default {
 .um-modal-header {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
-  padding: 1.35rem 1.5rem;
+  gap: var(--spacing-md);
+  padding: calc(var(--spacing-lg) - calc(var(--spacing-sm) * 0.3)) var(--spacing-lg);
   border-bottom: 1px solid var(--color-border-light);
 }
 
 .um-modal-title-wrap {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: calc(var(--spacing-sm) * 0.6);
   flex: 1;
   min-width: 0;
 }
 
 .um-modal-header h3 {
   margin: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
+  font-size: calc(var(--font-size-base) * 1.15);
+  font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .um-modal-title-wrap p {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   line-height: 1.4;
   color: var(--color-text-muted);
 }
@@ -1039,31 +1039,31 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--color-bg-interactive);
+  background-color: var(--surface-interactive);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--color-text-muted);
-  font-size: 0.95rem;
+  font-size: calc(var(--font-size-base) * 0.95);
   transition: var(--transition-base);
 }
 
 .um-modal-close:hover {
-  background-color: var(--color-bg-active);
+  background-color: var(--surface-hover);
   border-color: var(--color-border-medium);
   color: var(--color-text-primary);
 }
 
 .um-modal-close:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: var(--shadow-focus);
 }
 
 .um-modal-body {
-  padding: 1.35rem 1.5rem;
+  padding: calc(var(--spacing-lg) - calc(var(--spacing-sm) * 0.3)) var(--spacing-lg);
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: calc(var(--spacing-md) + calc(var(--spacing-xs) * 0.4));
   overflow-y: auto;
 }
 
@@ -1071,13 +1071,13 @@ export default {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 1rem;
-  padding: 1rem 1.5rem 1.2rem;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg) var(--font-size-xl);
   border-top: 1px solid var(--color-border-light);
 }
 
 .um-modal-footer .btn {
-  min-height: 40px;
+  min-height: var(--btn-height-md);
 }
 
 .um-btn-primary {
@@ -1091,40 +1091,40 @@ export default {
   background: transparent;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: calc(var(--spacing-sm) + var(--spacing-xs));
 }
 
 .um-section-card + .um-section-card {
   border-top: 1px solid var(--color-border-light);
-  padding-top: 1rem;
+  padding-top: var(--spacing-md);
 }
 
 .um-section-card--danger {
   border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-md);
-  padding: 1rem;
-  background: var(--color-bg-overlay-light);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  background: var(--surface-base);
 }
 
 .um-section-head {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
 }
 
 .um-section-head h4 {
   margin: 0;
-  font-size: 0.92rem;
-  font-weight: 600;
+  font-size: calc(var(--font-size-base) * 0.92);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: calc(var(--spacing-sm) * 0.9);
 }
 
 .um-section-head p {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: calc(var(--font-size-base) * 0.82);
   color: var(--color-text-muted);
   line-height: 1.4;
 }
@@ -1132,7 +1132,7 @@ export default {
 .um-fields-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: var(--spacing-md);
 }
 
 .um-fields-grid .form-group:first-child {
@@ -1143,22 +1143,22 @@ export default {
   margin-bottom: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: calc(var(--spacing-sm) * 0.9);
 }
 
 .um-modal-body .form-group label {
   margin-bottom: 0;
-  font-size: 0.84rem;
-  font-weight: 600;
+  font-size: calc(var(--font-size-base) * 0.84);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-muted);
 }
 
 .um-modal-body .form-control {
-  min-height: 40px;
-  height: 40px;
-  padding: 0 0.75rem;
-  font-size: 0.95rem;
-  background: var(--color-bg-interactive);
+  min-height: var(--input-height-md);
+  height: var(--input-height-md);
+  padding: 0 var(--input-padding-x-md);
+  font-size: var(--input-font-size-md);
+  background: var(--surface-interactive);
   border-color: var(--color-border-light);
 }
 
@@ -1167,13 +1167,13 @@ export default {
 }
 
 .um-modal-body .form-control:focus {
-  background: var(--color-bg-active);
+  background: var(--surface-hover);
   border-color: var(--color-border-focus);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: var(--shadow-focus);
 }
 
 .um-modal-body select.form-control {
-  padding-right: 2rem;
+  padding-right: var(--spacing-xl);
 }
 
 .um-modal-body .input-group {
@@ -1187,10 +1187,10 @@ export default {
 }
 
 .um-input-action {
-  min-height: 40px;
-  height: 40px;
-  min-width: 40px;
-  padding: 0 0.75rem;
+  min-height: var(--btn-height-md);
+  height: var(--btn-height-md);
+  min-width: var(--btn-height-md);
+  padding: 0 var(--btn-padding-x-sm);
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   margin-left: -1px;
@@ -1203,11 +1203,11 @@ export default {
 
 .um-modal-body .form-help {
   margin-top: 0;
-  font-size: 0.8rem;
+  font-size: calc(var(--font-size-base) * 0.8);
 }
 
 .form-help--warn {
-  color: var(--color-warning, var(--color-text-muted));
+  color: var(--color-warning);
 }
 
 .um-confirm-text {
@@ -1229,11 +1229,11 @@ export default {
 .permissions-user-info {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.1rem;
-  background: var(--color-bg-interactive);
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) calc(var(--spacing-md) + calc(var(--spacing-xs) * 0.4));
+  background: var(--surface-interactive);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-md);
+  border-radius: var(--radius-md);
 }
 
 .permissions-user-info .user-avatar {
@@ -1247,75 +1247,75 @@ export default {
 }
 
 .permissions-user-info .user-details .username {
-  font-size: 1.05rem;
-  font-weight: 600;
+  font-size: calc(var(--font-size-base) * 1.05);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-xs);
 }
 
 .permissions-user-info .user-details .role-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 999px;
+  gap: calc(var(--spacing-sm) * 0.7);
+  padding: var(--spacing-xs) calc(var(--spacing-sm) * 1.2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-full);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .role-badge--admin {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--color-error-alpha-20);
+  color: var(--color-error-light);
+  border: 1px solid var(--color-error);
 }
 
 .role-badge--user {
-  background: rgba(59, 130, 246, 0.15);
-  color: #93c5fd;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: var(--color-primary-alpha-20);
+  color: var(--color-primary-light);
+  border: 1px solid var(--color-primary);
 }
 
 .um-sections-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0.9rem;
+  gap: calc(var(--spacing-sm) + calc(var(--spacing-xs) * 1.6));
 }
 
 .permissions-section {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: calc(var(--spacing-sm) + calc(var(--spacing-xs) * 1.6));
 }
 
 .tabs-checkboxes {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .tabs-checkboxes label {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 0.75rem;
-  background: var(--color-bg-interactive);
+  gap: calc(var(--spacing-sm) + var(--spacing-xs));
+  padding: calc(var(--spacing-md) * 0.65) calc(var(--spacing-sm) + var(--spacing-xs));
+  background: var(--surface-interactive);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s;
   position: relative;
 }
 
 .tabs-checkboxes label:hover:not(.disabled) {
-  background: var(--color-bg-active);
+  background: var(--surface-hover);
   border-color: var(--color-border-medium);
 }
 
 .tabs-checkboxes label:focus-within {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  box-shadow: var(--shadow-focus);
 }
 
 .tabs-checkboxes label.disabled {
@@ -1337,54 +1337,54 @@ export default {
 .tabs-checkboxes .tab-label {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: calc(var(--spacing-sm) * 1.2);
   flex: 1;
 }
 
 .tab-checkbox-content {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: calc(var(--spacing-sm) * 1.2);
   flex: 1;
 }
 
 .tab-checkbox-content i {
-  color: #a5b4fc;
-  font-size: 1rem;
+  color: var(--color-primary-light);
+  font-size: var(--font-size-base);
   width: 20px;
   text-align: center;
 }
 
 .tabs-checkboxes .tab-label i {
-  color: #a5b4fc;
-  font-size: 1rem;
+  color: var(--color-primary-light);
+  font-size: var(--font-size-base);
   width: 20px;
   text-align: center;
 }
 
 .tabs-checkboxes .tab-label span {
-  font-size: 0.95rem;
+  font-size: calc(var(--font-size-base) * 0.95);
   color: var(--color-text-primary);
 }
 
 .required-badge {
   margin-left: auto;
-  padding: 0.2rem 0.5rem;
-  font-size: 0.7rem;
-  font-weight: 600;
+  padding: calc(var(--spacing-sm) * 0.4) var(--spacing-sm);
+  font-size: calc(var(--font-size-base) * 0.7);
+  font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  background: rgba(168, 85, 247, 0.15);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.3);
-  border-radius: 999px;
+  background: var(--color-info-alpha-20);
+  color: var(--color-info-light);
+  border: 1px solid var(--color-info);
+  border-radius: var(--radius-full);
 }
 
 /* ── Responsive ────────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .user-row {
     flex-wrap: wrap;
-    gap: 0.6rem;
+    gap: calc(var(--spacing-sm) * 1.2);
   }
   .user-identity {
     width: 100%;
@@ -1394,7 +1394,7 @@ export default {
   }
 
   .um-modal-content {
-    max-height: calc(100vh - 1.5rem);
+    max-height: calc(100vh - var(--spacing-lg));
   }
 
   .um-fields-grid {
@@ -1404,8 +1404,8 @@ export default {
   .um-modal-header,
   .um-modal-body,
   .um-modal-footer {
-    padding-left: 1rem;
-    padding-right: 1rem;
+    padding-left: var(--spacing-md);
+    padding-right: var(--spacing-md);
   }
 
   .um-modal-footer {

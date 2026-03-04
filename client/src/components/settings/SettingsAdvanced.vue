@@ -1158,7 +1158,7 @@ export default {
   font-weight: 400;
   color: var(--color-text-muted);
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 0.1rem 0.45rem;
   margin-left: 0.4rem;
   vertical-align: middle;

@@ -1490,7 +1490,7 @@ export default {
   align-items: center;
   gap: 0.35rem;
   padding: 0.2rem 0.55rem;
-  border-radius: 20px;
+  border-radius: var(--radius-full);
   font-size: 0.65rem;
   font-weight: 600;
   border: 1.5px solid;
@@ -1501,7 +1501,7 @@ export default {
 .status-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
 }
 .status-connected { background-color: rgba(16, 185, 129, 0.12); border-color: #10b981; color: #10b981; }
 .status-connected .status-dot { background-color: #10b981; }
@@ -1598,7 +1598,7 @@ export default {
   padding: 0.1rem 0.4rem;
   background: rgba(231, 76, 156, 0.2);
   color: #e74c9c;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.7rem;
   font-weight: 700;
 }
@@ -1648,7 +1648,7 @@ export default {
   padding: 0.5rem 0.75rem;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 2rem;
+  border-radius: var(--radius-full);
   font-size: 0.8rem;
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -1673,7 +1673,7 @@ export default {
 .chip-avatar {
   width: 1.25rem;
   height: 1.25rem;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   background: rgba(255, 255, 255, 0.15);
   display: flex;
   align-items: center;
@@ -1687,7 +1687,7 @@ export default {
 .chip-badge {
   margin-left: 0.25rem;
   padding: 0.1rem 0.35rem;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-lg);
   font-size: 0.6rem;
   font-weight: 700;
   background: rgba(255, 255, 255, 0.2);
