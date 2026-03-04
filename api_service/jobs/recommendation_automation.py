@@ -208,8 +208,8 @@ class RecommendationAutomation:
         # LLM enhancement - job setting overrides global; verify LLM is actually configured
         job_use_llm = job_filters.get('use_llm', None)
         if job_use_llm:
-            from api_service.services.llm.llm_service import get_llm_client
-            if not get_llm_client():
+            from api_service.services.llm.llm_service import is_llm_configured
+            if not is_llm_configured(self.env_vars):
                 self.logger.warning("Job has AI enhancement enabled but LLM is not configured. Falling back to standard algorithm.")
                 job_use_llm = False
 

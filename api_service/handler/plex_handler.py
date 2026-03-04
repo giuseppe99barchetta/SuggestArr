@@ -6,7 +6,7 @@ from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 from api_service.config.config import load_env_vars
-from api_service.services.llm.llm_service import get_llm_client, get_recommendations_from_history
+from api_service.services.llm.llm_service import is_llm_configured, get_recommendations_from_history
 
 def to_ascii(value):
     """
@@ -57,7 +57,7 @@ class PlexHandler:
         else:
             config = load_env_vars()
             if config.get('ENABLE_ADVANCED_ALGORITHM', False):
-                if get_llm_client() is not None:
+                if is_llm_configured(config):
                     self.use_llm = True
                 else:
                     self.logger.warning(

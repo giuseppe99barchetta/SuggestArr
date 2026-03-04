@@ -5,7 +5,7 @@ from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 from api_service.config.config import load_env_vars
-from api_service.services.llm.llm_service import get_llm_client, get_recommendations_from_history
+from api_service.services.llm.llm_service import is_llm_configured, get_recommendations_from_history
 
 class JellyfinHandler:
     def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client:SeerClient, tmdb_client:TMDbClient, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, dry_run=False):
@@ -49,7 +49,7 @@ class JellyfinHandler:
         else:
             config = load_env_vars()
             if config.get('ENABLE_ADVANCED_ALGORITHM', False):
-                if get_llm_client() is not None:
+                if is_llm_configured(config):
                     self.use_llm = True
                 else:
                     self.logger.warning(

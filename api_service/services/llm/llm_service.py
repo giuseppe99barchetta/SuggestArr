@@ -79,6 +79,14 @@ def get_llm_client() -> Optional[AsyncOpenAI]:
         return None
 
 
+def is_llm_configured(config: Optional[Dict[str, Any]] = None) -> bool:
+    """Return True when LLM config is present without creating network clients."""
+    cfg = config or ConfigService.get_runtime_config()
+    api_key = cfg.get("OPENAI_API_KEY")
+    base_url = cfg.get("OPENAI_BASE_URL")
+    return bool(api_key or base_url)
+
+
 # ---------------------------------------------------------------------------
 # Low-level helpers (pure / sync)
 # ---------------------------------------------------------------------------
@@ -263,30 +271,6 @@ async def get_recommendations_from_history(
         logger.info("Falling back to standard algorithms (LLM not configured).")
         return []
 
-    if not history_items:
-        logger.info("No history provided for LLM recommendations.")
-        return []
-
-    config = ConfigService.get_runtime_config()
-    model = config.get("LLM_MODEL", "gpt-4o-mini")
-    max_retries = int(config.get("LLM_MAX_RETRIES", 2))
-
-    history_items = _deduplicate_history(history_items)[:MAX_HISTORY_ITEMS]
-    if not history_items:
-        logger.info("No unique history items after deduplication.")
-        return []
-
-    history_titles_lower = {
-        _normalize_title(item.get("title") or item.get("name") or "")
-        for item in history_items
-    }
-
-    list_type = "movies" if item_type == "movie" else "TV shows"
-    history_text = "\n".join(
-        f"- {item.get('title', item.get('name', 'Unknown'))} ({item.get('year', 'Unknown')})"
-        for item in history_items
-    )
-
     def _normalize_language_constraint(raw: Any) -> Optional[str]:
         if isinstance(raw, list):
             if not raw:
@@ -307,40 +291,65 @@ async def get_recommendations_from_history(
         except (TypeError, ValueError):
             return None
 
-    constraint_lines: List[str] = []
-    if filters:
-        lang = _normalize_language_constraint(
-            filters.get("with_original_language")
-            or filters.get("original_language")
-            or filters.get("language")
+    try:
+        if not history_items:
+            logger.info("No history provided for LLM recommendations.")
+            return []
+
+        config = ConfigService.get_runtime_config()
+        model = config.get("LLM_MODEL", "gpt-4o-mini")
+        max_retries = int(config.get("LLM_MAX_RETRIES", 2))
+
+        history_items = _deduplicate_history(history_items)[:MAX_HISTORY_ITEMS]
+        if not history_items:
+            logger.info("No unique history items after deduplication.")
+            return []
+
+        history_titles_lower = {
+            _normalize_title(item.get("title") or item.get("name") or "")
+            for item in history_items
+        }
+
+        list_type = "movies" if item_type == "movie" else "TV shows"
+        history_text = "\n".join(
+            f"- {item.get('title', item.get('name', 'Unknown'))} ({item.get('year', 'Unknown')})"
+            for item in history_items
         )
-        if lang:
-            constraint_lines.append(
-                f"- ONLY recommend titles whose ORIGINAL language code is '{lang}'."
-            )
 
-        year_from = filters.get("release_year_gte") or filters.get("year_from")
-        try:
-            if year_from is not None:
+        constraint_lines: List[str] = []
+        if filters:
+            lang = _normalize_language_constraint(
+                filters.get("with_original_language")
+                or filters.get("original_language")
+                or filters.get("language")
+            )
+            if lang:
                 constraint_lines.append(
-                    f"- Only recommend titles released from year {int(year_from)} onward."
+                    f"- ONLY recommend titles whose ORIGINAL language code is '{lang}'."
                 )
-        except (TypeError, ValueError):
-            pass
 
-        min_rating = _to_float(filters.get("vote_average_gte") or filters.get("min_rating"))
-        if min_rating is not None:
-            if min_rating > 10:
-                min_rating = min_rating / 10
-            constraint_lines.append(
-                f"- Only recommend titles with TMDB rating >= {min_rating:.1f}."
-            )
+            year_from = filters.get("release_year_gte") or filters.get("year_from")
+            try:
+                if year_from is not None:
+                    constraint_lines.append(
+                        f"- Only recommend titles released from year {int(year_from)} onward."
+                    )
+            except (TypeError, ValueError):
+                pass
 
-    constraints_block = ""
-    if constraint_lines:
-        constraints_block = "\nApply these hard constraints:\n" + "\n".join(constraint_lines) + "\n"
+            min_rating = _to_float(filters.get("vote_average_gte") or filters.get("min_rating"))
+            if min_rating is not None:
+                if min_rating > 10:
+                    min_rating = min_rating / 10
+                constraint_lines.append(
+                    f"- Only recommend titles with TMDB rating >= {min_rating:.1f}."
+                )
 
-    prompt = f"""
+        constraints_block = ""
+        if constraint_lines:
+            constraints_block = "\nApply these hard constraints:\n" + "\n".join(constraint_lines) + "\n"
+
+        prompt = f"""
         You are an expert film and television recommendation system.
         The user has recently watched and enjoyed the following {list_type}:
 
@@ -366,77 +375,79 @@ async def get_recommendations_from_history(
         }}
     """
 
-    messages = [
-        {
-            "role": "system",
-            "content": "You are a specialized system that only outputs raw JSON objects for media recommendations.",
-        },
-        {"role": "user", "content": prompt},
-    ]
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a specialized system that only outputs raw JSON objects for media recommendations.",
+            },
+            {"role": "user", "content": prompt},
+        ]
 
-    logger.debug(
-        "Sending LLM request (%s) for %d unique %s history items.",
-        model,
-        len(history_items),
-        list_type,
-    )
-
-    try:
-        validated: RecommendationList = await _call_with_validation(
-            client=client,
-            model=model,
-            messages=messages,
-            schema_cls=RecommendationList,
-            temperature=0.7,
-            max_retries=max_retries,
-        )
-    except LLMValidationError as exc:
-        # Log as ERROR (not silently dropped) then return empty so the automation
-        # flow can continue with the standard algorithm fallback.
-        logger.error(
-            "LLM recommendation request failed after retries — falling back to standard algorithm. %s",
-            exc,
-        )
-        return []
-
-    valid_recommendations: List[Dict] = []
-    for rec in validated.recommendations:
-        rec_title = rec.title.strip().lower()
-
-        if _is_duplicate_of_history(rec_title, history_titles_lower):
-            logger.debug(
-                "Filtered duplicate recommendation already in watch history: %s", rec.title
-            )
-            continue
-
-        # Validate source_title against actual history titles.
-        source_title = rec.source_title
-        if source_title:
-            clean_source = _normalize_title(source_title)
-            if clean_source not in history_titles_lower:
-                logger.warning(
-                    "LLM returned source_title '%s' not found in history. Clearing.",
-                    source_title,
-                )
-                source_title = None
-            else:
-                stripped = re.sub(r'\s*[-–]\s*S\d+E\d+.*', '', source_title, flags=re.IGNORECASE)
-                stripped = re.sub(r'\s*\((19|20)\d{2}\)\s*$', '', stripped)
-                source_title = stripped.strip()
-
-        rec_dict: Dict[str, Any] = {
-            "title": rec.title,
-            "year": rec.year,
-            "rationale": rec.rationale or "No rationale provided by LLM.",
-            "source_title": source_title,
-        }
         logger.debug(
-            "[%s (%s)] LLM Rationale: %s", rec.title, rec.year, rec_dict["rationale"]
+            "Sending LLM request (%s) for %d unique %s history items.",
+            model,
+            len(history_items),
+            list_type,
         )
-        valid_recommendations.append(rec_dict)
 
-    logger.info("Successfully generated %d LLM recommendations.", len(valid_recommendations))
-    return valid_recommendations[:max_results]
+        try:
+            validated: RecommendationList = await _call_with_validation(
+                client=client,
+                model=model,
+                messages=messages,
+                schema_cls=RecommendationList,
+                temperature=0.7,
+                max_retries=max_retries,
+            )
+        except LLMValidationError as exc:
+            logger.error(
+                "LLM recommendation request failed after retries — falling back to standard algorithm. %s",
+                exc,
+            )
+            return []
+
+        valid_recommendations: List[Dict] = []
+        for rec in validated.recommendations:
+            rec_title = rec.title.strip().lower()
+
+            if _is_duplicate_of_history(rec_title, history_titles_lower):
+                logger.debug(
+                    "Filtered duplicate recommendation already in watch history: %s", rec.title
+                )
+                continue
+
+            source_title = rec.source_title
+            if source_title:
+                clean_source = _normalize_title(source_title)
+                if clean_source not in history_titles_lower:
+                    logger.warning(
+                        "LLM returned source_title '%s' not found in history. Clearing.",
+                        source_title,
+                    )
+                    source_title = None
+                else:
+                    stripped = re.sub(r'\s*[-–]\s*S\d+E\d+.*', '', source_title, flags=re.IGNORECASE)
+                    stripped = re.sub(r'\s*\((19|20)\d{2}\)\s*$', '', stripped)
+                    source_title = stripped.strip()
+
+            rec_dict: Dict[str, Any] = {
+                "title": rec.title,
+                "year": rec.year,
+                "rationale": rec.rationale or "No rationale provided by LLM.",
+                "source_title": source_title,
+            }
+            logger.debug(
+                "[%s (%s)] LLM Rationale: %s", rec.title, rec.year, rec_dict["rationale"]
+            )
+            valid_recommendations.append(rec_dict)
+
+        logger.info("Successfully generated %d LLM recommendations.", len(valid_recommendations))
+        return valid_recommendations[:max_results]
+    finally:
+        try:
+            await client.aclose()
+        except Exception:
+            pass
 
 
 async def interpret_search_query(
@@ -463,27 +474,28 @@ async def interpret_search_query(
         logger.info("LLM not configured — cannot interpret search query.")
         return {}
 
-    config = ConfigService.get_runtime_config()
-    model = config.get("LLM_MODEL", "gpt-4o-mini")
-    max_retries = int(config.get("LLM_MAX_RETRIES", 2))
+    try:
+        config = ConfigService.get_runtime_config()
+        model = config.get("LLM_MODEL", "gpt-4o-mini")
+        max_retries = int(config.get("LLM_MAX_RETRIES", 2))
 
-    list_type = "movies" if media_type == "movie" else "TV shows"
+        list_type = "movies" if media_type == "movie" else "TV shows"
 
-    deduped_history = _deduplicate_history(history_items)[:MAX_HISTORY_ITEMS]
-    if deduped_history:
-        history_text = "\n".join(
-            f"- {item.get('title', item.get('name', 'Unknown'))} ({item.get('year', 'Unknown')})"
-            for item in deduped_history
-        )
-        history_section = (
-            f"\nThe user has already watched the following {list_type} "
-            f"(do NOT suggest any of these):\n{history_text}\n\n"
-            "Use the viewing history to understand their taste and personalise suggestions.\n"
-        )
-    else:
-        history_section = ""
+        deduped_history = _deduplicate_history(history_items)[:MAX_HISTORY_ITEMS]
+        if deduped_history:
+            history_text = "\n".join(
+                f"- {item.get('title', item.get('name', 'Unknown'))} ({item.get('year', 'Unknown')})"
+                for item in deduped_history
+            )
+            history_section = (
+                f"\nThe user has already watched the following {list_type} "
+                f"(do NOT suggest any of these):\n{history_text}\n\n"
+                "Use the viewing history to understand their taste and personalise suggestions.\n"
+            )
+        else:
+            history_section = ""
 
-    prompt = f"""You are a {list_type} search assistant for a personal media server.
+        prompt = f"""You are a {list_type} search assistant for a personal media server.
 The user wants to find {list_type} that match this description:
 "{query}"
 {history_section}
@@ -524,36 +536,41 @@ Example format:
   ]
 }}"""
 
-    messages = [
-        {
-            "role": "system",
-            "content": "You are a media search assistant that only outputs raw JSON objects for TMDB queries.",
-        },
-        {"role": "user", "content": prompt},
-    ]
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a media search assistant that only outputs raw JSON objects for TMDB queries.",
+            },
+            {"role": "user", "content": prompt},
+        ]
 
-    logger.info(
-        "Sending AI search query to LLM (%s): '%s' (media_type=%s)",
-        model,
-        query[:80],
-        media_type,
-    )
+        logger.info(
+            "Sending AI search query to LLM (%s): '%s' (media_type=%s)",
+            model,
+            query[:80],
+            media_type,
+        )
 
-    validated: SearchQueryInterpretation = await _call_with_validation(
-        client=client,
-        model=model,
-        messages=messages,
-        schema_cls=SearchQueryInterpretation,
-        temperature=0.8,
-        max_retries=max_retries,
-    )
+        validated: SearchQueryInterpretation = await _call_with_validation(
+            client=client,
+            model=model,
+            messages=messages,
+            schema_cls=SearchQueryInterpretation,
+            temperature=0.8,
+            max_retries=max_retries,
+        )
 
-    result: Dict[str, Any] = validated.model_dump()
-    logger.info(
-        "LLM interpreted query: genres=%s, year=%s-%s, %d title suggestions",
-        validated.discover_params.genres,
-        validated.discover_params.year_from,
-        validated.discover_params.year_to,
-        len(validated.suggested_titles),
-    )
-    return result
+        result: Dict[str, Any] = validated.model_dump()
+        logger.info(
+            "LLM interpreted query: genres=%s, year=%s-%s, %d title suggestions",
+            validated.discover_params.genres,
+            validated.discover_params.year_from,
+            validated.discover_params.year_to,
+            len(validated.suggested_titles),
+        )
+        return result
+    finally:
+        try:
+            await client.aclose()
+        except Exception:
+            pass
