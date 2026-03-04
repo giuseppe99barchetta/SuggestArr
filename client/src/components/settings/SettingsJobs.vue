@@ -878,7 +878,7 @@ export default {
   border-radius: var(--radius-sm, 6px);
   font-size: 0.7rem;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-glass-light);
   color: var(--color-text-secondary, #aaa);
 }
 
@@ -926,9 +926,9 @@ export default {
   justify-content: center;
   padding: 3rem;
   text-align: center;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-glass-subtle);
   border-radius: var(--radius-md);
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border: 1px dashed var(--surface-interactive);
 }
 
 .empty-state i,
@@ -956,15 +956,15 @@ export default {
 }
 
 .job-card {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-interactive);
   border-radius: var(--radius-md);
   padding: 1.25rem;
   transition: all 0.2s ease;
 }
 
 .job-card:hover {
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: var(--surface-glass-strong);
 }
 
 .job-card.disabled {
@@ -992,7 +992,7 @@ export default {
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--surface-interactive);
   color: var(--color-text-secondary);
 }
 
@@ -1132,8 +1132,8 @@ export default {
 
 /* History Preview */
 .history-preview {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-light);
   border-radius: var(--radius-md);
   padding: 1rem;
 }
@@ -1239,25 +1239,25 @@ export default {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-glass-light);
   color: var(--color-text-primary, #fff);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--surface-interactive);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--surface-glass-medium);
+  border-color: var(--surface-hover);
 }
 
 .btn-outline {
   background: transparent;
   color: var(--color-text-primary, #fff);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--surface-hover);
 }
 
 .btn-outline:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: var(--surface-glass-subtle);
+  border-color: var(--surface-glass-strong);
 }
 
 .btn-danger {

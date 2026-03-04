@@ -5,6 +5,9 @@
 
 @import './variables.css';
 @import './primitives/modal.css';
+@import './primitives/card.css';
+@import './primitives/form.css';
+@import './primitives/button.css';
 
 /* ========== Reset & Base ========== */
 * {

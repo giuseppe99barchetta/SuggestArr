@@ -1,16 +1,22 @@
 <template>
   <div :class="cardClasses">
-    <div v-if="$slots.header || title" class="base-card-header">
-      <slot name="header">
-        <h3 v-if="title" class="base-card-title">{{ title }}</h3>
-      </slot>
+    <!-- Header Section -->
+    <div v-if="$slots.header || title || $slots.headerIcon" :class="headerClasses">
+      <slot name="headerIcon"></slot>
+      <div style="flex: 1">
+        <h3 v-if="title" class="card-title">{{ title }}</h3>
+        <p v-if="description" class="card-description">{{ description }}</p>
+      </div>
+      <slot name="header"></slot>
     </div>
 
-    <div class="base-card-body">
+    <!-- Body Section -->
+    <div class="card-body" :class="bodyClasses">
       <slot></slot>
     </div>
 
-    <div v-if="$slots.footer" class="base-card-footer">
+    <!-- Footer Section -->
+    <div v-if="$slots.footer" class="card-footer">
       <slot name="footer"></slot>
     </div>
   </div>
@@ -26,15 +32,24 @@ export default {
       type: String,
       default: null
     },
+    description: {
+      type: String,
+      default: null
+    },
     variant: {
       type: String,
       default: 'default',
-      validator: (value) => ['default', 'elevated', 'outline', 'ghost'].includes(value)
+      validator: (value) => ['default', 'elevated', 'outline', 'ghost', 'interactive'].includes(value)
     },
     padding: {
       type: String,
-      default: 'md',
-      validator: (value) => ['none', 'sm', 'md', 'lg'].includes(value)
+      default: 'lg',
+      validator: (value) => ['none', 'sm', 'md', 'lg', 'xl'].includes(value)
+    },
+    size: {
+      type: String,
+      default: 'standard',
+      validator: (value) => ['compact', 'standard', 'large'].includes(value)
     },
     hoverable: {
       type: Boolean,
@@ -43,96 +58,52 @@ export default {
   },
   setup(props) {
     const cardClasses = computed(() => [
-      'base-card',
-      `base-card--${props.variant}`,
-      `base-card--padding-${props.padding}`,
+      'card',
+      `card--${props.variant}`,
+      `card--${props.size}`,
+      `card--padding-${props.padding}`,
       {
-        'base-card--hoverable': props.hoverable
+        'card--interactive': props.hoverable || props.variant === 'interactive'
       }
     ]);
 
+    const headerClasses = computed(() => [
+      'card-header',
+      {
+        'card-header--empty': !props.title && !props.$slots.header
+      }
+    ]);
+
+    const bodyClasses = computed(() => {
+      const map = {
+        'none': 'card-body--no-padding',
+        'sm': 'card-body--compact',
+        'md': '',
+        'lg': '',
+        'xl': 'card-body--spacious'
+      };
+      return map[props.padding] || '';
+    });
+
     return {
-      cardClasses
+      cardClasses,
+      headerClasses,
+      bodyClasses
     };
   }
 };
 </script>
 
 <style scoped>
-.base-card {
-  background: var(--card-bg);
-  border-radius: var(--card-border-radius);
-  transition: var(--transition-all);
-}
-
-/* Variants */
-.base-card--default {
-  border: 1px solid var(--color-border-light);
-}
-
-.base-card--elevated {
-  box-shadow: var(--shadow-lg);
-}
-
-.base-card--outline {
-  border: 2px solid var(--color-border-medium);
-}
-
-.base-card--ghost {
-  background: transparent;
-}
-
-/* Padding */
-.base-card--padding-none .base-card-body {
-  padding: 0;
-}
-
-.base-card--padding-sm .base-card-body {
-  padding: var(--spacing-sm);
-}
-
-.base-card--padding-md .base-card-body {
-  padding: var(--spacing-lg);
-}
-
-.base-card--padding-lg .base-card-body {
-  padding: var(--spacing-xl);
-}
-
-/* Hoverable */
-.base-card--hoverable {
-  cursor: pointer;
-}
-
-.base-card--hoverable:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-xl);
-  border-color: var(--color-border-medium);
-}
-
-/* Header */
-.base-card-header {
-  padding: var(--spacing-lg);
-  padding-bottom: var(--spacing-md);
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.base-card-title {
-  margin: 0;
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-}
-
-/* Body */
-.base-card-body {
-  /* Padding set by padding variants */
-}
-
-/* Footer */
-.base-card-footer {
-  padding: var(--spacing-lg);
-  padding-top: var(--spacing-md);
-  border-top: 1px solid var(--color-border-light);
-}
+/* Alias base-card classes for backward compatibility */
+:deep(.base-card) { @apply card; }
+:deep(.base-card--default) { @apply card--default; }
+:deep(.base-card--elevated) { @apply card--elevated; }
+:deep(.base-card--outline) { @apply card--outline; }
+:deep(.base-card--ghost) { @apply card--ghost; }
+:deep(.base-card--hoverable) { @apply card--interactive; }
+:deep(.base-card-header) { @apply card-header; }
+:deep(.base-card-title) { @apply card-title; }
+:deep(.base-card-body) { @apply card-body; }
+:deep(.base-card-footer) { @apply card-footer; }
 </style>

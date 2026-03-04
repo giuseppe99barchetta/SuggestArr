@@ -1460,8 +1460,8 @@ export default {
 
 /* Service card */
 .service-card {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-interactive);
   border-radius: var(--border-radius-md);
   padding: 1.5rem;
 }
@@ -1503,11 +1503,11 @@ export default {
   height: 6px;
   border-radius: var(--radius-full);
 }
-.status-connected { background-color: rgba(16, 185, 129, 0.12); border-color: #10b981; color: #10b981; }
+.status-connected { background-color: var(--color-success-alpha-10); border-color: #10b981; color: #10b981; }
 .status-connected .status-dot { background-color: #10b981; }
-.status-disconnected { background-color: rgba(239, 68, 68, 0.12); border-color: #ef4444; color: #ef4444; }
+.status-disconnected { background-color: var(--color-error-alpha-10); border-color: #ef4444; color: #ef4444; }
 .status-disconnected .status-dot { background-color: #ef4444; }
-.status-warning { background-color: rgba(245, 158, 11, 0.12); border-color: #f59e0b; color: #f59e0b; }
+.status-warning { background-color: var(--color-warning-alpha-10); border-color: #f59e0b; color: #f59e0b; }
 .status-warning .status-dot { background-color: #f59e0b; }
 
 /* Collapsible section */
@@ -1523,8 +1523,8 @@ export default {
   gap: 0.75rem;
   width: 100%;
   padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-light);
   border-radius: var(--border-radius-sm);
   color: var(--color-text-primary);
   font-size: 0.9rem;
@@ -1534,8 +1534,8 @@ export default {
 }
 
 .collapsible-toggle:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--surface-glass-light);
+  border-color: var(--surface-hover);
 }
 
 .toggle-arrow {
@@ -1563,8 +1563,8 @@ export default {
 .advanced-block {
   padding: 1rem;
   margin-bottom: 1rem;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-light);
   border-radius: var(--border-radius-sm);
 }
 .advanced-block:last-child {
@@ -1617,7 +1617,7 @@ export default {
   gap: 0.4rem;
 }
 .text-btn:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--color-primary-alpha-10);
 }
 .text-btn:disabled {
   opacity: 0.5;
@@ -1628,7 +1628,7 @@ export default {
   color: var(--color-text-muted);
   margin: 0;
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--surface-glass-subtle);
   border-radius: var(--border-radius-sm);
   display: flex;
   align-items: center;
@@ -1646,8 +1646,8 @@ export default {
   align-items: center;
   gap: 0.4rem;
   padding: 0.5rem 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-interactive);
   border-radius: var(--radius-full);
   font-size: 0.8rem;
   color: var(--color-text-secondary);
@@ -1656,7 +1656,7 @@ export default {
 }
 .chip:hover {
   border-color: var(--color-primary);
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--color-primary-alpha-10);
 }
 .chip.active {
   background: var(--color-primary);
@@ -1674,7 +1674,7 @@ export default {
   width: 1.25rem;
   height: 1.25rem;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--surface-hover);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1682,7 +1682,7 @@ export default {
   font-weight: 600;
 }
 .chip.active .chip-avatar {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--surface-glass-strong);
 }
 .chip-badge {
   margin-left: 0.25rem;
@@ -1690,14 +1690,14 @@ export default {
   border-radius: var(--radius-lg);
   font-size: 0.6rem;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--surface-glass-strong);
   color: rgba(255, 255, 255, 0.8);
   border: none;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .chip-badge:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--surface-glass-strong);
 }
 .chip-badge.badge-active {
   background: #e74c9c;
@@ -1729,8 +1729,8 @@ export default {
 }
 .profile-card {
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-light);
   border-radius: var(--border-radius-sm);
 }
 .profile-card.anime {
@@ -1903,9 +1903,9 @@ export default {
 .omdb-info-footer {
   margin: 0;
   padding: 0.6rem 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-glass-subtle);
   border-radius: var(--border-radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--surface-glass-light);
   line-height: 1.4;
   display: flex;
   align-items: flex-start;

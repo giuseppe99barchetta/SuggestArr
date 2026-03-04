@@ -59,7 +59,14 @@
        - surface-interactive: Hover states, active elements
        - surface-hover: Subtle hover effect for dark backgrounds
        - surface-hover-solid: Strong hover effect for dark backgrounds
+       
+       Glass Morphism (white overlays for highlights and effects):
+       - surface-glass-subtle: Very subtle highlight (borders, dividers)
+       - surface-glass-light: Light highlight (cards, sections)
+       - surface-glass-medium: Medium highlight (active states, emphasis)
+       - surface-glass-strong: Strong highlight (focus, selection)
      ──────────────────────────────────────────────────────────────────── */
+  /* Dark surface layers */
   --surface-base: rgba(0, 0, 0, 0.6);
   --surface-raised: rgba(34, 34, 36, 0.9);
   --surface-elevated: rgba(0, 0, 0, 0.8);
@@ -68,6 +75,12 @@
   --surface-interactive: rgba(255, 255, 255, 0.1);
   --surface-hover: rgba(255, 255, 255, 0.15);
   --surface-hover-solid: rgba(37, 37, 37);
+
+  /* Glass morphism white overlays */
+  --surface-glass-subtle: rgba(255, 255, 255, 0.05);
+  --surface-glass-light: rgba(255, 255, 255, 0.08);
+  --surface-glass-medium: rgba(255, 255, 255, 0.12);
+  --surface-glass-strong: rgba(255, 255, 255, 0.2);
 
   /* Legacy aliases (deprecated - use surface-* instead) */
   --color-bg-primary: var(--surface-base);
@@ -228,6 +241,11 @@
   --shadow-focus: 0 0 0 3px rgba(59, 130, 246, 0.1);
   --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.3);
   --shadow-success: 0 0 20px rgba(16, 185, 129, 0.3);
+
+  /* Semantic elevation aliases (use these for consistent layering) */
+  --elevation-1: var(--shadow-sm);   /* Cards, panels */
+  --elevation-2: var(--shadow-md);   /* Dropdowns, popovers */
+  --elevation-3: var(--shadow-lg);   /* Modals, dialogs */
 
   /* ═══════════════════════════════════════════════════════════════════════
      BORDER RADIUS SCALE

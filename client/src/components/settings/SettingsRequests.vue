@@ -237,21 +237,21 @@ export default {
 }
 
 .stat-card-mini {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--surface-glass-light);
+  border: 1px solid var(--surface-glass-medium);
   border-radius: 14px;
   padding: 1.5rem;
   display: flex;
   align-items: center;
   gap: 1.25rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--elevation-1);
 }
 
 .stat-card-mini:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--surface-glass-medium);
   transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--elevation-3);
   border-color: rgba(255, 255, 255, 0.18);
 }
 
@@ -321,8 +321,8 @@ export default {
 
 /* Recent Requests Preview */
 .recent-requests-preview {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-medium);
   border-radius: 14px;
   padding: 1.75rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -357,8 +357,8 @@ export default {
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-light);
   border-radius: 10px;
 }
 
@@ -445,18 +445,18 @@ export default {
 }
 
 .request-card-compact {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-interactive);
   border-radius: 10px;
   transition: all 0.25s ease;
   overflow: hidden;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--elevation-1);
 }
 
 .request-card-compact:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface-glass-light);
   border-color: rgba(148, 163, 184, 0.2);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--elevation-2);
 }
 
 .request-poster-compact {
