@@ -286,7 +286,25 @@ class DatabaseManager:
                     cursor = conn.cursor()
                     
                     # Database-specific modifications
-                    if self.db_type == 'mysql':
+                    if self.db_type in ['mysql', 'mariadb']:
+                        # Keep full VARCHAR storage but constrain indexed prefixes to stay
+                        # under InnoDB's key-length limit when using utf8mb4.
+                        if table_name == 'requests':
+                            query = query.replace(
+                                "UNIQUE(media_type, tmdb_request_id, tmdb_source_id),",
+                                "UNIQUE KEY uniq_requests_identity (media_type(191), tmdb_request_id(191), tmdb_source_id(191)),"
+                            )
+                        elif table_name == 'metadata':
+                            query = query.replace(
+                                "UNIQUE(media_id, media_type)",
+                                "UNIQUE KEY uniq_metadata_media_type (media_id(191), media_type(191))"
+                            )
+                        elif table_name == 'pending_requests':
+                            query = query.replace(
+                                "UNIQUE(tmdb_id, media_type)",
+                                "UNIQUE KEY uniq_pending_tmdb_media_type (tmdb_id(191), media_type(191))"
+                            )
+
                         # Order matters: do specific replacements first
                         query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "INT AUTO_INCREMENT PRIMARY KEY")
                         query = query.replace("INTEGER", "INT")
