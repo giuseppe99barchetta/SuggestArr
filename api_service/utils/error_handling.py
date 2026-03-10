@@ -227,3 +227,33 @@ def paginated_response(items: list, page: int, per_page: int, total: int) -> tup
     }
     
     return jsonify(response), 200
+
+
+def validate_required_fields(required_fields, data):
+    """
+    Ensure that the required fields are present in the provided data.
+    
+    Args:
+        required_fields: List of field names that must be present
+        data: Dictionary to validate
+        
+    Raises:
+        ValueError: If any required fields are missing
+    """
+    missing_fields = [field for field in required_fields if field not in data]
+    if missing_fields:
+        raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+
+
+def error_response(message, status_code=400):
+    """
+    Create an error response message.
+    
+    Args:
+        message: Error message to include
+        status_code: HTTP status code (default: 400)
+        
+    Returns:
+        Tuple of (response_dict, status_code)
+    """
+    return jsonify({'message': message, 'type': 'error'}), status_code

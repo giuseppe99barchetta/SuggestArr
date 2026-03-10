@@ -9,6 +9,7 @@ Classes:
 
 import aiohttp
 import asyncio
+from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 
 # Constants for HTTP status codes and timeout
@@ -17,7 +18,7 @@ REQUEST_TIMEOUT = 10   # Timeout in seconds for HTTP requests
 CONTENT_PER_PAGE = 20  # Number of content items per page in TMDb API responses
 RATE_LIMIT_SLEEP = 0.3 # Delay between requests to avoid rate limiting
 
-class TMDbClient:
+class TMDbClient(BaseHTTPClient):
     """
     A client to interact with The Movie Database (TMDb) API to retrieve information
     related to movies, TV shows, and external IDs.
@@ -40,7 +41,7 @@ class TMDbClient:
         :param include_tvod: If True, also check rent/buy availability when matching streaming providers.
                              If False (default), only subscription-based (flatrate) providers are checked.
         """
-        self.logger = LoggerManager.get_logger(self.__class__.__name__)
+        super().__init__()
         self.api_key = api_key
         self.search_size = search_size
         self.tmdb_threshold = tmdb_threshold
@@ -60,23 +61,7 @@ class TMDbClient:
         self.omdb_client = omdb_client
         self.include_tvod = include_tvod
         self.tmdb_api_url = "https://api.themoviedb.org/3"
-        self.session = None
         self.logger.debug("TMDbClient initialized with API key: ***")
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
-        return self.session
-
-    async def close(self):
-        if self.session and not self.session.closed:
-            await self.session.close()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
 
     async def _fetch_recommendations(self, content_id, content_type, dry_run=False):
         """
@@ -194,7 +179,7 @@ class TMDbClient:
         self.logger.debug("Fetching data from URL: %s", url.replace(self.api_key, "***"))
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     self.logger.debug("Successfully fetched data for page %d", page)
                     return await response.json()
@@ -217,7 +202,7 @@ class TMDbClient:
         
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as details_response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as details_response:
                 if details_response.status in HTTP_OK:
                     data = await details_response.json()
                     metadata = self._format_result(data, content_type)
@@ -227,7 +212,7 @@ class TMDbClient:
                     return None
 
             # Fetch images for logo
-            async with session.get(images_url, timeout=REQUEST_TIMEOUT) as images_response:
+            async with session.get(images_url, timeout=self.REQUEST_TIMEOUT) as images_response:
                 if images_response.status in HTTP_OK:
                     images_data = await images_response.json()
                     logos = images_data.get("logos", [])
@@ -407,7 +392,7 @@ class TMDbClient:
         self.logger.debug("Fetching details for %s ID %s", content_type, content_id)
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     data = await response.json()
                     if content_type == 'movie':
@@ -440,7 +425,7 @@ class TMDbClient:
         self.logger.debug("Fetching external IDs for TV ID %s", tv_id)
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     data = await response.json()
                     return data.get('imdb_id')
@@ -575,7 +560,7 @@ class TMDbClient:
         self.logger.debug("Finding TMDb ID for TVDb ID %s", tvdb_id)
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     data = await response.json()
                     if 'tv_results' in data and data['tv_results']:
@@ -615,7 +600,7 @@ class TMDbClient:
 
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     data = await response.json()
                     if "results" in data and self.region_provider in data["results"]:
@@ -700,7 +685,7 @@ class TMDbClient:
         """Helper to execute search and format results."""
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     data = await response.json()
                     results = []

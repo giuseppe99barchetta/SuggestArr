@@ -6,13 +6,13 @@ using IMDB IDs (tt... format).
 """
 
 import aiohttp
+from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 
 HTTP_OK = {200, 201}
-REQUEST_TIMEOUT = 10
 
 
-class OmdbClient:
+class OmdbClient(BaseHTTPClient):
     """
     Client for interacting with the OMDb API to retrieve IMDB ratings.
 
@@ -27,26 +27,10 @@ class OmdbClient:
         Args:
             api_key (str): OMDb API key (free tier at omdbapi.com).
         """
-        self.logger = LoggerManager.get_logger(self.__class__.__name__)
+        super().__init__()
         self.api_key = api_key
         self.base_url = "https://www.omdbapi.com/"
-        self.session = None
         self.logger.debug("OmdbClient initialized")
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
-        return self.session
-
-    async def close(self):
-        if self.session and not self.session.closed:
-            await self.session.close()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
 
     async def get_rating(self, imdb_id):
         """
@@ -68,7 +52,7 @@ class OmdbClient:
 
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     data = await response.json()
 

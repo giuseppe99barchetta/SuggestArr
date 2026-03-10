@@ -7,14 +7,14 @@ Classes:
 """
 import aiohttp
 import asyncio
+from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 
 # Constants
-REQUEST_TIMEOUT = 10       # Timeout in seconds for regular HTTP requests
 LIBRARY_FETCH_TIMEOUT = 120  # Timeout in seconds for full-library bulk fetches
 
 
-class JellyfinClient:
+class JellyfinClient(BaseHTTPClient):
     """
     A client to interact with the Jellyfin API, allowing the retrieval of users, recent items,
     and media provider IDs.
@@ -26,28 +26,12 @@ class JellyfinClient:
         :param api_url: The base URL for the Jellyfin API.
         :param token: The authentication token for Jellyfin.
         """
-        self.logger = LoggerManager.get_logger(self.__class__.__name__)
+        super().__init__()
         self.max_content_fetch = max_content
         self.api_url = api_url
         self.libraries = library_ids
         self.headers = {"X-Emby-Token": token}
         self.existing_content = {}
-        self.session = None
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
-        return self.session
-
-    async def close(self):
-        if self.session and not self.session.closed:
-            await self.session.close()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
         
     async def init_existing_content(self):
         self.logger.info('Initializing existing content.')
@@ -63,7 +47,7 @@ class JellyfinClient:
         self.logger.debug(f'Requesting all users from {url}')
         try:
             session = await self._get_session()
-            async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, headers=self.headers, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     data = await response.json()
                     self.logger.debug(f'Users retrieved: {data}')
@@ -206,7 +190,7 @@ class JellyfinClient:
 
             try:
                 session = await self._get_session()
-                async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
+                async with session.get(url, headers=self.headers, params=params, timeout=self.REQUEST_TIMEOUT) as response:
                     if response.status == 200:
                         library_items = await response.json()
                         items = library_items.get('Items', [])
@@ -290,7 +274,7 @@ class JellyfinClient:
 
         try:
             session = await self._get_session()
-            async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, headers=self.headers, params=params, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     data = await response.json()
                     items = data.get('Items', [])
@@ -326,7 +310,7 @@ class JellyfinClient:
         try:
             session = await self._get_session()
             async with session.get(
-                url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
+                url, headers=self.headers, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     libraries = await response.json()
                     self.logger.debug(f'Libraries retrieved: {libraries}')

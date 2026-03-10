@@ -1,18 +1,20 @@
 import aiohttp
 import asyncio
 from typing import List, Set
+from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 
-# Constants for HTTP status codes and request timeout
-HTTP_OK = {200, 201, 202}
-REQUEST_TIMEOUT = 10  # Timeout in seconds for HTTP requests
 BATCH_SIZE = 20  # Number of requests fetched per batch
+HTTP_OK = {200, 201, 202}  # Include 202 Accepted for async operations
 
-class SeerClient:
+class SeerClient(BaseHTTPClient):
     """
     A client to interact with the Jellyseer API for handling media requests and authentication.
     """
+    
+    # Override HTTP_OK to include 202 Accepted for async operations
+    HTTP_OK = {200, 201, 202}
 
     def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None, session_token=None,
                 number_of_seasons="all", exclude_downloaded=True, exclude_watched=True,
@@ -23,7 +25,7 @@ class SeerClient:
             Expected keys: 'anime_movie', 'anime_tv', optionally 'default_movie', 'default_tv'.
             Each value is a dict with optional keys: serverId, profileId, rootFolder, tags, languageProfileId.
         """
-        self.logger = LoggerManager.get_logger(self.__class__.__name__)
+        super().__init__()
         self.api_url = api_url
         self.api_key = api_key
         self.username = seer_user_name
@@ -36,23 +38,7 @@ class SeerClient:
         self.exclude_downloaded = exclude_downloaded
         self.exclude_requested = exclude_watched
         self.anime_profile_config = anime_profile_config or {}
-        self.session = None
         self.logger.debug("SeerClient initialized with API URL: %s", api_url)
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
-        return self.session
-
-    async def close(self):
-        if self.session and not self.session.closed:
-            await self.session.close()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
         
     async def init(self):
         """
@@ -87,7 +73,7 @@ class SeerClient:
             # since aiohttp allows passing request-level headers/cookies
             session = await self._get_session()
             try:
-                async with session.request(method, url, json=data, headers=headers, cookies=cookies, timeout=REQUEST_TIMEOUT) as response:
+                async with session.request(method, url, json=data, headers=headers, cookies=cookies, timeout=self.REQUEST_TIMEOUT) as response:
                     self.logger.debug("Received response with status %d for request to %s", response.status, url)
                     if response.status in HTTP_OK:
                         return await response.json()
@@ -133,7 +119,7 @@ class SeerClient:
         self.logger.debug("Logging in to %s", login_url)
         session = await self._get_session()
         try:
-            async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=REQUEST_TIMEOUT) as response:
+            async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=self.REQUEST_TIMEOUT) as response:
                 self.logger.debug("Login response status: %d", response.status)
                 if response.status == 200 and 'connect.sid' in response.cookies:
                     self.session_token = response.cookies['connect.sid'].value
