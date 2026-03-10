@@ -271,7 +271,7 @@ def save_env_vars(config_data):
         # Write environment variables to the config.yaml file
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             yaml.safe_dump(env_vars, f)
-            logger.debug(f"Environment variables saved for keys: {list(env_vars.keys())}")
+            logger.debug(f"Environment variables saved; total keys: {len(env_vars)}")
         invalidate_config_cache()
 
     except Exception as e:
