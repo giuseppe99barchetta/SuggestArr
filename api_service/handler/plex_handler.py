@@ -19,7 +19,7 @@ def to_ascii(value):
     return unicodedata.normalize('NFKD', value)
 
 class PlexHandler:
-    def __init__(self, plex_client: PlexClient, seer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, dry_run=False):
+    def __init__(self, plex_client: PlexClient, seer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_jellyseer_discovery=False, jellyseer_discovered_ids=None, dry_run=False):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -48,6 +48,10 @@ class PlexHandler:
         
         self.library_anime_map = library_anime_map or {}
         self.request_delay = request_delay
+        self.honor_jellyseer_discovery = bool(honor_jellyseer_discovery)
+        self.jellyseer_discovered_ids = {
+            str(item_id) for item_id in (jellyseer_discovered_ids or set())
+        }
         self.dry_run = dry_run
         self.dry_run_items = []
         self._dry_run_processed_ids = set()
@@ -294,6 +298,10 @@ class PlexHandler:
 
                 already_requested = await self.seer_client.check_already_requested(media_id, media_type)
                 already_downloaded = await self.seer_client.check_already_downloaded(media_id, media_type, self.existing_content_sets)
+                excluded_by_discovery = (
+                    self.honor_jellyseer_discovery
+                    and str(media_id) in self.jellyseer_discovered_ids
+                )
                 in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
 
                 filter_results = media.get('filter_results', {'passed': True})
@@ -309,6 +317,7 @@ class PlexHandler:
                     filter_results['passed']
                     and not already_requested
                     and not already_downloaded
+                    and not excluded_by_discovery
                 )
 
                 title = media.get('title') or media.get('name') or 'Unknown'
@@ -326,6 +335,7 @@ class PlexHandler:
                     'filter_results': filter_results,
                     'already_requested': already_requested,
                     'already_downloaded': already_downloaded,
+                    'excluded_by_jellyseer_discovery': excluded_by_discovery,
                     'would_request': would_request,
                     'source': {
                         'tmdb_id': source_tmdb_obj.get('id'),
@@ -377,6 +387,14 @@ class PlexHandler:
             # Check optimized local content set
             if media_id in local_content_set:
                 self.logger.debug(f"Skipping [{media_type}, {media_title}]: already downloaded (local set check).")
+                continue
+
+            if self.honor_jellyseer_discovery and media_id in self.jellyseer_discovered_ids:
+                self.logger.debug(
+                    "Skipping [%s, %s]: already discovered/requested in Seer.",
+                    media_type,
+                    media_title,
+                )
                 continue
 
             media_to_send = dict(media)

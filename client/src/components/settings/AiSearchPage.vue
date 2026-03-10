@@ -195,12 +195,6 @@
               <span class="meta-type">{{ item.media_type === 'tv' ? 'TV' : 'Movie' }}</span>
             </div>
 
-            <!-- AI Rationale (truncated on card) -->
-            <div v-if="item.rationale" class="card-rationale">
-              <i class="fas fa-quote-left"></i>
-              {{ item.rationale }}
-            </div>
-
             <!-- Request Button -->
             <button
               @click="requestItem(item)"
@@ -413,7 +407,7 @@ export default {
         }
 
         this.results = data.results || [];
-        this.queryInterpretation = data.query_interpretation || null;
+        this.queryInterpretation = data.ai_reasoning || data.query_interpretation || null;
         this.hasSearched = true;
         this.saveToHistory(this.query.trim());
       } catch (err) {

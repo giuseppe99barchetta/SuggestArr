@@ -4,6 +4,7 @@ import unittest
 
 from api_service.jobs.recommendation_automation import (
     _extract_year_from_filter_value,
+    _resolve_honor_jellyseer_discovery,
     _resolve_year_range_filters,
 )
 
@@ -39,3 +40,27 @@ class TestRecommendationYearRangeParsing(unittest.TestCase):
         from_year, to_year = _resolve_year_range_filters({}, {"FILTER_RELEASE_YEAR": "2018"})
         self.assertEqual(from_year, 2018)
         self.assertIsNone(to_year)
+
+
+class TestHonorJellyseerDiscoveryResolution(unittest.TestCase):
+
+    def test_job_filter_overrides_global_true(self):
+        value = _resolve_honor_jellyseer_discovery(
+            {"honor_jellyseer_discovery": True},
+            {"HONOR_JELLYSEER_DISCOVERY": False},
+        )
+        self.assertTrue(value)
+
+    def test_job_filter_overrides_global_false(self):
+        value = _resolve_honor_jellyseer_discovery(
+            {"honor_jellyseer_discovery": False},
+            {"HONOR_JELLYSEER_DISCOVERY": True},
+        )
+        self.assertFalse(value)
+
+    def test_global_fallback_used_when_job_filter_missing(self):
+        value = _resolve_honor_jellyseer_discovery(
+            {},
+            {"HONOR_JELLYSEER_DISCOVERY": True},
+        )
+        self.assertTrue(value)

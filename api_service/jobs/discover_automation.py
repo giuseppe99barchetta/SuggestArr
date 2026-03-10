@@ -10,6 +10,7 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.db.job_repository import JobRepository
+from api_service.services.filter_normalization import normalize_filters
 from api_service.services.jellyseer.seer_client import SeerClient
 from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
@@ -194,11 +195,13 @@ class DiscoverAutomation:
         Returns:
             List of discovered content items.
         """
-        filters = self.job_data.get('filters', {})
+        raw_filters = self.job_data.get('filters', {})
+        normalized_filters = normalize_filters(raw_filters)
+        filters = {**raw_filters, **normalized_filters}
         media_type = self.job_data.get('media_type', 'movie')
         max_results = self.job_data.get('max_results', 20)
 
-        raw_language_filter = filters.get('with_original_language')
+        raw_language_filter = normalized_filters.get('language') or filters.get('with_original_language')
         normalized_language_filter = self.tmdb_discover._normalize_language_code(raw_language_filter)
         if normalized_language_filter:
             self.logger.info("Applying original language filter: %s", normalized_language_filter)

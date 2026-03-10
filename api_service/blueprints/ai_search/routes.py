@@ -30,7 +30,7 @@ async def ai_search_query():
         max_results (int): Maximum results to return (default 12).
 
     Returns:
-        JSON response with 'results', 'query_interpretation', and 'total'.
+        JSON response with 'results', 'ai_reasoning', and 'total'.
     """
     try:
         data = request.json or {}
@@ -76,7 +76,7 @@ async def ai_search_query():
         return jsonify({
             "status": "success",
             "results": result.get("results", []),
-            "query_interpretation": result.get("query_interpretation", {}),
+            "ai_reasoning": result.get("ai_reasoning", {}),
             "total": result.get("total", 0),
         }), 200
 

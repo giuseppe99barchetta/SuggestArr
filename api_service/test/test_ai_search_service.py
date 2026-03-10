@@ -49,7 +49,7 @@ def _tmdb_item(item_id=1, title='Test Movie', media_type='movie'):
         'vote_count': 1000,
         'original_language': 'en',
         'release_date': '2020-01-01',
-        'genre_ids': [],
+        'genre_ids': [53],
     }
 
 
@@ -178,8 +178,41 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
             result = await service._search_single('dark thriller', 'movie', None, 12)
 
         self.assertIn('results', result)
+        self.assertIn('ai_reasoning', result)
+        self.assertNotIn('query_interpretation', result)
+        self.assertEqual(result['ai_reasoning']['genres'], ['Thriller'])
+        self.assertEqual(result['ai_reasoning']['title_suggestions'][0]['title'], 'Se7en')
+        self.assertTrue(result['ai_reasoning']['explanation'])
         self.assertGreaterEqual(len(result['results']), 1)
         self.assertEqual(result['results'][0]['id'], 1)
+        self.assertEqual(result['results'][0]['rationale'], 'great film')
+
+    async def test_maps_suggestion_rationale_onto_matching_discover_result(self):
+        service = _make_service()
+        interpretation = {
+            'discover_params': {'genres': ['Action']},
+            'suggested_titles': [{'title': 'The Matrix', 'year': 1999, 'rationale': 'A groundbreaking sci-fi action film.'}],
+        }
+        mock_tmdb = self._make_tmdb_client()
+        mock_discover = MagicMock()
+        mock_discover.discover_movies = AsyncMock(return_value=[_tmdb_item(7, 'The Matrix')])
+        mock_discover.discover_tv = AsyncMock(return_value=[])
+        mock_discover.__aenter__ = AsyncMock(return_value=mock_discover)
+        mock_discover.__aexit__ = AsyncMock(return_value=False)
+
+        with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
+                   AsyncMock(return_value=interpretation)), \
+             patch.object(service, '_get_history', AsyncMock(return_value=[])), \
+             patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
+             patch.object(service, '_resolve_suggested_title', AsyncMock(return_value=None)), \
+             patch.object(service, '_make_tmdb_discover', return_value=mock_discover), \
+             patch('api_service.db.database_manager.DatabaseManager') as MockDB:
+            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            result = await service._search_single('movies like the matrix', 'movie', None, 12)
+
+        self.assertEqual(len(result['results']), 1)
+        self.assertEqual(result['results'][0]['title'], 'The Matrix')
+        self.assertEqual(result['results'][0]['rationale'], 'A groundbreaking sci-fi action film.')
 
     async def test_excludes_already_requested_ids(self):
         service = _make_service()
@@ -219,6 +252,59 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(result['results']), 0)
 
+    async def test_applies_llm_discover_params_to_filter_results(self):
+        service = _make_service()
+        interpretation = {
+            'discover_params': {
+                'original_language': 'it',
+                'min_rating': 9.0,
+                'year_from': 2010,
+                'year_to': 2020,
+            },
+            'suggested_titles': [{'title': 'Se7en', 'year': 1995, 'rationale': 'ok'}],
+        }
+        mock_tmdb = self._make_tmdb_client()
+
+        with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
+                   AsyncMock(return_value=interpretation)), \
+             patch.object(service, '_get_history', AsyncMock(return_value=[])), \
+             patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
+             patch('api_service.db.database_manager.DatabaseManager') as MockDB:
+            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            result = await service._search_single('thriller', 'movie', None, 12)
+
+        # The mocked TMDB item is en/8.0/2020-01-01, so it must be excluded.
+        self.assertEqual(len(result['results']), 0)
+
+    async def test_uses_tmdb_discover_when_llm_titles_do_not_resolve(self):
+        service = _make_service()
+        interpretation = {
+            'discover_params': {
+                'genres': ['Action', 'Sci-Fi', 'Disaster'],
+                'year_from': 2007,
+            },
+            'suggested_titles': [],
+        }
+        mock_tmdb = self._make_tmdb_client()
+        mock_discover = MagicMock()
+        mock_discover.discover_movies = AsyncMock(return_value=[_tmdb_item(7, '2012')])
+        mock_discover.discover_tv = AsyncMock(return_value=[])
+        mock_discover.__aenter__ = AsyncMock(return_value=mock_discover)
+        mock_discover.__aexit__ = AsyncMock(return_value=False)
+
+        with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
+                   AsyncMock(return_value=interpretation)), \
+             patch.object(service, '_get_history', AsyncMock(return_value=[])), \
+             patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
+             patch.object(service, '_make_tmdb_discover', return_value=mock_discover), \
+             patch('api_service.db.database_manager.DatabaseManager') as MockDB:
+            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            result = await service._search_single('catastrophic movies like 2012', 'movie', None, 12)
+
+        self.assertEqual(len(result['results']), 1)
+        self.assertEqual(result['results'][0]['id'], 7)
+        self.assertEqual(result['results'][0]['source'], 'tmdb_discover')
+
 
 # ---------------------------------------------------------------------------
 # search() — 'both' media type
@@ -231,12 +317,12 @@ class TestSearch(unittest.IsolatedAsyncioTestCase):
 
         movie_result = {
             'results': [{'id': 1, 'title': 'Movie A', 'media_type': 'movie'}],
-            'query_interpretation': {},
+            'ai_reasoning': {'genres': ['Action'], 'title_suggestions': [], 'explanation': 'movie'},
             'total': 1,
         }
         tv_result = {
             'results': [{'id': 2, 'title': 'Show B', 'media_type': 'tv'}],
-            'query_interpretation': {},
+            'ai_reasoning': {'genres': ['Drama'], 'title_suggestions': [], 'explanation': 'tv'},
             'total': 1,
         }
 
@@ -246,12 +332,16 @@ class TestSearch(unittest.IsolatedAsyncioTestCase):
         ids = [r['id'] for r in result['results']]
         self.assertIn(1, ids)
         self.assertIn(2, ids)
+        self.assertIn('ai_reasoning', result)
+        self.assertNotIn('query_interpretation', result)
+        self.assertEqual(result['ai_reasoning']['movie']['genres'], ['Action'])
+        self.assertEqual(result['ai_reasoning']['tv']['genres'], ['Drama'])
 
     async def test_single_media_type_delegates_to_search_single(self):
         service = _make_service()
         expected = {
             'results': [{'id': 1, 'title': 'Se7en'}],
-            'query_interpretation': {},
+            'ai_reasoning': {'genres': ['Thriller'], 'title_suggestions': [], 'explanation': 'x'},
             'total': 1,
         }
         with patch.object(service, '_search_single', AsyncMock(return_value=expected)) as mock_ss:
@@ -290,12 +380,12 @@ class TestSearchBothLeftovers(unittest.IsolatedAsyncioTestCase):
         service = _make_service()
         movie_result = {
             'results': [{'id': 1, 'title': 'Movie A'}, {'id': 2, 'title': 'Movie B'}],
-            'query_interpretation': {},
+            'ai_reasoning': {'genres': ['Action'], 'title_suggestions': [], 'explanation': 'movie'},
             'total': 2,
         }
         tv_result = {
             'results': [{'id': 3, 'title': 'Show C'}],
-            'query_interpretation': {},
+            'ai_reasoning': {'genres': ['Drama'], 'title_suggestions': [], 'explanation': 'tv'},
             'total': 1,
         }
         with patch.object(service, '_search_single', AsyncMock(side_effect=[movie_result, tv_result])):
@@ -303,6 +393,44 @@ class TestSearchBothLeftovers(unittest.IsolatedAsyncioTestCase):
         ids = [r['id'] for r in result['results']]
         self.assertIn(2, ids)   # leftover from longer movie list
         self.assertEqual(len(ids), 3)
+
+
+class TestAiReasoningPayload(unittest.TestCase):
+
+    def test_build_ai_reasoning_preserves_interpretation_fields(self):
+        interpretation = {
+            'discover_params': {
+                'genres': ['Action', 'Sci-Fi'],
+                'year_from': 2007,
+                'year_to': 2012,
+                'original_language': 'en',
+                'min_rating': 6.0,
+            },
+            'suggested_titles': [
+                {'title': '2012', 'year': 2009, 'rationale': 'Disaster blockbuster.'},
+            ],
+            'explanation': 'The AI focused on mainstream disaster movies from the late 2000s.',
+        }
+
+        reasoning = AiSearchService._build_ai_reasoning(interpretation)
+
+        self.assertEqual(reasoning['genres'], ['Action', 'Sci-Fi'])
+        self.assertEqual(reasoning['year_from'], 2007)
+        self.assertEqual(reasoning['year_to'], 2012)
+        self.assertEqual(reasoning['original_language'], 'en')
+        self.assertEqual(reasoning['min_rating'], 6.0)
+        self.assertEqual(reasoning['title_suggestions'], interpretation['suggested_titles'])
+        self.assertEqual(reasoning['explanation'], interpretation['explanation'])
+
+    def test_build_ai_reasoning_generates_explanation_when_missing(self):
+        reasoning = AiSearchService._build_ai_reasoning({
+            'discover_params': {'genres': ['Thriller'], 'year_from': 1990},
+            'suggested_titles': [{'title': 'Se7en', 'year': 1995, 'rationale': 'Dark thriller.'}],
+        })
+
+        self.assertIn('Thriller', reasoning['explanation'])
+        self.assertIn('1990', reasoning['explanation'])
+        self.assertIn('Se7en', reasoning['explanation'])
 
 
 # ---------------------------------------------------------------------------
@@ -551,6 +679,46 @@ class TestMakeTmdbClient(unittest.TestCase):
         with patch('api_service.services.omdb.omdb_client.OmdbClient') as MockOmdb:
             service._make_tmdb_client()
         MockOmdb.assert_called_once_with('omdb_key')
+
+
+class TestDiscoverParamsMapping(unittest.TestCase):
+
+    def test_maps_llm_filters_to_tmdb_discover_params(self):
+        mapped = AiSearchService._map_llm_discover_params(AiSearchService._prepare_tmdb_discover_filters({
+            'genres': [28, 53],
+            'original_language': 'EN',
+            'min_rating': 7.5,
+            'year_from': 1990,
+            'year_to': 1999,
+        }))
+        self.assertEqual(mapped['with_genres'], '28|53')
+        self.assertEqual(mapped['with_original_language'], 'en')
+        self.assertEqual(mapped['vote_average_gte'], 6.0)
+        self.assertEqual(mapped['vote_count_gte'], 200)
+        self.assertEqual(mapped['sort_by'], 'popularity.desc')
+        self.assertEqual(mapped['primary_release_date_gte'], '1990-01-01')
+        self.assertEqual(mapped['primary_release_date_lte'], '1999-12-31')
+
+    def test_unknown_genres_are_ignored(self):
+        mapped = AiSearchService._map_llm_discover_params(AiSearchService._prepare_tmdb_discover_filters({
+            'genres': ['Disaster'],
+            'year_from': 2007,
+        }))
+        self.assertNotIn('with_genres', mapped)
+        self.assertEqual(mapped['primary_release_date_gte'], '2007-01-01')
+        self.assertEqual(mapped['vote_average_gte'], 6.0)
+        self.assertEqual(mapped['vote_count_gte'], 200)
+
+    def test_prepare_tmdb_discover_filters_applies_quality_defaults(self):
+        prepared = AiSearchService._prepare_tmdb_discover_filters({
+            'genres': ['Action'],
+            'min_rating': 9.5,
+            'sort_by': 'vote_average.desc',
+            'vote_count_gte': 3,
+        })
+        self.assertEqual(prepared['min_rating'], 6.0)
+        self.assertEqual(prepared['sort_by'], 'popularity.desc')
+        self.assertEqual(prepared['vote_count_gte'], 200)
 
 
 if __name__ == '__main__':
