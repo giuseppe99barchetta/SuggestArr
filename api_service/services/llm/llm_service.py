@@ -24,6 +24,7 @@ from api_service.services.config_service import ConfigService
 from api_service.services.llm.schemas import (
     DiscoverParams,
     RecommendationList,
+    SearchResultRationaleList,
     SearchQueryInterpretation,
     SuggestedTitle,
 )
@@ -632,6 +633,124 @@ Example format:
             len(validated.suggested_titles),
         )
         return result
+    finally:
+        try:
+            await client.aclose()
+        except Exception:
+            pass
+
+
+async def generate_search_result_rationales(
+    query: str,
+    media_type: str,
+    discover_params: Dict[str, Any],
+    results: List[Dict[str, Any]],
+) -> Dict[str, str]:
+    """Generate concise, per-result rationales for AI-search TMDB results.
+
+    :param query: Original user search query.
+    :param media_type: 'movie' or 'tv'.
+    :param discover_params: Parsed interpretation filters used during discover.
+    :param results: Final or candidate TMDB result dicts with title/name and optional year.
+    :return: Mapping keyed as ``"{normalized_title}|{year_or_empty}"`` to rationale text.
+    """
+    if not results:
+        return {}
+
+    client = get_llm_client()
+    if not client:
+        logger.info("LLM not configured — skipping per-result rationale generation.")
+        return {}
+
+    try:
+        config = ConfigService.get_runtime_config()
+        model = config.get("LLM_MODEL", "gpt-4o-mini")
+        max_retries = int(config.get("LLM_MAX_RETRIES", 2))
+        list_type = "movies" if media_type == "movie" else "TV shows"
+
+        input_items: List[Dict[str, Any]] = []
+        for item in results:
+            title = (item.get("title") or item.get("name") or "").strip()
+            if not title:
+                continue
+
+            year = item.get("year")
+            if year is None:
+                date_value = item.get("release_date") if media_type == "movie" else item.get("first_air_date")
+                year_text = str(date_value).split("-")[0] if date_value else ""
+                year = int(year_text) if year_text.isdigit() else None
+
+            input_items.append({"title": title, "year": year})
+
+        if not input_items:
+            return {}
+
+        discover_summary = {
+            "genres": discover_params.get("genres"),
+            "year_from": discover_params.get("year_from"),
+            "year_to": discover_params.get("year_to"),
+            "min_rating": discover_params.get("min_rating"),
+        }
+
+        prompt = f"""You are writing short, personalized recommendation rationales for {list_type}.
+
+User query:
+\"{query}\"
+
+Interpreted filters:
+{json.dumps(discover_summary, ensure_ascii=True)}
+
+Generate one rationale for each candidate below:
+{json.dumps(input_items, ensure_ascii=True)}
+
+Return ONLY valid JSON with this exact shape:
+{{
+  \"rationales\": [
+    {{\"title\": \"...\", \"year\": 2020, \"rationale\": \"...\"}}
+  ]
+}}
+
+Rules:
+- Include exactly one entry per input item (same title/year pairs).
+- rationale must be exactly one sentence.
+- Keep each rationale natural, recommendation-like, and <= 20 words.
+- Vary wording across items; do not repeat the same sentence structure.
+- Mention concrete fit to the user's query or filters when possible.
+- Do not include markdown or any text outside JSON.
+"""
+
+        messages = [
+            {
+                "role": "system",
+                "content": "You produce strict JSON only for media rationale generation.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+
+        validated: SearchResultRationaleList = await _call_with_validation(
+            client=client,
+            model=model,
+            messages=messages,
+            schema_cls=SearchResultRationaleList,
+            temperature=0.8,
+            max_retries=max_retries,
+        )
+
+        rationale_map: Dict[str, str] = {}
+        for item in validated.rationales:
+            title_key = _normalize_title(item.title)
+            if not title_key:
+                continue
+            year_key = str(item.year) if item.year is not None else ""
+            key = f"{title_key}|{year_key}"
+            rationale = str(item.rationale or "").strip()
+            if rationale and key not in rationale_map:
+                rationale_map[key] = rationale
+
+        return rationale_map
+    except Exception as exc:
+        logger.warning("Failed generating per-result LLM rationales: %s", exc)
+        return {}
     finally:
         try:
             await client.aclose()

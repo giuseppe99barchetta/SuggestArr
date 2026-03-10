@@ -10,7 +10,10 @@ from typing import Any, Dict, List, Optional
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
 from api_service.services.filter_normalization import build_tmdb_params, normalize_filters
-from api_service.services.llm.llm_service import interpret_search_query
+from api_service.services.llm.llm_service import (
+    generate_search_result_rationales,
+    interpret_search_query,
+)
 from api_service.services.tmdb.tmdb_client import TMDbClient
 from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
@@ -215,7 +218,13 @@ class AiSearchService:
                 apply_discover_filters=False,
             )
 
-        self._apply_suggestion_rationales(final, suggestion_rationale_map)
+        await self._apply_suggestion_rationales(
+            final,
+            suggestion_rationale_map,
+            query,
+            discover_params,
+            media_type,
+        )
 
         return {
             "results": final[:max_results],
@@ -621,16 +630,117 @@ class AiSearchService:
         return rationale_map
 
     @staticmethod
-    def _apply_suggestion_rationales(results: List[Dict[str, Any]], suggestion_rationale_map: Dict[str, str]) -> None:
-        """Copy LLM suggestion rationales onto matching final results by normalized title."""
-        if not suggestion_rationale_map:
-            return
+    async def _apply_suggestion_rationales(
+        results: List[Dict[str, Any]],
+        suggestion_rationale_map: Dict[str, str],
+        query: str,
+        discover_params: Dict[str, Any],
+        media_type: str,
+    ) -> None:
+        """Set per-item rationale from exact matches, then LLM-generated one-liners, then contextual fallback."""
+        llm_rationale_map: Dict[str, str] = {}
+        unresolved_results: List[Dict[str, Any]] = []
 
         for result in results:
             title = str(result.get("title") or result.get("name") or "").strip().lower()
-            if not title:
-                continue
-            result["rationale"] = suggestion_rationale_map.get(title, result.get("rationale", ""))
+            if title and title in suggestion_rationale_map:
+                result["rationale"] = suggestion_rationale_map[title]
+            else:
+                unresolved_results.append(result)
+
+        if unresolved_results:
+            llm_rationale_map = await generate_search_result_rationales(
+                query=query,
+                media_type=media_type,
+                discover_params=discover_params,
+                results=unresolved_results,
+            )
+
+        seen_rationales: set = set()
+
+        for result in results:
+            existing = str(result.get("rationale") or "").strip()
+            if existing:
+                rationale = existing
+            else:
+                key = AiSearchService._result_lookup_key(result, media_type)
+                rationale = llm_rationale_map.get(key, "") if key else ""
+                if not rationale:
+                    rationale = AiSearchService._generate_contextual_result_rationale(
+                        result=result,
+                        discover_params=discover_params,
+                        media_type=media_type,
+                    )
+
+            # Keep rationale strings distinct even if two items resolve to identical text.
+            if rationale in seen_rationales:
+                item_id = result.get("id")
+                if item_id is not None:
+                    rationale = f"{rationale} (TMDb {item_id})"
+
+            seen_rationales.add(rationale)
+            result["rationale"] = rationale
+
+    @staticmethod
+    def _result_lookup_key(result: Dict[str, Any], media_type: str) -> str:
+        """Build a normalized title/year lookup key matching LLM rationale map keys."""
+        title = str(result.get("title") or result.get("name") or "").strip().lower()
+        if not title:
+            return ""
+
+        year = result.get("year")
+        if year is None:
+            date_value = result.get("release_date") if media_type == "movie" else result.get("first_air_date")
+            year_text = str(date_value).split("-")[0] if date_value else ""
+            year = int(year_text) if year_text.isdigit() else None
+
+        year_key = str(year) if year is not None else ""
+        return f"{title}|{year_key}"
+
+    @staticmethod
+    def _generate_contextual_result_rationale(
+        result: Dict[str, Any],
+        discover_params: Dict[str, Any],
+        media_type: str,
+    ) -> str:
+        """Generate a per-result rationale aligned to interpreted discover filters."""
+        title = str(result.get("title") or result.get("name") or "This title").strip() or "This title"
+
+        genres = discover_params.get("genres") or []
+        if isinstance(genres, list) and genres:
+            genres_text = ", ".join(str(genre) for genre in genres)
+            genre_part = f"the {genres_text} genre focus"
+        else:
+            genre_part = "the genre and tone from your query"
+
+        year_from = discover_params.get("year_from")
+        year_to = discover_params.get("year_to")
+        if year_from and year_to:
+            year_part = f"the requested {year_from}-{year_to} time range"
+        elif year_from:
+            year_part = f"the requested period from {year_from} onward"
+        elif year_to:
+            year_part = f"the requested period up to {year_to}"
+        else:
+            year_part = "the requested release window"
+
+        min_rating = discover_params.get("min_rating")
+        if min_rating is not None:
+            rating_part = f"the minimum rating target of {float(min_rating):.1f}+"
+        else:
+            rating_part = "the quality threshold inferred by the AI"
+
+        date_value = result.get("release_date") if media_type == "movie" else result.get("first_air_date")
+        release_year = str(date_value).split("-")[0] if date_value else None
+        if release_year and release_year.isdigit():
+            release_part = f" Released in {release_year}, it remains consistent with those constraints."
+        else:
+            release_part = ""
+
+        return (
+            f"{title} matches the AI search because it fits {genre_part}, aligns with {year_part}, "
+            f"and meets {rating_part}.{release_part}"
+        )
 
     @staticmethod
     def _is_watched(item: Dict, watched_titles: set) -> bool:

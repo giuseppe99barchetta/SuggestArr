@@ -76,3 +76,25 @@ class SearchQueryInterpretation(BaseModel):
 
     discover_params: DiscoverParams
     suggested_titles: list[SuggestedTitle]
+
+
+# ---------------------------------------------------------------------------
+# AI search result rationale generation schemas
+# ---------------------------------------------------------------------------
+
+class SearchResultRationaleItem(BaseModel):
+    """A single LLM-generated rationale tied to a suggested result title/year."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    year: Optional[int] = None
+    rationale: str
+
+
+class SearchResultRationaleList(BaseModel):
+    """Top-level wrapper for per-result AI search rationales."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rationales: list[SearchResultRationaleItem]

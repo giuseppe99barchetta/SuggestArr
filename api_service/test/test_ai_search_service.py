@@ -284,6 +284,7 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
                 'year_from': 2007,
             },
             'suggested_titles': [],
+            'explanation': 'Picked high-signal disaster titles similar to your query.',
         }
         mock_tmdb = self._make_tmdb_client()
         mock_discover = MagicMock()
@@ -297,6 +298,8 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_get_history', AsyncMock(return_value=[])), \
              patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
              patch.object(service, '_make_tmdb_discover', return_value=mock_discover), \
+             patch('api_service.services.ai_search.ai_search_service.generate_search_result_rationales',
+                 AsyncMock(return_value={'2012|2020': 'Apocalyptic action energy that directly matches your catastrophic-movie request.'})), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
             MockDB.return_value.get_requested_tmdb_ids.return_value = set()
             result = await service._search_single('catastrophic movies like 2012', 'movie', None, 12)
@@ -304,6 +307,69 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result['results']), 1)
         self.assertEqual(result['results'][0]['id'], 7)
         self.assertEqual(result['results'][0]['source'], 'tmdb_discover')
+        self.assertEqual(
+            result['results'][0]['rationale'],
+            'Apocalyptic action energy that directly matches your catastrophic-movie request.',
+        )
+
+
+class TestSuggestionRationaleAssignment(unittest.IsolatedAsyncioTestCase):
+
+    async def test_apply_suggestion_rationales_uses_map_then_llm_then_contextual(self):
+        results = [
+            {'id': 603, 'title': 'The Matrix', 'release_date': '1999-03-31', 'rationale': ''},
+            {'id': 1637, 'title': 'Speed', 'release_date': '1994-06-10', 'rationale': ''},
+            {'id': 42, 'name': 'Unknown Show', 'first_air_date': '2019-01-01', 'rationale': ''},
+        ]
+        suggestion_map = {'the matrix': 'A groundbreaking sci-fi action film.'}
+        discover_params = {
+            'genres': ['Action', 'Thriller'],
+            'year_from': 1990,
+            'year_to': 2020,
+            'min_rating': 7.0,
+        }
+
+        with patch(
+            'api_service.services.ai_search.ai_search_service.generate_search_result_rationales',
+            AsyncMock(return_value={'speed|1994': 'High-velocity action with relentless momentum that mirrors your request.'}),
+        ):
+            await AiSearchService._apply_suggestion_rationales(
+                results,
+                suggestion_map,
+                query='fast-paced action movies',
+                discover_params=discover_params,
+                media_type='movie',
+            )
+
+        self.assertEqual(results[0]['rationale'], 'A groundbreaking sci-fi action film.')
+        self.assertEqual(
+            results[1]['rationale'],
+            'High-velocity action with relentless momentum that mirrors your request.',
+        )
+        self.assertIn('Unknown Show', results[2]['rationale'])
+        self.assertNotEqual(results[0]['rationale'], results[1]['rationale'])
+        self.assertNotEqual(results[1]['rationale'], results[2]['rationale'])
+
+    async def test_apply_suggestion_rationales_keeps_duplicates_unique(self):
+        results = [
+            {'id': 1, 'title': 'Same Name', 'release_date': '2020-01-01', 'rationale': ''},
+            {'id': 2, 'title': 'Same Name', 'release_date': '2020-01-01', 'rationale': ''},
+        ]
+
+        with patch(
+            'api_service.services.ai_search.ai_search_service.generate_search_result_rationales',
+            AsyncMock(return_value={}),
+        ):
+            await AiSearchService._apply_suggestion_rationales(
+                results,
+                suggestion_rationale_map={},
+                query='drama with emotional depth',
+                discover_params={'genres': ['Drama']},
+                media_type='movie',
+            )
+
+        self.assertNotEqual(results[0]['rationale'], results[1]['rationale'])
+        self.assertIn('TMDb 2', results[1]['rationale'])
 
 
 # ---------------------------------------------------------------------------
