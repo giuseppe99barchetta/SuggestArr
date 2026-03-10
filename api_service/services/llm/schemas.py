@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -57,6 +57,22 @@ class DiscoverParams(BaseModel):
     original_language: Optional[str] = None
     sort_by: Optional[str] = None
     min_rating: Optional[float] = None
+
+    @field_validator("original_language", mode="before")
+    @classmethod
+    def coerce_language_list(cls, v):
+        """Coerce a list of language codes into a single ISO 639-1 code.
+
+        The LLM may incorrectly return multiple language codes as a list (e.g.,
+        ["da", "no", "sv"] for "Nordic western"). This validator takes the first
+        element to ensure Pydantic validation succeeds. Downstream normalization
+        can then apply further refinement if needed.
+        """
+        if isinstance(v, list):
+            if not v:
+                return None
+            return str(v[0])
+        return v
 
 
 class SuggestedTitle(BaseModel):
