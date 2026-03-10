@@ -145,6 +145,27 @@ def _repair_title_qualifiers(text: str) -> str:
     return re.sub(r'"([^"]*?)"\s+(\([^)]*?\))', r'"\1 \2"', text)
 
 
+def _extract_json_object(text: str) -> str:
+    """Extract the first complete JSON object from text.
+
+    Some providers prepend or append natural-language commentary even when
+    instructed to return JSON only. This keeps only the content between the
+    first ``{`` and the last ``}``, then trims whitespace.
+
+    :param text: LLM output that should contain a JSON object.
+    :return: String narrowed to the JSON object region when delimiters exist.
+    """
+    end = text.rfind("}")
+    if end != -1:
+        text = text[: end + 1]
+
+    start = text.find("{")
+    if start != -1:
+        text = text[start:]
+
+    return text.strip()
+
+
 def _deduplicate_history(history_items: List[Dict]) -> List[Dict]:
     """Remove duplicate titles from history, preserving order (first occurrence wins).
 
@@ -216,6 +237,7 @@ async def _call_with_validation(
 
     * stripped of markdown fences,
     * repaired for common LLM JSON quirks,
+    * narrowed to the first complete JSON object,
     * parsed as JSON,
     * validated against *schema_cls*.
 
@@ -248,7 +270,9 @@ async def _call_with_validation(
             response_format={"type": "json_object"},
         )
         raw = response.choices[0].message.content.strip()
-        content = _repair_title_qualifiers(_strip_markdown_fences(raw))
+        content = _extract_json_object(
+            _repair_title_qualifiers(_strip_markdown_fences(raw))
+        )
 
         try:
             parsed = json.loads(content)
