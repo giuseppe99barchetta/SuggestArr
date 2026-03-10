@@ -81,8 +81,15 @@ def _resolve_year_range_filters(job_filters: Dict[str, Any], env_vars: Dict[str,
 
 def _resolve_honor_seer_discovery(job_filters: Dict[str, Any], env_vars: Dict[str, Any]) -> bool:
     """Resolve whether Seer-discovered items should be excluded at runtime."""
+    # Prefer the new per-job key, fall back to legacy alias for backward compatibility.
+    if 'honor_seer_discovery' in job_filters:
+        return bool(job_filters.get('honor_seer_discovery'))
     if 'honor_jellyseer_discovery' in job_filters:
         return bool(job_filters.get('honor_jellyseer_discovery'))
+
+    # If no per-job setting is present, prefer the new env var, then fall back to the legacy one.
+    if 'HONOR_SEER_DISCOVERY' in env_vars:
+        return bool(env_vars.get('HONOR_SEER_DISCOVERY', False))
     return bool(env_vars.get('HONOR_JELLYSEER_DISCOVERY', False))
 
 
