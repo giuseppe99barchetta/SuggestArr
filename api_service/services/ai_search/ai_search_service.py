@@ -147,8 +147,8 @@ class AiSearchService:
         suggested_titles = interpretation.get("suggested_titles", [])
         suggestion_rationale_map = self._build_suggestion_rationale_map(suggested_titles)
 
-        logger.info("Discover filters: %s", prepared_discover_filters)
-        logger.info("TMDb params: %s", tmdb_discover_params)
+        logger.debug("Discover filters: %s", prepared_discover_filters)
+        logger.debug("TMDb params: %s", tmdb_discover_params)
 
         # 4. Build TMDb client from config
         tmdb_client = self._make_tmdb_client()

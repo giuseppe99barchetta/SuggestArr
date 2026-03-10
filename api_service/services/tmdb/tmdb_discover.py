@@ -189,8 +189,8 @@ class TMDbDiscover:
         query_params['page'] = page
         query_params['api_key'] = self.api_key
 
-        self.logger.info("Discover filters: %s", merged_filters)
-        self.logger.info("TMDb params: %s", query_params)
+        self.logger.debug("Discover filters: %s", merged_filters)
+        self.logger.debug("TMDb params: %s", query_params)
 
         # Build query string
         query_string = '&'.join(f"{k}={v}" for k, v in query_params.items())

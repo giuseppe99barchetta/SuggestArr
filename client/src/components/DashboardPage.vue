@@ -264,26 +264,31 @@
       <!-- Reset Confirmation Modal -->
       <transition name="fade">
         <div v-if="showResetModal" class="modal-overlay" @click.self="showResetModal = false">
-          <div class="modal-content">
-            <div class="modal-header">
-              <i class="fas fa-exclamation-triangle warning-icon"></i>
-              <h3>Confirm Reset</h3>
+          <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="reset-modal-title">
+            <div class="modal-header modal-header--danger">
+              <div class="modal-title-wrap">
+                <h3 class="modal-title" id="reset-modal-title">
+                  <i class="fas fa-exclamation-triangle"></i> Confirm Reset
+                </h3>
+                <p class="modal-subtitle">This action is permanent and cannot be undone.</p>
+              </div>
+              <button type="button" class="modal-close" aria-label="Close reset modal" @click="showResetModal = false">
+                <i class="fas fa-times"></i>
+              </button>
             </div>
-            
-            <p class="modal-body">
-              Are you sure you want to reset all settings to default? 
-              <strong>This action cannot be undone</strong> and will:
-            </p>
-            
-            <ul class="reset-warning-list">
-              <li><i class="fas fa-times-circle"></i> Clear all service connections</li>
-              <li><i class="fas fa-times-circle"></i> Remove all custom filters</li>
-              <li><i class="fas fa-times-circle"></i> Reset scheduling preferences</li>
-              <li><i class="fas fa-times-circle"></i> Clear database configuration</li>
-            </ul>
-            
-            <div class="modal-actions">
-              <button @click="showResetModal = false" class="btn btn-secondary">
+
+            <div class="modal-body">
+              <p>Are you sure you want to reset all settings to default? This will:</p>
+              <ul class="reset-warning-list">
+                <li><i class="fas fa-times-circle"></i> Clear all service connections</li>
+                <li><i class="fas fa-times-circle"></i> Remove all custom filters</li>
+                <li><i class="fas fa-times-circle"></i> Reset scheduling preferences</li>
+                <li><i class="fas fa-times-circle"></i> Clear database configuration</li>
+              </ul>
+            </div>
+
+            <div class="modal-footer">
+              <button @click="showResetModal = false" class="btn btn-outline">
                 <i class="fas fa-times"></i>
                 Cancel
               </button>
