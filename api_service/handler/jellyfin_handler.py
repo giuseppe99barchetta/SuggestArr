@@ -162,6 +162,7 @@ class JellyfinHandler:
             filters={
                 "with_original_language": self.tmdb_client.language_filter,
                 "release_year_gte": self.tmdb_client.release_year_filter,
+                "release_year_lte": self.tmdb_client.release_year_filter_to,
                 "vote_average_gte": self.tmdb_client.tmdb_threshold / 10 if self.tmdb_client.tmdb_threshold else None,
             },
         )

@@ -437,12 +437,18 @@ class TestGetRecommendationsFromHistory(unittest.IsolatedAsyncioTestCase):
                 history,
                 max_results=3,
                 item_type="movie",
-                filters={"with_original_language": "it"},
+                filters={
+                    "with_original_language": "it",
+                    "release_year_gte": 1990,
+                    "release_year_lte": 1999,
+                },
             )
 
         messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
         user_prompt = messages[1]["content"]
         self.assertIn("ORIGINAL language code is 'it'", user_prompt)
+        self.assertIn("released from year 1990 onward", user_prompt)
+        self.assertIn("released up to year 1999", user_prompt)
 
 
 # ---------------------------------------------------------------------------

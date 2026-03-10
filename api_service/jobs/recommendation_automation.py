@@ -18,6 +18,66 @@ from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 
 
+def _extract_year_from_filter_value(value: Any) -> Optional[int]:
+    """Parse a year from int/float/numeric string/date string filter values."""
+    if value is None or isinstance(value, bool):
+        return None
+
+    if isinstance(value, (int, float)):
+        year = int(value)
+        return year if year > 0 else None
+
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        if raw.isdigit():
+            year = int(raw)
+            return year if year > 0 else None
+        # Accept date-like strings such as YYYY-MM-DD.
+        if len(raw) >= 4 and raw[:4].isdigit():
+            year = int(raw[:4])
+            return year if year > 0 else None
+
+    return None
+
+
+def _resolve_year_range_filters(job_filters: Dict[str, Any], env_vars: Dict[str, Any]) -> tuple[int, Optional[int]]:
+    """Resolve recommendation year bounds from job filters (and global fallback)."""
+    from_year = None
+    to_year = None
+
+    from_candidates = [
+        'release_year_gte',
+        'year_from',
+        'primary_release_date_gte',
+        'first_air_date_gte',
+    ]
+    to_candidates = [
+        'release_year_lte',
+        'year_to',
+        'primary_release_date_lte',
+        'first_air_date_lte',
+    ]
+
+    for key in from_candidates:
+        parsed = _extract_year_from_filter_value(job_filters.get(key))
+        if parsed is not None:
+            from_year = parsed
+            break
+
+    for key in to_candidates:
+        parsed = _extract_year_from_filter_value(job_filters.get(key))
+        if parsed is not None:
+            to_year = parsed
+            break
+
+    if from_year is None:
+        from_year = _extract_year_from_filter_value(env_vars.get('FILTER_RELEASE_YEAR')) or 0
+
+    return from_year, to_year
+
+
 @dataclass
 class ExecutionResult:
     """Result of a job execution."""
@@ -137,7 +197,7 @@ class RecommendationAutomation:
         if include_no_ratings is None:
             include_no_ratings = self.env_vars.get('FILTER_INCLUDE_NO_RATING', True) == True
 
-        filter_release_year = job_filters.get('release_year_gte', int(self.env_vars.get('FILTER_RELEASE_YEAR') or 0))
+        filter_release_year, filter_release_year_to = _resolve_year_range_filters(job_filters, self.env_vars)
 
         # Language filter
         filter_language = []
@@ -254,6 +314,7 @@ class RecommendationAutomation:
             imdb_min_votes=imdb_min_votes,
             omdb_client=omdb_client,
             include_tvod=filter_include_tvod,
+            filter_release_year_to=filter_release_year_to,
         )
 
         # Determine which users to process

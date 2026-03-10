@@ -27,7 +27,7 @@ class TMDbClient:
                 include_no_ratings, filter_release_year, filter_language, filter_genre,
                 filter_region_provider, filter_streaming_services, filter_min_runtime=None,
                 rating_source='tmdb', imdb_threshold=None, imdb_min_votes=None,
-                omdb_client=None, include_tvod=False
+                omdb_client=None, include_tvod=False, filter_release_year_to=None
                 ):
         """
         Initializes the TMDbClient with the provided API key.
@@ -48,6 +48,7 @@ class TMDbClient:
         self.include_no_ratings = include_no_ratings
         self.language_filter = filter_language
         self.release_year_filter = filter_release_year
+        self.release_year_filter_to = int(filter_release_year_to) if filter_release_year_to is not None else None
         self.genre_filter = filter_genre
         self.pages = (self.search_size + CONTENT_PER_PAGE - 1) // CONTENT_PER_PAGE
         self.region_provider = filter_region_provider
@@ -343,6 +344,14 @@ class TMDbClient:
                     'passed': False, 'label': 'Year',
                     'value': year_str,
                     'reason': f'Before {self.release_year_filter}',
+                }
+                overall = False
+            elif self.release_year_filter_to is not None and int(year_str) > self.release_year_filter_to:
+                self._log_exclusion_reason(item, f"release year {year_str} after {self.release_year_filter_to}", content_type)
+                results['release_year'] = {
+                    'passed': False, 'label': 'Year',
+                    'value': year_str,
+                    'reason': f'After {self.release_year_filter_to}',
                 }
                 overall = False
             else:

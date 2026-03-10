@@ -391,6 +391,15 @@ async def get_recommendations_from_history(
             except (TypeError, ValueError):
                 pass
 
+            year_to = filters.get("release_year_lte") or filters.get("year_to")
+            try:
+                if year_to is not None:
+                    constraint_lines.append(
+                        f"- Only recommend titles released up to year {int(year_to)}."
+                    )
+            except (TypeError, ValueError):
+                pass
+
             min_rating = _to_float(filters.get("vote_average_gte") or filters.get("min_rating"))
             if min_rating is not None:
                 if min_rating > 10:
