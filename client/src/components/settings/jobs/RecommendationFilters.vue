@@ -167,19 +167,19 @@
               Exclude Requested Content
             </span>
           </label>
-          <small class="toggle-help">Skip content already requested in Jellyseer/Overseer</small>
+          <small class="toggle-help">Skip content already requested in Seer</small>
 
           <label class="toggle-item">
             <input
-              v-model="localFilters.honor_jellyseer_discovery"
+              v-model="localFilters.honor_seer_discovery"
               type="checkbox"
             />
             <span class="toggle-label-modal">
               <i class="fas fa-compass"></i>
-              Honor Jellyseer Discovery
+              Honor Seer Discovery
             </span>
           </label>
-          <small class="toggle-help">Respect Jellyseer's discovery settings for requests</small>
+          <small class="toggle-help">Respect Seer's discovery settings for requests</small>
         </div>
       </div>
     </template>
@@ -218,7 +218,7 @@ export default {
         search_size: 20,
         exclude_downloaded: true,
         exclude_requested: true,
-        honor_jellyseer_discovery: false
+        honor_seer_discovery: false
       },
       isUpdatingFromParent: false,
       localUserMode: 'all'
@@ -242,7 +242,7 @@ export default {
             search_size: newVal.filters.search_size ?? 20,
             exclude_downloaded: newVal.filters.exclude_downloaded ?? true,
             exclude_requested: newVal.filters.exclude_requested ?? true,
-            honor_jellyseer_discovery: newVal.filters.honor_jellyseer_discovery ?? false
+            honor_seer_discovery: newVal.filters.honor_seer_discovery ?? false
           };
           this.$nextTick(() => {
             this.isUpdatingFromParent = false;

@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 
-from api_service.services.jellyseer.seer_client import SeerClient
+from api_service.services.seer.seer_client import SeerClient
 
 
 # ---------------------------------------------------------------------------
@@ -243,21 +243,21 @@ class TestCheckAlreadyRequested(unittest.IsolatedAsyncioTestCase):
 
     async def test_returns_true_when_found_in_db(self):
         client = _make_client()
-        with patch('api_service.services.jellyseer.seer_client.DatabaseManager') as MockDB:
+        with patch('api_service.services.seer.seer_client.DatabaseManager') as MockDB:
             MockDB.return_value.check_request_exists.return_value = True
             result = await client.check_already_requested('12345', 'movie')
         self.assertTrue(result)
 
     async def test_returns_false_when_not_in_db(self):
         client = _make_client()
-        with patch('api_service.services.jellyseer.seer_client.DatabaseManager') as MockDB:
+        with patch('api_service.services.seer.seer_client.DatabaseManager') as MockDB:
             MockDB.return_value.check_request_exists.return_value = False
             result = await client.check_already_requested('12345', 'movie')
         self.assertFalse(result)
 
     async def test_returns_false_on_exception(self):
         client = _make_client()
-        with patch('api_service.services.jellyseer.seer_client.DatabaseManager') as MockDB:
+        with patch('api_service.services.seer.seer_client.DatabaseManager') as MockDB:
             MockDB.return_value.check_request_exists.side_effect = Exception('db error')
             result = await client.check_already_requested('12345', 'movie')
         self.assertFalse(result)
@@ -265,7 +265,7 @@ class TestCheckAlreadyRequested(unittest.IsolatedAsyncioTestCase):
     async def test_returns_false_when_exclude_requested_is_false(self):
         client = _make_client(exclude_watched=False)
         # DB should not be called
-        with patch('api_service.services.jellyseer.seer_client.DatabaseManager') as MockDB:
+        with patch('api_service.services.seer.seer_client.DatabaseManager') as MockDB:
             result = await client.check_already_requested('12345', 'movie')
         MockDB.return_value.check_request_exists.assert_not_called()
         self.assertFalse(result)
@@ -411,7 +411,7 @@ class TestRequestMedia(unittest.IsolatedAsyncioTestCase):
 
     async def test_returns_false_when_already_in_db(self):
         client = _make_client(exclude_watched=True)
-        with patch('api_service.services.jellyseer.seer_client.DatabaseManager') as MockDB:
+        with patch('api_service.services.seer.seer_client.DatabaseManager') as MockDB:
             MockDB.return_value.check_request_exists.return_value = True
             result = await client.request_media('movie', {'id': 456})
         self.assertFalse(result)
@@ -419,7 +419,7 @@ class TestRequestMedia(unittest.IsolatedAsyncioTestCase):
     async def test_enqueues_and_returns_true_for_new_request(self):
         client = _make_client(exclude_watched=True)
         user = {'id': 9, 'name': 'Alice'}
-        with patch('api_service.services.jellyseer.seer_client.DatabaseManager') as MockDB:
+        with patch('api_service.services.seer.seer_client.DatabaseManager') as MockDB:
             MockDB.return_value.check_request_exists.return_value = False
             MockDB.return_value.enqueue_request.return_value = True
             result = await client.request_media('movie', {'id': 789}, user=user)

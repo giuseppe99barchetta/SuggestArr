@@ -14,7 +14,7 @@ from api_service.handler.jellyfin_handler import JellyfinHandler
 from api_service.handler.plex_handler import PlexHandler
 from api_service.services.filter_normalization import normalize_filters
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
-from api_service.services.jellyseer.seer_client import SeerClient
+from api_service.services.seer.seer_client import SeerClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 
@@ -79,7 +79,7 @@ def _resolve_year_range_filters(job_filters: Dict[str, Any], env_vars: Dict[str,
     return from_year, to_year
 
 
-def _resolve_honor_jellyseer_discovery(job_filters: Dict[str, Any], env_vars: Dict[str, Any]) -> bool:
+def _resolve_honor_seer_discovery(job_filters: Dict[str, Any], env_vars: Dict[str, Any]) -> bool:
     """Resolve whether Seer-discovered items should be excluded at runtime."""
     if 'honor_jellyseer_discovery' in job_filters:
         return bool(job_filters.get('honor_jellyseer_discovery'))
@@ -99,7 +99,7 @@ class ExecutionResult:
 class RecommendationAutomation:
     """
     Automates the process of retrieving watched content from Jellyfin/Plex,
-    finding similar content via TMDb, and requesting it via Jellyseer/Overseer.
+    finding similar content via TMDb, and requesting it via Seer.
 
     This is similar to ContentAutomation but configured per-job with:
     - Specific user IDs to monitor
@@ -226,8 +226,8 @@ class RecommendationAutomation:
         filter_release_year, filter_release_year_to = _resolve_year_range_filters(
             {**job_filters, **normalized_filters}, self.env_vars
         )
-        honor_jellyseer_discovery = _resolve_honor_jellyseer_discovery(job_filters, self.env_vars)
-        jellyseer_discovered_ids = self._get_seer_discovered_tmdb_ids() if honor_jellyseer_discovery else set()
+        honor_seer_discovery = _resolve_honor_seer_discovery(job_filters, self.env_vars)
+        seer_discovered_ids = self._get_seer_discovered_tmdb_ids() if honor_seer_discovery else set()
 
         # Language filter
         filter_language = []
@@ -307,8 +307,8 @@ class RecommendationAutomation:
         anime_profile_config_raw = self.env_vars.get('SEER_ANIME_PROFILE_CONFIG', {})
         anime_profile_config = anime_profile_config_raw if isinstance(anime_profile_config_raw, dict) else {}
 
-        # Initialize Jellyseer client
-        self.logger.info("Initializing Jellyseer client")
+        # Initialize Seer service client
+        self.logger.info("Initializing Seer service client")
         seer_client = SeerClient(
             self.env_vars['SEER_API_URL'],
             self.env_vars['SEER_TOKEN'],
@@ -355,16 +355,16 @@ class RecommendationAutomation:
             await self._init_jellyfin_handler(
                 seer_client, tmdb_client, max_similar_movie, max_similar_tv,
                 selected_users, max_content, job_use_llm,
-                honor_jellyseer_discovery=honor_jellyseer_discovery,
-                jellyseer_discovered_ids=jellyseer_discovered_ids,
+                honor_seer_discovery=honor_seer_discovery,
+                seer_discovered_ids=seer_discovered_ids,
                 dry_run=dry_run
             )
         elif selected_service == 'plex':
             await self._init_plex_handler(
                 seer_client, tmdb_client, max_similar_movie, max_similar_tv,
                 selected_users, max_content, job_use_llm,
-                honor_jellyseer_discovery=honor_jellyseer_discovery,
-                jellyseer_discovered_ids=jellyseer_discovered_ids,
+                honor_seer_discovery=honor_seer_discovery,
+                seer_discovered_ids=seer_discovered_ids,
                 dry_run=dry_run
             )
         else:
@@ -404,8 +404,8 @@ class RecommendationAutomation:
     async def _init_jellyfin_handler(
         self, seer_client, tmdb_client, max_similar_movie, max_similar_tv,
         selected_users, max_content, use_llm=None,
-        honor_jellyseer_discovery: bool = False,
-        jellyseer_discovered_ids: Optional[set[str]] = None,
+        honor_seer_discovery: bool = False,
+        seer_discovered_ids: Optional[set[str]] = None,
         dry_run=False
     ):
         """Initialize Jellyfin handler."""
@@ -432,8 +432,8 @@ class RecommendationAutomation:
             jellyfin_client, seer_client, tmdb_client, self.logger,
             max_similar_movie, max_similar_tv,
             selected_users, jellyfin_anime_map, use_llm=use_llm,
-            honor_jellyseer_discovery=honor_jellyseer_discovery,
-            jellyseer_discovered_ids=jellyseer_discovered_ids,
+            honor_seer_discovery=honor_seer_discovery,
+            seer_discovered_ids=seer_discovered_ids,
             dry_run=dry_run
         )
         self.logger.info("Jellyfin handler initialized")
@@ -441,8 +441,8 @@ class RecommendationAutomation:
     async def _init_plex_handler(
         self, seer_client, tmdb_client, max_similar_movie, max_similar_tv,
         selected_users, max_content, use_llm=None,
-        honor_jellyseer_discovery: bool = False,
-        jellyseer_discovered_ids: Optional[set[str]] = None,
+        honor_seer_discovery: bool = False,
+        seer_discovered_ids: Optional[set[str]] = None,
         dry_run=False
     ):
         """Initialize Plex handler."""
@@ -470,8 +470,8 @@ class RecommendationAutomation:
             plex_client, seer_client, tmdb_client, self.logger,
             max_similar_movie, max_similar_tv,
             plex_anime_map, use_llm=use_llm,
-            honor_jellyseer_discovery=honor_jellyseer_discovery,
-            jellyseer_discovered_ids=jellyseer_discovered_ids,
+            honor_seer_discovery=honor_seer_discovery,
+            seer_discovered_ids=seer_discovered_ids,
             dry_run=dry_run
         )
         self.logger.info("Plex handler initialized")

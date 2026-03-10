@@ -15,7 +15,7 @@ def to_ascii(value):
     return unicodedata.normalize('NFKD', value)
 
 class PlexHandler(BaseMediaHandler):
-    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_jellyseer_discovery=False, jellyseer_discovered_ids=None, dry_run=False):
+    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -26,7 +26,7 @@ class PlexHandler(BaseMediaHandler):
         :param max_similar_tv: Max number of similar TV shows to request
         :param library_anime_map: Dict mapping library section ID to is_anime boolean
         :param use_llm: Override for LLM mode. If None, falls back to global ENABLE_ADVANCED_ALGORITHM setting.
-        :param request_delay: Seconds to wait between consecutive Jellyseerr requests (0 = concurrent).
+        :param request_delay: Seconds to wait between consecutive Seer service requests (0 = concurrent).
         :param dry_run: If True, simulate requests without touching download clients.
         """
         super().__init__(
@@ -38,8 +38,8 @@ class PlexHandler(BaseMediaHandler):
             library_anime_map=library_anime_map,
             use_llm=use_llm,
             request_delay=request_delay,
-            honor_jellyseer_discovery=honor_jellyseer_discovery,
-            jellyseer_discovered_ids=jellyseer_discovered_ids,
+            honor_seer_discovery=honor_seer_discovery,
+            seer_discovered_ids=seer_discovered_ids,
             dry_run=dry_run
         )
         self.plex_client = plex_client
@@ -182,7 +182,7 @@ class PlexHandler(BaseMediaHandler):
                 self.logger.warning(f"Error while processing item: 'tmdb_id' not found for tv show '{title}'. Skipping.")
 
     async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj, is_anime=False):
-        """Request similar media (movie/TV show) via Overseer."""
+        """Request similar media (movie/TV show) via the Seer service."""
         self.logger.debug(f"Requesting {max_items} similar media (anime={is_anime})")
         if not media_ids:
             self.logger.debug("No similar media found after filtering for source %s.", source_tmdb_obj.get('id') if isinstance(source_tmdb_obj, dict) else '?')
@@ -211,8 +211,8 @@ class PlexHandler(BaseMediaHandler):
                 already_requested = await self.seer_client.check_already_requested(media_id, media_type)
                 already_downloaded = await self.seer_client.check_already_downloaded(media_id, media_type, self.existing_content_sets)
                 excluded_by_discovery = (
-                    self.honor_jellyseer_discovery
-                    and str(media_id) in self.jellyseer_discovered_ids
+                    self.honor_seer_discovery
+                    and str(media_id) in self.seer_discovered_ids
                 )
                 in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
 
@@ -247,7 +247,7 @@ class PlexHandler(BaseMediaHandler):
                     'filter_results': filter_results,
                     'already_requested': already_requested,
                     'already_downloaded': already_downloaded,
-                    'excluded_by_jellyseer_discovery': excluded_by_discovery,
+                    'excluded_by_seer_discovery': excluded_by_discovery,
                     'would_request': would_request,
                     'source': {
                         'tmdb_id': source_tmdb_obj.get('id'),
@@ -301,7 +301,7 @@ class PlexHandler(BaseMediaHandler):
                 self.logger.debug(f"Skipping [{media_type}, {media_title}]: already downloaded (local set check).")
                 continue
 
-            if self.honor_jellyseer_discovery and media_id in self.jellyseer_discovered_ids:
+            if self.honor_seer_discovery and media_id in self.seer_discovered_ids:
                 self.logger.debug(
                     "Skipping [%s, %s]: already discovered/requested in Seer.",
                     media_type,

@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 import aiohttp
-from api_service.services.jellyseer.seer_client import SeerClient
+from api_service.services.seer.seer_client import SeerClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.utils.ssrf_guard import validate_url
@@ -29,7 +29,7 @@ def _load_seer_config():
 @seer_bp.route('/get_users', methods=['GET', 'POST'])
 async def get_users():
     """
-    Fetch Jellyseer/Overseer users using the globally configured API key and URL,
+    Fetch Seer users using the globally configured API key and URL,
     or credentials provided in the request body (e.g. during initial setup).
     """
     try:
@@ -60,13 +60,13 @@ async def get_users():
 
             return jsonify({'message': 'Users fetched successfully', 'users': users}), 200
     except Exception as e:
-        logger.error(f'Error fetching Jellyseer/Overseer users: {str(e)}', exc_info=True)
+        logger.error(f'Error fetching Seer service users: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error fetching users', 'type': 'error'}), 500
 
 
 async def _simple_seer_http_test(api_url, api_key):
     """
-    Simple HTTP test to verify Overseer/Jellyseer API accessibility.
+    Simple HTTP test to verify Seer API accessibility.
     Returns (success: bool, message: str, data: dict)
     """
     try:
@@ -109,7 +109,7 @@ async def _simple_seer_http_test(api_url, api_key):
 @seer_bp.route('/test', methods=['GET', 'POST'])
 async def test_seer_connection():
     """
-    Test Overseer/Jellyseer API connection using the globally configured API key and URL.
+    Test Seer API connection using the globally configured API key and URL.
     """
     try:
         config_data = request.get_json(silent=True) or {}
@@ -145,7 +145,7 @@ async def test_seer_connection():
 
                 if users and isinstance(users, list) and len(users) > 0:
                     return jsonify({
-                        'message': 'Overseer/Jellyseer connection successful!',
+                        'message': 'Seer connection successful!',
                         'status': 'success',
                         'data': {
                             'users_count': len(users),
@@ -155,7 +155,7 @@ async def test_seer_connection():
                     }), 200
                 elif users and isinstance(users, list):
                     return jsonify({
-                        'message': 'Overseer/Jellyseer connection successful but no users found',
+                        'message': 'Seer connection successful but no users found',
                         'status': 'success',
                         'data': {
                             'users_count': 0,
@@ -171,7 +171,7 @@ async def test_seer_connection():
                     }), 400
 
         except Exception as client_error:
-            logger.error(f'Overseer/Jellyseer client test failed: {str(client_error)}', exc_info=True)
+            logger.error(f'Seer service client test failed: {str(client_error)}', exc_info=True)
             return jsonify({
                 'message': 'HTTP connection successful but client test failed',
                 'status': 'error',
@@ -179,9 +179,9 @@ async def test_seer_connection():
             }), 400
 
     except Exception as e:
-        logger.error(f'Error testing Overseer/Jellyseer connection: {str(e)}', exc_info=True)
+        logger.error(f'Error testing Seer service connection: {str(e)}', exc_info=True)
         return jsonify({
-            'message': 'Error testing Overseer/Jellyseer connection',
+            'message': 'Error testing Seer connection',
             'status': 'error'
         }), 500
 
@@ -189,7 +189,7 @@ async def test_seer_connection():
 @seer_bp.route('/login', methods=['POST'])
 async def login_seer():
     """
-    Endpoint to log in to Jellyseer/Overseer using the provided credentials.
+    Endpoint to log in to Seer using the provided credentials.
     Credentials are supplied in the request body (this is the Seer login flow, not SuggestArr auth).
     """
     try:
@@ -230,7 +230,7 @@ async def login_seer():
 @seer_bp.route('/radarr-servers', methods=['GET', 'POST'])
 async def get_radarr_servers():
     """
-    Fetch available Radarr servers from Overseerr using the globally configured credentials.
+    Fetch available Radarr servers from Seer using the globally configured credentials.
     Returns servers with their quality profiles, root folders, and tags.
     """
     try:
@@ -261,7 +261,7 @@ async def get_radarr_servers():
 @seer_bp.route('/sonarr-servers', methods=['GET', 'POST'])
 async def get_sonarr_servers():
     """
-    Fetch available Sonarr servers from Overseerr using the globally configured credentials.
+    Fetch available Sonarr servers from Seer using the globally configured credentials.
     Returns servers with their quality profiles, root folders, and tags.
     """
     try:

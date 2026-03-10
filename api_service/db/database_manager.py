@@ -1187,7 +1187,7 @@ class DatabaseManager:
     def get_requested_tmdb_ids(self) -> set:
         """Return the set of TMDB IDs (as strings) that SuggestArr has already requested.
 
-        Used by AI Search to exclude items that have already been sent to Jellyseer,
+        Used by AI Search to exclude items that have already been sent to Seer,
         whether through the normal automation or through the AI Search feature.
 
         :return: Set of tmdb_request_id strings.
@@ -1495,7 +1495,7 @@ class DatabaseManager:
 
         :param tmdb_id: TMDB media ID.
         :param media_type: 'movie' or 'tv'.
-        :param user_id: Jellyseer user ID to attribute the request to (may be None).
+        :param user_id: Seer user ID to attribute the request to (may be None).
         :param payload: Complete Seer request body plus private meta-keys prefixed
             with ``_`` (``_source_id``, ``_rationale``, ``_is_anime``).
         :return: True if a new row was inserted, False if already present or already

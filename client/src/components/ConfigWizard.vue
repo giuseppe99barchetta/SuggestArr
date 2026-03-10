@@ -320,7 +320,7 @@ export default {
         },
         {
           id: 'seer',
-          label: 'Overseerr / Jellyseerr',
+          label: 'Seer',
           description: 'Connect your media request manager to submit suggestions.',
           component: SettingsServices,
           wizardSection: 'seer',
@@ -378,7 +378,7 @@ export default {
         if (!stepValidity.value['media-server']) return 'Connect your media server to continue.';
       }
       if (step.id === 'tmdb') return 'Test your TMDB connection above to continue.';
-      if (step.id === 'seer') return 'Test your Jellyseerr / Overseerr connection above to continue.';
+      if (step.id === 'seer') return 'Test your Seer connection above to continue.';
       return '';
     });
 

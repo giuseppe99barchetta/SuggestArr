@@ -351,10 +351,10 @@
         </div>
       </div>
 
-      <!-- Overseerr -->
+      <!-- Seer  -->
       <div v-if="showSection('seer')" :class="wizardMode ? '' : 'service-card'">
         <div v-if="!wizardMode" class="service-header">
-          <h3><i class="fas fa-list-alt"></i> Overseerr</h3>
+          <h3><i class="fas fa-list-alt"></i> Seer</h3>
           <span class="status-badge" :class="getSeerStatus">
             <span class="status-dot"></span>
             {{ getSeerStatusText }}
@@ -410,7 +410,7 @@
               <div class="advanced-block-header">
                 <span class="advanced-block-title"><i class="fas fa-user-shield"></i> Request Delay</span>
               </div>
-              <p class="advanced-block-desc">Wait time between consecutive Overseerr/Jellyseerr requests. Increase if you receive notification rate-limit errors (0 = send all requests simultaneously)</p>
+              <p class="advanced-block-desc">Wait time between consecutive Seer requests. Increase if you receive notification rate-limit errors (0 = send all requests simultaneously)</p>
               <div class="form-group" style="margin-top: 1.25rem;">
                 <input
                   id="seerRequestDelay"
@@ -508,7 +508,7 @@
                 </div>
               </div>
 
-              <p v-else-if="serversLoaded" class="no-items"><i class="fas fa-exclamation-triangle"></i> No Radarr/Sonarr servers found in Overseerr.</p>
+              <p v-else-if="serversLoaded" class="no-items"><i class="fas fa-exclamation-triangle"></i> No Radarr/Sonarr servers found in Seer.</p>
             </div>
           </div>
         </div>
@@ -542,7 +542,7 @@
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import {
-  testJellyseerApi, authenticateUser, fetchRadarrServers, fetchSonarrServers,
+  testSeerApi, authenticateUser, fetchRadarrServers, fetchSonarrServers,
   fetchJellyfinLibraries, fetchJellyfinUsers, fetchPlexLibraries, fetchPlexUsers,
   testOmdbApi, testTmdbApi
 } from '@/api/api';
@@ -1260,7 +1260,7 @@ export default {
       this.seerConnected = false;
       this.seerUsers = [];
       try {
-        const response = await testJellyseerApi({
+        const response = await testSeerApi({
           SEER_API_URL: seerUrl,
           SEER_TOKEN: seerToken,
         });

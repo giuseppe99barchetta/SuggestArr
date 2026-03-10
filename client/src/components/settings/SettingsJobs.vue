@@ -389,7 +389,7 @@ export default {
         {
           targetId: 'job-modal-filters',
           title: 'Filters',
-          description: 'Narrow down what gets requested: minimum TMDb rating, minimum vote count, original language, year range, and genre exclusions. Only content matching all active filters will be sent to Jellyseer/Overseer.',
+          description: 'Narrow down what gets requested: minimum TMDb rating, minimum vote count, original language, year range, and genre exclusions. Only content matching all active filters will be sent to Seer.',
           position: 'top'
         },
       ]

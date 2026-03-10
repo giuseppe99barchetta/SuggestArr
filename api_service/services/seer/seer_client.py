@@ -10,7 +10,7 @@ HTTP_OK = {200, 201, 202}  # Include 202 Accepted for async operations
 
 class SeerClient(BaseHTTPClient):
     """
-    A client to interact with the Jellyseer API for handling media requests and authentication.
+    A client to interact with the Seer service API for handling media requests and authentication.
     """
     
     # Override HTTP_OK to include 202 Accepted for async operations
@@ -20,7 +20,7 @@ class SeerClient(BaseHTTPClient):
                 number_of_seasons="all", exclude_downloaded=True, exclude_watched=True,
                 anime_profile_config=None):
         """
-        Initializes the JellyseerClient with the API URL and logs in the user.
+        Initializes the SeerClient with the API URL and logs in the user.
         :param anime_profile_config: Dict with anime/default profile routing settings.
             Expected keys: 'anime_movie', 'anime_tv', optionally 'default_movie', 'default_tv'.
             Each value is a dict with optional keys: serverId, profileId, rootFolder, tags, languageProfileId.
@@ -43,7 +43,7 @@ class SeerClient(BaseHTTPClient):
     async def init(self):
         """
         Asynchronous initialization method to fetch all requests.
-        This is typically called after creating an instance of JellyseerClient
+        This is typically called after creating an instance of SeerClient
         to ensure that the requests cache is populated.
         """
         self.logger.debug("Initializing SeerClient...")
@@ -106,7 +106,7 @@ class SeerClient(BaseHTTPClient):
         return None
 
     async def login(self):
-        """Authenticate with Jellyseer and obtain a session token."""
+        """Authenticate with the Seer service and obtain a session token."""
         if self._login_lock is None:
             self._login_lock = asyncio.Lock()
 
@@ -131,7 +131,7 @@ class SeerClient(BaseHTTPClient):
             self.logger.error("Login request to %s timed out.", login_url)
 
     async def get_all_users(self, max_users=100):
-        """Fetch all users from Jellyseer API, returning a list of user IDs, names, and local status."""
+        """Fetch all users from the Seer service API, returning a list of user IDs, names, and local status."""
         self.logger.debug("Fetching all users with max_users=%d", max_users)
         data = await self._make_request("GET", f"api/v1/user?take={max_users}")
         if data:
@@ -148,7 +148,7 @@ class SeerClient(BaseHTTPClient):
         return []
     
     async def fetch_all_requests(self):
-        """Fetch all requests made in Jellyseer and save them to the database."""
+        """Fetch all requests made in the Seer service and save them to the database."""
         self.logger.debug("Fetching all requests...")
         total_requests = await self.get_total_request()
         self.logger.debug("Total requests to fetch: %d", total_requests)
@@ -168,7 +168,7 @@ class SeerClient(BaseHTTPClient):
             self.logger.error(f"Failed to fetch batch at skip {skip}: {e}")
 
     async def get_total_request(self):
-        """Get total requests made in Jellyseer."""
+        """Get total requests made in the Seer service."""
         self.logger.debug("Getting total request count...")
         data = await self._make_request("GET", "api/v1/request/count")
         total = data.get('total', 0) if data else 0
@@ -176,13 +176,13 @@ class SeerClient(BaseHTTPClient):
         return total
 
     async def get_radarr_servers(self):
-        """Fetch available Radarr servers from Overseerr with their profiles, root folders, and tags."""
-        self.logger.debug("Fetching Radarr servers from Overseerr")
+        """Fetch available Radarr servers from the Seer service with their profiles, root folders, and tags."""
+        self.logger.debug("Fetching Radarr servers from the Seer service")
         return await self._make_request("GET", "api/v1/service/radarr")
 
     async def get_sonarr_servers(self):
-        """Fetch available Sonarr servers from Overseerr with their profiles, root folders, and tags."""
-        self.logger.debug("Fetching Sonarr servers from Overseerr")
+        """Fetch available Sonarr servers from the Seer service with their profiles, root folders, and tags."""
+        self.logger.debug("Fetching Sonarr servers from the Seer service")
         return await self._make_request("GET", "api/v1/service/sonarr")
 
     def _apply_profile_config(self, data, profile_key, media_type):

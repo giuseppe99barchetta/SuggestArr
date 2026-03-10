@@ -329,7 +329,7 @@ class JobRepository:
             exec_id: ID of the execution history record.
             status: Final status ('completed' or 'failed').
             results_count: Number of results found.
-            requested_count: Number of items requested to Jellyseer/Overseer.
+            requested_count: Number of items requested to Seer.
             error_message: Error message if failed.
         """
         self.logger.debug(f"Logging execution end for record ID: {exec_id}, status: {status}")

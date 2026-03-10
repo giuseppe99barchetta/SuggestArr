@@ -168,7 +168,7 @@ async def _check_seer(api_url: str, api_key: str) -> str:
     Ping the Seer /api/v1/status endpoint.
 
     Args:
-        api_url: Base URL for Jellyseer/Overseer.
+        api_url: Base URL for Seer.
         api_key: Seer API key.
 
     Returns:

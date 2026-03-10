@@ -417,7 +417,7 @@ export default {
         {
           targetId: 'tab-requests',
           title: 'Requests',
-          description: 'Every time SuggestArr runs, it submits content requests to Overseerr / Jellyseerr. You can track them all here — what was requested, when, and for which user.',
+          description: 'Every time SuggestArr runs, it submits content requests to Seer. You can track them all here — what was requested, when, and for which user.',
           position: 'bottom',
         },
         {
@@ -429,7 +429,7 @@ export default {
         {
           targetId: 'tab-services',
           title: 'Services',
-          description: 'Update your API keys and connection settings for TMDB, your media server (Jellyfin, Plex…), and Jellyseerr / Overseerr here.',
+          description: 'Update your API keys and connection settings for TMDB, your media server (Jellyfin, Plex…), and Seer here.',
           position: 'bottom',
         },
         {

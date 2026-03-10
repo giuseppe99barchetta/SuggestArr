@@ -20,15 +20,15 @@ export const testJellyfinApi = (url, token) => {
     });
 };
 
-// Function to test the Jellyseer/Overseer configuration and fetch users
-export const testJellyseerApi = (payload = null) => {
+// Function to test the Seer configuration and fetch users
+export const testSeerApi = (payload = null) => {
     if (payload) {
         return axios.post('/api/seer/get_users', payload);
     }
     return axios.get('/api/seer/get_users');
 };
 
-// Function to authenticate a user in Jellyseer/Overseer
+// Function to authenticate a user in Seer
 export const authenticateUser = (url, token, userName, password) => {
     return axios.post('/api/seer/login', {
         SEER_API_URL: url,
@@ -58,7 +58,7 @@ export function fetchPlexUsers(payload) {
     return axios.post('/api/plex/users', payload);
 }
 
-// Function to fetch Radarr servers from Overseerr for anime profile configuration
+// Function to fetch Radarr servers from Seer for anime profile configuration
 export const fetchRadarrServers = (payload = null) => {
     if (payload) {
         return axios.post('/api/seer/radarr-servers', payload);
@@ -66,7 +66,7 @@ export const fetchRadarrServers = (payload = null) => {
     return axios.get('/api/seer/radarr-servers');
 };
 
-// Function to fetch Sonarr servers from Overseerr for anime profile configuration
+// Function to fetch Sonarr servers from Seer for anime profile configuration
 export const fetchSonarrServers = (payload = null) => {
     if (payload) {
         return axios.post('/api/seer/sonarr-servers', payload);
@@ -93,7 +93,7 @@ export const getAiSearchRequests = (page = 1, perPage = 12, sortBy = 'date-desc'
     });
 };
 
-// AI Search: request a specific TMDB item via Jellyseer/Overseer
+// AI Search: request a specific TMDB item via Seer
 export const aiSearchRequest = (tmdbId, mediaType, rationale = '', metadata = {}, searchQuery = '') => {
     return axios.post('/api/ai-search/request', {
         tmdb_id: tmdbId,

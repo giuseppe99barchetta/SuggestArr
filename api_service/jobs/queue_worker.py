@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
-from api_service.services.jellyseer.seer_client import SeerClient
+from api_service.services.seer.seer_client import SeerClient
 
 MAX_RETRIES = 5
 WORKER_BATCH = 50

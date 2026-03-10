@@ -26,13 +26,13 @@ class BaseMediaHandler(ABC):
     
     def __init__(self, seer_client, tmdb_client, logger,
                  max_similar_movie, max_similar_tv, library_anime_map=None,
-                 use_llm=None, request_delay=0, honor_jellyseer_discovery=False,
-                 jellyseer_discovered_ids=None, dry_run=False):
+                 use_llm=None, request_delay=0, honor_seer_discovery=False,
+                 seer_discovered_ids=None, dry_run=False):
         """
         Initialize base media handler.
         
         Args:
-            seer_client: Jellyseer API client
+            seer_client: Seer service API client
             tmdb_client: TMDb API client
             logger: Logger instance
             max_similar_movie: Max number of similar movies to request
@@ -40,8 +40,8 @@ class BaseMediaHandler(ABC):
             library_anime_map: Dict mapping library identifiers to is_anime boolean
             use_llm: Override for LLM mode
             request_delay: Seconds to wait between consecutive requests
-            honor_jellyseer_discovery: Whether to honor Jellyseer discovery
-            jellyseer_discovered_ids: Set of already discovered item IDs
+            honor_seer_discovery: Whether to honor Seer discovery
+            seer_discovered_ids: Set of already discovered item IDs
             dry_run: Whether to simulate requests
         """
         self.seer_client = seer_client
@@ -57,9 +57,9 @@ class BaseMediaHandler(ABC):
         
         self.library_anime_map = library_anime_map or {}
         self.request_delay = request_delay
-        self.honor_jellyseer_discovery = bool(honor_jellyseer_discovery)
-        self.jellyseer_discovered_ids = {
-            str(item_id) for item_id in (jellyseer_discovered_ids or set())
+        self.honor_seer_discovery = bool(honor_seer_discovery)
+        self.seer_discovered_ids = {
+            str(item_id) for item_id in (seer_discovered_ids or set())
         }
         self.dry_run = dry_run
         self.dry_run_items = []

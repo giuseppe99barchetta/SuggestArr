@@ -88,9 +88,9 @@ async def ai_search_query():
 @ai_search_bp.route("/request", methods=["POST"])
 @limiter.limit("20 per minute")
 async def ai_search_request():
-    """Request a media item via Jellyseer/Overseer.
+    """Request a media item via Seer.
 
-    Calls the Jellyseer API directly so the local database entry is saved with
+    Calls the Seer API directly so the local database entry is saved with
     ``tmdb_source_id = 'ai_search'`` (allowing proper separation from
     watched-content recommendations) and with full item metadata so the title
     is stored correctly.
@@ -130,10 +130,10 @@ async def ai_search_request():
         if not seer_url or not seer_token:
             return jsonify({
                 "status": "error",
-                "message": "Jellyseer/Overseer is not configured.",
+                "message": "Seer is not configured.",
             }), 400
 
-        # Build Jellyseer request payload
+        # Build Seer request payload
         req_payload = {"mediaType": media_type, "mediaId": int(tmdb_id)}
         if media_type == "tv":
             num_seasons = config.get("FILTER_NUM_SEASONS", "all")
@@ -176,12 +176,12 @@ async def ai_search_request():
 
                 resp_text = await response.text()
                 logger.error(
-                    "Jellyseer request failed: status=%d, body=%s",
+                    "Seer request failed: status=%d, body=%s",
                     response.status, resp_text[:200],
                 )
                 return jsonify({
                     "status": "error",
-                    "message": f"Jellyseer returned status {response.status}.",
+                    "message": f"Seer returned status {response.status}.",
                 }), 500
 
     except Exception as exc:

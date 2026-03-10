@@ -1,4 +1,4 @@
-# Contributing to Jellyseer Request Automation
+# Contributing to Suggestarr
 
 Thank you for considering contributing to this project! Here's how you can get started:
 

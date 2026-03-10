@@ -1,6 +1,6 @@
 """
 Discover Automation for executing discover jobs.
-Fetches content from TMDb discover API and requests it via Jellyseer/Overseer.
+Fetches content from TMDb discover API and requests it via Seer.
 """
 import traceback
 from dataclasses import dataclass
@@ -11,7 +11,7 @@ from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.db.job_repository import JobRepository
 from api_service.services.filter_normalization import normalize_filters
-from api_service.services.jellyseer.seer_client import SeerClient
+from api_service.services.seer.seer_client import SeerClient
 from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
 
@@ -28,7 +28,7 @@ class ExecutionResult:
 class DiscoverAutomation:
     """
     Automates the process of discovering content via TMDb filters
-    and requesting it via Jellyseer/Overseer.
+    and requesting it via Seer.
     """
 
     def __init__(self):
