@@ -10,7 +10,7 @@ Covers:
 - create(): numeric caps (MAX_SIMILAR_MOVIE ≤ 20, MAX_SIMILAR_TV ≤ 20, SEARCH_SIZE ≤ 100)
 - run(): calls media_handler.process_recent_items()
 - run(): enters correct async context managers (seer, tmdb, media client, omdb)
-- run(): prefers jellyseer_client attribute over seer_client
+- run(): enters seer_client async context when present
 - run(): re-raises exceptions
 """
 
@@ -455,13 +455,11 @@ class TestContentAutomationRun(unittest.IsolatedAsyncioTestCase):
         seer.__aenter__.assert_awaited_once()
         seer.__aexit__.assert_awaited_once()
 
-    async def test_jellyseer_client_preferred_over_seer_client(self):
-        jellyseer = _make_async_cm()
+    async def test_seer_client_context_is_used_when_present(self):
         seer = _make_async_cm()
         tmdb = _mock_tmdb()
         jf_client = _make_async_cm()
         handler = _make_handler(
-            jellyseer_client=jellyseer,
             seer_client=seer,
             tmdb_client=tmdb,
             jellyfin_client=jf_client,
@@ -469,8 +467,7 @@ class TestContentAutomationRun(unittest.IsolatedAsyncioTestCase):
 
         await self._make_instance(handler).run()
 
-        jellyseer.__aenter__.assert_awaited_once()
-        seer.__aenter__.assert_not_called()
+        seer.__aenter__.assert_awaited_once()
 
     async def test_tmdb_client_context_manager_is_entered(self):
         seer = _make_async_cm()

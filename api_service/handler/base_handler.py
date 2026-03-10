@@ -130,15 +130,30 @@ class BaseMediaHandler(ABC):
         
         return {"id": 0, "name": "LLM Recommendation"}
     
-    async def process_llm_recommendations(self, history_items, item_type, max_results):
+    async def process_llm_recommendations(self, user_or_history_items, history_items_or_item_type, item_type_or_max_results, max_results=None):
         """
         Pass history to LLM, resolve TMDb IDs in parallel, and request them.
         
         Args:
-            history_items: List of watched items with title/year
-            item_type: 'movie' or 'tv'
-            max_results: Maximum number of recommendations to process
+            user_or_history_items: User object (new call form) or history items (legacy call form)
+            history_items_or_item_type: History items (new call form) or item_type (legacy call form)
+            item_type_or_max_results: Item type (new call form) or max_results (legacy call form)
+            max_results: Maximum recommendations to process (new call form only)
         """
+        if max_results is None:
+            # Backward-compatible call form:
+            # process_llm_recommendations(history_items, item_type, max_results)
+            user = None
+            history_items = user_or_history_items
+            item_type = history_items_or_item_type
+            max_results = item_type_or_max_results
+        else:
+            # New call form:
+            # process_llm_recommendations(user, history_items, item_type, max_results)
+            user = user_or_history_items
+            history_items = history_items_or_item_type
+            item_type = item_type_or_max_results
+
         if max_results <= 0:
             return
         
@@ -192,14 +207,17 @@ class BaseMediaHandler(ABC):
                 continue
             
             best_match['rationale'] = rec.get('rationale')
-            request_tasks.append(self._request_llm_recommendation(best_match, item_type, source_obj))
+            if user is None:
+                request_tasks.append(self._request_llm_recommendation(best_match, item_type, source_obj))
+            else:
+                request_tasks.append(self._request_llm_recommendation(best_match, item_type, source_obj, user))
         
         if request_tasks:
             self.logger.info(f"LLM matched {len(request_tasks)} {item_type} items to TMDb.")
             await asyncio.gather(*request_tasks)
     
     @abstractmethod
-    async def _request_llm_recommendation(self, media, item_type, source_obj):
+    async def _request_llm_recommendation(self, media, item_type, source_obj, user=None):
         """
         Request a single LLM recommendation.
         
@@ -209,5 +227,6 @@ class BaseMediaHandler(ABC):
             media: Media item dict from TMDb search
             item_type: 'movie' or 'tv'
             source_obj: Source TMDB metadata object
+            user: Optional user context for handlers that require user-specific requests
         """
         pass

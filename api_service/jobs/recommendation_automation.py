@@ -505,9 +505,7 @@ class RecommendationAutomation:
             # Process recent items (this is the main recommendation logic)
             from contextlib import AsyncExitStack
             async with AsyncExitStack() as stack:
-                if hasattr(self.media_handler, 'jellyseer_client'):
-                    await stack.enter_async_context(self.media_handler.jellyseer_client)
-                elif hasattr(self.media_handler, 'seer_client'):
+                if hasattr(self.media_handler, 'seer_client'):
                     await stack.enter_async_context(self.media_handler.seer_client)
 
                 if hasattr(self.media_handler, 'tmdb_client'):

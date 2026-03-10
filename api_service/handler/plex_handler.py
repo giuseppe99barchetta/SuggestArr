@@ -1,3 +1,4 @@
+import asyncio
 import unicodedata
 
 from api_service.handler.base_handler import BaseMediaHandler
@@ -59,7 +60,6 @@ class PlexHandler(BaseMediaHandler):
         recent_items_response = await self.plex_client.get_recent_items()
 
         if isinstance(recent_items_response, list):
-            tasks = []
             for response_item in recent_items_response:
                 title = response_item.get('title', response_item.get('grandparentTitle'))
                 if title is not None and isinstance(title, str):
@@ -68,9 +68,8 @@ class PlexHandler(BaseMediaHandler):
                 library_section_id = str(response_item.get('librarySectionID', ''))
                 is_anime = self.library_anime_map.get(library_section_id, False)
                 self.logger.info(f"Processing item: {title} (anime={is_anime})")
-                tasks.append(self.process_item(response_item, title, is_anime))
 
-            if tasks:
+            if recent_items_response:
                 if self.use_llm:
                     self.logger.info("Advanced Algorithm enabled. Generating recommendations using LLM.")
                     movie_history, tv_history = [], []
@@ -98,7 +97,16 @@ class PlexHandler(BaseMediaHandler):
                     if llm_tasks:
                         await asyncio.gather(*llm_tasks)
                 else:
-                    await asyncio.gather(*tasks)
+                    tasks = []
+                    for response_item in recent_items_response:
+                        title = response_item.get('title', response_item.get('grandparentTitle'))
+                        if title is not None and isinstance(title, str):
+                            title = to_ascii(title)
+                        library_section_id = str(response_item.get('librarySectionID', ''))
+                        is_anime = self.library_anime_map.get(library_section_id, False)
+                        tasks.append(self.process_item(response_item, title, is_anime))
+                    if tasks:
+                        await asyncio.gather(*tasks)
                 
                 self.logger.info(f"Total media requested: {self.request_count}")
             else:

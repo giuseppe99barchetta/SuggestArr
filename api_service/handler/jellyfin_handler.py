@@ -4,11 +4,11 @@ from api_service.handler.base_handler import BaseMediaHandler
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 
 class JellyfinHandler(BaseMediaHandler):
-    def __init__(self, jellyfin_client:JellyfinClient, jellyseer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_jellyseer_discovery=False, jellyseer_discovered_ids=None, dry_run=False):
+    def __init__(self, jellyfin_client:JellyfinClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_jellyseer_discovery=False, jellyseer_discovered_ids=None, dry_run=False):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client
-        :param jellyseer_client: Jellyseer API client
+        :param seer_client: Seer API client
         :param tmdb_client: TMDb API client
         :param logger: Logger instance
         :param max_similar_movie: Max number of similar movies to request
@@ -20,7 +20,7 @@ class JellyfinHandler(BaseMediaHandler):
         :param dry_run: If True, simulate requests without touching download clients.
         """
         super().__init__(
-            seer_client=jellyseer_client,
+            seer_client=seer_client,
             tmdb_client=tmdb_client,
             logger=logger,
             max_similar_movie=max_similar_movie,
@@ -204,8 +204,8 @@ class JellyfinHandler(BaseMediaHandler):
                 self._dry_run_processed_ids.add(dry_run_key)
                 media_title = media.get('title') or media.get('name') or 'Unknown'
 
-                already_requested = await self.jellyseer_client.check_already_requested(media_id, media_type)
-                already_downloaded = await self.jellyseer_client.check_already_downloaded(media_id, media_type, self.existing_content_sets)
+                already_requested = await self.seer_client.check_already_requested(media_id, media_type)
+                already_downloaded = await self.seer_client.check_already_downloaded(media_id, media_type, self.existing_content_sets)
                 excluded_by_discovery = (
                     self.honor_jellyseer_discovery
                     and str(media_id) in self.jellyseer_discovered_ids
@@ -265,7 +265,7 @@ class JellyfinHandler(BaseMediaHandler):
 
         # 1. Batch check already requested in DB
         tmdb_ids_to_check = [str(m.get('id')) for m in media_to_process if m.get('id')]
-        already_requested_set = await self.jellyseer_client.check_requests_exist_batch(media_type, tmdb_ids_to_check)
+        already_requested_set = await self.seer_client.check_requests_exist_batch(media_type, tmdb_ids_to_check)
 
         # 2. Get watch providers once
         in_excluded_streaming_service = False
@@ -335,6 +335,6 @@ class JellyfinHandler(BaseMediaHandler):
             })
             self.request_count += 1
             return
-        if await self.jellyseer_client.request_media(media_type=media_type, media=media, source=source_tmdb_obj, user=user, is_anime=is_anime, rationale=media.get('rationale')):
+        if await self.seer_client.request_media(media_type=media_type, media=media, source=source_tmdb_obj, user=user, is_anime=is_anime, rationale=media.get('rationale')):
             self.request_count += 1
             self.logger.info(f"Requested {media_type}: {media.get('title') or media.get('name') or 'Unknown'}")

@@ -52,8 +52,8 @@ async def get_users():
         except ValueError as exc:
             return jsonify({'message': str(exc), 'type': 'error'}), 400
 
-        async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as jellyseer_client:
-            users = await jellyseer_client.get_all_users()
+        async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as seer_client:
+            users = await seer_client.get_all_users()
 
             if not users:
                 return jsonify({'message': 'Failed to fetch users', 'type': 'error'}), 404
@@ -140,8 +140,8 @@ async def test_seer_connection():
             }), 400
 
         try:
-            async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as jellyseer_client:
-                users = await jellyseer_client.get_all_users()
+            async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as seer_client:
+                users = await seer_client.get_all_users()
 
                 if users and isinstance(users, list) and len(users) > 0:
                     return jsonify({
@@ -209,15 +209,15 @@ async def login_seer():
 
         async with SeerClient(
             api_url=api_url, api_key=api_key, seer_user_name=username, seer_password=password
-        ) as jellyseer_client:
+        ) as seer_client:
 
-            await jellyseer_client.login()
+            await seer_client.login()
 
-            if jellyseer_client.session_token:
+            if seer_client.session_token:
                 return jsonify({
                     'message': 'Login successful',
                     'type': 'success',
-                    'session_token': jellyseer_client.session_token
+                    'session_token': seer_client.session_token
                 }), 200
             else:
                 return jsonify({'message': 'Login failed', 'type': 'error'}), 401
