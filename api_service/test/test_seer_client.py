@@ -428,23 +428,103 @@ class TestRequestMedia(unittest.IsolatedAsyncioTestCase):
 
 
 # ---------------------------------------------------------------------------
+# _fetch_server_defaults
+# ---------------------------------------------------------------------------
+
+class TestFetchServerDefaults(unittest.IsolatedAsyncioTestCase):
+
+    def setUp(self):
+        self.client = _make_client()
+
+    async def test_returns_active_profile_from_matching_server(self):
+        servers = [
+            {'id': 0, 'isDefault': True, 'activeProfileId': 5, 'activeDirectory': '/movies',
+             'profiles': [], 'rootFolders': []},
+        ]
+        with patch.object(self.client, 'get_radarr_servers', AsyncMock(return_value=servers)):
+            result = await self.client._fetch_server_defaults('movie', server_id=0)
+        self.assertEqual(result['profileId'], 5)
+        self.assertEqual(result['rootFolder'], '/movies')
+
+    async def test_falls_back_to_default_server_when_id_not_found(self):
+        servers = [
+            {'id': 1, 'isDefault': False, 'activeProfileId': 10, 'activeDirectory': '/other',
+             'profiles': [], 'rootFolders': []},
+            {'id': 2, 'isDefault': True, 'activeProfileId': 20, 'activeDirectory': '/default',
+             'profiles': [], 'rootFolders': []},
+        ]
+        with patch.object(self.client, 'get_radarr_servers', AsyncMock(return_value=servers)):
+            result = await self.client._fetch_server_defaults('movie', server_id=99)
+        self.assertEqual(result['profileId'], 20)
+        self.assertEqual(result['rootFolder'], '/default')
+
+    async def test_uses_first_server_when_no_default_flag(self):
+        servers = [
+            {'id': 3, 'isDefault': False, 'activeProfileId': 7, 'activeDirectory': '/first',
+             'profiles': [], 'rootFolders': []},
+        ]
+        with patch.object(self.client, 'get_radarr_servers', AsyncMock(return_value=servers)):
+            result = await self.client._fetch_server_defaults('movie', server_id=99)
+        self.assertEqual(result['profileId'], 7)
+        self.assertEqual(result['rootFolder'], '/first')
+
+    async def test_falls_back_to_first_profile_when_active_profile_is_none(self):
+        servers = [
+            {'id': 0, 'isDefault': True, 'activeProfileId': None, 'activeDirectory': None,
+             'profiles': [{'id': 3, 'name': 'HD'}], 'rootFolders': [{'path': '/media'}]},
+        ]
+        with patch.object(self.client, 'get_radarr_servers', AsyncMock(return_value=servers)):
+            result = await self.client._fetch_server_defaults('movie', server_id=0)
+        self.assertEqual(result['profileId'], 3)
+        self.assertEqual(result['rootFolder'], '/media')
+
+    async def test_returns_empty_dict_when_no_servers(self):
+        with patch.object(self.client, 'get_radarr_servers', AsyncMock(return_value=[])):
+            result = await self.client._fetch_server_defaults('movie', server_id=0)
+        self.assertEqual(result, {})
+
+    async def test_returns_empty_dict_when_request_fails(self):
+        with patch.object(self.client, 'get_radarr_servers', AsyncMock(return_value=None)):
+            result = await self.client._fetch_server_defaults('movie', server_id=0)
+        self.assertEqual(result, {})
+
+    async def test_calls_sonarr_for_tv_media_type(self):
+        servers = [
+            {'id': 0, 'isDefault': True, 'activeProfileId': 2, 'activeDirectory': '/tv',
+             'profiles': [], 'rootFolders': []},
+        ]
+        with patch.object(self.client, 'get_sonarr_servers', AsyncMock(return_value=servers)) as mock_sonarr, \
+             patch.object(self.client, 'get_radarr_servers', AsyncMock()) as mock_radarr:
+            result = await self.client._fetch_server_defaults('tv', server_id=0)
+        mock_sonarr.assert_called_once()
+        mock_radarr.assert_not_called()
+        self.assertEqual(result['profileId'], 2)
+
+
+# ---------------------------------------------------------------------------
 # submit_queued_request
 # ---------------------------------------------------------------------------
 
 class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
 
-    async def test_strips_private_keys_and_returns_true_on_success(self):
-        client = _make_client()
-        payload = {
+    def _valid_payload(self, **extra):
+        """Return a minimal valid payload (profileId + rootFolder present)."""
+        base = {
             'mediaType': 'movie',
             'mediaId': 101,
+            'profileId': 1,
+            'rootFolder': '/movies',
             '_source_id': 1,
             '_user_id': 2,
             '_rationale': 'test',
             '_is_anime': False,
-            '_media_obj': {},
-            '_source_obj': {},
         }
+        base.update(extra)
+        return base
+
+    async def test_strips_private_keys_and_returns_true_on_success(self):
+        client = _make_client()
+        payload = self._valid_payload()
         with patch.object(client, '_make_request', AsyncMock(return_value={'id': 55})) as mock_req:
             result = await client.submit_queued_request(payload)
 
@@ -455,9 +535,49 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
 
     async def test_returns_false_on_failure_response(self):
         client = _make_client()
-        with patch.object(client, '_make_request', AsyncMock(return_value=None)):
+        with patch.object(client, '_make_request', AsyncMock(return_value=None)), \
+             patch.object(client, '_fetch_server_defaults', AsyncMock(return_value={'profileId': 1, 'rootFolder': '/movies'})):
             result = await client.submit_queued_request({'mediaType': 'movie', 'mediaId': 1})
         self.assertFalse(result)
+
+    async def test_fetches_defaults_and_succeeds_when_profile_id_missing(self):
+        client = _make_client()
+        payload = {'mediaType': 'movie', 'mediaId': 200, 'serverId': 0}
+        defaults = {'profileId': 3, 'rootFolder': '/movies'}
+        with patch.object(client, '_fetch_server_defaults', AsyncMock(return_value=defaults)), \
+             patch.object(client, '_make_request', AsyncMock(return_value={'id': 200})):
+            result = await client.submit_queued_request(payload)
+        self.assertTrue(result)
+
+    async def test_returns_false_when_profile_id_missing_after_fallback(self):
+        client = _make_client()
+        payload = {'mediaType': 'movie', 'mediaId': 300, 'serverId': 0}
+        # Fallback returns rootFolder but not profileId
+        with patch.object(client, '_fetch_server_defaults', AsyncMock(return_value={'rootFolder': '/movies'})):
+            result = await client.submit_queued_request(payload)
+        self.assertFalse(result)
+
+    async def test_returns_false_when_root_folder_missing_after_fallback(self):
+        client = _make_client()
+        payload = {'mediaType': 'movie', 'mediaId': 300, 'profileId': 1}
+        # Fallback returns profileId but not rootFolder
+        with patch.object(client, '_fetch_server_defaults', AsyncMock(return_value={'profileId': 1})):
+            result = await client.submit_queued_request(payload)
+        self.assertFalse(result)
+
+    async def test_returns_false_on_error_response(self):
+        client = _make_client()
+        with patch.object(client, '_make_request', AsyncMock(return_value={'error': 'Bad Request'})):
+            result = await client.submit_queued_request(self._valid_payload())
+        self.assertFalse(result)
+
+    async def test_no_fallback_fetch_when_profile_already_present(self):
+        """_fetch_server_defaults must not be called when profileId and rootFolder are set."""
+        client = _make_client()
+        with patch.object(client, '_fetch_server_defaults', AsyncMock()) as mock_fallback, \
+             patch.object(client, '_make_request', AsyncMock(return_value={'id': 1})):
+            await client.submit_queued_request(self._valid_payload())
+        mock_fallback.assert_not_called()
 
 
 if __name__ == '__main__':

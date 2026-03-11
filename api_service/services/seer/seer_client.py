@@ -185,6 +185,59 @@ class SeerClient(BaseHTTPClient):
         self.logger.debug("Fetching Sonarr servers from the Seer service")
         return await self._make_request("GET", "api/v1/service/sonarr")
 
+    async def _fetch_server_defaults(self, media_type: str, server_id) -> dict:
+        """Fetch default profileId and rootFolder from Jellyseerr for the given media type.
+
+        Calls the Radarr (movie) or Sonarr (tv) service endpoint and returns the
+        active profile ID and root folder for the specified server.  Falls back to
+        the default-flagged server, then the first server in the list.
+
+        :param media_type: ``'movie'`` (Radarr) or ``'tv'`` (Sonarr).
+        :param server_id: Target server ID to match, or ``None`` for
+            the default/first server.
+        :return: Dict with ``'profileId'`` and ``'rootFolder'`` keys; values may
+            be ``None`` when Jellyseerr itself has no defaults configured.
+        """
+        try:
+            servers = (
+                await self.get_radarr_servers()
+                if media_type == 'movie'
+                else await self.get_sonarr_servers()
+            )
+            if not servers:
+                service_name = 'Radarr' if media_type == 'movie' else 'Sonarr'
+                self.logger.warning(
+                    "No %s servers found while fetching defaults.", service_name
+                )
+                return {}
+
+            # Prefer exact server-ID match → default-flagged server → first entry
+            server = (
+                next((s for s in servers if s.get('id') == server_id), None)
+                or next((s for s in servers if s.get('isDefault')), None)
+                or servers[0]
+            )
+
+            profile_id = server.get('activeProfileId')
+            root_folder = server.get('activeDirectory')
+
+            # Last-resort: pick the first available profile / root folder
+            if profile_id is None and server.get('profiles'):
+                profile_id = server['profiles'][0].get('id')
+            if root_folder is None and server.get('rootFolders'):
+                root_folder = server['rootFolders'][0].get('path')
+
+            self.logger.debug(
+                "Fetched server defaults for %s (serverId=%s): profileId=%s, rootFolder=%s",
+                media_type, server_id, profile_id, root_folder,
+            )
+            return {'profileId': profile_id, 'rootFolder': root_folder}
+        except Exception as exc:
+            self.logger.error(
+                "Failed to fetch server defaults for media_type=%s: %s", media_type, exc
+            )
+            return {}
+
     def _apply_profile_config(self, data, profile_key, media_type):
         """Apply profile configuration (serverId, profileId, rootFolder, tags) to request data."""
         profile = self.anime_profile_config.get(profile_key, {})
@@ -290,13 +343,51 @@ class SeerClient(BaseHTTPClient):
         """Perform the actual HTTP submission to Seer for a single queue row.
 
         Called by the queue worker.  Strips private meta-keys before sending.
+        Validates ``profileId`` and ``rootFolder`` before the HTTP call, and
+        attempts to resolve them from Jellyseerr server settings when either is
+        absent or ``None``.
 
         :param payload: The JSON-decoded payload stored in pending_requests.
         :return: True on HTTP success, False on any failure.
         """
         # Build clean Seer body (drop private meta-keys)
         data = {k: v for k, v in payload.items() if not k.startswith('_')}
+        media_type = data.get('mediaType', 'unknown')
+        media_id = data.get('mediaId')
 
+        # Attempt to fill missing profileId / rootFolder from Jellyseerr server settings
+        if data.get('profileId') is None or data.get('rootFolder') is None:
+            server_id = data.get('serverId')
+            self.logger.warning(
+                "profileId or rootFolder missing for %s tmdb:%s (serverId=%s) — "
+                "fetching defaults from Jellyseerr.",
+                media_type, media_id, server_id,
+            )
+            defaults = await self._fetch_server_defaults(media_type, server_id)
+            if data.get('profileId') is None:
+                data['profileId'] = defaults.get('profileId')
+            if data.get('rootFolder') is None:
+                data['rootFolder'] = defaults.get('rootFolder')
+
+        # Abort if required fields are still absent after the fallback
+        if data.get('profileId') is None:
+            self.logger.error(
+                "Cannot submit Jellyseerr request for %s tmdb:%s — "
+                "profileId is missing (serverId=%s, rootFolder=%s). "
+                "Configure a valid profileId in your anime/default profile settings.",
+                media_type, media_id, data.get('serverId'), data.get('rootFolder'),
+            )
+            return False
+        if data.get('rootFolder') is None:
+            self.logger.error(
+                "Cannot submit Jellyseerr request for %s tmdb:%s — "
+                "rootFolder is missing (serverId=%s, profileId=%s). "
+                "Configure a valid rootFolder in your anime/default profile settings.",
+                media_type, media_id, data.get('serverId'), data.get('profileId'),
+            )
+            return False
+
+        self.logger.debug("Sending Jellyseerr request: %s", data)
         response = await self._make_request(
             "POST", "api/v1/request", data=data, use_cookie=bool(self.session_token)
         )
@@ -304,7 +395,11 @@ class SeerClient(BaseHTTPClient):
             self.logger.debug("Seer submission successful: %s", response)
             return True
 
-        self.logger.error("Seer submission failed: %s", response)
+        self.logger.error(
+            "Jellyseerr request failed for %s tmdb:%s | "
+            "response=%s | payload=%s",
+            media_type, media_id, response, data,
+        )
         return False
             
     async def check_already_requested(self, tmdb_id, media_type):

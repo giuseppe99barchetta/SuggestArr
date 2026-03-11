@@ -276,7 +276,11 @@ class DiscoverAutomation:
                     requested_count += 1
                     self.logger.info(f"Successfully requested: {title}")
                 else:
-                    self.logger.warning(f"Failed to request: {title}")
+                    self.logger.error(
+                        "Failed to enqueue %s request for '%s' (tmdb:%s) — "
+                        "check earlier logs for details.",
+                        media_type, title, tmdb_id,
+                    )
 
             except Exception as e:
                 self.logger.error(f"Error processing {title}: {str(e)}")
