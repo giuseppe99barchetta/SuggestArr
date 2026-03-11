@@ -46,7 +46,9 @@ def _link_jellyfin_like(provider: str):
     try:
         username, password = _read_credentials()
     except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+        # Do not expose exception details to the client; return a generic validation error.
+        logger.warning("Invalid credentials payload for provider %s: %s", provider, exc)
+        return jsonify({"error": "username and password are required"}), 400
 
     config = ConfigService.get_runtime_config()
     server_url = (config.get("JELLYFIN_API_URL") or "").rstrip("/")
