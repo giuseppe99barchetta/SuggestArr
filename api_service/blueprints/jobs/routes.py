@@ -138,10 +138,14 @@ def get_job(job_id: int):
 
 
 @jobs_bp.route('', methods=['POST'])
-@require_role('admin')
 def create_job():
     """
-    Create a new job (discover or recommendation).
+    Create a new job (discover or recommendation) for the authenticated user.
+
+    Ownership model:
+        - owner_id is always set from g.current_user['id'].
+        - Clients cannot choose or override owner_id.
+        - Admin users can still manage any job after creation.
 
     Request body:
         - name: Job name (required)
@@ -221,7 +225,6 @@ def create_job():
 
 
 @jobs_bp.route('/<int:job_id>', methods=['PUT'])
-@require_role('admin')
 def update_job(job_id: int):
     """
     Update an existing discover job.
@@ -295,7 +298,6 @@ def update_job(job_id: int):
 
 
 @jobs_bp.route('/<int:job_id>', methods=['DELETE'])
-@require_role('admin')
 def delete_job(job_id: int):
     """
     Delete a discover job.
@@ -343,7 +345,6 @@ def delete_job(job_id: int):
 
 
 @jobs_bp.route('/<int:job_id>/toggle', methods=['POST'])
-@require_role('admin')
 def toggle_job(job_id: int):
     """
     Toggle a discover job's enabled status.
@@ -399,7 +400,6 @@ def toggle_job(job_id: int):
 
 
 @jobs_bp.route('/<int:job_id>/run', methods=['POST'])
-@require_role('admin')
 @limiter.limit("5 per minute")
 def run_job_now(job_id: int):
     """
@@ -457,7 +457,6 @@ def run_job_now(job_id: int):
 
 
 @jobs_bp.route('/<int:job_id>/dry-run', methods=['POST'])
-@require_role('admin')
 @limiter.limit("10 per minute")
 def dry_run_job(job_id: int):
     """
