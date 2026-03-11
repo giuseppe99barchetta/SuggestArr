@@ -1513,12 +1513,12 @@ export default {
   height: 6px;
   border-radius: var(--radius-full);
 }
-.status-connected { background-color: var(--color-success-alpha-10); border-color: #10b981; color: #10b981; }
-.status-connected .status-dot { background-color: #10b981; }
-.status-disconnected { background-color: var(--color-error-alpha-10); border-color: #ef4444; color: #ef4444; }
-.status-disconnected .status-dot { background-color: #ef4444; }
-.status-warning { background-color: var(--color-warning-alpha-10); border-color: #f59e0b; color: #f59e0b; }
-.status-warning .status-dot { background-color: #f59e0b; }
+.status-connected { background-color: var(--color-success-alpha-10); border-color: var(--color-success); color: var(--color-success); }
+.status-connected .status-dot { background-color: var(--color-success); }
+.status-disconnected { background-color: var(--color-error-alpha-10); border-color: var(--color-error); color: var(--color-error); }
+.status-disconnected .status-dot { background-color: var(--color-error); }
+.status-warning { background-color: var(--color-warning-alpha-10); border-color: var(--color-warning); color: var(--color-warning); }
+.status-warning .status-dot { background-color: var(--color-warning); }
 
 /* Collapsible section */
 .collapsible-section {
