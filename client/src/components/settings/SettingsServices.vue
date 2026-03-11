@@ -1810,27 +1810,13 @@ export default {
 .mb-3 { margin-bottom: 0.75rem; }
 
 /* Buttons */
-.btn {
-  padding: 0.5rem 1rem;
-  border-radius: var(--border-radius-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition-base);
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  min-height: 44px;
-  min-width: 44px;
-}
+
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-outline { background: var(--color-bg-interactive); color: var(--color-text-primary); border: 1px solid var(--color-border-medium); }
 .btn-outline:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.5); }
 .btn-success { background: #10b981; color: white; border: 1px solid #10b981; }
 .btn-success:hover:not(:disabled) { background: #059669; }
-.btn-sm { padding: 0.375rem 0.75rem; font-size: 0.8125rem; min-height: 44px; min-width: 44px; }
+.btn-sm { padding: 0.375rem 0.75rem; font-size: 0.8125rem; min-height: 50px; min-width: 44px; }
 .btn-block { width: 100%; margin-top: 1rem; }
 .link { color: var(--color-primary); text-decoration: none; }
 .link:hover { text-decoration: underline; }

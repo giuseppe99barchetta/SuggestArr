@@ -206,17 +206,14 @@
                   <p>Choose what this account can manage.</p>
                 </div>
                 <div class="form-group um-form-group">
-                  <label for="newRole">Role</label>
-                  <select
-                    id="newRole"
+                  <BaseDropdown
                     v-model="newUser.role"
-                    class="form-control"
+                    :options="roleOptions"
+                    label="Role"
+                    placeholder="Select role"
+                    help-text="Admins have full access. Users have standard access."
                     :disabled="isCreating"
-                  >
-                    <option value="user">User</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                  <small class="form-help">Admins have full access. Users have standard access.</small>
+                  />
                 </div>
               </section>
 

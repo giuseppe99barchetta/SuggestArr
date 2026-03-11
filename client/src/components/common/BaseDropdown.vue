@@ -1,5 +1,5 @@
 <template>
-  <div class="form-group-modern" v-click-outside="closeDropdown">
+  <div class="form-group-modern" ref="dropdownWrapper">
     <label v-if="label" :for="id" class="modern-label">
       <span class="label-content">
         <span class="label-text">{{ label }}</span>
@@ -43,52 +43,6 @@
         </div>
       </div>
       
-      <!-- Custom dropdown menu -->
-      <transition name="dropdown-slide">
-        <div 
-          v-if="isOpen" 
-          :id="dropdownMenuId"
-          ref="dropdownMenu"
-          class="dropdown-menu"
-          role="menu"
-          :aria-labelledby="id"
-        >
-          <div class="dropdown-menu-inner">
-            <div class="dropdown-scroll">
-              <div
-                v-for="(option, index) in options"
-                :key="getOptionKey(option)"
-                :ref="el => { if (el) menuItemRefs[index] = el }"
-                class="dropdown-item"
-                role="menuitem"
-                :tabindex="highlightedIndex === index ? 0 : -1"
-                :aria-selected="isSelected(option).toString()"
-                :aria-disabled="option.disabled ? 'true' : undefined"
-                :class="{ 
-                  'is-selected': isSelected(option),
-                  'is-disabled': option.disabled,
-                  'is-highlighted': highlightedIndex === index
-                }"
-                @click.stop="selectOption(option)"
-                @keydown.enter.prevent="selectOption(option)"
-                @keydown.space.prevent="selectOption(option)"
-                @mouseenter="highlightedIndex = index"
-              >
-                <div class="item-content">
-                  <span class="item-label">{{ getOptionLabel(option) }}</span>
-                  <i v-if="isSelected(option)" class="fas fa-check item-check"></i>
-                </div>
-                <div class="item-ripple"></div>
-              </div>
-              
-              <div v-if="options.length === 0" class="dropdown-empty">
-                <i class="fas fa-inbox"></i>
-                <span>No options available</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </transition>
     </div>
     
     <transition name="fade-slide-up">
@@ -105,6 +59,55 @@
       </div>
     </transition>
   </div>
+
+  <Teleport to="body">
+    <Transition name="dropdown-slide">
+      <div
+        v-if="isOpen"
+        :id="dropdownMenuId"
+        ref="dropdownMenu"
+        class="dropdown-menu"
+        :style="menuStyle"
+        role="menu"
+        :aria-labelledby="id"
+      >
+        <div class="dropdown-menu-inner">
+          <div class="dropdown-scroll">
+            <div
+              v-for="(option, index) in options"
+              :key="getOptionKey(option)"
+              :ref="el => { if (el) menuItemRefs[index] = el }"
+              class="dropdown-item"
+              role="menuitem"
+              :tabindex="highlightedIndex === index ? 0 : -1"
+              :aria-selected="isSelected(option).toString()"
+              :aria-disabled="option.disabled ? 'true' : undefined"
+              :class="{ 
+                'is-selected': isSelected(option),
+                'is-disabled': option.disabled,
+                'is-highlighted': highlightedIndex === index
+              }"
+              @click.stop="selectOption(option)"
+              @keydown.enter.prevent="selectOption(option)"
+              @keydown.space.prevent="selectOption(option)"
+              @mouseenter="highlightedIndex = index"
+            >
+              <div class="item-content">
+                <span class="item-label">{{ getOptionLabel(option) }}</span>
+                <i v-if="isSelected(option)" class="fas fa-check item-check"></i>
+              </div>
+              <div class="item-ripple"></div>
+            </div>
+
+            <div v-if="options.length === 0" class="dropdown-empty">
+              <i class="fas fa-inbox"></i>
+              <span>No options available</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script>
@@ -166,7 +169,8 @@ export default {
     return {
       isOpen: false,
       highlightedIndex: -1,
-      menuItemRefs: []
+      menuItemRefs: [],
+      menuStyle: null
     };
   },
   computed: {
@@ -179,6 +183,24 @@ export default {
       );
       return selected ? this.getOptionLabel(selected) : '';
     }
+  },
+  mounted() {
+    this._onDocumentClick = (event) => {
+      const wrapper = this.$refs.dropdownWrapper;
+      const menu = this.$refs.dropdownMenu;
+      if (
+        (wrapper && wrapper.contains(event.target)) ||
+        (menu && menu.contains(event.target))
+      ) {
+        return;
+      }
+      this.closeDropdown();
+    };
+    document.addEventListener('click', this._onDocumentClick);
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this._onDocumentClick);
+    this._removePositionListeners();
   },
   methods: {
     getFirstDefinedProp(option, propNames) {
@@ -264,6 +286,7 @@ export default {
     openDropdown() {
       if (this.disabled) return;
       this.isOpen = true;
+      this._addPositionListeners();
       this.$nextTick(() => {
         this.scrollToSelected();
         // Focus the first enabled item or the selected item
@@ -289,14 +312,19 @@ export default {
       }
     },
     closeDropdown() {
+      const wasOpen = this.isOpen;
       this.isOpen = false;
       this.highlightedIndex = -1;
-      // Return focus to trigger
-      this.$nextTick(() => {
-        if (this.$refs.dropdownTrigger) {
-          this.$refs.dropdownTrigger.focus();
-        }
-      });
+      this._removePositionListeners();
+      // Return focus to trigger only if the dropdown was actually open,
+      // to avoid stealing focus from other elements (e.g. text inputs).
+      if (wasOpen) {
+        this.$nextTick(() => {
+          if (this.$refs.dropdownTrigger) {
+            this.$refs.dropdownTrigger.focus();
+          }
+        });
+      }
     },
     selectOption(option) {
       if (option.disabled) return;
@@ -334,22 +362,28 @@ export default {
         return this.getFirstDefinedProp(option, [this.optionValue, this.optionKey, this.optionLabel]);
       }
       return option;
-    }
-  },
-  directives: {
-    'click-outside': {
-      mounted(el, binding) {
-        el.clickOutsideEvent = (event) => {
-          if (!(el === event.target || el.contains(event.target))) {
-            binding.value();
-          }
-        };
-        document.addEventListener('click', el.clickOutsideEvent);
-      },
-      unmounted(el) {
-        document.removeEventListener('click', el.clickOutsideEvent);
-      }
-    }
+    },
+    _updateMenuPosition() {
+      const trigger = this.$refs.dropdownTrigger;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      this.menuStyle = {
+        position: 'fixed',
+        top: `${rect.bottom + 4}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+        zIndex: '9999',
+      };
+    },
+    _addPositionListeners() {
+      this._updateMenuPosition();
+      window.addEventListener('scroll', this._updateMenuPosition, { capture: true, passive: true });
+      window.addEventListener('resize', this._updateMenuPosition, { passive: true });
+    },
+    _removePositionListeners() {
+      window.removeEventListener('scroll', this._updateMenuPosition, { capture: true });
+      window.removeEventListener('resize', this._updateMenuPosition);
+    },
   }
 };
 </script>
@@ -510,13 +544,10 @@ export default {
   filter: drop-shadow(0 0 8px rgba(229, 231, 235, 0.3));
 }
 
-/* Dropdown Menu */
+/* Dropdown Menu – always teleported to <body> with fixed positioning via inline style */
 .dropdown-menu {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  left: 0;
-  right: 0;
-  z-index: 1000;
+  position: fixed;
+  z-index: 9999;
 }
 
 .dropdown-menu-inner {
