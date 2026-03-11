@@ -284,7 +284,13 @@ def update_user_permissions(user_id: int):
     try:
         updates = _extract_permission_updates(data)
     except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+        logger.warning(
+            "Invalid permission update payload for user_id=%s: %s",
+            user_id,
+            exc,
+            exc_info=True,
+        )
+        return jsonify({"error": "Invalid permission update payload"}), 400
 
     if not updates:
         return jsonify({"error": "No valid permission fields to update"}), 400
