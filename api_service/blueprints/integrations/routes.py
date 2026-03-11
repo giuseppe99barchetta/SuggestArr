@@ -130,7 +130,8 @@ def link_my_plex_account():
     try:
         username, password = _read_credentials()
     except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+        logger.warning("Invalid Plex credential payload: %s", exc)
+        return jsonify({"error": "username and password are required"}), 400
 
     try:
         response = http_requests.post(
