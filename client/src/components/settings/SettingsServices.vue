@@ -1101,7 +1101,17 @@ export default {
         this.jellyfinConnected = false;
         this.jellyfinLibraries = [];
         this.jellyfinUsers = [];
-        if (!silent) this._notifyError('Failed to connect. Check your URL and token.');
+        if (!silent) {
+          const status = error?.response?.status;
+          const serverMsg = error?.response?.data?.message;
+          if (status === 401 || status === 403) {
+            this._notifyError('Jellyfin rejected the API key (401). Ensure you are using a server-level API key from Dashboard → API Keys, not a user session token.');
+          } else if (serverMsg) {
+            this._notifyError(`Failed to connect: ${serverMsg}`);
+          } else {
+            this._notifyError('Failed to connect. Check your Jellyfin URL and API key.');
+          }
+        }
       } finally {
         this.jellyfinFetching = false;
       }

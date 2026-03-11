@@ -30,12 +30,14 @@ async def get_jellyfin_library():
     logger.info("Received request to fetch Jellyfin libraries")
     try:
         config_data = request.get_json(silent=True) or {}
-        api_url = config_data.get('JELLYFIN_API_URL')
-        api_key = config_data.get('JELLYFIN_TOKEN')
+        api_url = (config_data.get('JELLYFIN_API_URL') or '').strip()
+        api_key = (config_data.get('JELLYFIN_TOKEN') or '').strip()
 
         # Fallback to database config if not provided in request
         if not api_url or not api_key:
             api_url, api_key = _load_jellyfin_config()
+            api_url = (api_url or '').strip()
+            api_key = (api_key or '').strip()
 
         if not api_url or not api_key:
             logger.warning("Jellyfin credentials not configured")
@@ -130,12 +132,14 @@ async def get_jellyfin_users():
     """
     try:
         config_data = request.get_json(silent=True) or {}
-        api_url = config_data.get('JELLYFIN_API_URL')
-        api_key = config_data.get('JELLYFIN_TOKEN')
+        api_url = (config_data.get('JELLYFIN_API_URL') or '').strip()
+        api_key = (config_data.get('JELLYFIN_TOKEN') or '').strip()
 
         # Fallback to database config if not provided in request
         if not api_url or not api_key:
             api_url, api_key = _load_jellyfin_config()
+            api_url = (api_url or '').strip()
+            api_key = (api_key or '').strip()
 
         if not api_url or not api_key:
             logger.warning("Jellyfin credentials not configured")

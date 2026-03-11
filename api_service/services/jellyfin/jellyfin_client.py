@@ -28,9 +28,11 @@ class JellyfinClient(BaseHTTPClient):
         """
         super().__init__()
         self.max_content_fetch = max_content
-        self.api_url = api_url
+        # Strip trailing slash and whitespace so URL joins never produce double-slash paths.
+        self.api_url = api_url.rstrip('/').strip() if api_url else api_url
         self.libraries = library_ids
-        self.headers = {"X-Emby-Token": token}
+        # Strip whitespace from token to avoid 401s from copy-paste artefacts.
+        self.headers = {"X-Emby-Token": token.strip() if token else token}
         self.existing_content = {}
         
     async def init_existing_content(self):
@@ -315,8 +317,19 @@ class JellyfinClient(BaseHTTPClient):
                     libraries = await response.json()
                     self.logger.debug(f'Libraries retrieved: {libraries}')
                     return libraries
-                self.logger.error(
-                    "Failed to get libraries %d", response.status)
+                raw_body = await response.text()
+                if response.status == 401:
+                    self.logger.error(
+                        "Failed to get libraries — 401 Unauthorized. "
+                        "Verify the API key is a valid server-level API key (Dashboard → API Keys), "
+                        "not a user session token. URL=%s body=%.300s",
+                        url, raw_body,
+                    )
+                else:
+                    self.logger.error(
+                        "Failed to get libraries %d URL=%s body=%.300s",
+                        response.status, url, raw_body,
+                    )
         except aiohttp.ClientError as e:
             self.logger.error(
                 "An error occurred while retrieving libraries: %s", str(e))
