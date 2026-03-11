@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+axios.defaults.withCredentials = true;
+
 // Function to test the TMDB API key via the backend proxy (key never exposed client-side)
 export const testTmdbApi = (apiKey) => {
     return axios.post('/api/tmdb/test', { api_key: apiKey });
@@ -123,6 +125,8 @@ export const importConfig = (snapshot) => {
 export const getUsers = () => axios.get('/api/users');
 export const createUserAdmin = (data) => axios.post('/api/users', data);
 export const updateUser = (id, data) => axios.patch(`/api/users/${id}`, data);
+export const updateUserPermissions = (id, data) =>
+    axios.post(`/api/users/${id}/permissions`, data, { withCredentials: true });
 export const deleteUser = (id) => axios.delete(`/api/users/${id}`);
 
 // Media profile linking (any authenticated user)

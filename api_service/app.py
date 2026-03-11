@@ -60,6 +60,11 @@ executor = ThreadPoolExecutor(max_workers=3)
 logger = LoggerManager.get_logger("APP") 
 logger.debug(f"Current log level: {logging.getLevelName(logger.getEffectiveLevel())}")
 
+DEFAULT_CORS_ORIGINS = [
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+]
+
 # App Factory Pattern for modularity and testability
 def create_app():
     """
@@ -81,9 +86,10 @@ def create_app():
 
     # ------------------------------------------------------------------
     # CORS
-    # Default: allow all origins so existing LAN deployments keep working.
-    # Operators who expose SuggestArr to the internet SHOULD restrict this
-    # via the SUGGESTARR_ALLOWED_ORIGINS env var (comma-separated list).
+    # Default: allow the local frontend dev servers used by the Vue app.
+    # Credentialed requests cannot use wildcard origins, so operators who
+    # expose SuggestArr elsewhere SHOULD set SUGGESTARR_ALLOWED_ORIGINS to
+    # a comma-separated allowlist of exact origins.
     # Example: SUGGESTARR_ALLOWED_ORIGINS=https://suggestarr.home.example.com
     # ------------------------------------------------------------------
     allowed_origins_env = os.environ.get('SUGGESTARR_ALLOWED_ORIGINS', '').strip()
@@ -96,8 +102,12 @@ def create_app():
              methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
         logger.info("CORS restricted to: %s", allowed_origins)
     else:
-        # Wildcard — backward-compatible default for LAN deployments.
-        CORS(application)
+        CORS(application,
+             origins=DEFAULT_CORS_ORIGINS,
+             supports_credentials=True,
+             allow_headers=["Authorization", "Content-Type"],
+             methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+        logger.info("CORS using default frontend origins: %s", DEFAULT_CORS_ORIGINS)
 
     # ------------------------------------------------------------------
     # Rate limiter

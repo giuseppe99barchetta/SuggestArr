@@ -19,7 +19,7 @@
         :style="{ backgroundColor: config.STATIC_BACKGROUND_COLOR }"
       ></div>
     </div>
-    <div class="settings-content">
+    <div v-if="currentUser" class="settings-content">
       <!-- Header -->
       <div class="settings-header">
 
@@ -46,7 +46,7 @@
           v-for="tab in visibleTabs"
           :key="tab.id"
           :data-tour-id="tab.tourId || null"
-          @click="activeTab = tab.id"
+          @click="setActiveTab(tab.id)"
           :class="['tab-button', { active: activeTab === tab.id }]"
         >
           <i :class="tab.icon"></i>
@@ -102,6 +102,7 @@
       <div class="tab-content">
         <transition name="fade-slide" mode="out-in">
           <component
+            v-if="activeTabComponent"
             :key="activeTab"
             :is="activeTabComponent"
             :config="config"
@@ -306,6 +307,15 @@
       <Footer />
     </div>
 
+    <div v-else class="settings-content">
+      <div class="loading-overlay">
+        <div class="loading-content">
+          <div class="spinner"></div>
+          <p>Loading dashboard...</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Onboarding Tour -->
     <OnboardingTour
       :active="showTour"
@@ -356,7 +366,7 @@ export default {
   setup() {
     const { bg1Url, bg2Url, activeBg, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
     const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
-    const { authSetupComplete, currentUser, logout } = useAuth();
+    const { authSetupComplete, logout } = useAuth();
 
     return {
       bg1Url,
@@ -372,12 +382,12 @@ export default {
       updateAvailable,
       checkForUpdates,
       authSetupComplete,
-      currentUser,
-      logout
+      logout,
     };
   },
     data() {
     return {
+      currentUser: null,
       config: {},
       isLoading: false,
       isForceRunning: false,
@@ -476,14 +486,30 @@ export default {
   },
   computed: {
     visibleTabs() {
-      const isAdmin = this.currentUser?.role === 'admin';
+      if (!this.currentUser) {
+        return [];
+      }
+
+      const isAdmin = this.currentUser.role === 'admin';
+      const allowedTabs = new Set(
+        String(this.currentUser.visible_tabs || '')
+          .split(',')
+          .map(tab => this.normalizeTabId(tab.trim()))
+          .filter(Boolean)
+      );
+
       return this.tabs.filter(tab => {
         if (tab.adminOnly && !isAdmin) return false;
         if (tab.nonAdminOnly && isAdmin) return false;
+        if (!isAdmin && allowedTabs.size > 0 && !allowedTabs.has(tab.id)) return false;
         return true;
       });
     },
     activeTabComponent() {
+      // Never resolve a component for a tab the current user cannot access.
+      if (!this.visibleTabs.some(tab => tab.id === this.activeTab)) {
+        return null;
+      }
       const componentMap = {
         requests: 'SettingsRequests',
         services: 'SettingsServices',
@@ -495,7 +521,7 @@ export default {
         users: 'UserManagement',
         profile: 'UserProfile',
       };
-      return componentMap[this.activeTab];
+      return componentMap[this.activeTab] ?? null;
     },
     currentTabId() {
       return this.activeTab;
@@ -505,6 +531,19 @@ export default {
     isTransitioning(newValue) {
       if (newValue) {
         // Handle background transition state if needed
+      }
+    },
+    currentUser: {
+      // immediate: true ensures the guard runs at mount time even if
+      // currentUser is already populated before the watcher is registered.
+      immediate: true,
+      handler() {
+        this.ensureValidActiveTab();
+      },
+    },
+    activeTab(newTab) {
+      if (!this.visibleTabs.some(tab => tab.id === newTab)) {
+        this.ensureValidActiveTab();
       }
     },
     'config.ENABLE_STATIC_BACKGROUND': {
@@ -529,7 +568,19 @@ export default {
   },
   async mounted() {
     try {
-      await this.loadConfig();
+      await this.fetchMe();
+
+      if (!this.currentUser) {
+        return;
+      }
+
+      if (this.currentUser?.role === 'admin') {
+        await this.loadConfig();
+      }
+
+      // Re-validate after config+auth are settled, in case currentUser
+      // was populated after the initial watcher run.
+      this.ensureValidActiveTab();
 
       this.loadRequestCount();
 
@@ -544,11 +595,39 @@ export default {
         setTimeout(() => { this.showTour = true; }, 900);
       }
     } catch (error) {
-      console.error('Error during component mount:', error);
+      if (error?.response?.status !== 403) {
+        console.error('Error during component mount:', error);
+      }
       this.isLoading = false;
     }
   },
   methods: {
+    normalizeTabId(tabId) {
+      if (tabId === 'ai-search') {
+        return 'ai_search';
+      }
+      return tabId;
+    },
+
+    async fetchMe() {
+      try {
+        const response = await axios.get('/api/auth/me', {
+          withCredentials: true,
+          timeout: 10000,
+        });
+        this.currentUser = response.data;
+        return this.currentUser;
+      } catch (error) {
+        this.currentUser = null;
+        if (error?.response?.status === 401 || !error?.response) {
+          this.$router.push('/login');
+          return null;
+        }
+
+        this.$router.push('/login');
+        return null;
+      }
+    },
     async handleLogout() {
       await this.logout();
       this.$router.push('/login');
@@ -557,16 +636,26 @@ export default {
       localStorage.removeItem(TOUR_STORAGE_KEY);
       this.showTour = true;
     },
+    setActiveTab(id) {
+      if (this.visibleTabs.some(tab => tab.id === id)) {
+        this.activeTab = id;
+      }
+    },
+    ensureValidActiveTab() {
+      if (!this.visibleTabs.some(tab => tab.id === this.activeTab)) {
+        this.activeTab = this.visibleTabs[0]?.id ?? 'requests';
+      }
+    },
     selectMobileTab(tabId) {
-      this.activeTab = tabId;
+      this.setActiveTab(tabId);
       this.showMobileDropdown = false;
     },
     getCurrentTabName() {
-      const currentTab = this.tabs.find(tab => tab.id === this.activeTab);
+      const currentTab = this.visibleTabs.find(tab => tab.id === this.activeTab);
       return currentTab ? currentTab.name : '';
     },
     getCurrentTabIcon() {
-      const currentTab = this.tabs.find(tab => tab.id === this.activeTab);
+      const currentTab = this.visibleTabs.find(tab => tab.id === this.activeTab);
       return currentTab ? currentTab.icon : 'fas fa-question';
     },
     async loadConfig() {
@@ -578,6 +667,9 @@ export default {
         });
         this.config = response.data;
       } catch (error) {
+        if (error?.response?.status === 403) {
+          return;
+        }
         this.$toast.open({
           message: 'Failed to load configuration',
           type: 'error',

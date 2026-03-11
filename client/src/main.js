@@ -9,6 +9,8 @@ import "@/assets/styles/theme.css";
 import "@/assets/styles/global.css";
 
 async function initApp() {
+  axios.defaults.withCredentials = true;
+
   // Configure base URL for development
   if (process.env.NODE_ENV === "development") {
     axios.defaults.baseURL = "http://localhost:5000";

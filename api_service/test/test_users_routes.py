@@ -348,6 +348,45 @@ class TestUpdateUser(_UsersBlueprintBase):
         self.assertEqual(resp.status_code, 403)
 
 
+class TestUpdateUserPermissions(_UsersBlueprintBase):
+
+    def setUp(self):
+        super().setUp()
+        self._admin_uid = self._make_admin('admin')
+        self._set_caller(self._admin_uid, 'admin', 'admin')
+        self._target_uid = self._make_user('bob', 'user')
+
+    def test_admin_can_update_permissions(self):
+        resp = self.client.post(
+            f'/api/users/{self._target_uid}/permissions',
+            json={
+                'can_manage_ai': True,
+                'allowed_tabs': ['requests', 'jobs', 'ai-search', 'profile'],
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data['success'])
+        self.assertEqual(self._users['bob']['can_manage_ai'], 1)
+        self.assertEqual(self._users['bob']['visible_tabs'], 'requests,jobs,ai_search,profile')
+
+    def test_invalid_tab_returns_400(self):
+        resp = self.client.post(
+            f'/api/users/{self._target_uid}/permissions',
+            json={'allowed_tabs': ['requests', 'not-a-tab']},
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_non_admin_gets_403(self):
+        uid = self._make_user('viewer', 'user')
+        self._set_caller(uid, 'viewer', 'user')
+        resp = self.client.post(
+            f'/api/users/{self._target_uid}/permissions',
+            json={'allowed_tabs': ['requests', 'jobs']},
+        )
+        self.assertEqual(resp.status_code, 403)
+
+
 # ---------------------------------------------------------------------------
 # DELETE /api/users/<id>
 # ---------------------------------------------------------------------------

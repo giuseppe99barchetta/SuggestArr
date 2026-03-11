@@ -378,7 +378,7 @@
 
 <script>
 import { useAuth } from '@/composables/useAuth';
-import { getUsers, createUserAdmin, updateUser, deleteUser } from '@/api/api';
+import { getUsers, createUserAdmin, updateUser, updateUserPermissions, deleteUser } from '@/api/api';
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import UserProfile from './UserProfile.vue';
@@ -438,7 +438,8 @@ export default {
         { value: 'jobs', label: 'Jobs', icon: 'fas fa-briefcase', required: false },
         { value: 'services', label: 'Services', icon: 'fas fa-cogs', required: false },
         { value: 'database', label: 'Database', icon: 'fas fa-database', required: false },
-        { value: 'ai-search', label: 'AI Search', icon: 'fas fa-robot', required: false },
+        { value: 'advanced', label: 'Advanced', icon: 'fas fa-sliders-h', required: false },
+        { value: 'ai_search', label: 'AI Search', icon: 'fas fa-robot', required: false },
         { value: 'profile', label: 'Profile', icon: 'fas fa-user-circle', required: true },
         { value: 'logs', label: 'Logs', icon: 'fas fa-file-alt', required: false },
 
@@ -467,6 +468,13 @@ export default {
   },
 
   methods: {
+    normalizeTabValue(tabValue) {
+      if (tabValue === 'ai-search') {
+        return 'ai_search';
+      }
+      return tabValue;
+    },
+
     async loadUsers() {
       this.isLoadingUsers = true;
       try {
@@ -557,14 +565,20 @@ export default {
     },
 
     openEditPermissionsModal(user) {
+      const normalizedTabs = Array.isArray(user.visible_tabs)
+        ? user.visible_tabs.map((t) => this.normalizeTabValue(t)).filter(Boolean)
+        : user.visible_tabs
+        ? user.visible_tabs.split(',').map((t) => this.normalizeTabValue(t.trim())).filter(Boolean)
+        : [];
+
+      if (!normalizedTabs.includes('profile')) {
+        normalizedTabs.push('profile');
+      }
+
       this.permissionsTarget = user;
       this.editPermissions = {
         can_manage_ai: user.can_manage_ai || false,
-        visible_tabs_array: Array.isArray(user.visible_tabs)
-          ? [...user.visible_tabs]
-          : user.visible_tabs
-          ? user.visible_tabs.split(',').map((t) => t.trim()).filter(Boolean)
-          : [],
+        visible_tabs_array: [...new Set(normalizedTabs)],
       };
       this.permissionsError = null;
       this.showPermissionsModal = true;
@@ -587,15 +601,25 @@ export default {
       this.isSavingPermissions = true;
       this.permissionsError = null;
       try {
+        const allowedTabs = [...new Set(
+          this.editPermissions.visible_tabs_array
+            .map((tab) => this.normalizeTabValue(tab))
+            .filter(Boolean)
+        )];
+
         const payload = {
           can_manage_ai: this.editPermissions.can_manage_ai,
-          visible_tabs: this.editPermissions.visible_tabs_array.join(','),
+          allowed_tabs: allowedTabs,
         };
-        await updateUser(this.permissionsTarget.id, payload);
+        const response = await updateUserPermissions(this.permissionsTarget.id, payload);
+        if (response?.data?.success !== true) {
+          throw new Error('Unexpected permissions response');
+        }
         this.$toast.success(`Permissions updated for ${this.permissionsTarget.username}`);
         this.showPermissionsModal = false;
         await this.loadUsers();
       } catch (err) {
+        console.error('Failed to update permissions:', err.response?.data || err);
         this.permissionsError = err.response?.data?.error || 'Failed to update permissions';
       } finally {
         this.isSavingPermissions = false;
