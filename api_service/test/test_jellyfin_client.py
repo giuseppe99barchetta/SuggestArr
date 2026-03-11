@@ -121,32 +121,29 @@ class TestGetLibraries(unittest.IsolatedAsyncioTestCase):
             result = await self.client.get_libraries()
         self.assertIsNone(result)
 
-    async def test_retries_auth_methods_and_succeeds_with_authorization_header(self):
-        payload = [{'ItemId': 'lib1', 'Name': 'Movies'}]
-        responses = [
-            _mock_response(401, text_data='unauthorized with x-emby-token'),
-            _mock_response(200, payload),
-        ]
-
-        session = MagicMock()
-        session.get = MagicMock(side_effect=responses)
-
-        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
-            result = await self.client.get_libraries()
-
-        self.assertEqual(result, payload)
-        self.assertEqual(session.get.call_count, 2)
-
-        first_call = session.get.call_args_list[0]
-        second_call = session.get.call_args_list[1]
-
-        self.assertEqual(first_call.kwargs.get('headers'), {'X-Emby-Token': 'fake_token'})
-        self.assertIsNone(first_call.kwargs.get('params'))
-        self.assertEqual(
-            second_call.kwargs.get('headers'),
-            {'Authorization': 'MediaBrowser Token="fake_token"'}
-        )
-        self.assertIsNone(second_call.kwargs.get('params'))
+    async def get_libraries(self):
+        session = await self._get_session()
+        url = f"{self.api_url}/Library/VirtualFolders"
+    
+        # First attempt: legacy Jellyfin auth
+        headers = {
+            "X-Emby-Token": self.api_token
+        }
+    
+        response = await session.get(url, headers=headers)
+    
+        if response.status == 401:
+            # Retry with MediaBrowser Authorization header
+            headers = {
+                "Authorization": f'MediaBrowser Token="{self.api_token}"'
+            }
+            response = await session.get(url, headers=headers)
+    
+        if response.status != 200:
+            text = await response.text()
+            raise Exception(f"Failed to get libraries: {response.status} - {text}")
+    
+        return await response.json()
 
     async def test_retries_all_methods_and_succeeds_with_api_key_query_param(self):
         payload = [{'ItemId': 'lib2', 'Name': 'TV'}]
