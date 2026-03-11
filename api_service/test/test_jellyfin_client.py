@@ -121,6 +121,70 @@ class TestGetLibraries(unittest.IsolatedAsyncioTestCase):
             result = await self.client.get_libraries()
         self.assertIsNone(result)
 
+    async def test_retries_auth_methods_and_succeeds_with_authorization_header(self):
+        payload = [{'ItemId': 'lib1', 'Name': 'Movies'}]
+        responses = [
+            _mock_response(401, text_data='unauthorized with x-emby-token'),
+            _mock_response(200, payload),
+        ]
+
+        session = MagicMock()
+        session.get = MagicMock(side_effect=responses)
+
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            result = await self.client.get_libraries()
+
+        self.assertEqual(result, payload)
+        self.assertEqual(session.get.call_count, 2)
+
+        first_call = session.get.call_args_list[0]
+        second_call = session.get.call_args_list[1]
+
+        self.assertEqual(first_call.kwargs.get('headers'), {'X-Emby-Token': 'fake_token'})
+        self.assertIsNone(first_call.kwargs.get('params'))
+        self.assertEqual(
+            second_call.kwargs.get('headers'),
+            {'Authorization': 'MediaBrowser Token="fake_token"'}
+        )
+        self.assertIsNone(second_call.kwargs.get('params'))
+
+    async def test_retries_all_methods_and_succeeds_with_api_key_query_param(self):
+        payload = [{'ItemId': 'lib2', 'Name': 'TV'}]
+        responses = [
+            _mock_response(401, text_data='unauthorized method1'),
+            _mock_response(401, text_data='unauthorized method2'),
+            _mock_response(200, payload),
+        ]
+
+        session = MagicMock()
+        session.get = MagicMock(side_effect=responses)
+
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            result = await self.client.get_libraries()
+
+        self.assertEqual(result, payload)
+        self.assertEqual(session.get.call_count, 3)
+
+        third_call = session.get.call_args_list[2]
+        self.assertIsNone(third_call.kwargs.get('headers'))
+        self.assertEqual(third_call.kwargs.get('params'), {'api_key': 'fake_token'})
+
+    async def test_returns_none_when_all_auth_methods_fail_after_401(self):
+        responses = [
+            _mock_response(401, text_data='unauthorized method1'),
+            _mock_response(401, text_data='unauthorized method2'),
+            _mock_response(401, text_data='unauthorized method3'),
+        ]
+
+        session = MagicMock()
+        session.get = MagicMock(side_effect=responses)
+
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            result = await self.client.get_libraries()
+
+        self.assertIsNone(result)
+        self.assertEqual(session.get.call_count, 3)
+
 
 # ---------------------------------------------------------------------------
 # get_all_library_items
