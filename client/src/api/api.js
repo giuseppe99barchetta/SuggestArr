@@ -138,5 +138,10 @@ export const unlinkProvider = (provider) => axios.delete(`/api/users/me/link/${p
 export const plexOAuthStart = () => axios.get('/api/users/me/link/plex/oauth-start');
 export const plexOAuthPoll = (pinId) => axios.post('/api/users/me/link/plex/oauth-poll', { pin_id: pinId });
 
+// Credential-based self-linking for media integrations
+export const linkJellyfinIntegration = (data) => axios.post('/api/integrations/jellyfin/link', data);
+export const linkEmbyIntegration = (data) => axios.post('/api/integrations/emby/link', data);
+export const linkPlexIntegration = (data) => axios.post('/api/integrations/plex/link', data);
+
 // Own profile update (any authenticated user)
 export const updateMyProfile = (data) => axios.patch('/api/auth/me', data);

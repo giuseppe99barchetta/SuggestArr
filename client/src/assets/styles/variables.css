@@ -268,8 +268,8 @@
      ─────────────────────────────────────────────────────────────────────── */
   --radius-sm: 6px;
   --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 25px;
   --radius-full: 9999px;
 
   /* Legacy aliases for backward compatibility (DEPRECATED - use --radius-* instead) */
