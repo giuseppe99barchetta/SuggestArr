@@ -96,14 +96,78 @@ export default {
 
 <style scoped>
 /* Alias base-card classes for backward compatibility */
-:deep(.base-card) { @apply card; }
-:deep(.base-card--default) { @apply card--default; }
-:deep(.base-card--elevated) { @apply card--elevated; }
-:deep(.base-card--outline) { @apply card--outline; }
-:deep(.base-card--ghost) { @apply card--ghost; }
-:deep(.base-card--hoverable) { @apply card--interactive; }
-:deep(.base-card-header) { @apply card-header; }
-:deep(.base-card-title) { @apply card-title; }
-:deep(.base-card-body) { @apply card-body; }
-:deep(.base-card-footer) { @apply card-footer; }
+/* These rules mirror the canonical .card* styles from primitives/card.css */
+
+:deep(.base-card) {
+  position: relative;
+  background: var(--card-bg, var(--surface-elevated));
+  border: 1px solid var(--card-border-color, var(--color-border-light));
+  border-radius: var(--card-border-radius, var(--radius-lg));
+  overflow: hidden;
+  transition: var(--transition-base);
+}
+
+:deep(.base-card--default) {
+  background: var(--card-bg, var(--surface-base));
+  border: 1px solid var(--color-border-light);
+  box-shadow: none;
+}
+
+:deep(.base-card--elevated) {
+  background: var(--card-bg, var(--surface-elevated));
+  border: none;
+  box-shadow: var(--shadow-md);
+}
+
+:deep(.base-card--outline) {
+  background: transparent;
+  border: 2px solid var(--color-border-medium);
+  box-shadow: none;
+}
+
+:deep(.base-card--ghost) {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+:deep(.base-card--hoverable) {
+  cursor: pointer;
+}
+
+:deep(.base-card--hoverable:hover) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-border-medium);
+}
+
+:deep(.base-card-header) {
+  padding: var(--card-header-padding, var(--spacing-lg));
+  border-bottom: 1px solid var(--card-divider-color, var(--color-border-light));
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+:deep(.base-card-title) {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--card-title-color, var(--color-text-primary));
+  flex: 1;
+}
+
+:deep(.base-card-body) {
+  padding: var(--card-body-padding, var(--spacing-lg));
+}
+
+:deep(.base-card-footer) {
+  padding: var(--card-footer-padding, var(--spacing-lg));
+  border-top: 1px solid var(--card-divider-color, var(--color-border-light));
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
 </style>
