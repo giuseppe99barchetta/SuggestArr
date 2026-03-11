@@ -414,7 +414,10 @@ def list_provider_users(provider: str):
     try:
         resp = http_requests.get(
             f"{server_url}/Users",
-            headers={"X-Emby-Token": api_key},
+            headers={
+                "X-Emby-Token": api_key,
+                "Authorization": f'MediaBrowser Token="{api_key}"'
+                },
             timeout=10,
         )
         resp.raise_for_status()

@@ -33,7 +33,10 @@ class JellyfinClient(BaseHTTPClient):
         self.libraries = library_ids
         # Strip whitespace from token to avoid 401s from copy-paste artefacts.
         self.api_token = token.strip() if token else token
-        self.headers = {"X-Emby-Token": self.api_token}
+        self.headers = {
+            "X-Emby-Token": self.api_token,
+            "Authorization": f'MediaBrowser Token="{self.api_token}"'
+        }
         self.existing_content = {}
         
     async def init_existing_content(self):
@@ -313,7 +316,10 @@ class JellyfinClient(BaseHTTPClient):
         auth_attempts = [
             {
                 "name": "X-Emby-Token header",
-                "headers": {"X-Emby-Token": self.api_token},
+                "headers": {
+                    "X-Emby-Token": self.api_token,
+                    "Authorization": f'MediaBrowser Token="{self.api_token}"'
+                    },
                 "params": None,
             },
             {
