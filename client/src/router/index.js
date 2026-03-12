@@ -155,35 +155,35 @@ export async function createAppRouter() {
   // Set up axios interceptors before any API calls (router ref added after creation)
   auth.setupInterceptors();
 
-  // Check auth status — public endpoint, always works
-  const authStatus = await auth
-    .getAuthStatus()
-    .catch(() => ({ auth_setup_complete: false, app_setup_complete: false }));
+  let authStatus = { auth_setup_complete: false, app_setup_complete: false };
 
-  // If an admin account exists, try refreshing the session from the cookie.
-  const hadSessionHint = localStorage.getItem("suggestarr_had_session") === "1";
-  if (authStatus.auth_setup_complete && hadSessionHint) {
-    await auth.tryRefresh();
+  try {
+    // Check auth status — public endpoint, always works
+    authStatus = await auth.getAuthStatus();
+
+    // If an admin account exists, try refreshing the session from the cookie.
+    const hadSessionHint = localStorage.getItem("suggestarr_had_session") === "1";
+    if (authStatus.auth_setup_complete && hadSessionHint) {
+      await auth.tryRefresh();
+    }
+
+    // Load config based on auth state:
+    // - If NOT in setup mode and we have a token (either already or just refreshed),
+    //   use authenticated config loading (WITHOUT _skipAuth, so Authorization header is added)
+    // - If in setup mode, use public config loading (with _skipAuth: true)
+    if (authStatus.auth_setup_complete && auth.accessToken.value) {
+      // Authenticated case: we have a token, so fetch config WITH auth header
+      await loadAuthenticatedConfig().catch(() => {});
+    } else if (!authStatus.auth_setup_complete) {
+      // Setup mode: no auth required yet, fetch with _skipAuth
+      await loadConfig().catch(() => {});
+    }
+  } catch (error) {
+    console.warn("Auth initialization failed, continuing in logged-out state", error);
+  } finally {
+    // Always resolve auth-ready waiters, even when refresh/bootstrap fails.
+    markAuthReady();
   }
-
-  // Load config based on auth state:
-  // - If NOT in setup mode and we have a token (either already or just refreshed),
-  //   use authenticated config loading (WITHOUT _skipAuth, so Authorization header is added)
-  // - If in setup mode, use public config loading (with _skipAuth: true)
-  if (authStatus.auth_setup_complete && auth.accessToken.value) {
-    // Authenticated case: we have a token, so fetch config WITH auth header
-    await loadAuthenticatedConfig().catch(() => {});
-  } else if (!authStatus.auth_setup_complete) {
-    // Setup mode: no auth required yet, fetch with _skipAuth
-    await loadConfig().catch(() => {});
-  }
-
-  // Mark auth as ready AFTER:
-  // 1. Token is refreshed (if applicable)
-  // 2. Authorization header is configured in interceptors
-  // 3. Config is loaded with proper authentication
-  // This ensures components won't call protected endpoints before auth is ready
-  markAuthReady();
 
   // No need to call checkSetupStatus here; it will be handled by the first navigation to the app.
 

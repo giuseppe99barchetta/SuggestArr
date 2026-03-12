@@ -67,12 +67,19 @@ export default {
       }
     ]);
 
+    const hasHeaderContent = computed(() =>
+      props.title ||
+      props.description ||
+      slots.header ||
+      slots.headerIcon
+    )
+        
     const headerClasses = computed(() => [
       'card-header',
       {
-        'card-header--empty': !props.title && !slots.header
+        'card-header--empty': !hasHeaderContent.value
       }
-    ]);
+    ])
 
     const bodyClasses = computed(() => {
       const map = {
