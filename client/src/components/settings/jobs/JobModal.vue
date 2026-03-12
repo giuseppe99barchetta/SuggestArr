@@ -1,6 +1,7 @@
 <template>
-  <div class="modal-overlay" @click.self="$emit('close')">
-    <div class="modal">
+  <Teleport to="body">
+    <div class="modal-overlay" @click.self="$emit('close')">
+      <div class="modal">
       <!-- Minimal Header -->
       <div class="modal-header">
         <h3 class="modal-title">{{ isEditing ? 'Edit Job' : 'Create New Job' }}</h3>
@@ -169,8 +170,9 @@
           </button>
         </div>
       </form>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script>
@@ -301,6 +303,22 @@ export default {
 
 <style scoped>
 /* Component-specific styles only */
+
+/* Render as a true app-level modal even when opened from nested containers */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2000;
+  background: var(--modal-backdrop, rgba(0, 0, 0, 0.72));
+}
+
+.modal {
+  position: relative;
+  z-index: 2001;
+}
 
 /* Job Type Selector */
 .job-type-selector {
