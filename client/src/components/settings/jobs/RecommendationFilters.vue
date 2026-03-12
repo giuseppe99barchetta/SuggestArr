@@ -188,6 +188,7 @@
 
 <script>
 import axios from 'axios';
+import { waitForAuthReady } from '@/composables/useAuth';
 
 export default {
   name: 'RecommendationFilters',
@@ -273,6 +274,8 @@ export default {
     async loadUsers() {
       this.isLoading = true;
       try {
+        // Ensure auth is ready before making the protected API call
+        await waitForAuthReady();
         // Try to get users from the config
         const response = await axios.get('/api/config/fetch');
         if (response.data && response.data.SELECTED_USERS) {

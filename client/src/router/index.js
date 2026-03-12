@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import axios from "axios";
 import "vue-toast-notification/dist/theme-bootstrap.css";
-import { useAuth, setAuthRouter } from "@/composables/useAuth";
+import { useAuth, setAuthRouter, initializeAuthReady, markAuthReady, waitForAuthReady } from "@/composables/useAuth";
 
 // Lazy load components for code splitting
 const RequestsPage = () => import("@/components/RequestsPage.vue");
@@ -23,6 +23,11 @@ function configureAxiosSubpath(subpath) {
 }
 
 let _configPromise = null;
+
+/**
+ * Load config without requiring authentication (setup mode).
+ * Uses `_skipAuth: true` so public endpoints work during setup.
+ */
 async function loadConfig() {
   if (_configPromise) return _configPromise;
 
@@ -50,6 +55,39 @@ async function loadConfig() {
     });
 
   return _configPromise;
+}
+
+let _authConfigPromise = null;
+
+/**
+ * Load config with authentication (after token is set).
+ * Does NOT use `_skipAuth`, so the Authorization header IS added by the interceptor.
+ * This ensures the backend receives the Bearer token for protected endpoints.
+ */
+async function loadAuthenticatedConfig() {
+  if (_authConfigPromise) return _authConfigPromise;
+
+  _authConfigPromise = axios
+    .get("/api/config/fetch", {
+      timeout: 10000,
+      // NOTE: NO _skipAuth - the request interceptor WILL add Authorization header
+    })
+    .then((response) => {
+      localStorage.setItem("suggestarr_config", JSON.stringify(response.data));
+      return response.data.SUBPATH || "";
+    })
+    .catch((error) => {
+      console.warn(
+        "Failed to load authenticated configuration:",
+        error.message,
+      );
+      return ""; // Fallback to root subpath
+    })
+    .finally(() => {
+      _authConfigPromise = null;
+    });
+
+  return _authConfigPromise;
 }
 
 let _statusCache = null;
@@ -111,6 +149,9 @@ export async function createAppRouter() {
 
   const auth = useAuth();
 
+  // Initialize the auth-ready signal so components can wait for auth setup
+  initializeAuthReady();
+
   // Set up axios interceptors before any API calls (router ref added after creation)
   auth.setupInterceptors();
 
@@ -121,15 +162,29 @@ export async function createAppRouter() {
 
   // If an admin account exists, try refreshing the session from the cookie.
   const hadSessionHint = localStorage.getItem("suggestarr_had_session") === "1";
+  let tokenRefreshed = false;
   if (authStatus.auth_setup_complete && hadSessionHint) {
-    await auth.tryRefresh();
+    tokenRefreshed = await auth.tryRefresh();
   }
 
-  // Only call /fetch if we now have an access token or if the system is in setup mode.
-  // This avoids a noisy console 401 when the app is initialized without a session.
-  if (!authStatus.auth_setup_complete || auth.accessToken.value) {
+  // Load config based on auth state:
+  // - If NOT in setup mode and we have a token (either already or just refreshed),
+  //   use authenticated config loading (WITHOUT _skipAuth, so Authorization header is added)
+  // - If in setup mode, use public config loading (with _skipAuth: true)
+  if (authStatus.auth_setup_complete && auth.accessToken.value) {
+    // Authenticated case: we have a token, so fetch config WITH auth header
+    await loadAuthenticatedConfig().catch(() => {});
+  } else if (!authStatus.auth_setup_complete) {
+    // Setup mode: no auth required yet, fetch with _skipAuth
     await loadConfig().catch(() => {});
   }
+
+  // Mark auth as ready AFTER:
+  // 1. Token is refreshed (if applicable)
+  // 2. Authorization header is configured in interceptors
+  // 3. Config is loaded with proper authentication
+  // This ensures components won't call protected endpoints before auth is ready
+  markAuthReady();
 
   // No need to call checkSetupStatus here; it will be handled by the first navigation to the app.
 
@@ -186,6 +241,10 @@ export async function createAppRouter() {
 
   // Add navigation guards
   router.beforeEach(async (to) => {
+    // Wait for initial auth setup to complete before allowing navigation
+    // This ensures the access token is set and any refresh has completed
+    await waitForAuthReady();
+
     // For development, we might want to skip setup checks
     if (process.env.NODE_ENV === "development" && to.query.skipSetup) {
       return;

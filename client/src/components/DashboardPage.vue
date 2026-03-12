@@ -568,6 +568,10 @@ export default {
   },
   async mounted() {
     try {
+      // Ensure auth is fully initialized before making protected API calls
+      const { waitForAuthReady } = await import("@/composables/useAuth");
+      await waitForAuthReady();
+
       await this.fetchMe();
 
       if (!this.currentUser) {
