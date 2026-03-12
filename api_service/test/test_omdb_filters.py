@@ -8,6 +8,7 @@ Covers:
 """
 
 import unittest
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from api_service.services.omdb.omdb_client import OmdbClient
@@ -25,7 +26,7 @@ def _make_tmdb_client(
     include_no_ratings=False,
 ):
     """Return a TMDbClient with minimal required args for filter testing."""
-    return TMDbClient(
+    client = TMDbClient(
         api_key='fake_tmdb_key',
         search_size=10,
         tmdb_threshold=60,
@@ -41,6 +42,9 @@ def _make_tmdb_client(
         imdb_min_votes=imdb_min_votes,
         omdb_client=None,
     )
+    client.logger = logging.getLogger('TMDbClient')
+    client.logger.setLevel(logging.DEBUG)
+    return client
 
 
 MOVIE_ITEM = {'title': 'Inception', 'id': 27205}
@@ -302,7 +306,7 @@ class TestApplyImdbFilter(unittest.TestCase):
         item = {'title': 'Example Movie', 'id': 12345}
         imdb_data = {'imdb_rating': None, 'imdb_votes': 125, 'imdb_rating_raw': 'N/A'}
 
-        with self.assertLogs(client.logger, level='DEBUG') as captured:
+        with self.assertLogs('TMDbClient', level='DEBUG') as captured:
             result = client._apply_imdb_filter(imdb_data, item, 'movie')
 
         self.assertFalse(result)

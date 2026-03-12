@@ -9,6 +9,7 @@ Covers:
 """
 
 import unittest
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from api_service.services.ai_search.ai_search_service import AiSearchService
@@ -156,6 +157,7 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
         mock_tmdb.search_tv   = AsyncMock(return_value=[])
         mock_tmdb._apply_filters = MagicMock(return_value={'passed': True})
         mock_tmdb.omdb_client = None
+        mock_tmdb.logger = logging.getLogger("TMDbClient")
         # Async context manager support
         mock_tmdb.__aenter__ = AsyncMock(return_value=mock_tmdb)
         mock_tmdb.__aexit__  = AsyncMock(return_value=False)

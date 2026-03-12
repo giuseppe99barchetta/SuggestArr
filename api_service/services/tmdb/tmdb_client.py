@@ -499,29 +499,15 @@ class TMDbClient(BaseHTTPClient):
         imdb_rating = imdb_data.get('imdb_rating')
         imdb_votes = imdb_data.get('imdb_votes')
         raw_rating = imdb_data.get('imdb_rating_raw')
-        rating_raw_is_na = str(raw_rating).strip().upper() == 'N/A'
-        rating_missing = imdb_rating is None or rating_raw_is_na
-
-        # Explicit branch for OMDb imdbRating='N/A' to guarantee DEBUG logging
-        # before exclusion when unrated content is not allowed.
-        if rating_raw_is_na and imdb_rating is None and not self.include_no_ratings:
-            title = item.get('title' if content_type == 'movie' else 'name', 'Unknown')
-            tmdb_id = item.get('id', 'unknown')
-            media_label = 'movie' if content_type == 'movie' else 'tv show'
-            self.logger.debug(
-                "Skipping %s %s (tmdb:%s) - OMDb returned imdbRating=N/A and include_content_without_imdb_rating=false",
-                media_label,
-                title,
-                tmdb_id,
-            )
-            return False
+        normalized_raw_rating = str(raw_rating).strip().upper() if raw_rating is not None else None
+        rating_missing = imdb_rating is None or normalized_raw_rating in ('N/A', '')
 
         if rating_missing:
             if not self.include_no_ratings:
 
                 title = item.get('title' if content_type == 'movie' else 'name', 'Unknown')
                 tmdb_id = item.get('id', 'unknown')
-                rating_label = raw_rating if raw_rating not in (None, '') else 'missing'
+                rating_label = normalized_raw_rating if normalized_raw_rating not in (None, '') else 'missing'
                 media_label = 'movie' if content_type == 'movie' else 'tv show'
 
                 self.logger.debug(
