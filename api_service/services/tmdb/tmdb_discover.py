@@ -262,6 +262,7 @@ class TMDbDiscover:
             True if the item passes the filter, False otherwise.
         """
         title = item.get('title') or item.get('name', 'Unknown')
+        tmdb_id = item.get('id', 'unknown')
 
         if not imdb_data:
             if include_no_rating:
@@ -269,8 +270,24 @@ class TMDbDiscover:
             self.logger.debug("Excluding %s: no IMDB rating data available", title)
             return False
 
-        rating = imdb_data.get('imdb_rating', 0)
-        votes = imdb_data.get('imdb_votes', 0)
+        rating = imdb_data.get('imdb_rating')
+        votes = imdb_data.get('imdb_votes')
+
+        if rating is None:
+            if include_no_rating:
+                return True
+
+            raw_rating = imdb_data.get('imdb_rating_raw')
+            rating_label = raw_rating if raw_rating not in (None, '') else 'missing'
+            media_label = 'movie' if item.get('title') else 'tv show'
+            self.logger.debug(
+                "Skipping %s %s (tmdb:%s) - OMDb returned imdbRating=%s and include_content_without_imdb_rating=false",
+                media_label,
+                title,
+                tmdb_id,
+                rating_label,
+            )
+            return False
 
         if imdb_rating_gte is not None and rating < float(imdb_rating_gte):
             self.logger.debug(
@@ -278,9 +295,9 @@ class TMDbDiscover:
             )
             return False
 
-        if imdb_min_votes is not None and votes < int(imdb_min_votes):
+        if imdb_min_votes is not None and (votes is None or votes < int(imdb_min_votes)):
             self.logger.debug(
-                "Excluding %s: IMDB votes %d below minimum %d", title, votes, imdb_min_votes
+                "Excluding %s: IMDB votes %s below minimum %d", title, votes, imdb_min_votes
             )
             return False
 

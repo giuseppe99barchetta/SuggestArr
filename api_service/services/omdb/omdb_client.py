@@ -61,26 +61,56 @@ class OmdbClient(BaseHTTPClient):
                                           imdb_id, data.get('Error'))
                         return None
 
-                    raw_rating = data.get('imdbRating', 'N/A')
-                    raw_votes = data.get('imdbVotes', 'N/A')
+                    raw_rating = data.get('imdbRating')
+                    raw_votes = data.get('imdbVotes')
 
-                    if raw_rating == 'N/A' or raw_votes == 'N/A':
-                        self.logger.debug("No IMDB rating/votes data for IMDB ID %s", imdb_id)
-                        return None
+                    rating_missing = raw_rating in (None, '', 'N/A')
+                    votes_missing = raw_votes in (None, '', 'N/A')
+
+                    imdb_votes = None
+                    if not votes_missing:
+                        try:
+                            imdb_votes = int(str(raw_votes).replace(',', ''))
+                        except (ValueError, TypeError) as e:
+                            self.logger.warning(
+                                "Failed to parse IMDB votes for %s: %s", imdb_id, str(e)
+                            )
+
+                    if rating_missing:
+                        self.logger.debug(
+                            "No valid IMDB rating for IMDB ID %s (imdbRating=%s, imdbVotes=%s)",
+                            imdb_id,
+                            raw_rating,
+                            raw_votes,
+                        )
+                        return {
+                            'imdb_rating': None,
+                            'imdb_votes': imdb_votes,
+                            'imdb_rating_raw': raw_rating,
+                        }
 
                     try:
                         imdb_rating = float(raw_rating)
-                        imdb_votes = int(raw_votes.replace(',', ''))
-                        self.logger.debug("IMDB rating for %s: %.1f (%d votes)",
-                                          imdb_id, imdb_rating, imdb_votes)
+                        self.logger.debug(
+                            "IMDB rating for %s: %.1f (%s votes)",
+                            imdb_id,
+                            imdb_rating,
+                            imdb_votes if imdb_votes is not None else 'unknown',
+                        )
                         return {
                             'imdb_rating': imdb_rating,
                             'imdb_votes': imdb_votes,
+                            'imdb_rating_raw': raw_rating,
                         }
                     except (ValueError, TypeError) as e:
-                        self.logger.warning("Failed to parse IMDB rating data for %s: %s",
-                                            imdb_id, str(e))
-                        return None
+                        self.logger.warning(
+                            "Failed to parse IMDB rating data for %s: %s", imdb_id, str(e)
+                        )
+                        return {
+                            'imdb_rating': None,
+                            'imdb_votes': imdb_votes,
+                            'imdb_rating_raw': raw_rating,
+                        }
                 else:
                     self.logger.warning("OMDb request failed for IMDB ID %s: HTTP %d",
                                         imdb_id, response.status)

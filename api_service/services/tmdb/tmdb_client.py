@@ -450,6 +450,17 @@ class TMDbClient(BaseHTTPClient):
 
         imdb_rating = imdb_data.get('imdb_rating')
         imdb_votes = imdb_data.get('imdb_votes')
+        raw_rating = imdb_data.get('imdb_rating_raw')
+
+        if imdb_rating is None:
+            if not self.include_no_ratings:
+                reason = (
+                    f"OMDb returned imdbRating={raw_rating}"
+                    if raw_rating not in (None, '')
+                    else "OMDb returned missing imdbRating"
+                )
+                return {'passed': False, 'label': 'IMDB', 'reason': reason}
+            return {'passed': None, 'label': 'IMDB', 'reason': 'Missing IMDB rating (allowed)'}
 
         if imdb_rating is not None and imdb_rating < self.imdb_threshold / 10:
             return {
@@ -487,6 +498,41 @@ class TMDbClient(BaseHTTPClient):
 
         imdb_rating = imdb_data.get('imdb_rating')
         imdb_votes = imdb_data.get('imdb_votes')
+        raw_rating = imdb_data.get('imdb_rating_raw')
+        rating_raw_is_na = str(raw_rating).strip().upper() == 'N/A'
+        rating_missing = imdb_rating is None or rating_raw_is_na
+
+        # Explicit branch for OMDb imdbRating='N/A' to guarantee DEBUG logging
+        # before exclusion when unrated content is not allowed.
+        if rating_raw_is_na and imdb_rating is None and not self.include_no_ratings:
+            title = item.get('title' if content_type == 'movie' else 'name', 'Unknown')
+            tmdb_id = item.get('id', 'unknown')
+            media_label = 'movie' if content_type == 'movie' else 'tv show'
+            self.logger.debug(
+                "Skipping %s %s (tmdb:%s) - OMDb returned imdbRating=N/A and include_content_without_imdb_rating=false",
+                media_label,
+                title,
+                tmdb_id,
+            )
+            return False
+
+        if rating_missing:
+            if not self.include_no_ratings:
+
+                title = item.get('title' if content_type == 'movie' else 'name', 'Unknown')
+                tmdb_id = item.get('id', 'unknown')
+                rating_label = raw_rating if raw_rating not in (None, '') else 'missing'
+                media_label = 'movie' if content_type == 'movie' else 'tv show'
+
+                self.logger.debug(
+                    "Skipping %s %s (tmdb:%s) - OMDb returned imdbRating=%s and include_content_without_imdb_rating=false",
+                    media_label,
+                    title,
+                    tmdb_id,
+                    rating_label,
+                )
+
+                return False
 
         if imdb_rating is not None and imdb_rating < self.imdb_threshold / 10:
             self._log_exclusion_reason(

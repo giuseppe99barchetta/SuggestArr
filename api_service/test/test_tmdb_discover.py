@@ -170,6 +170,11 @@ class TestCheckImdbFilter(unittest.TestCase):
         result = self.disc._check_imdb_filter(None, self.item, None, None, include_no_rating=False)
         self.assertFalse(result)
 
+    def test_excludes_when_rating_missing_and_include_no_rating_false(self):
+        data = {'imdb_rating': None, 'imdb_votes': 125, 'imdb_rating_raw': 'N/A'}
+        result = self.disc._check_imdb_filter(data, self.item, None, None, include_no_rating=False)
+        self.assertFalse(result)
+
     def test_passes_when_rating_above_threshold(self):
         data = {'imdb_rating': 8.0, 'imdb_votes': 1000}
         result = self.disc._check_imdb_filter(data, self.item, 7.0, 100, include_no_rating=False)
