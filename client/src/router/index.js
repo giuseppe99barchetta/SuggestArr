@@ -162,9 +162,8 @@ export async function createAppRouter() {
 
   // If an admin account exists, try refreshing the session from the cookie.
   const hadSessionHint = localStorage.getItem("suggestarr_had_session") === "1";
-  let tokenRefreshed = false;
   if (authStatus.auth_setup_complete && hadSessionHint) {
-    tokenRefreshed = await auth.tryRefresh();
+    await auth.tryRefresh();
   }
 
   // Load config based on auth state:
