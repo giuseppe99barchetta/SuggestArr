@@ -92,10 +92,11 @@
   transition: var(--transition-base);
 }
 
-.filter-input:focus {
+.filter-input:focus-visible {
   outline: none;
   border-color: var(--color-primary);
   background: var(--color-bg-active);
+  box-shadow: var(--focus-ring);
 }
 
 .filter-input::placeholder {

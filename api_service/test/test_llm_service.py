@@ -36,6 +36,7 @@ from api_service.exceptions.api_exceptions import LLMValidationError
 from api_service.services.llm.llm_service import (
     _call_with_validation,
     _deduplicate_history,
+    _extract_json_object,
     _is_duplicate_of_history,
     _normalize_title,
     _repair_title_qualifiers,
@@ -104,6 +105,21 @@ class TestRepairTitleQualifiers(unittest.TestCase):
     def test_leaves_normal_json_unchanged(self):
         text = '{"title": "Se7en", "year": 1995}'
         self.assertEqual(_repair_title_qualifiers(text), text)
+
+
+# ---------------------------------------------------------------------------
+# _extract_json_object
+# ---------------------------------------------------------------------------
+
+class TestExtractJsonObject(unittest.TestCase):
+
+    def test_extracts_object_with_preface_and_trailing_text(self):
+        text = 'Here is the result:\n{"recommendations": []}\nThis should help.'
+        self.assertEqual(_extract_json_object(text), '{"recommendations": []}')
+
+    def test_returns_trimmed_text_when_braces_missing(self):
+        text = '  not json  '
+        self.assertEqual(_extract_json_object(text), 'not json')
 
 
 # ---------------------------------------------------------------------------
@@ -313,6 +329,22 @@ class TestCallWithValidation(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result.recommendations[0].title, "Dune")
 
+    async def test_ignores_trailing_text_after_valid_json(self):
+        payload = json.dumps({"recommendations": [
+            {"title": "Dune", "year": 2021, "rationale": "Epic.", "source_title": None}
+        ]})
+        noisy_output = f"{payload}\n\nI picked this based on your history."
+        client = self._make_client(_mock_openai_response(noisy_output))
+
+        result = await _call_with_validation(
+            client=client,
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "recommend"}],
+            schema_cls=RecommendationList,
+            max_retries=0,
+        )
+        self.assertEqual(result.recommendations[0].title, "Dune")
+
 
 # ---------------------------------------------------------------------------
 # get_recommendations_from_history (async)
@@ -405,12 +437,18 @@ class TestGetRecommendationsFromHistory(unittest.IsolatedAsyncioTestCase):
                 history,
                 max_results=3,
                 item_type="movie",
-                filters={"with_original_language": "it"},
+                filters={
+                    "with_original_language": "it",
+                    "release_year_gte": 1990,
+                    "release_year_lte": 1999,
+                },
             )
 
         messages = mock_client.chat.completions.create.call_args.kwargs["messages"]
         user_prompt = messages[1]["content"]
         self.assertIn("ORIGINAL language code is 'it'", user_prompt)
+        self.assertIn("released from year 1990 onward", user_prompt)
+        self.assertIn("released up to year 1999", user_prompt)
 
 
 # ---------------------------------------------------------------------------

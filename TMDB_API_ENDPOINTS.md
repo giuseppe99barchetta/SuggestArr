@@ -92,11 +92,11 @@ Tests the Jellyfin server connection with provided API token and URL.
 - `400 Bad Request`: Missing token or URL, or connection failed
 - `500 Internal Server Error`: Internal error
 
-## Overseer/Jellyseer Endpoints
+## Seer Endpoints
 
 ### POST `/api/seer/test`
 
-Tests the Overseer/Jellyseer API connection with provided API key and URL.
+Tests the Seer API connection with provided API key and URL.
 
 **Request Body:**
 ```json
@@ -111,7 +111,7 @@ Tests the Overseer/Jellyseer API connection with provided API key and URL.
 ```json
 {
   "status": "success",
-  "message": "Overseer/Jellyseer connection successful!",
+  "message": "Seer connection successful!",
   "data": {
     "users_count": 4,
     "server_url": "http://localhost:5055",
@@ -208,7 +208,7 @@ All service test endpoints have been enhanced with robust validation:
 ```json
 {
   "status": "success",
-  "message": "Overseer/Jellyseer connection successful but no users found",
+  "message": "Seer connection successful but no users found",
   "data": {
     "users_count": 0,
     "server_url": "http://localhost:5055"

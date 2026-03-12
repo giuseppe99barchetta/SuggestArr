@@ -1,5 +1,5 @@
 <template>
-  <div class="form-group-modern" v-click-outside="closeDropdown">
+  <div class="form-group-modern" ref="dropdownWrapper" v-bind="$attrs">
     <label v-if="label" :for="id" class="modern-label">
       <span class="label-content">
         <span class="label-text">{{ label }}</span>
@@ -8,13 +8,24 @@
     </label>
     
     <div 
+      ref="dropdownTrigger"
       class="custom-dropdown" 
       :class="{ 
         'is-open': isOpen, 
         'is-disabled': disabled, 
         'has-error': error 
       }"
+      :tabindex="disabled ? -1 : 0"
+      :aria-expanded="isOpen.toString()"
+      :aria-haspopup="'menu'"
+      :aria-controls="dropdownMenuId"
+      role="button"
       @click="toggleDropdown"
+      @keydown.enter.prevent="handleTriggerKeyDown"
+      @keydown.space.prevent="handleTriggerKeyDown"
+      @keydown.escape="handleEscapeKey"
+      @keydown.down.prevent="handleArrowDown"
+      @keydown.up.prevent="handleArrowUp"
     >
       <!-- Selected value display -->
       <div class="dropdown-trigger">
@@ -32,38 +43,6 @@
         </div>
       </div>
       
-      <!-- Custom dropdown menu -->
-      <transition name="dropdown-slide">
-        <div v-if="isOpen" class="dropdown-menu">
-          <div class="dropdown-menu-inner">
-            <div class="dropdown-scroll">
-              <div
-                v-for="(option, index) in options"
-                :key="getOptionKey(option)"
-                class="dropdown-item"
-                :class="{ 
-                  'is-selected': isSelected(option),
-                  'is-disabled': option.disabled,
-                  'is-highlighted': highlightedIndex === index
-                }"
-                @click.stop="selectOption(option)"
-                @mouseenter="highlightedIndex = index"
-              >
-                <div class="item-content">
-                  <span class="item-label">{{ getOptionLabel(option) }}</span>
-                  <i v-if="isSelected(option)" class="fas fa-check item-check"></i>
-                </div>
-                <div class="item-ripple"></div>
-              </div>
-              
-              <div v-if="options.length === 0" class="dropdown-empty">
-                <i class="fas fa-inbox"></i>
-                <span>No options available</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </transition>
     </div>
     
     <transition name="fade-slide-up">
@@ -80,11 +59,61 @@
       </div>
     </transition>
   </div>
+
+  <Teleport to="body">
+    <Transition name="dropdown-slide">
+      <div
+        v-if="isOpen"
+        :id="dropdownMenuId"
+        ref="dropdownMenu"
+        class="dropdown-menu"
+        :style="menuStyle"
+        role="menu"
+        :aria-labelledby="id"
+      >
+        <div class="dropdown-menu-inner">
+          <div class="dropdown-scroll">
+            <div
+              v-for="(option, index) in options"
+              :key="getOptionKey(option)"
+              :ref="el => { if (el) menuItemRefs[index] = el }"
+              class="dropdown-item"
+              role="menuitem"
+              :tabindex="highlightedIndex === index ? 0 : -1"
+              :aria-selected="isSelected(option).toString()"
+              :aria-disabled="option.disabled ? 'true' : undefined"
+              :class="{ 
+                'is-selected': isSelected(option),
+                'is-disabled': option.disabled,
+                'is-highlighted': highlightedIndex === index
+              }"
+              @click.stop="selectOption(option)"
+              @keydown.enter.prevent="selectOption(option)"
+              @keydown.space.prevent="selectOption(option)"
+              @mouseenter="highlightedIndex = index"
+            >
+              <div class="item-content">
+                <span class="item-label">{{ getOptionLabel(option) }}</span>
+                <i v-if="isSelected(option)" class="fas fa-check item-check"></i>
+              </div>
+              <div class="item-ripple"></div>
+            </div>
+
+            <div v-if="options.length === 0" class="dropdown-empty">
+              <i class="fas fa-inbox"></i>
+              <span>No options available</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script>
 export default {
   name: 'BaseDropdown',
+  inheritAttrs: false,
   props: {
     modelValue: {
       type: [String, Number, Boolean],
@@ -140,16 +169,39 @@ export default {
   data() {
     return {
       isOpen: false,
-      highlightedIndex: -1
+      highlightedIndex: -1,
+      menuItemRefs: [],
+      menuStyle: null
     };
   },
   computed: {
+    dropdownMenuId() {
+      return `${this.id}-menu`;
+    },
     selectedLabel() {
       const selected = this.options.find(opt => 
         this.getOptionValue(opt) === this.modelValue
       );
       return selected ? this.getOptionLabel(selected) : '';
     }
+  },
+  mounted() {
+    this._onDocumentClick = (event) => {
+      const wrapper = this.$refs.dropdownWrapper;
+      const menu = this.$refs.dropdownMenu;
+      if (
+        (wrapper && wrapper.contains(event.target)) ||
+        (menu && menu.contains(event.target))
+      ) {
+        return;
+      }
+      this.closeDropdown();
+    };
+    document.addEventListener('click', this._onDocumentClick);
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this._onDocumentClick);
+    this._removePositionListeners();
   },
   methods: {
     getFirstDefinedProp(option, propNames) {
@@ -160,18 +212,120 @@ export default {
       }
       return undefined;
     },
+    handleTriggerKeyDown() {
+      if (this.disabled) return;
+      if (!this.isOpen) {
+        this.openDropdown();
+      } else {
+        this.closeDropdown();
+      }
+    },
+    handleEscapeKey() {
+      if (this.isOpen) {
+        this.closeDropdown();
+      }
+    },
+    handleArrowDown() {
+      if (!this.isOpen) {
+        this.openDropdown();
+      } else {
+        this.navigateNext();
+      }
+    },
+    handleArrowUp() {
+      if (!this.isOpen) {
+        this.openDropdown();
+      } else {
+        this.navigatePrevious();
+      }
+    },
+    navigateNext() {
+      const enabledOptions = this.options.filter(opt => !opt.disabled);
+      if (enabledOptions.length === 0) return;
+      
+      let nextIndex = this.highlightedIndex + 1;
+      while (nextIndex < this.options.length && this.options[nextIndex].disabled) {
+        nextIndex++;
+      }
+      
+      if (nextIndex >= this.options.length) {
+        nextIndex = this.options.findIndex(opt => !opt.disabled);
+      }
+      
+      this.highlightedIndex = nextIndex;
+      this.focusMenuItem(nextIndex);
+    },
+    navigatePrevious() {
+      const enabledOptions = this.options.filter(opt => !opt.disabled);
+      if (enabledOptions.length === 0) return;
+      
+      let prevIndex = this.highlightedIndex - 1;
+      while (prevIndex >= 0 && this.options[prevIndex].disabled) {
+        prevIndex--;
+      }
+      
+      if (prevIndex < 0) {
+        for (let i = this.options.length - 1; i >= 0; i--) {
+          if (!this.options[i].disabled) {
+            prevIndex = i;
+            break;
+          }
+        }
+      }
+      
+      this.highlightedIndex = prevIndex;
+      this.focusMenuItem(prevIndex);
+    },
+    focusMenuItem(index) {
+      this.$nextTick(() => {
+        const menuItem = this.menuItemRefs[index];
+        if (menuItem && typeof menuItem.focus === 'function') {
+          menuItem.focus();
+        }
+      });
+    },
+    openDropdown() {
+      if (this.disabled) return;
+      this.isOpen = true;
+      this._addPositionListeners();
+      this.$nextTick(() => {
+        this.scrollToSelected();
+        // Focus the first enabled item or the selected item
+        const selectedIndex = this.options.findIndex(opt => this.isSelected(opt) && !opt.disabled);
+        if (selectedIndex !== -1) {
+          this.highlightedIndex = selectedIndex;
+          this.focusMenuItem(selectedIndex);
+        } else {
+          const firstEnabledIndex = this.options.findIndex(opt => !opt.disabled);
+          if (firstEnabledIndex !== -1) {
+            this.highlightedIndex = firstEnabledIndex;
+            this.focusMenuItem(firstEnabledIndex);
+          }
+        }
+      });
+    },
     toggleDropdown() {
       if (this.disabled) return;
-      this.isOpen = !this.isOpen;
       if (this.isOpen) {
-        this.$nextTick(() => {
-          this.scrollToSelected();
-        });
+        this.closeDropdown();
+      } else {
+        this.openDropdown();
       }
     },
     closeDropdown() {
+      const wasOpen = this.isOpen;
       this.isOpen = false;
       this.highlightedIndex = -1;
+      this._removePositionListeners();
+      // Return focus to trigger only if the dropdown was actually open,
+      // to avoid stealing focus from other elements (e.g. text inputs).
+      if (wasOpen) {
+        this.$nextTick(() => {
+          if (this.$refs.dropdownTrigger) {
+            this.$refs.dropdownTrigger.focus();
+          }
+        });
+      }
     },
     selectOption(option) {
       if (option.disabled) return;
@@ -188,7 +342,7 @@ export default {
       const selectedIndex = this.options.findIndex(opt => 
         this.getOptionValue(opt) === this.modelValue
       );
-      if (selectedIndex !== -1) {
+      if (selectedIndex !== -1 && !this.options[selectedIndex].disabled) {
         this.highlightedIndex = selectedIndex;
       }
     },
@@ -209,22 +363,28 @@ export default {
         return this.getFirstDefinedProp(option, [this.optionValue, this.optionKey, this.optionLabel]);
       }
       return option;
-    }
-  },
-  directives: {
-    'click-outside': {
-      mounted(el, binding) {
-        el.clickOutsideEvent = (event) => {
-          if (!(el === event.target || el.contains(event.target))) {
-            binding.value();
-          }
-        };
-        document.addEventListener('click', el.clickOutsideEvent);
-      },
-      unmounted(el) {
-        document.removeEventListener('click', el.clickOutsideEvent);
-      }
-    }
+    },
+    _updateMenuPosition() {
+      const trigger = this.$refs.dropdownTrigger;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      this.menuStyle = {
+        position: 'fixed',
+        top: `${rect.bottom + 4}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+        zIndex: '9999',
+      };
+    },
+    _addPositionListeners() {
+      this._updateMenuPosition();
+      window.addEventListener('scroll', this._updateMenuPosition, { capture: true, passive: true });
+      window.addEventListener('resize', this._updateMenuPosition, { passive: true });
+    },
+    _removePositionListeners() {
+      window.removeEventListener('scroll', this._updateMenuPosition, { capture: true });
+      window.removeEventListener('resize', this._updateMenuPosition);
+    },
   }
 };
 </script>
@@ -385,13 +545,10 @@ export default {
   filter: drop-shadow(0 0 8px rgba(229, 231, 235, 0.3));
 }
 
-/* Dropdown Menu */
+/* Dropdown Menu – always teleported to <body> with fixed positioning via inline style */
 .dropdown-menu {
-  position: absolute;
-  top: calc(100% + 0.5rem);
-  left: 0;
-  right: 0;
-  z-index: 1000;
+  position: fixed;
+  z-index: 9999;
 }
 
 .dropdown-menu-inner {

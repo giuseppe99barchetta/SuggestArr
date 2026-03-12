@@ -1,23 +1,25 @@
 <template>
   <div class="wizard-container" :class="{ 'static-bg-active': config.ENABLE_STATIC_BACKGROUND }">
     <!-- Background layers -->
-    <div
-      v-if="!config.ENABLE_STATIC_BACKGROUND"
-      class="background-layer current-bg"
-      :style="{ backgroundImage: 'url(' + currentBackgroundUrl + ')' }"
-      :class="{ 'fade-out': isTransitioning }"
-    ></div>
-    <div
-      v-if="!config.ENABLE_STATIC_BACKGROUND"
-      class="background-layer next-bg"
-      :style="{ backgroundImage: 'url(' + nextBackgroundUrl + ')' }"
-      :class="{ 'fade-in': isTransitioning }"
-    ></div>
-    <div
-      v-if="config.ENABLE_STATIC_BACKGROUND"
-      class="background-layer static-bg"
-      :style="{ backgroundColor: config.STATIC_BACKGROUND_COLOR }"
-    ></div>
+    <div class="background-container">
+      <template v-if="!config.ENABLE_STATIC_BACKGROUND">
+        <div
+          class="background-layer"
+          :class="activeBg === 'bg1' ? 'visible' : 'hidden'"
+          :style="{ backgroundImage: 'url(' + bg1Url + ')' }"
+        ></div>
+        <div
+          class="background-layer"
+          :class="activeBg === 'bg2' ? 'visible' : 'hidden'"
+          :style="{ backgroundImage: 'url(' + bg2Url + ')' }"
+        ></div>
+      </template>
+      <div
+        v-if="config.ENABLE_STATIC_BACKGROUND"
+        class="background-layer static-bg"
+        :style="{ backgroundColor: config.STATIC_BACKGROUND_COLOR }"
+      ></div>
+    </div>
 
     <!-- WELCOME SCREEN -->
     <div v-if="screen === 'welcome'" class="wizard-welcome-screen">
@@ -298,7 +300,7 @@ export default {
     // Config management
     const { config, hasExistingConfig, fetchConfig, saveConfig: saveConfigFn } = useConfigManager();
     const { isImporting, fileInput, importConfig: importConfigFn, handleFileImport: handleFileImportFn } = useConfigImport(fetchConfig);
-    const { currentBackgroundUrl, nextBackgroundUrl, isTransitioning, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
+    const { bg1Url, bg2Url, activeBg, isTransitioning, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
 
     // ─── Step Definitions ────────────────────────────────────────────────────
     const allSteps = computed(() => {
@@ -320,7 +322,7 @@ export default {
         },
         {
           id: 'seer',
-          label: 'Overseerr / Jellyseerr',
+          label: 'Seer',
           description: 'Connect your media request manager to submit suggestions.',
           component: SettingsServices,
           wizardSection: 'seer',
@@ -378,7 +380,7 @@ export default {
         if (!stepValidity.value['media-server']) return 'Connect your media server to continue.';
       }
       if (step.id === 'tmdb') return 'Test your TMDB connection above to continue.';
-      if (step.id === 'seer') return 'Test your Jellyseerr / Overseerr connection above to continue.';
+      if (step.id === 'seer') return 'Test your Seer connection above to continue.';
       return '';
     });
 
@@ -586,8 +588,9 @@ export default {
       hasExistingConfig,
       isImporting,
       fileInput,
-      currentBackgroundUrl,
-      nextBackgroundUrl,
+      bg1Url,
+      bg2Url,
+      activeBg,
       isTransitioning,
       allSteps,
       requiredSteps,

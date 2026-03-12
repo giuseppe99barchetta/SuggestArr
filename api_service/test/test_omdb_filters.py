@@ -8,6 +8,7 @@ Covers:
 """
 
 import unittest
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from api_service.services.omdb.omdb_client import OmdbClient
@@ -25,7 +26,7 @@ def _make_tmdb_client(
     include_no_ratings=False,
 ):
     """Return a TMDbClient with minimal required args for filter testing."""
-    return TMDbClient(
+    client = TMDbClient(
         api_key='fake_tmdb_key',
         search_size=10,
         tmdb_threshold=60,
@@ -41,6 +42,9 @@ def _make_tmdb_client(
         imdb_min_votes=imdb_min_votes,
         omdb_client=None,
     )
+    client.logger = logging.getLogger('TMDbClient')
+    client.logger.setLevel(logging.DEBUG)
+    return client
 
 
 MOVIE_ITEM = {'title': 'Inception', 'id': 27205}
@@ -136,7 +140,9 @@ class TestOmdbClientGetRating(unittest.IsolatedAsyncioTestCase):
         with patch('aiohttp.ClientSession', return_value=mock_session):
             result = await self.client.get_rating('tt1234567')
 
-        self.assertIsNone(result)
+        self.assertEqual(result['imdb_rating'], None)
+        self.assertEqual(result['imdb_votes'], 1000)
+        self.assertEqual(result['imdb_rating_raw'], 'N/A')
 
     async def test_returns_none_when_votes_is_na(self):
         payload = {'Response': 'True', 'imdbRating': '7.5', 'imdbVotes': 'N/A'}
@@ -154,7 +160,9 @@ class TestOmdbClientGetRating(unittest.IsolatedAsyncioTestCase):
         with patch('aiohttp.ClientSession', return_value=mock_session):
             result = await self.client.get_rating('tt1234567')
 
-        self.assertIsNone(result)
+        self.assertEqual(result['imdb_rating'], 7.5)
+        self.assertEqual(result['imdb_votes'], None)
+        self.assertEqual(result['imdb_rating_raw'], '7.5')
 
     # --- HTTP error ---
 
@@ -286,11 +294,29 @@ class TestApplyImdbFilter(unittest.TestCase):
     # --- edge cases with missing keys in imdb_data ---
 
     def test_passes_when_imdb_data_has_no_rating_key(self):
-        """If rating key is absent, the rating check is skipped → only votes checked."""
+        """Missing rating is excluded when include_no_ratings is False."""
         client = _make_tmdb_client(imdb_threshold=60, imdb_min_votes=100)
         imdb_data = {'imdb_votes': 500}
         result = client._apply_imdb_filter(imdb_data, MOVIE_ITEM, 'movie')
-        self.assertTrue(result)
+        self.assertFalse(result)
+
+    def test_excludes_when_omdb_returns_na_and_include_no_ratings_false(self):
+        client = _make_tmdb_client(include_no_ratings=False)
+
+        item = {'title': 'Example Movie', 'id': 12345}
+        imdb_data = {'imdb_rating': None, 'imdb_votes': 125, 'imdb_rating_raw': 'N/A'}
+
+        with self.assertLogs('TMDbClient', level='DEBUG') as captured:
+            result = client._apply_imdb_filter(imdb_data, item, 'movie')
+
+        self.assertFalse(result)
+
+        expected_msg = "Skipping movie Example Movie (tmdb:12345) - OMDb returned imdbRating=N/A and include_content_without_imdb_rating=false"
+
+        self.assertTrue(
+            any(expected_msg in record for record in captured.output),
+            f"Log message not found. Captured logs: {captured.output}"
+        )
 
     def test_passes_when_imdb_data_has_no_votes_key(self):
         """If votes key is absent, the votes check is skipped → only rating checked."""

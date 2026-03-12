@@ -227,6 +227,8 @@ def enforce_authentication() -> Optional[tuple]:
         "id": payload["sub"],
         "username": payload.get("username", ""),
         "role": payload.get("role", "user"),
+        "can_manage_ai": payload.get("can_manage_ai", 0),
+        "visible_tabs": payload.get("visible_tabs", "requests,jobs,profile"),
     }
 
     return None  # Allow the request to continue.

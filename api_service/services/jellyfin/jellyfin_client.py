@@ -7,14 +7,14 @@ Classes:
 """
 import aiohttp
 import asyncio
+from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 
 # Constants
-REQUEST_TIMEOUT = 10       # Timeout in seconds for regular HTTP requests
 LIBRARY_FETCH_TIMEOUT = 120  # Timeout in seconds for full-library bulk fetches
 
 
-class JellyfinClient:
+class JellyfinClient(BaseHTTPClient):
     """
     A client to interact with the Jellyfin API, allowing the retrieval of users, recent items,
     and media provider IDs.
@@ -26,28 +26,18 @@ class JellyfinClient:
         :param api_url: The base URL for the Jellyfin API.
         :param token: The authentication token for Jellyfin.
         """
-        self.logger = LoggerManager.get_logger(self.__class__.__name__)
+        super().__init__()
         self.max_content_fetch = max_content
-        self.api_url = api_url
+        # Strip trailing slash and whitespace so URL joins never produce double-slash paths.
+        self.api_url = api_url.rstrip('/').strip() if api_url else api_url
         self.libraries = library_ids
-        self.headers = {"X-Emby-Token": token}
+        # Strip whitespace from token to avoid 401s from copy-paste artefacts.
+        self.api_token = token.strip() if token else token
+        self.headers = {
+            "X-Emby-Token": self.api_token,
+            "Authorization": f'MediaBrowser Token="{self.api_token}"'
+        }
         self.existing_content = {}
-        self.session = None
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
-        return self.session
-
-    async def close(self):
-        if self.session and not self.session.closed:
-            await self.session.close()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
         
     async def init_existing_content(self):
         self.logger.info('Initializing existing content.')
@@ -63,7 +53,7 @@ class JellyfinClient:
         self.logger.debug(f'Requesting all users from {url}')
         try:
             session = await self._get_session()
-            async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, headers=self.headers, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     data = await response.json()
                     self.logger.debug(f'Users retrieved: {data}')
@@ -206,7 +196,7 @@ class JellyfinClient:
 
             try:
                 session = await self._get_session()
-                async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
+                async with session.get(url, headers=self.headers, params=params, timeout=self.REQUEST_TIMEOUT) as response:
                     if response.status == 200:
                         library_items = await response.json()
                         items = library_items.get('Items', [])
@@ -290,7 +280,7 @@ class JellyfinClient:
 
         try:
             session = await self._get_session()
-            async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, headers=self.headers, params=params, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     data = await response.json()
                     items = data.get('Items', [])
@@ -321,18 +311,120 @@ class JellyfinClient:
         self.logger.info("Searching Jellyfin libraries.")
 
         url = f"{self.api_url}/Library/VirtualFolders"
-        self.logger.debug(f'Requesting libraries from {url}')
+        endpoint = "/Library/VirtualFolders"
+
+        auth_attempts = [
+            {
+                "name": "X-Emby-Token header",
+                "headers": {
+                    "X-Emby-Token": self.api_token,
+                    "Authorization": f'MediaBrowser Token="{self.api_token}"'
+                    },
+                "params": None,
+            },
+            {
+                "name": "MediaBrowser Authorization header",
+                "headers": {"Authorization": f'MediaBrowser Token="{self.api_token}"'},
+                "params": None,
+            },
+            {
+                "name": "api_key query parameter",
+                "headers": None,
+                "params": {"api_key": self.api_token},
+            },
+        ]
+
+        def _sanitize_headers(headers):
+            if not headers:
+                return {}
+            sanitized = {}
+            for key, value in headers.items():
+                key_lower = key.lower()
+                if key_lower.endswith("token") or key_lower == "authorization":
+                    sanitized[key] = "***"
+                else:
+                    sanitized[key] = value
+            return sanitized
+
+        last_failure = None
 
         try:
             session = await self._get_session()
-            async with session.get(
-                url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
-                if response.status == 200:
-                    libraries = await response.json()
-                    self.logger.debug(f'Libraries retrieved: {libraries}')
-                    return libraries
+            first_attempt_unauthorized = False
+
+            for index, attempt in enumerate(auth_attempts):
+                headers = attempt["headers"]
+                params = attempt["params"]
+
+                self.logger.debug(
+                    "Jellyfin request prepared: base_url=%s endpoint=%s url=%s headers=%s token_length=%d",
+                    self.api_url,
+                    endpoint,
+                    url,
+                    _sanitize_headers(headers),
+                    len(self.api_token) if self.api_token else 0,
+                )
+
+                if index == 1:
+                    self.logger.debug("Retrying Jellyfin request using MediaBrowser Authorization header")
+                elif index == 2:
+                    self.logger.debug("Retrying Jellyfin request using api_key query parameter")
+
+                async with session.get(
+                    url,
+                    headers=headers,
+                    params=params,
+                    timeout=self.REQUEST_TIMEOUT,
+                ) as response:
+                    if response.status == 200:
+                        libraries = await response.json()
+                        self.logger.debug(
+                            "Jellyfin libraries request succeeded using auth method: %s",
+                            attempt["name"],
+                        )
+                        self.logger.debug(f'Libraries retrieved: {libraries}')
+                        return libraries
+
+                    raw_body = await response.text()
+                    last_failure = {
+                        "status": response.status,
+                        "headers": response.headers,
+                        "body": raw_body,
+                        "method": attempt["name"],
+                    }
+
+                    if index == 0 and response.status == 401:
+                        first_attempt_unauthorized = True
+                        self.logger.warning(
+                            "Jellyfin libraries request unauthorized with %s. "
+                            "Will retry with alternate authentication methods.",
+                            attempt["name"],
+                        )
+                        continue
+
+                    if index == 0 and response.status != 401:
+                        self.logger.error(
+                            "Failed to get libraries %d URL=%s body=%.300s",
+                            response.status,
+                            url,
+                            raw_body,
+                        )
+                        return None
+
+            if first_attempt_unauthorized and last_failure is not None:
                 self.logger.error(
-                    "Failed to get libraries %d", response.status)
+                    "Jellyfin auth failed after all methods. status=%s headers=%s body=%s",
+                    last_failure["status"],
+                    last_failure["headers"],
+                    last_failure["body"],
+                )
+            elif last_failure is not None:
+                self.logger.error(
+                    "Failed to get libraries %s URL=%s body=%.300s",
+                    last_failure["status"],
+                    url,
+                    last_failure["body"],
+                )
         except aiohttp.ClientError as e:
             self.logger.error(
                 "An error occurred while retrieving libraries: %s", str(e))

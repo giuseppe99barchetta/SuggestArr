@@ -1,12 +1,12 @@
 <template>
   <div class="modal-overlay" @click.self="$emit('close')">
-    <div class="dryrun-modal">
+    <div class="modal dryrun-modal">
       <!-- Header -->
       <div class="modal-header">
         <div class="header-title">
           <i class="fas fa-eye header-icon"></i>
           <div>
-            <h2>Dry Run Preview</h2>
+            <h2 class="modal-title">Dry Run Preview</h2>
             <span class="job-subtitle">
               {{ job.name }}
               <span v-if="cachedAt" class="cached-label">
@@ -15,7 +15,7 @@
             </span>
           </div>
         </div>
-        <button @click="$emit('close')" class="close-btn" title="Close">
+        <button @click="$emit('close')" class="modal-close" title="Close">
           <i class="fas fa-times"></i>
         </button>
       </div>
@@ -254,38 +254,7 @@ export default {
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.dryrun-modal {
-  background: var(--color-bg-content, #1a1a1c);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-lg, 12px);
-  width: 90%;
-  max-width: 720px;
-  max-height: 88vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* Header */
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-}
+/* Component-specific styles only */
 
 .header-title {
   display: flex;
@@ -295,14 +264,7 @@ export default {
 
 .header-icon {
   font-size: 1.4rem;
-  color: #22d3ee;
-}
-
-.modal-header h2 {
-  margin: 0 0 0.15rem 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--color-text-primary, #fff);
+  color: var(--color-info-light);
 }
 
 .job-subtitle {
@@ -313,30 +275,6 @@ export default {
 .cached-label {
   font-size: 0.75rem;
   color: rgba(34, 211, 238, 0.6);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--color-text-muted, #888);
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 0.3rem;
-  transition: color 0.15s;
-}
-
-.close-btn:hover {
-  color: var(--color-text-primary, #fff);
-}
-
-/* Body */
-.modal-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.25rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
 }
 
 /* Summary bar */
@@ -362,7 +300,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #22d3ee;
+  color: var(--color-info-light);
   font-weight: 500;
 }
 
@@ -408,7 +346,7 @@ export default {
 .toggle-btn.active {
   background: rgba(34, 211, 238, 0.12);
   border-color: rgba(34, 211, 238, 0.35);
-  color: #22d3ee;
+  color: var(--color-info-light);
 }
 
 .toggle-btn:hover:not(.active) {

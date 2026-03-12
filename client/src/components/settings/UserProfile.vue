@@ -143,69 +143,71 @@
           </button>
         </div>
 
-        <!-- Link form — Jellyfin / Emby (dropdown) -->
-        <template v-else-if="selectedService !== 'plex'">
-          <div v-if="isLoadingServerUsers" class="list-empty">
-            <i class="fas fa-spinner fa-spin"></i>
-            Loading {{ providerLabel }} users…
-          </div>
-          <div v-else-if="serverUsersError" class="error-banner">
-            <i class="fas fa-exclamation-circle"></i>
-            {{ serverUsersError }}
-          </div>
-          <template v-else>
-            <div v-if="serverUsers.length === 0" class="list-empty">
-              <i class="fas fa-users"></i>
-              No users found on {{ providerLabel }}.
-            </div>
-            <div v-else class="form-group">
-              <label>Select your {{ providerLabel }} account</label>
+        <!-- Link form: credential-based self-linking -->
+        <template v-else>
+          <form @submit.prevent="linkAccount">
+            <div v-if="isDirectoryBackedService" class="form-group">
+              <label for="linkServerUser">{{ providerLabel }} account</label>
               <BaseDropdown
+                id="linkServerUser"
                 v-model="selectedServerUserId"
                 :options="serverUserOptions"
-                placeholder="— choose an account —"
+                placeholder="Select your account"
+                :disabled="isLinking || isLoadingServerUsers"
+              />
+              <small v-if="isLoadingServerUsers" class="form-help">
+                Loading {{ providerLabel }} users…
+              </small>
+              <small v-else class="form-help">
+                Username is loaded from the configured {{ providerLabel }} server.
+              </small>
+            </div>
+
+            <div v-else class="form-group">
+              <label for="linkUsername">{{ providerLabel }} username</label>
+              <input
+                id="linkUsername"
+                v-model="linkForm.username"
+                type="text"
+                class="form-control"
+                :placeholder="`${providerLabel} username`"
+                autocomplete="username"
                 :disabled="isLinking"
               />
             </div>
+            <div class="form-group">
+              <label for="linkPassword">{{ providerLabel }} password</label>
+              <input
+                id="linkPassword"
+                v-model="linkForm.password"
+                type="password"
+                class="form-control"
+                placeholder="Password"
+                autocomplete="current-password"
+                :disabled="isLinking"
+              />
+            </div>
+
             <div v-if="linkError" class="error-banner">
               <i class="fas fa-exclamation-circle"></i>
               {{ linkError }}
             </div>
+
             <button
-              type="button"
+              type="submit"
               class="btn btn-outline btn-sm"
-              :disabled="isLinking || !selectedServerUserId"
-              @click="linkAccount"
+              :disabled="isLinking || !canSubmitLink"
             >
               <i :class="isLinking ? 'fas fa-spinner fa-spin' : 'fas fa-link'"></i>
-              {{ isLinking ? 'Linking…' : 'Link Account' }}
+              {{ isLinking ? 'Linking…' : `Link ${providerLabel} Account` }}
             </button>
-          </template>
-        </template>
-
-        <!-- Link form — Plex (OAuth) -->
-        <template v-else>
-          <div v-if="plexPolling" class="list-empty">
-            <i class="fas fa-spinner fa-spin"></i>
-            Waiting for Plex authorisation…
-            <button type="button" class="btn btn-outline btn-sm" @click="cancelPlexOAuth">Cancel</button>
-          </div>
-          <template v-else>
-            <div v-if="linkError" class="error-banner">
-              <i class="fas fa-exclamation-circle"></i>
-              {{ linkError }}
-            </div>
-            <button type="button" class="btn btn-primary btn-sm" :disabled="isLinking" @click="startPlexOAuth">
-              <i :class="isLinking ? 'fas fa-spinner fa-spin' : 'fas fa-external-link-alt'"></i>
-              {{ isLinking ? 'Starting…' : 'Link with Plex' }}
-            </button>
-          </template>
+          </form>
         </template>
 
       </div>
 
       <!-- No linkable service configured -->
-      <div v-else-if="config && config.SELECTED_SERVICE !== undefined" class="settings-group">
+      <div v-else-if="hasProviderContext" class="settings-group">
         <h3>
           <i class="fas fa-plug"></i>
           Media Server
@@ -221,15 +223,15 @@
 </template>
 
 <script>
+import axios from 'axios';
 import { useAuth } from '@/composables/useAuth';
 import {
-  getMyLinks,
   getMediaServerUsers,
-  linkJellyfin,
-  linkEmby,
+  getMyLinks,
+  linkJellyfinIntegration,
+  linkEmbyIntegration,
+  linkPlexIntegration,
   unlinkProvider,
-  plexOAuthStart,
-  plexOAuthPoll,
   updateMyProfile,
 } from '@/api/api';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
@@ -271,31 +273,46 @@ export default {
       // Linked accounts
       links: [],
 
-      // Server user dropdown (Jellyfin / Emby)
+      // Jellyfin / Emby users fetched from API
       serverUsers: [],
-      isLoadingServerUsers: false,
-      serverUsersError: null,
       selectedServerUserId: '',
+      isLoadingServerUsers: false,
+
+      // Provider availability for non-admin users
+      configStatus: {
+        selected_service: '',
+      },
+
+      // Credential-based link form
+      linkForm: { username: '', password: '' },
 
       // Linking / unlinking state
       isLinking: false,
       isUnlinking: false,
       linkError: null,
-
-      // Plex OAuth
-      plexPolling: false,
-      plexPinId: null,
-      plexPollTimer: null,
     };
   },
 
   computed: {
     selectedService() {
-      return (this.config?.SELECTED_SERVICE || '').toLowerCase();
+      return (
+        this.config?.SELECTED_SERVICE
+        || this.configStatus?.selected_service
+        || ''
+      ).toLowerCase();
     },
 
     isLinkableService() {
       return ['jellyfin', 'emby', 'plex'].includes(this.selectedService);
+    },
+
+    isDirectoryBackedService() {
+      return ['jellyfin', 'emby'].includes(this.selectedService);
+    },
+
+    hasProviderContext() {
+      return this.config?.SELECTED_SERVICE !== undefined
+        || this.configStatus?.selected_service !== undefined;
     },
 
     providerLabel() {
@@ -311,23 +328,63 @@ export default {
     },
 
     serverUserOptions() {
-      return this.serverUsers.map(u => ({ label: u.name, value: u.id }));
+      return this.serverUsers.map((user) => ({
+        label: user.name,
+        value: user.id,
+      }));
+    },
+
+    selectedServerUser() {
+      return this.serverUsers.find((user) => user.id === this.selectedServerUserId) || null;
+    },
+
+    canSubmitLink() {
+      if (!this.linkForm.password) {
+        return false;
+      }
+
+      if (this.isDirectoryBackedService) {
+        return !!this.selectedServerUserId;
+      }
+
+      return !!this.linkForm.username.trim();
     },
   },
 
-  mounted() {
-    this.loadLinks();
-    if (this.isLinkableService && this.selectedService !== 'plex') {
-      this.loadServerUsers();
-    }
+  async mounted() {
+    await this.loadConfigStatus();
+    await this.loadLinks();
+    await this.loadServerUsers();
   },
 
-  beforeUnmount() {
-    this.cancelPlexOAuth();
+  watch: {
+    selectedService: {
+      immediate: false,
+      async handler() {
+        this.linkError = null;
+        this.linkForm.username = '';
+        this.linkForm.password = '';
+        this.selectedServerUserId = '';
+        this.serverUsers = [];
+        await this.loadServerUsers();
+      },
+    },
   },
 
   methods: {
     // ── Links ──────────────────────────────────────────────────────────────
+
+    async loadConfigStatus() {
+      try {
+        const res = await axios.get('/api/config/status', {
+          withCredentials: true,
+          timeout: 10000,
+        });
+        this.configStatus = res.data || { selected_service: '' };
+      } catch (err) {
+        console.error('Failed to load config status', err);
+      }
+    },
 
     async loadLinks() {
       try {
@@ -339,35 +396,50 @@ export default {
     },
 
     async loadServerUsers() {
+      if (!this.isDirectoryBackedService) {
+        this.serverUsers = [];
+        this.selectedServerUserId = '';
+        return;
+      }
+
       this.isLoadingServerUsers = true;
-      this.serverUsersError = null;
       try {
         const res = await getMediaServerUsers(this.selectedService);
-        this.serverUsers = res.data;
+        this.serverUsers = Array.isArray(res.data) ? res.data : [];
       } catch (err) {
-        this.serverUsersError =
-          err.response?.data?.error || `Could not load ${this.providerLabel} users`;
+        this.serverUsers = [];
+        this.linkError = err.response?.data?.error || `Failed to load ${this.providerLabel} users`;
       } finally {
         this.isLoadingServerUsers = false;
       }
     },
 
     async linkAccount() {
-      if (!this.selectedServerUserId) return;
+      if (!this.canSubmitLink) return;
       this.linkError = null;
       this.isLinking = true;
       try {
-        const user = this.serverUsers.find(u => u.id === this.selectedServerUserId);
+        const resolvedUsername = this.isDirectoryBackedService
+          ? this.selectedServerUser?.name || ''
+          : this.linkForm.username.trim();
         const payload = {
-          external_user_id: user.id,
-          external_username: user.name,
+          username: resolvedUsername,
+          password: this.linkForm.password,
         };
+
+        let response;
         if (this.selectedService === 'jellyfin') {
-          await linkJellyfin(payload);
+          response = await linkJellyfinIntegration(payload);
+        } else if (this.selectedService === 'emby') {
+          response = await linkEmbyIntegration(payload);
         } else {
-          await linkEmby(payload);
+          response = await linkPlexIntegration(payload);
         }
-        this.$toast.success(`${this.providerLabel} account linked`);
+
+        const linkedName = response?.data?.external_username || this.linkForm.username.trim();
+        this.$toast.success(`${this.providerLabel} account linked as ${linkedName}`);
+        this.linkForm.username = '';
+        this.linkForm.password = '';
         this.selectedServerUserId = '';
         await this.loadLinks();
       } catch (err) {
@@ -387,56 +459,6 @@ export default {
         this.$toast.error(err.response?.data?.error || `Failed to unlink ${this.providerLabel}`);
       } finally {
         this.isUnlinking = false;
-      }
-    },
-
-    // ── Plex OAuth ─────────────────────────────────────────────────────────
-
-    async startPlexOAuth() {
-      this.linkError = null;
-      this.isLinking = true;
-      try {
-        const res = await plexOAuthStart();
-        this.plexPinId = res.data.pin_id;
-        window.open(res.data.auth_url, '_blank', 'noopener,noreferrer');
-        this.plexPolling = true;
-        this._schedulePlexPoll();
-      } catch (err) {
-        this.linkError = err.response?.data?.error || 'Failed to start Plex authorisation';
-      } finally {
-        this.isLinking = false;
-      }
-    },
-
-    _schedulePlexPoll() {
-      this.plexPollTimer = setTimeout(() => this._pollPlex(), 3000);
-    },
-
-    async _pollPlex() {
-      if (!this.plexPolling || !this.plexPinId) return;
-      try {
-        const res = await plexOAuthPoll(this.plexPinId);
-        if (res.data.status === 'linked') {
-          this.plexPolling = false;
-          this.plexPinId = null;
-          this.$toast.success(`Plex account linked as ${res.data.external_username}`);
-          await this.loadLinks();
-        } else {
-          this._schedulePlexPoll();
-        }
-      } catch (err) {
-        this.plexPolling = false;
-        this.plexPinId = null;
-        this.linkError = err.response?.data?.error || 'Plex authorisation failed';
-      }
-    },
-
-    cancelPlexOAuth() {
-      this.plexPolling = false;
-      this.plexPinId = null;
-      if (this.plexPollTimer) {
-        clearTimeout(this.plexPollTimer);
-        this.plexPollTimer = null;
       }
     },
 
@@ -546,13 +568,6 @@ export default {
 
 
 /* Form elements */
-.form-group {
-  margin-bottom: 1.5rem;
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
 
 .form-group label {
   display: block;

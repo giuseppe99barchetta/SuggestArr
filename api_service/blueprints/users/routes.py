@@ -5,6 +5,7 @@ Admin endpoints (require role='admin'):
   GET    /api/users               — list all SuggestArr accounts
   POST   /api/users               — admin create a new account
   PATCH  /api/users/<id>          — update role / active status
+    POST   /api/users/<id>/permissions — update per-user permissions and visible tabs
   DELETE /api/users/<id>          — permanently delete an account
 
 Per-user media profile endpoints (any authenticated user):
@@ -41,6 +42,13 @@ users_bp = Blueprint('users', __name__)
 
 _VALID_ROLES = {'admin', 'user'}
 _VALID_PROVIDERS = {'jellyfin', 'plex', 'emby'}
+_VALID_VISIBLE_TABS = {
+    'requests', 'ai_search', 'services', 'jobs', 'database',
+    'advanced', 'users', 'profile', 'logs',
+}
+_TAB_ALIASES = {
+    'ai-search': 'ai_search',
+}
 
 # Plex application identifier — stable across instances.
 _PLEX_CLIENT_NAME = "SuggestArr"
@@ -67,6 +75,58 @@ def _plex_headers() -> dict:
         "X-Plex-Version": _PLEX_VERSION,
         "Accept": "application/json",
     }
+
+
+def _normalize_visible_tabs(raw_tabs) -> list[str]:
+    """Normalize and validate a visible-tab payload from string or array input."""
+    if raw_tabs is None:
+        return []
+
+    if isinstance(raw_tabs, str):
+        tab_candidates = raw_tabs.split(',')
+    elif isinstance(raw_tabs, (list, tuple, set)):
+        tab_candidates = raw_tabs
+    else:
+        raise ValueError("allowed_tabs must be an array of tab ids or a comma-separated string")
+
+    normalized_tabs = []
+    seen_tabs = set()
+    invalid_tabs = []
+
+    for raw_tab in tab_candidates:
+        tab = str(raw_tab or '').strip()
+        if not tab:
+            continue
+
+        canonical_tab = _TAB_ALIASES.get(tab, tab)
+        if canonical_tab not in _VALID_VISIBLE_TABS:
+            invalid_tabs.append(tab)
+            continue
+
+        if canonical_tab not in seen_tabs:
+            seen_tabs.add(canonical_tab)
+            normalized_tabs.append(canonical_tab)
+
+    if invalid_tabs:
+        allowed_tabs = ', '.join(sorted(_VALID_VISIBLE_TABS))
+        invalid = ', '.join(sorted(set(invalid_tabs)))
+        raise ValueError(f"Invalid tab ids: {invalid}. Allowed: {allowed_tabs}")
+
+    return normalized_tabs
+
+
+def _extract_permission_updates(data: dict) -> dict:
+    """Build the permission-related update payload from request JSON."""
+    updates = {}
+
+    if 'can_manage_ai' in data:
+        updates['can_manage_ai'] = 1 if data['can_manage_ai'] else 0
+
+    if 'allowed_tabs' in data or 'visible_tabs' in data:
+        raw_tabs = data['allowed_tabs'] if 'allowed_tabs' in data else data['visible_tabs']
+        updates['visible_tabs'] = ','.join(_normalize_visible_tabs(raw_tabs))
+
+    return updates
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +229,11 @@ def update_user(user_id: int):
     if "is_active" in data:
         updates["is_active"] = 1 if data["is_active"] else 0
 
+    try:
+        updates.update(_extract_permission_updates(data))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
     if not updates:
         return jsonify({"error": "No valid fields to update"}), 400
 
@@ -193,6 +258,65 @@ def update_user(user_id: int):
         g.current_user["username"], user_id, updates,
     )
     return jsonify({"message": "User updated"}), 200
+
+
+@users_bp.route('/<int:user_id>/permissions', methods=['POST'])
+@require_role('admin')
+def update_user_permissions(user_id: int):
+    """
+    Update a user's permission flags and visible tab list.
+
+    Request JSON:
+      can_manage_ai  (bool)       — optional flag for user AI settings access
+      allowed_tabs   (str | list) — optional array or comma-separated tab ids
+      visible_tabs   (str | list) — legacy alias for allowed_tabs
+
+    Response (200):
+      {
+        "success": true,
+        "message": "Permissions updated",
+        "visible_tabs": ["requests", "jobs", "profile"],
+        "can_manage_ai": false
+      }
+    """
+    data = request.get_json(silent=True) or {}
+
+    try:
+        updates = _extract_permission_updates(data)
+    except ValueError as exc:
+        logger.warning(
+            "Invalid permission update payload for user_id=%s: %s",
+            user_id,
+            exc,
+            exc_info=True,
+        )
+        return jsonify({"error": "Invalid permission update payload"}), 400
+
+    if not updates:
+        return jsonify({"error": "No valid permission fields to update"}), 400
+
+    db = DatabaseManager()
+    target = db.get_auth_user_by_id(user_id)
+    if not target:
+        return jsonify({"error": "User not found"}), 404
+
+    updated = db.update_auth_user(user_id, updates)
+    if not updated:
+        return jsonify({"error": "User not found"}), 404
+
+    visible_tabs = updates.get('visible_tabs', target.get('visible_tabs', ''))
+    can_manage_ai = bool(updates.get('can_manage_ai', target.get('can_manage_ai', 0)))
+
+    logger.info(
+        "Admin %r updated permissions for user id=%d: %s",
+        g.current_user['username'], user_id, updates,
+    )
+    return jsonify({
+        'success': True,
+        'message': 'Permissions updated',
+        'visible_tabs': [tab for tab in visible_tabs.split(',') if tab],
+        'can_manage_ai': can_manage_ai,
+    }), 200
 
 
 # ---------------------------------------------------------------------------
@@ -228,6 +352,44 @@ def delete_user(user_id: int):
     db.delete_auth_user(user_id)
     logger.info("Admin %r deleted user id=%d (%r)", g.current_user["username"], user_id, target["username"])
     return jsonify({"message": "User deleted"}), 200
+
+# ---------------------------------------------------------------------------
+# Admin: link provider instance to user
+# ---------------------------------------------------------------------------
+
+@users_bp.route('/<int:user_id>/link/<provider>', methods=['POST'])
+@require_role('admin')
+def admin_link_provider(user_id: int, provider: str):
+    """
+    Admin-force a media server username map for any user profile.
+
+    Request JSON:
+      external_user_id   (str)
+      external_username  (str)
+
+    Response (200): { "message": "Account linked" }
+    """
+    if provider not in _VALID_PROVIDERS:
+        return jsonify({"error": f"Invalid provider. Must be one of: {', '.join(sorted(_VALID_PROVIDERS))}"}), 400
+
+    data = request.get_json(silent=True) or {}
+    external_user_id = (data.get("external_user_id") or "").strip()
+    external_username = (data.get("external_username") or "").strip()
+
+    if not external_user_id or not external_username:
+        return jsonify({"error": "external_user_id and external_username are required"}), 400
+
+    db = DatabaseManager()
+    
+    target = db.get_auth_user_by_id(user_id)
+    if not target:
+        return jsonify({"error": "User not found"}), 404
+
+    db.create_user_media_profile(
+        user_id, provider, external_user_id, external_username
+    )
+    logger.info("Admin %r linked %s account for user id=%d: %r", g.current_user["username"], provider, user_id, external_username)
+    return jsonify({"message": f"{provider.capitalize()} account linked for user"}), 200
 
 
 # ===========================================================================
@@ -364,7 +526,10 @@ def list_provider_users(provider: str):
     try:
         resp = http_requests.get(
             f"{server_url}/Users",
-            headers={"X-Emby-Token": api_key},
+            headers={
+                "X-Emby-Token": api_key,
+                "Authorization": f'MediaBrowser Token="{api_key}"'
+                },
             timeout=10,
         )
         resp.raise_for_status()

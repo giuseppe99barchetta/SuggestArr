@@ -182,10 +182,11 @@ def _build_filters_from_config(env_vars: Dict[str, Any]) -> Dict[str, Any]:
     if filter_region:
         filters['watch_region'] = filter_region
 
-    # Honor Jellyseer discovery settings
-    honor_discovery = env_vars.get('HONOR_JELLYSEER_DISCOVERY')
-    if honor_discovery is not None:
-        filters['honor_jellyseer_discovery'] = bool(honor_discovery)
+    # Honor Seer discovery settings
+    # Check new variable first, fall back to legacy for backward compatibility
+    honor_seer_discovery = env_vars.get('HONOR_SEER_DISCOVERY') or env_vars.get('HONOR_JELLYSEER_DISCOVERY')
+    if honor_seer_discovery is not None:
+        filters['honor_seer_discovery'] = bool(honor_seer_discovery)
 
     # Exclude already downloaded content
     exclude_downloaded = env_vars.get('EXCLUDE_DOWNLOADED')

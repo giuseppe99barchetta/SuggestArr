@@ -24,6 +24,7 @@ from api_service.services.config_service import ConfigService
 from api_service.services.llm.schemas import (
     DiscoverParams,
     RecommendationList,
+    SearchResultRationaleList,
     SearchQueryInterpretation,
     SuggestedTitle,
 )
@@ -47,15 +48,45 @@ _RETRY_SYSTEM_MESSAGE = (
 # Client factory
 # ---------------------------------------------------------------------------
 
-def get_llm_client() -> Optional[AsyncOpenAI]:
+def get_llm_client(user_id: Optional[int] = None) -> Optional[AsyncOpenAI]:
     """Initialize and return the OpenAI-compatible async client if configured.
+    
+    Checks for user-specific OpenAI config first (if user_id provided and user has
+    can_manage_ai permission), then falls back to global admin config.
 
+    :param user_id: Optional user ID to check for per-user OpenAI config
     :return: Configured :class:`AsyncOpenAI` instance, or ``None`` when the
         provider is not set up.
     """
-    config = ConfigService.get_runtime_config()
-    api_key = config.get("OPENAI_API_KEY")
-    base_url = config.get("OPENAI_BASE_URL")
+    api_key = None
+    base_url = None
+    
+    # Try to load user-specific config first
+    if user_id is not None:
+        try:
+            from api_service.db.database_manager import DatabaseManager
+            db = DatabaseManager()
+            token = db.get_user_media_profile_token(user_id, 'openai')
+            if token:
+                import json
+                try:
+                    user_config = json.loads(token)
+                    api_key = user_config.get('api_key')
+                    base_url = user_config.get('base_url')
+                    if api_key or base_url:
+                        logger.debug(f"Using per-user OpenAI config for user_id={user_id}")
+                except json.JSONDecodeError:
+                    logger.warning(f"Invalid JSON in user OpenAI config for user_id={user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to load user OpenAI config for user_id={user_id}: {e}")
+    
+    # Fall back to global config if no user-specific config
+    if not api_key and not base_url:
+        config = ConfigService.get_runtime_config()
+        api_key = config.get("OPENAI_API_KEY")
+        base_url = config.get("OPENAI_BASE_URL")
+        if api_key or base_url:
+            logger.debug("Using global OpenAI config")
 
     if not api_key:
         if base_url:
@@ -113,6 +144,27 @@ def _repair_title_qualifiers(text: str) -> str:
     :return: Repaired JSON string.
     """
     return re.sub(r'"([^"]*?)"\s+(\([^)]*?\))', r'"\1 \2"', text)
+
+
+def _extract_json_object(text: str) -> str:
+    """Extract the first complete JSON object from text.
+
+    Some providers prepend or append natural-language commentary even when
+    instructed to return JSON only. This keeps only the content between the
+    first ``{`` and the last ``}``, then trims whitespace.
+
+    :param text: LLM output that should contain a JSON object.
+    :return: String narrowed to the JSON object region when delimiters exist.
+    """
+    end = text.rfind("}")
+    if end != -1:
+        text = text[: end + 1]
+
+    start = text.find("{")
+    if start != -1:
+        text = text[start:]
+
+    return text.strip()
 
 
 def _deduplicate_history(history_items: List[Dict]) -> List[Dict]:
@@ -186,6 +238,7 @@ async def _call_with_validation(
 
     * stripped of markdown fences,
     * repaired for common LLM JSON quirks,
+    * narrowed to the first complete JSON object,
     * parsed as JSON,
     * validated against *schema_cls*.
 
@@ -195,8 +248,9 @@ async def _call_with_validation(
 
     ``response_format={"type": "json_object"}`` is passed to leverage native
     JSON mode when the provider supports it (OpenAI, many Ollama models, etc.).
-    Providers that do not support it will raise an API error that propagates
-    normally — this is intentional, as it is not a schema-validation failure.
+    For providers that reject ``json_object`` with a 400 error (for example
+    requiring ``json_schema`` or ``text``), the same request is retried once
+    without ``response_format``.
 
     :param client: Initialised async OpenAI-compatible client.
     :param model: Model identifier string (e.g. ``"gpt-4o-mini"``).
@@ -210,15 +264,51 @@ async def _call_with_validation(
     current_messages = list(messages)
     last_error: Exception = RuntimeError("No attempts made")
 
+    def _is_response_format_json_object_rejection(exc: Exception) -> bool:
+        """Return True when *exc* is a 400 rejection for json_object response_format."""
+        if getattr(exc, "status_code", None) != 400:
+            return False
+
+        details: List[str] = [str(exc)]
+        message = getattr(exc, "message", None)
+        if message:
+            details.append(str(message))
+
+        body = getattr(exc, "body", None)
+        if body is not None:
+            if isinstance(body, dict):
+                details.append(json.dumps(body, ensure_ascii=True))
+            else:
+                details.append(str(body))
+
+        detail_text = " ".join(details).lower()
+        return "response_format" in detail_text or "json_object" in detail_text
+
     for attempt in range(max_retries + 1):
-        response = await client.chat.completions.create(
-            model=model,
-            messages=current_messages,
-            temperature=temperature,
-            response_format={"type": "json_object"},
-        )
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                messages=current_messages,
+                temperature=temperature,
+                response_format={"type": "json_object"},
+            )
+        except Exception as exc:
+            if _is_response_format_json_object_rejection(exc):
+                logger.debug(
+                    "Provider rejected json_object response_format, retrying without structured output"
+                )
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=current_messages,
+                    temperature=temperature,
+                )
+            else:
+                raise
+
         raw = response.choices[0].message.content.strip()
-        content = _repair_title_qualifiers(_strip_markdown_fences(raw))
+        content = _extract_json_object(
+            _repair_title_qualifiers(_strip_markdown_fences(raw))
+        )
 
         try:
             parsed = json.loads(content)
@@ -333,6 +423,15 @@ async def get_recommendations_from_history(
                 if year_from is not None:
                     constraint_lines.append(
                         f"- Only recommend titles released from year {int(year_from)} onward."
+                    )
+            except (TypeError, ValueError):
+                pass
+
+            year_to = filters.get("release_year_lte") or filters.get("year_to")
+            try:
+                if year_to is not None:
+                    constraint_lines.append(
+                        f"- Only recommend titles released up to year {int(year_to)}."
                     )
             except (TypeError, ValueError):
                 pass
@@ -569,6 +668,124 @@ Example format:
             len(validated.suggested_titles),
         )
         return result
+    finally:
+        try:
+            await client.aclose()
+        except Exception:
+            pass
+
+
+async def generate_search_result_rationales(
+    query: str,
+    media_type: str,
+    discover_params: Dict[str, Any],
+    results: List[Dict[str, Any]],
+) -> Dict[str, str]:
+    """Generate concise, per-result rationales for AI-search TMDB results.
+
+    :param query: Original user search query.
+    :param media_type: 'movie' or 'tv'.
+    :param discover_params: Parsed interpretation filters used during discover.
+    :param results: Final or candidate TMDB result dicts with title/name and optional year.
+    :return: Mapping keyed as ``"{normalized_title}|{year_or_empty}"`` to rationale text.
+    """
+    if not results:
+        return {}
+
+    client = get_llm_client()
+    if not client:
+        logger.info("LLM not configured — skipping per-result rationale generation.")
+        return {}
+
+    try:
+        config = ConfigService.get_runtime_config()
+        model = config.get("LLM_MODEL", "gpt-4o-mini")
+        max_retries = int(config.get("LLM_MAX_RETRIES", 2))
+        list_type = "movies" if media_type == "movie" else "TV shows"
+
+        input_items: List[Dict[str, Any]] = []
+        for item in results:
+            title = (item.get("title") or item.get("name") or "").strip()
+            if not title:
+                continue
+
+            year = item.get("year")
+            if year is None:
+                date_value = item.get("release_date") if media_type == "movie" else item.get("first_air_date")
+                year_text = str(date_value).split("-")[0] if date_value else ""
+                year = int(year_text) if year_text.isdigit() else None
+
+            input_items.append({"title": title, "year": year})
+
+        if not input_items:
+            return {}
+
+        discover_summary = {
+            "genres": discover_params.get("genres"),
+            "year_from": discover_params.get("year_from"),
+            "year_to": discover_params.get("year_to"),
+            "min_rating": discover_params.get("min_rating"),
+        }
+
+        prompt = f"""You are writing short, personalized recommendation rationales for {list_type}.
+
+User query:
+\"{query}\"
+
+Interpreted filters:
+{json.dumps(discover_summary, ensure_ascii=True)}
+
+Generate one rationale for each candidate below:
+{json.dumps(input_items, ensure_ascii=True)}
+
+Return ONLY valid JSON with this exact shape:
+{{
+  \"rationales\": [
+    {{\"title\": \"...\", \"year\": 2020, \"rationale\": \"...\"}}
+  ]
+}}
+
+Rules:
+- Include exactly one entry per input item (same title/year pairs).
+- rationale must be exactly one sentence.
+- Keep each rationale natural, recommendation-like, and <= 20 words.
+- Vary wording across items; do not repeat the same sentence structure.
+- Mention concrete fit to the user's query or filters when possible.
+- Do not include markdown or any text outside JSON.
+"""
+
+        messages = [
+            {
+                "role": "system",
+                "content": "You produce strict JSON only for media rationale generation.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+
+        validated: SearchResultRationaleList = await _call_with_validation(
+            client=client,
+            model=model,
+            messages=messages,
+            schema_cls=SearchResultRationaleList,
+            temperature=0.8,
+            max_retries=max_retries,
+        )
+
+        rationale_map: Dict[str, str] = {}
+        for item in validated.rationales:
+            title_key = _normalize_title(item.title)
+            if not title_key:
+                continue
+            year_key = str(item.year) if item.year is not None else ""
+            key = f"{title_key}|{year_key}"
+            rationale = str(item.rationale or "").strip()
+            if rationale and key not in rationale_map:
+                rationale_map[key] = rationale
+
+        return rationale_map
+    except Exception as exc:
+        logger.warning("Failed generating per-result LLM rationales: %s", exc)
+        return {}
     finally:
         try:
             await client.aclose()

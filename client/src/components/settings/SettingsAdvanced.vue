@@ -81,7 +81,7 @@
               :disabled="isLoading"
             />
             <small class="form-help">
-              Required for OpenAI and hosted providers. Not needed for local LLMs like Ollama (leave blank or enter any value).
+              Required for OpenAI and hosted providers. For local providers like Ollama or LM Studio, you can use any placeholder value (for example <code>sk-local</code>).
             </small>
           </div>
 
@@ -96,7 +96,7 @@
               :disabled="isLoading"
             />
             <small class="form-help">
-              The model name to use. For Ollama, use the name of the locally installed model (e.g. <code>mistral</code>, <code>llama3</code>).
+              The model name to use. For Ollama use the local model tag (for example <code>llama3.1</code>). For LM Studio use the loaded model identifier.
             </small>
           </div>
 
@@ -114,7 +114,7 @@
               :disabled="isLoading"
             />
             <small class="form-help">
-              Leave blank for OpenAI. Set to <code>http://localhost:11434/v1</code> for Ollama, or your OpenRouter / LiteLLM endpoint.
+              Leave blank for OpenAI. Set to <code>http://localhost:11434/v1</code> for Ollama, <code>http://localhost:1234/v1</code> for LM Studio, or your LiteLLM/OpenRouter endpoint.
             </small>
           </div>
 
@@ -147,62 +147,139 @@
                   SuggestArr uses any <strong>OpenAI-compatible API</strong> to generate personalized recommendations based on your watch history. You can use a cloud provider or a local LLM running on your machine.
                 </p>
 
-                <div class="provider-list">
+                <div class="provider-tabs" role="tablist" aria-label="AI Providers">
+                  <button
+                    class="provider-tab"
+                    :class="{ active: activeAiGuideTab === 'openai' }"
+                    role="tab"
+                    :aria-selected="activeAiGuideTab === 'openai'"
+                    @click="activeAiGuideTab = 'openai'"
+                  >
+                    OpenAI
+                  </button>
+                  <button
+                    class="provider-tab"
+                    :class="{ active: activeAiGuideTab === 'ollama' }"
+                    role="tab"
+                    :aria-selected="activeAiGuideTab === 'ollama'"
+                    @click="activeAiGuideTab = 'ollama'"
+                  >
+                    Ollama
+                  </button>
+                  <button
+                    class="provider-tab"
+                    :class="{ active: activeAiGuideTab === 'lmstudio' }"
+                    role="tab"
+                    :aria-selected="activeAiGuideTab === 'lmstudio'"
+                    @click="activeAiGuideTab = 'lmstudio'"
+                  >
+                    LM Studio
+                  </button>
+                  <button
+                    class="provider-tab"
+                    :class="{ active: activeAiGuideTab === 'gemini' }"
+                    role="tab"
+                    :aria-selected="activeAiGuideTab === 'gemini'"
+                    @click="activeAiGuideTab = 'gemini'"
+                  >
+                    Gemini
+                  </button>
+                  <button
+                    class="provider-tab"
+                    :class="{ active: activeAiGuideTab === 'litellm' }"
+                    role="tab"
+                    :aria-selected="activeAiGuideTab === 'litellm'"
+                    @click="activeAiGuideTab = 'litellm'"
+                  >
+                    LiteLLM
+                  </button>
+                </div>
+
+                <div class="provider-panel" role="tabpanel" v-if="activeAiGuideTab === 'openai'">
                   <div class="provider-card">
                     <div class="provider-name"><i class="fas fa-cloud"></i> OpenAI</div>
-                    <table class="provider-table">
-                      <tbody>
-                        <tr><td>API Key</td><td><code>sk-proj-...</code> (required)</td></tr>
-                        <tr><td>Base URL</td><td><em>leave blank</em></td></tr>
-                        <tr><td>Model</td><td><code>gpt-4o-mini</code></td></tr>
-                      </tbody>
-                    </table>
+                    <ol class="provider-steps">
+                      <li>Create an API key in your OpenAI account.</li>
+                      <li>Use a model that supports chat completions, such as <code>gpt-4o-mini</code>.</li>
+                      <li>Leave Base URL empty to use the default OpenAI endpoint.</li>
+                    </ol>
+                    <pre class="provider-code" aria-label="OpenAI config example"><code>OPENAI_API_KEY=sk-proj-...
+OPENAI_BASE_URL=
+LLM_MODEL=gpt-4o-mini</code></pre>
                   </div>
+                </div>
 
-                  <div class="provider-card">
-                    <div class="provider-name"><i class="fas fa-gem"></i> Google Gemini</div>
-                    <table class="provider-table">
-                      <tbody>
-                        <tr><td>API Key</td><td><code>AIza...</code> (from Google AI Studio)</td></tr>
-                        <tr><td>Base URL</td><td><code>https://generativelanguage.googleapis.com/v1beta/openai/</code></td></tr>
-                        <tr><td>Model</td><td><code>gemini-2.0-flash</code>, <code>gemini-1.5-pro</code>, etc.</td></tr>
-                      </tbody>
-                    </table>
-                    <small class="provider-note">Get your free API key at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">aistudio.google.com</a>. The Base URL must end with <code>/openai/</code>.</small>
-                  </div>
-
+                <div class="provider-panel" role="tabpanel" v-else-if="activeAiGuideTab === 'ollama'">
                   <div class="provider-card provider-card--local">
                     <div class="provider-name"><i class="fas fa-server"></i> Ollama <span class="badge-local">Local</span></div>
-                    <table class="provider-table">
-                      <tbody>
-                        <tr><td>API Key</td><td><em>not required</em></td></tr>
-                        <tr><td>Base URL</td><td><code>http://localhost:11434/v1</code></td></tr>
-                        <tr><td>Model</td><td><code>mistral</code>, <code>llama3</code>, etc.</td></tr>
-                      </tbody>
-                    </table>
-                    <small class="provider-note">Make sure Ollama is running and the model is pulled before saving.</small>
+                    <ol class="provider-steps">
+                      <li>Install and run Ollama on your machine.</li>
+                      <li>Pull a model (example: <code>ollama pull llama3.1</code>).</li>
+                      <li>Set Base URL to <code>http://localhost:11434/v1</code> and model to your local model name.</li>
+                    </ol>
+                    <pre class="provider-code" aria-label="Ollama config example"><code>OPENAI_API_KEY=sk-local
+OPENAI_BASE_URL=http://localhost:11434/v1
+LLM_MODEL=llama3.1</code></pre>
+                    <pre class="provider-code provider-code--scroll" aria-label="Ollama docker example"><code>docker run --rm -it \
+  -p 11434:11434 \
+  -v ollama:/root/.ollama \
+  ollama/ollama</code></pre>
                   </div>
+                </div>
 
-                  <div class="provider-card">
-                    <div class="provider-name"><i class="fas fa-network-wired"></i> OpenRouter</div>
-                    <table class="provider-table">
-                      <tbody>
-                        <tr><td>API Key</td><td><code>sk-or-v1-...</code> (required)</td></tr>
-                        <tr><td>Base URL</td><td><code>https://openrouter.ai/api/v1</code></td></tr>
-                        <tr><td>Model</td><td><code>meta-llama/llama-3-8b-instruct</code></td></tr>
-                      </tbody>
-                    </table>
+                <div class="provider-panel" role="tabpanel" v-else-if="activeAiGuideTab === 'lmstudio'">
+                  <div class="provider-card provider-card--local">
+                    <div class="provider-name"><i class="fas fa-laptop-code"></i> LM Studio <span class="badge-local">Local</span></div>
+                    <ol class="provider-steps">
+                      <li>Run LM Studio.</li>
+                      <li>Start the OpenAI-compatible server from LM Studio.</li>
+                      <li>Use Base URL <code>http://localhost:1234/v1</code>.</li>
+                      <li>Use any dummy API key, for example <code>sk-local</code>.</li>
+                    </ol>
+                    <pre class="provider-code" aria-label="LM Studio config example"><code>OPENAI_API_KEY=sk-local
+OPENAI_BASE_URL=http://localhost:1234/v1
+LLM_MODEL=your-loaded-model</code></pre>
+                    <small class="provider-note">
+                      SuggestArr automatically falls back if a provider rejects
+                      <code>response_format={"type":"json_object"}</code>, so LM Studio works without requiring a LiteLLM proxy.
+                    </small>
                   </div>
+                </div>
 
+                <div class="provider-panel" role="tabpanel" v-else-if="activeAiGuideTab === 'gemini'">
                   <div class="provider-card">
-                    <div class="provider-name"><i class="fas fa-exchange-alt"></i> LiteLLM Proxy</div>
-                    <table class="provider-table">
-                      <tbody>
-                        <tr><td>API Key</td><td>depends on your proxy config</td></tr>
-                        <tr><td>Base URL</td><td><code>http://&lt;your-proxy&gt;:4000</code></td></tr>
-                        <tr><td>Model</td><td>depends on your proxy config</td></tr>
-                      </tbody>
-                    </table>
+                    <div class="provider-name"><i class="fas fa-gem"></i> Google Gemini</div>
+                    <p class="provider-description">
+                      Use Google's Gemini API through its OpenAI-compatible endpoint.
+                    </p>
+                    <ol class="provider-steps">
+                      <li>Create an API key in Google AI Studio.</li>
+                      <li>Paste the API key into SuggestArr.</li>
+                      <li>Use the Gemini OpenAI-compatible base URL shown below.</li>
+                    </ol>
+                    <pre class="provider-code" aria-label="Gemini config example"><code>OPENAI_API_KEY=AIza...
+OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+LLM_MODEL=gemini-2.0-flash</code></pre>
+                    <small class="provider-note">Generate keys at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>.</small>
+                  </div>
+                </div>
+
+                <div class="provider-panel" role="tabpanel" v-else>
+                  <div class="provider-card">
+                    <div class="provider-name"><i class="fas fa-exchange-alt"></i> LiteLLM Proxy <span class="badge-advanced">Advanced</span></div>
+                    <ol class="provider-steps">
+                      <li>Run LiteLLM proxy with your provider mappings.</li>
+                      <li>Set SuggestArr Base URL to the proxy endpoint.</li>
+                      <li>Use the model alias configured in LiteLLM.</li>
+                    </ol>
+                    <pre class="provider-code" aria-label="LiteLLM config example"><code>OPENAI_API_KEY=sk-your-proxy-key
+OPENAI_BASE_URL=http://localhost:4000/v1
+LLM_MODEL=gpt-4o-mini</code></pre>
+                    <pre class="provider-code provider-code--scroll" aria-label="LiteLLM docker example"><code>docker run --rm -it \
+  -p 4000:4000 \
+  -v ./litellm_config.yaml:/app/config.yaml \
+  ghcr.io/berriai/litellm:main-latest \
+  --config /app/config.yaml</code></pre>
                   </div>
                 </div>
 
@@ -210,6 +287,11 @@
                   <i class="fas fa-lightbulb"></i>
                   <span>The system sends your watch history to the LLM and receives a ranked list of recommendations with reasoning. No personal data is stored by the provider beyond your API usage.</span>
                 </div>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-outline btn-sm" @click="showAiInfoModal = false">
+                  Close
+                </button>
               </div>
             </div>
           </div>
@@ -494,6 +576,7 @@ export default {
       availableUsers: [],
       isLoadingUsers: false,
       showAiInfoModal: false,
+      activeAiGuideTab: 'openai',
       isTestingLlm: false,
       logLevelOptions: [
         { value: 'ERROR', label: 'Error' },
@@ -1158,7 +1241,7 @@ export default {
   font-weight: 400;
   color: var(--color-text-muted);
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 0.1rem 0.45rem;
   margin-left: 0.4rem;
   vertical-align: middle;
@@ -1218,9 +1301,11 @@ export default {
   border: 1px solid rgba(165, 180, 252, 0.3);
   border-radius: var(--border-radius-md);
   width: 100%;
-  max-width: 620px;
-  max-height: 90vh;
-  overflow-y: auto;
+  max-width: 700px;
+  max-height: min(86vh, 820px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
 }
 
@@ -1230,6 +1315,7 @@ export default {
   gap: 0.75rem;
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
 }
 
 .modal-header h3 {
@@ -1263,6 +1349,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  overflow-y: auto;
 }
 
 .modal-intro {
@@ -1272,10 +1359,53 @@ export default {
   font-size: 0.95rem;
 }
 
-.provider-list {
+.provider-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.provider-tab {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--border-radius-sm);
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.provider-tab:hover {
+  color: #e5e7eb;
+  border-color: rgba(165, 180, 252, 0.5);
+}
+
+.provider-tab.active {
+  color: #e5e7eb;
+  border-color: rgba(165, 180, 252, 0.65);
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.provider-panel {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+}
+
+.provider-list,
+.provider-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.provider-steps {
+  color: var(--color-text-muted);
+  margin: 0 0 0.8rem;
+  padding-left: 1.15rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .provider-card {
@@ -1313,6 +1443,38 @@ export default {
   padding: 0.1rem 0.5rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.badge-advanced {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.22);
+  color: #fbbf24;
+  border-radius: 8px;
+  padding: 0.1rem 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.provider-code {
+  margin: 0;
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  color: #d1d5db;
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  overflow-x: auto;
+}
+
+.provider-code + .provider-code {
+  margin-top: 0.6rem;
+}
+
+.provider-code--scroll {
+  max-height: 140px;
+  overflow-y: auto;
 }
 
 .provider-table {
@@ -1361,6 +1523,14 @@ export default {
   font-size: 0.875rem;
   color: #fbbf24;
   line-height: 1.5;
+}
+
+.modal-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.9rem 1.5rem 1.1rem;
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .modal-tip i {
@@ -1425,6 +1595,20 @@ export default {
   .settings-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .modal-box {
+    max-height: 92vh;
+  }
+
+  .modal-body {
+    padding: 1rem;
+  }
+
+  .modal-header,
+  .modal-footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 }
 </style>

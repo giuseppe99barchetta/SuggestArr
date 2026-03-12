@@ -574,6 +574,155 @@ def export_config():
         return jsonify({'message': 'Error exporting configuration', 'status': 'error'}), 500
 
 
+@config_bp.route('/openai/user', methods=['GET'])
+def get_user_openai_config():
+    """
+    Get the current user's OpenAI configuration (if any).
+    
+    Users with can_manage_ai permission can view their own OpenAI settings.
+    Returns masked API key (first 8 chars + ...) and base URL.
+    
+    Returns:
+        200 JSON with openai_api_key (masked) and openai_base_url
+        403 if user lacks can_manage_ai permission
+        404 if no user config exists (user should use global config)
+    """
+    from flask import g
+    current_user = getattr(g, 'current_user', None)
+    if not current_user:
+        return jsonify({'error': 'Authentication required'}), 401
+    
+    if not current_user.get('can_manage_ai'):
+        return jsonify({'error': 'Insufficient permissions to manage AI settings'}), 403
+    
+    try:
+        user_id = int(current_user['id'])
+        db = DatabaseManager()
+        
+        # Get OpenAI config from user_media_profiles
+        token = db.get_user_media_profile_token(user_id, 'openai')
+        
+        if not token:
+            return jsonify({'status': 'not_configured', 'message': 'No user-specific OpenAI config'}), 404
+        
+        # Token is stored as JSON: {"api_key": "...", "base_url": "..."}
+        import json
+        try:
+            config_data = json.loads(token)
+            api_key = config_data.get('api_key', '')
+            base_url = config_data.get('base_url', '')
+            
+            # Mask the API key for security
+            masked_key = api_key[:8] + '...' if len(api_key) > 8 else '***'
+            
+            return jsonify({
+                'status': 'success',
+                'openai_api_key': masked_key,
+                'openai_base_url': base_url
+            }), 200
+        except json.JSONDecodeError:
+            return jsonify({'error': 'Invalid stored configuration'}), 500
+            
+    except Exception as e:
+        logger.error(f'Error retrieving user OpenAI config: {e}', exc_info=True)
+        return jsonify({'error': 'Failed to retrieve OpenAI configuration'}), 500
+
+
+@config_bp.route('/openai/user', methods=['POST'])
+def save_user_openai_config():
+    """
+    Save the current user's OpenAI configuration.
+    
+    Only users with can_manage_ai=1 can save their own OpenAI settings.
+    Stores api_key and base_url in user_media_profiles with provider='openai'.
+    
+    Request JSON:
+      openai_api_key (str, optional) - OpenAI API key
+      openai_base_url (str, optional) - OpenAI base URL (for local providers)
+      
+    At least one field must be provided.
+    
+    Returns:
+        200 on success
+        400 if invalid input
+        403 if user lacks can_manage_ai permission
+    """
+    from flask import g
+    current_user = getattr(g, 'current_user', None)
+    if not current_user:
+        return jsonify({'error': 'Authentication required'}), 401
+    
+    if not current_user.get('can_manage_ai'):
+        return jsonify({'error': 'Insufficient permissions to manage AI settings'}), 403
+    
+    try:
+        data = request.get_json(silent=True) or {}
+        api_key = data.get('openai_api_key', '').strip()
+        base_url = data.get('openai_base_url', '').strip()
+        
+        if not api_key and not base_url:
+            return jsonify({'error': 'At least one of openai_api_key or openai_base_url must be provided'}), 400
+        
+        user_id = int(current_user['id'])
+        db = DatabaseManager()
+        
+        # Store as JSON in access_token field
+        import json
+        config_json = json.dumps({
+            'api_key': api_key,
+            'base_url': base_url
+        })
+        
+        # Use external_user_id and external_username as placeholders
+        db.create_user_media_profile(
+            user_id=user_id,
+            provider='openai',
+            external_user_id=str(user_id),
+            external_username=current_user.get('username', 'user'),
+            access_token=config_json
+        )
+        
+        logger.info(f"User {current_user.get('username')} saved personal OpenAI configuration")
+        return jsonify({'status': 'success', 'message': 'OpenAI configuration saved'}), 200
+        
+    except Exception as e:
+        logger.error(f'Error saving user OpenAI config: {e}', exc_info=True)
+        return jsonify({'error': 'Failed to save OpenAI configuration'}), 500
+
+
+@config_bp.route('/openai/user', methods=['DELETE'])
+def delete_user_openai_config():
+    """
+    Delete the current user's OpenAI configuration.
+    
+    This will cause the user to fall back to the global admin OpenAI config.
+    
+    Returns:
+        200 on success
+        403 if user lacks can_manage_ai permission
+    """
+    from flask import g
+    current_user = getattr(g, 'current_user', None)
+    if not current_user:
+        return jsonify({'error': 'Authentication required'}), 401
+    
+    if not current_user.get('can_manage_ai'):
+        return jsonify({'error': 'Insufficient permissions to manage AI settings'}), 403
+    
+    try:
+        user_id = int(current_user['id'])
+        db = DatabaseManager()
+        
+        db.delete_user_media_profile(user_id, 'openai')
+        
+        logger.info(f"User {current_user.get('username')} deleted personal OpenAI configuration")
+        return jsonify({'status': 'success', 'message': 'OpenAI configuration deleted. Using global config.'}), 200
+        
+    except Exception as e:
+        logger.error(f'Error deleting user OpenAI config: {e}', exc_info=True)
+        return jsonify({'error': 'Failed to delete OpenAI configuration'}), 500
+
+
 @config_bp.route('/import', methods=['POST'])
 @require_role('admin')
 def import_config():

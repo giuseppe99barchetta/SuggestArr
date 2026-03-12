@@ -161,7 +161,9 @@ class DatabaseManager:
                     role TEXT NOT NULL DEFAULT 'user',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_login TIMESTAMP,
-                    is_active INTEGER NOT NULL DEFAULT 1
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    can_manage_ai INTEGER DEFAULT 0,
+                    visible_tabs TEXT DEFAULT 'requests,jobs,profile'
                 )
             """,
             'refresh_tokens': """
@@ -236,6 +238,7 @@ class DatabaseManager:
                     schedule_value TEXT NOT NULL,
                     max_results INTEGER DEFAULT 20,
                     user_ids TEXT,
+                    owner_id INTEGER,
                     is_system INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -432,6 +435,9 @@ class DatabaseManager:
                     db_type=self.db_type
                 )
 
+        # Check and add missing columns to auth_users table
+        self._migrate_auth_users_table()
+
         # Check and add missing columns to discover_jobs table
         self._migrate_discover_jobs_table()
 
@@ -456,6 +462,58 @@ class DatabaseManager:
                     )
         except Exception as e:
             self.logger.warning("Could not migrate viewer roles (table may not exist yet): %s", e)
+
+    def _migrate_auth_users_table(self):
+        """Add missing columns to auth_users table for RBAC permissions."""
+        self.logger.debug("Checking for missing columns in auth_users table...")
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            try:
+                # Get existing columns
+                if self.db_type == 'sqlite':
+                    query = "PRAGMA table_info(auth_users);"
+                    cursor.execute(query)
+                    existing_columns = {row[1] for row in cursor.fetchall()}
+                elif self.db_type == 'postgres':
+                    query = """
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name = 'auth_users';
+                    """
+                    cursor.execute(query)
+                    existing_columns = {row[0] for row in cursor.fetchall()}
+                elif self.db_type in ['mysql', 'mariadb']:
+                    query = "SHOW COLUMNS FROM auth_users;"
+                    cursor.execute(query)
+                    existing_columns = {row[0] for row in cursor.fetchall()}
+                else:
+                    self.logger.warning(f"Unsupported DB type for column check: {self.db_type}")
+                    return
+
+                # Add missing can_manage_ai column
+                if 'can_manage_ai' not in existing_columns:
+                    self.logger.info("Adding column can_manage_ai to auth_users...")
+                    if self.db_type in ['mysql', 'mariadb']:
+                        cursor.execute("ALTER TABLE auth_users ADD COLUMN can_manage_ai TINYINT(1) DEFAULT 0;")
+                    elif self.db_type == 'postgres':
+                        cursor.execute("ALTER TABLE auth_users ADD COLUMN can_manage_ai SMALLINT DEFAULT 0;")
+                    else:
+                        cursor.execute("ALTER TABLE auth_users ADD COLUMN can_manage_ai INTEGER DEFAULT 0;")
+                    conn.commit()
+
+                # Add missing visible_tabs column
+                if 'visible_tabs' not in existing_columns:
+                    self.logger.info("Adding column visible_tabs to auth_users...")
+                    if self.db_type in ['mysql', 'mariadb']:
+                        cursor.execute("ALTER TABLE auth_users ADD COLUMN visible_tabs VARCHAR(255) DEFAULT 'requests,jobs,profile';")
+                    else:
+                        cursor.execute("ALTER TABLE auth_users ADD COLUMN visible_tabs TEXT DEFAULT 'requests,jobs,profile';")
+                    conn.commit()
+
+            except Exception as e:
+                self.logger.error(f"Failed to migrate auth_users table: {e}")
+                # Don't raise - table might not exist yet
 
     def _migrate_discover_jobs_table(self):
         """Add missing columns to discover_jobs table for job type support."""
@@ -511,6 +569,34 @@ class DatabaseManager:
                     else:
                         cursor.execute("ALTER TABLE discover_jobs ADD COLUMN is_system INTEGER DEFAULT 0;")
                     conn.commit()
+                # Add missing owner_id column for RBAC
+                if 'owner_id' not in existing_columns:
+                    self.logger.info("Adding column owner_id to discover_jobs for job ownership...")
+                    if self.db_type in ['mysql', 'mariadb']:
+                        cursor.execute("ALTER TABLE discover_jobs ADD COLUMN owner_id INTEGER;")
+                    else:
+                        cursor.execute("ALTER TABLE discover_jobs ADD COLUMN owner_id INTEGER;")
+                    conn.commit()
+                    
+                    # Set default owner_id to primary admin for existing jobs
+                    try:
+                        ph = self._ph()
+                        # Get the first admin user ID
+                        cursor.execute(
+                            f"SELECT id FROM auth_users WHERE role = {ph} ORDER BY id LIMIT 1",
+                            ('admin',)
+                        )
+                        admin_row = cursor.fetchone()
+                        if admin_row:
+                            admin_id = admin_row[0]
+                            cursor.execute(
+                                f"UPDATE discover_jobs SET owner_id = {ph} WHERE owner_id IS NULL",
+                                (admin_id,)
+                            )
+                            conn.commit()
+                            self.logger.info(f"Set default owner_id to admin (ID: {admin_id}) for existing jobs")
+                    except Exception as e:
+                        self.logger.warning(f"Could not set default owner_id: {e}")
 
             except Exception as e:
                 self.logger.error(f"Failed to migrate discover_jobs table: {e}")
@@ -1101,7 +1187,7 @@ class DatabaseManager:
     def get_requested_tmdb_ids(self) -> set:
         """Return the set of TMDB IDs (as strings) that SuggestArr has already requested.
 
-        Used by AI Search to exclude items that have already been sent to Jellyseer,
+        Used by AI Search to exclude items that have already been sent to Seer,
         whether through the normal automation or through the AI Search feature.
 
         :return: Set of tmdb_request_id strings.
@@ -1409,7 +1495,7 @@ class DatabaseManager:
 
         :param tmdb_id: TMDB media ID.
         :param media_type: 'movie' or 'tv'.
-        :param user_id: Jellyseer user ID to attribute the request to (may be None).
+        :param user_id: Seer user ID to attribute the request to (may be None).
         :param payload: Complete Seer request body plus private meta-keys prefixed
             with ``_`` (``_source_id``, ``_rationale``, ``_is_anime``).
         :return: True if a new row was inserted, False if already present or already
@@ -1680,24 +1766,57 @@ class DatabaseManager:
             dict | None: Same shape as get_auth_user_by_username, or None.
         """
         ph = self._ph()
-        query = (
-            f"SELECT id, username, password_hash, role, is_active, last_login "
-            f"FROM auth_users WHERE id = {ph}"
-        )
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(query, (user_id,))
-            row = cursor.fetchone()
-        if row is None:
-            return None
-        return {
-            "id": row[0],
-            "username": row[1],
-            "password_hash": row[2],
-            "role": row[3],
-            "is_active": bool(row[4]),
-            "last_login": row[5],
-        }
+        
+        # Try to select with new columns first, fall back to old schema if they don't exist
+        try:
+            query = (
+                f"SELECT id, username, password_hash, role, is_active, last_login, "
+                f"can_manage_ai, visible_tabs "
+                f"FROM auth_users WHERE id = {ph}"
+            )
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (user_id,))
+                row = cursor.fetchone()
+            if row is None:
+                return None
+            return {
+                "id": row[0],
+                "username": row[1],
+                "password_hash": row[2],
+                "role": row[3],
+                "is_active": bool(row[4]),
+                "last_login": row[5],
+                "can_manage_ai": row[6] if len(row) > 6 else 0,
+                "visible_tabs": row[7] if len(row) > 7 else 'requests,jobs,profile',
+            }
+        except Exception as e:
+            # Fall back to old schema without new columns (for migration compatibility)
+            if 'can_manage_ai' in str(e) or 'visible_tabs' in str(e):
+                self.logger.debug("New auth_users columns not yet migrated, using fallback query")
+                query = (
+                    f"SELECT id, username, password_hash, role, is_active, last_login "
+                    f"FROM auth_users WHERE id = {ph}"
+                )
+                with self.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(query, (user_id,))
+                    row = cursor.fetchone()
+                if row is None:
+                    return None
+                return {
+                    "id": row[0],
+                    "username": row[1],
+                    "password_hash": row[2],
+                    "role": row[3],
+                    "is_active": bool(row[4]),
+                    "last_login": row[5],
+                    "can_manage_ai": 0,
+                    "visible_tabs": 'requests,jobs,profile',
+                }
+            else:
+                # Different error, re-raise
+                raise
 
     def update_last_login(self, user_id: int) -> None:
         """
@@ -1827,42 +1946,75 @@ class DatabaseManager:
 
         Returns:
             list[dict]: Each dict has keys id, username, role, is_active,
-                        created_at, last_login.
+                        created_at, last_login, can_manage_ai, visible_tabs.
         """
-        query = (
-            "SELECT id, username, role, is_active, created_at, last_login "
-            "FROM auth_users ORDER BY id"
-        )
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(query)
-            rows = cursor.fetchall()
-        return [
-            {
-                "id": row[0],
-                "username": row[1],
-                "role": row[2],
-                "is_active": bool(row[3]),
-                "created_at": row[4],
-                "last_login": row[5],
-            }
-            for row in rows
-        ]
+        # Try to select with new columns first, fall back to old schema if they don't exist
+        try:
+            query = (
+                "SELECT id, username, role, is_active, created_at, last_login, "
+                "can_manage_ai, visible_tabs "
+                "FROM auth_users ORDER BY id"
+            )
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query)
+                rows = cursor.fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "username": row[1],
+                    "role": row[2],
+                    "is_active": bool(row[3]),
+                    "created_at": row[4],
+                    "last_login": row[5],
+                    "can_manage_ai": row[6] if len(row) > 6 else 0,
+                    "visible_tabs": row[7] if len(row) > 7 else 'requests,jobs,profile',
+                }
+                for row in rows
+            ]
+        except Exception as e:
+            # Fall back to old schema without new columns (for migration compatibility)
+            if 'can_manage_ai' in str(e) or 'visible_tabs' in str(e):
+                self.logger.debug("New auth_users columns not yet migrated, using fallback query")
+                query = (
+                    "SELECT id, username, role, is_active, created_at, last_login "
+                    "FROM auth_users ORDER BY id"
+                )
+                with self.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(query)
+                    rows = cursor.fetchall()
+                return [
+                    {
+                        "id": row[0],
+                        "username": row[1],
+                        "role": row[2],
+                        "is_active": bool(row[3]),
+                        "created_at": row[4],
+                        "last_login": row[5],
+                        "can_manage_ai": 0,
+                        "visible_tabs": 'requests,jobs,profile',
+                    }
+                    for row in rows
+                ]
+            else:
+                # Different error, re-raise
+                raise
 
     def update_auth_user(self, user_id: int, updates: Dict[str, Any]) -> bool:
         """
         Update allowed fields of an auth user record.
 
-        Only 'role' and 'is_active' may be changed through this method.
+        Allowed fields: 'role', 'is_active', 'can_manage_ai', 'visible_tabs'.
 
         Args:
             user_id: Primary key of the user to update.
-            updates: Dict containing any subset of {'role', 'is_active'}.
+            updates: Dict containing any subset of allowed fields.
 
         Returns:
             bool: True if a row was updated, False if the user was not found.
         """
-        allowed = {'role', 'is_active'}
+        allowed = {'role', 'is_active', 'can_manage_ai', 'visible_tabs'}
         fields = {k: v for k, v in updates.items() if k in allowed}
         if not fields:
             return False

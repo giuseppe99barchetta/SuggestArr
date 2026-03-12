@@ -1,23 +1,25 @@
 <template>
   <div class="settings-container" :class="{ 'static-bg-active': config.ENABLE_STATIC_BACKGROUND }">
-    <div 
-      v-if="!config.ENABLE_STATIC_BACKGROUND"
-      class="background-layer current-bg" 
-      :style="{ backgroundImage: 'url(' + currentBackgroundUrl + ')' }"
-      :class="{ 'fade-out': isTransitioning }"
-    ></div>
-    <div 
-      v-if="!config.ENABLE_STATIC_BACKGROUND"
-      class="background-layer next-bg" 
-      :style="{ backgroundImage: 'url(' + nextBackgroundUrl + ')' }"
-      :class="{ 'fade-in': isTransitioning }"
-    ></div>
-    <div
-      v-if="config.ENABLE_STATIC_BACKGROUND"
-      class="background-layer static-bg"
-      :style="{ backgroundColor: config.STATIC_BACKGROUND_COLOR }"
-    ></div>
-    <div class="settings-content">
+    <div class="background-container">
+      <template v-if="!config.ENABLE_STATIC_BACKGROUND">
+        <div
+          class="background-layer"
+          :class="activeBg === 'bg1' ? 'visible' : 'hidden'"
+          :style="{ backgroundImage: 'url(' + bg1Url + ')' }"
+        ></div>
+        <div
+          class="background-layer"
+          :class="activeBg === 'bg2' ? 'visible' : 'hidden'"
+          :style="{ backgroundImage: 'url(' + bg2Url + ')' }"
+        ></div>
+      </template>
+      <div
+        v-if="config.ENABLE_STATIC_BACKGROUND"
+        class="background-layer static-bg"
+        :style="{ backgroundColor: config.STATIC_BACKGROUND_COLOR }"
+      ></div>
+    </div>
+    <div v-if="currentUser" class="settings-content">
       <!-- Header -->
       <div class="settings-header">
 
@@ -44,7 +46,7 @@
           v-for="tab in visibleTabs"
           :key="tab.id"
           :data-tour-id="tab.tourId || null"
-          @click="activeTab = tab.id"
+          @click="setActiveTab(tab.id)"
           :class="['tab-button', { active: activeTab === tab.id }]"
         >
           <i :class="tab.icon"></i>
@@ -100,6 +102,7 @@
       <div class="tab-content">
         <transition name="fade-slide" mode="out-in">
           <component
+            v-if="activeTabComponent"
             :key="activeTab"
             :is="activeTabComponent"
             :config="config"
@@ -264,26 +267,31 @@
       <!-- Reset Confirmation Modal -->
       <transition name="fade">
         <div v-if="showResetModal" class="modal-overlay" @click.self="showResetModal = false">
-          <div class="modal-content">
-            <div class="modal-header">
-              <i class="fas fa-exclamation-triangle warning-icon"></i>
-              <h3>Confirm Reset</h3>
+          <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="reset-modal-title">
+            <div class="modal-header modal-header--danger">
+              <div class="modal-title-wrap">
+                <h3 class="modal-title" id="reset-modal-title">
+                  <i class="fas fa-exclamation-triangle"></i> Confirm Reset
+                </h3>
+                <p class="modal-subtitle">This action is permanent and cannot be undone.</p>
+              </div>
+              <button type="button" class="modal-close" aria-label="Close reset modal" @click="showResetModal = false">
+                <i class="fas fa-times"></i>
+              </button>
             </div>
-            
-            <p class="modal-body">
-              Are you sure you want to reset all settings to default? 
-              <strong>This action cannot be undone</strong> and will:
-            </p>
-            
-            <ul class="reset-warning-list">
-              <li><i class="fas fa-times-circle"></i> Clear all service connections</li>
-              <li><i class="fas fa-times-circle"></i> Remove all custom filters</li>
-              <li><i class="fas fa-times-circle"></i> Reset scheduling preferences</li>
-              <li><i class="fas fa-times-circle"></i> Clear database configuration</li>
-            </ul>
-            
-            <div class="modal-actions">
-              <button @click="showResetModal = false" class="btn btn-secondary">
+
+            <div class="modal-body">
+              <p>Are you sure you want to reset all settings to default? This will:</p>
+              <ul class="reset-warning-list">
+                <li><i class="fas fa-times-circle"></i> Clear all service connections</li>
+                <li><i class="fas fa-times-circle"></i> Remove all custom filters</li>
+                <li><i class="fas fa-times-circle"></i> Reset scheduling preferences</li>
+                <li><i class="fas fa-times-circle"></i> Clear database configuration</li>
+              </ul>
+            </div>
+
+            <div class="modal-footer">
+              <button @click="showResetModal = false" class="btn btn-outline">
                 <i class="fas fa-times"></i>
                 Cancel
               </button>
@@ -297,6 +305,15 @@
       </transition>
 
       <Footer />
+    </div>
+
+    <div v-else class="settings-content">
+      <div class="loading-overlay">
+        <div class="loading-content">
+          <div class="spinner"></div>
+          <p>Loading dashboard...</p>
+        </div>
+      </div>
     </div>
 
     <!-- Onboarding Tour -->
@@ -347,13 +364,14 @@ export default {
     UserProfile,
   },
   setup() {
-    const { currentBackgroundUrl, nextBackgroundUrl, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
+    const { bg1Url, bg2Url, activeBg, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
     const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
-    const { authSetupComplete, currentUser, logout } = useAuth();
+    const { authSetupComplete, logout } = useAuth();
 
     return {
-      currentBackgroundUrl,
-      nextBackgroundUrl,
+      bg1Url,
+      bg2Url,
+      activeBg,
       isTransitioning,
       startDefaultImageRotation,
       startBackgroundImageRotation,
@@ -364,12 +382,12 @@ export default {
       updateAvailable,
       checkForUpdates,
       authSetupComplete,
-      currentUser,
-      logout
+      logout,
     };
   },
     data() {
     return {
+      currentUser: null,
       config: {},
       isLoading: false,
       isForceRunning: false,
@@ -412,7 +430,7 @@ export default {
         {
           targetId: 'tab-requests',
           title: 'Requests',
-          description: 'Every time SuggestArr runs, it submits content requests to Overseerr / Jellyseerr. You can track them all here — what was requested, when, and for which user.',
+          description: 'Every time SuggestArr runs, it submits content requests to Seer. You can track them all here — what was requested, when, and for which user.',
           position: 'bottom',
         },
         {
@@ -424,7 +442,7 @@ export default {
         {
           targetId: 'tab-services',
           title: 'Services',
-          description: 'Update your API keys and connection settings for TMDB, your media server (Jellyfin, Plex…), and Jellyseerr / Overseerr here.',
+          description: 'Update your API keys and connection settings for TMDB, your media server (Jellyfin, Plex…), and Seer here.',
           position: 'bottom',
         },
         {
@@ -468,14 +486,30 @@ export default {
   },
   computed: {
     visibleTabs() {
-      const isAdmin = this.currentUser?.role === 'admin';
+      if (!this.currentUser) {
+        return [];
+      }
+
+      const isAdmin = this.currentUser.role === 'admin';
+      const allowedTabs = new Set(
+        String(this.currentUser.visible_tabs || '')
+          .split(',')
+          .map(tab => this.normalizeTabId(tab.trim()))
+          .filter(Boolean)
+      );
+
       return this.tabs.filter(tab => {
         if (tab.adminOnly && !isAdmin) return false;
         if (tab.nonAdminOnly && isAdmin) return false;
+        if (!isAdmin && allowedTabs.size > 0 && !allowedTabs.has(tab.id)) return false;
         return true;
       });
     },
     activeTabComponent() {
+      // Never resolve a component for a tab the current user cannot access.
+      if (!this.visibleTabs.some(tab => tab.id === this.activeTab)) {
+        return null;
+      }
       const componentMap = {
         requests: 'SettingsRequests',
         services: 'SettingsServices',
@@ -487,7 +521,7 @@ export default {
         users: 'UserManagement',
         profile: 'UserProfile',
       };
-      return componentMap[this.activeTab];
+      return componentMap[this.activeTab] ?? null;
     },
     currentTabId() {
       return this.activeTab;
@@ -497,6 +531,19 @@ export default {
     isTransitioning(newValue) {
       if (newValue) {
         // Handle background transition state if needed
+      }
+    },
+    currentUser: {
+      // immediate: true ensures the guard runs at mount time even if
+      // currentUser is already populated before the watcher is registered.
+      immediate: true,
+      handler() {
+        this.ensureValidActiveTab();
+      },
+    },
+    activeTab(newTab) {
+      if (!this.visibleTabs.some(tab => tab.id === newTab)) {
+        this.ensureValidActiveTab();
       }
     },
     'config.ENABLE_STATIC_BACKGROUND': {
@@ -521,7 +568,23 @@ export default {
   },
   async mounted() {
     try {
-      await this.loadConfig();
+      // Ensure auth is fully initialized before making protected API calls
+      const { waitForAuthReady } = await import("@/composables/useAuth");
+      await waitForAuthReady();
+
+      await this.fetchMe();
+
+      if (!this.currentUser) {
+        return;
+      }
+
+      if (this.currentUser?.role === 'admin') {
+        await this.loadConfig();
+      }
+
+      // Re-validate after config+auth are settled, in case currentUser
+      // was populated after the initial watcher run.
+      this.ensureValidActiveTab();
 
       this.loadRequestCount();
 
@@ -536,11 +599,39 @@ export default {
         setTimeout(() => { this.showTour = true; }, 900);
       }
     } catch (error) {
-      console.error('Error during component mount:', error);
+      if (error?.response?.status !== 403) {
+        console.error('Error during component mount:', error);
+      }
       this.isLoading = false;
     }
   },
   methods: {
+    normalizeTabId(tabId) {
+      if (tabId === 'ai-search') {
+        return 'ai_search';
+      }
+      return tabId;
+    },
+
+    async fetchMe() {
+      try {
+        const response = await axios.get('/api/auth/me', {
+          withCredentials: true,
+          timeout: 10000,
+        });
+        this.currentUser = response.data;
+        return this.currentUser;
+      } catch (error) {
+        this.currentUser = null;
+        if (error?.response?.status === 401 || !error?.response) {
+          this.$router.push('/login');
+          return null;
+        }
+
+        this.$router.push('/login');
+        return null;
+      }
+    },
     async handleLogout() {
       await this.logout();
       this.$router.push('/login');
@@ -549,16 +640,26 @@ export default {
       localStorage.removeItem(TOUR_STORAGE_KEY);
       this.showTour = true;
     },
+    setActiveTab(id) {
+      if (this.visibleTabs.some(tab => tab.id === id)) {
+        this.activeTab = id;
+      }
+    },
+    ensureValidActiveTab() {
+      if (!this.visibleTabs.some(tab => tab.id === this.activeTab)) {
+        this.activeTab = this.visibleTabs[0]?.id ?? 'requests';
+      }
+    },
     selectMobileTab(tabId) {
-      this.activeTab = tabId;
+      this.setActiveTab(tabId);
       this.showMobileDropdown = false;
     },
     getCurrentTabName() {
-      const currentTab = this.tabs.find(tab => tab.id === this.activeTab);
+      const currentTab = this.visibleTabs.find(tab => tab.id === this.activeTab);
       return currentTab ? currentTab.name : '';
     },
     getCurrentTabIcon() {
-      const currentTab = this.tabs.find(tab => tab.id === this.activeTab);
+      const currentTab = this.visibleTabs.find(tab => tab.id === this.activeTab);
       return currentTab ? currentTab.icon : 'fas fa-question';
     },
     async loadConfig() {
@@ -570,6 +671,9 @@ export default {
         });
         this.config = response.data;
       } catch (error) {
+        if (error?.response?.status === 403) {
+          return;
+        }
         this.$toast.open({
           message: 'Failed to load configuration',
           type: 'error',

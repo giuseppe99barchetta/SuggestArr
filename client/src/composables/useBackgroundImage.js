@@ -2,48 +2,53 @@ import { ref, onUnmounted } from 'vue';
 import { fetchRandomMovieImage } from '@/api/tmdbApi';
 
 export function useBackgroundImage() {
-  const currentBackgroundUrl = ref('/images/default1.jpg');
-  const nextBackgroundUrl = ref('/images/default1.jpg');
+  const bg1Url = ref('/images/default1.jpg');
+  const bg2Url = ref('/images/default1.jpg');
+  // 'bg1' is initially visible; 'bg2' is the hidden layer waiting for the next image
+  const activeBg = ref('bg1');
   const isTransitioning = ref(false);
   const intervalId = ref(null);
   const defaultImages = ['/images/default1.jpg', '/images/default2.jpg', '/images/default3.jpg'];
   const currentDefaultImageIndex = ref(0);
 
-  // Function to change the image with a smooth crossfade
-  async function changeBackground(newUrl) {
+  // Crossfade to a new image using two alternating layers.
+  // Step 1: write the new URL onto the hidden layer.
+  // Step 2: after two animation frames (so Vue has painted the new image),
+  //         swap which layer is "visible" – the CSS opacity transition does the rest.
+  function changeBackground(newUrl) {
     if (!newUrl) return;
-
-    // Prevent multiple simultaneous transitions
-    if (isTransitioning.value) {
-      return;
-    }
+    if (isTransitioning.value) return;
 
     const img = new Image();
     img.src = newUrl;
 
     img.onload = () => {
-      // Set the new image in the next layer
-      nextBackgroundUrl.value = newUrl;
+      isTransitioning.value = true;
 
-      // Use requestAnimationFrame to ensure DOM has updated
+      const nextBg = activeBg.value === 'bg1' ? 'bg2' : 'bg1';
+
+      // Write the new image onto the currently-hidden layer
+      if (nextBg === 'bg1') {
+        bg1Url.value = newUrl;
+      } else {
+        bg2Url.value = newUrl;
+      }
+
+      // Double rAF: first frame lets Vue render the new background-image onto the
+      // hidden layer; second frame triggers the class swap and starts the CSS fade.
       requestAnimationFrame(() => {
-        // Start transition
-        isTransitioning.value = true;
-
-        // After transition completes, swap and reset
-        setTimeout(() => {
-          // Swap the background URLs
-          currentBackgroundUrl.value = newUrl;
-
-          // Disable transitions temporarily to prevent flash
-          isTransitioning.value = false;
-        }, 800);
+        requestAnimationFrame(() => {
+          activeBg.value = nextBg;
+          setTimeout(() => {
+            isTransitioning.value = false;
+          }, 1000); // matches CSS transition: opacity 1s
+        });
       });
     };
   }
 
   function startDefaultImageRotation() {
-    stopBackgroundImageRotation(); // Safety check: clear existing intervals
+    stopBackgroundImageRotation();
     intervalId.value = setInterval(() => {
       currentDefaultImageIndex.value = (currentDefaultImageIndex.value + 1) % defaultImages.length;
       changeBackground(defaultImages[currentDefaultImageIndex.value]);
@@ -52,9 +57,7 @@ export function useBackgroundImage() {
 
   function startBackgroundImageRotation() {
     stopBackgroundImageRotation();
-    // Load the first image immediately
     fetchRandomMovieImageAsync();
-    // Then start the interval
     intervalId.value = setInterval(() => fetchRandomMovieImageAsync(), 10000);
   }
 
@@ -62,9 +65,8 @@ export function useBackgroundImage() {
     try {
       const imageUrl = await fetchRandomMovieImage();
       if (imageUrl) {
-        await changeBackground(imageUrl);
+        changeBackground(imageUrl);
       } else if (imageUrl === null) {
-        // Stop polling TMDB if it is not configured or fails repeatedly
         console.warn("TMDB not configured or no image, falling back to default rotation.");
         startDefaultImageRotation();
       }
@@ -86,8 +88,9 @@ export function useBackgroundImage() {
   });
 
   return {
-    currentBackgroundUrl,
-    nextBackgroundUrl,
+    bg1Url,
+    bg2Url,
+    activeBg,
     isTransitioning,
     startDefaultImageRotation,
     startBackgroundImageRotation,

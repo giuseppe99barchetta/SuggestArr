@@ -555,15 +555,6 @@ export default {
   cursor: not-allowed;
 }
 
-.input-group {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.input-group .form-control {
-  flex: 1;
-}
-
 .select-wrapper {
   position: relative;
   display: flex;
@@ -635,7 +626,7 @@ export default {
 .info-box code {
   background: rgba(0, 0, 0, 0.3);
   padding: 0.2rem 0.4rem;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-sm);
   font-family: 'Courier New', monospace;
   font-size: 0.875rem;
 }

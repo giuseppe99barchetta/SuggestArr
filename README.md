@@ -11,14 +11,14 @@
 [![](https://dcbadge.limes.pink/api/server/https://discord.com/invite/JXwFd3PnXY?style=flat)](https://discord.com/invite/JXwFd3PnXY)
 </div>
 
-SuggestArr is a project designed to automate media content recommendations and download requests based on user activity in media servers like **Jellyfin**, **Plex**, and now **Emby**. It retrieves recently watched content, searches for similar titles using the TMDb API, and sends automated download requests to **Jellyseer** or **Overseer**.
+SuggestArr is a project designed to automate media content recommendations and download requests based on user activity in media servers like **Jellyfin**, **Plex**, and now **Emby**. It retrieves recently watched content, searches for similar titles using the TMDb API, and sends automated download requests to **Seer**.
 
 ## Features
 - **Multi-Media Server Support**: Supports Jellyfin, Plex, and Emby for retrieving media content.
 - **TMDb Integration**: Searches for similar movies and TV shows on TMDb.
 - **AI-Powered Recommendations** *(beta)*: Uses any OpenAI-compatible LLM (OpenAI, Ollama, Gemini, LiteLLM…) to generate hyper-personalized suggestions based on watch history, complete with AI reasoning for each pick.
 - **AI Search** *(beta)*: Describe in natural language what you want to watch and let the AI find matching titles, personalised to your viewing history, with one-click request to Seer.
-- **Automated Requests**: Sends download requests for recommended content to Jellyseer or Seer.
+- **Automated Requests**: Sends download requests for recommended content to Seer.
 - **Web Interface**: A user-friendly interface for configuration and management.
 - **Real-Time Logs**: View and filter logs in real time (e.g., `INFO`, `ERROR`, `DEBUG`).
 - **User Selection**: Choose specific users to initiate requests, allowing management and approval of auto-requested content.
@@ -31,7 +31,7 @@ SuggestArr is a project designed to automate media content recommendations and d
 - **Python 3.x** or **Docker**
 - **[TMDb API Key](https://www.themoviedb.org/documentation/api)**
 - Configured **[Jellyfin](https://jellyfin.org/)**, **[Plex](https://www.plex.tv/)**, or **[Emby](https://emby.media/)**
-- Configured **[Jellyseer](https://github.com/Fallenbagel/jellyseerr)** or **[Overseer](https://github.com/sct/overseerr)**
+- Configured **[Seer](https://github.com/seerr-team/seerr)**
 - (Optional) External database (PostgreSQL or MySQL) for improved performance
 
 ## Docker Usage
@@ -68,15 +68,15 @@ Access the web interface at: http://localhost:5000 (or your custom port if confi
 
 Make sure your environment is set up correctly and that the application is running to access the web interface.
 
-### Using a Specific Jellyseer/Overseer User for Requests
-If you'd like to use a specific Jellyseer user to make media requests, follow these steps:
+### Using a Specific Seer User for Requests
+If you'd like to use a specific Seer user to make media requests, follow these steps:
 
 1. In the web interface, enable the user selection option by checking the corresponding box.
 2. Select the desired user from the dropdown list.
 3. Enter the password for the selected user.
 4. The system will now use this user to make media requests, rather than using the admin or default profile.
 
-Note: Currently, only local Jellyseer users are supported.
+Note: Currently, only local Seer users are supported.
 
 ## AI-Powered Recommendations (Beta)
 
@@ -163,7 +163,7 @@ Type a natural-language description of what you feel like watching. The LLM inte
 - **Natural language queries** — describe mood, genre, decade, language, or specific themes
 - **Viewing-history personalisation** — the AI tailors results based on what you (or your users) have already watched
 - **Exclude already-watched titles** — hide content you've already seen
-- **One-click requesting** — send results directly to Jellyseer/Overseer without leaving the page
+- **One-click requesting** — send results directly to Seer without leaving the page
 - **Query interpretation badge** — see how the AI parsed your query (genres, year range, language, min rating)
 
 ### How to enable

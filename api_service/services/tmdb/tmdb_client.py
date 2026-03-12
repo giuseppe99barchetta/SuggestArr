@@ -9,6 +9,7 @@ Classes:
 
 import aiohttp
 import asyncio
+from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 
 # Constants for HTTP status codes and timeout
@@ -17,7 +18,7 @@ REQUEST_TIMEOUT = 10   # Timeout in seconds for HTTP requests
 CONTENT_PER_PAGE = 20  # Number of content items per page in TMDb API responses
 RATE_LIMIT_SLEEP = 0.3 # Delay between requests to avoid rate limiting
 
-class TMDbClient:
+class TMDbClient(BaseHTTPClient):
     """
     A client to interact with The Movie Database (TMDb) API to retrieve information
     related to movies, TV shows, and external IDs.
@@ -27,7 +28,7 @@ class TMDbClient:
                 include_no_ratings, filter_release_year, filter_language, filter_genre,
                 filter_region_provider, filter_streaming_services, filter_min_runtime=None,
                 rating_source='tmdb', imdb_threshold=None, imdb_min_votes=None,
-                omdb_client=None, include_tvod=False
+                omdb_client=None, include_tvod=False, filter_release_year_to=None
                 ):
         """
         Initializes the TMDbClient with the provided API key.
@@ -40,7 +41,7 @@ class TMDbClient:
         :param include_tvod: If True, also check rent/buy availability when matching streaming providers.
                              If False (default), only subscription-based (flatrate) providers are checked.
         """
-        self.logger = LoggerManager.get_logger(self.__class__.__name__)
+        super().__init__()
         self.api_key = api_key
         self.search_size = search_size
         self.tmdb_threshold = tmdb_threshold
@@ -48,6 +49,7 @@ class TMDbClient:
         self.include_no_ratings = include_no_ratings
         self.language_filter = filter_language
         self.release_year_filter = filter_release_year
+        self.release_year_filter_to = int(filter_release_year_to) if filter_release_year_to is not None else None
         self.genre_filter = filter_genre
         self.pages = (self.search_size + CONTENT_PER_PAGE - 1) // CONTENT_PER_PAGE
         self.region_provider = filter_region_provider
@@ -59,23 +61,7 @@ class TMDbClient:
         self.omdb_client = omdb_client
         self.include_tvod = include_tvod
         self.tmdb_api_url = "https://api.themoviedb.org/3"
-        self.session = None
         self.logger.debug("TMDbClient initialized with API key: ***")
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
-        return self.session
-
-    async def close(self):
-        if self.session and not self.session.closed:
-            await self.session.close()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
 
     async def _fetch_recommendations(self, content_id, content_type, dry_run=False):
         """
@@ -193,7 +179,7 @@ class TMDbClient:
         self.logger.debug("Fetching data from URL: %s", url.replace(self.api_key, "***"))
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     self.logger.debug("Successfully fetched data for page %d", page)
                     return await response.json()
@@ -216,7 +202,7 @@ class TMDbClient:
         
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as details_response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as details_response:
                 if details_response.status in HTTP_OK:
                     data = await details_response.json()
                     metadata = self._format_result(data, content_type)
@@ -226,7 +212,7 @@ class TMDbClient:
                     return None
 
             # Fetch images for logo
-            async with session.get(images_url, timeout=REQUEST_TIMEOUT) as images_response:
+            async with session.get(images_url, timeout=self.REQUEST_TIMEOUT) as images_response:
                 if images_response.status in HTTP_OK:
                     images_data = await images_response.json()
                     logos = images_data.get("logos", [])
@@ -345,6 +331,14 @@ class TMDbClient:
                     'reason': f'Before {self.release_year_filter}',
                 }
                 overall = False
+            elif self.release_year_filter_to is not None and int(year_str) > self.release_year_filter_to:
+                self._log_exclusion_reason(item, f"release year {year_str} after {self.release_year_filter_to}", content_type)
+                results['release_year'] = {
+                    'passed': False, 'label': 'Year',
+                    'value': year_str,
+                    'reason': f'After {self.release_year_filter_to}',
+                }
+                overall = False
             else:
                 results['release_year'] = {'passed': True, 'label': 'Year', 'value': year_str}
 
@@ -398,7 +392,7 @@ class TMDbClient:
         self.logger.debug("Fetching details for %s ID %s", content_type, content_id)
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     data = await response.json()
                     if content_type == 'movie':
@@ -431,7 +425,7 @@ class TMDbClient:
         self.logger.debug("Fetching external IDs for TV ID %s", tv_id)
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     data = await response.json()
                     return data.get('imdb_id')
@@ -456,6 +450,17 @@ class TMDbClient:
 
         imdb_rating = imdb_data.get('imdb_rating')
         imdb_votes = imdb_data.get('imdb_votes')
+        raw_rating = imdb_data.get('imdb_rating_raw')
+
+        if imdb_rating is None:
+            if not self.include_no_ratings:
+                reason = (
+                    f"OMDb returned imdbRating={raw_rating}"
+                    if raw_rating not in (None, '')
+                    else "OMDb returned missing imdbRating"
+                )
+                return {'passed': False, 'label': 'IMDB', 'reason': reason}
+            return {'passed': None, 'label': 'IMDB', 'reason': 'Missing IMDB rating (allowed)'}
 
         if imdb_rating is not None and imdb_rating < self.imdb_threshold / 10:
             return {
@@ -493,6 +498,27 @@ class TMDbClient:
 
         imdb_rating = imdb_data.get('imdb_rating')
         imdb_votes = imdb_data.get('imdb_votes')
+        raw_rating = imdb_data.get('imdb_rating_raw')
+        normalized_raw_rating = str(raw_rating).strip().upper() if raw_rating is not None else None
+        rating_missing = imdb_rating is None or normalized_raw_rating in ('N/A', '')
+
+        if rating_missing:
+            if not self.include_no_ratings:
+
+                title = item.get('title' if content_type == 'movie' else 'name', 'Unknown')
+                tmdb_id = item.get('id', 'unknown')
+                rating_label = normalized_raw_rating if normalized_raw_rating not in (None, '') else 'missing'
+                media_label = 'movie' if content_type == 'movie' else 'tv show'
+
+                self.logger.debug(
+                    "Skipping %s %s (tmdb:%s) - OMDb returned imdbRating=%s and include_content_without_imdb_rating=false",
+                    media_label,
+                    title,
+                    tmdb_id,
+                    rating_label,
+                )
+
+                return False
 
         if imdb_rating is not None and imdb_rating < self.imdb_threshold / 10:
             self._log_exclusion_reason(
@@ -566,7 +592,7 @@ class TMDbClient:
         self.logger.debug("Finding TMDb ID for TVDb ID %s", tvdb_id)
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     data = await response.json()
                     if 'tv_results' in data and data['tv_results']:
@@ -606,7 +632,7 @@ class TMDbClient:
 
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     data = await response.json()
                     if "results" in data and self.region_provider in data["results"]:
@@ -691,7 +717,7 @@ class TMDbClient:
         """Helper to execute search and format results."""
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     data = await response.json()
                     results = []

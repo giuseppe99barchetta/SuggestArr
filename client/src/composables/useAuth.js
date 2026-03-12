@@ -12,6 +12,11 @@ let _interceptorsSetup = false;
 let _router = null;
 let _refreshFailed = false; // Once true, no further refresh attempts until login
 
+// Auth initialization tracking — ensures app doesn't make protected API calls
+// until auth is fully set up and any required refresh is complete.
+let _authInitReadyPromise = null;
+let _authInitResolve = null;
+
 function isAbortLikeError(error) {
   const code = error?.code || error?.message?.code;
   if (code === "ECONNABORTED" || code === "ERR_CANCELED") return true;
@@ -75,6 +80,41 @@ function setSessionFromAccessToken(token) {
 
 export function setAuthRouter(router) {
   _router = router;
+}
+
+/**
+ * Initialize the auth-ready promise. Called once during app startup
+ * to allow waitForAuthReady() to resolve when auth setup is complete.
+ */
+export function initializeAuthReady() {
+  if (!_authInitReadyPromise) {
+    _authInitReadyPromise = new Promise((resolve) => {
+      _authInitResolve = resolve;
+    });
+  }
+  return _authInitReadyPromise;
+}
+
+/**
+ * Mark auth as fully initialized and ready for protected API calls.
+ * Called after setup checks and refresh attempts are complete.
+ */
+export function markAuthReady() {
+  if (_authInitResolve) {
+    _authInitResolve();
+  }
+}
+
+/**
+ * Wait for auth initialization to complete.
+ * Safe to call multiple times — returns the same promise.
+ * @returns {Promise<void>} Resolves when auth is ready for protected API calls.
+ */
+export async function waitForAuthReady() {
+  if (!_authInitReadyPromise) {
+    initializeAuthReady();
+  }
+  return _authInitReadyPromise;
 }
 
 export function useAuth() {
@@ -230,5 +270,6 @@ export function useAuth() {
     setupAdmin,
     getAuthStatus,
     setupInterceptors,
+    markAuthReady,
   };
 }

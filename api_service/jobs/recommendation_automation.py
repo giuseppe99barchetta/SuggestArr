@@ -12,10 +12,85 @@ from api_service.db.database_manager import DatabaseManager
 from api_service.db.job_repository import JobRepository
 from api_service.handler.jellyfin_handler import JellyfinHandler
 from api_service.handler.plex_handler import PlexHandler
+from api_service.services.filter_normalization import normalize_filters
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
-from api_service.services.jellyseer.seer_client import SeerClient
+from api_service.services.seer.seer_client import SeerClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
+
+
+def _extract_year_from_filter_value(value: Any) -> Optional[int]:
+    """Parse a year from int/float/numeric string/date string filter values."""
+    if value is None or isinstance(value, bool):
+        return None
+
+    if isinstance(value, (int, float)):
+        year = int(value)
+        return year if year > 0 else None
+
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        if raw.isdigit():
+            year = int(raw)
+            return year if year > 0 else None
+        # Accept date-like strings such as YYYY-MM-DD.
+        if len(raw) >= 4 and raw[:4].isdigit():
+            year = int(raw[:4])
+            return year if year > 0 else None
+
+    return None
+
+
+def _resolve_year_range_filters(job_filters: Dict[str, Any], env_vars: Dict[str, Any]) -> tuple[int, Optional[int]]:
+    """Resolve recommendation year bounds from job filters (and global fallback)."""
+    from_year = None
+    to_year = None
+
+    from_candidates = [
+        'release_year_gte',
+        'year_from',
+        'primary_release_date_gte',
+        'first_air_date_gte',
+    ]
+    to_candidates = [
+        'release_year_lte',
+        'year_to',
+        'primary_release_date_lte',
+        'first_air_date_lte',
+    ]
+
+    for key in from_candidates:
+        parsed = _extract_year_from_filter_value(job_filters.get(key))
+        if parsed is not None:
+            from_year = parsed
+            break
+
+    for key in to_candidates:
+        parsed = _extract_year_from_filter_value(job_filters.get(key))
+        if parsed is not None:
+            to_year = parsed
+            break
+
+    if from_year is None:
+        from_year = _extract_year_from_filter_value(env_vars.get('FILTER_RELEASE_YEAR')) or 0
+
+    return from_year, to_year
+
+
+def _resolve_honor_seer_discovery(job_filters: Dict[str, Any], env_vars: Dict[str, Any]) -> bool:
+    """Resolve whether Seer-discovered items should be excluded at runtime."""
+    # Prefer the new per-job key, fall back to legacy alias for backward compatibility.
+    if 'honor_seer_discovery' in job_filters:
+        return bool(job_filters.get('honor_seer_discovery'))
+    if 'honor_jellyseer_discovery' in job_filters:
+        return bool(job_filters.get('honor_jellyseer_discovery'))
+
+    # If no per-job setting is present, prefer the new env var, then fall back to the legacy one.
+    if 'HONOR_SEER_DISCOVERY' in env_vars:
+        return bool(env_vars.get('HONOR_SEER_DISCOVERY', False))
+    return bool(env_vars.get('HONOR_JELLYSEER_DISCOVERY', False))
 
 
 @dataclass
@@ -31,7 +106,7 @@ class ExecutionResult:
 class RecommendationAutomation:
     """
     Automates the process of retrieving watched content from Jellyfin/Plex,
-    finding similar content via TMDb, and requesting it via Jellyseer/Overseer.
+    finding similar content via TMDb, and requesting it via Seer.
 
     This is similar to ContentAutomation but configured per-job with:
     - Specific user IDs to monitor
@@ -48,6 +123,21 @@ class RecommendationAutomation:
         self.db_manager: Optional[DatabaseManager] = None
         self.media_handler = None
         self.env_vars: Optional[Dict[str, Any]] = None
+
+    def _get_seer_discovered_tmdb_ids(self) -> set[str]:
+        """Return TMDb IDs discovered/requested directly in Seer (non-SuggestArr source)."""
+        discovered_ids: set[str] = set()
+        query = "SELECT DISTINCT tmdb_request_id FROM requests WHERE requested_by = 'Seer'"
+
+        try:
+            with self.db_manager.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query)
+                discovered_ids = {str(row[0]) for row in cursor.fetchall()}
+        except Exception as exc:
+            self.logger.warning("Could not load Seer discovery IDs: %s", exc)
+
+        return discovered_ids
 
     @classmethod
     async def create(cls, job_id: int, dry_run: bool = False) -> 'RecommendationAutomation':
@@ -92,6 +182,7 @@ class RecommendationAutomation:
     async def _initialize_components(self, dry_run: bool = False):
         """Initialize all required components for the recommendation job."""
         job_filters = self.job_data.get('filters', {})
+        normalized_filters = normalize_filters(job_filters)
         job_user_ids = self.job_data.get('user_ids', [])
         media_type = self.job_data.get('media_type', 'both')
         max_results = self.job_data.get('max_results', 20)
@@ -126,7 +217,9 @@ class RecommendationAutomation:
         search_size = job_filters.get('search_size', int(self.env_vars.get('SEARCH_SIZE', '20')))
 
         # TMDB filters from job configuration
-        tmdb_threshold = job_filters.get('vote_average_gte', int(self.env_vars.get('FILTER_TMDB_THRESHOLD') or 60))
+        tmdb_threshold = normalized_filters.get('min_rating')
+        if tmdb_threshold is None:
+            tmdb_threshold = int(self.env_vars.get('FILTER_TMDB_THRESHOLD') or 60)
         # Convert 0-10 scale to 0-100 if needed
         if tmdb_threshold <= 10:
             tmdb_threshold = int(tmdb_threshold * 10)
@@ -137,12 +230,16 @@ class RecommendationAutomation:
         if include_no_ratings is None:
             include_no_ratings = self.env_vars.get('FILTER_INCLUDE_NO_RATING', True) == True
 
-        filter_release_year = job_filters.get('release_year_gte', int(self.env_vars.get('FILTER_RELEASE_YEAR') or 0))
+        filter_release_year, filter_release_year_to = _resolve_year_range_filters(
+            {**job_filters, **normalized_filters}, self.env_vars
+        )
+        honor_seer_discovery = _resolve_honor_seer_discovery(job_filters, self.env_vars)
+        seer_discovered_ids = self._get_seer_discovered_tmdb_ids() if honor_seer_discovery else set()
 
         # Language filter
         filter_language = []
-        if job_filters.get('with_original_language'):
-            filter_language = [job_filters['with_original_language']]
+        if normalized_filters.get('language'):
+            filter_language = [normalized_filters['language']]
         elif self.env_vars.get('FILTER_LANGUAGE'):
             filter_language = self.env_vars.get('FILTER_LANGUAGE', [])
             if not isinstance(filter_language, list):
@@ -217,8 +314,8 @@ class RecommendationAutomation:
         anime_profile_config_raw = self.env_vars.get('SEER_ANIME_PROFILE_CONFIG', {})
         anime_profile_config = anime_profile_config_raw if isinstance(anime_profile_config_raw, dict) else {}
 
-        # Initialize Jellyseer client
-        self.logger.info("Initializing Jellyseer client")
+        # Initialize Seer service client
+        self.logger.info("Initializing Seer service client")
         seer_client = SeerClient(
             self.env_vars['SEER_API_URL'],
             self.env_vars['SEER_TOKEN'],
@@ -254,6 +351,7 @@ class RecommendationAutomation:
             imdb_min_votes=imdb_min_votes,
             omdb_client=omdb_client,
             include_tvod=filter_include_tvod,
+            filter_release_year_to=filter_release_year_to,
         )
 
         # Determine which users to process
@@ -263,12 +361,18 @@ class RecommendationAutomation:
         if selected_service in ('jellyfin', 'emby'):
             await self._init_jellyfin_handler(
                 seer_client, tmdb_client, max_similar_movie, max_similar_tv,
-                selected_users, max_content, job_use_llm, dry_run=dry_run
+                selected_users, max_content, job_use_llm,
+                honor_seer_discovery=honor_seer_discovery,
+                seer_discovered_ids=seer_discovered_ids,
+                dry_run=dry_run
             )
         elif selected_service == 'plex':
             await self._init_plex_handler(
                 seer_client, tmdb_client, max_similar_movie, max_similar_tv,
-                selected_users, max_content, job_use_llm, dry_run=dry_run
+                selected_users, max_content, job_use_llm,
+                honor_seer_discovery=honor_seer_discovery,
+                seer_discovered_ids=seer_discovered_ids,
+                dry_run=dry_run
             )
         else:
             raise ValueError(f"Unsupported service: {selected_service}")
@@ -306,7 +410,10 @@ class RecommendationAutomation:
 
     async def _init_jellyfin_handler(
         self, seer_client, tmdb_client, max_similar_movie, max_similar_tv,
-        selected_users, max_content, use_llm=None, dry_run=False
+        selected_users, max_content, use_llm=None,
+        honor_seer_discovery: bool = False,
+        seer_discovered_ids: Optional[set[str]] = None,
+        dry_run=False
     ):
         """Initialize Jellyfin handler."""
         self.logger.info("Initializing Jellyfin client")
@@ -331,13 +438,19 @@ class RecommendationAutomation:
         self.media_handler = JellyfinHandler(
             jellyfin_client, seer_client, tmdb_client, self.logger,
             max_similar_movie, max_similar_tv,
-            selected_users, jellyfin_anime_map, use_llm=use_llm, dry_run=dry_run
+            selected_users, jellyfin_anime_map, use_llm=use_llm,
+            honor_seer_discovery=honor_seer_discovery,
+            seer_discovered_ids=seer_discovered_ids,
+            dry_run=dry_run
         )
         self.logger.info("Jellyfin handler initialized")
 
     async def _init_plex_handler(
         self, seer_client, tmdb_client, max_similar_movie, max_similar_tv,
-        selected_users, max_content, use_llm=None, dry_run=False
+        selected_users, max_content, use_llm=None,
+        honor_seer_discovery: bool = False,
+        seer_discovered_ids: Optional[set[str]] = None,
+        dry_run=False
     ):
         """Initialize Plex handler."""
         self.logger.info("Initializing Plex client")
@@ -363,7 +476,10 @@ class RecommendationAutomation:
         self.media_handler = PlexHandler(
             plex_client, seer_client, tmdb_client, self.logger,
             max_similar_movie, max_similar_tv,
-            plex_anime_map, use_llm=use_llm, dry_run=dry_run
+            plex_anime_map, use_llm=use_llm,
+            honor_seer_discovery=honor_seer_discovery,
+            seer_discovered_ids=seer_discovered_ids,
+            dry_run=dry_run
         )
         self.logger.info("Plex handler initialized")
 
@@ -396,9 +512,7 @@ class RecommendationAutomation:
             # Process recent items (this is the main recommendation logic)
             from contextlib import AsyncExitStack
             async with AsyncExitStack() as stack:
-                if hasattr(self.media_handler, 'jellyseer_client'):
-                    await stack.enter_async_context(self.media_handler.jellyseer_client)
-                elif hasattr(self.media_handler, 'seer_client'):
+                if hasattr(self.media_handler, 'seer_client'):
                     await stack.enter_async_context(self.media_handler.seer_client)
 
                 if hasattr(self.media_handler, 'tmdb_client'):

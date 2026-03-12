@@ -47,7 +47,11 @@ _REFRESH_COOKIE = "suggestarr_refresh"
 # Dummy bcrypt hash used for constant-time comparison when a username is not
 # found.  The hash is pre-computed so it cannot be timed differently from a
 # real hash lookup.  It deliberately does NOT match any password.
-_DUMMY_HASH = "$2b$12$invalidhashpadding000000000000000000000000000000000000000"
+# IMPORTANT: this must be a structurally valid bcrypt hash (correct length,
+# valid base-64 alphabet) so that bcrypt.checkpw() actually runs the full
+# key-derivation work instead of raising ValueError and short-circuiting,
+# which would defeat the timing-safe username-enumeration protection.
+_DUMMY_HASH = "$2b$12$Mw9OodX1LL0TkdqxKIjoReHVW2LdwqWmTdAtDPXjNxT34V55xST86"
 
 
 # ---------------------------------------------------------------------------

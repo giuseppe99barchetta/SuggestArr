@@ -1,10 +1,11 @@
 <template>
-  <div class="modal-overlay" @click.self="$emit('close')">
-    <div class="modal-content">
+  <Teleport to="body">
+    <div class="modal-overlay" @click.self="$emit('close')">
+      <div class="modal">
       <!-- Minimal Header -->
       <div class="modal-header">
         <h3 class="modal-title">{{ isEditing ? 'Edit Job' : 'Create New Job' }}</h3>
-        <button @click="$emit('close')" class="close-btn" aria-label="Close">
+        <button @click="$emit('close')" class="modal-close" aria-label="Close">
           <i class="fas fa-times"></i>
         </button>
       </div>
@@ -169,8 +170,9 @@
           </button>
         </div>
       </form>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script>
@@ -300,94 +302,11 @@ export default {
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--color-bg-overlay-heavy);
-  backdrop-filter: blur(8px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: var(--z-modal);
-  padding: 1rem;
-}
+/* Component-specific styles only */
 
-.modal-content {
-  background: var(--color-bg-content);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 20px 50px -12px rgba(0, 0, 0, 0.5);
-  max-width: 800px;
-  width: 100%;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.25rem 2rem;
-  flex-shrink: 0;
-}
-
-.modal-title {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  font-size: 1.25rem;
-  cursor: pointer;
-  padding: 0.5rem;
-  transition: var(--transition-base);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-}
-
-.close-btn:hover {
-  background: var(--color-bg-overlay-light);
-  color: var(--color-text-primary);
-}
-
-.modal-form {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-.modal-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0.5rem 2rem 2rem;
-}
-
-.modal-body::-webkit-scrollbar {
-  width: 10px;
-}
-
-.modal-body::-webkit-scrollbar-track {
-  background: var(--color-bg-overlay-light);
-}
-
-.modal-body::-webkit-scrollbar-thumb {
-  background: var(--color-primary);
-  border-radius: var(--radius-sm);
+.modal {
+  position: relative;
+  z-index: 2001;
 }
 
 /* Job Type Selector */
@@ -619,57 +538,6 @@ export default {
   border: none;
 }
 
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1.25rem 2rem;
-  background: var(--color-bg-content);
-  flex-shrink: 0;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-medium);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition: var(--transition-base);
-  font-size: 0.9rem;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
-}
-
-.btn-secondary {
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-medium);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--color-bg-active);
-  border-color: var(--color-primary);
-}
-
 /* Advanced Toggle */
 .advanced-toggle {
   display: flex;
@@ -724,52 +592,15 @@ export default {
   max-height: 2000px;
 }
 
-@media (max-width: 850px) {
-  .modal-content {
-    max-width: 95%;
-  }
-}
+
 
 @media (max-width: 600px) {
-  .modal-overlay {
-    padding: 0;
-  }
-
-  .modal-content {
-    max-width: 100%;
-    max-height: 100vh;
-    height: 100vh;
-    border-radius: 0;
-  }
-
-  .modal-header {
-    padding: 1rem 1.25rem;
-  }
-
-  .modal-body {
-    padding: 0.5rem 1.25rem 1.5rem;
-  }
-
-  .modal-title {
-    font-size: 1.1rem;
-  }
-
   .media-type-selector {
     flex-direction: column;
   }
 
   .job-type-selector {
     flex-direction: column;
-  }
-
-  .modal-footer {
-    padding: 1rem 1.25rem;
-    gap: 0.5rem;
-  }
-
-  .btn {
-    flex: 1;
-    padding: 0.75rem 1rem;
   }
 
   .settings-group {

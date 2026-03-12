@@ -7,6 +7,7 @@ import asyncio
 from typing import Any, Dict, List, Optional
 
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.filter_normalization import build_tmdb_params, normalize_filters
 
 # Constants
 HTTP_OK = {200, 201}
@@ -66,8 +67,9 @@ class TMDbDiscover:
         Returns:
             List of movie dictionaries matching the filters.
         """
-        self.logger.debug(f"Discovering movies with filters: {filters}")
-        return await self._discover('movie', filters, max_results)
+        normalized_filters = normalize_filters(filters)
+        self.logger.debug(f"Discovering movies with normalized filters: {normalized_filters}")
+        return await self._discover('movie', {**(filters or {}), **normalized_filters}, max_results)
 
     async def discover_tv(
         self,
@@ -84,8 +86,9 @@ class TMDbDiscover:
         Returns:
             List of TV show dictionaries matching the filters.
         """
-        self.logger.debug(f"Discovering TV shows with filters: {filters}")
-        return await self._discover('tv', filters, max_results)
+        normalized_filters = normalize_filters(filters)
+        self.logger.debug(f"Discovering TV shows with normalized filters: {normalized_filters}")
+        return await self._discover('tv', {**(filters or {}), **normalized_filters}, max_results)
 
     async def _discover(
         self,
@@ -179,9 +182,15 @@ class TMDbDiscover:
         Returns:
             API response data or None on error.
         """
-        query_params = self._build_query_params(filters)
+        normalized_filters = normalize_filters(filters)
+        merged_filters = {**(filters or {}), **normalized_filters}
+
+        query_params = self._build_query_params(merged_filters)
         query_params['page'] = page
         query_params['api_key'] = self.api_key
+
+        self.logger.debug("Discover filters: %s", merged_filters)
+        self.logger.debug("TMDb params: %s", query_params)
 
         # Build query string
         query_string = '&'.join(f"{k}={v}" for k, v in query_params.items())
@@ -253,6 +262,7 @@ class TMDbDiscover:
             True if the item passes the filter, False otherwise.
         """
         title = item.get('title') or item.get('name', 'Unknown')
+        tmdb_id = item.get('id', 'unknown')
 
         if not imdb_data:
             if include_no_rating:
@@ -260,8 +270,24 @@ class TMDbDiscover:
             self.logger.debug("Excluding %s: no IMDB rating data available", title)
             return False
 
-        rating = imdb_data.get('imdb_rating', 0)
-        votes = imdb_data.get('imdb_votes', 0)
+        rating = imdb_data.get('imdb_rating')
+        votes = imdb_data.get('imdb_votes')
+
+        if rating is None:
+            if include_no_rating:
+                return True
+
+            raw_rating = imdb_data.get('imdb_rating_raw')
+            rating_label = raw_rating if raw_rating not in (None, '') else 'missing'
+            media_label = 'movie' if item.get('title') else 'tv show'
+            self.logger.debug(
+                "Skipping %s %s (tmdb:%s) - OMDb returned imdbRating=%s and include_content_without_imdb_rating=false",
+                media_label,
+                title,
+                tmdb_id,
+                rating_label,
+            )
+            return False
 
         if imdb_rating_gte is not None and rating < float(imdb_rating_gte):
             self.logger.debug(
@@ -269,9 +295,9 @@ class TMDbDiscover:
             )
             return False
 
-        if imdb_min_votes is not None and votes < int(imdb_min_votes):
+        if imdb_min_votes is not None and (votes is None or votes < int(imdb_min_votes)):
             self.logger.debug(
-                "Excluding %s: IMDB votes %d below minimum %d", title, votes, imdb_min_votes
+                "Excluding %s: IMDB votes %s below minimum %d", title, votes, imdb_min_votes
             )
             return False
 
@@ -302,11 +328,35 @@ class TMDbDiscover:
             Dictionary of TMDb API query parameters.
         """
         params = {}
+        normalized_filters = normalize_filters(filters)
+
+        # Canonical filters are converted centrally, then adapted to TMDb API key format.
+        canonical_tmdb_params = build_tmdb_params(normalized_filters)
+        tmdb_key_mapping = {
+            'primary_release_date_gte': 'primary_release_date.gte',
+            'primary_release_date_lte': 'primary_release_date.lte',
+            'vote_average_gte': 'vote_average.gte',
+            'with_original_language': 'with_original_language',
+            'with_genres': 'with_genres',
+        }
+        for source_key, target_key in tmdb_key_mapping.items():
+            if source_key in canonical_tmdb_params:
+                params[target_key] = canonical_tmdb_params[source_key]
+
+        year_from = normalized_filters.get('year_from')
+        if year_from is not None and 'first_air_date_gte' not in filters:
+            params['first_air_date.gte'] = f"{year_from}-01-01"
+
+        year_to = normalized_filters.get('year_to')
+        if year_to is not None and 'first_air_date_lte' not in filters:
+            params['first_air_date.lte'] = f"{year_to}-12-31"
 
         # Determine if TMDB rating/vote filters should be skipped
         # (when IMDB-only source is selected, TMDB rating checks are replaced by IMDB checks)
         rating_source = filters.get('rating_source', 'tmdb')
         skip_tmdb_rating = rating_source == 'imdb'
+        if skip_tmdb_rating:
+            params.pop('vote_average.gte', None)
 
         # Direct parameter mapping (internal IMDB keys are intentionally excluded)
         param_mapping = {
@@ -346,14 +396,6 @@ class TMDbDiscover:
                 continue
 
             params[api_key] = value
-
-        # Handle genres (can be list or comma-separated string)
-        if 'with_genres' in filters and filters['with_genres']:
-            genres = filters['with_genres']
-            if isinstance(genres, list):
-                params['with_genres'] = ','.join(str(g) for g in genres)
-            else:
-                params['with_genres'] = str(genres)
 
         if 'without_genres' in filters and filters['without_genres']:
             genres = filters['without_genres']

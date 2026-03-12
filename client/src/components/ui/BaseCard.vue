@@ -1,16 +1,22 @@
 <template>
   <div :class="cardClasses">
-    <div v-if="$slots.header || title" class="base-card-header">
-      <slot name="header">
-        <h3 v-if="title" class="base-card-title">{{ title }}</h3>
-      </slot>
+    <!-- Header Section -->
+    <div v-if="$slots.header || title || $slots.headerIcon" :class="headerClasses">
+      <slot name="headerIcon"></slot>
+      <div style="flex: 1">
+        <h3 v-if="title" class="card-title">{{ title }}</h3>
+        <p v-if="description" class="card-description">{{ description }}</p>
+      </div>
+      <slot name="header"></slot>
     </div>
 
-    <div class="base-card-body">
+    <!-- Body Section -->
+    <div class="card-body" :class="bodyClasses">
       <slot></slot>
     </div>
 
-    <div v-if="$slots.footer" class="base-card-footer">
+    <!-- Footer Section -->
+    <div v-if="$slots.footer" class="card-footer">
       <slot name="footer"></slot>
     </div>
   </div>
@@ -26,113 +32,149 @@ export default {
       type: String,
       default: null
     },
+    description: {
+      type: String,
+      default: null
+    },
     variant: {
       type: String,
       default: 'default',
-      validator: (value) => ['default', 'elevated', 'outline', 'ghost'].includes(value)
+      validator: (value) => ['default', 'elevated', 'outline', 'ghost', 'interactive'].includes(value)
     },
     padding: {
       type: String,
-      default: 'md',
-      validator: (value) => ['none', 'sm', 'md', 'lg'].includes(value)
+      default: 'lg',
+      validator: (value) => ['none', 'sm', 'md', 'lg', 'xl'].includes(value)
+    },
+    size: {
+      type: String,
+      default: 'standard',
+      validator: (value) => ['compact', 'standard', 'large'].includes(value)
     },
     hoverable: {
       type: Boolean,
       default: false
     }
   },
-  setup(props) {
+  setup(props, { slots }) {
     const cardClasses = computed(() => [
-      'base-card',
-      `base-card--${props.variant}`,
-      `base-card--padding-${props.padding}`,
+      'card',
+      `card--${props.variant}`,
+      `card--${props.size}`,
+      `card--padding-${props.padding}`,
       {
-        'base-card--hoverable': props.hoverable
+        'card--interactive': props.hoverable || props.variant === 'interactive'
       }
     ]);
 
+    const hasHeaderContent = computed(() =>
+      props.title ||
+      props.description ||
+      slots.header ||
+      slots.headerIcon
+    )
+        
+    const headerClasses = computed(() => [
+      'card-header',
+      {
+        'card-header--empty': !hasHeaderContent.value
+      }
+    ])
+
+    const bodyClasses = computed(() => {
+      const map = {
+        'none': 'card-body--no-padding',
+        'sm': 'card-body--compact',
+        'md': '',
+        'lg': '',
+        'xl': 'card-body--spacious'
+      };
+      return map[props.padding] || '';
+    });
+
     return {
-      cardClasses
+      cardClasses,
+      headerClasses,
+      bodyClasses
     };
   }
 };
 </script>
 
 <style scoped>
-.base-card {
-  background: var(--card-bg);
-  border-radius: var(--card-border-radius);
-  transition: var(--transition-all);
+/* Alias base-card classes for backward compatibility */
+/* These rules mirror the canonical .card* styles from primitives/card.css */
+
+:deep(.base-card) {
+  position: relative;
+  background: var(--card-bg, var(--surface-elevated));
+  border: 1px solid var(--card-border-color, var(--color-border-light));
+  border-radius: var(--card-border-radius, var(--radius-lg));
+  overflow: hidden;
+  transition: var(--transition-base);
 }
 
-/* Variants */
-.base-card--default {
+:deep(.base-card--default) {
+  background: var(--card-bg, var(--surface-base));
   border: 1px solid var(--color-border-light);
+  box-shadow: none;
 }
 
-.base-card--elevated {
-  box-shadow: var(--shadow-lg);
+:deep(.base-card--elevated) {
+  background: var(--card-bg, var(--surface-elevated));
+  border: none;
+  box-shadow: var(--shadow-md);
 }
 
-.base-card--outline {
-  border: 2px solid var(--color-border-medium);
-}
-
-.base-card--ghost {
+:deep(.base-card--outline) {
   background: transparent;
+  border: 2px solid var(--color-border-medium);
+  box-shadow: none;
 }
 
-/* Padding */
-.base-card--padding-none .base-card-body {
-  padding: 0;
+:deep(.base-card--ghost) {
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
-.base-card--padding-sm .base-card-body {
-  padding: var(--spacing-sm);
-}
-
-.base-card--padding-md .base-card-body {
-  padding: var(--spacing-lg);
-}
-
-.base-card--padding-lg .base-card-body {
-  padding: var(--spacing-xl);
-}
-
-/* Hoverable */
-.base-card--hoverable {
+:deep(.base-card--hoverable) {
   cursor: pointer;
 }
 
-.base-card--hoverable:hover {
+:deep(.base-card--hoverable:hover) {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-xl);
+  box-shadow: var(--shadow-lg);
   border-color: var(--color-border-medium);
 }
 
-/* Header */
-.base-card-header {
-  padding: var(--spacing-lg);
-  padding-bottom: var(--spacing-md);
-  border-bottom: 1px solid var(--color-border-light);
+:deep(.base-card-header) {
+  padding: var(--card-header-padding, var(--spacing-lg));
+  border-bottom: 1px solid var(--card-divider-color, var(--color-border-light));
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
 }
 
-.base-card-title {
+:deep(.base-card-title) {
   margin: 0;
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
+  color: var(--card-title-color, var(--color-text-primary));
+  flex: 1;
 }
 
-/* Body */
-.base-card-body {
-  /* Padding set by padding variants */
+:deep(.base-card-body) {
+  padding: var(--card-body-padding, var(--spacing-lg));
 }
 
-/* Footer */
-.base-card-footer {
-  padding: var(--spacing-lg);
-  padding-top: var(--spacing-md);
-  border-top: 1px solid var(--color-border-light);
+:deep(.base-card-footer) {
+  padding: var(--card-footer-padding, var(--spacing-lg));
+  border-top: 1px solid var(--card-divider-color, var(--color-border-light));
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
 }
 </style>

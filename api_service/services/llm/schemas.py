@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +58,22 @@ class DiscoverParams(BaseModel):
     sort_by: Optional[str] = None
     min_rating: Optional[float] = None
 
+    @field_validator("original_language", mode="before")
+    @classmethod
+    def coerce_language_list(cls, v):
+        """Coerce a list of language codes into a single ISO 639-1 code.
+
+        The LLM may incorrectly return multiple language codes as a list (e.g.,
+        ["da", "no", "sv"] for "Nordic western"). This validator takes the first
+        element to ensure Pydantic validation succeeds. Downstream normalization
+        can then apply further refinement if needed.
+        """
+        if isinstance(v, list):
+            if not v:
+                return None
+            return str(v[0])
+        return v
+
 
 class SuggestedTitle(BaseModel):
     """A single specific title suggestion produced by the LLM for AI search."""
@@ -76,3 +92,25 @@ class SearchQueryInterpretation(BaseModel):
 
     discover_params: DiscoverParams
     suggested_titles: list[SuggestedTitle]
+
+
+# ---------------------------------------------------------------------------
+# AI search result rationale generation schemas
+# ---------------------------------------------------------------------------
+
+class SearchResultRationaleItem(BaseModel):
+    """A single LLM-generated rationale tied to a suggested result title/year."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    year: Optional[int] = None
+    rationale: str
+
+
+class SearchResultRationaleList(BaseModel):
+    """Top-level wrapper for per-result AI search rationales."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rationales: list[SearchResultRationaleItem]

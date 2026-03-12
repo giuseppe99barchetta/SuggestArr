@@ -4,6 +4,10 @@
  */
 
 @import './variables.css';
+@import './primitives/modal.css';
+@import './primitives/card.css';
+@import './primitives/form.css';
+@import './primitives/button.css';
 
 /* ========== Reset & Base ========== */
 * {
@@ -13,7 +17,7 @@
 }
 
 html {
-  font-size: 16px;
+  font-size: var(--font-size-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -63,25 +67,25 @@ strong {
 
 code {
   font-family: var(--font-family-mono);
-  font-size: 0.9em;
-  background: var(--color-bg-tertiary);
-  padding: 2px 6px;
+  font-size: var(--font-size-sm);
+  background: var(--surface-interactive);
+  padding: var(--spacing-2xs) calc(var(--spacing-xs) + var(--spacing-2xs));
   border-radius: var(--radius-sm);
   color: var(--color-primary-light);
 }
 
 /* ========== Scrollbar ========== */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: calc(var(--spacing-xs) * 2.5);
+  height: calc(var(--spacing-xs) * 2.5);
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-bg-secondary);
+  background: var(--surface-raised);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-bg-tertiary);
+  background: var(--surface-interactive);
   border-radius: var(--radius-sm);
 }
 
@@ -97,8 +101,8 @@ code {
 
 /* ========== Focus Visible ========== */
 *:focus-visible {
-  outline: 2px solid var(--color-border-focus);
-  outline-offset: 2px;
+  outline: var(--spacing-2xs) solid var(--color-border-focus);
+  outline-offset: var(--spacing-2xs);
 }
 
 /* ========== Utility Classes ========== */
@@ -167,10 +171,10 @@ code {
 
 /* Width */
 .w-full { width: 100%; }
-.max-w-sm { max-width: 640px; }
-.max-w-md { max-width: 768px; }
-.max-w-lg { max-width: 1024px; }
-.max-w-xl { max-width: 1280px; }
+.max-w-sm { max-width: var(--breakpoint-sm); }
+.max-w-md { max-width: var(--breakpoint-md); }
+.max-w-lg { max-width: var(--breakpoint-lg); }
+.max-w-xl { max-width: var(--breakpoint-xl); }
 
 /* Overflow */
 .overflow-hidden { overflow: hidden; }
@@ -211,7 +215,7 @@ code {
 @keyframes slideInUp {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(calc(var(--spacing-xs) * 5));
   }
   to {
     opacity: 1;
@@ -222,7 +226,7 @@ code {
 @keyframes slideInDown {
   from {
     opacity: 0;
-    transform: translateY(-20px);
+    transform: translateY(calc(var(--spacing-xs) * -5));
   }
   to {
     opacity: 1;

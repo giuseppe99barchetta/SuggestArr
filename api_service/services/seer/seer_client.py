@@ -1,29 +1,31 @@
 import aiohttp
 import asyncio
 from typing import List, Set
+from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 
-# Constants for HTTP status codes and request timeout
-HTTP_OK = {200, 201, 202}
-REQUEST_TIMEOUT = 10  # Timeout in seconds for HTTP requests
 BATCH_SIZE = 20  # Number of requests fetched per batch
+HTTP_OK = {200, 201, 202}  # Include 202 Accepted for async operations
 
-class SeerClient:
+class SeerClient(BaseHTTPClient):
     """
-    A client to interact with the Jellyseer API for handling media requests and authentication.
+    A client to interact with the Seer service API for handling media requests and authentication.
     """
+    
+    # Override HTTP_OK to include 202 Accepted for async operations
+    HTTP_OK = {200, 201, 202}
 
     def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None, session_token=None,
                 number_of_seasons="all", exclude_downloaded=True, exclude_watched=True,
                 anime_profile_config=None):
         """
-        Initializes the JellyseerClient with the API URL and logs in the user.
+        Initializes the SeerClient with the API URL and logs in the user.
         :param anime_profile_config: Dict with anime/default profile routing settings.
             Expected keys: 'anime_movie', 'anime_tv', optionally 'default_movie', 'default_tv'.
             Each value is a dict with optional keys: serverId, profileId, rootFolder, tags, languageProfileId.
         """
-        self.logger = LoggerManager.get_logger(self.__class__.__name__)
+        super().__init__()
         self.api_url = api_url
         self.api_key = api_key
         self.username = seer_user_name
@@ -36,28 +38,12 @@ class SeerClient:
         self.exclude_downloaded = exclude_downloaded
         self.exclude_requested = exclude_watched
         self.anime_profile_config = anime_profile_config or {}
-        self.session = None
         self.logger.debug("SeerClient initialized with API URL: %s", api_url)
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
-        return self.session
-
-    async def close(self):
-        if self.session and not self.session.closed:
-            await self.session.close()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
         
     async def init(self):
         """
         Asynchronous initialization method to fetch all requests.
-        This is typically called after creating an instance of JellyseerClient
+        This is typically called after creating an instance of SeerClient
         to ensure that the requests cache is populated.
         """
         self.logger.debug("Initializing SeerClient...")
@@ -87,7 +73,7 @@ class SeerClient:
             # since aiohttp allows passing request-level headers/cookies
             session = await self._get_session()
             try:
-                async with session.request(method, url, json=data, headers=headers, cookies=cookies, timeout=REQUEST_TIMEOUT) as response:
+                async with session.request(method, url, json=data, headers=headers, cookies=cookies, timeout=self.REQUEST_TIMEOUT) as response:
                     self.logger.debug("Received response with status %d for request to %s", response.status, url)
                     if response.status in HTTP_OK:
                         return await response.json()
@@ -120,7 +106,7 @@ class SeerClient:
         return None
 
     async def login(self):
-        """Authenticate with Jellyseer and obtain a session token."""
+        """Authenticate with the Seer service and obtain a session token."""
         if self._login_lock is None:
             self._login_lock = asyncio.Lock()
 
@@ -133,7 +119,7 @@ class SeerClient:
         self.logger.debug("Logging in to %s", login_url)
         session = await self._get_session()
         try:
-            async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=REQUEST_TIMEOUT) as response:
+            async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=self.REQUEST_TIMEOUT) as response:
                 self.logger.debug("Login response status: %d", response.status)
                 if response.status == 200 and 'connect.sid' in response.cookies:
                     self.session_token = response.cookies['connect.sid'].value
@@ -145,7 +131,7 @@ class SeerClient:
             self.logger.error("Login request to %s timed out.", login_url)
 
     async def get_all_users(self, max_users=100):
-        """Fetch all users from Jellyseer API, returning a list of user IDs, names, and local status."""
+        """Fetch all users from the Seer service API, returning a list of user IDs, names, and local status."""
         self.logger.debug("Fetching all users with max_users=%d", max_users)
         data = await self._make_request("GET", f"api/v1/user?take={max_users}")
         if data:
@@ -162,7 +148,7 @@ class SeerClient:
         return []
     
     async def fetch_all_requests(self):
-        """Fetch all requests made in Jellyseer and save them to the database."""
+        """Fetch all requests made in the Seer service and save them to the database."""
         self.logger.debug("Fetching all requests...")
         total_requests = await self.get_total_request()
         self.logger.debug("Total requests to fetch: %d", total_requests)
@@ -182,7 +168,7 @@ class SeerClient:
             self.logger.error(f"Failed to fetch batch at skip {skip}: {e}")
 
     async def get_total_request(self):
-        """Get total requests made in Jellyseer."""
+        """Get total requests made in the Seer service."""
         self.logger.debug("Getting total request count...")
         data = await self._make_request("GET", "api/v1/request/count")
         total = data.get('total', 0) if data else 0
@@ -190,14 +176,67 @@ class SeerClient:
         return total
 
     async def get_radarr_servers(self):
-        """Fetch available Radarr servers from Overseerr with their profiles, root folders, and tags."""
-        self.logger.debug("Fetching Radarr servers from Overseerr")
+        """Fetch available Radarr servers from the Seer service with their profiles, root folders, and tags."""
+        self.logger.debug("Fetching Radarr servers from the Seer service")
         return await self._make_request("GET", "api/v1/service/radarr")
 
     async def get_sonarr_servers(self):
-        """Fetch available Sonarr servers from Overseerr with their profiles, root folders, and tags."""
-        self.logger.debug("Fetching Sonarr servers from Overseerr")
+        """Fetch available Sonarr servers from the Seer service with their profiles, root folders, and tags."""
+        self.logger.debug("Fetching Sonarr servers from the Seer service")
         return await self._make_request("GET", "api/v1/service/sonarr")
+
+    async def _fetch_server_defaults(self, media_type: str, server_id) -> dict:
+        """Fetch default profileId and rootFolder from Jellyseerr for the given media type.
+
+        Calls the Radarr (movie) or Sonarr (tv) service endpoint and returns the
+        active profile ID and root folder for the specified server.  Falls back to
+        the default-flagged server, then the first server in the list.
+
+        :param media_type: ``'movie'`` (Radarr) or ``'tv'`` (Sonarr).
+        :param server_id: Target server ID to match, or ``None`` for
+            the default/first server.
+        :return: Dict with ``'profileId'`` and ``'rootFolder'`` keys; values may
+            be ``None`` when Jellyseerr itself has no defaults configured.
+        """
+        try:
+            servers = (
+                await self.get_radarr_servers()
+                if media_type == 'movie'
+                else await self.get_sonarr_servers()
+            )
+            if not servers:
+                service_name = 'Radarr' if media_type == 'movie' else 'Sonarr'
+                self.logger.warning(
+                    "No %s servers found while fetching defaults.", service_name
+                )
+                return {}
+
+            # Prefer exact server-ID match → default-flagged server → first entry
+            server = (
+                next((s for s in servers if s.get('id') == server_id), None)
+                or next((s for s in servers if s.get('isDefault')), None)
+                or servers[0]
+            )
+
+            profile_id = server.get('activeProfileId')
+            root_folder = server.get('activeDirectory')
+
+            # Last-resort: pick the first available profile / root folder
+            if profile_id is None and server.get('profiles'):
+                profile_id = server['profiles'][0].get('id')
+            if root_folder is None and server.get('rootFolders'):
+                root_folder = server['rootFolders'][0].get('path')
+
+            self.logger.debug(
+                "Fetched server defaults for %s (serverId=%s): profileId=%s, rootFolder=%s",
+                media_type, server_id, profile_id, root_folder,
+            )
+            return {'profileId': profile_id, 'rootFolder': root_folder}
+        except Exception as exc:
+            self.logger.error(
+                "Failed to fetch server defaults for media_type=%s: %s", media_type, exc
+            )
+            return {}
 
     def _apply_profile_config(self, data, profile_key, media_type):
         """Apply profile configuration (serverId, profileId, rootFolder, tags) to request data."""
@@ -304,13 +343,51 @@ class SeerClient:
         """Perform the actual HTTP submission to Seer for a single queue row.
 
         Called by the queue worker.  Strips private meta-keys before sending.
+        Validates ``profileId`` and ``rootFolder`` before the HTTP call, and
+        attempts to resolve them from Jellyseerr server settings when either is
+        absent or ``None``.
 
         :param payload: The JSON-decoded payload stored in pending_requests.
         :return: True on HTTP success, False on any failure.
         """
         # Build clean Seer body (drop private meta-keys)
         data = {k: v for k, v in payload.items() if not k.startswith('_')}
+        media_type = data.get('mediaType', 'unknown')
+        media_id = data.get('mediaId')
 
+        # Attempt to fill missing profileId / rootFolder from Jellyseerr server settings
+        if data.get('profileId') is None or data.get('rootFolder') is None:
+            server_id = data.get('serverId')
+            self.logger.warning(
+                "profileId or rootFolder missing for %s tmdb:%s (serverId=%s) — "
+                "fetching defaults from Jellyseerr.",
+                media_type, media_id, server_id,
+            )
+            defaults = await self._fetch_server_defaults(media_type, server_id)
+            if data.get('profileId') is None:
+                data['profileId'] = defaults.get('profileId')
+            if data.get('rootFolder') is None:
+                data['rootFolder'] = defaults.get('rootFolder')
+
+        # Abort if required fields are still absent after the fallback
+        if data.get('profileId') is None:
+            self.logger.error(
+                "Cannot submit Jellyseerr request for %s tmdb:%s — "
+                "profileId is missing (serverId=%s, rootFolder=%s). "
+                "Configure a valid profileId in your anime/default profile settings.",
+                media_type, media_id, data.get('serverId'), data.get('rootFolder'),
+            )
+            return False
+        if data.get('rootFolder') is None:
+            self.logger.error(
+                "Cannot submit Jellyseerr request for %s tmdb:%s — "
+                "rootFolder is missing (serverId=%s, profileId=%s). "
+                "Configure a valid rootFolder in your anime/default profile settings.",
+                media_type, media_id, data.get('serverId'), data.get('profileId'),
+            )
+            return False
+
+        self.logger.debug("Sending Jellyseerr request: %s", data)
         response = await self._make_request(
             "POST", "api/v1/request", data=data, use_cookie=bool(self.session_token)
         )
@@ -318,7 +395,11 @@ class SeerClient:
             self.logger.debug("Seer submission successful: %s", response)
             return True
 
-        self.logger.error("Seer submission failed: %s", response)
+        self.logger.error(
+            "Jellyseerr request failed for %s tmdb:%s | "
+            "response=%s | payload=%s",
+            media_type, media_id, response, data,
+        )
         return False
             
     async def check_already_requested(self, tmdb_id, media_type):

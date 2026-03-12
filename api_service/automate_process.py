@@ -3,7 +3,7 @@ from api_service.services.config_service import ConfigService
 from api_service.handler.jellyfin_handler import JellyfinHandler
 from api_service.handler.plex_handler import PlexHandler
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
-from api_service.services.jellyseer.seer_client import SeerClient
+from api_service.services.seer.seer_client import SeerClient
 from api_service.services.omdb.omdb_client import OmdbClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
@@ -12,7 +12,7 @@ from api_service.services.tmdb.tmdb_client import TMDbClient
 class ContentAutomation:
     """
     Automates the process of retrieving recent movies/TV shows from Jellyfin/Plex,
-    finding similar content via TMDb, and requesting content via Jellyseer/Overseer.
+    finding similar content via TMDb, and requesting content via the Seer service.
     """
 
     def __new__(cls):
@@ -109,8 +109,8 @@ class ContentAutomation:
         anime_profile_config_raw = env_vars.get('SEER_ANIME_PROFILE_CONFIG', {})
         anime_profile_config = anime_profile_config_raw if isinstance(anime_profile_config_raw, dict) else {}
 
-        # Overseer/Jellyseer client
-        instance.logger.info("Initializing Jellyseer client")
+        # Seer service client
+        instance.logger.info("Initializing Seer service client")
         seer_client = SeerClient(
             env_vars['SEER_API_URL'],
             env_vars['SEER_TOKEN'],
@@ -123,7 +123,7 @@ class ContentAutomation:
             anime_profile_config
         )
         await seer_client.init()
-        instance.logger.info("Jellyseer client initialized successfully")
+        instance.logger.info("Seer service client initialized successfully")
 
         # TMDb client
         instance.logger.info("Initializing TMDb client")
@@ -221,9 +221,7 @@ class ContentAutomation:
         try:
             from contextlib import AsyncExitStack
             async with AsyncExitStack() as stack:
-                if hasattr(self.media_handler, 'jellyseer_client'):
-                    await stack.enter_async_context(self.media_handler.jellyseer_client)
-                elif hasattr(self.media_handler, 'seer_client'):
+                if hasattr(self.media_handler, 'seer_client'):
                     await stack.enter_async_context(self.media_handler.seer_client)
 
                 if hasattr(self.media_handler, 'tmdb_client'):

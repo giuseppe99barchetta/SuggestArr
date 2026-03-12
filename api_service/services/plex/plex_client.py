@@ -8,14 +8,12 @@ Classes:
 import asyncio
 import json
 import aiohttp
+from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.api_exceptions import PlexConnectionError, PlexClientError
 
-# Constants
-REQUEST_TIMEOUT = 10  # Timeout in seconds for HTTP requests
 
-
-class PlexClient:
+class PlexClient(BaseHTTPClient):
     """
     A client to interact with the Plex API, allowing the retrieval of users, recent items,
     and libraries.
@@ -28,7 +26,7 @@ class PlexClient:
         :param token: The authentication token for Plex.
         :param max_content: Maximum number of recent items to fetch.
         """
-        self.logger = LoggerManager.get_logger(self.__class__.__name__)
+        super().__init__()
         self.max_content_fetch = max_content
         self.api_url = api_url
         self.library_ids = library_ids
@@ -41,23 +39,6 @@ class PlexClient:
         
         if client_id:
             self.headers['X-Plex-Client-Identifier'] = client_id
-
-        self.session = None
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
-        return self.session
-
-    async def close(self):
-        if self.session and not self.session.closed:
-            await self.session.close()
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
 
     async def _safe_json_decode(self, response):
         """
@@ -93,7 +74,7 @@ class PlexClient:
             session = await self._get_session()
             # Request for friends
             self.logger.debug(f"Fetching friends from: {friends_url}")
-            async with session.get(friends_url, headers=self.headers, timeout=REQUEST_TIMEOUT) as friends_response:
+            async with session.get(friends_url, headers=self.headers, timeout=self.REQUEST_TIMEOUT) as friends_response:
                 if friends_response.status == 200:
                     friends = await self._safe_json_decode(friends_response)
                     self.logger.debug(f"Retrieved {len(friends)} friends from Plex")
@@ -104,7 +85,7 @@ class PlexClient:
 
             # Request for local accounts
             self.logger.debug(f"Fetching local accounts from: {accounts_url}")
-            async with session.get(accounts_url, headers=self.headers, timeout=REQUEST_TIMEOUT) as accounts_response:
+            async with session.get(accounts_url, headers=self.headers, timeout=self.REQUEST_TIMEOUT) as accounts_response:
                 if accounts_response.status == 200:
                     accounts_data = await self._safe_json_decode(accounts_response)
                     accounts = accounts_data.get('MediaContainer', {}).get('Account', [])
@@ -155,7 +136,7 @@ class PlexClient:
     
             try:
                 session = await self._get_session()
-                async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
+                async with session.get(url, headers=self.headers, params=params, timeout=self.REQUEST_TIMEOUT) as response:
                     if response.status == 200:
                         data = await self._safe_json_decode(response)
                         metadata = data.get('MediaContainer', {}).get('Metadata', [])
@@ -240,7 +221,7 @@ class PlexClient:
 
         try:
             session = await self._get_session()
-            async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, headers=self.headers, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     data = await self._safe_json_decode(response)
                     return data.get('MediaContainer', {}).get('Directory', [])
@@ -260,7 +241,7 @@ class PlexClient:
         url = f"{self.api_url}{item_id}"
         try:
             session = await self._get_session()
-            async with session.get(url, headers=self.headers, timeout=REQUEST_TIMEOUT) as response:
+            async with session.get(url, headers=self.headers, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     item_data = await self._safe_json_decode(response)
                     guids = item_data.get('MediaContainer', {}).get('Metadata', [])[0].get('Guid', [])
@@ -351,8 +332,8 @@ class PlexClient:
 
         try:
             safe_headers = {k: '***' if k == 'X-Plex-Token' else v for k, v in self.headers.items()}
-            self.logger.debug(f"Requesting URL: {url} with headers: {safe_headers}, params: {params} and timeout: {REQUEST_TIMEOUT}")
-            async with session.get(url, headers=self.headers, params=params, timeout=REQUEST_TIMEOUT) as response:
+            self.logger.debug(f"Requesting URL: {url} with headers: {safe_headers}, params: {params} and timeout: {self.REQUEST_TIMEOUT}")
+            async with session.get(url, headers=self.headers, params=params, timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status == 200:
                     library_items = await self._safe_json_decode(response)
                     items = library_items.get('MediaContainer', {}).get('Metadata', [])

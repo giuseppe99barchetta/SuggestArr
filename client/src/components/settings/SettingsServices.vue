@@ -351,10 +351,10 @@
         </div>
       </div>
 
-      <!-- Overseerr -->
+      <!-- Seer  -->
       <div v-if="showSection('seer')" :class="wizardMode ? '' : 'service-card'">
         <div v-if="!wizardMode" class="service-header">
-          <h3><i class="fas fa-list-alt"></i> Overseerr</h3>
+          <h3><i class="fas fa-list-alt"></i> Seer</h3>
           <span class="status-badge" :class="getSeerStatus">
             <span class="status-dot"></span>
             {{ getSeerStatusText }}
@@ -410,7 +410,7 @@
               <div class="advanced-block-header">
                 <span class="advanced-block-title"><i class="fas fa-user-shield"></i> Request Delay</span>
               </div>
-              <p class="advanced-block-desc">Wait time between consecutive Overseerr/Jellyseerr requests. Increase if you receive notification rate-limit errors (0 = send all requests simultaneously)</p>
+              <p class="advanced-block-desc">Wait time between consecutive Seer requests. Increase if you receive notification rate-limit errors (0 = send all requests simultaneously)</p>
               <div class="form-group" style="margin-top: 1.25rem;">
                 <input
                   id="seerRequestDelay"
@@ -508,7 +508,7 @@
                 </div>
               </div>
 
-              <p v-else-if="serversLoaded" class="no-items"><i class="fas fa-exclamation-triangle"></i> No Radarr/Sonarr servers found in Overseerr.</p>
+              <p v-else-if="serversLoaded" class="no-items"><i class="fas fa-exclamation-triangle"></i> No Radarr/Sonarr servers found in Seer.</p>
             </div>
           </div>
         </div>
@@ -542,7 +542,7 @@
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import {
-  testJellyseerApi, authenticateUser, fetchRadarrServers, fetchSonarrServers,
+  testSeerApi, authenticateUser, fetchRadarrServers, fetchSonarrServers,
   fetchJellyfinLibraries, fetchJellyfinUsers, fetchPlexLibraries, fetchPlexUsers,
   testOmdbApi, testTmdbApi
 } from '@/api/api';
@@ -1101,7 +1101,17 @@ export default {
         this.jellyfinConnected = false;
         this.jellyfinLibraries = [];
         this.jellyfinUsers = [];
-        if (!silent) this._notifyError('Failed to connect. Check your URL and token.');
+        if (!silent) {
+          const status = error?.response?.status;
+          const serverMsg = error?.response?.data?.message;
+          if (status === 401 || status === 403) {
+            this._notifyError('Jellyfin rejected the API key (401). Ensure you are using a server-level API key from Dashboard → API Keys, not a user session token.');
+          } else if (serverMsg) {
+            this._notifyError(`Failed to connect: ${serverMsg}`);
+          } else {
+            this._notifyError('Failed to connect. Check your Jellyfin URL and API key.');
+          }
+        }
       } finally {
         this.jellyfinFetching = false;
       }
@@ -1260,7 +1270,7 @@ export default {
       this.seerConnected = false;
       this.seerUsers = [];
       try {
-        const response = await testJellyseerApi({
+        const response = await testSeerApi({
           SEER_API_URL: seerUrl,
           SEER_TOKEN: seerToken,
         });
@@ -1460,8 +1470,8 @@ export default {
 
 /* Service card */
 .service-card {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-interactive);
   border-radius: var(--border-radius-md);
   padding: 1.5rem;
 }
@@ -1490,7 +1500,7 @@ export default {
   align-items: center;
   gap: 0.35rem;
   padding: 0.2rem 0.55rem;
-  border-radius: 20px;
+  border-radius: var(--radius-full);
   font-size: 0.65rem;
   font-weight: 600;
   border: 1.5px solid;
@@ -1501,14 +1511,14 @@ export default {
 .status-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
 }
-.status-connected { background-color: rgba(16, 185, 129, 0.12); border-color: #10b981; color: #10b981; }
-.status-connected .status-dot { background-color: #10b981; }
-.status-disconnected { background-color: rgba(239, 68, 68, 0.12); border-color: #ef4444; color: #ef4444; }
-.status-disconnected .status-dot { background-color: #ef4444; }
-.status-warning { background-color: rgba(245, 158, 11, 0.12); border-color: #f59e0b; color: #f59e0b; }
-.status-warning .status-dot { background-color: #f59e0b; }
+.status-connected { background-color: var(--color-success-alpha-10); border-color: var(--color-success); color: var(--color-success); }
+.status-connected .status-dot { background-color: var(--color-success); }
+.status-disconnected { background-color: var(--color-error-alpha-10); border-color: var(--color-error); color: var(--color-error); }
+.status-disconnected .status-dot { background-color: var(--color-error); }
+.status-warning { background-color: var(--color-warning-alpha-10); border-color: var(--color-warning); color: var(--color-warning); }
+.status-warning .status-dot { background-color: var(--color-warning); }
 
 /* Collapsible section */
 .collapsible-section {
@@ -1523,8 +1533,8 @@ export default {
   gap: 0.75rem;
   width: 100%;
   padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-light);
   border-radius: var(--border-radius-sm);
   color: var(--color-text-primary);
   font-size: 0.9rem;
@@ -1534,8 +1544,8 @@ export default {
 }
 
 .collapsible-toggle:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--surface-glass-light);
+  border-color: var(--surface-hover);
 }
 
 .toggle-arrow {
@@ -1563,8 +1573,8 @@ export default {
 .advanced-block {
   padding: 1rem;
   margin-bottom: 1rem;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-light);
   border-radius: var(--border-radius-sm);
 }
 .advanced-block:last-child {
@@ -1598,7 +1608,7 @@ export default {
   padding: 0.1rem 0.4rem;
   background: rgba(231, 76, 156, 0.2);
   color: #e74c9c;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 0.7rem;
   font-weight: 700;
 }
@@ -1617,7 +1627,7 @@ export default {
   gap: 0.4rem;
 }
 .text-btn:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--color-primary-alpha-10);
 }
 .text-btn:disabled {
   opacity: 0.5;
@@ -1628,7 +1638,7 @@ export default {
   color: var(--color-text-muted);
   margin: 0;
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--surface-glass-subtle);
   border-radius: var(--border-radius-sm);
   display: flex;
   align-items: center;
@@ -1646,9 +1656,9 @@ export default {
   align-items: center;
   gap: 0.4rem;
   padding: 0.5rem 0.75rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 2rem;
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-interactive);
+  border-radius: var(--radius-full);
   font-size: 0.8rem;
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -1656,7 +1666,7 @@ export default {
 }
 .chip:hover {
   border-color: var(--color-primary);
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--color-primary-alpha-10);
 }
 .chip.active {
   background: var(--color-primary);
@@ -1673,8 +1683,8 @@ export default {
 .chip-avatar {
   width: 1.25rem;
   height: 1.25rem;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-full);
+  background: var(--surface-hover);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1682,22 +1692,22 @@ export default {
   font-weight: 600;
 }
 .chip.active .chip-avatar {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--surface-glass-strong);
 }
 .chip-badge {
   margin-left: 0.25rem;
   padding: 0.1rem 0.35rem;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-lg);
   font-size: 0.6rem;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--surface-glass-strong);
   color: rgba(255, 255, 255, 0.8);
   border: none;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .chip-badge:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--surface-glass-strong);
 }
 .chip-badge.badge-active {
   background: #e74c9c;
@@ -1729,8 +1739,8 @@ export default {
 }
 .profile-card {
   padding: 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-light);
   border-radius: var(--border-radius-sm);
 }
 .profile-card.anime {
@@ -1790,13 +1800,6 @@ export default {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.input-group {
-  display: flex;
-  gap: 0.5rem;
-}
-.input-group .form-control {
-  flex: 1;
-}
 .form-help {
   display: block;
   margin-top: 0.25rem;
@@ -1807,29 +1810,13 @@ export default {
 .mb-3 { margin-bottom: 0.75rem; }
 
 /* Buttons */
-.btn {
-  padding: 0.5rem 1rem;
-  border-radius: var(--border-radius-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition-base);
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  min-height: 44px;
-  min-width: 44px;
-}
+
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: var(--color-primary); color: white; }
-.btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); }
 .btn-outline { background: var(--color-bg-interactive); color: var(--color-text-primary); border: 1px solid var(--color-border-medium); }
 .btn-outline:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.5); }
 .btn-success { background: #10b981; color: white; border: 1px solid #10b981; }
 .btn-success:hover:not(:disabled) { background: #059669; }
-.btn-sm { padding: 0.375rem 0.75rem; font-size: 0.8125rem; min-height: 44px; min-width: 44px; }
+.btn-sm { padding: 0.375rem 0.75rem; font-size: 0.8125rem; min-height: 50px; min-width: 44px; }
 .btn-block { width: 100%; margin-top: 1rem; }
 .link { color: var(--color-primary); text-decoration: none; }
 .link:hover { text-decoration: underline; }
@@ -1912,9 +1899,9 @@ export default {
 .omdb-info-footer {
   margin: 0;
   padding: 0.6rem 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-glass-subtle);
   border-radius: var(--border-radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--surface-glass-light);
   line-height: 1.4;
   display: flex;
   align-items: flex-start;

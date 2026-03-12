@@ -25,6 +25,7 @@ import jwt
 
 from api_service.auth.secret_key import load_secret_key
 from api_service.config.logger_manager import LoggerManager
+from api_service.db.database_manager import DatabaseManager
 
 logger = LoggerManager.get_logger("AuthService")
 
@@ -95,12 +96,14 @@ class AuthService:
         Issue a short-lived signed JWT access token.
 
         Payload claims:
-          sub      — user ID (string)
-          username — display name
-          role     — 'admin' or 'user'
-          iat      — issued-at timestamp
-          exp      — expiry timestamp (now + ACCESS_TOKEN_EXPIRE_MINUTES)
-          jti      — unique token ID (reserved for future revocation list)
+          sub            — user ID (string)
+          username       — display name
+          role           — 'admin' or 'user'
+          iat            — issued-at timestamp
+          exp            — expiry timestamp (now + ACCESS_TOKEN_EXPIRE_MINUTES)
+          jti            — unique token ID (reserved for future revocation list)
+          can_manage_ai  — boolean flag for per‑user AI management
+          visible_tabs   — comma‑separated list of UI tabs the user may access
 
         Args:
             user_id:  Internal DB primary key of the authenticated user.
@@ -111,6 +114,17 @@ class AuthService:
             str: Signed JWT string.
         """
         now = datetime.now(tz=timezone.utc)
+        # Fetch permission fields from DB, fallback to defaults on error
+        try:
+            db = DatabaseManager()
+            user_record = db.get_auth_user_by_id(user_id)
+            can_manage_ai = bool(user_record.get('can_manage_ai', 0))
+            visible_tabs = user_record.get('visible_tabs', 'requests,jobs,profile')
+        except Exception as e:
+            logger = LoggerManager.get_logger('AuthService')
+            logger.warning("Failed to fetch permission fields for JWT payload: %s", e)
+            can_manage_ai = False
+            visible_tabs = 'requests,jobs,profile'
         payload = {
             "sub": str(user_id),
             "username": username,
@@ -118,6 +132,8 @@ class AuthService:
             "iat": now,
             "exp": now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
             "jti": str(uuid.uuid4()),
+            "can_manage_ai": can_manage_ai,
+            "visible_tabs": visible_tabs,
         }
         return jwt.encode(payload, load_secret_key(), algorithm=_JWT_ALGORITHM)
 

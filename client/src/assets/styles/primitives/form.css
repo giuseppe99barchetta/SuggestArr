@@ -1,0 +1,437 @@
+/* ================================================================
+   FORM PRIMITIVES
+   ================================================================
+   Canonical form control system for input, textarea, select, labels.
+   Eliminates ~600+ lines of duplicate form CSS across components.
+   
+   Design Principles:
+   - Single source of truth for all form styling
+   - Composable variants for different contexts
+   - Consistent spacing/sizing/visual density
+   - Full accessibility support
+   - Semantic class naming
+   
+   Usage:
+   - .label: Standard form label
+   - .input: Text inputs, email, password, etc.
+   - .textarea: Multi-line text areas
+   - .select: Dropdown select elements
+   - .select-wrapper: Container for custom select UI
+   - .help-text: Descriptive/validation text below inputs
+   - .form-row: Horizontal form layout
+   - .input-group: Adjacent input combinations
+   
+   Variants:
+   - Size variants: --sm, --md (default), --lg
+   - State modifiers: .is-disabled, .is-invalid, .is-valid
+================================================================ */
+
+/* ================================================================
+   FORM LABELS
+================================================================ */
+
+.label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.label.label--sm {
+  font-size: 0.8125rem;
+  margin-bottom: 0.375rem;
+}
+
+.label.label--lg {
+  font-size: 0.9375rem;
+  margin-bottom: 0.625rem;
+}
+
+.label .required {
+  color: var(--color-error);
+  margin-left: 0.125rem;
+}
+
+/* ================================================================
+   INPUT BASE
+   Common styles for all input-like controls
+================================================================ */
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  background-color: var(--color-bg-interactive);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  font-size: 0.9375rem;
+  font-family: var(--font-family-base);
+  line-height: 1.5;
+  transition: var(--transition-base);
+  box-sizing: border-box;
+}
+
+.input:focus-visible,
+.textarea:focus-visible,
+.select:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+/* Disabled state */
+.input:disabled,
+.textarea:disabled,
+.select:disabled,
+.input.is-disabled,
+.textarea.is-disabled,
+.select.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--color-bg-content-secondary);
+}
+
+/* ================================================================
+   INPUT SPECIFIC
+================================================================ */
+
+.input {
+  padding: 0.75rem 1rem;
+  height: 2.875rem; /* Consistent height */
+}
+
+.input.input--sm {
+  padding: 0.5rem 0.75rem;
+  height: 2.25rem;
+  font-size: 0.875rem;
+}
+
+.input.input--md {
+  padding: 0.65rem 0.875rem;
+  height: 2.625rem;
+  font-size: 0.9rem;
+}
+
+.input.input--lg {
+  padding: 0.875rem 1.25rem;
+  height: 3.25rem;
+  font-size: 1rem;
+}
+
+/* ================================================================
+   TEXTAREA SPECIFIC
+================================================================ */
+
+.textarea {
+  padding: 0.75rem 1rem;
+  min-height: 6rem;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.textarea.textarea--sm {
+  padding: 0.5rem 0.75rem;
+  min-height: 4.5rem;
+  font-size: 0.875rem;
+}
+
+.textarea.textarea--lg {
+  padding: 0.875rem 1.25rem;
+  min-height: 8rem;
+  font-size: 1rem;
+}
+
+.textarea.textarea--fixed {
+  resize: none;
+}
+
+/* ================================================================
+   SELECT SPECIFIC
+================================================================ */
+
+.select {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 0.75rem;
+  padding-right: 2.5rem;
+}
+
+.select.select--sm {
+  padding: 0.5rem 0.75rem;
+  padding-right: 2rem;
+  font-size: 0.875rem;
+  background-position: right 0.75rem center;
+}
+
+.select.select--lg {
+  padding: 0.875rem 1.25rem;
+  padding-right: 3rem;
+  font-size: 1rem;
+  background-position: right 1.25rem center;
+}
+
+.select option {
+  background-color: var(--color-bg-content-secondary);
+  color: var(--color-text-primary);
+}
+
+/* ================================================================
+   SELECT WRAPPER
+   For custom select styling with chevron indicators
+================================================================ */
+
+.select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.select-wrapper .select {
+  padding-right: 2.5rem;
+}
+
+.select-wrapper .chevron-indicator {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+}
+
+.select-wrapper:focus-within .chevron-indicator {
+  transform: translateY(-50%) rotate(180deg);
+  color: var(--color-primary);
+}
+
+/* ================================================================
+   VALIDATION STATES
+================================================================ */
+
+/* Invalid state */
+.input.is-invalid,
+.textarea.is-invalid,
+.select.is-invalid {
+  border-color: var(--color-error);
+}
+
+.input.is-invalid:focus-visible,
+.textarea.is-invalid:focus-visible,
+.select.is-invalid:focus-visible {
+  border-color: var(--color-error);
+  box-shadow: var(--focus-ring-error);
+}
+
+/* Valid state */
+.input.is-valid,
+.textarea.is-valid,
+.select.is-valid {
+  border-color: var(--color-success);
+}
+
+.input.is-valid:focus-visible,
+.textarea.is-valid:focus-visible,
+.select.is-valid:focus-visible {
+  border-color: var(--color-success);
+  box-shadow: var(--focus-ring-success);
+}
+
+/* ================================================================
+   HELP TEXT
+================================================================ */
+
+.help-text {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.help-text.help-text--error {
+  color: var(--color-error);
+  margin-top: 0.25rem;
+}
+
+.help-text.help-text--success {
+  color: var(--color-success);
+  margin-top: 0.25rem;
+}
+
+.help-text.help-text--warning {
+  color: var(--color-warning);
+  margin-top: 0.25rem;
+}
+
+/* ================================================================
+   FORM LAYOUT COMPONENTS
+================================================================ */
+
+/* Form Row - Groups related form fields horizontally */
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.form-row.form-row--2-col {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.form-row.form-row--3-col {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.form-row.form-row--compact {
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+/* Input Group - Adjacent input combinations (e.g., url + button) */
+.input-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.input-group .input,
+.input-group .select,
+.input-group .textarea {
+  flex: 1;
+}
+
+.input-group.input-group--tight {
+  gap: 0;
+}
+
+.input-group.input-group--tight > *:not(:first-child) {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: -1px;
+}
+
+.input-group.input-group--tight > *:not(:last-child) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* Form Group - Complete field with label + input + help */
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-group.form-group--compact {
+  margin-bottom: 0.875rem;
+}
+
+.form-group.form-group--spacious {
+  margin-bottom: 1.75rem;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+/* ================================================================
+   BACKWARD COMPATIBILITY ALIASES
+   Maintains support for legacy class names during migration
+================================================================ */
+
+.form-control {
+  /* Maps to .input by default */
+  width: 100%;
+  background-color: var(--color-bg-interactive);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 0.9375rem;
+  font-family: var(--font-family-base);
+  transition: var(--transition-base);
+  box-sizing: border-box;
+}
+
+.form-control:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
+}
+
+.form-control::placeholder {
+  color: var(--color-text-muted);
+}
+
+.form-control:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--color-bg-content-secondary);
+}
+
+.form-help {
+  /* Maps to .help-text */
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.input-field {
+  /* Maps to .input - existing theme.css usage */
+  width: 100%;
+  background-color: var(--color-bg-content-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  transition: var(--transition-all);
+}
+
+.input-field:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
+}
+
+.input-field::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* ================================================================
+   RESPONSIVE ADJUSTMENTS
+================================================================ */
+
+@media (max-width: 768px) {
+  .form-row,
+  .form-row.form-row--2-col,
+  .form-row.form-row--3-col {
+    grid-template-columns: 1fr;
+  }
+  
+  .input-group {
+    flex-direction: column;
+  }
+  
+  .input-group.input-group--tight > * {
+    border-radius: var(--radius-sm) !important;
+    margin-left: 0 !important;
+  }
+}

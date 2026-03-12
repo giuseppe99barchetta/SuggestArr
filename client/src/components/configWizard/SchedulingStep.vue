@@ -2,7 +2,7 @@
   <div class="scheduling-step">
     <p class="step-intro">
       Choose how often SuggestArr should run automatically. Each run it will scan your recently
-      watched content, find similar titles via TMDB, and submit requests to Overseerr / Jellyseerr —
+      watched content, find similar titles via TMDB, and submit requests to Seer —
       so new content keeps appearing in your request queue without any manual effort.
     </p>
 

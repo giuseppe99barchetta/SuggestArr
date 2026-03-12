@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import axios from 'axios';
+import { waitForAuthReady } from './useAuth';
 
 export function useConfigManager() {
   const config = ref(getInitialConfig());
@@ -35,6 +36,8 @@ export function useConfigManager() {
 
   async function fetchConfig() {
     try {
+      // Ensure auth is ready before making the protected API call
+      await waitForAuthReady();
       const { data } = await axios.get('/api/config/fetch');
       if (data) {
         config.value = { ...getInitialConfig(), ...data };

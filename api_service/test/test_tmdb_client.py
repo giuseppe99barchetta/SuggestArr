@@ -29,6 +29,7 @@ def _make_client(
     tmdb_min_votes=10,
     include_no_ratings=True,
     filter_release_year=0,
+    filter_release_year_to=None,
     filter_language=None,
     filter_genre=None,
     filter_region_provider=None,
@@ -43,6 +44,7 @@ def _make_client(
         tmdb_min_votes=tmdb_min_votes,
         include_no_ratings=include_no_ratings,
         filter_release_year=filter_release_year,
+        filter_release_year_to=filter_release_year_to,
         filter_language=filter_language,
         filter_genre=filter_genre,
         filter_region_provider=filter_region_provider,
@@ -131,6 +133,16 @@ class TestApplyFilters(unittest.TestCase):
         client = _make_client(filter_release_year=2020)
         item = {**_MOVIE_ITEM, 'release_date': '2010-01-01'}
         self.assertFalse(client._apply_filters(item, 'movie')['passed'])
+
+    def test_excludes_when_release_year_after_upper_bound(self):
+        client = _make_client(filter_release_year_to=2020)
+        item = {**_MOVIE_ITEM, 'release_date': '2021-01-01'}
+        self.assertFalse(client._apply_filters(item, 'movie')['passed'])
+
+    def test_passes_when_release_year_within_range(self):
+        client = _make_client(filter_release_year=2010, filter_release_year_to=2010)
+        item = {**_MOVIE_ITEM, 'release_date': '2010-07-16'}
+        self.assertTrue(client._apply_filters(item, 'movie')['passed'])
 
     def test_excludes_when_genre_in_exclude_list(self):
         client = _make_client(filter_genre=[{'id': 28, 'name': 'Action'}])

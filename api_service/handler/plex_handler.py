@@ -1,12 +1,8 @@
 import asyncio
-import re
 import unicodedata
 
-from api_service.services.jellyseer.seer_client import SeerClient
+from api_service.handler.base_handler import BaseMediaHandler
 from api_service.services.plex.plex_client import PlexClient
-from api_service.services.tmdb.tmdb_client import TMDbClient
-from api_service.config.config import load_env_vars
-from api_service.services.llm.llm_service import is_llm_configured, get_recommendations_from_history
 
 def to_ascii(value):
     """
@@ -18,8 +14,8 @@ def to_ascii(value):
         return value
     return unicodedata.normalize('NFKD', value)
 
-class PlexHandler:
-    def __init__(self, plex_client: PlexClient, seer_client: SeerClient, tmdb_client: TMDbClient, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, dry_run=False):
+class PlexHandler(BaseMediaHandler):
+    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -30,43 +26,32 @@ class PlexHandler:
         :param max_similar_tv: Max number of similar TV shows to request
         :param library_anime_map: Dict mapping library section ID to is_anime boolean
         :param use_llm: Override for LLM mode. If None, falls back to global ENABLE_ADVANCED_ALGORITHM setting.
-        :param request_delay: Seconds to wait between consecutive Jellyseerr requests (0 = concurrent).
+        :param request_delay: Seconds to wait between consecutive Seer service requests (0 = concurrent).
         :param dry_run: If True, simulate requests without touching download clients.
         """
+        super().__init__(
+            seer_client=seer_client,
+            tmdb_client=tmdb_client,
+            logger=logger,
+            max_similar_movie=max_similar_movie,
+            max_similar_tv=max_similar_tv,
+            library_anime_map=library_anime_map,
+            use_llm=use_llm,
+            request_delay=request_delay,
+            honor_seer_discovery=honor_seer_discovery,
+            seer_discovered_ids=seer_discovered_ids,
+            dry_run=dry_run
+        )
         self.plex_client = plex_client
-        self.seer_client = seer_client
-        self.tmdb_client = tmdb_client
-        self.logger = logger
-        self.max_similar_movie = max_similar_movie
-        self.max_similar_tv = max_similar_tv
-        self.request_count = 0
-        # Optimization: Pre-process existing_content into sets for O(1) lookups
-        self.existing_content_sets = {}
-        if plex_client.existing_content:
-            for media_type, items in plex_client.existing_content.items():
-                self.existing_content_sets[media_type] = {str(item.get('tmdb_id')) for item in items if item.get('tmdb_id')}
-        
-        self.library_anime_map = library_anime_map or {}
-        self.request_delay = request_delay
-        self.dry_run = dry_run
-        self.dry_run_items = []
-        self._dry_run_processed_ids = set()
-
-        if use_llm is not None:
-            self.use_llm = use_llm
-        else:
-            config = load_env_vars()
-            if config.get('ENABLE_ADVANCED_ALGORITHM', False):
-                if is_llm_configured(config):
-                    self.use_llm = True
-                else:
-                    self.logger.warning(
-                        "ENABLE_ADVANCED_ALGORITHM is True but LLM is not configured. "
-                        "AI-powered recommendations will be disabled."
-                    )
-                    self.use_llm = False
-            else:
-                self.use_llm = False
+        self._populate_existing_content_sets()
+    
+    def _populate_existing_content_sets(self):
+        """Extract existing content from Plex client."""
+        if self.plex_client.existing_content:
+            for media_type, items in self.plex_client.existing_content.items():
+                self.existing_content_sets[media_type] = {
+                    str(item.get('tmdb_id')) for item in items if item.get('tmdb_id')
+                }
 
 
     async def process_recent_items(self):
@@ -75,7 +60,6 @@ class PlexHandler:
         recent_items_response = await self.plex_client.get_recent_items()
 
         if isinstance(recent_items_response, list):
-            tasks = []
             for response_item in recent_items_response:
                 title = response_item.get('title', response_item.get('grandparentTitle'))
                 if title is not None and isinstance(title, str):
@@ -84,9 +68,8 @@ class PlexHandler:
                 library_section_id = str(response_item.get('librarySectionID', ''))
                 is_anime = self.library_anime_map.get(library_section_id, False)
                 self.logger.info(f"Processing item: {title} (anime={is_anime})")
-                tasks.append(self.process_item(response_item, title, is_anime))
 
-            if tasks:
+            if recent_items_response:
                 if self.use_llm:
                     self.logger.info("Advanced Algorithm enabled. Generating recommendations using LLM.")
                     movie_history, tv_history = [], []
@@ -114,7 +97,16 @@ class PlexHandler:
                     if llm_tasks:
                         await asyncio.gather(*llm_tasks)
                 else:
-                    await asyncio.gather(*tasks)
+                    tasks = []
+                    for response_item in recent_items_response:
+                        title = response_item.get('title', response_item.get('grandparentTitle'))
+                        if title is not None and isinstance(title, str):
+                            title = to_ascii(title)
+                        library_section_id = str(response_item.get('librarySectionID', ''))
+                        is_anime = self.library_anime_map.get(library_section_id, False)
+                        tasks.append(self.process_item(response_item, title, is_anime))
+                    if tasks:
+                        await asyncio.gather(*tasks)
                 
                 self.logger.info(f"Total media requested: {self.request_count}")
             else:
@@ -122,84 +114,9 @@ class PlexHandler:
         else:
             self.logger.warning("Unexpected response format: expected a list")
 
-    async def _resolve_llm_source(self, source_title: str, item_type: str) -> dict:
-        """Resolve an LLM-suggested source title to a TMDB metadata object.
-
-        Strips episode notation (e.g. "Dan Da Dan - S02E12" → "Dan Da Dan") before
-        searching, so that series-level titles are looked up correctly on TMDB.
-
-        :param source_title: The title of the watched item that inspired the recommendation.
-        :param item_type: 'movie' or 'tv'.
-        :return: TMDB metadata dict, or a fallback sentinel dict if not found.
-        """
-        if source_title:
-            # Strip episode codes like "- S02E12" or "- s02e12" that may appear in titles
-            clean_title = re.sub(r'\s*[-–]\s*S\d+E\d+.*', '', source_title, flags=re.IGNORECASE).strip()
-            if item_type == 'movie':
-                results = await self.tmdb_client.search_movie(clean_title)
-            else:
-                results = await self.tmdb_client.search_tv(clean_title)
-            if results:
-                self.logger.debug(f"Resolved LLM source '{clean_title}' to TMDB ID {results[0].get('id')}")
-                return results[0]
-            self.logger.warning(f"Could not resolve LLM source title '{clean_title}' on TMDB.")
-        return {"id": 0, "name": "LLM Recommendation"}
-
-    async def process_llm_recommendations(self, history_items, item_type, max_results):
-        """Pass history to LLM, resolve TMDb IDs in parallel, and request them."""
-        if max_results <= 0:
-            return
-
-        self.logger.info(f"Delegating {max_results} {item_type} recommendations to LLM service.")
-
-        llm_recommendations = await get_recommendations_from_history(
-            history_items,
-            max_results,
-            item_type,
-            filters={
-                "with_original_language": self.tmdb_client.language_filter,
-                "release_year_gte": self.tmdb_client.release_year_filter,
-                "vote_average_gte": self.tmdb_client.tmdb_threshold / 10 if self.tmdb_client.tmdb_threshold else None,
-            },
-        )
-
-        if not llm_recommendations:
-            self.logger.warning("LLM returned no recommendations.")
-            return
-
-        search_fn = self.tmdb_client.search_movie if item_type == 'movie' else self.tmdb_client.search_tv
-
-        async def resolve(rec):
-            """Fetch TMDB data for the recommended item and its source in parallel."""
-            rec_results, source_obj = await asyncio.gather(
-                search_fn(rec.get("title"), rec.get("year")),
-                self._resolve_llm_source(rec.get("source_title"), item_type),
-            )
-            return rec, rec_results, source_obj
-
-        resolved = await asyncio.gather(*[resolve(rec) for rec in llm_recommendations])
-
-        request_tasks = []
-        for rec, rec_results, source_obj in resolved:
-            if not rec_results:
-                continue
-            best_match = rec_results[0]
-            filter_result = self.tmdb_client._apply_filters(best_match, item_type)
-            best_match['filter_results'] = filter_result
-            if not filter_result.get('passed', False):
-                self.logger.info(
-                    "Skipping LLM %s recommendation '%s': failed configured filters (%s)",
-                    item_type,
-                    best_match.get('title') or best_match.get('name') or 'Unknown',
-                    ', '.join(k for k, v in filter_result.items() if k != 'passed' and isinstance(v, dict) and v.get('passed') is False)
-                )
-                continue
-            best_match['rationale'] = rec.get('rationale')
-            request_tasks.append(self.request_similar_media([best_match], item_type, 1, source_obj))
-
-        if request_tasks:
-            self.logger.info(f"LLM matched {len(request_tasks)} {item_type} items to TMDb.")
-            await asyncio.gather(*request_tasks)
+    async def _request_llm_recommendation(self, media, item_type, source_obj):
+        """Request a single LLM recommendation via Plex."""
+        await self.request_similar_media([media], item_type, 1, source_obj)
 
     async def process_item(self, item, title, is_anime=False):
         """Process an individual item (movie or TV show episode)."""
@@ -265,7 +182,7 @@ class PlexHandler:
                 self.logger.warning(f"Error while processing item: 'tmdb_id' not found for tv show '{title}'. Skipping.")
 
     async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj, is_anime=False):
-        """Request similar media (movie/TV show) via Overseer."""
+        """Request similar media (movie/TV show) via the Seer service."""
         self.logger.debug(f"Requesting {max_items} similar media (anime={is_anime})")
         if not media_ids:
             self.logger.debug("No similar media found after filtering for source %s.", source_tmdb_obj.get('id') if isinstance(source_tmdb_obj, dict) else '?')
@@ -293,6 +210,10 @@ class PlexHandler:
 
                 already_requested = await self.seer_client.check_already_requested(media_id, media_type)
                 already_downloaded = await self.seer_client.check_already_downloaded(media_id, media_type, self.existing_content_sets)
+                excluded_by_discovery = (
+                    self.honor_seer_discovery
+                    and str(media_id) in self.seer_discovered_ids
+                )
                 in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
 
                 filter_results = media.get('filter_results', {'passed': True})
@@ -308,6 +229,7 @@ class PlexHandler:
                     filter_results['passed']
                     and not already_requested
                     and not already_downloaded
+                    and not excluded_by_discovery
                 )
 
                 title = media.get('title') or media.get('name') or 'Unknown'
@@ -325,6 +247,7 @@ class PlexHandler:
                     'filter_results': filter_results,
                     'already_requested': already_requested,
                     'already_downloaded': already_downloaded,
+                    'excluded_by_seer_discovery': excluded_by_discovery,
                     'would_request': would_request,
                     'source': {
                         'tmdb_id': source_tmdb_obj.get('id'),
@@ -376,6 +299,14 @@ class PlexHandler:
             # Check optimized local content set
             if media_id in local_content_set:
                 self.logger.debug(f"Skipping [{media_type}, {media_title}]: already downloaded (local set check).")
+                continue
+
+            if self.honor_seer_discovery and media_id in self.seer_discovered_ids:
+                self.logger.debug(
+                    "Skipping [%s, %s]: already discovered/requested in Seer.",
+                    media_type,
+                    media_title,
+                )
                 continue
 
             media_to_send = dict(media)

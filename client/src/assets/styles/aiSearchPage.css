@@ -91,9 +91,10 @@
   transition: border-color var(--transition-base);
 }
 
-.search-textarea:focus {
+.search-textarea:focus-visible {
   outline: none;
   border-color: var(--color-info);
+  box-shadow: var(--focus-ring);
 }
 
 .search-textarea::placeholder { color: var(--color-text-muted); }
@@ -260,9 +261,10 @@
   text-align: center;
 }
 
-.number-input:focus {
+.number-input:focus-visible {
   outline: none;
-  border-color: var(--color-info);
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
 }
 
 /* Recent searches */

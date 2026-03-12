@@ -84,13 +84,13 @@ class TestBuildQueryParams(unittest.TestCase):
         self.assertNotIn('vote_average.gte', params)
         self.assertNotIn('vote_count.gte', params)
 
-    def test_genres_list_joined_with_comma(self):
+    def test_genres_list_joined_with_pipe(self):
         params = self.disc._build_query_params({'with_genres': [28, 12]})
-        self.assertEqual(params['with_genres'], '28,12')
+        self.assertEqual(params['with_genres'], '28|12')
 
-    def test_genres_string_passed_through(self):
+    def test_genres_string_normalized_to_pipe(self):
         params = self.disc._build_query_params({'with_genres': '28,12'})
-        self.assertEqual(params['with_genres'], '28,12')
+        self.assertEqual(params['with_genres'], '28|12')
 
     def test_default_sort_by_is_popularity_desc(self):
         params = self.disc._build_query_params({})
@@ -133,6 +133,24 @@ class TestBuildQueryParams(unittest.TestCase):
         })
         self.assertEqual(params['with_original_language'], 'ja')
 
+    def test_canonical_year_from_maps_to_release_date_and_tv_date(self):
+        params = self.disc._build_query_params({'year_from': 1990})
+        self.assertEqual(params['primary_release_date.gte'], '1990-01-01')
+        self.assertEqual(params['first_air_date.gte'], '1990-01-01')
+
+    def test_canonical_year_to_maps_to_release_date_and_tv_date(self):
+        params = self.disc._build_query_params({'year_to': '1999'})
+        self.assertEqual(params['primary_release_date.lte'], '1999-12-31')
+        self.assertEqual(params['first_air_date.lte'], '1999-12-31')
+
+    def test_explicit_first_air_date_alias_is_preserved_over_canonical_year(self):
+        params = self.disc._build_query_params({
+            'year_from': 2000,
+            'first_air_date_gte': '2010-01-01',
+        })
+        self.assertEqual(params['primary_release_date.gte'], '2000-01-01')
+        self.assertEqual(params['first_air_date.gte'], '2010-01-01')
+
 
 # ---------------------------------------------------------------------------
 # _check_imdb_filter
@@ -150,6 +168,11 @@ class TestCheckImdbFilter(unittest.TestCase):
 
     def test_excludes_when_no_data_and_include_no_rating_false(self):
         result = self.disc._check_imdb_filter(None, self.item, None, None, include_no_rating=False)
+        self.assertFalse(result)
+
+    def test_excludes_when_rating_missing_and_include_no_rating_false(self):
+        data = {'imdb_rating': None, 'imdb_votes': 125, 'imdb_rating_raw': 'N/A'}
+        result = self.disc._check_imdb_filter(data, self.item, None, None, include_no_rating=False)
         self.assertFalse(result)
 
     def test_passes_when_rating_above_threshold(self):

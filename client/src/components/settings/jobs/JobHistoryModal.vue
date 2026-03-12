@@ -1,9 +1,9 @@
 <template>
   <div class="modal-overlay" @click.self="$emit('close')">
-    <div class="history-modal">
+    <div class="modal history-modal">
       <div class="modal-header">
-        <h2><i class="fas fa-history"></i> Execution History</h2>
-        <button @click="$emit('close')" class="close-btn">
+        <h2 class="modal-title"><i class="fas fa-history"></i> Execution History</h2>
+        <button @click="$emit('close')" class="modal-close">
           <i class="fas fa-times"></i>
         </button>
       </div>
@@ -223,71 +223,10 @@ export default {
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
+/* Component-specific styles only */
 
 .history-modal {
-  background: var(--color-bg-content, #1a1a1c);
-  border-radius: var(--radius-lg, 12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  width: 100%;
-  max-width: 900px;
-  max-height: 85vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.modal-header h2 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--color-text-primary, #fff);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  color: var(--color-text-muted, #888);
-  font-size: 1.1rem;
-  cursor: pointer;
-  padding: 0.5rem;
-  border-radius: var(--radius-sm, 6px);
-  transition: all 0.2s ease;
-}
-
-.close-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--color-text-primary, #fff);
-}
-
-.modal-body {
-  padding: 1.5rem;
-  overflow-y: auto;
-  flex: 1;
+  /* Inherits from .modal primitive */
 }
 
 .history-filters {

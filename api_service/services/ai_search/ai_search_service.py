@@ -4,17 +4,26 @@ rating filtering, and history-based deduplication to power the AI Search tab.
 """
 
 import asyncio
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
-from api_service.services.llm.llm_service import interpret_search_query
+from api_service.services.filter_normalization import build_tmdb_params, normalize_filters
+from api_service.services.llm.llm_service import (
+    generate_search_result_rationales,
+    interpret_search_query,
+)
 from api_service.services.tmdb.tmdb_client import TMDbClient
+from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
 logger = LoggerManager.get_logger("AiSearchService")
 
 # Maximum total results returned to the caller
 _RESULTS_MAX = 12
+_DISCOVER_MIN_RATING = 6.0
+_DISCOVER_MIN_VOTES = 200
+_DISCOVER_SORT_BY = "popularity.desc"
 
 
 class AiSearchService:
@@ -59,7 +68,7 @@ class AiSearchService:
         :param max_results: Maximum number of results to return.
         :param use_history: Whether to fetch and pass viewing history to the LLM.
         :param exclude_watched: Whether to exclude already-watched titles from results.
-        :return: Dict with 'results', 'query_interpretation', and 'total'.
+        :return: Dict with 'results', 'ai_reasoning', and 'total'.
         """
         if media_type == "both":
             movie_task = self._search_single(query, "movie", user_ids, max_results, use_history, exclude_watched)
@@ -80,12 +89,14 @@ class AiSearchService:
                     if item not in merged:
                         merged.append(item)
 
+            ai_reasoning = {
+                "movie": movie_res.get("ai_reasoning", {}),
+                "tv": tv_res.get("ai_reasoning", {}),
+            }
+
             return {
                 "results": merged[:max_results],
-                "query_interpretation": {
-                    "movie": movie_res.get("query_interpretation", {}),
-                    "tv": tv_res.get("query_interpretation", {}),
-                },
+                "ai_reasoning": ai_reasoning,
                 "total": len(merged[:max_results]),
             }
 
@@ -132,15 +143,24 @@ class AiSearchService:
         interpretation = await interpret_search_query(
             query, history, media_type, max_suggestions=llm_suggestions_count
         )
+        ai_reasoning = self._build_ai_reasoning(interpretation)
         discover_params = interpretation.get("discover_params", {})
+        prepared_discover_filters = self._prepare_tmdb_discover_filters(discover_params)
+        tmdb_discover_params = self._map_llm_discover_params(prepared_discover_filters)
         suggested_titles = interpretation.get("suggested_titles", [])
+        suggestion_rationale_map = self._build_suggestion_rationale_map(suggested_titles)
+
+        logger.debug("Discover filters: %s", prepared_discover_filters)
+        logger.debug("TMDb params: %s", tmdb_discover_params)
 
         # 4. Build TMDb client from config
         tmdb_client = self._make_tmdb_client()
+        tmdb_discover = self._make_tmdb_discover(tmdb_client.omdb_client)
 
         from contextlib import AsyncExitStack
         async with AsyncExitStack() as stack:
             await stack.enter_async_context(tmdb_client)
+            await stack.enter_async_context(tmdb_discover)
             if tmdb_client.omdb_client:
                 await stack.enter_async_context(tmdb_client.omdb_client)
 
@@ -151,33 +171,221 @@ class AiSearchService:
             ]
             title_results: List[Optional[Dict]] = list(await asyncio.gather(*title_tasks))
 
+            discover_results: List[Dict[str, Any]] = []
+            if tmdb_discover_params:
+                logger.info("Calling TMDb discover for %s with params: %s", media_type, tmdb_discover_params)
+                if media_type == "movie":
+                    discover_results = await tmdb_discover.discover_movies(prepared_discover_filters, max_results=max_results)
+                else:
+                    discover_results = await tmdb_discover.discover_tv(prepared_discover_filters, max_results=max_results)
+                logger.info("TMDb discover returned %d %s results", len(discover_results), media_type)
+
         # 6. Build result list: AI suggestions only, filtered & deduped
         seen_ids: set = set()
         final: List[Dict] = []
 
         for tmdb_item, suggestion in zip(title_results, suggested_titles):
-            if tmdb_item is None:
-                continue
-            item_id = tmdb_item.get("id")
-            if not item_id or item_id in seen_ids:
-                continue
-            if str(item_id) in already_requested:
-                continue
-            if exclude_watched and self._is_watched(tmdb_item, watched_titles):
-                continue
-            if not tmdb_client._apply_filters(tmdb_item, media_type)['passed']:
-                continue
-            seen_ids.add(item_id)
-            tmdb_item["rationale"] = suggestion.get("rationale", "")
-            tmdb_item["source"] = "ai_suggestion"
-            tmdb_item["media_type"] = media_type
-            final.append(tmdb_item)
+            self._append_candidate_result(
+                final=final,
+                seen_ids=seen_ids,
+                item=tmdb_item,
+                media_type=media_type,
+                tmdb_client=tmdb_client,
+                already_requested=already_requested,
+                watched_titles=watched_titles,
+                exclude_watched=exclude_watched,
+                source="ai_suggestion",
+                rationale=suggestion.get("rationale", ""),
+                tmdb_discover_params=tmdb_discover_params,
+                apply_discover_filters=True,
+            )
+
+        for tmdb_item in discover_results:
+            if len(final) >= max_results:
+                break
+            self._append_candidate_result(
+                final=final,
+                seen_ids=seen_ids,
+                item=tmdb_item,
+                media_type=media_type,
+                tmdb_client=tmdb_client,
+                already_requested=already_requested,
+                watched_titles=watched_titles,
+                exclude_watched=exclude_watched,
+                source="tmdb_discover",
+                rationale="",
+                tmdb_discover_params=tmdb_discover_params,
+                apply_discover_filters=False,
+            )
+
+        await self._apply_suggestion_rationales(
+            final,
+            suggestion_rationale_map,
+            query,
+            discover_params,
+            media_type,
+        )
 
         return {
             "results": final[:max_results],
-            "query_interpretation": discover_params,
+            "ai_reasoning": ai_reasoning,
             "total": len(final[:max_results]),
         }
+
+    @staticmethod
+    def _build_ai_reasoning(interpretation: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a frontend-friendly reasoning payload from the full LLM interpretation."""
+        discover_params = interpretation.get("discover_params", {}) or {}
+        suggested_titles = interpretation.get("suggested_titles", []) or []
+
+        return {
+            "genres": discover_params.get("genres") or [],
+            "year_from": discover_params.get("year_from"),
+            "year_to": discover_params.get("year_to"),
+            "original_language": discover_params.get("original_language"),
+            "min_rating": discover_params.get("min_rating"),
+            "title_suggestions": suggested_titles,
+            "explanation": interpretation.get("explanation") or AiSearchService._generate_reasoning_explanation(
+                discover_params,
+                suggested_titles,
+            ),
+        }
+
+    @staticmethod
+    def _generate_reasoning_explanation(
+        discover_params: Dict[str, Any],
+        suggested_titles: List[Dict[str, Any]],
+    ) -> str:
+        """Generate a concise explanation when the LLM payload does not include one."""
+        parts: List[str] = []
+
+        genres = discover_params.get("genres") or []
+        if genres:
+            parts.append(f"Focused on {', '.join(genres)} titles")
+
+        year_from = discover_params.get("year_from")
+        year_to = discover_params.get("year_to")
+        if year_from and year_to:
+            parts.append(f"released between {year_from} and {year_to}")
+        elif year_from:
+            parts.append(f"released from {year_from} onward")
+        elif year_to:
+            parts.append(f"released up to {year_to}")
+
+        language = discover_params.get("original_language")
+        if language:
+            parts.append(f"with original language '{language}'")
+
+        min_rating = discover_params.get("min_rating")
+        if min_rating is not None:
+            parts.append(f"targeting titles rated at least {min_rating:.1f} on TMDb")
+
+        if suggested_titles:
+            preview_titles = [item.get("title") for item in suggested_titles if item.get("title")][:3]
+            if preview_titles:
+                parts.append(f"and highlighted examples like {', '.join(preview_titles)}")
+
+        if not parts:
+            return "The AI interpreted your request and selected titles that best match the query."
+
+        return "The AI interpreted your request by " + ", ".join(parts) + "."
+
+    @staticmethod
+    def _normalize_date_string(value: Any) -> Optional[str]:
+        """Return a YYYY-MM-DD string for date-like values, or None when invalid."""
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        if len(text) == 4 and text.isdigit():
+            return f"{text}-01-01"
+        try:
+            # Accept date/datetime-like values while preserving date-only comparison.
+            return datetime.fromisoformat(text.replace("Z", "+00:00")).date().isoformat()
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _map_llm_discover_params(discover_params: Dict[str, Any]) -> Dict[str, Any]:
+        """Map LLM discover filters to TMDb discover-style parameter names."""
+        normalized = normalize_filters(discover_params)
+        params = build_tmdb_params(normalized)
+
+        vote_count_gte = discover_params.get("vote_count_gte")
+        if vote_count_gte is not None:
+            params["vote_count_gte"] = int(vote_count_gte)
+
+        sort_by = discover_params.get("sort_by")
+        if sort_by:
+            params["sort_by"] = str(sort_by)
+
+        return params
+
+    @staticmethod
+    def _prepare_tmdb_discover_filters(discover_params: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply AI-search quality defaults before invoking TMDb discover."""
+        prepared = dict(discover_params or {})
+        prepared["sort_by"] = _DISCOVER_SORT_BY
+        prepared["vote_count_gte"] = max(int(prepared.get("vote_count_gte") or 0), _DISCOVER_MIN_VOTES)
+        prepared["min_rating"] = _DISCOVER_MIN_RATING
+        return prepared
+
+    def _passes_tmdb_discover_params(
+        self,
+        item: Dict[str, Any],
+        media_type: str,
+        tmdb_discover_params: Dict[str, Any],
+    ) -> bool:
+        """Apply mapped TMDb discover-style params to resolved search items."""
+        if not tmdb_discover_params:
+            return True
+
+        genres_csv = tmdb_discover_params.get("with_genres")
+        if genres_csv:
+            allowed_genres = {
+                int(g.strip()) for g in str(genres_csv).replace("|", ",").split(",")
+                if g.strip().isdigit()
+            }
+            if allowed_genres:
+                item_genres = set(item.get("genre_ids") or [])
+                if not (item_genres & allowed_genres):
+                    return False
+
+        expected_language = tmdb_discover_params.get("with_original_language")
+        if expected_language:
+            item_language = str(item.get("original_language") or "").strip().lower()
+            if item_language != str(expected_language).strip().lower():
+                return False
+
+        vote_average_gte = tmdb_discover_params.get("vote_average_gte")
+        if vote_average_gte is not None:
+            try:
+                if float(item.get("vote_average") or 0) < float(vote_average_gte):
+                    return False
+            except (TypeError, ValueError):
+                return False
+
+        vote_count_gte = tmdb_discover_params.get("vote_count_gte")
+        if vote_count_gte is not None:
+            try:
+                if int(item.get("vote_count") or 0) < int(vote_count_gte):
+                    return False
+            except (TypeError, ValueError):
+                return False
+
+        item_date = item.get("release_date") if media_type == "movie" else item.get("first_air_date")
+        normalized_item_date = self._normalize_date_string(item_date)
+
+        gte_date = self._normalize_date_string(tmdb_discover_params.get("primary_release_date_gte"))
+        if gte_date and normalized_item_date and normalized_item_date < gte_date:
+            return False
+
+        lte_date = self._normalize_date_string(tmdb_discover_params.get("primary_release_date_lte"))
+        if lte_date and normalized_item_date and normalized_item_date > lte_date:
+            return False
+
+        return True
 
     async def _resolve_suggested_title(
         self, suggestion: Dict, media_type: str, tmdb_client: TMDbClient
@@ -349,6 +557,189 @@ class AiSearchService:
             imdb_threshold=imdb_threshold,
             imdb_min_votes=imdb_min_votes,
             omdb_client=omdb_client,
+        )
+
+    def _make_tmdb_discover(self, omdb_client=None) -> TMDbDiscover:
+        """Instantiate TMDbDiscover from the current configuration."""
+        return TMDbDiscover(
+            api_key=self.config.get("TMDB_API_KEY", ""),
+            omdb_client=omdb_client,
+        )
+
+    def _append_candidate_result(
+        self,
+        final: List[Dict[str, Any]],
+        seen_ids: set,
+        item: Optional[Dict[str, Any]],
+        media_type: str,
+        tmdb_client: TMDbClient,
+        already_requested: set,
+        watched_titles: set,
+        exclude_watched: bool,
+        source: str,
+        rationale: str,
+        tmdb_discover_params: Dict[str, Any],
+        apply_discover_filters: bool,
+    ) -> None:
+        """Append a candidate result when it survives local filtering."""
+        if item is None:
+            logger.debug("Skipping %s result: TMDb returned no item", source)
+            return
+
+        item_id = item.get("id")
+        title = item.get("title") or item.get("name") or "Unknown"
+
+        if not item_id:
+            logger.debug("Skipping %s result without TMDb id: %s", source, title)
+            return
+        if item_id in seen_ids:
+            logger.debug("Skipping duplicate %s result: %s (%s)", source, title, item_id)
+            return
+        if str(item_id) in already_requested:
+            logger.debug("Skipping already requested %s result: %s (%s)", source, title, item_id)
+            return
+        if exclude_watched and self._is_watched(item, watched_titles):
+            logger.debug("Skipping watched %s result: %s (%s)", source, title, item_id)
+            return
+        if apply_discover_filters and not self._passes_tmdb_discover_params(item, media_type, tmdb_discover_params):
+            logger.debug("Skipping %s result failing discover filters: %s (%s)", source, title, item_id)
+            return
+
+        filter_result = tmdb_client._apply_filters(item, media_type)
+        if not filter_result['passed']:
+            logger.debug("Skipping %s result failing TMDbClient filters: %s (%s) -> %s", source, title, item_id, filter_result)
+            return
+
+        seen_ids.add(item_id)
+        item["rationale"] = rationale
+        item["source"] = source
+        item["media_type"] = media_type
+        final.append(item)
+
+    @staticmethod
+    def _build_suggestion_rationale_map(suggested_titles: List[Dict[str, Any]]) -> Dict[str, str]:
+        """Build a normalized title-to-rationale lookup from LLM title suggestions."""
+        rationale_map: Dict[str, str] = {}
+
+        for suggestion in suggested_titles:
+            title = str(suggestion.get("title") or "").strip().lower()
+            rationale = str(suggestion.get("rationale") or "")
+            if title and rationale and title not in rationale_map:
+                rationale_map[title] = rationale
+
+        return rationale_map
+
+    @staticmethod
+    async def _apply_suggestion_rationales(
+        results: List[Dict[str, Any]],
+        suggestion_rationale_map: Dict[str, str],
+        query: str,
+        discover_params: Dict[str, Any],
+        media_type: str,
+    ) -> None:
+        """Set per-item rationale from exact matches, then LLM-generated one-liners, then contextual fallback."""
+        llm_rationale_map: Dict[str, str] = {}
+        unresolved_results: List[Dict[str, Any]] = []
+
+        for result in results:
+            title = str(result.get("title") or result.get("name") or "").strip().lower()
+            if title and title in suggestion_rationale_map:
+                result["rationale"] = suggestion_rationale_map[title]
+            else:
+                unresolved_results.append(result)
+
+        if unresolved_results:
+            llm_rationale_map = await generate_search_result_rationales(
+                query=query,
+                media_type=media_type,
+                discover_params=discover_params,
+                results=unresolved_results,
+            )
+
+        seen_rationales: set = set()
+
+        for result in results:
+            existing = str(result.get("rationale") or "").strip()
+            if existing:
+                rationale = existing
+            else:
+                key = AiSearchService._result_lookup_key(result, media_type)
+                rationale = llm_rationale_map.get(key, "") if key else ""
+                if not rationale:
+                    rationale = AiSearchService._generate_contextual_result_rationale(
+                        result=result,
+                        discover_params=discover_params,
+                        media_type=media_type,
+                    )
+
+            # Keep rationale strings distinct even if two items resolve to identical text.
+            if rationale in seen_rationales:
+                item_id = result.get("id")
+                if item_id is not None:
+                    rationale = f"{rationale} (TMDb {item_id})"
+
+            seen_rationales.add(rationale)
+            result["rationale"] = rationale
+
+    @staticmethod
+    def _result_lookup_key(result: Dict[str, Any], media_type: str) -> str:
+        """Build a normalized title/year lookup key matching LLM rationale map keys."""
+        title = str(result.get("title") or result.get("name") or "").strip().lower()
+        if not title:
+            return ""
+
+        year = result.get("year")
+        if year is None:
+            date_value = result.get("release_date") if media_type == "movie" else result.get("first_air_date")
+            year_text = str(date_value).split("-")[0] if date_value else ""
+            year = int(year_text) if year_text.isdigit() else None
+
+        year_key = str(year) if year is not None else ""
+        return f"{title}|{year_key}"
+
+    @staticmethod
+    def _generate_contextual_result_rationale(
+        result: Dict[str, Any],
+        discover_params: Dict[str, Any],
+        media_type: str,
+    ) -> str:
+        """Generate a per-result rationale aligned to interpreted discover filters."""
+        title = str(result.get("title") or result.get("name") or "This title").strip() or "This title"
+
+        genres = discover_params.get("genres") or []
+        if isinstance(genres, list) and genres:
+            genres_text = ", ".join(str(genre) for genre in genres)
+            genre_part = f"the {genres_text} genre focus"
+        else:
+            genre_part = "the genre and tone from your query"
+
+        year_from = discover_params.get("year_from")
+        year_to = discover_params.get("year_to")
+        if year_from and year_to:
+            year_part = f"the requested {year_from}-{year_to} time range"
+        elif year_from:
+            year_part = f"the requested period from {year_from} onward"
+        elif year_to:
+            year_part = f"the requested period up to {year_to}"
+        else:
+            year_part = "the requested release window"
+
+        min_rating = discover_params.get("min_rating")
+        if min_rating is not None:
+            rating_part = f"the minimum rating target of {float(min_rating):.1f}+"
+        else:
+            rating_part = "the quality threshold inferred by the AI"
+
+        date_value = result.get("release_date") if media_type == "movie" else result.get("first_air_date")
+        release_year = str(date_value).split("-")[0] if date_value else None
+        if release_year and release_year.isdigit():
+            release_part = f" Released in {release_year}, it remains consistent with those constraints."
+        else:
+            release_part = ""
+
+        return (
+            f"{title} matches the AI search because it fits {genre_part}, aligns with {year_part}, "
+            f"and meets {rating_part}.{release_part}"
         )
 
     @staticmethod
