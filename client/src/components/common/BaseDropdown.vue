@@ -1,5 +1,5 @@
 <template>
-  <div class="form-group-modern" ref="dropdownWrapper">
+  <div class="form-group-modern" ref="dropdownWrapper" v-bind="$attrs">
     <label v-if="label" :for="id" class="modern-label">
       <span class="label-content">
         <span class="label-text">{{ label }}</span>
@@ -113,6 +113,7 @@
 <script>
 export default {
   name: 'BaseDropdown',
+  inheritAttrs: false,
   props: {
     modelValue: {
       type: [String, Number, Boolean],

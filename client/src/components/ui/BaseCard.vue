@@ -56,7 +56,7 @@ export default {
       default: false
     }
   },
-  setup(props) {
+  setup(props, { slots }) {
     const cardClasses = computed(() => [
       'card',
       `card--${props.variant}`,
@@ -70,7 +70,7 @@ export default {
     const headerClasses = computed(() => [
       'card-header',
       {
-        'card-header--empty': !props.title && !props.$slots.header
+        'card-header--empty': !props.title && !slots.header
       }
     ]);
 
