@@ -229,6 +229,9 @@ def get_default_values():
         'SEER_ANIME_PROFILE_CONFIG': lambda: {},
         'SEER_REQUEST_DELAY': lambda: 2,
         'ALLOW_REGISTRATION': lambda: False,
+        'AUTH_MODE': lambda: 'enabled',
+        'AUTH_TRUSTED_CIDRS': lambda: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7',
+        'AUTH_BYPASS_USERNAME': lambda: 'local_admin',
     }
 
 def get_config_values():
@@ -330,7 +333,8 @@ def get_config_sections():
                      'ENABLE_STATIC_BACKGROUND', 'STATIC_BACKGROUND_COLOR',
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
                      'ENABLE_API_CACHING', 'OPENAI_API_KEY', 'OPENAI_BASE_URL',
-                     'LLM_MODEL', 'SUBPATH', 'ALLOW_REGISTRATION']
+                     'LLM_MODEL', 'SUBPATH', 'ALLOW_REGISTRATION',
+                     'AUTH_MODE', 'AUTH_TRUSTED_CIDRS', 'AUTH_BYPASS_USERNAME']
     }
 
 def get_config_section(section_name):

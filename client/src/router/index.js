@@ -94,6 +94,7 @@ let _statusCache = null;
 let _statusCacheTimestamp = 0;
 let _statusPromise = null;
 const STATUS_CACHE_TTL = 1000; // 1 second cache
+let _authModeCache = null;
 
 function isAbortLikeError(error) {
   const code = error?.code || error?.message?.code;
@@ -141,6 +142,34 @@ async function checkSetupStatus() {
     });
 
   return _statusPromise;
+}
+
+async function getAuthMode() {
+  if (_authModeCache) return _authModeCache;
+
+  try {
+    const cachedConfig = localStorage.getItem("suggestarr_config");
+    if (cachedConfig) {
+      const parsedConfig = JSON.parse(cachedConfig);
+      const cachedMode = (parsedConfig?.AUTH_MODE || "enabled").toString().toLowerCase();
+      if (["enabled", "local_bypass", "disabled"].includes(cachedMode)) {
+        _authModeCache = cachedMode;
+        return _authModeCache;
+      }
+    }
+  } catch {
+    // Ignore cache parse errors and fetch from API.
+  }
+
+  try {
+    const response = await axios.get("/api/config/fetch", { _skipAuth: true, timeout: 10000 });
+    const mode = (response.data?.AUTH_MODE || "enabled").toString().toLowerCase();
+    _authModeCache = ["enabled", "local_bypass", "disabled"].includes(mode) ? mode : "enabled";
+    return _authModeCache;
+  } catch {
+    _authModeCache = "enabled";
+    return _authModeCache;
+  }
 }
 
 export async function createAppRouter() {
@@ -250,16 +279,18 @@ export async function createAppRouter() {
     }
 
     const currentStatus = await checkSetupStatus();
+    const authMode = await getAuthMode();
+    const isAuthDisabled = authMode === "disabled";
     const isAuthenticated = !!auth.accessToken.value;
 
     // First-run flow:
     // - No auth users yet: force all routes to Login (setup-admin form lives there).
     // - Auth exists + app setup incomplete: keep Login out of the way and use /setup wizard.
     if (!currentStatus.setup_completed) {
-      if (!isAuthenticated && to.name !== "Login") {
+      if (!isAuthenticated && !isAuthDisabled && to.name !== "Login") {
         return { name: "Login", query: { redirect: to.fullPath } };
       }
-      if (isAuthenticated && to.name === "Login") {
+      if ((isAuthenticated || isAuthDisabled) && to.name === "Login") {
         return "/setup";
       }
     }
@@ -278,10 +309,10 @@ export async function createAppRouter() {
     if (auth.authSetupComplete.value) {
       if (to.name === "Login") {
         // Already authenticated → skip login page
-        if (auth.accessToken.value) return "/dashboard";
+        if (auth.accessToken.value || isAuthDisabled) return "/dashboard";
         return;
       }
-      if (!auth.accessToken.value) {
+      if (!auth.accessToken.value && !isAuthDisabled) {
         return { name: "Login", query: { redirect: to.fullPath } };
       }
     }

@@ -513,6 +513,69 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           Application
         </h3>
 
+        <BaseDropdown
+          v-model="localConfig.AUTH_MODE"
+          :options="authModeOptions"
+          label="Authentication Mode"
+          help-text="Choose how SuggestArr enforces authentication for API requests"
+          :disabled="isLoading"
+          id="authMode"
+        />
+
+        <p class="section-description">
+          Choose how users access SuggestArr. You can require login for everyone, allow trusted local networks to bypass login, or disable authentication.
+        </p>
+
+        <div v-if="localConfig.AUTH_MODE === 'disabled'" class="warning-box warning-box--auth">
+          <i class="fas fa-exclamation-triangle"></i>
+          <div>
+            <strong>Warning:</strong>
+            <p>
+              Authentication will be completely disabled. This should only be used in trusted environments.
+            </p>
+          </div>
+        </div>
+
+        <div v-else-if="localConfig.AUTH_MODE === 'local_bypass'" class="warning-box warning-box--auth">
+          <i class="fas fa-exclamation-triangle"></i>
+          <div>
+            <strong>Warning:</strong>
+            <p>
+              Requests from trusted local networks will bypass authentication.
+            </p>
+          </div>
+        </div>
+
+        <div v-if="localConfig.AUTH_MODE === 'local_bypass'" class="form-group">
+          <label for="authTrustedCidrs">Trusted CIDRs</label>
+          <input
+            id="authTrustedCidrs"
+            v-model="localConfig.AUTH_TRUSTED_CIDRS"
+            type="text"
+            placeholder="127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+            class="form-control"
+            :disabled="isLoading"
+          />
+          <small class="form-help">
+            Comma-separated CIDR ranges that can bypass auth when mode is <code>local_bypass</code>.
+          </small>
+        </div>
+
+        <div v-if="localConfig.AUTH_MODE === 'local_bypass' || localConfig.AUTH_MODE === 'disabled'" class="form-group">
+          <label for="authBypassUsername">Bypass Username</label>
+          <input
+            id="authBypassUsername"
+            v-model="localConfig.AUTH_BYPASS_USERNAME"
+            type="text"
+            placeholder="local_admin"
+            class="form-control"
+            :disabled="isLoading"
+          />
+          <small class="form-help">
+            Username used as internal request context when auth is bypassed.
+          </small>
+        </div>
+
         <div class="form-group">
           <label for="subpath">Subpath</label>
           <input id="subpath" v-model="localConfig.SUBPATH" type="text" placeholder="/suggestarr" class="form-control"
@@ -583,6 +646,11 @@ export default {
         { value: 'WARNING', label: 'Warning' },
         { value: 'INFO', label: 'Info' },
         { value: 'DEBUG', label: 'Debug' }
+      ],
+      authModeOptions: [
+        { value: 'enabled', label: 'Require Login' },
+        { value: 'local_bypass', label: 'Allow Local Network Without Login' },
+        { value: 'disabled', label: 'Disable Authentication' },
       ]
     };
   },
@@ -628,6 +696,9 @@ export default {
           ENABLE_VISUAL_EFFECTS: true,
           ENABLE_STATIC_BACKGROUND: false,
           STATIC_BACKGROUND_COLOR: '#2E3440',
+          AUTH_MODE: 'enabled',
+          AUTH_TRUSTED_CIDRS: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
+          AUTH_BYPASS_USERNAME: 'local_admin',
         };
 
         Object.keys(advancedDefaults).forEach(key => {
@@ -635,6 +706,10 @@ export default {
             this.localConfig[key] = advancedDefaults[key];
           }
         });
+
+        if (!this.authModeOptions.some(option => option.value === this.localConfig.AUTH_MODE)) {
+          this.localConfig.AUTH_MODE = 'enabled';
+        }
       },
     },
   },
@@ -752,6 +827,27 @@ export default {
     },
 
     async saveSettings() {
+      const cidrText = String(this.localConfig.AUTH_TRUSTED_CIDRS || '').trim();
+      const authMode = this.authModeOptions.some(option => option.value === this.localConfig.AUTH_MODE)
+        ? this.localConfig.AUTH_MODE
+        : 'enabled';
+
+      if (authMode === 'local_bypass' && !cidrText) {
+        this.$toast.error('Trusted CIDRs are required when Authentication Mode is local_bypass.');
+        return;
+      }
+
+      if (cidrText) {
+        const invalidCidrs = cidrText
+          .split(',')
+          .map(item => item.trim())
+          .filter(item => item && !item.includes('/'));
+        if (invalidCidrs.length > 0) {
+          this.$toast.error('Trusted CIDRs must be a comma-separated CIDR list (for example 192.168.0.0/16).');
+          return;
+        }
+      }
+
       try {
         await this.$emit('save-section', {
           section: 'advanced',
@@ -774,6 +870,9 @@ export default {
             ENABLE_VISUAL_EFFECTS: this.localConfig.ENABLE_VISUAL_EFFECTS !== false,
             ENABLE_STATIC_BACKGROUND: this.localConfig.ENABLE_STATIC_BACKGROUND || false,
             STATIC_BACKGROUND_COLOR: this.localConfig.STATIC_BACKGROUND_COLOR || '#2E3440',
+            AUTH_MODE: authMode,
+            AUTH_TRUSTED_CIDRS: cidrText || '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
+            AUTH_BYPASS_USERNAME: (this.localConfig.AUTH_BYPASS_USERNAME || '').trim() || 'local_admin',
             SUBPATH: this.localConfig.SUBPATH || null,
           },
         });
@@ -825,6 +924,9 @@ export default {
         ENABLE_VISUAL_EFFECTS: true,
         ENABLE_STATIC_BACKGROUND: false,
         STATIC_BACKGROUND_COLOR: '#2E3440',
+        AUTH_MODE: 'enabled',
+        AUTH_TRUSTED_CIDRS: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
+        AUTH_BYPASS_USERNAME: 'local_admin',
         SUBPATH: null,
       };
 
@@ -954,6 +1056,13 @@ export default {
   line-height: 1.4;
 }
 
+.section-description {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
 .warning-box {
   background: rgba(245, 158, 11, 0.1);
   border: 1px solid rgba(245, 158, 11, 0.3);
@@ -981,6 +1090,12 @@ export default {
   color: #e5e7eb;
   margin: 0;
   line-height: 1.5;
+}
+
+.warning-box--auth {
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
 }
 
 .loading-users {
