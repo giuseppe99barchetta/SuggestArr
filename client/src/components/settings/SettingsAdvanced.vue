@@ -517,7 +517,6 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           v-model="localConfig.AUTH_MODE"
           :options="authModeOptions"
           label="Authentication Mode"
-          help-text="Choose how SuggestArr enforces authentication for API requests"
           :disabled="isLoading"
           id="authMode"
         />
