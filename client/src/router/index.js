@@ -281,7 +281,19 @@ export async function createAppRouter() {
     const currentStatus = await checkSetupStatus();
     const authMode = await getAuthMode();
     const isAuthDisabled = authMode === "disabled";
-    const isAuthenticated = !!auth.accessToken.value;
+    let statusAuth = { authenticated: false, bypass: false };
+    try {
+      const status = await auth.getAuthStatus();
+      statusAuth = {
+        authenticated: !!status?.authenticated,
+        bypass: !!status?.bypass,
+      };
+    } catch {
+      // Keep default unauthenticated status when the probe fails.
+    }
+
+    const isBypassAuthenticated = statusAuth.authenticated && statusAuth.bypass;
+    const isAuthenticated = !!auth.accessToken.value || isBypassAuthenticated;
 
     // First-run flow:
     // - No auth users yet: force all routes to Login (setup-admin form lives there).
@@ -309,10 +321,10 @@ export async function createAppRouter() {
     if (auth.authSetupComplete.value) {
       if (to.name === "Login") {
         // Already authenticated → skip login page
-        if (auth.accessToken.value || isAuthDisabled) return "/dashboard";
+        if (isAuthenticated || isAuthDisabled) return "/dashboard";
         return;
       }
-      if (!auth.accessToken.value && !isAuthDisabled) {
+      if (!isAuthenticated && !isAuthDisabled) {
         return { name: "Login", query: { redirect: to.fullPath } };
       }
     }

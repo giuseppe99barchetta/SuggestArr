@@ -326,11 +326,20 @@ def enforce_authentication() -> Optional[tuple]:
 
     auth_mode = _resolve_auth_mode()
 
+    client_ip = request.remote_addr or ""
+    trusted_cidr_networks = _load_trusted_cidrs()
+    trusted_cidrs = [str(network) for network in trusted_cidr_networks]
+    is_trusted_ip = _is_trusted_local_ip(client_ip)
+
+    logger.debug(
+        f"AUTH DEBUG - ip={client_ip} mode={auth_mode} trusted={is_trusted_ip} cidrs={trusted_cidrs}"
+    )
+
     if auth_mode == "disabled":
         g.current_user = _load_bypass_user_context()
         return None
 
-    if auth_mode == "local_bypass" and _is_trusted_local_ip(request.remote_addr or ""):
+    if auth_mode == "local_bypass" and is_trusted_ip:
         g.current_user = _load_bypass_user_context()
         return None
 
