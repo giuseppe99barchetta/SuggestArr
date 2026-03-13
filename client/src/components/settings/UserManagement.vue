@@ -116,15 +116,12 @@
         </p>
 
         <div class="form-group">
-          <label class="checkbox-label">
-            <input
-              type="checkbox"
-              v-model="localAllowRegistration"
-              @change="saveRegistration"
-              :disabled="isSavingRegistration"
-            />
-            <span class="checkbox-text">Allow self-registration</span>
-          </label>
+          <BaseCheckbox
+            v-model="localAllowRegistration"
+            :disabled="isSavingRegistration"
+            label="Allow self-registration"
+            @change="saveRegistration"
+          />
           <small class="form-help">
             Disabled by default. Enable only if you want users to sign up themselves.
           </small>
@@ -311,17 +308,12 @@
                     <h4><i class="fas fa-robot"></i> AI Management</h4>
                     <p>Enable or restrict personal AI configuration access.</p>
                   </div>
-                  <label class="checkbox-label">
-                    <input
-                      type="checkbox"
-                      v-model="editPermissions.can_manage_ai"
-                      :disabled="isSavingPermissions"
-                    />
-                    <span class="checkbox-text checkbox-text--stack">
-                      <strong>Can manage AI settings</strong>
-                      <small>Allow user to configure their own OpenAI API key and settings.</small>
-                    </span>
-                  </label>
+                  <BaseCheckbox
+                    v-model="editPermissions.can_manage_ai"
+                    :disabled="isSavingPermissions"
+                    label="Can manage AI settings"
+                    description="Allow user to configure their own OpenAI API key and settings."
+                  />
                 </section>
 
                 <section class="permissions-section um-section-card">
@@ -381,12 +373,13 @@ import { useAuth } from '@/composables/useAuth';
 import { getUsers, createUserAdmin, updateUser, updateUserPermissions, deleteUser } from '@/api/api';
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import UserProfile from './UserProfile.vue';
 
 export default {
   name: 'UserManagement',
 
-  components: { BaseDropdown, UserProfile },
+  components: { BaseDropdown, BaseCheckbox, UserProfile },
 
   props: {
     config: Object,
@@ -746,44 +739,6 @@ export default {
   margin-bottom: var(--spacing-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--spacing-sm) + var(--spacing-xs));
-  cursor: pointer;
-  margin-bottom: var(--spacing-sm);
-}
-
-.checkbox-label input[type='checkbox'] {
-  vertical-align: middle;
-  width: var(--font-size-xl);
-  height: var(--font-size-xl);
-  accent-color: var(--color-primary);
-  flex-shrink: 0;
-}
-
-.checkbox-text {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  vertical-align: middle;
-  margin-left: var(--spacing-xs);
-  color: var(--color-text-primary);
-  font-weight: var(--font-weight-medium);
-}
-
-.checkbox-text--stack {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: calc(var(--spacing-sm) * 0.3);
-}
-
-.checkbox-text small {
-  color: var(--color-text-muted);
-  font-size: calc(var(--font-size-base) * 0.8);
-  font-weight: var(--font-weight-normal);
 }
 
 .form-control {
@@ -1221,17 +1176,6 @@ export default {
   opacity: 0.5;
 }
 
-.tabs-checkboxes input[type='checkbox'] {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.tabs-checkboxes input[type='checkbox']:disabled {
-  cursor: not-allowed;
-}
-
 .tabs-checkboxes .tab-label {
   display: flex;
   align-items: center;
@@ -1247,14 +1191,14 @@ export default {
 }
 
 .tab-checkbox-content i {
-  color: var(--color-primary-light);
+  color: var(--color-primary);
   font-size: var(--font-size-base);
   width: 20px;
   text-align: center;
 }
 
 .tabs-checkboxes .tab-label i {
-  color: var(--color-primary-light);
+  color: var(--color-primary);
   font-size: var(--font-size-base);
   width: 20px;
   text-align: center;

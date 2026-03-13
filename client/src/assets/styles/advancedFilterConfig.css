@@ -165,11 +165,6 @@
     transition: .4s;
 }
 
-input:checked+.slider {
-    /* Indigo-500 */
-    background-color: var(--color-primary-light);
-}
-
 input:checked+.slider:before {
     transform: translateX(calc(var(--spacing-xs) * 6.5));
 }

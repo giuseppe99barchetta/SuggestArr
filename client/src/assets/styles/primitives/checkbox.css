@@ -1,0 +1,78 @@
+/* ================================================================
+   CHECKBOX PRIMITIVE
+   ================================================================
+   Custom appearance for native input[type="checkbox"] in contexts
+   where BaseCheckbox.vue cannot serve as a drop-in replacement
+   (e.g. card-selection layouts where the <label> wraps complex
+   rich content beyond a single checkbox + text pair).
+
+   For standard checkbox usage, always prefer BaseCheckbox.vue.
+
+   Visual tokens are shared with BaseCheckbox.vue to guarantee
+   a consistent look across both patterns:
+     - 18px box dimensions
+     - Same border / surface token usage
+     - Same checked color (--color-primary)
+     - Same focus-ring style (--focus-ring)
+================================================================ */
+
+/* ── Tabs-style card-selection checkboxes ──────────────────── */
+/*
+   Used by the "Visible Tabs" selector in UserManagement.vue.
+   The parent <label> acts as a selectable card row; the
+   <input type="checkbox"> is a compact indicator inside it.
+*/
+
+.tabs-checkboxes input[type='checkbox'] {
+  /* Remove browser-native appearance entirely */
+  appearance: none;
+  -webkit-appearance: none;
+
+  /* Dimensions — match BaseCheckbox 18px box */
+  flex-shrink: 0;
+  width: 1.125rem;
+  height: 1.125rem;
+
+  /* Borders & background */
+  border: 1.5px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface-interactive);
+
+  /* Cursor & interaction */
+  cursor: pointer;
+
+  /* Smooth transitions */
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+
+  /* Checkmark SVG (shown only when checked) */
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 0.625rem;
+}
+
+.tabs-checkboxes input[type='checkbox']:hover {
+  border-color: var(--color-border-heavy);
+  background-color: var(--surface-hover);
+}
+
+/* Focus-visible — WCAG 2.1 AA keyboard accessibility */
+.tabs-checkboxes input[type='checkbox']:focus-visible {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
+}
+
+/* Checked state: fill with brand color + inline SVG checkmark */
+.tabs-checkboxes input[type='checkbox']:checked {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  background-image: url("data:image/svg+xml,<svg viewBox='0 0 10 8' fill='none' xmlns='http://www.w3.org/2000/svg'><polyline points='1,4 3.5,6.5 9,1' stroke='white' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+}
+
+.tabs-checkboxes input[type='checkbox']:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
