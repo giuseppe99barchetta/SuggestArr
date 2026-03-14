@@ -108,6 +108,13 @@ jobs:
           username: ciuse99
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
+      - name: Login to ghcr.io
+        uses: docker/login-action@v4.0.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Prepare platform slug
         id: prep
         run: echo "platform_slug=$(echo '${{ matrix.platform }}' | tr '/' '-')" >> $GITHUB_OUTPUT
@@ -119,7 +126,9 @@ jobs:
           file: docker/Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
-          tags: ciuse99/suggestarr:${{ needs.bump-version.outputs.new_version }}-${{ steps.prep.outputs.platform_slug }}
+          tags: |
+            ciuse99/suggestarr:${{ needs.bump-version.outputs.new_version }}-${{ steps.prep.outputs.platform_slug }}
+            ghcr.io/giuseppe99barchetta/suggestarr:${{ needs.bump-version.outputs.new_version }}-${{ steps.prep.outputs.platform_slug }}
           cache-from: |
             type=gha,scope=prod-${{ matrix.platform }}
             type=registry,ref=ciuse99/suggestarr:cache
