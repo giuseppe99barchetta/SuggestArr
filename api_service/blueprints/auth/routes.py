@@ -256,13 +256,16 @@ def login():
     # SameSite=Strict — cookie is not sent on cross-site requests (CSRF protection).
     # path=/api/auth/refresh — cookie is only sent to the refresh endpoint,
     #   not to every API call, which limits its exposure window.
+    subpath = str(load_env_vars().get('SUBPATH') or '').strip()
+    refresh_path = f"{subpath}/api/auth/refresh" if subpath else "/api/auth/refresh"
+    
     response.set_cookie(
         _REFRESH_COOKIE,
         raw_refresh,
         httponly=True,
         samesite="Strict",
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/auth/refresh",
+        path=refresh_path,
     )
 
     return response
@@ -345,7 +348,9 @@ def logout():
 
     response = make_response(jsonify({"message": "Logged out"}), 200)
     # Clear the cookie by expiring it immediately.
-    response.delete_cookie(_REFRESH_COOKIE, path="/api/auth/refresh")
+    subpath = str(load_env_vars().get('SUBPATH') or '').strip()
+    refresh_path = f"{subpath}/api/auth/refresh" if subpath else "/api/auth/refresh"
+    response.delete_cookie(_REFRESH_COOKIE, path=refresh_path)
     return response
 
 
