@@ -24,28 +24,22 @@
         </div>
       
         <div class="form-group">
-          <label class="checkbox-label">
-            <input
-              v-model="localConfig.ENABLE_BETA_FEATURES"
-              type="checkbox"
-              :disabled="isLoading"
-            />
-            <span class="checkbox-text">Enable beta features</span>
-          </label>
+          <BaseCheckbox
+            v-model="localConfig.ENABLE_BETA_FEATURES"
+            :disabled="isLoading"
+            label="Enable beta features"
+          />
           <small class="form-help">
             Enable experimental features that are still in development
           </small>
         </div>
       
         <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES }">
-          <label class="checkbox-label">
-            <input
-              v-model="localConfig.ENABLE_ADVANCED_ALGORITHM"
-              type="checkbox"
-              :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES"
-            />
-            <span class="checkbox-text">Use advanced suggestion algorithm</span>
-          </label>
+          <BaseCheckbox
+            v-model="localConfig.ENABLE_ADVANCED_ALGORITHM"
+            :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES"
+            label="Use advanced suggestion algorithm"
+          />
           <small class="form-help">
             Use an AI-powered algorithm for hyper-personalized content suggestions based on watch history.
           </small>
@@ -315,57 +309,45 @@ LLM_MODEL=gpt-4o-mini</code></pre>
         />
 
         <div class="form-group">
-          <label class="checkbox-label">
-            <input
-              v-model="localConfig.ENABLE_DEBUG_MODE"
-              type="checkbox"
-              :disabled="isLoading"
-            />
-            <span class="checkbox-text">Enable debug mode</span>
-          </label>
+          <BaseCheckbox
+            v-model="localConfig.ENABLE_DEBUG_MODE"
+            :disabled="isLoading"
+            label="Enable debug mode"
+          />
           <small class="form-help">
             Enable detailed logging and debugging information
           </small>
         </div>
 
         <div class="form-group">
-          <label class="checkbox-label">
-            <input
-              v-model="localConfig.ENABLE_PERFORMANCE_MONITORING"
-              type="checkbox"
-              :disabled="isLoading"
-            />
-            <span class="checkbox-text">Enable performance monitoring</span>
-          </label>
+          <BaseCheckbox
+            v-model="localConfig.ENABLE_PERFORMANCE_MONITORING"
+            :disabled="isLoading"
+            label="Enable performance monitoring"
+          />
           <small class="form-help">
             Track performance metrics for optimization
           </small>
         </div>
 
         <div class="form-group">
-          <label class="checkbox-label">
-            <input
-              :checked="!localConfig.ENABLE_VISUAL_EFFECTS"
-              @change="localConfig.ENABLE_VISUAL_EFFECTS = !$event.target.checked"
-              type="checkbox"
-              :disabled="isLoading"
-            />
-            <span class="checkbox-text">Disable visual effects (blur)</span>
-          </label>
+          <BaseCheckbox
+            :model-value="!localConfig.ENABLE_VISUAL_EFFECTS"
+            @update:model-value="localConfig.ENABLE_VISUAL_EFFECTS = !$event"
+            :disabled="isLoading"
+            label="Disable visual effects (blur)"
+          />
           <small class="form-help">
             Check this box to improve UI performance and frame rates by turning off heavy CSS background blurs.
           </small>
         </div>
 
         <div class="form-group">
-          <label class="checkbox-label">
-            <input
-              v-model="localConfig.ENABLE_STATIC_BACKGROUND"
-              type="checkbox"
-              :disabled="isLoading"
-            />
-            <span class="checkbox-text">Enable static colored background</span>
-          </label>
+          <BaseCheckbox
+            v-model="localConfig.ENABLE_STATIC_BACKGROUND"
+            :disabled="isLoading"
+            label="Enable static colored background"
+          />
           <small class="form-help">
             Override the app's default rotating background pictures with a static color.
           </small>
@@ -493,14 +475,11 @@ LLM_MODEL=gpt-4o-mini</code></pre>
         </div>
 
         <div class="form-group">
-          <label class="checkbox-label">
-            <input
-              v-model="localConfig.ENABLE_API_CACHING"
-              type="checkbox"
-              :disabled="isLoading"
-            />
-            <span class="checkbox-text">Enable API response caching</span>
-          </label>
+          <BaseCheckbox
+            v-model="localConfig.ENABLE_API_CACHING"
+            :disabled="isLoading"
+            label="Enable API response caching"
+          />
           <small class="form-help">
             Cache API responses to reduce external service load
           </small>
@@ -512,6 +491,68 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           <i class="fas fa-gear"></i>
           Application
         </h3>
+
+        <BaseDropdown
+          v-model="localConfig.AUTH_MODE"
+          :options="authModeOptions"
+          label="Authentication Mode"
+          :disabled="isLoading"
+          id="authMode"
+        />
+
+        <p class="section-description">
+          Choose how users access SuggestArr. You can require login for everyone, allow trusted local networks to bypass login, or disable authentication.
+        </p>
+
+        <div v-if="localConfig.AUTH_MODE === 'disabled'" class="warning-box warning-box--auth">
+          <i class="fas fa-exclamation-triangle"></i>
+          <div>
+            <strong>Warning:</strong>
+            <p>
+              Authentication will be completely disabled. This should only be used in trusted environments.
+            </p>
+          </div>
+        </div>
+
+        <div v-else-if="localConfig.AUTH_MODE === 'local_bypass'" class="warning-box warning-box--auth">
+          <i class="fas fa-exclamation-triangle"></i>
+          <div>
+            <strong>Warning:</strong>
+            <p>
+              Requests from trusted local networks will bypass authentication.
+            </p>
+          </div>
+        </div>
+
+        <div v-if="localConfig.AUTH_MODE === 'local_bypass'" class="form-group">
+          <label for="authTrustedCidrs">Trusted CIDRs</label>
+          <input
+            id="authTrustedCidrs"
+            v-model="localConfig.AUTH_TRUSTED_CIDRS"
+            type="text"
+            placeholder="127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+            class="form-control"
+            :disabled="isLoading"
+          />
+          <small class="form-help">
+            Comma-separated CIDR ranges that can bypass auth when mode is <code>local_bypass</code>.
+          </small>
+        </div>
+
+        <div v-if="localConfig.AUTH_MODE === 'local_bypass' || localConfig.AUTH_MODE === 'disabled'" class="form-group">
+          <label for="authBypassUsername">Bypass Username</label>
+          <input
+            id="authBypassUsername"
+            v-model="localConfig.AUTH_BYPASS_USERNAME"
+            type="text"
+            placeholder="local_admin"
+            class="form-control"
+            :disabled="isLoading"
+          />
+          <small class="form-help">
+            Username used as internal request context when auth is bypassed.
+          </small>
+        </div>
 
         <div class="form-group">
           <label for="subpath">Subpath</label>
@@ -552,11 +593,13 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 <script>
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 
 export default {
   name: 'SettingsAdvanced',
   components: {
-    BaseDropdown
+    BaseDropdown,
+    BaseCheckbox,
   },
   props: {
     config: {
@@ -583,6 +626,11 @@ export default {
         { value: 'WARNING', label: 'Warning' },
         { value: 'INFO', label: 'Info' },
         { value: 'DEBUG', label: 'Debug' }
+      ],
+      authModeOptions: [
+        { value: 'enabled', label: 'Require Login' },
+        { value: 'local_bypass', label: 'Allow Local Network Without Login' },
+        { value: 'disabled', label: 'Disable Authentication' },
       ]
     };
   },
@@ -628,6 +676,9 @@ export default {
           ENABLE_VISUAL_EFFECTS: true,
           ENABLE_STATIC_BACKGROUND: false,
           STATIC_BACKGROUND_COLOR: '#2E3440',
+          AUTH_MODE: 'enabled',
+          AUTH_TRUSTED_CIDRS: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
+          AUTH_BYPASS_USERNAME: 'local_admin',
         };
 
         Object.keys(advancedDefaults).forEach(key => {
@@ -635,6 +686,10 @@ export default {
             this.localConfig[key] = advancedDefaults[key];
           }
         });
+
+        if (!this.authModeOptions.some(option => option.value === this.localConfig.AUTH_MODE)) {
+          this.localConfig.AUTH_MODE = 'enabled';
+        }
       },
     },
   },
@@ -752,6 +807,27 @@ export default {
     },
 
     async saveSettings() {
+      const cidrText = String(this.localConfig.AUTH_TRUSTED_CIDRS || '').trim();
+      const authMode = this.authModeOptions.some(option => option.value === this.localConfig.AUTH_MODE)
+        ? this.localConfig.AUTH_MODE
+        : 'enabled';
+
+      if (authMode === 'local_bypass' && !cidrText) {
+        this.$toast.error('Trusted CIDRs are required when Authentication Mode is local_bypass.');
+        return;
+      }
+
+      if (cidrText) {
+        const invalidCidrs = cidrText
+          .split(',')
+          .map(item => item.trim())
+          .filter(item => item && !item.includes('/'));
+        if (invalidCidrs.length > 0) {
+          this.$toast.error('Trusted CIDRs must be a comma-separated CIDR list (for example 192.168.0.0/16).');
+          return;
+        }
+      }
+
       try {
         await this.$emit('save-section', {
           section: 'advanced',
@@ -774,6 +850,9 @@ export default {
             ENABLE_VISUAL_EFFECTS: this.localConfig.ENABLE_VISUAL_EFFECTS !== false,
             ENABLE_STATIC_BACKGROUND: this.localConfig.ENABLE_STATIC_BACKGROUND || false,
             STATIC_BACKGROUND_COLOR: this.localConfig.STATIC_BACKGROUND_COLOR || '#2E3440',
+            AUTH_MODE: authMode,
+            AUTH_TRUSTED_CIDRS: cidrText || '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
+            AUTH_BYPASS_USERNAME: (this.localConfig.AUTH_BYPASS_USERNAME || '').trim() || 'local_admin',
             SUBPATH: this.localConfig.SUBPATH || null,
           },
         });
@@ -825,6 +904,9 @@ export default {
         ENABLE_VISUAL_EFFECTS: true,
         ENABLE_STATIC_BACKGROUND: false,
         STATIC_BACKGROUND_COLOR: '#2E3440',
+        AUTH_MODE: 'enabled',
+        AUTH_TRUSTED_CIDRS: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
+        AUTH_BYPASS_USERNAME: 'local_admin',
         SUBPATH: null,
       };
 
@@ -894,33 +976,11 @@ export default {
   margin-bottom: 0;
 }
 
-.form-group label {
+.form-group label:not(.base-checkbox) {
   display: block;
   margin-top: 0.5rem;
-  font-weight: 500;
-  color: #e5e7eb;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  cursor: pointer;
-  margin-bottom: 0.5rem;
-}
-
-.checkbox-label input[type="checkbox"] {
-  vertical-align: middle;
-  width: 1.25rem;
-  height: 1.25rem;
-  accent-color: var(--color-primary);
-}
-
-.checkbox-text {
-  vertical-align: middle;
-  margin-left: 0.5rem;
-  color: #e5e7eb;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
 }
 
 .form-control {
@@ -954,6 +1014,13 @@ export default {
   line-height: 1.4;
 }
 
+.section-description {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
 .warning-box {
   background: rgba(245, 158, 11, 0.1);
   border: 1px solid rgba(245, 158, 11, 0.3);
@@ -981,6 +1048,12 @@ export default {
   color: #e5e7eb;
   margin: 0;
   line-height: 1.5;
+}
+
+.warning-box--auth {
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
 }
 
 .loading-users {
@@ -1185,19 +1258,6 @@ export default {
   filter: blur(0.8px);
   pointer-events: none;
   transition: all 0.3s ease;
-}
-
-.feature-disabled .checkbox-label {
-  cursor: not-allowed;
-}
-
-.feature-disabled input[type="checkbox"] {
-  opacity: 0.4;
-}
-
-.feature-disabled .checkbox-text,
-.feature-disabled .form-help {
-  color: var(--color-text-muted);
 }
 
 /* Feature wrapper for positioning */

@@ -25,13 +25,18 @@ Security decisions
 - Login errors are logged at WARNING level with the username (not the password)
   to support anomaly detection without leaking credentials to log consumers.
 """
+import os
 from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, request, jsonify, make_response, g
 
 from api_service.auth.auth_service import AuthService, MIN_PASSWORD_LENGTH, REFRESH_TOKEN_EXPIRE_DAYS
 from api_service.auth.limiter import limiter
-from api_service.auth.middleware import invalidate_setup_cache
+from api_service.auth.middleware import (
+    _is_trusted_local_ip,
+    _load_bypass_user_context,
+    invalidate_setup_cache,
+)
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
@@ -79,11 +84,45 @@ def auth_status():
         app_done = bool(config.get('SETUP_COMPLETED', False))
         allow_registration = bool(config.get('ALLOW_REGISTRATION', False))
 
-        return jsonify({
+        auth_mode = (os.environ.get("AUTH_MODE") or "").strip().lower()
+        if not auth_mode:
+            auth_mode = str(load_env_vars().get("AUTH_MODE", "enabled")).strip().lower()
+        if os.environ.get("SUGGESTARR_AUTH_DISABLED", "").lower() == "true":
+            auth_mode = "disabled"
+
+        current_user = getattr(g, "current_user", None)
+        bypass = False
+
+        # /api/auth/status is public, so middleware returns before injecting
+        # bypass context. Recreate equivalent bypass checks here.
+        if not current_user:
+            client_ip = (
+                request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+                or request.remote_addr
+                or ""
+            )
+            if auth_mode == "disabled":
+                current_user = _load_bypass_user_context()
+                bypass = True
+            elif auth_mode == "local_bypass" and _is_trusted_local_ip(client_ip):
+                current_user = _load_bypass_user_context()
+                bypass = True
+
+        authenticated = bool(current_user)
+
+        response = {
             "auth_setup_complete": auth_done,
             "app_setup_complete": app_done,
             "allow_registration": allow_registration,
-        }), 200
+            "authenticated": authenticated,
+        }
+
+        if authenticated:
+            response["username"] = current_user.get("username", "")
+            if bypass:
+                response["bypass"] = True
+
+        return jsonify(response), 200
     except Exception as exc:
         logger.error("Error reading auth status: %s", exc)
         # Fail open so the frontend can still reach the wizard.
@@ -91,6 +130,7 @@ def auth_status():
             "auth_setup_complete": False,
             "app_setup_complete": False,
             "allow_registration": False,
+            "authenticated": False,
         }), 200
 
 
@@ -216,13 +256,16 @@ def login():
     # SameSite=Strict — cookie is not sent on cross-site requests (CSRF protection).
     # path=/api/auth/refresh — cookie is only sent to the refresh endpoint,
     #   not to every API call, which limits its exposure window.
+    subpath = str(load_env_vars().get('SUBPATH') or '').strip()
+    refresh_path = f"{subpath}/api/auth/refresh" if subpath else "/api/auth/refresh"
+    
     response.set_cookie(
         _REFRESH_COOKIE,
         raw_refresh,
         httponly=True,
         samesite="Strict",
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/auth/refresh",
+        path=refresh_path,
     )
 
     return response
@@ -305,7 +348,9 @@ def logout():
 
     response = make_response(jsonify({"message": "Logged out"}), 200)
     # Clear the cookie by expiring it immediately.
-    response.delete_cookie(_REFRESH_COOKIE, path="/api/auth/refresh")
+    subpath = str(load_env_vars().get('SUBPATH') or '').strip()
+    refresh_path = f"{subpath}/api/auth/refresh" if subpath else "/api/auth/refresh"
+    response.delete_cookie(_REFRESH_COOKIE, path=refresh_path)
     return response
 
 

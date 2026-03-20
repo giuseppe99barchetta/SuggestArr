@@ -178,13 +178,19 @@ class JellyfinClient(BaseHTTPClient):
             # 404 for users whose library visibility excludes certain virtual folders
             # (e.g. Collections) in Jellyfin 10.9+.
             url = f"{self.api_url}/Users/{user_id}/Items"
+            # Over-fetch from the API by a factor of 10 so that the client-side
+            # per-series deduplication below can still yield max_content_fetch
+            # *unique* series even when the user recently binge-watched a few shows
+            # (each episode would otherwise consume one Limit slot, leaving very
+            # few unique series after dedup if the Limit equals max_content_fetch).
+            api_fetch_limit = max(self.max_content_fetch * 5, 100)
             params = {
                 "SortBy": "DatePlayed",
                 "SortOrder": "Descending",
                 "IsPlayed": "true",
                 "Recursive": "true",
                 "IncludeItemTypes": "Movie,Episode",
-                "Limit": self.max_content_fetch,
+                "Limit": api_fetch_limit,
                 "ParentId": library_id,
                 "Fields": "ProviderIds,SeriesProviderIds",
             }
@@ -264,11 +270,12 @@ class JellyfinClient(BaseHTTPClient):
         :return: List of items, or None if the fallback also fails.
         """
         url = f"{self.api_url}/Users/{user_id}/Items"
+        api_fetch_limit = max(self.max_content_fetch * 5, 100)
         params = {
             "IsPlayed": "true",
             "Recursive": "true",
             "IncludeItemTypes": "Movie,Episode",
-            "Limit": self.max_content_fetch,
+            "Limit": api_fetch_limit,
             "ParentId": library_id,
             "Fields": "ProviderIds,SeriesProviderIds",
         }

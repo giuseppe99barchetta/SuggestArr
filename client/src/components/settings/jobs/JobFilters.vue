@@ -102,15 +102,13 @@
 
     <!-- Include No Rating Toggle -->
     <div class="form-group">
-      <label class="toggle-item inline">
-        <input
-          v-model="localFilters.include_no_rating"
-          type="checkbox"
-        />
-        <span class="toggle-label-jobs">
-          {{ localFilters.rating_source !== 'tmdb' ? 'Include content without IMDB rating' : 'Include content without rating' }}
-        </span>
-      </label>
+      <div class="toggle-item inline">
+        <BaseCheckbox v-model="localFilters.include_no_rating">
+          <span class="toggle-label-jobs">
+            {{ localFilters.rating_source !== 'tmdb' ? 'Include content without IMDB rating' : 'Include content without rating' }}
+          </span>
+        </BaseCheckbox>
+      </div>
       <small class="form-help">Also include content that doesn't have any rating data yet</small>
     </div>
 
@@ -212,13 +210,11 @@
 
     <!-- Include TVOD Toggle -->
     <div class="form-group">
-      <label class="toggle-item inline">
-        <input
-          v-model="localFilters.include_tvod"
-          type="checkbox"
-        />
-        <span class="toggle-label-jobs">Include rent/buy (TVOD) availability</span>
-      </label>
+      <div class="toggle-item inline">
+        <BaseCheckbox v-model="localFilters.include_tvod">
+          <span class="toggle-label-jobs">Include rent/buy (TVOD) availability</span>
+        </BaseCheckbox>
+      </div>
       <small class="form-help">Also match providers available for rent or purchase, not just subscription (flatrate)</small>
     </div>
 
@@ -260,11 +256,13 @@
 <script>
 import { jobsApi } from '@/api/jobsApi';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 
 export default {
   name: 'JobFilters',
   components: {
-    BaseDropdown
+    BaseDropdown,
+    BaseCheckbox,
   },
   props: {
     modelValue: {
@@ -722,18 +720,10 @@ input[type="date"] {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  cursor: pointer;
 }
 
 .toggle-item.inline {
   padding: 0.5rem 0;
-}
-
-.toggle-item input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--color-primary);
-  cursor: pointer;
 }
 
 .toggle-label-jobs {

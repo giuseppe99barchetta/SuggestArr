@@ -623,9 +623,25 @@ export default {
         return this.currentUser;
       } catch (error) {
         this.currentUser = null;
-        if (error?.response?.status === 401 || !error?.response) {
-          this.$router.push('/login');
-          return null;
+
+        // In local bypass mode there may be no JWT token; rely on public
+        // auth status to avoid an incorrect redirect loop to /login.
+        try {
+          const statusRes = await axios.get('/api/auth/status', {
+            _skipAuth: true,
+            timeout: 5000,
+          });
+
+          if (statusRes?.data?.authenticated) {
+            const retryRes = await axios.get('/api/auth/me', {
+              withCredentials: true,
+              timeout: 10000,
+            });
+            this.currentUser = retryRes.data;
+            return this.currentUser;
+          }
+        } catch {
+          // Fall through to login redirect below when status/me cannot be resolved.
         }
 
         this.$router.push('/login');

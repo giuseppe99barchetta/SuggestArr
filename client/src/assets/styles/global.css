@@ -8,6 +8,7 @@
 @import './primitives/card.css';
 @import './primitives/form.css';
 @import './primitives/button.css';
+@import './primitives/checkbox.css';
 
 /* ========== Reset & Base ========== */
 * {

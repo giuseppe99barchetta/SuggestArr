@@ -120,11 +120,23 @@ def create_app():
     # Runs before every request and enforces JWT on all /api/* routes
     # except those explicitly listed in auth.middleware.PUBLIC_ROUTES.
     # ------------------------------------------------------------------
+    auth_mode = None
     if os.environ.get("SUGGESTARR_AUTH_DISABLED", "").lower() == "true":
+        auth_mode = "disabled"
+    else:
+        auth_mode = str(load_env_vars().get("AUTH_MODE", "enabled")).strip().lower()
+
+    if auth_mode == "disabled":
         logger.warning("=" * 60)
         logger.warning("!! SECURITY WARNING: Authentication is DISABLED !!")
         logger.warning("!! All API endpoints are publicly accessible.   !!")
         logger.warning("!! Set SUGGESTARR_AUTH_DISABLED=false to re-enable.")
+        logger.warning("=" * 60)
+    elif auth_mode == "local_bypass":
+        logger.warning("=" * 60)
+        logger.warning("!! SECURITY WARNING: Local Network Auth Bypass is ENABLED !!")
+        logger.warning("!! Trusted local CIDRs bypass login; remote access still needs JWT. !!")
+        logger.warning("!! Validate proxy/X-Forwarded-For trust configuration before use. !!")
         logger.warning("=" * 60)
 
     application.before_request(enforce_authentication)
