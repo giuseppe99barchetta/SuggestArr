@@ -174,7 +174,7 @@ class TestJobManagerCronTrigger(unittest.TestCase):
     def test_preset_every_hour(self):
         trigger = self.manager._preset_to_trigger('every_hour')
         self.assertIsInstance(trigger, CronTrigger)
-        now = datetime(2026, 2, 15, 1, 30, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 2, 15, 1, 14, 0, tzinfo=timezone.utc)
         nxt = _next_fire(trigger, now)
         # Next fire must always land on the top of the hour
         self.assertEqual(nxt.minute, 0)
