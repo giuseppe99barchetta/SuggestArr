@@ -55,6 +55,8 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       # Optional: Customize the port (defaults to 5000 if not set)
       - SUGGESTARR_PORT=${SUGGESTARR_PORT:-5000}
+      # Optional: Set to true to include adult content in TMDB searches (defaults to false)
+      - INCLUDE_ADULT=${INCLUDE_ADULT:-false}
 ```
 To start the container with Docker Compose:
 

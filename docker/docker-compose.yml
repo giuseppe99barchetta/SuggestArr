@@ -11,3 +11,4 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - SUGGESTARR_PORT=${SUGGESTARR_PORT:-5000}
       - TZ=Europe/Rome
+      - INCLUDE_ADULT=${INCLUDE_ADULT:-false}

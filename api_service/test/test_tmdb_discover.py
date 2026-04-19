@@ -14,6 +14,7 @@ Covers:
 """
 
 import asyncio
+import os
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -100,9 +101,17 @@ class TestBuildQueryParams(unittest.TestCase):
         params = self.disc._build_query_params({'sort_by': 'vote_average.desc'})
         self.assertEqual(params['sort_by'], 'vote_average.desc')
 
-    def test_default_include_adult_is_false(self):
+    @patch('api_service.services.tmdb.tmdb_discover.load_env_vars')
+    def test_default_include_adult_is_false(self, mock_load_env_vars):
+        mock_load_env_vars.return_value = {}
         params = self.disc._build_query_params({})
         self.assertEqual(params['include_adult'], 'false')
+
+    @patch('api_service.services.tmdb.tmdb_discover.load_env_vars')
+    def test_default_include_adult_is_true_via_env(self, mock_load_env_vars):
+        mock_load_env_vars.return_value = {'INCLUDE_ADULT': True}
+        params = self.disc._build_query_params({})
+        self.assertEqual(params['include_adult'], 'true')
 
     def test_internal_imdb_keys_not_in_output(self):
         params = self.disc._build_query_params({

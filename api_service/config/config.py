@@ -187,6 +187,7 @@ def get_default_values():
         # Include pay-per-view availability (rent/buy) in streaming checks
         # Default: false (only subscription-based flatrate providers are considered)
         'FILTER_INCLUDE_TVOD': lambda: False,
+        'INCLUDE_ADULT': lambda: False,
         'SUBPATH': lambda: None,
         'DB_TYPE': lambda: 'sqlite',
         'DB_HOST': lambda: None,
@@ -330,7 +331,7 @@ def get_config_sections():
                      'ENABLE_STATIC_BACKGROUND', 'STATIC_BACKGROUND_COLOR',
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
                      'ENABLE_API_CACHING', 'OPENAI_API_KEY', 'OPENAI_BASE_URL',
-                     'LLM_MODEL', 'SUBPATH', 'ALLOW_REGISTRATION']
+                     'LLM_MODEL', 'SUBPATH', 'ALLOW_REGISTRATION', 'INCLUDE_ADULT']
     }
 
 def get_config_section(section_name):
