@@ -1,3 +1,4 @@
+import os
 import time
 from flask import Blueprint, request, jsonify
 import aiohttp
@@ -160,7 +161,9 @@ def get_popular_movies():
         502 if TMDB upstream returns an error.
     """
     page          = request.args.get('page', 1, type=int)
-    include_adult = request.args.get('include_adult', 'false')
+    env_vars      = load_env_vars()
+    include_adult_default = str(env_vars.get('INCLUDE_ADULT', False)).lower()
+    include_adult = request.args.get('include_adult', include_adult_default)
     cache_key     = f'popular:{page}:{include_adult}'
 
     cached = _cache_get(cache_key, _POPULAR_TTL)

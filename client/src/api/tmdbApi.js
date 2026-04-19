@@ -18,7 +18,7 @@ export const fetchRandomMovieImage = async () => {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await axios.get('/api/tmdb/popular', {
-        params: { page: randomPage, include_adult: false },
+        params: { page: randomPage },
         timeout: 10000,
       });
 

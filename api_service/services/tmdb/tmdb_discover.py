@@ -4,9 +4,11 @@ Provides functionality to discover movies and TV shows using various filter crit
 """
 import aiohttp
 import asyncio
+import os
 from typing import Any, Dict, List, Optional
 
 from api_service.config.logger_manager import LoggerManager
+from api_service.config.config import load_env_vars
 from api_service.services.filter_normalization import build_tmdb_params, normalize_filters
 
 # Constants
@@ -445,7 +447,9 @@ class TMDbDiscover:
 
         # Default to exclude adult content
         if 'include_adult' not in params:
-            params['include_adult'] = 'false'
+            env_vars = load_env_vars()
+            include_adult_val = str(env_vars.get('INCLUDE_ADULT', False)).lower()
+            params['include_adult'] = include_adult_val
 
         self.logger.debug(f"Built query params: {params}")
         return params
