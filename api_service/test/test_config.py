@@ -91,6 +91,7 @@ class TestConfig(unittest.TestCase):
         "SEER_REQUEST_DELAY": 0.5,
         "FILTER_INCLUDE_TVOD": "false",
         "ALLOW_REGISTRATION": False,
+        "INCLUDE_ADULT": False,
     }
 
     def setUp(self):
