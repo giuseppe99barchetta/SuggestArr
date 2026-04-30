@@ -2,6 +2,7 @@ import os
 import time
 from flask import Blueprint, request, jsonify
 import aiohttp
+from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 
