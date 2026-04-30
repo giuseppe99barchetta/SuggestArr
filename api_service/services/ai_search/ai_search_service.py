@@ -80,14 +80,27 @@ class AiSearchService:
             ai_tv = tv_res["results"]
 
             merged: List[Dict] = []
+            seen_ids = set()
+
+            # Interleave items from both lists, preserving order and removing duplicates
+            # by their TMDb/OMDb IDs.
             for pair in zip(ai_movies, ai_tv):
-                merged.extend(pair)
+                for item in pair:
+                    item_id = item.get("id")
+                    if item_id not in seen_ids:
+                        merged.append(item)
+                        if item_id is not None:
+                            seen_ids.add(item_id)
 
             # Append leftovers (when one list is longer than the other)
+            min_len = min(len(ai_movies), len(ai_tv))
             for lst in (ai_movies, ai_tv):
-                for item in lst:
-                    if item not in merged:
+                for item in lst[min_len:]:
+                    item_id = item.get("id")
+                    if item_id not in seen_ids:
                         merged.append(item)
+                        if item_id is not None:
+                            seen_ids.add(item_id)
 
             ai_reasoning = {
                 "movie": movie_res.get("ai_reasoning", {}),
