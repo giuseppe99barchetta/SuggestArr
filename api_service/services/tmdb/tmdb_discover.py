@@ -131,11 +131,41 @@ class TMDbDiscover:
                 self.logger.warning(f"No data returned for page {page}")
                 break
 
-            for item in data['results']:
-                if use_imdb:
-                    imdb_id = await self._get_imdb_id(item['id'], media_type)
+            items_to_process = data['results']
+
+            if use_imdb and items_to_process:
+                # 1. Fetch IMDB IDs concurrently
+                id_sem = asyncio.Semaphore(10)
+                async def fetch_id(item):
+                    async with id_sem:
+                        return item['id'], await self._get_imdb_id(item['id'], media_type)
+
+                id_tasks = [fetch_id(item) for item in items_to_process]
+                id_results = await asyncio.gather(*id_tasks)
+                imdb_ids = dict(id_results)
+
+                # 2. Fetch OMDB ratings concurrently
+                omdb_sem = asyncio.Semaphore(10)
+                async def fetch_omdb(imdb_id):
+                    async with omdb_sem:
+                        return imdb_id, await self.omdb_client.get_rating(imdb_id)
+
+                omdb_tasks = [
+                    fetch_omdb(imdb_id)
+                    for _, imdb_id in imdb_ids.items() if imdb_id
+                ]
+
+                imdb_data_results = {}
+                if omdb_tasks:
+                    omdb_results = await asyncio.gather(*omdb_tasks)
+                    imdb_data_results = dict(omdb_results)
+
+                # 3. Apply IMDB filters
+                filtered_items = []
+                for item in items_to_process:
+                    imdb_id = imdb_ids.get(item['id'])
                     if imdb_id:
-                        imdb_data = await self.omdb_client.get_rating(imdb_id)
+                        imdb_data = imdb_data_results.get(imdb_id)
                         if not self._check_imdb_filter(
                             imdb_data, item, imdb_rating_gte, imdb_min_votes, include_no_rating
                         ):
@@ -145,6 +175,11 @@ class TMDbDiscover:
                         self.logger.debug("Excluding %s: no IMDB ID found in TMDB data", title)
                         continue
 
+                    filtered_items.append(item)
+
+                items_to_process = filtered_items
+
+            for item in items_to_process:
                 formatted = self._format_result(item, media_type)
                 results.append(formatted)
 

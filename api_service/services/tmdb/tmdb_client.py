@@ -81,24 +81,69 @@ class TMDbClient(BaseHTTPClient):
                 self.logger.debug("No data returned for page %d", page)
                 break
 
+            # First pass: identify items that need detail calls
+            items_to_process = []
             for item in data['results']:
                 filter_result = self._apply_filters(item, content_type)
                 core_passed = filter_result['passed']
 
-                # In normal mode skip failing items early (no detail API calls wasted)
+                # In normal mode skip failing items early
                 if not dry_run and not core_passed:
                     continue
 
-                needs_detail_call = self.filter_min_runtime or self.rating_source in ('imdb', 'both')
+                items_to_process.append((item, filter_result, core_passed))
+
+            # Fetch details concurrently
+            needs_detail_call = self.filter_min_runtime or self.rating_source in ('imdb', 'both')
+            detail_results = {}
+
+            if needs_detail_call and items_to_process:
+                # Use a semaphore to prevent too many concurrent requests to TMDB
+                sem = asyncio.Semaphore(10)
+
+                async def fetch_details(item_id, item_type):
+                    async with sem:
+                        return item_id, await self._get_item_details(item_id, item_type)
+
+                tasks = []
+                for item, _, core_passed in items_to_process:
+                    if core_passed or dry_run:
+                        tasks.append(fetch_details(item['id'], content_type))
+
+                if tasks:
+                    results = await asyncio.gather(*tasks)
+                    detail_results = {item_id: details for item_id, details in results}
+
+            # Now fetch OMDB ratings concurrently if needed
+            imdb_results = {}
+            if self.rating_source in ('imdb', 'both') and self.omdb_client and items_to_process:
+                omdb_sem = asyncio.Semaphore(10)
+
+                async def fetch_omdb(imdb_id):
+                    async with omdb_sem:
+                        return imdb_id, await self.omdb_client.get_rating(imdb_id)
+
+                omdb_tasks = []
+                for item, _, core_passed in items_to_process:
+                    if core_passed or dry_run:
+                        details = detail_results.get(item['id']) or {}
+                        imdb_id = details.get('imdb_id')
+                        if imdb_id:
+                            omdb_tasks.append(fetch_omdb(imdb_id))
+
+                if omdb_tasks:
+                    results = await asyncio.gather(*omdb_tasks)
+                    imdb_results = {imdb_id: data for imdb_id, data in results}
+
+            # Second pass: apply final filters with fetched data
+            for item, filter_result, core_passed in items_to_process:
                 runtime = None
                 imdb_id = None
 
-                # Only make detail API calls when the item passes core filters or we're in
-                # dry-run mode (so we can show runtime/IMDB results for passing items).
                 if needs_detail_call and (core_passed or dry_run):
-                    details = await self._get_item_details(item['id'], content_type)
-                    runtime = details.get('runtime') if details else None
-                    imdb_id = details.get('imdb_id') if details else None
+                    details = detail_results.get(item['id']) or {}
+                    runtime = details.get('runtime')
+                    imdb_id = details.get('imdb_id')
 
                 # Runtime check
                 if self.filter_min_runtime:
@@ -125,7 +170,7 @@ class TMDbClient(BaseHTTPClient):
                 # IMDB rating check
                 if self.rating_source in ('imdb', 'both') and self.omdb_client:
                     if imdb_id:
-                        imdb_data = await self.omdb_client.get_rating(imdb_id)
+                        imdb_data = imdb_results.get(imdb_id)
                         if dry_run:
                             imdb_result = self._get_imdb_filter_result(imdb_data)
                             filter_result['imdb_rating'] = imdb_result
