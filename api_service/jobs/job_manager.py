@@ -11,6 +11,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
+from api_service.utils.asyncio_loop import close_event_loop
 
 
 class JobManager:
@@ -192,7 +193,7 @@ class JobManager:
             try:
                 loop.run_until_complete(executor(job_id))
             finally:
-                loop.close()
+                close_event_loop(loop, self.logger)
 
             self.logger.info(f"Job {job_id} execution completed")
         except Exception as e:

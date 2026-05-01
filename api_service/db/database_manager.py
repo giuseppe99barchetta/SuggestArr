@@ -1526,6 +1526,12 @@ class DatabaseManager:
                 conn.commit()
                 if inserted:
                     self.logger.debug("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)
+                else:
+                    self.logger.info(
+                        "enqueue_request: %s tmdb:%s already exists in pending queue, skipping.",
+                        media_type,
+                        tmdb_id,
+                    )
                 return inserted
         except Exception as e:
             self.logger.error("Failed to enqueue %s tmdb:%s: %s", media_type, tmdb_id, e)

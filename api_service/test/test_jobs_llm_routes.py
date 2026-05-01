@@ -8,6 +8,7 @@ from flask import Flask, g
 
 from api_service.auth.limiter import limiter
 from api_service.blueprints.jobs.routes import jobs_bp
+from api_service.utils.asyncio_loop import run_coroutine_sync
 
 
 class TestLlmConnectionRoute(unittest.TestCase):
@@ -55,3 +56,35 @@ class TestLlmConnectionRoute(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(calls[0]['max_tokens'], 16)
+
+
+class TestAsyncLoopCleanup(unittest.TestCase):
+    def test_run_coroutine_sync_drains_pending_cleanup_task(self):
+        state = {"closed": False}
+
+        async def cleanup():
+            state["closed"] = True
+
+        async def main():
+            import asyncio
+            asyncio.create_task(cleanup())
+            return "ok"
+
+        self.assertEqual(run_coroutine_sync(main()), "ok")
+        self.assertTrue(state["closed"])
+
+
+class TestHealthLlmCheck(unittest.TestCase):
+    def test_health_llm_check_does_not_create_async_client(self):
+        from api_service.blueprints.health import routes as health_routes
+
+        with patch(
+            'api_service.services.llm.llm_service.is_llm_configured',
+            return_value=True,
+        ) as configured, patch(
+            'api_service.services.llm.llm_service.get_llm_client',
+            side_effect=AssertionError("should not create client"),
+        ):
+            self.assertEqual(health_routes._check_llm(), "ok")
+
+        configured.assert_called_once()

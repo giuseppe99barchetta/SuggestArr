@@ -12,6 +12,7 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.seer.seer_client import SeerClient
+from api_service.utils.asyncio_loop import close_event_loop
 
 MAX_RETRIES = 5
 WORKER_BATCH = 50
@@ -148,4 +149,4 @@ def run_queue_worker() -> None:
     except Exception as e:
         logger.error("Queue worker cycle failed: %s", e, exc_info=True)
     finally:
-        loop.close()
+        close_event_loop(loop, logger)

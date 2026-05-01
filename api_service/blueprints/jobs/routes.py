@@ -1,7 +1,6 @@
 """ API routes for managing jobs (discover and recommendation).
 Provides CRUD operations and job execution endpoints.
 """
-import asyncio
 import threading
 import traceback
 from flask import Blueprint, jsonify, request, g
@@ -14,6 +13,7 @@ from api_service.db.job_repository import JobRepository
 from api_service.jobs.job_manager import JobManager
 from api_service.jobs.discover_automation import DiscoverAutomation, execute_discover_job
 from api_service.jobs.recommendation_automation import RecommendationAutomation, execute_recommendation_job
+from api_service.utils.asyncio_loop import run_coroutine_sync
 
 logger = LoggerManager.get_logger("JobsRoute")
 jobs_bp = Blueprint('jobs', __name__)
@@ -26,19 +26,9 @@ _run_all_running = False
 def run_async(coro):
     """
     Run an async coroutine synchronously.
-    Uses asyncio.run() so event loops are created/closed safely per invocation.
+    Drains pending cleanup tasks before closing the per-invocation event loop.
     """
-    try:
-        return asyncio.run(coro)
-    except RuntimeError as exc:
-        # If this is called while another loop is already running in the same
-        # thread, execute asyncio.run() in a worker thread instead.
-        if "cannot be called from a running event loop" in str(exc):
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, coro)
-                return future.result()
-        raise
+    return run_coroutine_sync(coro, logger)
 
 
 def get_job_manager() -> JobManager:
@@ -536,9 +526,9 @@ def _run_all_jobs_in_background():
             try:
                 logger.info(f"Force run all: starting {job_type} job {job_id} ({job.get('name', '')})")
                 if job_type == 'recommendation':
-                    asyncio.run(execute_recommendation_job(job_id))
+                    run_async(execute_recommendation_job(job_id))
                 else:
-                    asyncio.run(execute_discover_job(job_id))
+                    run_async(execute_discover_job(job_id))
                 logger.info(f"Force run all: job {job_id} completed")
             except Exception as e:
                 logger.error(f"Force run all: error in job {job_id}: {e}", exc_info=True)
