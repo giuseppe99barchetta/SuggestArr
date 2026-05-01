@@ -311,6 +311,37 @@ class JellyfinClient(BaseHTTPClient):
             return None
 
     
+    async def get_series_provider_ids(self, user_id, series_id):
+        """
+        Fetch provider IDs for a series by its Jellyfin SeriesId.
+        Used as a fallback when episode objects do not include SeriesProviderIds.
+        :param user_id: The Jellyfin user ID.
+        :param series_id: The Jellyfin SeriesId from the episode object.
+        :return: Dict of provider IDs (e.g. {"Tmdb": "12345"}), or empty dict.
+        """
+        url = f"{self.api_url}/Users/{user_id}/Items/{series_id}"
+        params = {"Fields": "ProviderIds"}
+        self.logger.debug(
+            "Fetching series item for SeriesId=%s (user=%s)", series_id, user_id
+        )
+        try:
+            session = await self._get_session()
+            async with session.get(
+                url, headers=self.headers, params=params, timeout=self.REQUEST_TIMEOUT
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("ProviderIds", {})
+                self.logger.warning(
+                    "Failed to fetch series item SeriesId=%s: HTTP %d",
+                    series_id, response.status,
+                )
+        except aiohttp.ClientError as e:
+            self.logger.error(
+                "Error fetching series item SeriesId=%s: %s", series_id, str(e)
+            )
+        return {}
+
     async def get_libraries(self):
         """
         Retrieves list of library asynchronously.

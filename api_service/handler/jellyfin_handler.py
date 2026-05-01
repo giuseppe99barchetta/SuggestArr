@@ -158,6 +158,16 @@ class JellyfinHandler(BaseMediaHandler):
         source_tmdb_id = provider_ids.get("Tmdb")
 
         if not source_tmdb_id:
+            self.logger.debug(
+                "SeriesProviderIds missing on episode; fetching series item for SeriesId=%s",
+                series_id,
+            )
+            series_provider_ids = await self.jellyfin_client.get_series_provider_ids(
+                user["id"], series_id
+            )
+            source_tmdb_id = series_provider_ids.get("Tmdb")
+
+        if not source_tmdb_id:
             self.logger.debug("Series skipped: no TMDb ID")
             return
 
