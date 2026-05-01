@@ -38,6 +38,7 @@ class JellyfinClient(BaseHTTPClient):
             "Authorization": f'MediaBrowser Token="{self.api_token}"'
         }
         self.existing_content = {}
+        self._series_provider_ids_cache = {}
         
     async def init_existing_content(self):
         self.logger.info('Initializing existing content.')
@@ -309,6 +310,49 @@ class JellyfinClient(BaseHTTPClient):
                 library_name, user_name, str(e)
             )
             return None
+
+    async def get_series_provider_ids(self, series_id):
+        """
+        Retrieves provider IDs from a parent series item.
+        Jellyfin episode items do not always include the series TMDb ID.
+        """
+        if not series_id:
+            return {}
+
+        if series_id in self._series_provider_ids_cache:
+            return self._series_provider_ids_cache[series_id]
+
+        url = f"{self.api_url}/Items/{series_id}"
+        params = {"Fields": "ProviderIds"}
+        self.logger.debug("Requesting series provider IDs for %s", series_id)
+
+        try:
+            session = await self._get_session()
+            async with session.get(
+                url,
+                headers=self.headers,
+                params=params,
+                timeout=self.REQUEST_TIMEOUT
+            ) as response:
+                if response.status != 200:
+                    self.logger.warning(
+                        "Failed to get series provider IDs for %s: %d",
+                        series_id,
+                        response.status
+                    )
+                    return {}
+
+                data = await response.json()
+                provider_ids = data.get("ProviderIds") or {}
+                self._series_provider_ids_cache[series_id] = provider_ids
+                return provider_ids
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            self.logger.error(
+                "Error retrieving series provider IDs for %s: %s",
+                series_id,
+                str(e)
+            )
+            return {}
 
     
     async def get_libraries(self):

@@ -231,6 +231,7 @@ class FakeJellyfinClient(AsyncContextClient):
         self.existing_content = {}
         self.init_existing_content = AsyncMock()
         self.get_all_users = AsyncMock(return_value=[deepcopy(USER)])
+        self.get_series_provider_ids = AsyncMock(return_value={"Tmdb": "22"})
 
     async def get_recent_items(self, user):
         return deepcopy(self.recent_items_by_library)
@@ -478,6 +479,41 @@ async def test_jellyfin_handler_process_recent_items_runs_real_llm_flow_without_
     assert {item["title"] for item in handler.dry_run_items} == {"Blade Runner 2049", "Silo"}
     assert ("Severance", None) in handler.tmdb_client.tv_calls
     assert "TypeError" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_jellyfin_handler_fetches_parent_series_tmdb_id_for_episode(test_logger):
+    jellyfin_client = FakeJellyfinClient()
+    tmdb_client = SimpleNamespace(
+        get_metadata=AsyncMock(return_value={"id": 22, "name": "Severance"}),
+        find_similar_tvshows=AsyncMock(return_value=[{"id": 221, "name": "Silo"}]),
+    )
+    handler = JellyfinHandler(
+        jellyfin_client=jellyfin_client,
+        seer_client=FakeSeerClient(),
+        tmdb_client=tmdb_client,
+        logger=test_logger,
+        max_similar_movie=1,
+        max_similar_tv=1,
+        selected_users=[deepcopy(USER)],
+        dry_run=True,
+    )
+    handler.request_similar_media = AsyncMock()
+
+    episode = {
+        "Type": "Episode",
+        "Name": "Pilot",
+        "SeriesName": "Severance",
+        "SeriesId": "series-22",
+        "ProviderIds": {"Tvdb": "795681"},
+    }
+
+    await handler.process_episode(deepcopy(USER), episode)
+
+    jellyfin_client.get_series_provider_ids.assert_awaited_once_with("series-22")
+    tmdb_client.get_metadata.assert_awaited_once_with("22", "tv")
+    tmdb_client.find_similar_tvshows.assert_awaited_once_with("22", dry_run=True)
+    handler.request_similar_media.assert_awaited_once()
 
 
 @pytest.mark.asyncio
