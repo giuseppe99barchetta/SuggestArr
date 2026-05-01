@@ -963,11 +963,12 @@ def test_llm_connection():
 
         client = OpenAI(**client_kwargs)
 
-        # Make a minimal completion to verify the connection and credentials
+        # Make a minimal completion to verify the connection and credentials.
+        # Some OpenAI-compatible gateways reject values below 16.
         client.chat.completions.create(
             model=model,
             messages=[{'role': 'user', 'content': 'Hi'}],
-            max_tokens=1,
+            max_tokens=16,
         )
 
         return jsonify({'status': 'success', 'message': 'Connection successful!'}), 200
