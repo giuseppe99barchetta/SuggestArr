@@ -523,6 +523,38 @@ async def test_recommendation_automation_dry_run_preserves_async_flow_and_logs(m
 
 
 @pytest.mark.asyncio
+async def test_recommendation_automation_dry_run_respects_job_max_results(monkeypatch):
+    runtime_config = build_runtime_config("jellyfin")
+    job_data = build_job_data("jellyfin-capped-dry-run")
+    job_data["max_results"] = 1
+    fake_repo = FakeJobRepository(job_data)
+    fake_tmdb = FakeTMDbClient()
+    fake_seer = FakeSeerClient()
+    fake_jellyfin = FakeJellyfinClient()
+    llm_mock = make_llm_side_effect()
+
+    monkeypatch.setattr(recommendation_module.LoggerManager, "get_logger", lambda name: logging.getLogger(name))
+    monkeypatch.setattr(recommendation_module.ConfigService, "get_runtime_config", lambda: deepcopy(runtime_config))
+    monkeypatch.setattr(recommendation_module, "JobRepository", lambda: fake_repo)
+    monkeypatch.setattr(recommendation_module, "DatabaseManager", lambda: FakeDatabaseManager())
+    monkeypatch.setattr(recommendation_module, "SeerClient", lambda *args, **kwargs: fake_seer)
+    monkeypatch.setattr(recommendation_module, "TMDbClient", lambda *args, **kwargs: fake_tmdb)
+    monkeypatch.setattr(recommendation_module, "JellyfinClient", lambda *args, **kwargs: fake_jellyfin)
+
+    with patch("api_service.handler.base_handler.get_recommendations_from_history", llm_mock):
+        automation = await RecommendationAutomation.create(job_id=1, dry_run=True)
+        result = await automation.run(dry_run=True)
+
+    assert result.success is True
+    assert result.requested_count == 1
+    assert sum(1 for item in result.dry_run_items if item["would_request"]) == 1
+    assert any(
+        item.get("filter_results", {}).get("request_limit", {}).get("passed") is False
+        for item in result.dry_run_items
+    )
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("language_payload", "history_items", "expected_language"),
     [

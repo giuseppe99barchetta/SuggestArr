@@ -127,7 +127,7 @@
           <transition name="slide">
             <div v-if="showAdvanced" class="advanced-section">
               <!-- Max Results -->
-              <div class="settings-group" data-tour-id="job-modal-max-results">
+              <div v-if="form.job_type === 'discover'" class="settings-group" data-tour-id="job-modal-max-results">
                 <h4>Results</h4>
                 <div class="form-group">
                   <label for="maxResults">Max Results: {{ form.max_results }}</label>
@@ -141,7 +141,7 @@
                     class="form-range"
                   />
                   <small class="form-help">
-                    {{ form.job_type === 'discover' ? 'Maximum content to discover per run' : 'Maximum similar content per watched item' }}
+                    Maximum content to discover per run
                   </small>
                 </div>
               </div>
