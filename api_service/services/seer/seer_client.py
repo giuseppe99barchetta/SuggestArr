@@ -121,7 +121,7 @@ class SeerClient(BaseHTTPClient):
         try:
             async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=self.REQUEST_TIMEOUT) as response:
                 self.logger.debug("Login response status: %d", response.status)
-                if response.status == 200 and 'connect.sid' in response.cookies:
+                if response.status in self.HTTP_OK and 'connect.sid' in response.cookies:
                     self.session_token = response.cookies['connect.sid'].value
                     self.is_logged_in = True
                     self.logger.info("Successfully logged in as %s", self.username)

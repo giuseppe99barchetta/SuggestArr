@@ -169,6 +169,26 @@ class TestLogin(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.session_token, 'session_xyz')
         self.assertTrue(client.is_logged_in)
 
+    async def test_sets_session_token_on_success_created_status(self):
+        cookie_mock = MagicMock()
+        cookie_mock.value = 'session_xyz'
+
+        resp = AsyncMock()
+        resp.status = 201
+        resp.cookies = {'connect.sid': cookie_mock}
+        resp.__aenter__ = AsyncMock(return_value=resp)
+        resp.__aexit__ = AsyncMock(return_value=False)
+
+        session = MagicMock()
+        session.post = MagicMock(return_value=resp)
+        client = _make_client()
+
+        with patch.object(client, '_get_session', AsyncMock(return_value=session)):
+            await client.login()
+
+        self.assertEqual(client.session_token, 'session_xyz')
+        self.assertTrue(client.is_logged_in)
+
     async def test_does_not_set_token_on_non_200(self):
         resp = AsyncMock()
         resp.status = 401
