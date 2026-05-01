@@ -74,6 +74,80 @@ class TMDbClient(BaseHTTPClient):
         """
         self.logger.debug("Fetching recommendations for %s with ID %s (dry_run=%s)", content_type, content_id, dry_run)
         search = []
+        async def process_item(item):
+            filter_result = self._apply_filters(item, content_type)
+            core_passed = filter_result['passed']
+
+            # In normal mode skip failing items early (no detail API calls wasted)
+            if not dry_run and not core_passed:
+                return None
+
+            needs_detail_call = self.filter_min_runtime or self.rating_source in ('imdb', 'both')
+            runtime = None
+            imdb_id = None
+
+            # Only make detail API calls when the item passes core filters or we're in
+            # dry-run mode (so we can show runtime/IMDB results for passing items).
+            if needs_detail_call and (core_passed or dry_run):
+                details = await self._get_item_details(item['id'], content_type)
+                runtime = details.get('runtime') if details else None
+                imdb_id = details.get('imdb_id') if details else None
+
+            # Runtime check
+            if self.filter_min_runtime:
+                if runtime is not None:
+                    runtime_passed = runtime >= self.filter_min_runtime
+                    if dry_run:
+                        filter_result['runtime'] = {
+                            'passed': runtime_passed, 'label': 'Runtime',
+                            'value': f'{runtime}min',
+                            'reason': f'Below {self.filter_min_runtime}min' if not runtime_passed else None,
+                        }
+                        if not runtime_passed:
+                            filter_result['passed'] = False
+                    elif not runtime_passed:
+                        self._log_exclusion_reason(
+                            item,
+                            f"runtime {runtime}min below minimum {self.filter_min_runtime}min",
+                            content_type,
+                        )
+                        return None
+                elif dry_run and core_passed:
+                    filter_result['runtime'] = {'passed': None, 'label': 'Runtime', 'reason': 'Unknown runtime'}
+
+            # IMDB rating check
+            if self.rating_source in ('imdb', 'both') and self.omdb_client:
+                if imdb_id:
+                    imdb_data = await self.omdb_client.get_rating(imdb_id)
+                    if dry_run:
+                        imdb_result = self._get_imdb_filter_result(imdb_data)
+                        filter_result['imdb_rating'] = imdb_result
+                        if not imdb_result['passed']:
+                            filter_result['passed'] = False
+                    elif not self._apply_imdb_filter(imdb_data, item, content_type):
+                        return None
+                else:
+                    if not self.include_no_ratings:
+                        if dry_run:
+                            filter_result['imdb_rating'] = {
+                                'passed': False, 'label': 'IMDB',
+                                'reason': 'No IMDB ID found',
+                            }
+                            filter_result['passed'] = False
+                        else:
+                            self._log_exclusion_reason(item, "no IMDB ID found", content_type)
+                            return None
+                    elif dry_run and core_passed:
+                        filter_result['imdb_rating'] = {
+                            'passed': None, 'label': 'IMDB',
+                            'reason': 'No IMDB ID',
+                        }
+
+            formatted = self._format_result(item, content_type)
+            if dry_run:
+                formatted['filter_results'] = filter_result
+            return formatted
+
         for page in range(1, self.pages + 1):
             self.logger.debug("Fetching page %d of recommendations", page)
             data = await self._fetch_page_data(content_id, content_type, page)
@@ -81,81 +155,18 @@ class TMDbClient(BaseHTTPClient):
                 self.logger.debug("No data returned for page %d", page)
                 break
 
-            for item in data['results']:
-                filter_result = self._apply_filters(item, content_type)
-                core_passed = filter_result['passed']
+            # Process items in batches to avoid over-fetching while still benefiting from concurrency
+            batch_size = 5
+            for i in range(0, len(data['results']), batch_size):
+                batch = data['results'][i:i + batch_size]
+                results = await asyncio.gather(*[process_item(item) for item in batch])
 
-                # In normal mode skip failing items early (no detail API calls wasted)
-                if not dry_run and not core_passed:
-                    continue
+                for res in results:
+                    if res is not None:
+                        search.append(res)
+                        if not dry_run and len(search) >= self.search_size:
+                            break
 
-                needs_detail_call = self.filter_min_runtime or self.rating_source in ('imdb', 'both')
-                runtime = None
-                imdb_id = None
-
-                # Only make detail API calls when the item passes core filters or we're in
-                # dry-run mode (so we can show runtime/IMDB results for passing items).
-                if needs_detail_call and (core_passed or dry_run):
-                    details = await self._get_item_details(item['id'], content_type)
-                    runtime = details.get('runtime') if details else None
-                    imdb_id = details.get('imdb_id') if details else None
-
-                # Runtime check
-                if self.filter_min_runtime:
-                    if runtime is not None:
-                        runtime_passed = runtime >= self.filter_min_runtime
-                        if dry_run:
-                            filter_result['runtime'] = {
-                                'passed': runtime_passed, 'label': 'Runtime',
-                                'value': f'{runtime}min',
-                                'reason': f'Below {self.filter_min_runtime}min' if not runtime_passed else None,
-                            }
-                            if not runtime_passed:
-                                filter_result['passed'] = False
-                        elif not runtime_passed:
-                            self._log_exclusion_reason(
-                                item,
-                                f"runtime {runtime}min below minimum {self.filter_min_runtime}min",
-                                content_type,
-                            )
-                            continue
-                    elif dry_run and core_passed:
-                        filter_result['runtime'] = {'passed': None, 'label': 'Runtime', 'reason': 'Unknown runtime'}
-
-                # IMDB rating check
-                if self.rating_source in ('imdb', 'both') and self.omdb_client:
-                    if imdb_id:
-                        imdb_data = await self.omdb_client.get_rating(imdb_id)
-                        if dry_run:
-                            imdb_result = self._get_imdb_filter_result(imdb_data)
-                            filter_result['imdb_rating'] = imdb_result
-                            if not imdb_result['passed']:
-                                filter_result['passed'] = False
-                        elif not self._apply_imdb_filter(imdb_data, item, content_type):
-                            continue
-                    else:
-                        if not self.include_no_ratings:
-                            if dry_run:
-                                filter_result['imdb_rating'] = {
-                                    'passed': False, 'label': 'IMDB',
-                                    'reason': 'No IMDB ID found',
-                                }
-                                filter_result['passed'] = False
-                            else:
-                                self._log_exclusion_reason(item, "no IMDB ID found", content_type)
-                                continue
-                        elif dry_run and core_passed:
-                            filter_result['imdb_rating'] = {
-                                'passed': None, 'label': 'IMDB',
-                                'reason': 'No IMDB ID',
-                            }
-
-                formatted = self._format_result(item, content_type)
-                if dry_run:
-                    formatted['filter_results'] = filter_result
-                search.append(formatted)
-
-                # Stop once we reach the target in normal mode
                 if not dry_run and len(search) >= self.search_size:
                     self.logger.debug("Reached search size limit of %d", self.search_size)
                     break
