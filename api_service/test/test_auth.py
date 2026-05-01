@@ -168,18 +168,24 @@ class TestMiddleware(unittest.TestCase):
         invalidate_setup_cache()
         os.environ['SUGGESTARR_SECRET_KEY'] = TEST_SECRET
         os.environ.pop('SUGGESTARR_AUTH_DISABLED', None)
+        os.environ['AUTH_MODE'] = 'enabled'
+        os.environ.pop('AUTH_TRUSTED_CIDRS', None)
+        os.environ.pop('AUTH_BYPASS_USERNAME', None)
 
     def tearDown(self):
         from api_service.auth.middleware import invalidate_setup_cache
         invalidate_setup_cache()
         os.environ.pop('SUGGESTARR_AUTH_DISABLED', None)
+        os.environ.pop('AUTH_MODE', None)
+        os.environ.pop('AUTH_TRUSTED_CIDRS', None)
+        os.environ.pop('AUTH_BYPASS_USERNAME', None)
 
-    def _call_middleware(self, path, headers=None, user_count=1):
+    def _call_middleware(self, path, headers=None, user_count=1, remote_addr='127.0.0.1', include_user=False):
         """
         Run enforce_authentication for a synthetic request and return its result.
         Returns None if the middleware allows the request, or a (response, code) tuple.
         """
-        from flask import Flask
+        from flask import Flask, g
         from api_service.auth.middleware import enforce_authentication, invalidate_setup_cache
 
         app = Flask(__name__)
@@ -189,8 +195,11 @@ class TestMiddleware(unittest.TestCase):
         invalidate_setup_cache()
 
         with patch('api_service.auth.middleware.DatabaseManager', stub_db):
-            with app.test_request_context(path, headers=headers or {}):
-                return enforce_authentication()
+            with app.test_request_context(path, headers=headers or {}, environ_base={"REMOTE_ADDR": remote_addr}):
+                result = enforce_authentication()
+                if include_user:
+                    return result, getattr(g, 'current_user', None)
+                return result
 
     # --- Non-API paths always pass ---
 
@@ -273,14 +282,50 @@ class TestMiddleware(unittest.TestCase):
 
     def test_disable_auth_bypasses_protected_routes(self):
         os.environ['SUGGESTARR_AUTH_DISABLED'] = 'true'
-        result = self._call_middleware('/api/config/fetch', user_count=1)
+        result, current_user = self._call_middleware('/api/config/fetch', user_count=1, include_user=True)
         self.assertIsNone(result)
+        self.assertIsNotNone(current_user)
 
     def test_disable_auth_false_still_enforces(self):
         os.environ['SUGGESTARR_AUTH_DISABLED'] = 'false'
         result = self._call_middleware('/api/config/fetch', user_count=1)
         _, code = result
         self.assertEqual(code, 401)
+
+    def test_local_bypass_trusted_ip_skips_jwt_and_sets_user(self):
+        os.environ['AUTH_MODE'] = 'local_bypass'
+        result, current_user = self._call_middleware(
+            '/api/config/fetch',
+            user_count=1,
+            remote_addr='192.168.1.50',
+            include_user=True,
+        )
+        self.assertIsNone(result)
+        self.assertIsNotNone(current_user)
+        self.assertIn('id', current_user)
+
+    def test_local_bypass_remote_ip_still_requires_jwt(self):
+        os.environ['AUTH_MODE'] = 'local_bypass'
+        result = self._call_middleware(
+            '/api/config/fetch',
+            user_count=1,
+            remote_addr='8.8.8.8',
+        )
+        self.assertIsNotNone(result)
+        _, code = result
+        self.assertEqual(code, 401)
+
+    def test_disabled_mode_always_sets_current_user(self):
+        os.environ['AUTH_MODE'] = 'disabled'
+        result, current_user = self._call_middleware(
+            '/api/config/fetch',
+            user_count=1,
+            remote_addr='8.8.8.8',
+            include_user=True,
+        )
+        self.assertIsNone(result)
+        self.assertIsNotNone(current_user)
+        self.assertIn('id', current_user)
 
     # --- Error response must not leak internals ---
 
@@ -372,6 +417,7 @@ class _AuthBlueprintBase(unittest.TestCase):
         from api_service.auth.middleware import invalidate_setup_cache
         invalidate_setup_cache()
         os.environ['SUGGESTARR_SECRET_KEY'] = TEST_SECRET
+        os.environ['AUTH_MODE'] = 'enabled'
         os.environ['SUGGESTARR_AUTH_DISABLED'] = 'true'   # bypass middleware for blueprint tests
 
         # In-memory stores
@@ -384,6 +430,7 @@ class _AuthBlueprintBase(unittest.TestCase):
 
     def tearDown(self):
         os.environ.pop('SUGGESTARR_AUTH_DISABLED', None)
+        os.environ.pop('AUTH_MODE', None)
         from api_service.auth.middleware import invalidate_setup_cache
         invalidate_setup_cache()
         from api_service.auth.secret_key import invalidate_cache

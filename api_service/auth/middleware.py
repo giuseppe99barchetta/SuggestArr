@@ -38,12 +38,14 @@ leakage to potential attackers.
 import os
 import time
 import threading
+import ipaddress
 from functools import wraps
 from typing import Optional
 
 from flask import request, jsonify, g
 
 from api_service.auth.auth_service import AuthService
+from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 
 logger = LoggerManager.get_logger("AuthMiddleware")
@@ -91,6 +93,138 @@ _SETUP_CACHE_TTL_S = 5.0
 DatabaseManager = None  # type: ignore[assignment]
 
 
+_DEFAULT_AUTH_TRUSTED_CIDRS = [
+    "127.0.0.0/8",
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "::1/128",
+    "fc00::/7",
+]
+
+
+def _get_database_manager():
+    """Lazily resolve DatabaseManager to avoid circular imports."""
+    global DatabaseManager
+    if DatabaseManager is None:
+        from api_service.db.database_manager import DatabaseManager as _DM
+        DatabaseManager = _DM
+    return DatabaseManager
+
+
+def _resolve_auth_mode() -> str:
+    """Resolve auth mode from backward-compatible env/config settings."""
+    if os.environ.get("SUGGESTARR_AUTH_DISABLED", "").lower() == "true":
+        return "disabled"
+
+    mode = (os.environ.get("AUTH_MODE") or "").strip().lower()
+    if not mode:
+        mode = str(load_env_vars().get("AUTH_MODE", "enabled")).strip().lower()
+
+    if mode not in {"enabled", "local_bypass", "disabled"}:
+        logger.warning("Invalid AUTH_MODE=%r, defaulting to 'enabled'", mode)
+        return "enabled"
+    return mode
+
+
+def _load_trusted_cidrs() -> list[ipaddress._BaseNetwork]:
+    """Load and parse trusted CIDR ranges for local-bypass mode."""
+    raw = os.environ.get("AUTH_TRUSTED_CIDRS")
+    if raw is None:
+        raw = load_env_vars().get("AUTH_TRUSTED_CIDRS", _DEFAULT_AUTH_TRUSTED_CIDRS)
+
+    if isinstance(raw, str):
+        cidr_values = [x.strip() for x in raw.split(",") if x.strip()]
+    elif isinstance(raw, (list, tuple, set)):
+        cidr_values = [str(x).strip() for x in raw if str(x).strip()]
+    else:
+        cidr_values = list(_DEFAULT_AUTH_TRUSTED_CIDRS)
+
+    networks: list[ipaddress._BaseNetwork] = []
+    for cidr in cidr_values:
+        try:
+            networks.append(ipaddress.ip_network(cidr, strict=False))
+        except ValueError:
+            logger.warning("Ignoring invalid AUTH_TRUSTED_CIDRS entry: %r", cidr)
+
+    if not networks:
+        networks = [ipaddress.ip_network(c, strict=False) for c in _DEFAULT_AUTH_TRUSTED_CIDRS]
+
+    return networks
+
+
+def _is_trusted_local_ip(client_ip: str) -> bool:
+    """Return True when client_ip belongs to configured trusted local CIDRs."""
+    if not client_ip:
+        return False
+    try:
+        ip = ipaddress.ip_address(client_ip)
+    except ValueError:
+        return False
+
+    for network in _load_trusted_cidrs():
+        if ip in network:
+            return True
+    return False
+
+
+def _build_synthetic_bypass_user() -> dict:
+    """Build a minimal synthetic admin context for bypass modes."""
+    username = (os.environ.get("AUTH_BYPASS_USERNAME") or "").strip()
+    if not username:
+        username = str(load_env_vars().get("AUTH_BYPASS_USERNAME", "local_admin")).strip() or "local_admin"
+
+    return {
+        "id": "0",
+        "username": username,
+        "role": "admin",
+        "can_manage_ai": 1,
+        "visible_tabs": "requests,ai_search,services,jobs,database,advanced,users,profile,logs",
+    }
+
+
+def _load_bypass_user_context() -> dict:
+    """
+    Resolve a valid request user context for auth-bypass modes.
+
+    Resolution order:
+      1) AUTH_BYPASS_USERNAME (default local_admin)
+      2) First active admin user in DB
+      3) Synthetic local admin context
+    """
+    configured_username = (os.environ.get("AUTH_BYPASS_USERNAME") or "").strip()
+    if not configured_username:
+        configured_username = str(load_env_vars().get("AUTH_BYPASS_USERNAME", "local_admin")).strip() or "local_admin"
+
+    try:
+        db = _get_database_manager()()
+
+        configured_user = db.get_auth_user_by_username(configured_username)
+        if configured_user and configured_user.get("is_active", True):
+            return {
+                "id": str(configured_user["id"]),
+                "username": configured_user.get("username", configured_username),
+                "role": configured_user.get("role", "admin"),
+                "can_manage_ai": int(bool(configured_user.get("can_manage_ai", 0))),
+                "visible_tabs": configured_user.get("visible_tabs", "requests,jobs,profile"),
+            }
+
+        users = db.get_all_auth_users()
+        for user in users:
+            if user.get("role") == "admin" and user.get("is_active", True):
+                return {
+                    "id": str(user["id"]),
+                    "username": user.get("username", "admin"),
+                    "role": user.get("role", "admin"),
+                    "can_manage_ai": int(bool(user.get("can_manage_ai", 0))),
+                    "visible_tabs": user.get("visible_tabs", "requests,jobs,profile"),
+                }
+    except Exception as exc:
+        logger.warning("Could not resolve bypass user from DB; using synthetic user: %s", exc)
+
+    return _build_synthetic_bypass_user()
+
+
 def _is_setup_mode() -> bool:
     """
     Return True when no SuggestArr auth users exist (first-run wizard mode).
@@ -109,13 +243,8 @@ def _is_setup_mode() -> bool:
         if cached["value"] is not None and now < cached["expires_at"]:
             return cached["value"]  # type: ignore[return-value]
 
-    # Resolve lazily to avoid a circular import at module load time.
-    if DatabaseManager is None:
-        from api_service.db.database_manager import DatabaseManager as _DM
-        DatabaseManager = _DM
-
     try:
-        count = DatabaseManager().get_auth_user_count()
+        count = _get_database_manager()().get_auth_user_count()
         result = count == 0
     except Exception:
         # If the DB is not yet reachable (e.g., first startup), fail open so
@@ -195,11 +324,25 @@ def enforce_authentication() -> Optional[tuple]:
     if _is_public_route(path):
         return None
 
-    # Escape hatch: SUGGESTARR_AUTH_DISABLED=true bypasses all auth checks.
-    # This is documented as insecure and intended only for operators who need
-    # backward compatibility during a migration window.
-    # The startup warning (emitted in app.py) makes the risk visible.
-    if os.environ.get("SUGGESTARR_AUTH_DISABLED", "").lower() == "true":
+    auth_mode = _resolve_auth_mode()
+
+    client_ip = request.remote_addr or ""
+    trusted_cidr_networks = _load_trusted_cidrs()
+    trusted_cidrs = [str(network) for network in trusted_cidr_networks]
+    is_trusted_ip = _is_trusted_local_ip(client_ip)
+
+    logger.debug(
+        f"AUTH DEBUG - ip={client_ip} mode={auth_mode} trusted={is_trusted_ip} cidrs={trusted_cidrs}"
+    )
+
+    if auth_mode == "disabled":
+        if getattr(g, "current_user", None) is None:
+            g.current_user = _load_bypass_user_context()
+        return None
+
+    if auth_mode == "local_bypass" and is_trusted_ip:
+        if getattr(g, "current_user", None) is None:
+            g.current_user = _load_bypass_user_context()
         return None
 
     # Setup mode: if no admin account exists yet, allow everything so the

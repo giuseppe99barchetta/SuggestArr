@@ -61,17 +61,17 @@
         <span class="llm-badge">Beta</span>
       </label>
       <div class="llm-toggle-row">
-        <label class="toggle-item">
-          <input
+        <div class="toggle-item">
+          <BaseCheckbox
             v-model="localFilters.use_llm"
-            type="checkbox"
             @change="updateFilters(localFilters)"
-          />
-          <span class="toggle-label-modal">
-            <i class="fas fa-brain"></i>
-            Enable AI-powered recommendations
-          </span>
-        </label>
+          >
+            <span class="toggle-label-modal">
+              <i class="fas fa-brain"></i>
+              Enable AI-powered recommendations
+            </span>
+          </BaseCheckbox>
+        </div>
       </div>
       <small class="form-help llm-help" v-if="localFilters.use_llm">
         <i class="fas fa-info-circle"></i>
@@ -145,40 +145,34 @@
       <div class="form-group">
         <label>Behavior Options</label>
         <div class="toggle-options">
-          <label class="toggle-item">
-            <input
-              v-model="localFilters.exclude_downloaded"
-              type="checkbox"
-            />
-            <span class="toggle-label-modal">
-              <i class="fas fa-download"></i>
-              Exclude Downloaded Content
-            </span>
-          </label>
+          <div class="toggle-item">
+            <BaseCheckbox v-model="localFilters.exclude_downloaded">
+              <span class="toggle-label-modal">
+                <i class="fas fa-download"></i>
+                Exclude Downloaded Content
+              </span>
+            </BaseCheckbox>
+          </div>
           <small class="toggle-help">Skip content already in your library</small>
 
-          <label class="toggle-item">
-            <input
-              v-model="localFilters.exclude_requested"
-              type="checkbox"
-            />
-            <span class="toggle-label-modal">
-              <i class="fas fa-clock"></i>
-              Exclude Requested Content
-            </span>
-          </label>
+          <div class="toggle-item">
+            <BaseCheckbox v-model="localFilters.exclude_requested">
+              <span class="toggle-label-modal">
+                <i class="fas fa-clock"></i>
+                Exclude Requested Content
+              </span>
+            </BaseCheckbox>
+          </div>
           <small class="toggle-help">Skip content already requested in Seer</small>
 
-          <label class="toggle-item">
-            <input
-              v-model="localFilters.honor_seer_discovery"
-              type="checkbox"
-            />
-            <span class="toggle-label-modal">
-              <i class="fas fa-compass"></i>
-              Honor Seer Discovery
-            </span>
-          </label>
+          <div class="toggle-item">
+            <BaseCheckbox v-model="localFilters.honor_seer_discovery">
+              <span class="toggle-label-modal">
+                <i class="fas fa-compass"></i>
+                Honor Seer Discovery
+              </span>
+            </BaseCheckbox>
+          </div>
           <small class="toggle-help">Respect Seer's discovery settings for requests</small>
         </div>
       </div>
@@ -189,9 +183,11 @@
 <script>
 import axios from 'axios';
 import { waitForAuthReady } from '@/composables/useAuth';
+import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 
 export default {
   name: 'RecommendationFilters',
+  components: { BaseCheckbox },
   props: {
     modelValue: {
       type: Object,
@@ -519,20 +515,12 @@ export default {
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem;
-  cursor: pointer;
   border-radius: var(--radius-sm);
   transition: var(--transition-base);
 }
 
 .toggle-item:hover {
   background: var(--color-bg-interactive);
-}
-
-.toggle-item input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--color-primary);
-  cursor: pointer;
 }
 
 .toggle-label-modal {
