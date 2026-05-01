@@ -336,11 +336,13 @@ def enforce_authentication() -> Optional[tuple]:
     )
 
     if auth_mode == "disabled":
-        g.current_user = _load_bypass_user_context()
+        if getattr(g, "current_user", None) is None:
+            g.current_user = _load_bypass_user_context()
         return None
 
     if auth_mode == "local_bypass" and is_trusted_ip:
-        g.current_user = _load_bypass_user_context()
+        if getattr(g, "current_user", None) is None:
+            g.current_user = _load_bypass_user_context()
         return None
 
     # Setup mode: if no admin account exists yet, allow everything so the

@@ -168,7 +168,7 @@ class TestMiddleware(unittest.TestCase):
         invalidate_setup_cache()
         os.environ['SUGGESTARR_SECRET_KEY'] = TEST_SECRET
         os.environ.pop('SUGGESTARR_AUTH_DISABLED', None)
-        os.environ.pop('AUTH_MODE', None)
+        os.environ['AUTH_MODE'] = 'enabled'
         os.environ.pop('AUTH_TRUSTED_CIDRS', None)
         os.environ.pop('AUTH_BYPASS_USERNAME', None)
 
@@ -417,6 +417,7 @@ class _AuthBlueprintBase(unittest.TestCase):
         from api_service.auth.middleware import invalidate_setup_cache
         invalidate_setup_cache()
         os.environ['SUGGESTARR_SECRET_KEY'] = TEST_SECRET
+        os.environ['AUTH_MODE'] = 'enabled'
         os.environ['SUGGESTARR_AUTH_DISABLED'] = 'true'   # bypass middleware for blueprint tests
 
         # In-memory stores
@@ -429,6 +430,7 @@ class _AuthBlueprintBase(unittest.TestCase):
 
     def tearDown(self):
         os.environ.pop('SUGGESTARR_AUTH_DISABLED', None)
+        os.environ.pop('AUTH_MODE', None)
         from api_service.auth.middleware import invalidate_setup_cache
         invalidate_setup_cache()
         from api_service.auth.secret_key import invalidate_cache
