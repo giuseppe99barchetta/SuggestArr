@@ -28,7 +28,7 @@
             <img src="@/assets/logo.png" alt="SuggestArr Logo" class="logo">
           </a>
           <button
-            v-if="authSetupComplete"
+            v-if="authSetupComplete && !authBypass"
             @click="handleLogout"
             class="logout-btn"
             title="Log out"
@@ -366,7 +366,7 @@ export default {
   setup() {
     const { bg1Url, bg2Url, activeBg, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
     const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
-    const { authSetupComplete, logout } = useAuth();
+    const { authSetupComplete, authBypass, logout } = useAuth();
 
     return {
       bg1Url,
@@ -382,6 +382,7 @@ export default {
       updateAvailable,
       checkForUpdates,
       authSetupComplete,
+      authBypass,
       logout,
     };
   },
