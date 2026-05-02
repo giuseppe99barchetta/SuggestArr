@@ -393,6 +393,21 @@ class TestBuildSeerPayload(unittest.TestCase):
         payload = client._build_seer_payload('tv', {'id': 200})
         self.assertEqual(payload['seasons'], [1, 2, 3])
 
+    def test_tv_payload_zero_seasons_means_all(self):
+        client = _make_client(number_of_seasons='0')
+        payload = client._build_seer_payload('tv', {'id': 200})
+        self.assertEqual(payload['seasons'], 'all')
+
+    def test_tv_payload_first_season_only_overrides_numbered_seasons(self):
+        client = _make_client(number_of_seasons='3', request_first_season_only=True)
+        payload = client._build_seer_payload('tv', {'id': 200})
+        self.assertEqual(payload['seasons'], [1])
+
+    def test_tv_payload_first_season_only_false_string_does_not_override(self):
+        client = _make_client(number_of_seasons='3', request_first_season_only='false')
+        payload = client._build_seer_payload('tv', {'id': 200})
+        self.assertEqual(payload['seasons'], [1, 2, 3])
+
     def test_private_meta_keys_are_present(self):
         client = _make_client()
         source = {'id': 42}

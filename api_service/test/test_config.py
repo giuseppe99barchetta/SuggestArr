@@ -25,6 +25,7 @@ class TestConfig(unittest.TestCase):
         "FILTER_TMDB_MIN_VOTES": "50",
         "FILTER_TMDB_THRESHOLD": "75",
         "FILTER_NUM_SEASONS": 0,
+        "REQUEST_FIRST_SEASON_ONLY": False,
         "HONOR_JELLYSEER_DISCOVERY": "false",
         "JELLYFIN_API_URL": "",
         "JELLYFIN_LIBRARIES": [],

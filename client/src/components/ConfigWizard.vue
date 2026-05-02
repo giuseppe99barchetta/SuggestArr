@@ -262,6 +262,7 @@ const SETUP_DEFAULTS = {
   CRON_TIMES: '0 0 * * *',
   EXCLUDE_DOWNLOADED: true,
   EXCLUDE_REQUESTED: true,
+  REQUEST_FIRST_SEASON_ONLY: false,
 };
 
 export default {

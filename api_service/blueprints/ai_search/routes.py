@@ -138,10 +138,17 @@ async def ai_search_request():
         if media_type == "tv":
             num_seasons = config.get("FILTER_NUM_SEASONS", "all")
             req_payload["tvdbId"] = int(tmdb_id)
-            req_payload["seasons"] = (
-                "all" if str(num_seasons) == "all"
-                else list(range(1, int(num_seasons) + 1))
+            first_season_only = config.get("REQUEST_FIRST_SEASON_ONLY", False)
+            first_season_only = (
+                first_season_only if isinstance(first_season_only, bool)
+                else str(first_season_only).strip().lower() in {"1", "true", "yes", "on"}
             )
+            if first_season_only:
+                req_payload["seasons"] = [1]
+            elif num_seasons in (None, "", "all", 0, "0"):
+                req_payload["seasons"] = "all"
+            else:
+                req_payload["seasons"] = list(range(1, int(num_seasons) + 1))
 
         # Auth: prefer session cookie, fall back to API key (mirrors SeerClient behaviour)
         headers = {"Content-Type": "application/json", "accept": "application/json"}

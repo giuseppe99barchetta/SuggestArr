@@ -62,9 +62,10 @@ async def _run_worker() -> int:
         seer_user_name=env.get('SEER_USER_NAME'),
         seer_password=env.get('SEER_USER_PSW'),
         session_token=env.get('SEER_SESSION_TOKEN'),
-        number_of_seasons=env.get('NUMBER_OF_SEASONS', 'all'),
+        number_of_seasons=env.get('FILTER_NUM_SEASONS') or 'all',
         exclude_downloaded=False,
         exclude_watched=False,  # pre-checks already done at enqueue time
+        request_first_season_only=env.get('REQUEST_FIRST_SEASON_ONLY', False),
     )
     async with seer:
         await seer.init()

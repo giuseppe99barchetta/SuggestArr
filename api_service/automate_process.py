@@ -34,6 +34,7 @@ class ContentAutomation:
         instance.max_similar_tv = min(int(env_vars.get('MAX_SIMILAR_TV', '2')), 20)
         instance.search_size = min(int(env_vars.get('SEARCH_SIZE', '20')), 100)
         instance.number_of_seasons = env_vars.get('FILTER_NUM_SEASONS') or "all"
+        instance.request_first_season_only = env_vars.get('REQUEST_FIRST_SEASON_ONLY', False)
 
         # Ensure selected_users is always a list and normalize mixed types
         selected_users_raw = env_vars.get('SELECTED_USERS') or []
@@ -120,7 +121,8 @@ class ContentAutomation:
             instance.number_of_seasons,
             exclude_downloaded,
             exclude_requested,
-            anime_profile_config
+            anime_profile_config,
+            instance.request_first_season_only
         )
         await seer_client.init()
         instance.logger.info("Seer service client initialized successfully")
