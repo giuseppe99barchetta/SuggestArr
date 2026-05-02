@@ -90,6 +90,15 @@
               <i class="fas fa-pencil-alt"></i>
             </button>
 
+            <button
+              :disabled="!!isSaving[user.id] || !selectedService"
+              class="btn btn-outline btn-sm icon-btn"
+              title="Assign media account"
+              @click="openMediaLinkModal(user)"
+            >
+              <i class="fas fa-link"></i>
+            </button>
+
             <!-- Delete -->
             <button
               :disabled="user.id === currentUserId || !!isSaving[user.id]"
@@ -365,12 +374,71 @@
       </transition>
     </teleport>
 
+    <!-- ── Assign Media Account Modal ── -->
+    <teleport to="body">
+      <transition name="modal-fade">
+        <div v-if="showMediaLinkModal" class="modal-overlay" @click.self="showMediaLinkModal = false">
+          <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="media-link-title">
+            <div class="modal-header">
+              <div class="modal-title-wrap">
+                <h3 class="modal-title" id="media-link-title"><i class="fas fa-link"></i> Assign Media Account</h3>
+                <p class="modal-subtitle">Map {{ mediaLinkTarget?.username }} to a {{ providerLabel }} user.</p>
+              </div>
+              <button type="button" class="modal-close" aria-label="Close media account modal" @click="showMediaLinkModal = false">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div class="modal-body">
+              <section class="um-section-card">
+                <div class="form-group um-form-group">
+                  <BaseDropdown
+                    v-model="selectedMediaUserId"
+                    :options="mediaUserOptions"
+                    label="Media account"
+                    placeholder="Select account"
+                    :disabled="isLoadingMediaUsers || isSavingMediaLink"
+                  />
+                  <small v-if="isLoadingMediaUsers" class="form-help">
+                    Loading {{ providerLabel }} users…
+                  </small>
+                </div>
+              </section>
+              <div v-if="mediaLinkError" class="error-banner" role="alert">
+                <i class="fas fa-exclamation-circle"></i>
+                {{ mediaLinkError }}
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button class="btn btn-outline" :disabled="isSavingMediaLink" @click="showMediaLinkModal = false">
+                Cancel
+              </button>
+              <button class="btn btn-primary um-btn-primary" :disabled="isSavingMediaLink || !selectedMediaUserId" @click="submitMediaLink">
+                <i :class="isSavingMediaLink ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
+                {{ isSavingMediaLink ? 'Saving…' : 'Save Link' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </teleport>
+
   </div>
 </template>
 
 <script>
 import { useAuth } from '@/composables/useAuth';
-import { getUsers, createUserAdmin, updateUser, updateUserPermissions, deleteUser } from '@/api/api';
+import {
+  adminLinkProvider,
+  createUserAdmin,
+  deleteUser,
+  fetchPlexUsers,
+  getMediaServerUsers,
+  getUsers,
+  updateUser,
+  updateUserPermissions,
+} from '@/api/api';
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
@@ -421,6 +489,14 @@ export default {
       permissionsError: null,
       isSavingPermissions: false,
 
+      showMediaLinkModal: false,
+      mediaLinkTarget: null,
+      mediaUsers: [],
+      selectedMediaUserId: '',
+      isLoadingMediaUsers: false,
+      isSavingMediaLink: false,
+      mediaLinkError: null,
+
       roleOptions: [
         { label: 'Admin', value: 'admin' },
         { label: 'User', value: 'user' },
@@ -429,13 +505,8 @@ export default {
       availableTabs: [
         { value: 'requests', label: 'Requests', icon: 'fas fa-film', required: false },
         { value: 'jobs', label: 'Jobs', icon: 'fas fa-briefcase', required: false },
-        { value: 'services', label: 'Services', icon: 'fas fa-cogs', required: false },
-        { value: 'database', label: 'Database', icon: 'fas fa-database', required: false },
-        { value: 'advanced', label: 'Advanced', icon: 'fas fa-sliders-h', required: false },
         { value: 'ai_search', label: 'AI Search', icon: 'fas fa-robot', required: false },
         { value: 'profile', label: 'Profile', icon: 'fas fa-user-circle', required: true },
-        { value: 'logs', label: 'Logs', icon: 'fas fa-file-alt', required: false },
-
       ],
     };
   },
@@ -444,6 +515,22 @@ export default {
     currentUserId() {
       if (!this.currentUser) return null;
       return Number(this.currentUser.id ?? this.currentUser.sub ?? null);
+    },
+    selectedService() {
+      return (this.config?.SELECTED_SERVICE || '').toLowerCase();
+    },
+    providerLabel() {
+      const labels = { plex: 'Plex', jellyfin: 'Jellyfin', emby: 'Emby' };
+      return labels[this.selectedService] || 'media';
+    },
+    mediaUserOptions() {
+      return this.mediaUsers.map((user) => ({
+        label: user.name || user.username || user.title || user.email || String(user.id),
+        value: String(user.id),
+      }));
+    },
+    selectedMediaUser() {
+      return this.mediaUsers.find((user) => String(user.id) === String(this.selectedMediaUserId)) || null;
     },
   },
 
@@ -597,7 +684,7 @@ export default {
         const allowedTabs = [...new Set(
           this.editPermissions.visible_tabs_array
             .map((tab) => this.normalizeTabValue(tab))
-            .filter(Boolean)
+            .filter(tab => this.availableTabs.some(available => available.value === tab))
         )];
 
         const payload = {
@@ -616,6 +703,63 @@ export default {
         this.permissionsError = err.response?.data?.error || 'Failed to update permissions';
       } finally {
         this.isSavingPermissions = false;
+      }
+    },
+
+    async openMediaLinkModal(user) {
+      this.mediaLinkTarget = user;
+      this.mediaUsers = [];
+      this.selectedMediaUserId = '';
+      this.mediaLinkError = null;
+      this.showMediaLinkModal = true;
+      await this.loadMediaUsers();
+    },
+
+    async loadMediaUsers() {
+      if (!['plex', 'jellyfin', 'emby'].includes(this.selectedService)) {
+        this.mediaLinkError = 'No supported media service configured';
+        return;
+      }
+
+      this.isLoadingMediaUsers = true;
+      try {
+        if (this.selectedService === 'plex') {
+          const res = await fetchPlexUsers({
+            PLEX_TOKEN: this.config.PLEX_TOKEN,
+            PLEX_API_URL: this.config.PLEX_API_URL,
+          });
+          this.mediaUsers = res.data?.users || [];
+        } else {
+          const res = await getMediaServerUsers(this.selectedService);
+          this.mediaUsers = Array.isArray(res.data) ? res.data : [];
+        }
+      } catch (err) {
+        this.mediaUsers = [];
+        this.mediaLinkError = err.response?.data?.error
+          || err.response?.data?.message
+          || `Failed to load ${this.providerLabel} users`;
+      } finally {
+        this.isLoadingMediaUsers = false;
+      }
+    },
+
+    async submitMediaLink() {
+      if (!this.mediaLinkTarget || !this.selectedMediaUser) return;
+      this.isSavingMediaLink = true;
+      this.mediaLinkError = null;
+      try {
+        const user = this.selectedMediaUser;
+        const externalUsername = user.name || user.username || user.title || user.email || String(user.id);
+        await adminLinkProvider(this.mediaLinkTarget.id, this.selectedService, {
+          external_user_id: String(user.id),
+          external_username: externalUsername,
+        });
+        this.$toast.success(`${this.providerLabel} account assigned to ${this.mediaLinkTarget.username}`);
+        this.showMediaLinkModal = false;
+      } catch (err) {
+        this.mediaLinkError = err.response?.data?.error || 'Failed to assign media account';
+      } finally {
+        this.isSavingMediaLink = false;
       }
     },
 

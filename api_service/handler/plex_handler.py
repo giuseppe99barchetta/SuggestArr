@@ -2,7 +2,7 @@ import asyncio
 import unicodedata
 
 from api_service.handler.base_handler import BaseMediaHandler
-from api_service.services.plex.plex_client import PlexClient
+from api_service.services.plex.plex_client import PlexClient, normalize_guid_provider_id
 
 def to_ascii(value):
     """
@@ -15,7 +15,7 @@ def to_ascii(value):
     return unicodedata.normalize('NFKD', value)
 
 class PlexHandler(BaseMediaHandler):
-    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False):
+    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -28,6 +28,7 @@ class PlexHandler(BaseMediaHandler):
         :param use_llm: Override for LLM mode. If None, falls back to global ENABLE_ADVANCED_ALGORITHM setting.
         :param request_delay: Seconds to wait between consecutive Seer service requests (0 = concurrent).
         :param dry_run: If True, simulate requests without touching download clients.
+        :param max_total_requests: Max number of items to request for the whole run.
         """
         super().__init__(
             seer_client=seer_client,
@@ -40,7 +41,8 @@ class PlexHandler(BaseMediaHandler):
             request_delay=request_delay,
             honor_seer_discovery=honor_seer_discovery,
             seer_discovered_ids=seer_discovered_ids,
-            dry_run=dry_run
+            dry_run=dry_run,
+            max_total_requests=max_total_requests
         )
         self.plex_client = plex_client
         self._populate_existing_content_sets()
@@ -49,9 +51,15 @@ class PlexHandler(BaseMediaHandler):
         """Extract existing content from Plex client."""
         if self.plex_client.existing_content:
             for media_type, items in self.plex_client.existing_content.items():
-                self.existing_content_sets[media_type] = {
-                    str(item.get('tmdb_id')) for item in items if item.get('tmdb_id')
-                }
+                normalized_ids = set()
+                for item in items:
+                    tmdb_id = item.get('tmdb_id')
+                    if not tmdb_id:
+                        continue
+                    normalized_ids.add(
+                        normalize_guid_provider_id(f'tmdb://{tmdb_id}', 'tmdb') or str(tmdb_id)
+                    )
+                self.existing_content_sets[media_type] = normalized_ids
 
 
     async def process_recent_items(self):
@@ -225,12 +233,19 @@ class PlexHandler(BaseMediaHandler):
                 if in_excluded_streaming_service:
                     filter_results['passed'] = False
 
-                would_request = (
+                base_would_request = (
                     filter_results['passed']
                     and not already_requested
                     and not already_downloaded
                     and not excluded_by_discovery
                 )
+                would_request = base_would_request and await self._reserve_request_slot()
+                if base_would_request and not would_request:
+                    filter_results['request_limit'] = {
+                        'passed': False,
+                        'label': 'Request limit',
+                        'reason': f'Max Results reached ({self.max_total_requests})',
+                    }
 
                 title = media.get('title') or media.get('name') or 'Unknown'
                 self.logger.info(f"[DRY RUN] {'Would request' if would_request else 'Would skip'} {media_type}: {title}")
@@ -261,7 +276,13 @@ class PlexHandler(BaseMediaHandler):
             return
 
         # Non-dry-run optimization: Batch check and avoid redundant API calls
-        media_to_process = media_ids[:max_items]
+        remaining_capacity = None
+        if self.max_total_requests is not None:
+            remaining_capacity = max(self.max_total_requests - self.request_count, 0)
+            if remaining_capacity <= 0:
+                return
+        item_limit = min(max_items, remaining_capacity) if remaining_capacity is not None else max_items
+        media_to_process = media_ids[:item_limit]
         if not media_to_process:
             return
 
@@ -293,12 +314,12 @@ class PlexHandler(BaseMediaHandler):
 
             # Check batch results
             if media_id in already_requested_set:
-                self.logger.debug(f"Skipping [{media_type}, {media_title}]: already requested (batch check).")
+                self.logger.info(f"Skipping [{media_type}, {media_title}]: already requested (batch check).")
                 continue
 
             # Check optimized local content set
             if media_id in local_content_set:
-                self.logger.debug(f"Skipping [{media_type}, {media_title}]: already downloaded (local set check).")
+                self.logger.info(f"Skipping [{media_type}, {media_title}]: already downloaded (local set check).")
                 continue
 
             if self.honor_seer_discovery and media_id in self.seer_discovered_ids:
@@ -342,9 +363,18 @@ class PlexHandler(BaseMediaHandler):
             })
             self.request_count += 1
             return
+        if not await self._reserve_request_slot():
+            self.logger.info(
+                "Skipping %s: job max_results limit reached (%s)",
+                media.get('title') or media.get('name') or 'Unknown',
+                self.max_total_requests,
+            )
+            return
         if await self.seer_client.request_media(media_type, media, source_tmdb_obj, is_anime=is_anime, rationale=media.get('rationale')):
             self.request_count += 1
             title_for_log = media.get('title') or media.get('name') or ''
             if title_for_log is not None and isinstance(title_for_log, str):
                 title_for_log = to_ascii(title_for_log)
             self.logger.info(f"Requested {media_type}: {title_for_log}{' [Anime]' if is_anime else ''}")
+        else:
+            await self._release_request_slot()

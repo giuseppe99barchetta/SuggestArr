@@ -7,6 +7,7 @@ from api_service.auth.middleware import require_role
 from api_service.automate_process import ContentAutomation
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.utils.asyncio_loop import close_event_loop
 
 logger = LoggerManager().get_logger("AutomationRoute")
 automation_bp = Blueprint('automation', __name__)
@@ -27,7 +28,7 @@ def _run_automation_in_background():
     except Exception as e:
         logger.error(f'Background force run error: {str(e)}', exc_info=True)
     finally:
-        loop.close()
+        close_event_loop(loop, logger)
         with _force_run_lock:
             _force_run_running = False
 

@@ -28,7 +28,7 @@
             <img src="@/assets/logo.png" alt="SuggestArr Logo" class="logo">
           </a>
           <button
-            v-if="authSetupComplete"
+            v-if="authSetupComplete && !authBypass"
             @click="handleLogout"
             class="logout-btn"
             title="Log out"
@@ -156,7 +156,7 @@
           </div>
         </div>
         
-        <div class="footer-actions" data-tour-id="footer-actions">
+        <div v-if="isAdmin" class="footer-actions" data-tour-id="footer-actions">
           <button
             @click="exportConfig"
             class="btn btn-outline"
@@ -366,7 +366,7 @@ export default {
   setup() {
     const { bg1Url, bg2Url, activeBg, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
     const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
-    const { authSetupComplete, logout } = useAuth();
+    const { authSetupComplete, authBypass, logout } = useAuth();
 
     return {
       bg1Url,
@@ -382,6 +382,7 @@ export default {
       updateAvailable,
       checkForUpdates,
       authSetupComplete,
+      authBypass,
       logout,
     };
   },
@@ -415,10 +416,10 @@ export default {
         { id: 'services',  name: 'Services',  icon: 'fas fa-plug',         tourId: 'tab-services', adminOnly: true },
         { id: 'jobs',      name: 'Jobs',       icon: 'fas fa-briefcase',   tourId: 'tab-jobs' },
         { id: 'database',  name: 'Database',  icon: 'fas fa-database',     tourId: 'tab-database', adminOnly: true },
-        { id: 'advanced',  name: 'Advanced',  icon: 'fas fa-sliders-h',   tourId: 'tab-advanced' },
+        { id: 'advanced',  name: 'Advanced',  icon: 'fas fa-sliders-h',   tourId: 'tab-advanced', adminOnly: true },
         { id: 'users',     name: 'Users',      icon: 'fas fa-users',       adminOnly: true },
         { id: 'profile',   name: 'Profile',    icon: 'fas fa-user-circle', nonAdminOnly: true },
-        { id: 'logs',      name: 'Logs',       icon: 'fas fa-file-alt',    tourId: 'tab-logs' },
+        { id: 'logs',      name: 'Logs',       icon: 'fas fa-file-alt',    tourId: 'tab-logs', adminOnly: true },
       ],
       tourSteps: [
         {
@@ -504,6 +505,9 @@ export default {
         if (!isAdmin && allowedTabs.size > 0 && !allowedTabs.has(tab.id)) return false;
         return true;
       });
+    },
+    isAdmin() {
+      return this.currentUser?.role === 'admin';
     },
     activeTabComponent() {
       // Never resolve a component for a tab the current user cannot access.

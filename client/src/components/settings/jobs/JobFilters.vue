@@ -127,6 +127,16 @@
       <small class="form-help">Only include TV shows with at least this many seasons</small>
     </div>
 
+    <!-- Request Seasons Option (TV-capable jobs) -->
+    <div v-if="mediaType === 'tv' || mediaType === 'both'" class="form-group">
+      <div class="toggle-item inline">
+        <BaseCheckbox v-model="localFilters.request_first_season_only">
+          <span class="toggle-label-jobs">Request first season only</span>
+        </BaseCheckbox>
+      </div>
+      <small class="form-help">Send season 1 only when requesting new TV series</small>
+    </div>
+
     <!-- Minimum Runtime Filter -->
     <div class="form-group">
       <label for="minRuntime">Minimum Runtime (minutes)</label>

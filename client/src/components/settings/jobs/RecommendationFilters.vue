@@ -86,6 +86,21 @@
     <template v-if="showAdvanced">
       <!-- Recommendation-specific settings -->
       <div class="form-group">
+        <label for="maxRecommendationResults">Total Request Limit: {{ maxResults }}</label>
+        <input
+          id="maxRecommendationResults"
+          :value="maxResults"
+          type="range"
+          min="5"
+          max="100"
+          step="5"
+          class="form-range"
+          @input="updateMaxResults"
+        />
+        <small class="form-help">Maximum items this recommendation job can request per run</small>
+      </div>
+
+      <div class="form-group">
         <label for="maxSimilarMovie">Similar Movies Per Watched: {{ localFilters.max_similar_movie || 5 }}</label>
         <input
           id="maxSimilarMovie"
@@ -224,6 +239,9 @@ export default {
   computed: {
     userMode() {
       return this.localUserMode;
+    },
+    maxResults() {
+      return this.modelValue.max_results || 20;
     }
   },
   watch: {
@@ -328,6 +346,13 @@ export default {
           ...this.modelValue.filters,
           ...filters
         }
+      });
+    },
+
+    updateMaxResults(event) {
+      this.$emit('update:modelValue', {
+        ...this.modelValue,
+        max_results: Number(event.target.value)
       });
     }
   }

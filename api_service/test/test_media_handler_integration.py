@@ -231,6 +231,7 @@ class FakeJellyfinClient(AsyncContextClient):
         self.existing_content = {}
         self.init_existing_content = AsyncMock()
         self.get_all_users = AsyncMock(return_value=[deepcopy(USER)])
+        self.get_series_provider_ids = AsyncMock(return_value={"Tmdb": "22"})
 
     async def get_recent_items(self, user):
         return deepcopy(self.recent_items_by_library)
@@ -454,6 +455,27 @@ async def test_plex_handler_process_recent_items_runs_real_llm_flow_without_type
     assert "TypeError" not in caplog.text
 
 
+def test_plex_handler_normalizes_existing_content_tmdb_ids(test_logger):
+    plex_client = FakePlexClient()
+    plex_client.existing_content = {
+        "movie": [{"tmdb_id": "808?lang=en"}],
+        "tv": [{"tmdb_id": "1399"}],
+    }
+
+    handler = PlexHandler(
+        plex_client=plex_client,
+        seer_client=FakeSeerClient(),
+        tmdb_client=FakeTMDbClient(),
+        logger=test_logger,
+        max_similar_movie=1,
+        max_similar_tv=1,
+        dry_run=True,
+    )
+
+    assert handler.existing_content_sets["movie"] == {"808"}
+    assert handler.existing_content_sets["tv"] == {"1399"}
+
+
 @pytest.mark.asyncio
 async def test_jellyfin_handler_process_recent_items_runs_real_llm_flow_without_type_error(caplog, test_logger):
     handler = JellyfinHandler(
@@ -478,6 +500,41 @@ async def test_jellyfin_handler_process_recent_items_runs_real_llm_flow_without_
     assert {item["title"] for item in handler.dry_run_items} == {"Blade Runner 2049", "Silo"}
     assert ("Severance", None) in handler.tmdb_client.tv_calls
     assert "TypeError" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_jellyfin_handler_fetches_parent_series_tmdb_id_for_episode(test_logger):
+    jellyfin_client = FakeJellyfinClient()
+    tmdb_client = SimpleNamespace(
+        get_metadata=AsyncMock(return_value={"id": 22, "name": "Severance"}),
+        find_similar_tvshows=AsyncMock(return_value=[{"id": 221, "name": "Silo"}]),
+    )
+    handler = JellyfinHandler(
+        jellyfin_client=jellyfin_client,
+        seer_client=FakeSeerClient(),
+        tmdb_client=tmdb_client,
+        logger=test_logger,
+        max_similar_movie=1,
+        max_similar_tv=1,
+        selected_users=[deepcopy(USER)],
+        dry_run=True,
+    )
+    handler.request_similar_media = AsyncMock()
+
+    episode = {
+        "Type": "Episode",
+        "Name": "Pilot",
+        "SeriesName": "Severance",
+        "SeriesId": "series-22",
+        "ProviderIds": {"Tvdb": "795681"},
+    }
+
+    await handler.process_episode(deepcopy(USER), episode)
+
+    jellyfin_client.get_series_provider_ids.assert_awaited_once_with("series-22")
+    tmdb_client.get_metadata.assert_awaited_once_with("22", "tv")
+    tmdb_client.find_similar_tvshows.assert_awaited_once_with("22", dry_run=True)
+    handler.request_similar_media.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -520,6 +577,38 @@ async def test_recommendation_automation_dry_run_preserves_async_flow_and_logs(m
     assert "Advanced Algorithm enabled. Generating recommendations using LLM." in caplog.text
     assert "Job completed: 2 would be requested" in caplog.text
     assert "TypeError" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_recommendation_automation_dry_run_respects_job_max_results(monkeypatch):
+    runtime_config = build_runtime_config("jellyfin")
+    job_data = build_job_data("jellyfin-capped-dry-run")
+    job_data["max_results"] = 1
+    fake_repo = FakeJobRepository(job_data)
+    fake_tmdb = FakeTMDbClient()
+    fake_seer = FakeSeerClient()
+    fake_jellyfin = FakeJellyfinClient()
+    llm_mock = make_llm_side_effect()
+
+    monkeypatch.setattr(recommendation_module.LoggerManager, "get_logger", lambda name: logging.getLogger(name))
+    monkeypatch.setattr(recommendation_module.ConfigService, "get_runtime_config", lambda: deepcopy(runtime_config))
+    monkeypatch.setattr(recommendation_module, "JobRepository", lambda: fake_repo)
+    monkeypatch.setattr(recommendation_module, "DatabaseManager", lambda: FakeDatabaseManager())
+    monkeypatch.setattr(recommendation_module, "SeerClient", lambda *args, **kwargs: fake_seer)
+    monkeypatch.setattr(recommendation_module, "TMDbClient", lambda *args, **kwargs: fake_tmdb)
+    monkeypatch.setattr(recommendation_module, "JellyfinClient", lambda *args, **kwargs: fake_jellyfin)
+
+    with patch("api_service.handler.base_handler.get_recommendations_from_history", llm_mock):
+        automation = await RecommendationAutomation.create(job_id=1, dry_run=True)
+        result = await automation.run(dry_run=True)
+
+    assert result.success is True
+    assert result.requested_count == 1
+    assert sum(1 for item in result.dry_run_items if item["would_request"]) == 1
+    assert any(
+        item.get("filter_results", {}).get("request_limit", {}).get("passed") is False
+        for item in result.dry_run_items
+    )
 
 
 @pytest.mark.asyncio

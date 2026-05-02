@@ -194,6 +194,9 @@ class RecommendationAutomation:
         number_of_seasons = job_filters.get('min_seasons')
         if number_of_seasons is None:
             number_of_seasons = self.env_vars.get('FILTER_NUM_SEASONS') or "all"
+        request_first_season_only = job_filters.get('request_first_season_only')
+        if request_first_season_only is None:
+            request_first_season_only = self.env_vars.get('REQUEST_FIRST_SEASON_ONLY', False)
 
         # Exclusion settings - job overrides global
         exclude_downloaded = job_filters.get('exclude_downloaded')
@@ -325,7 +328,8 @@ class RecommendationAutomation:
             number_of_seasons,
             exclude_downloaded,
             exclude_requested,
-            anime_profile_config
+            anime_profile_config,
+            request_first_season_only
         )
         if dry_run:
             self.logger.info("Dry-run mode: skipping Seer request cache sync.")
@@ -362,6 +366,7 @@ class RecommendationAutomation:
             await self._init_jellyfin_handler(
                 seer_client, tmdb_client, max_similar_movie, max_similar_tv,
                 selected_users, max_content, job_use_llm,
+                max_total_requests=max_results,
                 honor_seer_discovery=honor_seer_discovery,
                 seer_discovered_ids=seer_discovered_ids,
                 dry_run=dry_run
@@ -370,6 +375,7 @@ class RecommendationAutomation:
             await self._init_plex_handler(
                 seer_client, tmdb_client, max_similar_movie, max_similar_tv,
                 selected_users, max_content, job_use_llm,
+                max_total_requests=max_results,
                 honor_seer_discovery=honor_seer_discovery,
                 seer_discovered_ids=seer_discovered_ids,
                 dry_run=dry_run
@@ -411,6 +417,7 @@ class RecommendationAutomation:
     async def _init_jellyfin_handler(
         self, seer_client, tmdb_client, max_similar_movie, max_similar_tv,
         selected_users, max_content, use_llm=None,
+        max_total_requests=None,
         honor_seer_discovery: bool = False,
         seer_discovered_ids: Optional[set[str]] = None,
         dry_run=False
@@ -441,13 +448,15 @@ class RecommendationAutomation:
             selected_users, jellyfin_anime_map, use_llm=use_llm,
             honor_seer_discovery=honor_seer_discovery,
             seer_discovered_ids=seer_discovered_ids,
-            dry_run=dry_run
+            dry_run=dry_run,
+            max_total_requests=max_total_requests
         )
         self.logger.info("Jellyfin handler initialized")
 
     async def _init_plex_handler(
         self, seer_client, tmdb_client, max_similar_movie, max_similar_tv,
         selected_users, max_content, use_llm=None,
+        max_total_requests=None,
         honor_seer_discovery: bool = False,
         seer_discovered_ids: Optional[set[str]] = None,
         dry_run=False
@@ -479,7 +488,8 @@ class RecommendationAutomation:
             plex_anime_map, use_llm=use_llm,
             honor_seer_discovery=honor_seer_discovery,
             seer_discovered_ids=seer_discovered_ids,
-            dry_run=dry_run
+            dry_run=dry_run,
+            max_total_requests=max_total_requests
         )
         self.logger.info("Plex handler initialized")
 

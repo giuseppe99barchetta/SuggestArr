@@ -5,6 +5,7 @@ import { ref } from "vue";
 const accessToken = ref(null);
 const currentUser = ref(null); // { username, role }
 const authSetupComplete = ref(false);
+const authBypass = ref(false);
 const SESSION_HINT_KEY = "suggestarr_had_session";
 
 let _refreshPromise = null;
@@ -156,6 +157,7 @@ export function useAuth() {
       { _skipAuth: true },
     );
     setSessionFromAccessToken(res.data.access_token);
+    authBypass.value = false;
     _refreshFailed = false; // Allow refresh attempts again after a fresh login
     localStorage.setItem(SESSION_HINT_KEY, "1");
     return res.data;
@@ -167,6 +169,7 @@ export function useAuth() {
       await axios.post("/api/auth/logout", {}, { _skipAuth: true });
     } finally {
       setSessionFromAccessToken(null);
+      authBypass.value = false;
       _refreshFailed = false; // Allow refresh after the user logs in again
       localStorage.removeItem(SESSION_HINT_KEY);
     }
@@ -183,6 +186,7 @@ export function useAuth() {
   async function getAuthStatus() {
     const res = await axios.get("/api/auth/status", { _skipAuth: true });
     authSetupComplete.value = res.data.auth_setup_complete;
+    authBypass.value = !!res.data.bypass;
     return res.data;
   }
 
@@ -264,6 +268,7 @@ export function useAuth() {
     accessToken,
     currentUser,
     authSetupComplete,
+    authBypass,
     login,
     logout,
     tryRefresh,

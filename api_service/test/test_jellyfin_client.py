@@ -443,6 +443,48 @@ class TestFallbackRecentItems(unittest.IsolatedAsyncioTestCase):
 
 
 # ---------------------------------------------------------------------------
+# get_series_provider_ids
+# ---------------------------------------------------------------------------
+
+class TestGetSeriesProviderIds(unittest.IsolatedAsyncioTestCase):
+
+    def setUp(self):
+        self.client = _make_client()
+
+    async def test_returns_parent_series_provider_ids(self):
+        resp = _mock_response(200, {'ProviderIds': {'Tmdb': '1418'}})
+        session = _mock_session(resp)
+
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            result = await self.client.get_series_provider_ids('series-1')
+
+        self.assertEqual(result, {'Tmdb': '1418'})
+        session.get.assert_called_once()
+        call = session.get.call_args
+        self.assertEqual(call.args[0], 'http://jellyfin.local/Items/series-1')
+        self.assertEqual(call.kwargs.get('params'), {'Fields': 'ProviderIds'})
+
+    async def test_uses_cache_for_repeated_series_lookup(self):
+        resp = _mock_response(200, {'ProviderIds': {'Tmdb': '1418'}})
+        session = _mock_session(resp)
+
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            first = await self.client.get_series_provider_ids('series-1')
+            second = await self.client.get_series_provider_ids('series-1')
+
+        self.assertEqual(first, second)
+        session.get.assert_called_once()
+
+    async def test_returns_empty_dict_on_http_error(self):
+        session = _mock_session(_mock_response(404))
+
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            result = await self.client.get_series_provider_ids('missing-series')
+
+        self.assertEqual(result, {})
+
+
+# ---------------------------------------------------------------------------
 # init_existing_content
 # ---------------------------------------------------------------------------
 

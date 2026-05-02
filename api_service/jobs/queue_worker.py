@@ -12,6 +12,7 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.seer.seer_client import SeerClient
+from api_service.utils.asyncio_loop import close_event_loop
 
 MAX_RETRIES = 5
 WORKER_BATCH = 50
@@ -61,9 +62,10 @@ async def _run_worker() -> int:
         seer_user_name=env.get('SEER_USER_NAME'),
         seer_password=env.get('SEER_USER_PSW'),
         session_token=env.get('SEER_SESSION_TOKEN'),
-        number_of_seasons=env.get('NUMBER_OF_SEASONS', 'all'),
+        number_of_seasons=env.get('FILTER_NUM_SEASONS') or 'all',
         exclude_downloaded=False,
         exclude_watched=False,  # pre-checks already done at enqueue time
+        request_first_season_only=env.get('REQUEST_FIRST_SEASON_ONLY', False),
     )
     async with seer:
         await seer.init()
@@ -148,4 +150,4 @@ def run_queue_worker() -> None:
     except Exception as e:
         logger.error("Queue worker cycle failed: %s", e, exc_info=True)
     finally:
-        loop.close()
+        close_event_loop(loop, logger)

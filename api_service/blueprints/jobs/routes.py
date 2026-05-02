@@ -1,7 +1,6 @@
 """ API routes for managing jobs (discover and recommendation).
 Provides CRUD operations and job execution endpoints.
 """
-import asyncio
 import threading
 import traceback
 from flask import Blueprint, jsonify, request, g
@@ -14,6 +13,7 @@ from api_service.db.job_repository import JobRepository
 from api_service.jobs.job_manager import JobManager
 from api_service.jobs.discover_automation import DiscoverAutomation, execute_discover_job
 from api_service.jobs.recommendation_automation import RecommendationAutomation, execute_recommendation_job
+from api_service.utils.asyncio_loop import run_coroutine_sync
 
 logger = LoggerManager.get_logger("JobsRoute")
 jobs_bp = Blueprint('jobs', __name__)
@@ -26,19 +26,9 @@ _run_all_running = False
 def run_async(coro):
     """
     Run an async coroutine synchronously.
-    Uses asyncio.run() so event loops are created/closed safely per invocation.
+    Drains pending cleanup tasks before closing the per-invocation event loop.
     """
-    try:
-        return asyncio.run(coro)
-    except RuntimeError as exc:
-        # If this is called while another loop is already running in the same
-        # thread, execute asyncio.run() in a worker thread instead.
-        if "cannot be called from a running event loop" in str(exc):
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, coro)
-                return future.result()
-        raise
+    return run_coroutine_sync(coro, logger)
 
 
 def get_job_manager() -> JobManager:
@@ -536,9 +526,9 @@ def _run_all_jobs_in_background():
             try:
                 logger.info(f"Force run all: starting {job_type} job {job_id} ({job.get('name', '')})")
                 if job_type == 'recommendation':
-                    asyncio.run(execute_recommendation_job(job_id))
+                    run_async(execute_recommendation_job(job_id))
                 else:
-                    asyncio.run(execute_discover_job(job_id))
+                    run_async(execute_discover_job(job_id))
                 logger.info(f"Force run all: job {job_id} completed")
             except Exception as e:
                 logger.error(f"Force run all: error in job {job_id}: {e}", exc_info=True)
@@ -607,6 +597,12 @@ def get_job_history(job_id: int):
         if not job:
             return jsonify({'status': 'error', 'message': 'Job not found'}), 404
 
+        current_user = getattr(g, 'current_user', None)
+        if current_user and current_user.get('role') != 'admin':
+            user_id = int(current_user['id'])
+            if job.get('owner_id') != user_id:
+                return jsonify({'status': 'error', 'message': 'Job not found'}), 404
+
         limit = request.args.get('limit', 50, type=int)
         history = repository.get_job_history(job_id, limit)
 
@@ -636,6 +632,19 @@ def get_all_history():
         repository = JobRepository()
         limit = request.args.get('limit', 100, type=int)
         history = repository.get_recent_history(limit)
+
+        current_user = getattr(g, 'current_user', None)
+        if current_user and current_user.get('role') != 'admin':
+            user_id = int(current_user['id'])
+            owned_job_ids = {
+                job['id']
+                for job in repository.get_all_jobs()
+                if job.get('owner_id') == user_id
+            }
+            history = [
+                item for item in history
+                if item.get('job_id') in owned_job_ids
+            ]
 
         return jsonify({'status': 'success', 'history': history}), 200
 
@@ -806,12 +815,18 @@ def get_job_defaults():
 
         tmdb_min_votes = config.get('FILTER_TMDB_MIN_VOTES')
         vote_count_gte = int(tmdb_min_votes) if tmdb_min_votes is not None else None
+        request_first_season_only = config.get('REQUEST_FIRST_SEASON_ONLY', False)
+        if not isinstance(request_first_season_only, bool):
+            request_first_season_only = (
+                str(request_first_season_only).strip().lower() in {'1', 'true', 'yes', 'on'}
+            )
 
         return jsonify({
             'status': 'success',
             'defaults': {
                 'vote_average_gte': vote_average_gte,
                 'vote_count_gte': vote_count_gte,
+                'request_first_season_only': request_first_season_only,
             }
         }), 200
     except Exception as e:
@@ -963,11 +978,12 @@ def test_llm_connection():
 
         client = OpenAI(**client_kwargs)
 
-        # Make a minimal completion to verify the connection and credentials
+        # Make a minimal completion to verify the connection and credentials.
+        # Some OpenAI-compatible gateways reject values below 16.
         client.chat.completions.create(
             model=model,
             messages=[{'role': 'user', 'content': 'Hi'}],
-            max_tokens=1,
+            max_tokens=16,
         )
 
         return jsonify({'status': 'success', 'message': 'Connection successful!'}), 200

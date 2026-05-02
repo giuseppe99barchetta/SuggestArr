@@ -128,6 +128,8 @@ export const updateUser = (id, data) => axios.patch(`/api/users/${id}`, data);
 export const updateUserPermissions = (id, data) =>
     axios.post(`/api/users/${id}/permissions`, data, { withCredentials: true });
 export const deleteUser = (id) => axios.delete(`/api/users/${id}`);
+export const adminLinkProvider = (id, provider, data) =>
+    axios.post(`/api/users/${id}/link/${provider}`, data);
 
 // Media profile linking (any authenticated user)
 export const getMyLinks = () => axios.get('/api/users/me/links');

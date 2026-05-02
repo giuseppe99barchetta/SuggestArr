@@ -8,6 +8,16 @@ from api_service.db.database_manager import DatabaseManager
 BATCH_SIZE = 20  # Number of requests fetched per batch
 HTTP_OK = {200, 201, 202}  # Include 202 Accepted for async operations
 
+
+def _as_bool(value):
+    """Normalize bool-like config values."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
 class SeerClient(BaseHTTPClient):
     """
     A client to interact with the Seer service API for handling media requests and authentication.
@@ -18,7 +28,7 @@ class SeerClient(BaseHTTPClient):
 
     def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None, session_token=None,
                 number_of_seasons="all", exclude_downloaded=True, exclude_watched=True,
-                anime_profile_config=None):
+                anime_profile_config=None, request_first_season_only=False):
         """
         Initializes the SeerClient with the API URL and logs in the user.
         :param anime_profile_config: Dict with anime/default profile routing settings.
@@ -34,11 +44,22 @@ class SeerClient(BaseHTTPClient):
         self.is_logged_in = False
         self._login_lock = None
         self.number_of_seasons = number_of_seasons
+        self.request_first_season_only = _as_bool(request_first_season_only)
         self.pending_requests = set()
         self.exclude_downloaded = exclude_downloaded
         self.exclude_requested = exclude_watched
         self.anime_profile_config = anime_profile_config or {}
         self.logger.debug("SeerClient initialized with API URL: %s", api_url)
+
+    def _resolve_tv_seasons(self):
+        """Return Seer seasons payload for TV requests."""
+        if self.request_first_season_only:
+            return [1]
+
+        if self.number_of_seasons in (None, "", "all", 0, "0"):
+            return "all"
+
+        return list(range(1, int(self.number_of_seasons) + 1))
         
     async def init(self):
         """
@@ -121,7 +142,7 @@ class SeerClient(BaseHTTPClient):
         try:
             async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=self.REQUEST_TIMEOUT) as response:
                 self.logger.debug("Login response status: %d", response.status)
-                if response.status == 200 and 'connect.sid' in response.cookies:
+                if response.status in self.HTTP_OK and 'connect.sid' in response.cookies:
                     self.session_token = response.cookies['connect.sid'].value
                     self.is_logged_in = True
                     self.logger.info("Successfully logged in as %s", self.username)
@@ -268,10 +289,7 @@ class SeerClient(BaseHTTPClient):
         data = {"mediaType": media_type, "mediaId": media['id']}
 
         if media_type == 'tv':
-            data["seasons"] = (
-                "all" if self.number_of_seasons == "all"
-                else list(range(1, int(self.number_of_seasons) + 1))
-            )
+            data["seasons"] = self._resolve_tv_seasons()
 
         if self.anime_profile_config:
             profile_key = f"anime_{media_type}" if is_anime else f"default_{media_type}"

@@ -13,6 +13,19 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.api_exceptions import PlexConnectionError, PlexClientError
 
 
+def normalize_guid_provider_id(guid_id, provider='tmdb'):
+    """Return the provider ID from a Plex GUID, stripped of Plex URI extras."""
+    if not isinstance(guid_id, str):
+        return None
+
+    prefix = f'{provider}://'
+    if not guid_id.startswith(prefix):
+        return None
+
+    provider_id = guid_id[len(prefix):].split('?', 1)[0].split('/', 1)[0].strip()
+    return provider_id or None
+
+
 class PlexClient(BaseHTTPClient):
     """
     A client to interact with the Plex API, allowing the retrieval of users, recent items,
@@ -247,9 +260,8 @@ class PlexClient(BaseHTTPClient):
                     guids = item_data.get('MediaContainer', {}).get('Metadata', [])[0].get('Guid', [])
 
                     for guid in guids:
-                        guid_id = guid.get('id', '')
-                        if guid_id.startswith(f'{provider}://'):
-                            tmdb_id = guid_id.split(f'{provider}://')[-1]
+                        tmdb_id = normalize_guid_provider_id(guid.get('id', ''), provider)
+                        if tmdb_id:
                             return tmdb_id
 
                     self.logger.debug("No %s GUID found for item %s (available GUIDs: %s)", provider, item_id, [g.get('id') for g in guids])
@@ -350,9 +362,8 @@ class PlexClient(BaseHTTPClient):
                             guids = item.get('Guid', [])
                             tmdb_id = None
                             for guid in guids:
-                                guid_id = guid.get('id', '')
-                                if guid_id.startswith('tmdb://'):
-                                    tmdb_id = guid_id.split('tmdb://')[-1]
+                                tmdb_id = normalize_guid_provider_id(guid.get('id', ''), 'tmdb')
+                                if tmdb_id:
                                     break
                             
                             if tmdb_id:

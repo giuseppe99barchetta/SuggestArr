@@ -27,7 +27,7 @@ class BaseMediaHandler(ABC):
     def __init__(self, seer_client, tmdb_client, logger,
                  max_similar_movie, max_similar_tv, library_anime_map=None,
                  use_llm=None, request_delay=0, honor_seer_discovery=False,
-                 seer_discovered_ids=None, dry_run=False):
+                 seer_discovered_ids=None, dry_run=False, max_total_requests=None):
         """
         Initialize base media handler.
         
@@ -43,6 +43,7 @@ class BaseMediaHandler(ABC):
             honor_seer_discovery: Whether to honor Seer discovery
             seer_discovered_ids: Set of already discovered item IDs
             dry_run: Whether to simulate requests
+            max_total_requests: Maximum requestable items for the whole run
         """
         self.seer_client = seer_client
         self.tmdb_client = tmdb_client
@@ -64,6 +65,9 @@ class BaseMediaHandler(ABC):
         self.dry_run = dry_run
         self.dry_run_items = []
         self._dry_run_processed_ids = set()
+        self.max_total_requests = int(max_total_requests) if max_total_requests else None
+        self._request_slots_reserved = 0
+        self._request_limit_lock = asyncio.Lock()
         
         # Determine LLM mode
         if use_llm is not None:
@@ -81,6 +85,29 @@ class BaseMediaHandler(ABC):
                     self.use_llm = False
             else:
                 self.use_llm = False
+
+    def _has_request_capacity(self):
+        """Return whether this run can still request more media."""
+        return self.max_total_requests is None or self._request_slots_reserved < self.max_total_requests
+
+    async def _reserve_request_slot(self):
+        """Reserve one request slot if the job-level cap allows it."""
+        if self.max_total_requests is None:
+            return True
+
+        async with self._request_limit_lock:
+            if self._request_slots_reserved >= self.max_total_requests:
+                return False
+            self._request_slots_reserved += 1
+            return True
+
+    async def _release_request_slot(self):
+        """Release a previously reserved request slot."""
+        if self.max_total_requests is None:
+            return
+
+        async with self._request_limit_lock:
+            self._request_slots_reserved = max(self._request_slots_reserved - 1, 0)
     
     @abstractmethod
     def _populate_existing_content_sets(self):

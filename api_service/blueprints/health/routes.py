@@ -12,6 +12,7 @@ from flask import Blueprint, jsonify
 
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
+from api_service.utils.asyncio_loop import close_event_loop
 
 logger = LoggerManager.get_logger("HealthRoute")
 health_bp = Blueprint('health', __name__)
@@ -99,9 +100,9 @@ def _check_llm() -> str:
         is set, "error" on unexpected failures.
     """
     try:
-        from api_service.services.llm.llm_service import get_llm_client
-        client = get_llm_client()
-        return _OK if client is not None else _NOT_CONFIGURED
+        from api_service.services.llm.llm_service import is_llm_configured
+        from api_service.services.config_service import ConfigService
+        return _OK if is_llm_configured(ConfigService.get_runtime_config()) else _NOT_CONFIGURED
     except Exception as e:
         logger.error("Health LLM check failed: %s", e)
         return _ERROR
@@ -122,7 +123,7 @@ def _run_async_checks(config: dict) -> tuple:
     try:
         return loop.run_until_complete(_gather_async_checks(config))
     finally:
-        loop.close()
+        close_event_loop(loop, logger)
 
 
 # ---------------------------------------------------------------------------

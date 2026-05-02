@@ -174,9 +174,21 @@
                     <span v-if="errors.FILTER_MIN_RUNTIME" class="form-error">{{ errors.FILTER_MIN_RUNTIME }}</span>
                 </div>
             </div>
+            <div class="toggle-item" style="margin-top: 0.75rem;">
+                <div class="toggle-info">
+                    <h4 class="toggle-title">Request first season only</h4>
+                    <p class="toggle-description">Request only season 1 for new TV series, regardless of the maximum seasons value</p>
+                </div>
+                <label class="switch">
+                    <input type="checkbox"
+                        :checked="config.REQUEST_FIRST_SEASON_ONLY"
+                        @change="handleUpdate('REQUEST_FIRST_SEASON_ONLY', $event.target.checked)">
+                    <span class="slider round"></span>
+                </label>
+            </div>
             <p class="form-help">
                 <i class="fas fa-info-circle"></i>
-                Limit TV series by number of seasons and exclude short content below a minimum runtime
+                Limit TV series by number of seasons, control requested seasons, and exclude short content below a minimum runtime
             </p>
         </div>
 

@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 
 from api_service.exceptions.api_exceptions import PlexConnectionError, PlexClientError
-from api_service.services.plex.plex_client import PlexClient
+from api_service.services.plex.plex_client import PlexClient, normalize_guid_provider_id
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +51,15 @@ def _error_response(status):
     resp.__aenter__ = AsyncMock(return_value=resp)
     resp.__aexit__ = AsyncMock(return_value=False)
     return resp
+
+
+class TestNormalizeGuidProviderId(unittest.TestCase):
+
+    def test_strips_query_string_from_provider_guid(self):
+        self.assertEqual(normalize_guid_provider_id('tmdb://12345?lang=en'), '12345')
+
+    def test_returns_none_for_other_provider(self):
+        self.assertIsNone(normalize_guid_provider_id('imdb://tt9999'))
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +274,21 @@ class TestGetMetadataProviderId(unittest.IsolatedAsyncioTestCase):
             result = await self.client.get_metadata_provider_id('/library/metadata/1')
         self.assertEqual(result, '12345')
 
+    async def test_returns_tmdb_id_without_query_string(self):
+        data = {
+            'MediaContainer': {
+                'Metadata': [{'Guid': [
+                    {'id': 'tmdb://12345?lang=en'},
+                ]}]
+            }
+        }
+        resp = _text_response(200, data)
+        session = MagicMock()
+        session.get = MagicMock(return_value=resp)
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            result = await self.client.get_metadata_provider_id('/library/metadata/1')
+        self.assertEqual(result, '12345')
+
     async def test_returns_none_when_provider_not_found(self):
         data = {
             'MediaContainer': {
@@ -292,6 +316,38 @@ class TestGetMetadataProviderId(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
             result = await self.client.get_metadata_provider_id('/library/metadata/1')
         self.assertIsNone(result)
+
+
+# ---------------------------------------------------------------------------
+# _fetch_library_items
+# ---------------------------------------------------------------------------
+
+class TestFetchLibraryItems(unittest.IsolatedAsyncioTestCase):
+
+    async def test_normalizes_tmdb_guid_query_string_for_existing_content(self):
+        client = _make_client()
+        data = {
+            'MediaContainer': {
+                'Metadata': [
+                    {
+                        'type': 'movie',
+                        'title': 'Shrek',
+                        'Guid': [{'id': 'tmdb://808?lang=en'}],
+                    }
+                ]
+            }
+        }
+        session = MagicMock()
+        session.get = MagicMock(return_value=_text_response(200, data))
+        results_by_library = {}
+
+        await client._fetch_library_items(
+            session,
+            {'key': '1', 'title': 'Movies'},
+            results_by_library,
+        )
+
+        self.assertEqual(results_by_library['movie'][0]['tmdb_id'], '808')
 
 
 # ---------------------------------------------------------------------------
