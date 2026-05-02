@@ -2,7 +2,7 @@ import asyncio
 import unicodedata
 
 from api_service.handler.base_handler import BaseMediaHandler
-from api_service.services.plex.plex_client import PlexClient
+from api_service.services.plex.plex_client import PlexClient, normalize_guid_provider_id
 
 def to_ascii(value):
     """
@@ -51,9 +51,15 @@ class PlexHandler(BaseMediaHandler):
         """Extract existing content from Plex client."""
         if self.plex_client.existing_content:
             for media_type, items in self.plex_client.existing_content.items():
-                self.existing_content_sets[media_type] = {
-                    str(item.get('tmdb_id')) for item in items if item.get('tmdb_id')
-                }
+                normalized_ids = set()
+                for item in items:
+                    tmdb_id = item.get('tmdb_id')
+                    if not tmdb_id:
+                        continue
+                    normalized_ids.add(
+                        normalize_guid_provider_id(f'tmdb://{tmdb_id}', 'tmdb') or str(tmdb_id)
+                    )
+                self.existing_content_sets[media_type] = normalized_ids
 
 
     async def process_recent_items(self):
@@ -308,12 +314,12 @@ class PlexHandler(BaseMediaHandler):
 
             # Check batch results
             if media_id in already_requested_set:
-                self.logger.debug(f"Skipping [{media_type}, {media_title}]: already requested (batch check).")
+                self.logger.info(f"Skipping [{media_type}, {media_title}]: already requested (batch check).")
                 continue
 
             # Check optimized local content set
             if media_id in local_content_set:
-                self.logger.debug(f"Skipping [{media_type}, {media_title}]: already downloaded (local set check).")
+                self.logger.info(f"Skipping [{media_type}, {media_title}]: already downloaded (local set check).")
                 continue
 
             if self.honor_seer_discovery and media_id in self.seer_discovered_ids:

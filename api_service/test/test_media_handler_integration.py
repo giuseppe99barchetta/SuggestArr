@@ -455,6 +455,27 @@ async def test_plex_handler_process_recent_items_runs_real_llm_flow_without_type
     assert "TypeError" not in caplog.text
 
 
+def test_plex_handler_normalizes_existing_content_tmdb_ids(test_logger):
+    plex_client = FakePlexClient()
+    plex_client.existing_content = {
+        "movie": [{"tmdb_id": "808?lang=en"}],
+        "tv": [{"tmdb_id": "1399"}],
+    }
+
+    handler = PlexHandler(
+        plex_client=plex_client,
+        seer_client=FakeSeerClient(),
+        tmdb_client=FakeTMDbClient(),
+        logger=test_logger,
+        max_similar_movie=1,
+        max_similar_tv=1,
+        dry_run=True,
+    )
+
+    assert handler.existing_content_sets["movie"] == {"808"}
+    assert handler.existing_content_sets["tv"] == {"1399"}
+
+
 @pytest.mark.asyncio
 async def test_jellyfin_handler_process_recent_items_runs_real_llm_flow_without_type_error(caplog, test_logger):
     handler = JellyfinHandler(
