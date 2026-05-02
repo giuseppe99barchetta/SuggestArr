@@ -597,6 +597,12 @@ def get_job_history(job_id: int):
         if not job:
             return jsonify({'status': 'error', 'message': 'Job not found'}), 404
 
+        current_user = getattr(g, 'current_user', None)
+        if current_user and current_user.get('role') != 'admin':
+            user_id = int(current_user['id'])
+            if job.get('owner_id') != user_id:
+                return jsonify({'status': 'error', 'message': 'Job not found'}), 404
+
         limit = request.args.get('limit', 50, type=int)
         history = repository.get_job_history(job_id, limit)
 
@@ -626,6 +632,19 @@ def get_all_history():
         repository = JobRepository()
         limit = request.args.get('limit', 100, type=int)
         history = repository.get_recent_history(limit)
+
+        current_user = getattr(g, 'current_user', None)
+        if current_user and current_user.get('role') != 'admin':
+            user_id = int(current_user['id'])
+            owned_job_ids = {
+                job['id']
+                for job in repository.get_all_jobs()
+                if job.get('owner_id') == user_id
+            }
+            history = [
+                item for item in history
+                if item.get('job_id') in owned_job_ids
+            ]
 
         return jsonify({'status': 'success', 'history': history}), 200
 

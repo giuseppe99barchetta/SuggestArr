@@ -145,7 +145,23 @@
 
         <!-- Link form: credential-based self-linking -->
         <template v-else>
-          <form @submit.prevent="linkAccount">
+          <div v-if="isPlexService">
+            <div v-if="linkError" class="error-banner">
+              <i class="fas fa-exclamation-circle"></i>
+              {{ linkError }}
+            </div>
+            <button
+              type="button"
+              class="btn btn-outline btn-sm"
+              :disabled="isLinking"
+              @click="linkPlexWithOAuth"
+            >
+              <i :class="isLinking ? 'fas fa-spinner fa-spin' : 'fas fa-link'"></i>
+              {{ isLinking ? 'Waiting for Plex…' : 'Link Plex Account' }}
+            </button>
+          </div>
+
+          <form v-else @submit.prevent="linkAccount">
             <div v-if="isDirectoryBackedService" class="form-group">
               <label for="linkServerUser">{{ providerLabel }} account</label>
               <BaseDropdown
@@ -230,7 +246,8 @@ import {
   getMyLinks,
   linkJellyfinIntegration,
   linkEmbyIntegration,
-  linkPlexIntegration,
+  plexOAuthPoll,
+  plexOAuthStart,
   unlinkProvider,
   updateMyProfile,
 } from '@/api/api';
@@ -310,6 +327,10 @@ export default {
       return ['jellyfin', 'emby'].includes(this.selectedService);
     },
 
+    isPlexService() {
+      return this.selectedService === 'plex';
+    },
+
     hasProviderContext() {
       return this.config?.SELECTED_SERVICE !== undefined
         || this.configStatus?.selected_service !== undefined;
@@ -339,6 +360,10 @@ export default {
     },
 
     canSubmitLink() {
+      if (this.isPlexService) {
+        return true;
+      }
+
       if (!this.linkForm.password) {
         return false;
       }
@@ -432,8 +457,6 @@ export default {
           response = await linkJellyfinIntegration(payload);
         } else if (this.selectedService === 'emby') {
           response = await linkEmbyIntegration(payload);
-        } else {
-          response = await linkPlexIntegration(payload);
         }
 
         const linkedName = response?.data?.external_username || this.linkForm.username.trim();
@@ -442,6 +465,37 @@ export default {
         this.linkForm.password = '';
         this.selectedServerUserId = '';
         await this.loadLinks();
+      } catch (err) {
+        this.linkError = err.response?.data?.error || `Failed to link ${this.providerLabel} account`;
+      } finally {
+        this.isLinking = false;
+      }
+    },
+
+    async linkPlexWithOAuth() {
+      this.linkError = null;
+      this.isLinking = true;
+      try {
+        const start = await plexOAuthStart();
+        const { pin_id: pinId, auth_url: authUrl } = start.data || {};
+        if (!pinId || !authUrl) {
+          throw new Error('Invalid Plex OAuth response');
+        }
+
+        window.open(authUrl, 'plex-oauth', 'width=600,height=760');
+
+        for (let attempt = 0; attempt < 60; attempt += 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const poll = await plexOAuthPoll(pinId);
+          if (poll.data?.status === 'linked') {
+            const linkedName = poll.data.external_username || 'Plex';
+            this.$toast.success(`${this.providerLabel} account linked as ${linkedName}`);
+            await this.loadLinks();
+            return;
+          }
+        }
+
+        this.linkError = 'Plex authorization timed out. Please try again.';
       } catch (err) {
         this.linkError = err.response?.data?.error || `Failed to link ${this.providerLabel} account`;
       } finally {
