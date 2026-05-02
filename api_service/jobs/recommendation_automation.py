@@ -194,7 +194,9 @@ class RecommendationAutomation:
         number_of_seasons = job_filters.get('min_seasons')
         if number_of_seasons is None:
             number_of_seasons = self.env_vars.get('FILTER_NUM_SEASONS') or "all"
-        request_first_season_only = self.env_vars.get('REQUEST_FIRST_SEASON_ONLY', False)
+        request_first_season_only = job_filters.get('request_first_season_only')
+        if request_first_season_only is None:
+            request_first_season_only = self.env_vars.get('REQUEST_FIRST_SEASON_ONLY', False)
 
         # Exclusion settings - job overrides global
         exclude_downloaded = job_filters.get('exclude_downloaded')

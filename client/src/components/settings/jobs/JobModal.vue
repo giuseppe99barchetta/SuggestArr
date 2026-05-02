@@ -248,6 +248,7 @@ export default {
           this.form.filters = {
             vote_average_gte: d.vote_average_gte,
             ...(d.vote_count_gte != null ? { vote_count_gte: d.vote_count_gte } : {}),
+            request_first_season_only: d.request_first_season_only === true,
             ...this.form.filters
           };
         }

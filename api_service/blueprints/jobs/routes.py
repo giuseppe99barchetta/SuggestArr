@@ -796,12 +796,18 @@ def get_job_defaults():
 
         tmdb_min_votes = config.get('FILTER_TMDB_MIN_VOTES')
         vote_count_gte = int(tmdb_min_votes) if tmdb_min_votes is not None else None
+        request_first_season_only = config.get('REQUEST_FIRST_SEASON_ONLY', False)
+        if not isinstance(request_first_season_only, bool):
+            request_first_season_only = (
+                str(request_first_season_only).strip().lower() in {'1', 'true', 'yes', 'on'}
+            )
 
         return jsonify({
             'status': 'success',
             'defaults': {
                 'vote_average_gte': vote_average_gte,
                 'vote_count_gte': vote_count_gte,
+                'request_first_season_only': request_first_season_only,
             }
         }), 200
     except Exception as e:

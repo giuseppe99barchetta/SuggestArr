@@ -72,7 +72,10 @@ class DiscoverAutomation:
 
         # Initialize Seer client
         number_of_seasons = env_vars.get('FILTER_NUM_SEASONS') or "all"
-        request_first_season_only = env_vars.get('REQUEST_FIRST_SEASON_ONLY', False)
+        job_filters = instance.job_data.get('filters', {}) if instance.job_data else {}
+        request_first_season_only = job_filters.get('request_first_season_only')
+        if request_first_season_only is None:
+            request_first_season_only = env_vars.get('REQUEST_FIRST_SEASON_ONLY', False)
         exclude_downloaded = env_vars.get('EXCLUDE_DOWNLOADED', True)
         exclude_requested = env_vars.get('EXCLUDE_REQUESTED', True)
         anime_profile_config = env_vars.get('SEER_ANIME_PROFILE_CONFIG', {})

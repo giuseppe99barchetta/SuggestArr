@@ -172,6 +172,14 @@ def _build_filters_from_config(env_vars: Dict[str, Any]) -> Dict[str, Any]:
     if filter_num_seasons:
         filters['min_seasons'] = int(filter_num_seasons)
 
+    # Request first season only (TV only)
+    request_first_season_only = env_vars.get('REQUEST_FIRST_SEASON_ONLY')
+    if request_first_season_only is not None:
+        filters['request_first_season_only'] = (
+            request_first_season_only if isinstance(request_first_season_only, bool)
+            else str(request_first_season_only).strip().lower() in {'1', 'true', 'yes', 'on'}
+        )
+
     # Streaming services filter
     filter_streaming = env_vars.get('FILTER_STREAMING_SERVICES')
     if filter_streaming and isinstance(filter_streaming, list):
