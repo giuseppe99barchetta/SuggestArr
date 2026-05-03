@@ -126,6 +126,39 @@ class TestMakeRequest(unittest.IsolatedAsyncioTestCase):
             result = await self.client._make_request('POST', 'api/v1/request', retries=2)
         self.assertIsNone(result)
 
+    async def test_recomputes_cookie_after_login_retry(self):
+        self.client.session_token = 'old-token'
+        first = _mock_response(403, {'message': 'Session expired'})
+        second = _mock_response(201, {'id': 42})
+        session = MagicMock()
+        session.request = MagicMock(side_effect=[first, second])
+
+        async def refresh_login():
+            self.client.session_token = 'new-token'
+
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)), \
+             patch.object(self.client, 'login', AsyncMock(side_effect=refresh_login)), \
+             patch('asyncio.sleep', AsyncMock()):
+            result = await self.client._make_request(
+                'POST', 'api/v1/request', use_cookie=True, retries=2
+            )
+
+        self.assertEqual(result, {'id': 42})
+        self.assertEqual(session.request.call_args_list[0].kwargs['cookies']['connect.sid'], 'old-token')
+        self.assertEqual(session.request.call_args_list[1].kwargs['cookies']['connect.sid'], 'new-token')
+
+    async def test_permission_403_does_not_retry_login(self):
+        resp = _mock_response(403, {'message': 'You do not have permission to access this endpoint'})
+        session = _mock_session(resp)
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)), \
+             patch.object(self.client, 'login', AsyncMock()) as mock_login, \
+             patch('asyncio.sleep', AsyncMock()):
+            result = await self.client._make_request('POST', 'api/v1/request', retries=3)
+
+        self.assertIsNone(result)
+        mock_login.assert_not_awaited()
+        self.assertEqual(session.request.call_count, 1)
+
     async def test_returns_none_on_client_error(self):
         session = MagicMock()
         session.request = MagicMock(side_effect=aiohttp.ClientError('refused'))
@@ -558,7 +591,7 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
         return base
 
     async def test_strips_private_keys_and_returns_true_on_success(self):
-        client = _make_client()
+        client = _make_client(session_token='tok')
         payload = self._valid_payload()
         with patch.object(client, '_make_request', AsyncMock(return_value={'id': 55})) as mock_req:
             result = await client.submit_queued_request(payload)
@@ -568,15 +601,30 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
         for key in sent_data:
             self.assertFalse(key.startswith('_'), f"Private key {key!r} was not stripped")
 
+    async def test_logs_in_before_submit_when_no_session_token(self):
+        client = _make_client(session_token=None)
+        payload = self._valid_payload()
+
+        async def login():
+            client.session_token = 'fresh-token'
+
+        with patch.object(client, 'login', AsyncMock(side_effect=login)) as mock_login, \
+             patch.object(client, '_make_request', AsyncMock(return_value={'id': 55})) as mock_req:
+            result = await client.submit_queued_request(payload)
+
+        self.assertTrue(result)
+        mock_login.assert_awaited_once()
+        self.assertTrue(mock_req.call_args.kwargs['use_cookie'])
+
     async def test_returns_false_on_failure_response(self):
-        client = _make_client()
+        client = _make_client(session_token='tok')
         with patch.object(client, '_make_request', AsyncMock(return_value=None)), \
              patch.object(client, '_fetch_server_defaults', AsyncMock(return_value={'profileId': 1, 'rootFolder': '/movies'})):
             result = await client.submit_queued_request({'mediaType': 'movie', 'mediaId': 1})
         self.assertFalse(result)
 
     async def test_fetches_defaults_and_succeeds_when_profile_id_missing(self):
-        client = _make_client()
+        client = _make_client(session_token='tok')
         payload = {'mediaType': 'movie', 'mediaId': 200, 'serverId': 0}
         defaults = {'profileId': 3, 'rootFolder': '/movies'}
         with patch.object(client, '_fetch_server_defaults', AsyncMock(return_value=defaults)), \
@@ -601,14 +649,14 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result)
 
     async def test_returns_false_on_error_response(self):
-        client = _make_client()
+        client = _make_client(session_token='tok')
         with patch.object(client, '_make_request', AsyncMock(return_value={'error': 'Bad Request'})):
             result = await client.submit_queued_request(self._valid_payload())
         self.assertFalse(result)
 
     async def test_no_fallback_fetch_when_profile_already_present(self):
         """_fetch_server_defaults must not be called when profileId and rootFolder are set."""
-        client = _make_client()
+        client = _make_client(session_token='tok')
         with patch.object(client, '_fetch_server_defaults', AsyncMock()) as mock_fallback, \
              patch.object(client, '_make_request', AsyncMock(return_value={'id': 1})):
             await client.submit_queued_request(self._valid_payload())

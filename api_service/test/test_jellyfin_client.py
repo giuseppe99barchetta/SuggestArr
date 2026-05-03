@@ -461,8 +461,8 @@ class TestGetSeriesProviderIds(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, {'Tmdb': '1418'})
         session.get.assert_called_once()
         call = session.get.call_args
-        self.assertEqual(call.args[0], 'http://jellyfin.local/Items/series-1')
-        self.assertEqual(call.kwargs.get('params'), {'Fields': 'ProviderIds'})
+        self.assertEqual(call.args[0], 'http://jellyfin.local/Items')
+        self.assertEqual(call.kwargs.get('params'), {'Fields': 'ProviderIds', 'Ids': 'series-1'})
 
     async def test_uses_cache_for_repeated_series_lookup(self):
         resp = _mock_response(200, {'ProviderIds': {'Tmdb': '1418'}})

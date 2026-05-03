@@ -322,8 +322,8 @@ class JellyfinClient(BaseHTTPClient):
         if series_id in self._series_provider_ids_cache:
             return self._series_provider_ids_cache[series_id]
 
-        url = f"{self.api_url}/Items/{series_id}"
-        params = {"Fields": "ProviderIds"}
+        url = f"{self.api_url}/Items"
+        params = {"Fields": "ProviderIds", "Ids": series_id}
         self.logger.debug("Requesting series provider IDs for %s", series_id)
 
         try:
