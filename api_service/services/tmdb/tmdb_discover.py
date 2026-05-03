@@ -131,7 +131,7 @@ class TMDbDiscover:
                 self.logger.warning(f"No data returned for page {page}")
                 break
 
-            for item in data['results']:
+            async def process_item(item):
                 if use_imdb:
                     imdb_id = await self._get_imdb_id(item['id'], media_type)
                     if imdb_id:
@@ -139,14 +139,23 @@ class TMDbDiscover:
                         if not self._check_imdb_filter(
                             imdb_data, item, imdb_rating_gte, imdb_min_votes, include_no_rating
                         ):
-                            continue
+                            return None
                     elif not include_no_rating:
                         title = item.get('title') or item.get('name', 'Unknown')
                         self.logger.debug("Excluding %s: no IMDB ID found in TMDB data", title)
-                        continue
+                        return None
+                return self._format_result(item, media_type)
 
-                formatted = self._format_result(item, media_type)
-                results.append(formatted)
+            batch_size = 5
+            for i in range(0, len(data['results']), batch_size):
+                batch = data['results'][i:i + batch_size]
+                batch_results = await asyncio.gather(*[process_item(item) for item in batch])
+
+                for res in batch_results:
+                    if res is not None:
+                        results.append(res)
+                        if len(results) >= max_results:
+                            break
 
                 if len(results) >= max_results:
                     break
