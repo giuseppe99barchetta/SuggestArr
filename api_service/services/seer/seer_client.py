@@ -85,11 +85,11 @@ class SeerClient(BaseHTTPClient):
     async def _make_request(self, method, endpoint, data=None, use_cookie=False, retries=3, delay=2):
         """Unified API request handling with retry logic and error handling."""
         url = f"{self.api_url}/{endpoint}"
-        headers, cookies = self._get_auth_headers(use_cookie)
-
         for attempt in range(retries):
             self.logger.debug("Attempt %d for request to %s", attempt + 1, url)
-            
+
+            headers, cookies = self._get_auth_headers(use_cookie)
+
             # Use shared session but override headers/cookies for this request
             # since aiohttp allows passing request-level headers/cookies
             session = await self._get_session()
@@ -104,8 +104,13 @@ class SeerClient(BaseHTTPClient):
                         self.logger.error(
                             f"Request to {url} failed with status: {response.status}, {message}"
                         )
-                        # Quota-exceeded errors won't be resolved by re-logging in; abort immediately
-                        if 'quota' in message.lower():
+                        # Quota/permission errors won't be resolved by repeated login attempts.
+                        lower_message = message.lower()
+                        if (
+                            'quota' in lower_message
+                            or 'permission' in lower_message
+                            or 'not authorized' in lower_message
+                        ):
                             return None
                         # Otherwise treat as auth failure and retry with login
                         if attempt < retries - 1:
@@ -406,6 +411,9 @@ class SeerClient(BaseHTTPClient):
             return False
 
         self.logger.debug("Sending Jellyseerr request: %s", data)
+        if not self.session_token and self.username and self.password:
+            await self.login()
+
         response = await self._make_request(
             "POST", "api/v1/request", data=data, use_cookie=bool(self.session_token)
         )

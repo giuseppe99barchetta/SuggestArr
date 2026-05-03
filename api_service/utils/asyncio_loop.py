@@ -32,6 +32,12 @@ async def _drain_pending_tasks(logger=None, timeout: float = 5.0) -> None:
         await asyncio.gather(*pending, return_exceptions=True)
 
 
+async def _flush_ready_callbacks() -> None:
+    """Run callbacks scheduled by async cleanup before loop shutdown."""
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+
 def close_event_loop(loop: asyncio.AbstractEventLoop, logger=None) -> None:
     """Drain pending cleanup tasks, then close a manually-created event loop."""
     if loop.is_closed():
@@ -39,10 +45,13 @@ def close_event_loop(loop: asyncio.AbstractEventLoop, logger=None) -> None:
 
     try:
         loop.run_until_complete(_drain_pending_tasks(logger))
+        loop.run_until_complete(_flush_ready_callbacks())
         loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.run_until_complete(_flush_ready_callbacks())
         shutdown_executor = getattr(loop, "shutdown_default_executor", None)
         if shutdown_executor:
             loop.run_until_complete(shutdown_executor())
+        loop.run_until_complete(_flush_ready_callbacks())
     finally:
         loop.close()
         asyncio.set_event_loop(None)
