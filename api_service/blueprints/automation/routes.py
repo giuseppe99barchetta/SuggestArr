@@ -1,6 +1,5 @@
 import asyncio
 import threading
-import traceback
 from flask import Blueprint, jsonify, request
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_role
