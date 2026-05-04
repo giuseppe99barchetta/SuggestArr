@@ -123,44 +123,86 @@ class TMDbDiscover:
                 media_type, rating_source, imdb_rating_gte, imdb_min_votes
             )
 
-        for page in range(1, pages_needed + 1):
-            self.logger.debug(f"Fetching discover page {page} for {media_type}")
+        async def process_item(item):
+            if use_imdb:
+                imdb_id = await self._get_imdb_id(item['id'], media_type)
+                if imdb_id:
+                    imdb_data = await self.omdb_client.get_rating(imdb_id)
+                    if not self._check_imdb_filter(
+                        imdb_data, item, imdb_rating_gte, imdb_min_votes, include_no_rating
+                    ):
+                        return None
+                elif not include_no_rating:
+                    title = item.get('title') or item.get('name', 'Unknown')
+                    self.logger.debug("Excluding %s: no IMDB ID found in TMDB data", title)
+                    return None
 
-            data = await self._fetch_discover_page(media_type, filters, page)
-            if not data or 'results' not in data:
-                self.logger.warning(f"No data returned for page {page}")
-                break
+            return self._format_result(item, media_type)
 
-            for item in data['results']:
-                if use_imdb:
-                    imdb_id = await self._get_imdb_id(item['id'], media_type)
-                    if imdb_id:
-                        imdb_data = await self.omdb_client.get_rating(imdb_id)
-                        if not self._check_imdb_filter(
-                            imdb_data, item, imdb_rating_gte, imdb_min_votes, include_no_rating
-                        ):
-                            continue
-                    elif not include_no_rating:
-                        title = item.get('title') or item.get('name', 'Unknown')
-                        self.logger.debug("Excluding %s: no IMDB ID found in TMDB data", title)
+        async def process_page_results(page_data, needed):
+            if not page_data or 'results' not in page_data or needed <= 0:
+                return []
+
+            page_results = []
+            batch_size = 5
+            items = page_data['results']
+            for i in range(0, len(items), batch_size):
+                batch = items[i:i + batch_size]
+                batch_processed = await asyncio.gather(*[process_item(item) for item in batch])
+                for res in batch_processed:
+                    if res:
+                        page_results.append(res)
+                        if len(page_results) >= needed:
+                            return page_results
+            return page_results
+
+        # Fetch first page to get total_pages
+        self.logger.debug(f"Fetching discover page 1 for {media_type}")
+        first_page_data = await self._fetch_discover_page(media_type, filters, 1)
+        if not first_page_data or 'results' not in first_page_data:
+            self.logger.warning("No data returned for page 1")
+            return []
+
+        # Process first page
+        results.extend(await process_page_results(first_page_data, max_results))
+
+        if len(results) >= max_results:
+            self.logger.info(f"Discovered {len(results)} {media_type} items")
+            return results[:max_results]
+
+        total_pages = first_page_data.get('total_pages', 1)
+        actual_pages_needed = min(pages_needed, total_pages)
+
+        if actual_pages_needed > 1:
+            # Fetch remaining pages in batches
+            remaining_pages = list(range(2, actual_pages_needed + 1))
+            page_batch_size = 5
+
+            for i in range(0, len(remaining_pages), page_batch_size):
+                batch_pages = remaining_pages[i:i + page_batch_size]
+                self.logger.debug(f"Fetching discover pages {batch_pages} for {media_type}")
+
+                pages_data = await asyncio.gather(
+                    *[self._fetch_discover_page(media_type, filters, p) for p in batch_pages]
+                )
+
+                for p_data in pages_data:
+                    if not p_data:
                         continue
 
-                formatted = self._format_result(item, media_type)
-                results.append(formatted)
+                    needed = max_results - len(results)
+                    page_processed = await process_page_results(p_data, needed)
+                    results.extend(page_processed)
+
+                    if len(results) >= max_results:
+                        break
 
                 if len(results) >= max_results:
                     break
 
-            if len(results) >= max_results:
-                break
-
-            # Check if there are more pages
-            if page >= data.get('total_pages', 1):
-                break
-
-            # Rate limit delay
-            if page < pages_needed:
-                await asyncio.sleep(RATE_LIMIT_SLEEP)
+                # Rate limit delay between batches
+                if i + page_batch_size < len(remaining_pages):
+                    await asyncio.sleep(RATE_LIMIT_SLEEP)
 
         self.logger.info(f"Discovered {len(results)} {media_type} items")
         return results[:max_results]
