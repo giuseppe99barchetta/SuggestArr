@@ -1,0 +1,3 @@
+## 2024-05-24 - Batch Concurrent External API Lookups in Discover API
+**Learning:** Found an N+1 performance bottleneck in list/discover endpoints (`TMDbDiscover._discover`) where external IMDB rating data for each item is fetched sequentially. This codebase architecture can significantly benefit from processing these external API calls concurrently via batching (e.g. `asyncio.gather(..., batch_size=5)`).
+**Action:** When implementing or reviewing list-based endpoints that fetch supplementary data per item, apply batched concurrency with `asyncio.gather` instead of sequential iterations to optimize performance while avoiding rate-limiting on external services.
