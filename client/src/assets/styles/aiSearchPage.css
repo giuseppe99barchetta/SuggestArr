@@ -864,3 +864,40 @@
     margin-left: 0;
   }
 }
+/* AI Search like/dislike feedback */
+.feedback-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+
+.feedback-btn {
+  background: transparent;
+  border: 1px solid var(--color-border, #444);
+  color: var(--color-text-muted, #aaa);
+  border-radius: 999px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.feedback-btn:hover {
+  transform: scale(1.08);
+}
+
+.feedback-btn.feedback-like.active {
+  background: rgba(46, 204, 113, 0.15);
+  border-color: #2ecc71;
+  color: #2ecc71;
+}
+
+.feedback-btn.feedback-dislike.active {
+  background: rgba(231, 76, 60, 0.15);
+  border-color: #e74c3c;
+  color: #e74c3c;
+}

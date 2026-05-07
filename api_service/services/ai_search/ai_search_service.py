@@ -137,11 +137,23 @@ class AiSearchService:
         except Exception as exc:
             logger.warning("Could not fetch already-requested IDs: %s", exc)
 
+        # 2b. Fetch user feedback (likes positively bias the prompt; dislikes are excluded from results).
+        liked_titles: list = []
+        try:
+            from api_service.db.database_manager import DatabaseManager
+            db = DatabaseManager()
+            disliked_ids = db.get_ai_dislike_ids(media_type)
+            already_requested = already_requested | {str(i) for i in disliked_ids}
+            liked_titles = db.get_ai_likes(media_type)
+        except Exception as exc:
+            logger.warning("Could not fetch AI feedback: %s", exc)
+
         # 3. LLM interpretation — request enough suggestions to fill max_results after
         # filtering; ask for slightly more than needed to absorb TMDB lookup misses.
         llm_suggestions_count = max(max_results, 12)
         interpretation = await interpret_search_query(
-            query, history, media_type, max_suggestions=llm_suggestions_count
+            query, history, media_type, max_suggestions=llm_suggestions_count,
+            liked_titles=liked_titles,
         )
         ai_reasoning = self._build_ai_reasoning(interpretation)
         discover_params = interpretation.get("discover_params", {})
