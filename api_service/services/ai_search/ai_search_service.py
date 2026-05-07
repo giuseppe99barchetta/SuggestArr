@@ -59,6 +59,7 @@ class AiSearchService:
         max_results: int = _RESULTS_MAX,
         use_history: bool = True,
         exclude_watched: bool = True,
+        exclude_seen: bool = False,
     ) -> Dict[str, Any]:
         """Execute an AI-powered search.
 
@@ -71,8 +72,8 @@ class AiSearchService:
         :return: Dict with 'results', 'ai_reasoning', and 'total'.
         """
         if media_type == "both":
-            movie_task = self._search_single(query, "movie", user_ids, max_results, use_history, exclude_watched)
-            tv_task = self._search_single(query, "tv", user_ids, max_results, use_history, exclude_watched)
+            movie_task = self._search_single(query, "movie", user_ids, max_results, use_history, exclude_watched, exclude_seen)
+            tv_task = self._search_single(query, "tv", user_ids, max_results, use_history, exclude_watched, exclude_seen)
             movie_res, tv_res = await asyncio.gather(movie_task, tv_task)
 
             # Interleave: AI movie, AI tv, …
@@ -100,7 +101,7 @@ class AiSearchService:
                 "total": len(merged[:max_results]),
             }
 
-        return await self._search_single(query, media_type, user_ids, max_results, use_history, exclude_watched)
+        return await self._search_single(query, media_type, user_ids, max_results, use_history, exclude_watched, exclude_seen)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -114,6 +115,7 @@ class AiSearchService:
         max_results: int,
         use_history: bool = True,
         exclude_watched: bool = True,
+        exclude_seen: bool = False,
     ) -> Dict[str, Any]:
         """Run the full search pipeline for a single media type."""
         # 1. Fetch history (best-effort — never crash the search if unavailable)
@@ -145,6 +147,9 @@ class AiSearchService:
             disliked_ids = db.get_ai_dislike_ids(media_type)
             already_requested = already_requested | {str(i) for i in disliked_ids}
             liked_titles = db.get_ai_likes(media_type)
+            if exclude_seen:
+                seen_ids = db.get_ai_seen_ids(media_type)
+                already_requested = already_requested | seen_ids
         except Exception as exc:
             logger.warning("Could not fetch AI feedback: %s", exc)
 
@@ -238,10 +243,19 @@ class AiSearchService:
             media_type,
         )
 
+        final_slice = final[:max_results]
+        try:
+            from api_service.db.database_manager import DatabaseManager
+            DatabaseManager().record_ai_seen(
+                [(item.get("id"), item.get("media_type") or media_type) for item in final_slice]
+            )
+        except Exception as exc:
+            logger.warning("Could not record AI seen items: %s", exc)
+
         return {
-            "results": final[:max_results],
+            "results": final_slice,
             "ai_reasoning": ai_reasoning,
-            "total": len(final[:max_results]),
+            "total": len(final_slice),
         }
 
     @staticmethod

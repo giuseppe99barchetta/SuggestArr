@@ -91,6 +91,23 @@
               <div class="toggle-knob"></div>
             </div>
           </label>
+          <label class="toggle-option">
+            <span class="toggle-label">
+              <i class="fas fa-redo"></i>
+              Hide already-recommended
+              <span class="toggle-hint">Don't show titles that appeared in any previous AI search</span>
+            </span>
+            <div class="toggle-switch" :class="{ on: excludeSeen }" @click="excludeSeen = !excludeSeen">
+              <div class="toggle-knob"></div>
+            </div>
+          </label>
+          <div class="reset-seen-row">
+            <button type="button" class="reset-seen-btn" @click="resetSeen" :disabled="isResettingSeen">
+              <i :class="isResettingSeen ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
+              {{ isResettingSeen ? 'Clearing...' : 'Clear recommendation history' }}
+            </button>
+            <span class="reset-seen-hint">Lets previously recommended titles re-appear.</span>
+          </div>
           <div class="number-option">
             <span class="toggle-label">
               <i class="fas fa-list-ol"></i>
@@ -325,7 +342,7 @@
 </template>
 
 <script>
-import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete } from '@/api/api.js';
+import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear } from '@/api/api.js';
 import '@/assets/styles/aiSearchPage.css';
 
 export default {
@@ -352,8 +369,16 @@ export default {
       maxResults: 12,
       // Recent search history (persisted in localStorage)
       feedbackMap: {},
+      excludeSeen: JSON.parse(localStorage.getItem('suggestarr_ai_exclude_seen') || 'false'),
+      isResettingSeen: false,
       recentSearches: JSON.parse(localStorage.getItem('suggestarr_ai_search_history') || '[]'),
     };
+  },
+
+  watch: {
+    excludeSeen(val) {
+      localStorage.setItem('suggestarr_ai_exclude_seen', JSON.stringify(!!val));
+    },
   },
 
   computed: {
@@ -401,6 +426,20 @@ export default {
   },
 
   methods: {
+
+    async resetSeen() {
+      if (this.isResettingSeen) return;
+      this.isResettingSeen = true;
+      try {
+        await aiSearchSeenClear();
+      } catch (err) {
+        const msg = err.response?.data?.message || err.message || 'Failed to clear history.';
+        this.errorMessage = msg;
+      } finally {
+        this.isResettingSeen = false;
+      }
+    },
+
     feedbackOf(item) {
       return this.feedbackMap[item.media_type + ':' + item.id] || null;
     },
@@ -469,7 +508,7 @@ export default {
       this.queryInterpretation = null;
 
       try {
-        const res = await aiSearch(this.query.trim(), this.mediaType, [], this.maxResults, this.useHistory, this.excludeWatched);
+        const res = await aiSearch(this.query.trim(), this.mediaType, [], this.maxResults, this.useHistory, this.excludeWatched, this.excludeSeen);
         const data = res.data;
 
         if (data.status === 'error') {

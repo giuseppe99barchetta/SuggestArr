@@ -50,6 +50,9 @@ async def ai_search_query():
         exclude_watched = data.get("exclude_watched", True)
         if not isinstance(exclude_watched, bool):
             exclude_watched = True
+        exclude_seen = data.get("exclude_seen", False)
+        if not isinstance(exclude_seen, bool):
+            exclude_seen = False
 
         # Check LLM is configured (not strictly required — service degrades gracefully,
         # but we surface a clear error before attempting if completely unconfigured)
@@ -71,6 +74,7 @@ async def ai_search_query():
             max_results=max_results,
             use_history=use_history,
             exclude_watched=exclude_watched,
+            exclude_seen=exclude_seen,
         )
 
         return jsonify({
@@ -277,4 +281,21 @@ def ai_search_feedback_delete():
         return jsonify({"status": "success"}), 200
     except Exception as exc:
         logger.error("Failed to delete ai feedback: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+
+@ai_search_bp.route("/seen", methods=["DELETE"])
+@limiter.limit("30 per minute")
+def ai_search_seen_clear():
+    """Clear the already-recommended history (optionally per media_type)."""
+    try:
+        data = request.json or {}
+        media_type = data.get("media_type")
+        if media_type and media_type not in ("movie", "tv"):
+            return jsonify({"status": "error", "message": "media_type must be 'movie' or 'tv'"}), 400
+        deleted = DatabaseManager().clear_ai_seen(media_type)
+        return jsonify({"status": "success", "deleted": deleted}), 200
+    except Exception as exc:
+        logger.error("Failed to clear ai seen: %s", exc)
         return jsonify({"status": "error", "message": str(exc)}), 500

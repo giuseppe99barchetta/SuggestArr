@@ -901,3 +901,39 @@
   border-color: #e74c3c;
   color: #e74c3c;
 }
+
+.reset-seen-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.reset-seen-btn {
+  background: transparent;
+  border: 1px solid var(--color-border, #444);
+  color: var(--color-text-muted, #aaa);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reset-seen-btn:hover:not(:disabled) {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.reset-seen-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.reset-seen-hint {
+  color: var(--color-text-muted, #888);
+  font-size: 0.8rem;
+}
