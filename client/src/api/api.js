@@ -106,6 +106,27 @@ export const aiSearchRequest = (tmdbId, mediaType, rationale = '', metadata = {}
     });
 };
 
+// AI Search: like/dislike feedback
+export const aiSearchFeedbackList = () => {
+    return axios.get('/api/ai-search/feedback');
+};
+
+export const aiSearchFeedbackSet = (tmdbId, mediaType, feedback, title = null, year = null) => {
+    return axios.post('/api/ai-search/feedback', {
+        tmdb_id: tmdbId,
+        media_type: mediaType,
+        feedback,
+        title,
+        year,
+    });
+};
+
+export const aiSearchFeedbackDelete = (tmdbId, mediaType) => {
+    return axios.delete('/api/ai-search/feedback', {
+        data: { tmdb_id: tmdbId, media_type: mediaType },
+    });
+};
+
 // AI Search: check whether LLM is configured and AI search is available
 export const aiSearchStatus = () => {
     return axios.get('/api/ai-search/status');
