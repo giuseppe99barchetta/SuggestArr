@@ -32,6 +32,7 @@ from api_service.blueprints.ai_search.routes import ai_search_bp
 from api_service.blueprints.health.routes import health_bp
 from api_service.blueprints.admin.routes import admin_bp
 from api_service.blueprints.users.routes import users_bp
+from api_service.blueprints.cleanup.routes import cleanup_bp
 
 class SubpathMiddleware:
     """
@@ -183,6 +184,7 @@ def create_app():
     application.register_blueprint(health_bp, url_prefix='/api/health')
     application.register_blueprint(admin_bp, url_prefix='/api/admin')
     application.register_blueprint(users_bp, url_prefix='/api/users')
+    application.register_blueprint(cleanup_bp, url_prefix='/api/cleanup')
 
     # Register routes
     register_routes(application)
@@ -306,7 +308,32 @@ try:
         max_instances=1,
         replace_existing=True,
     )
-    logger.info("Jobs scheduler initialized (discover + recommendation + queue_worker)")
+
+    # Daily cleanup job (no-op when disabled in cleanup_settings)
+    from api_service.jobs.cleanup_automation import execute_cleanup_job, _run_lock as _cleanup_run_lock
+    import asyncio as _asyncio
+    def _run_cleanup_job():
+        if not _cleanup_run_lock.acquire(blocking=False):
+            logger.info("Cleanup cron skipped: a run is already in progress.")
+            return
+        try:
+            _asyncio.run(execute_cleanup_job())
+        except Exception as exc:
+            logger.error(f"Cleanup job error: {exc}")
+        finally:
+            try:
+                _cleanup_run_lock.release()
+            except RuntimeError:
+                pass
+    job_manager.scheduler.add_job(
+        _run_cleanup_job,
+        'cron',
+        hour=4, minute=15,
+        id='cleanup_automation',
+        max_instances=1,
+        replace_existing=True,
+    )
+    logger.info("Jobs scheduler initialized (discover + recommendation + queue_worker + cleanup)")
 except Exception as e:
     import traceback
     logger.error(f"Failed to initialize discover jobs scheduler: {e}")
