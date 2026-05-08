@@ -554,6 +554,7 @@ async def interpret_search_query(
     history_items: List[Dict],
     media_type: str = "movie",
     max_suggestions: int = 8,
+    liked_titles: Optional[List[Dict]] = None,
 ) -> Dict[str, Any]:
     """Interpret a natural language search query and return structured TMDB parameters.
 
@@ -594,10 +595,25 @@ async def interpret_search_query(
         else:
             history_section = ""
 
+        liked_section = ""
+        if liked_titles:
+            liked_text = chr(10).join(
+                f"- {t.get('title')} ({t.get('year') or 'Unknown'})"
+                for t in liked_titles[:50] if t.get('title')
+            )
+            if liked_text:
+                _nl = chr(10)
+                liked_section = (
+                    f"{_nl}The user has explicitly LIKED the following {list_type} "
+                    f"and considers them strong examples of their taste:{_nl}{liked_text}{_nl}{_nl}"
+                    f"Lean strongly toward {list_type} similar in tone, themes, mood, era or style. "
+                    f"Do NOT include the liked titles themselves in the suggestions.{_nl}"
+                )
+
         prompt = f"""You are a {list_type} search assistant for a personal media server.
 The user wants to find {list_type} that match this description:
 "{query}"
-{history_section}
+{history_section}{liked_section}
 Return ONLY a single valid JSON object (no markdown, no explanation) with exactly these two keys:
 
 1. "discover_params": TMDB discover filter parameters:

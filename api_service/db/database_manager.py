@@ -272,6 +272,26 @@ class DatabaseManager:
                     UNIQUE(tmdb_id, media_type)
                 )
             """,
+            'ai_search_seen': """
+                CREATE TABLE IF NOT EXISTS ai_search_seen (
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (tmdb_id, media_type)
+                )
+            """,
+            'ai_search_feedback': """
+                CREATE TABLE IF NOT EXISTS ai_search_feedback (
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    feedback TEXT NOT NULL,
+                    title TEXT,
+                    year INTEGER,
+                    rationale TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (tmdb_id, media_type)
+                )
+            """,
             'integrations': """
                 CREATE TABLE IF NOT EXISTS integrations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1197,6 +1217,146 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute(query)
             return {str(row[0]) for row in cursor.fetchall()}
+
+    def set_ai_feedback(self, tmdb_id: str, media_type: str, feedback: str,
+                        title: str = None, year: int = None, rationale: str = None) -> None:
+        """Insert or update a like/dislike feedback for an AI search result.
+
+        :param feedback: 'like' or 'dislike'.
+        """
+        if feedback not in ('like', 'dislike'):
+            raise ValueError("feedback must be 'like' or 'dislike'")
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type in ('mysql', 'mariadb'):
+                cursor.execute(
+                    f"REPLACE INTO ai_search_feedback (tmdb_id, media_type, feedback, title, year, rationale) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})",
+                    (str(tmdb_id), media_type, feedback, title, year, rationale),
+                )
+            else:
+                cursor.execute(
+                    f"INSERT INTO ai_search_feedback (tmdb_id, media_type, feedback, title, year, rationale) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}) ON CONFLICT(tmdb_id, media_type) DO UPDATE SET feedback=excluded.feedback, title=excluded.title, year=excluded.year, rationale=excluded.rationale, created_at=CURRENT_TIMESTAMP",
+                    (str(tmdb_id), media_type, feedback, title, year, rationale),
+                )
+            conn.commit()
+
+    def delete_ai_feedback(self, tmdb_id: str, media_type: str) -> None:
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"DELETE FROM ai_search_feedback WHERE tmdb_id = {placeholder} AND media_type = {placeholder}",
+                (str(tmdb_id), media_type),
+            )
+            conn.commit()
+
+    def get_all_ai_feedback(self):
+        """Return list of all feedback rows as dicts (tmdb_id, media_type, feedback, title, year)."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT tmdb_id, media_type, feedback, title, year FROM ai_search_feedback")
+            rows = cursor.fetchall()
+            out = []
+            for r in rows:
+                out.append({
+                    'tmdb_id': str(r[0]),
+                    'media_type': r[1],
+                    'feedback': r[2],
+                    'title': r[3],
+                    'year': r[4],
+                })
+            return out
+
+    def get_ai_dislike_ids(self, media_type: str = None) -> set:
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if media_type:
+                cursor.execute(
+                    f"SELECT tmdb_id FROM ai_search_feedback WHERE feedback = 'dislike' AND media_type = {placeholder}",
+                    (media_type,),
+                )
+            else:
+                cursor.execute("SELECT tmdb_id FROM ai_search_feedback WHERE feedback = 'dislike'")
+            return {str(r[0]) for r in cursor.fetchall()}
+
+    def get_ai_likes(self, media_type: str = None):
+        """Return liked items as list of {title, year, media_type} dicts."""
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if media_type:
+                cursor.execute(
+                    f"SELECT title, year, media_type FROM ai_search_feedback WHERE feedback = 'like' AND media_type = {placeholder} AND title IS NOT NULL",
+                    (media_type,),
+                )
+            else:
+                cursor.execute("SELECT title, year, media_type FROM ai_search_feedback WHERE feedback = 'like' AND title IS NOT NULL")
+            return [{'title': r[0], 'year': r[1], 'media_type': r[2]} for r in cursor.fetchall()]
+
+    def get_ai_dislikes(self, media_type: str = None):
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if media_type:
+                cursor.execute(
+                    f"SELECT title, year, media_type FROM ai_search_feedback WHERE feedback = 'dislike' AND media_type = {placeholder} AND title IS NOT NULL",
+                    (media_type,),
+                )
+            else:
+                cursor.execute("SELECT title, year, media_type FROM ai_search_feedback WHERE feedback = 'dislike' AND title IS NOT NULL")
+            return [{'title': r[0], 'year': r[1], 'media_type': r[2]} for r in cursor.fetchall()]
+
+    def record_ai_seen(self, items) -> None:
+        """Record a batch of (tmdb_id, media_type) tuples as already-recommended."""
+        if not items:
+            return
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        rows = [(str(t), m) for t, m in items if t]
+        if not rows:
+            return
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type in ('mysql', 'mariadb'):
+                cursor.executemany(
+                    f"REPLACE INTO ai_search_seen (tmdb_id, media_type) VALUES ({placeholder}, {placeholder})",
+                    rows,
+                )
+            else:
+                cursor.executemany(
+                    f"INSERT INTO ai_search_seen (tmdb_id, media_type) VALUES ({placeholder}, {placeholder}) ON CONFLICT(tmdb_id, media_type) DO UPDATE SET last_seen=CURRENT_TIMESTAMP",
+                    rows,
+                )
+            conn.commit()
+
+    def get_ai_seen_ids(self, media_type: str = None) -> set:
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if media_type:
+                cursor.execute(
+                    f"SELECT tmdb_id FROM ai_search_seen WHERE media_type = {placeholder}",
+                    (media_type,),
+                )
+            else:
+                cursor.execute("SELECT tmdb_id FROM ai_search_seen")
+            return {str(r[0]) for r in cursor.fetchall()}
+
+    def clear_ai_seen(self, media_type: str = None) -> int:
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if media_type:
+                cursor.execute(
+                    f"DELETE FROM ai_search_seen WHERE media_type = {placeholder}",
+                    (media_type,),
+                )
+            else:
+                cursor.execute("DELETE FROM ai_search_seen")
+            count = cursor.rowcount
+            conn.commit()
+            return count
 
     def get_ai_search_requests(self, page: int = 1, per_page: int = 12, sort_by: str = 'date-desc') -> Dict[str, Any]:
         """Get requests made via AI Search, paginated and sorted.

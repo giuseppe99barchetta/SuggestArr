@@ -50,6 +50,9 @@ async def ai_search_query():
         exclude_watched = data.get("exclude_watched", True)
         if not isinstance(exclude_watched, bool):
             exclude_watched = True
+        exclude_seen = data.get("exclude_seen", False)
+        if not isinstance(exclude_seen, bool):
+            exclude_seen = False
 
         # Check LLM is configured (not strictly required — service degrades gracefully,
         # but we surface a clear error before attempting if completely unconfigured)
@@ -71,6 +74,7 @@ async def ai_search_query():
             max_results=max_results,
             use_history=use_history,
             exclude_watched=exclude_watched,
+            exclude_seen=exclude_seen,
         )
 
         return jsonify({
@@ -213,3 +217,85 @@ def ai_search_status():
             "Set OPENAI_API_KEY (and optionally OPENAI_BASE_URL) in Advanced settings."
         ),
     }), 200
+
+
+@ai_search_bp.route("/feedback", methods=["GET"])
+def ai_search_feedback_list():
+    """Return all stored like/dislike feedback so the frontend can render state."""
+    try:
+        rows = DatabaseManager().get_all_ai_feedback()
+        return jsonify({"status": "success", "feedback": rows}), 200
+    except Exception as exc:
+        logger.error("Failed to list ai feedback: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@ai_search_bp.route("/feedback", methods=["POST"])
+@limiter.limit("60 per minute")
+def ai_search_feedback_set():
+    """Record a like or dislike for an AI search result.
+
+    Request body:
+        tmdb_id (int|str): TMDB id.
+        media_type (str): 'movie' or 'tv'.
+        feedback (str): 'like' or 'dislike'.
+        title (str, optional)
+        year (int, optional)
+    """
+    try:
+        data = request.json or {}
+        tmdb_id = data.get("tmdb_id")
+        media_type = data.get("media_type")
+        feedback = data.get("feedback")
+        title = data.get("title")
+        year = data.get("year")
+        if year is not None:
+            try:
+                year = int(year)
+            except (TypeError, ValueError):
+                year = None
+        if not tmdb_id:
+            return jsonify({"status": "error", "message": "tmdb_id is required"}), 400
+        if media_type not in ("movie", "tv"):
+            return jsonify({"status": "error", "message": "media_type must be 'movie' or 'tv'"}), 400
+        if feedback not in ("like", "dislike"):
+            return jsonify({"status": "error", "message": "feedback must be 'like' or 'dislike'"}), 400
+        DatabaseManager().set_ai_feedback(str(tmdb_id), media_type, feedback, title=title, year=year)
+        return jsonify({"status": "success"}), 200
+    except Exception as exc:
+        logger.error("Failed to set ai feedback: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@ai_search_bp.route("/feedback", methods=["DELETE"])
+@limiter.limit("60 per minute")
+def ai_search_feedback_delete():
+    """Remove feedback for a TMDB item."""
+    try:
+        data = request.json or {}
+        tmdb_id = data.get("tmdb_id")
+        media_type = data.get("media_type")
+        if not tmdb_id or media_type not in ("movie", "tv"):
+            return jsonify({"status": "error", "message": "tmdb_id and media_type required"}), 400
+        DatabaseManager().delete_ai_feedback(str(tmdb_id), media_type)
+        return jsonify({"status": "success"}), 200
+    except Exception as exc:
+        logger.error("Failed to delete ai feedback: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+
+@ai_search_bp.route("/seen", methods=["DELETE"])
+@limiter.limit("30 per minute")
+def ai_search_seen_clear():
+    """Clear the already-recommended history (optionally per media_type)."""
+    try:
+        data = request.json or {}
+        media_type = data.get("media_type")
+        if media_type and media_type not in ("movie", "tv"):
+            return jsonify({"status": "error", "message": "media_type must be 'movie' or 'tv'"}), 400
+        deleted = DatabaseManager().clear_ai_seen(media_type)
+        return jsonify({"status": "success", "deleted": deleted}), 200
+    except Exception as exc:
+        logger.error("Failed to clear ai seen: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
