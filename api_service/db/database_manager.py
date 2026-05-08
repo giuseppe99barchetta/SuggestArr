@@ -327,6 +327,28 @@ class DatabaseManager:
                                 "UNIQUE(tmdb_id, media_type)",
                                 "UNIQUE KEY uniq_pending_tmdb_media_type (tmdb_id(191), media_type(191))"
                             )
+                        elif table_name == 'ai_search_seen':
+                            query = """
+                                CREATE TABLE IF NOT EXISTS ai_search_seen (
+                                    tmdb_id VARCHAR(64) NOT NULL,
+                                    media_type VARCHAR(16) NOT NULL,
+                                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                    PRIMARY KEY (tmdb_id, media_type)
+                                ) ENGINE=InnoDB
+                            """
+                        elif table_name == 'ai_search_feedback':
+                            query = """
+                                CREATE TABLE IF NOT EXISTS ai_search_feedback (
+                                    tmdb_id VARCHAR(64) NOT NULL,
+                                    media_type VARCHAR(16) NOT NULL,
+                                    feedback VARCHAR(16) NOT NULL,
+                                    title VARCHAR(512),
+                                    year INTEGER,
+                                    rationale VARCHAR(512),
+                                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                    PRIMARY KEY (tmdb_id, media_type)
+                                ) ENGINE=InnoDB
+                            """
 
                         # Order matters: do specific replacements first
                         query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "INT AUTO_INCREMENT PRIMARY KEY")
