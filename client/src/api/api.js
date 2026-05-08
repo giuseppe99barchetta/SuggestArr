@@ -77,7 +77,7 @@ export const fetchSonarrServers = (payload = null) => {
 };
 
 // AI Search: semantic content search powered by LLM + TMDB
-export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 12, useHistory = true, excludeWatched = true) => {
+export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 12, useHistory = true, excludeWatched = true, excludeSeen = false) => {
     return axios.post('/api/ai-search/query', {
         query,
         media_type: mediaType,
@@ -85,6 +85,14 @@ export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 
         max_results: maxResults,
         use_history: useHistory,
         exclude_watched: excludeWatched,
+        exclude_seen: excludeSeen,
+    });
+};
+
+// AI Search: clear already-recommended history
+export const aiSearchSeenClear = (mediaType = null) => {
+    return axios.delete('/api/ai-search/seen', {
+        data: mediaType ? { media_type: mediaType } : {},
     });
 };
 

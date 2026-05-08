@@ -123,6 +123,22 @@ class TMDbDiscover:
                 media_type, rating_source, imdb_rating_gte, imdb_min_votes
             )
 
+        async def process_item(item):
+            if use_imdb:
+                imdb_id = await self._get_imdb_id(item['id'], media_type)
+                if imdb_id:
+                    imdb_data = await self.omdb_client.get_rating(imdb_id)
+                    if not self._check_imdb_filter(
+                        imdb_data, item, imdb_rating_gte, imdb_min_votes, include_no_rating
+                    ):
+                        return None
+                elif not include_no_rating:
+                    title = item.get('title') or item.get('name', 'Unknown')
+                    self.logger.debug("Excluding %s: no IMDB ID found in TMDB data", title)
+                    return None
+
+            return self._format_result(item, media_type)
+
         for page in range(1, pages_needed + 1):
             self.logger.debug(f"Fetching discover page {page} for {media_type}")
 
@@ -131,22 +147,17 @@ class TMDbDiscover:
                 self.logger.warning(f"No data returned for page {page}")
                 break
 
-            for item in data['results']:
-                if use_imdb:
-                    imdb_id = await self._get_imdb_id(item['id'], media_type)
-                    if imdb_id:
-                        imdb_data = await self.omdb_client.get_rating(imdb_id)
-                        if not self._check_imdb_filter(
-                            imdb_data, item, imdb_rating_gte, imdb_min_votes, include_no_rating
-                        ):
-                            continue
-                    elif not include_no_rating:
-                        title = item.get('title') or item.get('name', 'Unknown')
-                        self.logger.debug("Excluding %s: no IMDB ID found in TMDB data", title)
-                        continue
+            # Process items in batches to avoid over-fetching while benefiting from concurrency
+            batch_size = 5
+            for i in range(0, len(data['results']), batch_size):
+                batch = data['results'][i:i + batch_size]
+                batch_results = await asyncio.gather(*[process_item(item) for item in batch])
 
-                formatted = self._format_result(item, media_type)
-                results.append(formatted)
+                for res in batch_results:
+                    if res is not None:
+                        results.append(res)
+                        if len(results) >= max_results:
+                            break
 
                 if len(results) >= max_results:
                     break
