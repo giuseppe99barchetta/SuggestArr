@@ -2,6 +2,7 @@
 Main Flask application for managing environment variables and running processes.
 """
 from concurrent.futures import ThreadPoolExecutor
+from html import escape
 import os
 from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
@@ -46,11 +47,24 @@ class SubpathMiddleware:
         subpath = env_vars.get('SUBPATH')
         subpath = str(subpath).strip('/') if subpath else ''
         
-        if subpath and environ['PATH_INFO'].startswith(f'/{subpath}'):
+        if subpath and environ['PATH_INFO'] == f'/{subpath}':
+            query_string = environ.get('QUERY_STRING', '')
+            location = f'/{subpath}/'
+            if query_string:
+                location = f'{location}?{query_string}'
+
+            start_response(
+                '308 Permanent Redirect',
+                [
+                    ('Location', location),
+                    ('Content-Type', 'text/plain; charset=utf-8'),
+                    ('Content-Length', '0'),
+                ],
+            )
+            return [b'']
+
+        if subpath and environ['PATH_INFO'].startswith(f'/{subpath}/'):
             # Strip the subpath from PATH_INFO.
-            # If the URL is exactly /<subpath> (no trailing slash), the result
-            # would be an empty string which is not a valid WSGI PATH_INFO.
-            # Fall back to '/' so Flask can match the root route.
             stripped = environ['PATH_INFO'][len(subpath) + 1:]
             environ['PATH_INFO'] = stripped if stripped else '/'
             # Ensure SCRIPT_NAME correctly reflects the subpath
@@ -252,8 +266,11 @@ def register_routes(app): # pylint: disable=redefined-outer-name
                 subpath_prefix = ''
                 
             # Inject subpath so frontend knows its base URL
-            meta_tag = f'<meta name="suggestarr-subpath" content="{subpath_prefix}">'
-            content = content.replace('<head>', f'<head>{meta_tag}')
+            escaped_subpath = escape(subpath_prefix, quote=True)
+            injected_tags = f'<meta name="suggestarr-subpath" content="{escaped_subpath}">'
+            if subpath_prefix:
+                injected_tags += f'<base href="{escaped_subpath}/">'
+            content = content.replace('<head>', f'<head>{injected_tags}')
             
             return Response(content, mimetype='text/html')
         else:
