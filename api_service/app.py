@@ -12,6 +12,7 @@ import atexit
 
 from api_service.utils.utils import AppUtils
 from api_service.config.logger_manager import LoggerManager
+from api_service.config.config import load_env_vars
 
 from api_service.auth.middleware import enforce_authentication
 from api_service.auth.limiter import limiter
