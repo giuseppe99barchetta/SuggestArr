@@ -2,9 +2,8 @@
 Main Flask application for managing environment variables and running processes.
 """
 from concurrent.futures import ThreadPoolExecutor
-from html import escape
 import os
-from flask import Flask, send_from_directory, jsonify
+from flask import Flask, jsonify
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 from asgiref.wsgi import WsgiToAsgi
@@ -13,7 +12,6 @@ import atexit
 
 from api_service.utils.utils import AppUtils
 from api_service.config.logger_manager import LoggerManager
-from api_service.config.config import load_env_vars
 
 from api_service.auth.middleware import enforce_authentication
 from api_service.auth.limiter import limiter
@@ -33,43 +31,7 @@ from api_service.blueprints.ai_search.routes import ai_search_bp
 from api_service.blueprints.health.routes import health_bp
 from api_service.blueprints.admin.routes import admin_bp
 from api_service.blueprints.users.routes import users_bp
-
-class SubpathMiddleware:
-    """
-    WSGI Middleware to strip the SUBPATH from the request URL
-    so Flask routing works correctly behind various reverse proxies.
-    """
-    def __init__(self, app):
-        self.app = app
-
-    def __call__(self, environ, start_response):
-        env_vars = load_env_vars()
-        subpath = env_vars.get('SUBPATH')
-        subpath = str(subpath).strip('/') if subpath else ''
-        
-        if subpath and environ['PATH_INFO'] == f'/{subpath}':
-            query_string = environ.get('QUERY_STRING', '')
-            location = f'/{subpath}/'
-            if query_string:
-                location = f'{location}?{query_string}'
-
-            start_response(
-                '308 Permanent Redirect',
-                [
-                    ('Location', location),
-                    ('Content-Type', 'text/plain; charset=utf-8'),
-                    ('Content-Length', '0'),
-                ],
-            )
-            return [b'']
-
-        if subpath and environ['PATH_INFO'].startswith(f'/{subpath}/'):
-            # Strip the subpath from PATH_INFO.
-            stripped = environ['PATH_INFO'][len(subpath) + 1:]
-            environ['PATH_INFO'] = stripped if stripped else '/'
-            # Ensure SCRIPT_NAME correctly reflects the subpath
-            environ['SCRIPT_NAME'] = f'/{subpath}'
-        return self.app(environ, start_response)
+from api_service.frontend_routes import SubpathMiddleware, register_routes
 
 executor = ThreadPoolExecutor(max_workers=3)
 logger = LoggerManager.get_logger("APP") 
@@ -89,7 +51,8 @@ def create_app():
     if AppUtils.is_last_worker():
         AppUtils.print_welcome_message() # Print only for last worker
 
-    application = Flask(__name__, static_folder='../static')
+    static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
+    application = Flask(__name__, static_folder=static_dir)
 
     # ------------------------------------------------------------------
     # Reverse-proxy trust
@@ -205,78 +168,6 @@ def create_app():
     AppUtils.load_environment()
 
     return application
-
-def register_routes(app): # pylint: disable=redefined-outer-name
-    """
-    Register the application routes.
-    """
-
-    @app.route('/', defaults={'path': ''})
-    @app.route('/<path:path>')
-    def serve_frontend(path):
-        """
-        Serve the built frontend's index.html or any other static file.
-        API routes should be handled by blueprints, not this catch-all.
-        """
-        # API routes that reach here were not matched by blueprints - return 404
-        if path.startswith('api/'):
-            from flask import abort
-            abort(404)
-
-        app.static_folder = '../static'
-        
-        env_vars = load_env_vars()
-        subpath = env_vars.get('SUBPATH')
-        subpath = str(subpath).strip('/') if subpath else ''
-        
-        # If the browser mistakenly requested the asset including the subpath 
-        # (e.g., due to absolute vs relative resolution confusion), we strip it
-        # so we can find the actual file in the static directory.
-        if subpath and path.startswith(f"{subpath}/"):
-            path = path[len(subpath) + 1:]
-        elif subpath and path == subpath:
-            path = ""
-            
-        target_path = path if path != "" else "index.html"
-
-        # Resolve and validate the requested path against the static folder to
-        # prevent directory traversal using user-controlled `path`.
-        static_root = os.path.realpath(app.static_folder)
-        full_path = os.path.realpath(os.path.join(static_root, target_path))
-
-        # If the resolved path is outside the static root, do not serve it.
-        if os.path.commonpath([static_root, full_path]) != static_root:
-            from flask import abort
-            abort(404)
-
-        if target_path == "index.html" or not os.path.exists(full_path):
-            from flask import Response
-            index_path = os.path.join(app.static_folder, 'index.html')
-            if not os.path.exists(index_path):
-                from flask import abort
-                abort(404)
-            
-            with open(index_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-                
-                
-            if subpath:
-                subpath_prefix = '/' + subpath
-            else:
-                subpath_prefix = ''
-                
-            # Inject subpath so frontend knows its base URL
-            escaped_subpath = escape(subpath_prefix, quote=True)
-            injected_tags = f'<meta name="suggestarr-subpath" content="{escaped_subpath}">'
-            if subpath_prefix:
-                injected_tags += f'<base href="{escaped_subpath}/">'
-            content = content.replace('<head>', f'<head>{injected_tags}')
-            
-            return Response(content, mimetype='text/html')
-        else:
-            # Serve the requested file (static assets like JS, CSS, images, etc.).
-            # `target_path` has been validated to stay within `static_root`.
-            return send_from_directory(app.static_folder, target_path)
 
 app = create_app()
 app.wsgi_app = SubpathMiddleware(app.wsgi_app)
