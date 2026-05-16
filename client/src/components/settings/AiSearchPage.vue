@@ -32,9 +32,10 @@
           class="search-textarea"
           placeholder="Describe what you want to watch... e.g. 'A psychological thriller from the 90s with a twist ending' or 'Feel-good anime with strong friendships'"
           rows="3"
-          @keydown.ctrl.enter="runSearch"
+          @keydown.enter.exact.prevent="runSearch"
+          @keydown.shift.enter.exact.stop=""
         ></textarea>
-        <div class="search-hint">Ctrl + Enter to search</div>
+        <div class="search-hint">Enter to search · Shift + Enter for newline</div>
       </div>
 
       <div class="search-controls">
@@ -90,6 +91,23 @@
               <div class="toggle-knob"></div>
             </div>
           </label>
+          <label class="toggle-option">
+            <span class="toggle-label">
+              <i class="fas fa-redo"></i>
+              Hide already-recommended
+              <span class="toggle-hint">Don't show titles that appeared in any previous AI search</span>
+            </span>
+            <div class="toggle-switch" :class="{ on: excludeSeen }" @click="excludeSeen = !excludeSeen">
+              <div class="toggle-knob"></div>
+            </div>
+          </label>
+          <div class="reset-seen-row">
+            <button type="button" class="reset-seen-btn" @click="resetSeen" :disabled="isResettingSeen">
+              <i :class="isResettingSeen ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
+              {{ isResettingSeen ? 'Clearing...' : 'Clear recommendation history' }}
+            </button>
+            <span class="reset-seen-hint">Lets previously recommended titles re-appear.</span>
+          </div>
           <div class="number-option">
             <span class="toggle-label">
               <i class="fas fa-list-ol"></i>
@@ -205,6 +223,26 @@
               <i :class="requestButtonIcon(item)"></i>
               {{ requestButtonLabel(item) }}
             </button>
+
+            <!-- Like/Dislike feedback -->
+            <div class="feedback-row">
+              <button
+                class="feedback-btn feedback-like"
+                :class="{ active: feedbackOf(item) === 'like' }"
+                @click.stop="toggleFeedback(item, 'like')"
+                title="More like this"
+              >
+                <i class="fas fa-thumbs-up"></i>
+              </button>
+              <button
+                class="feedback-btn feedback-dislike"
+                :class="{ active: feedbackOf(item) === 'dislike' }"
+                @click.stop="toggleFeedback(item, 'dislike')"
+                title="Don't show this again"
+              >
+                <i class="fas fa-thumbs-down"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -304,7 +342,7 @@
 </template>
 
 <script>
-import { aiSearch, aiSearchRequest, aiSearchStatus } from '@/api/api.js';
+import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear } from '@/api/api.js';
 import '@/assets/styles/aiSearchPage.css';
 
 export default {
@@ -330,8 +368,17 @@ export default {
       excludeWatched: true,
       maxResults: 12,
       // Recent search history (persisted in localStorage)
+      feedbackMap: {},
+      excludeSeen: JSON.parse(localStorage.getItem('suggestarr_ai_exclude_seen') || 'false'),
+      isResettingSeen: false,
       recentSearches: JSON.parse(localStorage.getItem('suggestarr_ai_search_history') || '[]'),
     };
+  },
+
+  watch: {
+    excludeSeen(val) {
+      localStorage.setItem('suggestarr_ai_exclude_seen', JSON.stringify(!!val));
+    },
   },
 
   computed: {
@@ -379,6 +426,69 @@ export default {
   },
 
   methods: {
+
+    async resetSeen() {
+      if (this.isResettingSeen) return;
+      this.isResettingSeen = true;
+      try {
+        await aiSearchSeenClear();
+      } catch (err) {
+        const msg = err.response?.data?.message || err.message || 'Failed to clear history.';
+        this.errorMessage = msg;
+      } finally {
+        this.isResettingSeen = false;
+      }
+    },
+
+    feedbackOf(item) {
+      return this.feedbackMap[item.media_type + ':' + item.id] || null;
+    },
+
+    async toggleFeedback(item, kind) {
+      const key = item.media_type + ':' + item.id;
+      const current = this.feedbackMap[key] || null;
+      try {
+        if (current === kind) {
+          await aiSearchFeedbackDelete(item.id, item.media_type);
+          const next = { ...this.feedbackMap };
+          delete next[key];
+          this.feedbackMap = next;
+        } else {
+          const year = this.releaseYear(item);
+          await aiSearchFeedbackSet(
+            item.id,
+            item.media_type,
+            kind,
+            item.title || null,
+            year ? Number(year) : null,
+          );
+          this.feedbackMap = { ...this.feedbackMap, [key]: kind };
+          if (kind === 'dislike') {
+            this.results = this.results.filter(r => !(r.id === item.id && r.media_type === item.media_type));
+            if (this.selectedItem && this.selectedItem.id === item.id && this.selectedItem.media_type === item.media_type) {
+              this.closeModal();
+            }
+          }
+        }
+      } catch (err) {
+        const msg = err.response?.data?.message || err.message || 'Failed to save feedback.';
+        this.errorMessage = msg;
+      }
+    },
+
+    async loadFeedback() {
+      try {
+        const res = await aiSearchFeedbackList();
+        const map = {};
+        for (const row of res.data.feedback || []) {
+          map[row.media_type + ':' + row.tmdb_id] = row.feedback;
+        }
+        this.feedbackMap = map;
+      } catch {
+        // non-fatal
+      }
+    },
+
     async checkLlmStatus() {
       try {
         const res = await aiSearchStatus();
@@ -398,7 +508,7 @@ export default {
       this.queryInterpretation = null;
 
       try {
-        const res = await aiSearch(this.query.trim(), this.mediaType, [], this.maxResults, this.useHistory, this.excludeWatched);
+        const res = await aiSearch(this.query.trim(), this.mediaType, [], this.maxResults, this.useHistory, this.excludeWatched, this.excludeSeen);
         const data = res.data;
 
         if (data.status === 'error') {
@@ -508,6 +618,7 @@ export default {
 
   mounted() {
     this.checkLlmStatus();
+    this.loadFeedback();
     this._onKeydown = (e) => { if (e.key === 'Escape') this.closeModal(); };
     window.addEventListener('keydown', this._onKeydown);
   },
