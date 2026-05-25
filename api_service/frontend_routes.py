@@ -22,6 +22,15 @@ def normalize_subpath(value):
     return "" if normalized == "/" else normalized
 
 
+def get_configured_subpath():
+    """Return normalized SUBPATH from environment first, then config."""
+    env_subpath = os.environ.get("SUBPATH")
+    if env_subpath not in (None, ""):
+        return normalize_subpath(env_subpath)
+
+    return normalize_subpath(load_env_vars().get("SUBPATH"))
+
+
 def strip_subpath_prefix(path, subpath):
     """Drop leading SUBPATH from frontend request paths when present."""
     normalized_path = (path or "").lstrip("/")
@@ -78,7 +87,7 @@ class SubpathMiddleware:
         self.app = app
 
     def __call__(self, environ, start_response):
-        subpath = normalize_subpath(load_env_vars().get("SUBPATH"))
+        subpath = get_configured_subpath()
 
         if subpath and environ["PATH_INFO"] == subpath:
             query_string = environ.get("QUERY_STRING", "")
@@ -113,7 +122,7 @@ def register_routes(app):  # pylint: disable=redefined-outer-name
         if path.startswith("api/"):
             abort(404)
 
-        subpath = normalize_subpath(load_env_vars().get("SUBPATH"))
+        subpath = get_configured_subpath()
         relative_path = strip_subpath_prefix(path, subpath)
         target_path = relative_path or "index.html"
         static_root = os.path.realpath(app.static_folder)

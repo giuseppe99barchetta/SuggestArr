@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from flask import Flask
 
-from api_service.frontend_routes import normalize_subpath, register_routes
+from api_service.frontend_routes import SubpathMiddleware, normalize_subpath, register_routes
 
 
 class TestFrontendRoutes(unittest.TestCase):
@@ -58,6 +58,16 @@ class TestFrontendRoutes(unittest.TestCase):
         self.assertIn('src="js/app.123.js"', body)
         self.assertIn('href="css/app.123.css"', body)
 
+    def test_subpath_env_var_drives_index_tags(self):
+        with patch.dict(os.environ, {"SUBPATH": "/suggestarr"}), \
+             patch("api_service.frontend_routes.load_env_vars", return_value={"SUBPATH": None}):
+            response = self.client.get("/suggestarr/")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn('<meta name="suggestarr-subpath" content="/suggestarr">', body)
+        self.assertIn('<base href="/suggestarr/">', body)
+
     def test_subpath_js_asset_serves_javascript_not_html(self):
         with patch("api_service.frontend_routes.load_env_vars", return_value={"SUBPATH": "/suggestarr"}):
             response = self.client.get("/suggestarr/js/app.123.js")
@@ -96,6 +106,21 @@ class TestFrontendRoutes(unittest.TestCase):
             response = self.client.get("/suggestarr/js/missing.js")
 
         self.assertEqual(response.status_code, 404)
+
+    def test_middleware_strips_env_subpath_before_routing_assets(self):
+        app = Flask(__name__, static_folder=self.tempdir.name)
+        app.config["TESTING"] = True
+        register_routes(app)
+        app.wsgi_app = SubpathMiddleware(app.wsgi_app)
+        client = app.test_client()
+
+        with patch.dict(os.environ, {"SUBPATH": "/suggestarr"}), \
+             patch("api_service.frontend_routes.load_env_vars", return_value={"SUBPATH": None}):
+            response = client.get("/suggestarr/js/app.123.js")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("javascript", response.content_type)
+        self.assertEqual(response.get_data(as_text=True), "console.log('ok');")
 
     def test_root_deployment_asset_still_serves(self):
         with patch("api_service.frontend_routes.load_env_vars", return_value={"SUBPATH": None}):
