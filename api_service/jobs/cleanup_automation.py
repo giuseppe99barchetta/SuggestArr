@@ -22,6 +22,15 @@ FAVORITE_USER_RATING = 10.0
 SUPPORTED_MEDIA_SERVICES = {"plex", "jellyfin", "emby"}
 
 
+def _format_utc_timestamp(dt: datetime) -> str:
+    """Return UTC timestamp text compatible with SQL CURRENT_TIMESTAMP."""
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _utcnow_for_db() -> str:
+    return _format_utc_timestamp(datetime.utcnow())
+
+
 def _normalise_selected_users(raw_users) -> List[Dict]:
     if not isinstance(raw_users, list):
         return []
@@ -196,7 +205,7 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
     if media_service not in SUPPORTED_MEDIA_SERVICES:
         msg = f"Cleanup supports Plex, Jellyfin, and Emby (configured service: {media_service or 'unknown'})."
         logger.warning(msg)
-        db.update_cleanup_settings(last_run_at=datetime.utcnow().isoformat(),
+        db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
                                    last_run_status='unsupported', last_run_summary=msg)
         return {'status': 'unsupported', 'message': msg}
 
@@ -204,18 +213,18 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
     if missing_config:
         msg = missing_config
         logger.warning(msg)
-        db.update_cleanup_settings(last_run_at=datetime.utcnow().isoformat(),
+        db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
                                    last_run_status='not_configured', last_run_summary=msg)
         return {'status': 'not_configured', 'message': msg}
 
-    cutoff = (datetime.utcnow() - timedelta(days=grace_days)).isoformat()
+    cutoff = _format_utc_timestamp(datetime.utcnow() - timedelta(days=grace_days))
     candidates: List[Dict] = db.get_suggestarr_requests_older_than(cutoff)
     logger.info("Cleanup: %d candidate request(s) older than %d day(s) (cutoff=%s, dry_run=%s).",
                 len(candidates), grace_days, cutoff, dry_run)
 
     if not candidates:
         summary = f"No requests older than {grace_days} days."
-        db.update_cleanup_settings(last_run_at=datetime.utcnow().isoformat(),
+        db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
                                    last_run_status='ok', last_run_summary=summary)
         return {'status': 'ok', 'summary': summary, 'deleted': 0, 'kept': 0, 'missing': 0}
 
@@ -297,7 +306,7 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
     summary = (f"Candidates={len(candidates)} "
                f"{'would_delete' if dry_run else 'deleted'}={deleted} "
                f"kept_favorited={kept} not_in_library={missing} errors={errors}")
-    db.update_cleanup_settings(last_run_at=datetime.utcnow().isoformat(),
+    db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
                                last_run_status=('dry_run' if dry_run else 'ok'),
                                last_run_summary=summary)
     logger.info("Cleanup run finished: %s", summary)
