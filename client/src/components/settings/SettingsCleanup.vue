@@ -26,8 +26,10 @@
     <div v-else class="cleanup-panel">
       <label class="toggle-option">
         <span class="toggle-label">
-          <i class="fas fa-power-off"></i>
-          Enable cleanup automation
+          <span class="toggle-title">
+            <i class="fas fa-power-off"></i>
+            Enable cleanup automation
+          </span>
           <span class="toggle-hint">Runs daily at 04:15 server-time. When off, no scans happen.</span>
         </span>
         <div class="toggle-switch" :class="{ on: form.enabled }" @click="form.enabled = !form.enabled">
@@ -37,8 +39,10 @@
 
       <label class="toggle-option">
         <span class="toggle-label">
-          <i class="fas fa-vial"></i>
-          Dry-run mode
+          <span class="toggle-title">
+            <i class="fas fa-vial"></i>
+            Dry-run mode
+          </span>
           <span class="toggle-hint">Logs which items would be sent to Seer for deletion without touching files. Strongly recommended before flipping to real deletion.</span>
         </span>
         <div class="toggle-switch" :class="{ on: form.dry_run }" @click="form.dry_run = !form.dry_run">
@@ -48,8 +52,10 @@
 
       <div class="number-option">
         <span class="toggle-label">
-          <i class="fas fa-hourglass-half"></i>
-          Grace period (days)
+          <span class="toggle-title">
+            <i class="fas fa-hourglass-half"></i>
+            Grace period (days)
+          </span>
           <span class="toggle-hint">If a requested item has not been favorited in Plex, Jellyfin, or Emby within this many days of being requested, it becomes a deletion candidate.</span>
         </span>
         <input v-model.number="form.grace_days" type="number" min="1" max="365" class="number-input" />
@@ -209,11 +215,14 @@ export default {
 
     formatTs(ts) {
       if (!ts) return '—';
-      try {
-        return new Date(ts.endsWith('Z') ? ts : ts + 'Z').toLocaleString();
-      } catch {
-        return ts;
+      const raw = String(ts).trim();
+      const hasTimezone = /(?:z|gmt|[+-]\d{2}:?\d{2})$/i.test(raw);
+      const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+      const date = new Date(hasTimezone ? normalized : `${normalized}Z`);
+      if (Number.isNaN(date.getTime())) {
+        return raw;
       }
+      return date.toLocaleString();
     },
 
     actionClass(action) {
@@ -286,6 +295,17 @@ export default {
 }
 .toggle-option:last-of-type, .number-option:last-of-type { border-bottom: none; }
 .toggle-label { display: flex; flex-direction: column; gap: 4px; max-width: 70%; }
+.toggle-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-primary, #fff);
+}
+.toggle-title i {
+  width: 16px;
+  color: var(--color-text-muted, #aaa);
+  text-align: center;
+}
 .toggle-hint { color: var(--color-text-muted, #888); font-size: 0.85rem; }
 
 .number-input {
