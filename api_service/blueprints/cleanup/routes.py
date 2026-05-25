@@ -3,6 +3,7 @@
 from flask import Blueprint, jsonify, request
 
 from api_service.auth.limiter import limiter
+from api_service.auth.middleware import require_role
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.jobs.cleanup_automation import execute_cleanup_job, _run_lock as _shared_run_lock
@@ -22,6 +23,7 @@ def cleanup_settings_get():
 
 
 @cleanup_bp.route("/settings", methods=["POST"])
+@require_role("admin")
 @limiter.limit("30 per minute")
 def cleanup_settings_set():
     try:
@@ -52,6 +54,7 @@ def cleanup_settings_set():
 
 
 @cleanup_bp.route("/run", methods=["POST"])
+@require_role("admin")
 async def cleanup_run_now():
     if not _run_lock.acquire(blocking=False):
         return jsonify({
