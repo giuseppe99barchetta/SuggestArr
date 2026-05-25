@@ -147,6 +147,28 @@ def _validation_retry_message(schema_cls: Type[BaseModel]) -> str:
     return _RETRY_SYSTEM_MESSAGE
 
 
+def _normalize_parsed_response(parsed: Any, schema_cls: Type[BaseModel]) -> Any:
+    """Coerce common provider response shapes into the requested schema."""
+    if schema_cls is not RecommendationList:
+        return parsed
+
+    if isinstance(parsed, list):
+        return {"recommendations": parsed}
+
+    if not isinstance(parsed, dict) or "recommendations" in parsed:
+        return parsed
+
+    for key in ("movies", "movie_recommendations", "tv", "tv_recommendations", "results"):
+        value = parsed.get(key)
+        if isinstance(value, list):
+            normalized = dict(parsed)
+            normalized["recommendations"] = value
+            normalized.pop(key, None)
+            return normalized
+
+    return parsed
+
+
 # ---------------------------------------------------------------------------
 # Low-level helpers (pure / sync)
 # ---------------------------------------------------------------------------
@@ -176,21 +198,29 @@ def _repair_title_qualifiers(text: str) -> str:
 
 
 def _extract_json_object(text: str) -> str:
-    """Extract the first complete JSON object from text.
+    """Extract the first complete JSON object or array from text.
 
     Some providers prepend or append natural-language commentary even when
     instructed to return JSON only. This keeps only the content between the
-    first ``{`` and the last ``}``, then trims whitespace.
+    first JSON opener and its likely closing delimiter, then trims whitespace.
 
-    :param text: LLM output that should contain a JSON object.
-    :return: String narrowed to the JSON object region when delimiters exist.
+    :param text: LLM output that should contain JSON.
+    :return: String narrowed to the JSON region when delimiters exist.
     """
-    end = text.rfind("}")
-    if end != -1:
-        text = text[: end + 1]
+    object_start = text.find("{")
+    array_start = text.find("[")
 
-    start = text.find("{")
-    if start != -1:
+    starts = [idx for idx in (object_start, array_start) if idx != -1]
+    if not starts:
+        return text.strip()
+
+    start = min(starts)
+    opener = text[start]
+    closer = "}" if opener == "{" else "]"
+    end = text.rfind(closer)
+    if end != -1 and end >= start:
+        text = text[start: end + 1]
+    else:
         text = text[start:]
 
     return text.strip()
@@ -341,16 +371,19 @@ async def _call_with_validation(
 
         try:
             parsed = json.loads(content)
+            parsed = _normalize_parsed_response(parsed, schema_cls)
             validated = schema_cls.model_validate(parsed)
             return validated
         except (json.JSONDecodeError, ValidationError) as exc:
             last_error = exc
+            preview = content.replace("\n", "\\n")[:200]
             logger.warning(
-                "LLM response validation failed (attempt %d/%d): %s",
+                "LLM response validation failed (attempt %d/%d): %s; response preview=%r",
                 attempt + 1,
                 max_retries + 1,
                 # Truncate to avoid leaking excessive content in logs.
                 str(exc)[:300],
+                preview,
             )
             if attempt < max_retries:
                 # Inject correction hint as the first system message and retry.
@@ -768,30 +801,30 @@ async def generate_search_result_rationales(
 
         prompt = f"""You are writing short, personalized recommendation rationales for {list_type}.
 
-User query:
-\"{query}\"
-
-Interpreted filters:
-{json.dumps(discover_summary, ensure_ascii=True)}
-
-Generate one rationale for each candidate below:
-{json.dumps(input_items, ensure_ascii=True)}
-
-Return ONLY valid JSON with this exact shape:
-{{
-  \"rationales\": [
-    {{\"title\": \"...\", \"year\": 2020, \"rationale\": \"...\"}}
-  ]
-}}
-
-Rules:
-- Include exactly one entry per input item (same title/year pairs).
-- rationale must be exactly one sentence.
-- Keep each rationale natural, recommendation-like, and <= 20 words.
-- Vary wording across items; do not repeat the same sentence structure.
-- Mention concrete fit to the user's query or filters when possible.
-- Do not include markdown or any text outside JSON.
-"""
+        User query:
+        \"{query}\"
+        
+        Interpreted filters:
+        {json.dumps(discover_summary, ensure_ascii=True)}
+        
+        Generate one rationale for each candidate below:
+        {json.dumps(input_items, ensure_ascii=True)}
+        
+        Return ONLY valid JSON with this exact shape:
+        {{
+          \"rationales\": [
+            {{\"title\": \"...\", \"year\": 2020, \"rationale\": \"...\"}}
+          ]
+        }}
+        
+        Rules:
+        - Include exactly one entry per input item (same title/year pairs).
+        - rationale must be exactly one sentence.
+        - Keep each rationale natural, recommendation-like, and <= 20 words.
+        - Vary wording across items; do not repeat the same sentence structure.
+        - Mention concrete fit to the user's query or filters when possible.
+        - Do not include markdown or any text outside JSON.
+        """
 
         messages = [
             {

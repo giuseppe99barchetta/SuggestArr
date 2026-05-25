@@ -313,6 +313,38 @@ class TestCallWithValidation(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(state["callback_ran"])
 
+    async def test_bare_recommendation_array_is_wrapped(self):
+        payload = json.dumps([
+            {"title": "Dune", "year": 2021, "rationale": "Epic.", "source_title": None}
+        ])
+        client = self._make_client(_mock_openai_response(payload))
+
+        result = await _call_with_validation(
+            client=client,
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "recommend"}],
+            schema_cls=RecommendationList,
+            max_retries=0,
+        )
+
+        self.assertEqual(result.recommendations[0].title, "Dune")
+
+    async def test_common_recommendation_keys_are_normalized(self):
+        payload = json.dumps({"movies": [
+            {"title": "Dune", "year": 2021, "rationale": "Epic.", "source_title": None}
+        ]})
+        client = self._make_client(_mock_openai_response(payload))
+
+        result = await _call_with_validation(
+            client=client,
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "recommend"}],
+            schema_cls=RecommendationList,
+            max_retries=0,
+        )
+
+        self.assertEqual(result.recommendations[0].title, "Dune")
+
     async def test_retries_exhausted_raises_llm_validation_error(self):
         bad_payload = json.dumps({"wrong_key": []})
         client = self._make_client(
