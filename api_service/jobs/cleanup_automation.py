@@ -262,7 +262,7 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
             db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
                                action='would_delete', was_dry_run=True,
                                user_rating=rating,
-                               reason=f'Not favorited after {grace_days} days; would delete files via Radarr/Sonarr.')
+                               reason=f'Not favorited after {grace_days} days; would request file deletion from Seer.')
             deleted += 1
             continue
 
@@ -274,7 +274,7 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
                 db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
                                    action='deleted', was_dry_run=False,
                                    user_rating=rating,
-                                   reason=f'Not favorited after {grace_days} days; files removed via Radarr/Sonarr.')
+                                   reason=f'Not favorited after {grace_days} days; Seer accepted the file deletion request.')
             else:
                 errors += 1
                 db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,

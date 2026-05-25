@@ -17,7 +17,7 @@
       <i class="fas fa-exclamation-triangle"></i>
       <div class="warning-content">
         <strong>Destructive action</strong>
-        <span>When enabled and not in dry-run, this will delete media files via Radarr/Sonarr (through Seer). Always run in dry-run first to verify the candidate list.</span>
+        <span>When enabled and not in dry-run, this asks Seer to delete the matched media files. Always run in dry-run first to verify the candidate list.</span>
       </div>
     </div>
 
@@ -39,7 +39,7 @@
         <span class="toggle-label">
           <i class="fas fa-vial"></i>
           Dry-run mode
-          <span class="toggle-hint">Logs what would be deleted without actually touching files. Strongly recommended before flipping to real deletion.</span>
+          <span class="toggle-hint">Logs which items would be sent to Seer for deletion without touching files. Strongly recommended before flipping to real deletion.</span>
         </span>
         <div class="toggle-switch" :class="{ on: form.dry_run }" @click="form.dry_run = !form.dry_run">
           <div class="toggle-knob"></div>
