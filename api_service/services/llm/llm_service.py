@@ -11,6 +11,7 @@ All LLM calls go through :func:`_call_with_validation`, which:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from typing import Any, Dict, List, Optional, Type, TypeVar
@@ -41,6 +42,13 @@ _RETRY_SYSTEM_MESSAGE = (
     "Your previous response did not match the required JSON schema. "
     "Return strictly valid JSON matching the schema. "
     "No markdown fences, no extra fields, no comments."
+)
+
+_RECOMMENDATION_SCHEMA_HINT = (
+    'Required top-level shape: {"recommendations": ['
+    '{"title": "Movie title", "year": 2023, '
+    '"rationale": "Why this fits.", "source_title": "Watched title"}'
+    "]}. Do not return {}, an array, or any other top-level key."
 )
 
 
@@ -118,6 +126,90 @@ def is_llm_configured(config: Optional[Dict[str, Any]] = None) -> bool:
     return bool(api_key or base_url)
 
 
+async def _close_llm_client(client: AsyncOpenAI) -> None:
+    """Close the LLM HTTP client and let transport callbacks finish."""
+    try:
+        await client.aclose()
+    except Exception as exc:
+        logger.debug("Ignoring LLM client close failure: %s", exc)
+        return
+
+    # httpx/anyio may schedule transport-close callbacks during aclose().
+    # Short-lived job loops must run those callbacks before loop.close().
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+
+def _validation_retry_message(schema_cls: Type[BaseModel]) -> str:
+    """Return schema-specific correction text for retry attempts."""
+    if schema_cls is RecommendationList:
+        return f"{_RETRY_SYSTEM_MESSAGE} {_RECOMMENDATION_SCHEMA_HINT}"
+    return _RETRY_SYSTEM_MESSAGE
+
+
+def _normalize_parsed_response(parsed: Any, schema_cls: Type[BaseModel]) -> Any:
+    """Coerce common provider response shapes into the requested schema."""
+    if schema_cls is not RecommendationList:
+        return parsed
+
+    if isinstance(parsed, list):
+        return {"recommendations": parsed}
+
+    if not isinstance(parsed, dict) or "recommendations" in parsed:
+        return parsed
+
+    for key in ("movies", "movie_recommendations", "tv", "tv_recommendations", "results"):
+        value = parsed.get(key)
+        if isinstance(value, list):
+            normalized = dict(parsed)
+            normalized["recommendations"] = value
+            normalized.pop(key, None)
+            return normalized
+
+    return parsed
+
+
+def _response_format_options(schema_cls: Type[BaseModel]) -> List[Optional[Dict[str, Any]]]:
+    """Return structured-output formats from strictest to broadest."""
+    return [
+        {
+            "type": "json_schema",
+            "json_schema": {
+                "name": schema_cls.__name__,
+                "schema": schema_cls.model_json_schema(),
+                "strict": True,
+            },
+        },
+        {"type": "json_object"},
+        None,
+    ]
+
+
+def _is_response_format_rejection(exc: Exception) -> bool:
+    """Return True when provider rejects a response_format option."""
+    if getattr(exc, "status_code", None) != 400:
+        return False
+
+    details: List[str] = [str(exc)]
+    message = getattr(exc, "message", None)
+    if message:
+        details.append(str(message))
+
+    body = getattr(exc, "body", None)
+    if body is not None:
+        if isinstance(body, dict):
+            details.append(json.dumps(body, ensure_ascii=True))
+        else:
+            details.append(str(body))
+
+    detail_text = " ".join(details).lower()
+    return (
+        "response_format" in detail_text
+        or "json_object" in detail_text
+        or "json_schema" in detail_text
+    )
+
+
 # ---------------------------------------------------------------------------
 # Low-level helpers (pure / sync)
 # ---------------------------------------------------------------------------
@@ -147,21 +239,29 @@ def _repair_title_qualifiers(text: str) -> str:
 
 
 def _extract_json_object(text: str) -> str:
-    """Extract the first complete JSON object from text.
+    """Extract the first complete JSON object or array from text.
 
     Some providers prepend or append natural-language commentary even when
     instructed to return JSON only. This keeps only the content between the
-    first ``{`` and the last ``}``, then trims whitespace.
+    first JSON opener and its likely closing delimiter, then trims whitespace.
 
-    :param text: LLM output that should contain a JSON object.
-    :return: String narrowed to the JSON object region when delimiters exist.
+    :param text: LLM output that should contain JSON.
+    :return: String narrowed to the JSON region when delimiters exist.
     """
-    end = text.rfind("}")
-    if end != -1:
-        text = text[: end + 1]
+    object_start = text.find("{")
+    array_start = text.find("[")
 
-    start = text.find("{")
-    if start != -1:
+    starts = [idx for idx in (object_start, array_start) if idx != -1]
+    if not starts:
+        return text.strip()
+
+    start = min(starts)
+    opener = text[start]
+    closer = "}" if opener == "{" else "]"
+    end = text.rfind(closer)
+    if end != -1 and end >= start:
+        text = text[start: end + 1]
+    else:
         text = text[start:]
 
     return text.strip()
@@ -246,11 +346,9 @@ async def _call_with_validation(
     attempt.  After *max_retries + 1* total attempts :class:`LLMValidationError`
     is raised.
 
-    ``response_format={"type": "json_object"}`` is passed to leverage native
-    JSON mode when the provider supports it (OpenAI, many Ollama models, etc.).
-    For providers that reject ``json_object`` with a 400 error (for example
-    requiring ``json_schema`` or ``text``), the same request is retried once
-    without ``response_format``.
+    Strict JSON-schema mode is tried first where supported. Providers that
+    reject a ``response_format`` with a 400 response fall back to JSON-object
+    mode, then to plain prompting without burning a validation retry.
 
     :param client: Initialised async OpenAI-compatible client.
     :param model: Model identifier string (e.g. ``"gpt-4o-mini"``).
@@ -264,46 +362,31 @@ async def _call_with_validation(
     current_messages = list(messages)
     last_error: Exception = RuntimeError("No attempts made")
 
-    def _is_response_format_json_object_rejection(exc: Exception) -> bool:
-        """Return True when *exc* is a 400 rejection for json_object response_format."""
-        if getattr(exc, "status_code", None) != 400:
-            return False
-
-        details: List[str] = [str(exc)]
-        message = getattr(exc, "message", None)
-        if message:
-            details.append(str(message))
-
-        body = getattr(exc, "body", None)
-        if body is not None:
-            if isinstance(body, dict):
-                details.append(json.dumps(body, ensure_ascii=True))
-            else:
-                details.append(str(body))
-
-        detail_text = " ".join(details).lower()
-        return "response_format" in detail_text or "json_object" in detail_text
-
     for attempt in range(max_retries + 1):
-        try:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=current_messages,
-                temperature=temperature,
-                response_format={"type": "json_object"},
-            )
-        except Exception as exc:
-            if _is_response_format_json_object_rejection(exc):
-                logger.debug(
-                    "Provider rejected json_object response_format, retrying without structured output"
-                )
-                response = await client.chat.completions.create(
-                    model=model,
-                    messages=current_messages,
-                    temperature=temperature,
-                )
-            else:
+        response = None
+        for response_format in _response_format_options(schema_cls):
+            request_kwargs: Dict[str, Any] = {
+                "model": model,
+                "messages": current_messages,
+                "temperature": temperature,
+            }
+            if response_format is not None:
+                request_kwargs["response_format"] = response_format
+
+            try:
+                response = await client.chat.completions.create(**request_kwargs)
+                break
+            except Exception as exc:
+                if response_format is not None and _is_response_format_rejection(exc):
+                    logger.debug(
+                        "Provider rejected %s response_format, trying next option",
+                        response_format.get("type"),
+                    )
+                    continue
                 raise
+
+        if response is None:
+            raise RuntimeError("LLM request did not return a response")
 
         raw = response.choices[0].message.content.strip()
         content = _extract_json_object(
@@ -312,21 +395,24 @@ async def _call_with_validation(
 
         try:
             parsed = json.loads(content)
+            parsed = _normalize_parsed_response(parsed, schema_cls)
             validated = schema_cls.model_validate(parsed)
             return validated
         except (json.JSONDecodeError, ValidationError) as exc:
             last_error = exc
+            preview = content.replace("\n", "\\n")[:200]
             logger.warning(
-                "LLM response validation failed (attempt %d/%d): %s",
+                "LLM response validation failed (attempt %d/%d): %s; response preview=%r",
                 attempt + 1,
                 max_retries + 1,
                 # Truncate to avoid leaking excessive content in logs.
                 str(exc)[:300],
+                preview,
             )
             if attempt < max_retries:
                 # Inject correction hint as the first system message and retry.
                 current_messages = [
-                    {"role": "system", "content": _RETRY_SYSTEM_MESSAGE},
+                    {"role": "system", "content": _validation_retry_message(schema_cls)},
                     *messages,
                 ]
 
@@ -543,10 +629,7 @@ async def get_recommendations_from_history(
         logger.info("Successfully generated %d LLM recommendations.", len(valid_recommendations))
         return valid_recommendations[:max_results]
     finally:
-        try:
-            await client.aclose()
-        except Exception:
-            pass
+        await _close_llm_client(client)
 
 
 async def interpret_search_query(
@@ -554,6 +637,7 @@ async def interpret_search_query(
     history_items: List[Dict],
     media_type: str = "movie",
     max_suggestions: int = 8,
+    liked_titles: Optional[List[Dict]] = None,
 ) -> Dict[str, Any]:
     """Interpret a natural language search query and return structured TMDB parameters.
 
@@ -594,10 +678,25 @@ async def interpret_search_query(
         else:
             history_section = ""
 
+        liked_section = ""
+        if liked_titles:
+            liked_text = chr(10).join(
+                f"- {t.get('title')} ({t.get('year') or 'Unknown'})"
+                for t in liked_titles[:50] if t.get('title')
+            )
+            if liked_text:
+                _nl = chr(10)
+                liked_section = (
+                    f"{_nl}The user has explicitly LIKED the following {list_type} "
+                    f"and considers them strong examples of their taste:{_nl}{liked_text}{_nl}{_nl}"
+                    f"Lean strongly toward {list_type} similar in tone, themes, mood, era or style. "
+                    f"Do NOT include the liked titles themselves in the suggestions.{_nl}"
+                )
+
         prompt = f"""You are a {list_type} search assistant for a personal media server.
 The user wants to find {list_type} that match this description:
 "{query}"
-{history_section}
+{history_section}{liked_section}
 Return ONLY a single valid JSON object (no markdown, no explanation) with exactly these two keys:
 
 1. "discover_params": TMDB discover filter parameters:
@@ -669,10 +768,7 @@ Example format:
         )
         return result
     finally:
-        try:
-            await client.aclose()
-        except Exception:
-            pass
+        await _close_llm_client(client)
 
 
 async def generate_search_result_rationales(
@@ -729,30 +825,30 @@ async def generate_search_result_rationales(
 
         prompt = f"""You are writing short, personalized recommendation rationales for {list_type}.
 
-User query:
-\"{query}\"
-
-Interpreted filters:
-{json.dumps(discover_summary, ensure_ascii=True)}
-
-Generate one rationale for each candidate below:
-{json.dumps(input_items, ensure_ascii=True)}
-
-Return ONLY valid JSON with this exact shape:
-{{
-  \"rationales\": [
-    {{\"title\": \"...\", \"year\": 2020, \"rationale\": \"...\"}}
-  ]
-}}
-
-Rules:
-- Include exactly one entry per input item (same title/year pairs).
-- rationale must be exactly one sentence.
-- Keep each rationale natural, recommendation-like, and <= 20 words.
-- Vary wording across items; do not repeat the same sentence structure.
-- Mention concrete fit to the user's query or filters when possible.
-- Do not include markdown or any text outside JSON.
-"""
+        User query:
+        \"{query}\"
+        
+        Interpreted filters:
+        {json.dumps(discover_summary, ensure_ascii=True)}
+        
+        Generate one rationale for each candidate below:
+        {json.dumps(input_items, ensure_ascii=True)}
+        
+        Return ONLY valid JSON with this exact shape:
+        {{
+          \"rationales\": [
+            {{\"title\": \"...\", \"year\": 2020, \"rationale\": \"...\"}}
+          ]
+        }}
+        
+        Rules:
+        - Include exactly one entry per input item (same title/year pairs).
+        - rationale must be exactly one sentence.
+        - Keep each rationale natural, recommendation-like, and <= 20 words.
+        - Vary wording across items; do not repeat the same sentence structure.
+        - Mention concrete fit to the user's query or filters when possible.
+        - Do not include markdown or any text outside JSON.
+        """
 
         messages = [
             {
@@ -787,7 +883,4 @@ Rules:
         logger.warning("Failed generating per-result LLM rationales: %s", exc)
         return {}
     finally:
-        try:
-            await client.aclose()
-        except Exception:
-            pass
+        await _close_llm_client(client)

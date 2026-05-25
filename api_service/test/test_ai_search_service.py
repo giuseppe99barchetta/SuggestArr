@@ -394,7 +394,8 @@ class TestSearch(unittest.IsolatedAsyncioTestCase):
             'total': 1,
         }
 
-        with patch.object(service, '_search_single', AsyncMock(side_effect=[movie_result, tv_result])):
+        with patch.object(service, '_search_single', AsyncMock(side_effect=[movie_result, tv_result])) as mock_ss, \
+             patch.object(service, '_record_seen_items') as mock_record_seen:
             result = await service.search('thriller', media_type='both', max_results=4)
 
         ids = [r['id'] for r in result['results']]
@@ -404,6 +405,38 @@ class TestSearch(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('query_interpretation', result)
         self.assertEqual(result['ai_reasoning']['movie']['genres'], ['Action'])
         self.assertEqual(result['ai_reasoning']['tv']['genres'], ['Drama'])
+        self.assertEqual(mock_ss.await_count, 2)
+        for call in mock_ss.await_args_list:
+            self.assertFalse(call.kwargs['record_seen'])
+        mock_record_seen.assert_called_once_with(result['results'], 'both')
+
+    async def test_both_media_type_records_only_returned_results_as_seen(self):
+        service = _make_service()
+        movie_result = {
+            'results': [
+                {'id': 1, 'title': 'Movie A', 'media_type': 'movie'},
+                {'id': 2, 'title': 'Movie B', 'media_type': 'movie'},
+            ],
+            'ai_reasoning': {'genres': ['Action'], 'title_suggestions': [], 'explanation': 'movie'},
+            'total': 2,
+        }
+        tv_result = {
+            'results': [
+                {'id': 3, 'title': 'Show C', 'media_type': 'tv'},
+                {'id': 4, 'title': 'Show D', 'media_type': 'tv'},
+            ],
+            'ai_reasoning': {'genres': ['Drama'], 'title_suggestions': [], 'explanation': 'tv'},
+            'total': 2,
+        }
+
+        with patch.object(service, '_search_single', AsyncMock(side_effect=[movie_result, tv_result])), \
+             patch.object(service, '_record_seen_items') as mock_record_seen:
+            result = await service.search('thriller', media_type='both', max_results=2)
+
+        self.assertEqual([r['id'] for r in result['results']], [1, 3])
+        mock_record_seen.assert_called_once_with(result['results'], 'both')
+        recorded_ids = [item['id'] for item in mock_record_seen.call_args.args[0]]
+        self.assertEqual(recorded_ids, [1, 3])
 
     async def test_single_media_type_delegates_to_search_single(self):
         service = _make_service()

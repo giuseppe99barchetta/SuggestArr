@@ -29,12 +29,14 @@ Covers (interpret_search_query — async):
 """
 
 import json
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 from api_service.exceptions.api_exceptions import LLMValidationError
 from api_service.services.llm.llm_service import (
     _call_with_validation,
+    _close_llm_client,
     _deduplicate_history,
     _extract_json_object,
     _is_duplicate_of_history,
@@ -211,6 +213,12 @@ class TestCallWithValidation(unittest.IsolatedAsyncioTestCase):
         mock_client.chat.completions.create = AsyncMock(side_effect=list(responses))
         return mock_client
 
+    def _response_format_rejection(self, response_format_type: str):
+        exc = Exception(f"{response_format_type} response_format unsupported")
+        exc.status_code = 400
+        exc.body = {"error": f"{response_format_type} response_format unsupported"}
+        return exc
+
     async def test_valid_response_passes_first_attempt(self):
         payload = json.dumps({"recommendations": [
             {"title": "Dune", "year": 2021, "rationale": "Epic sci-fi", "source_title": None}
@@ -230,6 +238,30 @@ class TestCallWithValidation(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.recommendations[0].title, "Dune")
         # Only one API call should have been made
         self.assertEqual(client.chat.completions.create.call_count, 1)
+        response_format = client.chat.completions.create.call_args[1]["response_format"]
+        self.assertEqual(response_format["type"], "json_schema")
+
+    async def test_response_format_rejection_falls_back_without_burning_retry(self):
+        payload = json.dumps({"recommendations": [
+            {"title": "Dune", "year": 2021, "rationale": "Epic sci-fi", "source_title": None}
+        ]})
+        client = self._make_client(
+            self._response_format_rejection("json_schema"),
+            _mock_openai_response(payload),
+        )
+
+        result = await _call_with_validation(
+            client=client,
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "recommend"}],
+            schema_cls=RecommendationList,
+            max_retries=0,
+        )
+
+        self.assertEqual(result.recommendations[0].title, "Dune")
+        self.assertEqual(client.chat.completions.create.call_count, 2)
+        second_response_format = client.chat.completions.create.call_args_list[1][1]["response_format"]
+        self.assertEqual(second_response_format["type"], "json_object")
 
     async def test_invalid_schema_triggers_retry_and_succeeds(self):
         bad_payload = json.dumps({"wrong_key": []})  # missing "recommendations"
@@ -276,6 +308,72 @@ class TestCallWithValidation(unittest.IsolatedAsyncioTestCase):
         second_call_messages = client.chat.completions.create.call_args_list[1][1]["messages"]
         self.assertEqual(second_call_messages[0]["role"], "system")
         self.assertIn("schema", second_call_messages[0]["content"].lower())
+
+    async def test_recommendation_retry_includes_required_top_level_shape(self):
+        bad_payload = json.dumps({})
+        good_payload = json.dumps({"recommendations": [
+            {"title": "Tenet", "year": 2020, "rationale": "Great.", "source_title": None}
+        ]})
+        client = self._make_client(
+            _mock_openai_response(bad_payload),
+            _mock_openai_response(good_payload),
+        )
+
+        await _call_with_validation(
+            client=client,
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "recommend"}],
+            schema_cls=RecommendationList,
+            max_retries=1,
+        )
+
+        second_call_messages = client.chat.completions.create.call_args_list[1][1]["messages"]
+        self.assertIn('"recommendations"', second_call_messages[0]["content"])
+        self.assertIn("Do not return {}", second_call_messages[0]["content"])
+
+    async def test_close_llm_client_drains_transport_close_callbacks(self):
+        state = {"callback_ran": False}
+
+        class FakeClient:
+            async def aclose(self):
+                loop = asyncio.get_running_loop()
+                loop.call_soon(lambda: state.__setitem__("callback_ran", True))
+
+        await _close_llm_client(FakeClient())
+
+        self.assertTrue(state["callback_ran"])
+
+    async def test_bare_recommendation_array_is_wrapped(self):
+        payload = json.dumps([
+            {"title": "Dune", "year": 2021, "rationale": "Epic.", "source_title": None}
+        ])
+        client = self._make_client(_mock_openai_response(payload))
+
+        result = await _call_with_validation(
+            client=client,
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "recommend"}],
+            schema_cls=RecommendationList,
+            max_retries=0,
+        )
+
+        self.assertEqual(result.recommendations[0].title, "Dune")
+
+    async def test_common_recommendation_keys_are_normalized(self):
+        payload = json.dumps({"movies": [
+            {"title": "Dune", "year": 2021, "rationale": "Epic.", "source_title": None}
+        ]})
+        client = self._make_client(_mock_openai_response(payload))
+
+        result = await _call_with_validation(
+            client=client,
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "recommend"}],
+            schema_cls=RecommendationList,
+            max_retries=0,
+        )
+
+        self.assertEqual(result.recommendations[0].title, "Dune")
 
     async def test_retries_exhausted_raises_llm_validation_error(self):
         bad_payload = json.dumps({"wrong_key": []})

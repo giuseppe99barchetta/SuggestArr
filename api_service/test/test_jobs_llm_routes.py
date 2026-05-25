@@ -55,7 +55,8 @@ class TestLlmConnectionRoute(unittest.TestCase):
             })
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(calls[0]['max_tokens'], 16)
+        self.assertEqual(calls[0]['max_completion_tokens'], 16)
+        self.assertNotIn('max_tokens', calls[0])
 
 
 class TestAsyncLoopCleanup(unittest.TestCase):

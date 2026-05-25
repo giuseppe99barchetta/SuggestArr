@@ -77,7 +77,7 @@ export const fetchSonarrServers = (payload = null) => {
 };
 
 // AI Search: semantic content search powered by LLM + TMDB
-export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 12, useHistory = true, excludeWatched = true) => {
+export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 12, useHistory = true, excludeWatched = true, excludeSeen = false) => {
     return axios.post('/api/ai-search/query', {
         query,
         media_type: mediaType,
@@ -85,6 +85,14 @@ export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 
         max_results: maxResults,
         use_history: useHistory,
         exclude_watched: excludeWatched,
+        exclude_seen: excludeSeen,
+    });
+};
+
+// AI Search: clear already-recommended history
+export const aiSearchSeenClear = (mediaType = null) => {
+    return axios.delete('/api/ai-search/seen', {
+        data: mediaType ? { media_type: mediaType } : {},
     });
 };
 
@@ -106,10 +114,38 @@ export const aiSearchRequest = (tmdbId, mediaType, rationale = '', metadata = {}
     });
 };
 
+// AI Search: like/dislike feedback
+export const aiSearchFeedbackList = () => {
+    return axios.get('/api/ai-search/feedback');
+};
+
+export const aiSearchFeedbackSet = (tmdbId, mediaType, feedback, title = null, year = null) => {
+    return axios.post('/api/ai-search/feedback', {
+        tmdb_id: tmdbId,
+        media_type: mediaType,
+        feedback,
+        title,
+        year,
+    });
+};
+
+export const aiSearchFeedbackDelete = (tmdbId, mediaType) => {
+    return axios.delete('/api/ai-search/feedback', {
+        data: { tmdb_id: tmdbId, media_type: mediaType },
+    });
+};
+
 // AI Search: check whether LLM is configured and AI search is available
 export const aiSearchStatus = () => {
     return axios.get('/api/ai-search/status');
 };
+
+
+// Cleanup automation
+export const getCleanupSettings = () => axios.get('/api/cleanup/settings');
+export const setCleanupSettings = (payload) => axios.post('/api/cleanup/settings', payload);
+export const runCleanupNow = (dryRun = null) => axios.post('/api/cleanup/run', dryRun === null ? {} : { dry_run: dryRun });
+export const getCleanupLog = (limit = 100) => axios.get('/api/cleanup/log', { params: { limit } });
 
 // Config export: download a full configuration snapshot (admin only, includes API keys)
 export const exportConfig = () => {
