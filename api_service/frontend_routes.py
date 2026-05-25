@@ -4,7 +4,8 @@ Frontend static file and SPA fallback routing helpers.
 from html import escape
 import os
 
-from flask import Response, abort, send_from_directory
+from flask import Response, abort, send_file
+from werkzeug.security import safe_join
 
 from api_service.config.config import load_env_vars
 
@@ -56,9 +57,14 @@ def request_targets_asset(path):
 
 
 def _resolve_static_path(static_root, target_path):
-    full_path = os.path.realpath(os.path.join(static_root, target_path))
+    safe_path = safe_join(static_root, target_path)
+    if safe_path is None:
+        abort(404)
+
+    full_path = os.path.realpath(safe_path)
     if os.path.commonpath([static_root, full_path]) != static_root:
         abort(404)
+
     return full_path
 
 
@@ -133,7 +139,7 @@ def register_routes(app):  # pylint: disable=redefined-outer-name
         full_path = _resolve_static_path(static_root, target_path)
 
         if os.path.isfile(full_path):
-            return send_from_directory(static_root, target_path)
+            return send_file(full_path)
 
         if relative_path and request_targets_asset(relative_path):
             abort(404)

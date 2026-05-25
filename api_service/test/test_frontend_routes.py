@@ -107,6 +107,20 @@ class TestFrontendRoutes(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_path_traversal_asset_is_rejected(self):
+        secret_path = os.path.join(os.path.dirname(self.tempdir.name), "secret.txt")
+        with open(secret_path, "w", encoding="utf-8") as handle:
+            handle.write("secret")
+
+        try:
+            with patch("api_service.frontend_routes.load_env_vars", return_value={"SUBPATH": None}):
+                response = self.client.get("/%2e%2e/secret.txt")
+        finally:
+            os.remove(secret_path)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertNotEqual(response.get_data(as_text=True), "secret")
+
     def test_middleware_strips_env_subpath_before_routing_assets(self):
         app = Flask(__name__, static_folder=self.tempdir.name)
         app.config["TESTING"] = True
