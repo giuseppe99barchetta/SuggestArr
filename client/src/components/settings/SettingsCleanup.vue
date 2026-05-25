@@ -2,7 +2,7 @@
   <div class="cleanup-page" :class="{ embedded }">
     <div v-if="!embedded" class="section-header">
       <h2><i class="fas fa-broom"></i> Cleanup Automation</h2>
-      <p>Automatically delete SuggestArr requests and their files when the item has not been favorited (Plex heart) within a grace period.</p>
+      <p>Automatically delete SuggestArr requests and their files when the item has not been favorited in your media server within a grace period.</p>
     </div>
 
     <div v-else class="embedded-header">
@@ -10,7 +10,7 @@
         <i class="fas fa-broom"></i>
         Cleanup Automation
       </h3>
-      <p>Remove old SuggestArr requests when Plex users never favorite them.</p>
+      <p>Remove old SuggestArr requests when media-server users never favorite them.</p>
     </div>
 
     <div class="warning-banner">
@@ -50,7 +50,7 @@
         <span class="toggle-label">
           <i class="fas fa-hourglass-half"></i>
           Grace period (days)
-          <span class="toggle-hint">If a requested item has not been favorited (Plex heart) within this many days of being requested, it becomes a deletion candidate.</span>
+          <span class="toggle-hint">If a requested item has not been favorited in Plex, Jellyfin, or Emby within this many days of being requested, it becomes a deletion candidate.</span>
         </span>
         <input v-model.number="form.grace_days" type="number" min="1" max="365" class="number-input" />
       </div>

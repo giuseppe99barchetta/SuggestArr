@@ -1,5 +1,5 @@
 """Cleanup automation: prune SuggestArr-originated requests + files when the
-underlying media has not been favorited (Plex heart / userRating == 10) within
+underlying media has not been favorited in the configured media server within
 a configurable grace period.
 
 Safe by default: only runs when explicitly enabled, and starts in dry-run mode.
@@ -12,16 +12,30 @@ from typing import Dict, List, Optional, Tuple
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
+from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.seer.seer_client import SeerClient
 
 
 _run_lock = threading.Lock()
 FAVORITE_USER_RATING = 10.0
-SUPPORTED_MEDIA_SERVICES = {"plex"}
+SUPPORTED_MEDIA_SERVICES = {"plex", "jellyfin", "emby"}
 
 
-async def _build_favorite_map(env_vars: Dict) -> Dict[Tuple[str, str], float]:
+def _normalise_selected_users(raw_users) -> List[Dict]:
+    if not isinstance(raw_users, list):
+        return []
+
+    users = []
+    for user in raw_users:
+        if isinstance(user, dict) and user.get('id'):
+            users.append(user)
+        elif isinstance(user, str) and user:
+            users.append({'id': user, 'name': user})
+    return users
+
+
+async def _build_plex_favorite_map(env_vars: Dict) -> Dict[Tuple[str, str], float]:
     """Return mapping of (media_type, tmdb_id) -> userRating from the Plex library."""
     plex_libraries_raw = env_vars.get('PLEX_LIBRARIES') or []
     plex_libraries = plex_libraries_raw if isinstance(plex_libraries_raw, list) else []
@@ -33,19 +47,130 @@ async def _build_favorite_map(env_vars: Dict) -> Dict[Tuple[str, str], float]:
         library_ids=plex_libraries,
         user_ids=[],
     )
-    library_items = await plex_client.get_all_library_items() or {}
-    rating_map: Dict[Tuple[str, str], float] = {}
-    for media_type, items in library_items.items():
-        for item in items or []:
-            tmdb_id = item.get('tmdb_id')
-            if not tmdb_id:
+    try:
+        library_items = await plex_client.get_all_library_items() or {}
+        rating_map: Dict[Tuple[str, str], float] = {}
+        for media_type, items in library_items.items():
+            for item in items or []:
+                tmdb_id = item.get('tmdb_id')
+                if not tmdb_id:
+                    continue
+                try:
+                    rating = float(item.get('userRating', 0) or 0)
+                except (TypeError, ValueError):
+                    rating = 0.0
+                rating_map[(media_type, str(tmdb_id))] = rating
+        return rating_map
+    finally:
+        await plex_client.close()
+
+
+async def _fetch_jellyfin_favorites_for_user(
+    client: JellyfinClient,
+    user_id: str,
+    library_id: Optional[str],
+) -> List[Dict]:
+    session = await client._get_session()
+    params = {
+        "Recursive": "true",
+        "IncludeItemTypes": "Movie,Series",
+        "Fields": "ProviderIds,UserData",
+        "Filters": "IsFavorite",
+    }
+    if library_id:
+        params["ParentId"] = library_id
+
+    async with session.get(
+        f"{client.api_url}/Users/{user_id}/Items",
+        headers=client.headers,
+        params=params,
+        timeout=client.REQUEST_TIMEOUT,
+    ) as response:
+        if response.status != 200:
+            body = await response.text()
+            client.logger.warning(
+                "Failed to fetch favorite items for user %s: %s body=%.300s",
+                user_id,
+                response.status,
+                body,
+            )
+            return []
+        data = await response.json()
+        return data.get("Items", []) or []
+
+
+async def _build_jellyfin_favorite_map(env_vars: Dict) -> Dict[Tuple[str, str], float]:
+    """Return mapping of (media_type, tmdb_id) -> favorite score for Jellyfin/Emby."""
+    jellyfin_libraries_raw = env_vars.get('JELLYFIN_LIBRARIES') or []
+    jellyfin_libraries = jellyfin_libraries_raw if isinstance(jellyfin_libraries_raw, list) else []
+    selected_users = _normalise_selected_users(env_vars.get('SELECTED_USERS') or [])
+
+    client = JellyfinClient(
+        env_vars['JELLYFIN_API_URL'],
+        env_vars['JELLYFIN_TOKEN'],
+        max_content=10000,
+        library_ids=jellyfin_libraries,
+    )
+
+    try:
+        library_items = await client.get_all_library_items() or {}
+        rating_map: Dict[Tuple[str, str], float] = {}
+        for media_type, items in library_items.items():
+            for item in items or []:
+                tmdb_id = item.get('tmdb_id') or item.get("ProviderIds", {}).get("Tmdb")
+                if tmdb_id:
+                    rating_map[(media_type, str(tmdb_id))] = 0.0
+
+        if not selected_users:
+            selected_users = await client.get_all_users()
+
+        libraries = client.libraries or []
+        library_ids = [
+            lib.get('id')
+            for lib in libraries
+            if isinstance(lib, dict) and lib.get('id')
+        ]
+        if not library_ids:
+            library_ids = [None]
+
+        for user in selected_users:
+            user_id = str(user.get('id') or '')
+            if not user_id:
                 continue
-            try:
-                rating = float(item.get('userRating', 0) or 0)
-            except (TypeError, ValueError):
-                rating = 0.0
-            rating_map[(media_type, str(tmdb_id))] = rating
-    return rating_map
+            for library_id in library_ids:
+                favorite_items = await _fetch_jellyfin_favorites_for_user(client, user_id, library_id)
+                for item in favorite_items:
+                    item_type = item.get("Type")
+                    if item_type not in ("Movie", "Series"):
+                        continue
+                    tmdb_id = item.get("ProviderIds", {}).get("Tmdb")
+                    if not tmdb_id:
+                        continue
+                    media_type = "tv" if item_type == "Series" else "movie"
+                    rating_map[(media_type, str(tmdb_id))] = FAVORITE_USER_RATING
+
+        return rating_map
+    finally:
+        await client.close()
+
+
+async def _build_favorite_map(env_vars: Dict, media_service: str) -> Dict[Tuple[str, str], float]:
+    if media_service == "plex":
+        return await _build_plex_favorite_map(env_vars)
+    if media_service in {"jellyfin", "emby"}:
+        return await _build_jellyfin_favorite_map(env_vars)
+    return {}
+
+
+def _missing_service_config(env_vars: Dict, media_service: str) -> Optional[str]:
+    if media_service == "plex":
+        if not env_vars.get('PLEX_API_URL') or not env_vars.get('PLEX_TOKEN'):
+            return "Plex is not configured (PLEX_API_URL / PLEX_TOKEN missing)."
+    elif media_service in {"jellyfin", "emby"}:
+        if not env_vars.get('JELLYFIN_API_URL') or not env_vars.get('JELLYFIN_TOKEN'):
+            label = "Emby" if media_service == "emby" else "Jellyfin"
+            return f"{label} is not configured (JELLYFIN_API_URL / JELLYFIN_TOKEN missing)."
+    return None
 
 
 async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optional[bool] = None) -> Dict:
@@ -67,16 +192,17 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
         return {'status': 'skipped', 'message': 'Cleanup is disabled.'}
 
     env_vars = ConfigService.get_runtime_config()
-    media_service = (env_vars.get('SELECTED_SERVICE') or env_vars.get('MEDIA_SERVICE') or '').lower()
-    if media_service and media_service not in SUPPORTED_MEDIA_SERVICES:
-        msg = f"Cleanup currently only supports Plex (configured service: {media_service or 'unknown'})."
+    media_service = (env_vars.get('SELECTED_SERVICE') or env_vars.get('MEDIA_SERVICE') or 'plex').lower()
+    if media_service not in SUPPORTED_MEDIA_SERVICES:
+        msg = f"Cleanup supports Plex, Jellyfin, and Emby (configured service: {media_service or 'unknown'})."
         logger.warning(msg)
         db.update_cleanup_settings(last_run_at=datetime.utcnow().isoformat(),
                                    last_run_status='unsupported', last_run_summary=msg)
         return {'status': 'unsupported', 'message': msg}
 
-    if not env_vars.get('PLEX_API_URL') or not env_vars.get('PLEX_TOKEN'):
-        msg = "Plex is not configured (PLEX_API_URL / PLEX_TOKEN missing)."
+    missing_config = _missing_service_config(env_vars, media_service)
+    if missing_config:
+        msg = missing_config
         logger.warning(msg)
         db.update_cleanup_settings(last_run_at=datetime.utcnow().isoformat(),
                                    last_run_status='not_configured', last_run_summary=msg)
@@ -93,7 +219,7 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
                                    last_run_status='ok', last_run_summary=summary)
         return {'status': 'ok', 'summary': summary, 'deleted': 0, 'kept': 0, 'missing': 0}
 
-    favorite_map = await _build_favorite_map(env_vars)
+    favorite_map = await _build_favorite_map(env_vars, media_service)
 
     seer_client = None
     if not dry_run:
@@ -122,7 +248,7 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
             db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
                                action='skipped_not_in_library', was_dry_run=dry_run,
                                user_rating=None,
-                               reason='Not present in Plex library; nothing to delete here.')
+                               reason=f'Not present in {media_service.title()} library; nothing to delete here.')
             continue
 
         if rating >= FAVORITE_USER_RATING:
