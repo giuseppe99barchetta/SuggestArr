@@ -979,11 +979,14 @@ def test_llm_connection():
         client = OpenAI(**client_kwargs)
 
         # Make a minimal completion to verify the connection and credentials.
-        # Some OpenAI-compatible gateways reject values below 16.
+        # max_completion_tokens is used instead of the deprecated max_tokens to
+        # support current OpenAI models (o-series, gpt-4.1-*, gpt-5.x) which
+        # reject max_tokens with a 400 error. Some OpenAI-compatible gateways
+        # reject values below 16, so we keep a safe minimum of 16.
         client.chat.completions.create(
             model=model,
             messages=[{'role': 'user', 'content': 'Hi'}],
-            max_tokens=16,
+            max_completion_tokens=16,
         )
 
         return jsonify({'status': 'success', 'message': 'Connection successful!'}), 200

@@ -341,6 +341,7 @@ import SettingsAdvanced from './settings/SettingsAdvanced.vue';
 import SettingsRequests from './settings/SettingsRequests.vue';
 import SettingsJobs from './settings/SettingsJobs.vue';
 import AiSearchPage from './settings/AiSearchPage.vue';
+import SettingsCleanup from './settings/SettingsCleanup.vue';
 import LogsComponent from './LogsComponent.vue';
 import UserManagement from './settings/UserManagement.vue';
 import UserProfile from './settings/UserProfile.vue';
@@ -359,6 +360,7 @@ export default {
     SettingsRequests,
     SettingsJobs,
     AiSearchPage,
+    SettingsCleanup,
     LogsComponent,
     UserManagement,
     UserProfile,
@@ -417,6 +419,7 @@ export default {
         { id: 'jobs',      name: 'Jobs',       icon: 'fas fa-briefcase',   tourId: 'tab-jobs' },
         { id: 'database',  name: 'Database',  icon: 'fas fa-database',     tourId: 'tab-database', adminOnly: true },
         { id: 'advanced',  name: 'Advanced',  icon: 'fas fa-sliders-h',   tourId: 'tab-advanced', adminOnly: true },
+        { id: 'cleanup',   name: 'Cleanup',   icon: 'fas fa-broom',       tourId: 'tab-cleanup', adminOnly: true },
         { id: 'users',     name: 'Users',      icon: 'fas fa-users',       adminOnly: true },
         { id: 'profile',   name: 'Profile',    icon: 'fas fa-user-circle', nonAdminOnly: true },
         { id: 'logs',      name: 'Logs',       icon: 'fas fa-file-alt',    tourId: 'tab-logs', adminOnly: true },
@@ -522,6 +525,7 @@ export default {
         advanced: 'SettingsAdvanced',
         logs: 'LogsComponent',
         ai_search: 'AiSearchPage',
+        cleanup: 'SettingsCleanup',
         users: 'UserManagement',
         profile: 'UserProfile',
       };

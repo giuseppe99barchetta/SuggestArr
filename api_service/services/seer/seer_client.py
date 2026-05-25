@@ -152,8 +152,12 @@ class SeerClient(BaseHTTPClient):
                     self.is_logged_in = True
                     self.logger.info("Successfully logged in as %s", self.username)
                 else:
+                    self.session_token = None
+                    self.is_logged_in = False
                     self.logger.error("Login failed: %d", response.status)
         except asyncio.TimeoutError:
+            self.session_token = None
+            self.is_logged_in = False
             self.logger.error("Login request to %s timed out.", login_url)
 
     async def get_all_users(self, max_users=100):
@@ -411,8 +415,18 @@ class SeerClient(BaseHTTPClient):
             return False
 
         self.logger.debug("Sending Jellyseerr request: %s", data)
-        if not self.session_token and self.username and self.password:
+        # Saved cookies can expire or belong to a previously selected user.
+        # Refresh when credentials exist so queued jobs run as the configured
+        # Jellyseerr user instead of silently falling back to a stale session.
+        if self.username and self.password:
             await self.login()
+            if not self.session_token:
+                self.logger.error(
+                    "Cannot submit Jellyseerr request for %s tmdb:%s — "
+                    "configured Seer user login failed. Re-authenticate the Seer user in settings.",
+                    media_type, media_id,
+                )
+                return False
 
         response = await self._make_request(
             "POST", "api/v1/request", data=data, use_cookie=bool(self.session_token)
@@ -493,3 +507,37 @@ class SeerClient(BaseHTTPClient):
         """Retrieve metadata for a specific media item."""
         self.logger.debug("Getting metadata for media_id=%s, media_type=%s", media_id, media_type)
         return DatabaseManager().get_metadata(media_id, media_type)
+
+    async def lookup_seer_media_id(self, tmdb_id, media_type):
+        """Resolve TMDB id to Seer's internal mediaInfo.id (None if not present in Seer)."""
+        endpoint = f"api/v1/{'movie' if media_type == 'movie' else 'tv'}/{int(tmdb_id)}"
+        data = await self._make_request("GET", endpoint, use_cookie=bool(self.session_token))
+        if not data:
+            return None
+        media_info = data.get("mediaInfo") or {}
+        return media_info.get("id")
+
+    async def delete_media_file_by_tmdb(self, tmdb_id, media_type):
+        """Delete files (via arr) for the Seer media matching tmdb_id. Returns True on success."""
+        seer_media_id = await self.lookup_seer_media_id(tmdb_id, media_type)
+        if not seer_media_id:
+            self.logger.info("No Seer media found for tmdb_id=%s media_type=%s; nothing to delete.", tmdb_id, media_type)
+            return False
+        url = f"{self.api_url}/api/v1/media/{int(seer_media_id)}/file"
+        headers, cookies = self._get_auth_headers(bool(self.session_token))
+        session = await self._get_session()
+        try:
+            async with session.delete(url, headers=headers, cookies=cookies, timeout=self.REQUEST_TIMEOUT) as response:
+                if response.status in (200, 202, 204):
+                    self.logger.info("Deleted Seer media file for tmdb_id=%s (seer_media_id=%s)", tmdb_id, seer_media_id)
+                    return True
+                body = ""
+                try:
+                    body = await response.text()
+                except Exception:
+                    pass
+                self.logger.error("Failed to delete Seer media file: status=%s body=%s", response.status, body[:200])
+                return False
+        except aiohttp.ClientError as exc:
+            self.logger.error("Client error deleting Seer media file: %s", exc)
+            return False

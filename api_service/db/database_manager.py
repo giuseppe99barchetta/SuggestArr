@@ -272,6 +272,49 @@ class DatabaseManager:
                     UNIQUE(tmdb_id, media_type)
                 )
             """,
+            'cleanup_settings': """
+                CREATE TABLE IF NOT EXISTS cleanup_settings (
+                    id INTEGER PRIMARY KEY,
+                    enabled INTEGER NOT NULL DEFAULT 0,
+                    dry_run INTEGER NOT NULL DEFAULT 1,
+                    grace_days INTEGER NOT NULL DEFAULT 7,
+                    last_run_at TIMESTAMP,
+                    last_run_status TEXT,
+                    last_run_summary TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """,
+            'cleanup_log': """
+                CREATE TABLE IF NOT EXISTS cleanup_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ran_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    tmdb_id TEXT,
+                    media_type TEXT,
+                    title TEXT,
+                    action TEXT NOT NULL,
+                    was_dry_run INTEGER NOT NULL DEFAULT 0,
+                    user_rating REAL,
+                    reason TEXT
+            'ai_search_seen': """
+                CREATE TABLE IF NOT EXISTS ai_search_seen (
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (tmdb_id, media_type)
+                )
+            """,
+            'ai_search_feedback': """
+                CREATE TABLE IF NOT EXISTS ai_search_feedback (
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    feedback TEXT NOT NULL,
+                    title TEXT,
+                    year INTEGER,
+                    rationale TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (tmdb_id, media_type)
+                )
+            """,
             'integrations': """
                 CREATE TABLE IF NOT EXISTS integrations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -307,6 +350,28 @@ class DatabaseManager:
                                 "UNIQUE(tmdb_id, media_type)",
                                 "UNIQUE KEY uniq_pending_tmdb_media_type (tmdb_id(191), media_type(191))"
                             )
+                        elif table_name == 'ai_search_seen':
+                            query = """
+                                CREATE TABLE IF NOT EXISTS ai_search_seen (
+                                    tmdb_id VARCHAR(64) NOT NULL,
+                                    media_type VARCHAR(16) NOT NULL,
+                                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                    PRIMARY KEY (tmdb_id, media_type)
+                                ) ENGINE=InnoDB
+                            """
+                        elif table_name == 'ai_search_feedback':
+                            query = """
+                                CREATE TABLE IF NOT EXISTS ai_search_feedback (
+                                    tmdb_id VARCHAR(64) NOT NULL,
+                                    media_type VARCHAR(16) NOT NULL,
+                                    feedback VARCHAR(16) NOT NULL,
+                                    title VARCHAR(512),
+                                    year INTEGER,
+                                    rationale VARCHAR(512),
+                                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                                    PRIMARY KEY (tmdb_id, media_type)
+                                ) ENGINE=InnoDB
+                            """
 
                         # Order matters: do specific replacements first
                         query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "INT AUTO_INCREMENT PRIMARY KEY")
@@ -1197,6 +1262,248 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute(query)
             return {str(row[0]) for row in cursor.fetchall()}
+
+    def set_ai_feedback(self, tmdb_id: str, media_type: str, feedback: str,
+                        title: str = None, year: int = None, rationale: str = None) -> None:
+        """Insert or update a like/dislike feedback for an AI search result.
+
+        :param feedback: 'like' or 'dislike'.
+        """
+        if feedback not in ('like', 'dislike'):
+            raise ValueError("feedback must be 'like' or 'dislike'")
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type in ('mysql', 'mariadb'):
+                cursor.execute(
+                    f"REPLACE INTO ai_search_feedback (tmdb_id, media_type, feedback, title, year, rationale) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})",
+                    (str(tmdb_id), media_type, feedback, title, year, rationale),
+                )
+            else:
+                cursor.execute(
+                    f"INSERT INTO ai_search_feedback (tmdb_id, media_type, feedback, title, year, rationale) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}) ON CONFLICT(tmdb_id, media_type) DO UPDATE SET feedback=excluded.feedback, title=excluded.title, year=excluded.year, rationale=excluded.rationale, created_at=CURRENT_TIMESTAMP",
+                    (str(tmdb_id), media_type, feedback, title, year, rationale),
+                )
+            conn.commit()
+
+    def delete_ai_feedback(self, tmdb_id: str, media_type: str) -> None:
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"DELETE FROM ai_search_feedback WHERE tmdb_id = {placeholder} AND media_type = {placeholder}",
+                (str(tmdb_id), media_type),
+            )
+            conn.commit()
+
+    def get_all_ai_feedback(self):
+        """Return list of all feedback rows as dicts (tmdb_id, media_type, feedback, title, year)."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT tmdb_id, media_type, feedback, title, year FROM ai_search_feedback")
+            rows = cursor.fetchall()
+            out = []
+            for r in rows:
+                out.append({
+                    'tmdb_id': str(r[0]),
+                    'media_type': r[1],
+                    'feedback': r[2],
+                    'title': r[3],
+                    'year': r[4],
+                })
+            return out
+
+    def get_ai_dislike_ids(self, media_type: str = None) -> set:
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if media_type:
+                cursor.execute(
+                    f"SELECT tmdb_id FROM ai_search_feedback WHERE feedback = 'dislike' AND media_type = {placeholder}",
+                    (media_type,),
+                )
+            else:
+                cursor.execute("SELECT tmdb_id FROM ai_search_feedback WHERE feedback = 'dislike'")
+            return {str(r[0]) for r in cursor.fetchall()}
+
+    def get_ai_likes(self, media_type: str = None):
+        """Return liked items as list of {title, year, media_type} dicts."""
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if media_type:
+                cursor.execute(
+                    f"SELECT title, year, media_type FROM ai_search_feedback WHERE feedback = 'like' AND media_type = {placeholder} AND title IS NOT NULL",
+                    (media_type,),
+                )
+            else:
+                cursor.execute("SELECT title, year, media_type FROM ai_search_feedback WHERE feedback = 'like' AND title IS NOT NULL")
+            return [{'title': r[0], 'year': r[1], 'media_type': r[2]} for r in cursor.fetchall()]
+
+    def get_ai_dislikes(self, media_type: str = None):
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if media_type:
+                cursor.execute(
+                    f"SELECT title, year, media_type FROM ai_search_feedback WHERE feedback = 'dislike' AND media_type = {placeholder} AND title IS NOT NULL",
+                    (media_type,),
+                )
+            else:
+                cursor.execute("SELECT title, year, media_type FROM ai_search_feedback WHERE feedback = 'dislike' AND title IS NOT NULL")
+            return [{'title': r[0], 'year': r[1], 'media_type': r[2]} for r in cursor.fetchall()]
+
+    def get_cleanup_settings(self) -> dict:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, enabled, dry_run, grace_days, last_run_at, last_run_status, last_run_summary FROM cleanup_settings WHERE id = 1")
+            row = cursor.fetchone()
+            if not row:
+                placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+                cursor.execute(
+                    f"INSERT INTO cleanup_settings (id, enabled, dry_run, grace_days) VALUES (1, {placeholder}, {placeholder}, {placeholder})",
+                    (0, 1, 7),
+                )
+                conn.commit()
+                return {'enabled': False, 'dry_run': True, 'grace_days': 7,
+                        'last_run_at': None, 'last_run_status': None, 'last_run_summary': None}
+            return {
+                'enabled': bool(row[1]),
+                'dry_run': bool(row[2]),
+                'grace_days': int(row[3]),
+                'last_run_at': row[4],
+                'last_run_status': row[5],
+                'last_run_summary': row[6],
+            }
+
+    def update_cleanup_settings(self, enabled=None, dry_run=None, grace_days=None,
+                                last_run_at=None, last_run_status=None, last_run_summary=None) -> dict:
+        # Ensure row exists.
+        self.get_cleanup_settings()
+        sets = []
+        params = []
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        if enabled is not None:
+            sets.append(f"enabled = {placeholder}"); params.append(1 if enabled else 0)
+        if dry_run is not None:
+            sets.append(f"dry_run = {placeholder}"); params.append(1 if dry_run else 0)
+        if grace_days is not None:
+            sets.append(f"grace_days = {placeholder}"); params.append(int(grace_days))
+        if last_run_at is not None:
+            sets.append(f"last_run_at = {placeholder}"); params.append(last_run_at)
+        if last_run_status is not None:
+            sets.append(f"last_run_status = {placeholder}"); params.append(last_run_status)
+        if last_run_summary is not None:
+            sets.append(f"last_run_summary = {placeholder}"); params.append(last_run_summary)
+        sets.append("updated_at = CURRENT_TIMESTAMP")
+        if sets:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"UPDATE cleanup_settings SET {', '.join(sets)} WHERE id = 1", params)
+                conn.commit()
+        return self.get_cleanup_settings()
+
+    def add_cleanup_log(self, *, tmdb_id, media_type, title, action,
+                        was_dry_run, user_rating=None, reason=None) -> None:
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"INSERT INTO cleanup_log (tmdb_id, media_type, title, action, was_dry_run, user_rating, reason) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})",
+                (str(tmdb_id) if tmdb_id is not None else None, media_type, title, action,
+                 1 if was_dry_run else 0, user_rating, reason),
+            )
+            conn.commit()
+
+    def get_cleanup_log(self, limit: int = 100) -> list:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, ran_at, tmdb_id, media_type, title, action, was_dry_run, user_rating, reason FROM cleanup_log ORDER BY id DESC LIMIT ?".replace('?', '%s' if self.db_type in ('mysql', 'postgres') else '?'),
+                (int(limit),),
+            )
+            rows = cursor.fetchall()
+            return [{
+                'id': r[0], 'ran_at': r[1], 'tmdb_id': r[2], 'media_type': r[3],
+                'title': r[4], 'action': r[5], 'was_dry_run': bool(r[6]),
+                'user_rating': r[7], 'reason': r[8],
+            } for r in rows]
+
+    def get_suggestarr_requests_older_than(self, cutoff_iso: str) -> list:
+        """Return SuggestArr-originated requests requested before cutoff."""
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"""SELECT r.tmdb_request_id, r.media_type, r.requested_at, m.title
+                     FROM requests r
+                     LEFT JOIN metadata m ON m.media_id = r.tmdb_request_id AND m.media_type = r.media_type
+                     WHERE r.requested_by = 'SuggestArr' AND r.requested_at < {placeholder}
+                     ORDER BY r.requested_at ASC""",
+                (cutoff_iso,),
+            )
+            return [{'tmdb_id': str(row[0]), 'media_type': row[1], 'requested_at': row[2], 'title': row[3]}
+                    for row in cursor.fetchall()]
+
+    def delete_request_row(self, tmdb_id: str, media_type: str) -> None:
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"DELETE FROM requests WHERE tmdb_request_id = {placeholder} AND media_type = {placeholder} AND requested_by = 'SuggestArr'",
+                (str(tmdb_id), media_type),
+            )
+            conn.commit()
+
+    def record_ai_seen(self, items) -> None:
+        """Record a batch of (tmdb_id, media_type) tuples as already-recommended."""
+        if not items:
+            return
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        rows = [(str(t), m) for t, m in items if t]
+        if not rows:
+            return
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type in ('mysql', 'mariadb'):
+                cursor.executemany(
+                    f"REPLACE INTO ai_search_seen (tmdb_id, media_type) VALUES ({placeholder}, {placeholder})",
+                    rows,
+                )
+            else:
+                cursor.executemany(
+                    f"INSERT INTO ai_search_seen (tmdb_id, media_type) VALUES ({placeholder}, {placeholder}) ON CONFLICT(tmdb_id, media_type) DO UPDATE SET last_seen=CURRENT_TIMESTAMP",
+                    rows,
+                )
+            conn.commit()
+
+    def get_ai_seen_ids(self, media_type: str = None) -> set:
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if media_type:
+                cursor.execute(
+                    f"SELECT tmdb_id FROM ai_search_seen WHERE media_type = {placeholder}",
+                    (media_type,),
+                )
+            else:
+                cursor.execute("SELECT tmdb_id FROM ai_search_seen")
+            return {str(r[0]) for r in cursor.fetchall()}
+
+    def clear_ai_seen(self, media_type: str = None) -> int:
+        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if media_type:
+                cursor.execute(
+                    f"DELETE FROM ai_search_seen WHERE media_type = {placeholder}",
+                    (media_type,),
+                )
+            else:
+                cursor.execute("DELETE FROM ai_search_seen")
+            count = cursor.rowcount
+            conn.commit()
+            return count
 
     def get_ai_search_requests(self, page: int = 1, per_page: int = 12, sort_by: str = 'date-desc') -> Dict[str, Any]:
         """Get requests made via AI Search, paginated and sorted.
