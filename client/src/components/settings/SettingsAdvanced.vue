@@ -563,6 +563,8 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           </small>
         </div>
       </div>
+
+      <SettingsCleanup embedded />
     </div>
 
 
@@ -594,12 +596,14 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
+import SettingsCleanup from './SettingsCleanup.vue';
 
 export default {
   name: 'SettingsAdvanced',
   components: {
     BaseDropdown,
     BaseCheckbox,
+    SettingsCleanup,
   },
   props: {
     config: {

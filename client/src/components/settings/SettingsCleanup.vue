@@ -1,8 +1,16 @@
 <template>
-  <div class="cleanup-page">
-    <div class="section-header">
+  <div class="cleanup-page" :class="{ embedded }">
+    <div v-if="!embedded" class="section-header">
       <h2><i class="fas fa-broom"></i> Cleanup Automation</h2>
       <p>Automatically delete SuggestArr requests and their files when the item has not been favorited (Plex heart) within a grace period.</p>
+    </div>
+
+    <div v-else class="embedded-header">
+      <h3>
+        <i class="fas fa-broom"></i>
+        Cleanup Automation
+      </h3>
+      <p>Remove old SuggestArr requests when Plex users never favorite them.</p>
     </div>
 
     <div class="warning-banner">
@@ -15,7 +23,7 @@
 
     <div v-if="loading" class="placeholder">Loading…</div>
 
-    <div v-else class="settings-card">
+    <div v-else class="cleanup-panel">
       <label class="toggle-option">
         <span class="toggle-label">
           <i class="fas fa-power-off"></i>
@@ -73,7 +81,7 @@
       </div>
     </div>
 
-    <div class="settings-card">
+    <div class="cleanup-panel cleanup-log-panel">
       <div class="card-header-row">
         <h3><i class="fas fa-history"></i> Audit log</h3>
         <button class="btn btn-link" @click="loadLog" :disabled="loadingLog">
@@ -114,6 +122,13 @@ import { getCleanupSettings, setCleanupSettings, runCleanupNow, getCleanupLog } 
 
 export default {
   name: 'SettingsCleanup',
+
+  props: {
+    embedded: {
+      type: Boolean,
+      default: false,
+    },
+  },
 
   data() {
     return {
@@ -218,8 +233,31 @@ export default {
 
 <style scoped>
 .cleanup-page { padding: 0; }
+.cleanup-page.embedded {
+  grid-column: 1 / -1;
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  border-radius: var(--border-radius-md, 8px);
+  padding: 1.5rem;
+}
 .section-header h2 { font-size: 1.6rem; margin-bottom: 0.25rem; }
 .section-header p { color: var(--color-text-muted, #aaa); }
+.embedded-header {
+  margin-bottom: 1rem;
+}
+.embedded-header h3 {
+  font-size: 1.2rem;
+  margin: 0 0 0.35rem;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.embedded-header p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+}
 
 .warning-banner {
   display: flex; gap: 12px; align-items: flex-start;
@@ -229,10 +267,17 @@ export default {
 .warning-banner i { color: #e78a00; font-size: 1.1rem; margin-top: 2px; }
 .warning-content strong { display: block; margin-bottom: 2px; }
 
-.settings-card {
+.cleanup-panel {
   background: var(--color-card, #2a2a2a);
   border: 1px solid var(--color-border, #444);
   border-radius: 8px; padding: 16px; margin-bottom: 20px;
+}
+.embedded .cleanup-panel {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.cleanup-log-panel {
+  overflow-x: auto;
 }
 
 .toggle-option, .number-option {
