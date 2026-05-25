@@ -115,6 +115,16 @@
           <div class="settings-group" data-tour-id="job-modal-schedule">
             <h4>Schedule</h4>
             <SchedulePicker v-model="schedule" />
+            <label class="pause-pending-toggle">
+              <input
+                v-model="form.pause_if_pending_requests"
+                type="checkbox"
+              />
+              <span>
+                <strong>Pause while Seer requests are pending</strong>
+                <small>Skip this job when Seer still has requests awaiting approval or denial.</small>
+              </span>
+            </label>
           </div>
 
           <!-- Advanced Settings Toggle -->
@@ -204,7 +214,8 @@ export default {
         max_results: 20,
         filters: {},
         user_ids: [],
-        enabled: true
+        enabled: true,
+        pause_if_pending_requests: false
       },
       schedule: {
         type: 'preset',
@@ -232,7 +243,8 @@ export default {
         max_results: this.job.max_results || 20,
         filters: this.job.filters ? JSON.parse(JSON.stringify(this.job.filters)) : {},
         user_ids: this.job.user_ids ? [...this.job.user_ids] : [],
-        enabled: this.job.enabled !== false
+        enabled: this.job.enabled !== false,
+        pause_if_pending_requests: this.job.pause_if_pending_requests === true
       };
       this.schedule = {
         type: this.job.schedule_type || 'preset',
@@ -468,6 +480,38 @@ export default {
   font-size: 0.75rem;
   color: var(--color-text-muted);
   margin-top: 0.35rem;
+}
+
+.pause-pending-toggle {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.pause-pending-toggle input {
+  margin-top: 0.2rem;
+}
+
+.pause-pending-toggle span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pause-pending-toggle strong {
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+}
+
+.pause-pending-toggle small {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
 }
 
 .media-type-selector {

@@ -180,7 +180,7 @@ AI Search requires an LLM to be configured (same setup as AI-Powered Recommendat
 ---
 
 ## Installation
-For Docker, Unraid, source install, reverse proxy, backup, and recommended configuration instructions, see the [Installation Guide](INSTALLATION.md).
+For Docker, Unraid, source install, reverse proxy, backup, and recommended configuration instructions, see the [Installation Guide](/docs/INSTALLATION.md).
 
 ## Join Our Discord Community
 Feel free to join our Discord community to share ideas, ask questions, or get help with SuggestArr: [Join here](https://discord.gg/JXwFd3PnXY).

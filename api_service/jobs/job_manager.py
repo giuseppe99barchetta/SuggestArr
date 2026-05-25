@@ -11,6 +11,8 @@ from apscheduler.triggers.cron import CronTrigger
 
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
+from api_service.services.config_service import ConfigService
+from api_service.services.seer.seer_client import SeerClient
 from api_service.utils.asyncio_loop import close_event_loop
 
 
@@ -191,6 +193,20 @@ class JobManager:
             asyncio.set_event_loop(loop)
 
             try:
+                if loop.run_until_complete(self._should_pause_for_pending_requests(job_data)):
+                    exec_id = self.repository.log_execution_start(job_id)
+                    self.repository.log_execution_end(
+                        exec_id=exec_id,
+                        status='skipped',
+                        results_count=0,
+                        requested_count=0,
+                        error_message='Paused: Seer has pending requests awaiting approval or denial.'
+                    )
+                    self.logger.info(
+                        "Job %s paused because Seer has pending requests awaiting approval or denial.",
+                        job_id,
+                    )
+                    return
                 loop.run_until_complete(executor(job_id))
             finally:
                 close_event_loop(loop, self.logger)
@@ -198,6 +214,23 @@ class JobManager:
             self.logger.info(f"Job {job_id} execution completed")
         except Exception as e:
             self.logger.error(f"Job {job_id} execution failed: {str(e)}")
+
+    async def _should_pause_for_pending_requests(self, job_data: Dict[str, Any]) -> bool:
+        """Return True when this job should skip because Seer has pending requests."""
+        if not job_data.get('pause_if_pending_requests'):
+            return False
+
+        env_vars = ConfigService.get_runtime_config()
+        seer_client = SeerClient(
+            env_vars['SEER_API_URL'],
+            env_vars['SEER_TOKEN'],
+            env_vars.get('SEER_USER_NAME'),
+            env_vars.get('SEER_USER_PSW'),
+            env_vars.get('SEER_SESSION_TOKEN'),
+        )
+
+        async with seer_client:
+            return await seer_client.has_pending_requests()
 
     def _create_trigger(self, schedule_type: str, schedule_value: str) -> Optional[CronTrigger]:
         """
