@@ -169,6 +169,47 @@ def _normalize_parsed_response(parsed: Any, schema_cls: Type[BaseModel]) -> Any:
     return parsed
 
 
+def _response_format_options(schema_cls: Type[BaseModel]) -> List[Optional[Dict[str, Any]]]:
+    """Return structured-output formats from strictest to broadest."""
+    return [
+        {
+            "type": "json_schema",
+            "json_schema": {
+                "name": schema_cls.__name__,
+                "schema": schema_cls.model_json_schema(),
+                "strict": True,
+            },
+        },
+        {"type": "json_object"},
+        None,
+    ]
+
+
+def _is_response_format_rejection(exc: Exception) -> bool:
+    """Return True when provider rejects a response_format option."""
+    if getattr(exc, "status_code", None) != 400:
+        return False
+
+    details: List[str] = [str(exc)]
+    message = getattr(exc, "message", None)
+    if message:
+        details.append(str(message))
+
+    body = getattr(exc, "body", None)
+    if body is not None:
+        if isinstance(body, dict):
+            details.append(json.dumps(body, ensure_ascii=True))
+        else:
+            details.append(str(body))
+
+    detail_text = " ".join(details).lower()
+    return (
+        "response_format" in detail_text
+        or "json_object" in detail_text
+        or "json_schema" in detail_text
+    )
+
+
 # ---------------------------------------------------------------------------
 # Low-level helpers (pure / sync)
 # ---------------------------------------------------------------------------
@@ -305,11 +346,9 @@ async def _call_with_validation(
     attempt.  After *max_retries + 1* total attempts :class:`LLMValidationError`
     is raised.
 
-    ``response_format={"type": "json_object"}`` is passed to leverage native
-    JSON mode when the provider supports it (OpenAI, many Ollama models, etc.).
-    For providers that reject ``json_object`` with a 400 error (for example
-    requiring ``json_schema`` or ``text``), the same request is retried once
-    without ``response_format``.
+    Strict JSON-schema mode is tried first where supported. Providers that
+    reject a ``response_format`` with a 400 response fall back to JSON-object
+    mode, then to plain prompting without burning a validation retry.
 
     :param client: Initialised async OpenAI-compatible client.
     :param model: Model identifier string (e.g. ``"gpt-4o-mini"``).
@@ -323,46 +362,31 @@ async def _call_with_validation(
     current_messages = list(messages)
     last_error: Exception = RuntimeError("No attempts made")
 
-    def _is_response_format_json_object_rejection(exc: Exception) -> bool:
-        """Return True when *exc* is a 400 rejection for json_object response_format."""
-        if getattr(exc, "status_code", None) != 400:
-            return False
-
-        details: List[str] = [str(exc)]
-        message = getattr(exc, "message", None)
-        if message:
-            details.append(str(message))
-
-        body = getattr(exc, "body", None)
-        if body is not None:
-            if isinstance(body, dict):
-                details.append(json.dumps(body, ensure_ascii=True))
-            else:
-                details.append(str(body))
-
-        detail_text = " ".join(details).lower()
-        return "response_format" in detail_text or "json_object" in detail_text
-
     for attempt in range(max_retries + 1):
-        try:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=current_messages,
-                temperature=temperature,
-                response_format={"type": "json_object"},
-            )
-        except Exception as exc:
-            if _is_response_format_json_object_rejection(exc):
-                logger.debug(
-                    "Provider rejected json_object response_format, retrying without structured output"
-                )
-                response = await client.chat.completions.create(
-                    model=model,
-                    messages=current_messages,
-                    temperature=temperature,
-                )
-            else:
+        response = None
+        for response_format in _response_format_options(schema_cls):
+            request_kwargs: Dict[str, Any] = {
+                "model": model,
+                "messages": current_messages,
+                "temperature": temperature,
+            }
+            if response_format is not None:
+                request_kwargs["response_format"] = response_format
+
+            try:
+                response = await client.chat.completions.create(**request_kwargs)
+                break
+            except Exception as exc:
+                if response_format is not None and _is_response_format_rejection(exc):
+                    logger.debug(
+                        "Provider rejected %s response_format, trying next option",
+                        response_format.get("type"),
+                    )
+                    continue
                 raise
+
+        if response is None:
+            raise RuntimeError("LLM request did not return a response")
 
         raw = response.choices[0].message.content.strip()
         content = _extract_json_object(

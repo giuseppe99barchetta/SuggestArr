@@ -213,6 +213,12 @@ class TestCallWithValidation(unittest.IsolatedAsyncioTestCase):
         mock_client.chat.completions.create = AsyncMock(side_effect=list(responses))
         return mock_client
 
+    def _response_format_rejection(self, response_format_type: str):
+        exc = Exception(f"{response_format_type} response_format unsupported")
+        exc.status_code = 400
+        exc.body = {"error": f"{response_format_type} response_format unsupported"}
+        return exc
+
     async def test_valid_response_passes_first_attempt(self):
         payload = json.dumps({"recommendations": [
             {"title": "Dune", "year": 2021, "rationale": "Epic sci-fi", "source_title": None}
@@ -232,6 +238,30 @@ class TestCallWithValidation(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.recommendations[0].title, "Dune")
         # Only one API call should have been made
         self.assertEqual(client.chat.completions.create.call_count, 1)
+        response_format = client.chat.completions.create.call_args[1]["response_format"]
+        self.assertEqual(response_format["type"], "json_schema")
+
+    async def test_response_format_rejection_falls_back_without_burning_retry(self):
+        payload = json.dumps({"recommendations": [
+            {"title": "Dune", "year": 2021, "rationale": "Epic sci-fi", "source_title": None}
+        ]})
+        client = self._make_client(
+            self._response_format_rejection("json_schema"),
+            _mock_openai_response(payload),
+        )
+
+        result = await _call_with_validation(
+            client=client,
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "recommend"}],
+            schema_cls=RecommendationList,
+            max_retries=0,
+        )
+
+        self.assertEqual(result.recommendations[0].title, "Dune")
+        self.assertEqual(client.chat.completions.create.call_count, 2)
+        second_response_format = client.chat.completions.create.call_args_list[1][1]["response_format"]
+        self.assertEqual(second_response_format["type"], "json_object")
 
     async def test_invalid_schema_triggers_retry_and_succeeds(self):
         bad_payload = json.dumps({"wrong_key": []})  # missing "recommendations"
