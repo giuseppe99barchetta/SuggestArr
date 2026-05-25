@@ -2,16 +2,16 @@
   <div class="settings-container" :class="{ 'static-bg-active': config.ENABLE_STATIC_BACKGROUND }">
     <div class="background-container">
       <template v-if="!config.ENABLE_STATIC_BACKGROUND">
-        <div
-          class="background-layer"
-          :class="activeBg === 'bg1' ? 'visible' : 'hidden'"
-          :style="{ backgroundImage: 'url(' + bg1Url + ')' }"
-        ></div>
-        <div
-          class="background-layer"
-          :class="activeBg === 'bg2' ? 'visible' : 'hidden'"
-          :style="{ backgroundImage: 'url(' + bg2Url + ')' }"
-        ></div>
+          <div
+            class="background-layer"
+            :class="activeBg === 'bg1' ? 'bg-visible' : 'bg-hidden'"
+            :style="{ backgroundImage: 'url(' + bg1Url + ')' }"
+          ></div>
+          <div
+            class="background-layer"
+            :class="activeBg === 'bg2' ? 'bg-visible' : 'bg-hidden'"
+            :style="{ backgroundImage: 'url(' + bg2Url + ')' }"
+          ></div>
       </template>
       <div
         v-if="config.ENABLE_STATIC_BACKGROUND"

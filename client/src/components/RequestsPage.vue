@@ -4,12 +4,12 @@
         <template v-if="!config.ENABLE_STATIC_BACKGROUND">
           <div
             class="background-layer"
-            :class="activeBg === 'bg1' ? 'visible' : 'hidden'"
+            :class="activeBg === 'bg1' ? 'bg-visible' : 'bg-hidden'"
             :style="{ backgroundImage: 'url(' + bg1Url + ')' }"
           ></div>
           <div
             class="background-layer"
-            :class="activeBg === 'bg2' ? 'visible' : 'hidden'"
+            :class="activeBg === 'bg2' ? 'bg-visible' : 'bg-hidden'"
             :style="{ backgroundImage: 'url(' + bg2Url + ')' }"
           ></div>
         </template>
@@ -620,14 +620,6 @@ export default {
     },
   },
   watch: {
-    isTransitioning(newValue) {
-      if (newValue) {
-        setTimeout(() => {
-          this.backgroundImageUrl = this.nextBackgroundImageUrl;
-          this.isTransitioning = false;
-        }, 800);
-      }
-    },
     viewMode(newMode) {
       if (newMode === 'ai-requests') return; // handled by switchToAiRequests
       this.$nextTick(() => {
