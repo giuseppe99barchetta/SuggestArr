@@ -72,8 +72,14 @@ class AiSearchService:
         :return: Dict with 'results', 'ai_reasoning', and 'total'.
         """
         if media_type == "both":
-            movie_task = self._search_single(query, "movie", user_ids, max_results, use_history, exclude_watched, exclude_seen)
-            tv_task = self._search_single(query, "tv", user_ids, max_results, use_history, exclude_watched, exclude_seen)
+            movie_task = self._search_single(
+                query, "movie", user_ids, max_results, use_history, exclude_watched, exclude_seen,
+                record_seen=False,
+            )
+            tv_task = self._search_single(
+                query, "tv", user_ids, max_results, use_history, exclude_watched, exclude_seen,
+                record_seen=False,
+            )
             movie_res, tv_res = await asyncio.gather(movie_task, tv_task)
 
             # Interleave: AI movie, AI tv, …
@@ -94,11 +100,13 @@ class AiSearchService:
                 "movie": movie_res.get("ai_reasoning", {}),
                 "tv": tv_res.get("ai_reasoning", {}),
             }
+            final_results = merged[:max_results]
+            self._record_seen_items(final_results, media_type)
 
             return {
-                "results": merged[:max_results],
+                "results": final_results,
                 "ai_reasoning": ai_reasoning,
-                "total": len(merged[:max_results]),
+                "total": len(final_results),
             }
 
         return await self._search_single(query, media_type, user_ids, max_results, use_history, exclude_watched, exclude_seen)
@@ -116,6 +124,7 @@ class AiSearchService:
         use_history: bool = True,
         exclude_watched: bool = True,
         exclude_seen: bool = False,
+        record_seen: bool = True,
     ) -> Dict[str, Any]:
         """Run the full search pipeline for a single media type."""
         # 1. Fetch history (best-effort — never crash the search if unavailable)
@@ -244,19 +253,23 @@ class AiSearchService:
         )
 
         final_slice = final[:max_results]
-        try:
-            from api_service.db.database_manager import DatabaseManager
-            DatabaseManager().record_ai_seen(
-                [(item.get("id"), item.get("media_type") or media_type) for item in final_slice]
-            )
-        except Exception as exc:
-            logger.warning("Could not record AI seen items: %s", exc)
+        if record_seen:
+            self._record_seen_items(final_slice, media_type)
 
         return {
             "results": final_slice,
             "ai_reasoning": ai_reasoning,
             "total": len(final_slice),
         }
+
+    def _record_seen_items(self, items: List[Dict], media_type: str) -> None:
+        try:
+            from api_service.db.database_manager import DatabaseManager
+            DatabaseManager().record_ai_seen(
+                [(item.get("id"), item.get("media_type") or media_type) for item in items]
+            )
+        except Exception as exc:
+            logger.warning("Could not record AI seen items: %s", exc)
 
     @staticmethod
     def _build_ai_reasoning(interpretation: Dict[str, Any]) -> Dict[str, Any]:
