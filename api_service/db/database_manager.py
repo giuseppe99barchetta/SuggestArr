@@ -29,7 +29,7 @@ _INTEGRATION_REQUIRED_FIELDS: Dict[str, List[str]] = {
     'seer':     ['api_url', 'api_key'],
     'tmdb':     ['api_key'],
     'omdb':     ['api_key'],
-    # OpenAI/LLM: no hard required fields — either api_key (cloud) or base_url (local) is sufficient.
+    # OpenAI/LLM: no hard required fields - either api_key (cloud) or base_url (local) is sufficient.
     # An existing row (even empty) is considered valid to prevent overwriting user configuration.
     'openai':   [],
 }
@@ -295,6 +295,8 @@ class DatabaseManager:
                     was_dry_run INTEGER NOT NULL DEFAULT 0,
                     user_rating REAL,
                     reason TEXT
+                )
+            """,
             'ai_search_seen': """
                 CREATE TABLE IF NOT EXISTS ai_search_seen (
                     tmdb_id TEXT NOT NULL,
@@ -765,9 +767,9 @@ class DatabaseManager:
         Startup migration: seed or repair the integrations table from config.yaml.
 
         Rules applied per service:
-        - Row does not exist            → insert from config (if config has required fields).
-        - Row exists but invalid/empty  → update from config (if config has required fields).
-        - Row exists and valid          → leave untouched.
+        - Row does not exist -> insert from config (if config has required fields).
+        - Row exists but invalid/empty -> update from config (if config has required fields).
+        - Row exists and valid -> leave untouched.
 
         This is safe to call on every startup.
         """
@@ -806,7 +808,7 @@ class DatabaseManager:
 
             if existing is not None and self._is_integration_valid(service, existing):
                 self.logger.debug(
-                    "Integration '%s' already in DB with valid credentials — skipping migration", service
+                    "Integration '%s' already in DB with valid credentials - skipping migration", service
                 )
                 continue
 
@@ -814,7 +816,7 @@ class DatabaseManager:
             required = _INTEGRATION_REQUIRED_FIELDS.get(service, [])
             if not all(config.get(field) for field in required):
                 self.logger.debug(
-                    "Integration '%s': config.yaml missing required fields %s — skipping",
+                    "Integration '%s': config.yaml missing required fields %s - skipping",
                     service, required,
                 )
                 continue
@@ -822,7 +824,7 @@ class DatabaseManager:
             action = "Updating" if existing is not None else "Migrating"
             safe_log = {k: v for k, v in config.items() if k not in ('api_key', 'session_token')}
             self.logger.info(
-                "%s '%s' credentials from config.yaml → integrations table %s",
+                "%s '%s' credentials from config.yaml -> integrations table %s",
                 action, service, safe_log,
             )
             self.set_integration(service, config)
@@ -1510,7 +1512,7 @@ class DatabaseManager:
 
         :param page: Page number (1-based).
         :param per_page: Results per page.
-        :param sort_by: Sort key — one of 'date-desc', 'date-asc', 'title-asc', 'title-desc'.
+        :param sort_by: Sort key - one of 'date-desc', 'date-asc', 'title-asc', 'title-desc'.
         :return: Dict with 'data', 'total', 'total_pages', 'current_page', 'per_page'.
         """
         self.logger.debug("Retrieving AI search requests: page=%d, per_page=%d, sort_by=%s", page, per_page, sort_by)
@@ -1875,7 +1877,7 @@ class DatabaseManager:
     def _update_pending_status(self, row_id: int, status: str, retry_count: int,
                                last_attempt_at: Optional[datetime] = None,
                                next_attempt_at: Optional[datetime] = None) -> None:
-        """Internal helper — update status / retry columns on a pending_requests row."""
+        """Internal helper - update status / retry columns on a pending_requests row."""
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = (f"UPDATE pending_requests SET status={placeholder}, retry_count={placeholder}"
                  f", last_attempt_at={placeholder}, next_attempt_at={placeholder}"
@@ -1955,7 +1957,7 @@ class DatabaseManager:
             return 0
 
     # ---------------------------------------------------------------------------
-    # Auth-user methods (SuggestArr internal accounts — NOT external service users)
+    # Auth-user methods (SuggestArr internal accounts - NOT external service users)
     # ---------------------------------------------------------------------------
 
     def _ph(self) -> str:
@@ -2046,7 +2048,7 @@ class DatabaseManager:
 
         Returns:
             dict | None: Row as a dict with keys id, username, password_hash,
-                         role, is_active, last_login — or None if not found.
+                         role, is_active, last_login - or None if not found.
         """
         ph = self._ph()
         query = (
@@ -2188,7 +2190,7 @@ class DatabaseManager:
             token_hash: SHA-256 hex digest of the raw token received from the cookie.
 
         Returns:
-            dict | None: Row with keys id, user_id, expires_at — or None if
+            dict | None: Row with keys id, user_id, expires_at - or None if
                          not found or already revoked.
         """
         ph = self._ph()
