@@ -11,6 +11,7 @@ All LLM calls go through :func:`_call_with_validation`, which:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from typing import Any, Dict, List, Optional, Type, TypeVar
@@ -41,6 +42,13 @@ _RETRY_SYSTEM_MESSAGE = (
     "Your previous response did not match the required JSON schema. "
     "Return strictly valid JSON matching the schema. "
     "No markdown fences, no extra fields, no comments."
+)
+
+_RECOMMENDATION_SCHEMA_HINT = (
+    'Required top-level shape: {"recommendations": ['
+    '{"title": "Movie title", "year": 2023, '
+    '"rationale": "Why this fits.", "source_title": "Watched title"}'
+    "]}. Do not return {}, an array, or any other top-level key."
 )
 
 
@@ -116,6 +124,27 @@ def is_llm_configured(config: Optional[Dict[str, Any]] = None) -> bool:
     api_key = cfg.get("OPENAI_API_KEY")
     base_url = cfg.get("OPENAI_BASE_URL")
     return bool(api_key or base_url)
+
+
+async def _close_llm_client(client: AsyncOpenAI) -> None:
+    """Close the LLM HTTP client and let transport callbacks finish."""
+    try:
+        await client.aclose()
+    except Exception as exc:
+        logger.debug("Ignoring LLM client close failure: %s", exc)
+        return
+
+    # httpx/anyio may schedule transport-close callbacks during aclose().
+    # Short-lived job loops must run those callbacks before loop.close().
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+
+def _validation_retry_message(schema_cls: Type[BaseModel]) -> str:
+    """Return schema-specific correction text for retry attempts."""
+    if schema_cls is RecommendationList:
+        return f"{_RETRY_SYSTEM_MESSAGE} {_RECOMMENDATION_SCHEMA_HINT}"
+    return _RETRY_SYSTEM_MESSAGE
 
 
 # ---------------------------------------------------------------------------
@@ -326,7 +355,7 @@ async def _call_with_validation(
             if attempt < max_retries:
                 # Inject correction hint as the first system message and retry.
                 current_messages = [
-                    {"role": "system", "content": _RETRY_SYSTEM_MESSAGE},
+                    {"role": "system", "content": _validation_retry_message(schema_cls)},
                     *messages,
                 ]
 
@@ -543,10 +572,7 @@ async def get_recommendations_from_history(
         logger.info("Successfully generated %d LLM recommendations.", len(valid_recommendations))
         return valid_recommendations[:max_results]
     finally:
-        try:
-            await client.aclose()
-        except Exception:
-            pass
+        await _close_llm_client(client)
 
 
 async def interpret_search_query(
@@ -685,10 +711,7 @@ Example format:
         )
         return result
     finally:
-        try:
-            await client.aclose()
-        except Exception:
-            pass
+        await _close_llm_client(client)
 
 
 async def generate_search_result_rationales(
@@ -803,7 +826,4 @@ Rules:
         logger.warning("Failed generating per-result LLM rationales: %s", exc)
         return {}
     finally:
-        try:
-            await client.aclose()
-        except Exception:
-            pass
+        await _close_llm_client(client)

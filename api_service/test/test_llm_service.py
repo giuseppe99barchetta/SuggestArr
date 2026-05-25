@@ -29,12 +29,14 @@ Covers (interpret_search_query — async):
 """
 
 import json
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 from api_service.exceptions.api_exceptions import LLMValidationError
 from api_service.services.llm.llm_service import (
     _call_with_validation,
+    _close_llm_client,
     _deduplicate_history,
     _extract_json_object,
     _is_duplicate_of_history,
@@ -276,6 +278,40 @@ class TestCallWithValidation(unittest.IsolatedAsyncioTestCase):
         second_call_messages = client.chat.completions.create.call_args_list[1][1]["messages"]
         self.assertEqual(second_call_messages[0]["role"], "system")
         self.assertIn("schema", second_call_messages[0]["content"].lower())
+
+    async def test_recommendation_retry_includes_required_top_level_shape(self):
+        bad_payload = json.dumps({})
+        good_payload = json.dumps({"recommendations": [
+            {"title": "Tenet", "year": 2020, "rationale": "Great.", "source_title": None}
+        ]})
+        client = self._make_client(
+            _mock_openai_response(bad_payload),
+            _mock_openai_response(good_payload),
+        )
+
+        await _call_with_validation(
+            client=client,
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "recommend"}],
+            schema_cls=RecommendationList,
+            max_retries=1,
+        )
+
+        second_call_messages = client.chat.completions.create.call_args_list[1][1]["messages"]
+        self.assertIn('"recommendations"', second_call_messages[0]["content"])
+        self.assertIn("Do not return {}", second_call_messages[0]["content"])
+
+    async def test_close_llm_client_drains_transport_close_callbacks(self):
+        state = {"callback_ran": False}
+
+        class FakeClient:
+            async def aclose(self):
+                loop = asyncio.get_running_loop()
+                loop.call_soon(lambda: state.__setitem__("callback_ran", True))
+
+        await _close_llm_client(FakeClient())
+
+        self.assertTrue(state["callback_ran"])
 
     async def test_retries_exhausted_raises_llm_validation_error(self):
         bad_payload = json.dumps({"wrong_key": []})
