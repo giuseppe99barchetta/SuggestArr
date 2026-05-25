@@ -89,13 +89,19 @@
 
     <div class="cleanup-panel cleanup-log-panel">
       <div class="card-header-row">
-        <h3><i class="fas fa-history"></i> Audit log</h3>
-        <button class="btn btn-link" @click="loadLog" :disabled="loadingLog">
-          <i :class="loadingLog ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i> Refresh
+        <button class="log-title-button" @click="logCollapsed = !logCollapsed">
+          <i :class="logCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down'"></i>
+          <span><i class="fas fa-history"></i> Audit log</span>
+          <span v-if="log.length" class="log-count">{{ log.length }}</span>
         </button>
+        <div class="log-header-actions">
+          <button class="btn btn-link" @click="loadLog" :disabled="loadingLog">
+            <i :class="loadingLog ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i> Refresh
+          </button>
+        </div>
       </div>
-      <div v-if="!log.length" class="placeholder">No cleanup actions logged yet.</div>
-      <table v-else class="log-table">
+      <div v-if="!logCollapsed && !log.length" class="placeholder">No cleanup actions logged yet.</div>
+      <table v-else-if="!logCollapsed" class="log-table">
         <thead>
           <tr>
             <th>When</th>
@@ -108,7 +114,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in log" :key="row.id" :class="actionClass(row.action)">
+          <tr v-for="row in paginatedLog" :key="row.id" :class="actionClass(row.action)">
             <td>{{ formatTs(row.ran_at) }}</td>
             <td>{{ row.title || ('tmdb:' + row.tmdb_id) }}</td>
             <td>{{ row.media_type === 'tv' ? 'TV' : 'Movie' }}</td>
@@ -119,6 +125,17 @@
           </tr>
         </tbody>
       </table>
+      <div v-if="!logCollapsed && totalLogPages > 1" class="pagination-row">
+        <button class="btn btn-sm" :disabled="logPage <= 1" @click="logPage -= 1">
+          <i class="fas fa-chevron-left"></i>
+          Previous
+        </button>
+        <span>Page {{ logPage }} of {{ totalLogPages }}</span>
+        <button class="btn btn-sm" :disabled="logPage >= totalLogPages" @click="logPage += 1">
+          Next
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -146,8 +163,22 @@ export default {
       settings: null,
       form: { enabled: false, dry_run: true, grace_days: 7 },
       log: [],
+      logCollapsed: true,
+      logPage: 1,
+      logPageSize: 25,
       lastResult: null,
     };
+  },
+
+  computed: {
+    totalLogPages() {
+      return Math.max(1, Math.ceil(this.log.length / this.logPageSize));
+    },
+
+    paginatedLog() {
+      const start = (this.logPage - 1) * this.logPageSize;
+      return this.log.slice(start, start + this.logPageSize);
+    },
   },
 
   methods: {
@@ -206,6 +237,9 @@ export default {
       try {
         const res = await getCleanupLog(200);
         this.log = res.data.log || [];
+        if (this.logPage > this.totalLogPages) {
+          this.logPage = this.totalLogPages;
+        }
       } catch (err) {
         // non-fatal
       } finally {
@@ -325,6 +359,7 @@ export default {
 .btn-primary { background: #3498db; border-color: #3498db; color: white; }
 .btn-danger { background: #c0392b; border-color: #c0392b; color: white; }
 .btn-link { background: transparent; border: none; color: #3498db; padding: 4px 8px; }
+.btn-sm { padding: 6px 10px; font-size: 0.82rem; }
 
 .result-banner {
   margin-top: 12px; padding: 10px; border-radius: 6px;
@@ -336,7 +371,39 @@ export default {
 .last-run-info { margin-top: 12px; font-size: 0.9rem; color: var(--color-text-muted, #aaa); }
 .last-run-summary { margin-top: 4px; font-family: monospace; font-size: 0.82rem; }
 
-.card-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.card-header-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.log-title-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: 0;
+  color: var(--color-text-primary, #fff);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 4px 0;
+}
+.log-title-button span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.log-count {
+  min-width: 24px;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-muted, #aaa);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.log-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .placeholder { color: var(--color-text-muted, #888); padding: 8px 0; font-style: italic; }
 
 .log-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
@@ -348,4 +415,13 @@ export default {
 .log-table .row-delete { color: #e67e22; }
 .log-table .row-kept { color: #2ecc71; }
 .log-table .row-error { color: #e74c3c; }
+.pagination-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--color-text-muted, #aaa);
+  font-size: 0.85rem;
+}
 </style>
