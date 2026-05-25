@@ -152,8 +152,12 @@ class SeerClient(BaseHTTPClient):
                     self.is_logged_in = True
                     self.logger.info("Successfully logged in as %s", self.username)
                 else:
+                    self.session_token = None
+                    self.is_logged_in = False
                     self.logger.error("Login failed: %d", response.status)
         except asyncio.TimeoutError:
+            self.session_token = None
+            self.is_logged_in = False
             self.logger.error("Login request to %s timed out.", login_url)
 
     async def get_all_users(self, max_users=100):
@@ -411,8 +415,18 @@ class SeerClient(BaseHTTPClient):
             return False
 
         self.logger.debug("Sending Jellyseerr request: %s", data)
-        if not self.session_token and self.username and self.password:
+        # Saved cookies can expire or belong to a previously selected user.
+        # Refresh when credentials exist so queued jobs run as the configured
+        # Jellyseerr user instead of silently falling back to a stale session.
+        if self.username and self.password:
             await self.login()
+            if not self.session_token:
+                self.logger.error(
+                    "Cannot submit Jellyseerr request for %s tmdb:%s — "
+                    "configured Seer user login failed. Re-authenticate the Seer user in settings.",
+                    media_type, media_id,
+                )
+                return False
 
         response = await self._make_request(
             "POST", "api/v1/request", data=data, use_cookie=bool(self.session_token)
