@@ -140,6 +140,13 @@ export const aiSearchStatus = () => {
     return axios.get('/api/ai-search/status');
 };
 
+
+// Cleanup automation
+export const getCleanupSettings = () => axios.get('/api/cleanup/settings');
+export const setCleanupSettings = (payload) => axios.post('/api/cleanup/settings', payload);
+export const runCleanupNow = (dryRun = null) => axios.post('/api/cleanup/run', dryRun === null ? {} : { dry_run: dryRun });
+export const getCleanupLog = (limit = 100) => axios.get('/api/cleanup/log', { params: { limit } });
+
 // Config export: download a full configuration snapshot (admin only, includes API keys)
 export const exportConfig = () => {
     return axios.get('/api/config/export', { responseType: 'json' });
