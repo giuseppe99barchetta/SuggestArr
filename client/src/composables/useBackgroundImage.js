@@ -17,12 +17,17 @@ export function useBackgroundImage() {
   //         swap which layer is "visible" – the CSS opacity transition does the rest.
   function changeBackground(newUrl) {
     if (!newUrl) return;
+    const currentUrl = activeBg.value === 'bg1' ? bg1Url.value : bg2Url.value;
+    if (newUrl === currentUrl) return;
     if (isTransitioning.value) return;
 
     const img = new Image();
-    img.src = newUrl;
+    img.decoding = 'async';
+    let transitionStarted = false;
 
-    img.onload = () => {
+    const showPreloadedImage = () => {
+      if (transitionStarted) return;
+      transitionStarted = true;
       isTransitioning.value = true;
 
       const nextBg = activeBg.value === 'bg1' ? 'bg2' : 'bg1';
@@ -45,6 +50,16 @@ export function useBackgroundImage() {
         });
       });
     };
+
+    img.onload = showPreloadedImage;
+    img.onerror = () => {
+      isTransitioning.value = false;
+    };
+    img.src = newUrl;
+
+    if (img.complete) {
+      showPreloadedImage();
+    }
   }
 
   function startDefaultImageRotation() {

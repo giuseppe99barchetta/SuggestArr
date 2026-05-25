@@ -22,15 +22,19 @@
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
-  transition: opacity 1s ease;
-}
-
-.background-layer.hidden {
   opacity: 0;
+  transition: opacity 1s ease;
+  will-change: opacity;
 }
 
-.background-layer.visible {
+.background-layer.bg-hidden {
+  opacity: 0;
+  display: block;
+}
+
+.background-layer.bg-visible {
   opacity: 1;
+  display: block;
 }
 
 .background-layer.static-bg {
