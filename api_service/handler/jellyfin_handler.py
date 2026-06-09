@@ -2,9 +2,10 @@ import asyncio
 
 from api_service.handler.base_handler import BaseMediaHandler
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
+from api_service.db.database_manager import DatabaseManager
 
 class JellyfinHandler(BaseMediaHandler):
-    def __init__(self, jellyfin_client:JellyfinClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None):
+    def __init__(self, jellyfin_client:JellyfinClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, max_content=10):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client
@@ -19,6 +20,7 @@ class JellyfinHandler(BaseMediaHandler):
         :param request_delay: Seconds to wait between consecutive Seer service requests (0 = concurrent).
         :param dry_run: If True, simulate requests without touching download clients.
         :param max_total_requests: Max number of items to request for the whole run.
+        :param max_content: Max seeds to process after merging Trakt + Jellyfin sources.
         """
         super().__init__(
             seer_client=seer_client,
@@ -32,7 +34,9 @@ class JellyfinHandler(BaseMediaHandler):
             honor_seer_discovery=honor_seer_discovery,
             seer_discovered_ids=seer_discovered_ids,
             dry_run=dry_run,
-            max_total_requests=max_total_requests
+            max_total_requests=max_total_requests,
+            trakt_augmentor=trakt_augmentor,
+            max_content=max_content,
         )
         self.jellyfin_client = jellyfin_client
         self.selected_users = selected_users
@@ -58,59 +62,155 @@ class JellyfinHandler(BaseMediaHandler):
         self.logger.info(f"Total media requested: {self.request_count}")
 
     async def process_user_recent_items(self, user):
-        """Process recently watched items for a specific Jellyfin user."""
+        """Process recently watched items for a Jellyfin user, merged with Trakt."""
         if not isinstance(user, dict):
             self.logger.error(f"Invalid user object (not a dict): {user}")
             return
         user_name = user.get('name', user.get('id', 'Unknown'))
         self.logger.info(f"Fetching content for user: {user_name}")
+
+        # 1. Collect Trakt seeds (don't process yet).
+        trakt_seeds = await self._collect_trakt_seeds_for_user(user)
+
+        # 2. Fetch Jellyfin recent items.
         recent_items_by_library = await self.jellyfin_client.get_recent_items(user)
         self.logger.debug(f"Recent items for user {user['name']}: {recent_items_by_library}")
 
+        jf_seeds = []
         if recent_items_by_library:
+            # Flatten all items across libraries and resolve TMDB IDs in parallel.
+            flat_items = []
+            for library_name, items in recent_items_by_library.items():
+                is_anime = self.library_anime_map.get(library_name, False)
+                for item in items:
+                    flat_items.append((item, library_name, is_anime))
+
+            jf_seeds = await asyncio.gather(*[
+                self._jellyfin_item_to_seed(item, library_name, is_anime, user)
+                for item, library_name, is_anime in flat_items
+            ])
+            jf_seeds = [s for s in jf_seeds if s is not None]
+
+        # 3. Merge Trakt + Jellyfin seeds, sort by date, dedup, cap.
+        all_seeds = trakt_seeds + jf_seeds
+        merged = self._merge_seeds(all_seeds)
+        if not merged:
+            return
+
+        self.logger.info("Processing %d merged seeds for Jellyfin user %s", len(merged), user_name)
+        await self._process_merged_seeds(user, merged)
+
+    async def _jellyfin_item_to_seed(self, item, library_name, is_anime, user):
+        """Resolve a Jellyfin item to a normalized seed dict or None."""
+        item_type = item.get('Type', '').lower()
+        media_type = 'movie' if item_type == 'movie' else 'tv'
+        title = item.get('SeriesName') if item_type == 'episode' else item.get('Name')
+        if not title:
+            return None
+
+        # Resolve TMDB ID.
+        tmdb_id = None
+        if media_type == 'movie':
+            tmdb_id = (item.get('ProviderIds') or {}).get('Tmdb')
+        else:
+            tmdb_id = ((item.get('SeriesProviderIds') or item.get('ProviderIds', {})).get('Tmdb'))
+            if not tmdb_id:
+                series_id = item.get('SeriesId')
+                if series_id:
+                    try:
+                        series_pids = await self.jellyfin_client.get_series_provider_ids(series_id)
+                        tmdb_id = (series_pids or {}).get('Tmdb')
+                    except Exception:
+                        pass
+        if not tmdb_id:
+            return None
+
+        # Parse date.
+        date = 0
+        for field in ('DatePlayed', 'DateCreated', 'PremiereDate'):
+            val = item.get(field)
+            if val:
+                try:
+                    from datetime import datetime as dt
+                    date = int(dt.fromisoformat(str(val).replace('Z', '+00:00')).timestamp())
+                except (ValueError, TypeError):
+                    pass
+                break
+
+        source_obj = None
+        try:
+            source_obj = await self.tmdb_client.get_metadata(tmdb_id, media_type)
+        except (AttributeError, Exception):
+            pass
+        return {
+            'tmdb_id': str(tmdb_id), 'media_type': media_type,
+            'title': title, 'year': item.get('ProductionYear'),
+            'date': date, 'source_obj': source_obj, 'is_anime': is_anime,
+            'user': user,
+        }
+
+    async def _collect_trakt_seeds_for_user(self, user):
+        """Fetch Trakt seeds for a user, return list without processing."""
+        if not self.trakt_augmentor:
+            return []
+
+        external_id = str(user.get('id'))
+        identity = DatabaseManager().upsert_media_user_identity(
+            provider="jellyfin", external_user_id=external_id, external_username=user.get('name'),
+        )
+        seeds = await self._augment_user_trakt(identity["id"])
+        for s in seeds:
+            s.setdefault('date', s.get('watched_at', 0))
+        return seeds
+
+    async def _process_merged_seeds(self, user, seeds):
+        """Process merged seeds for a Jellyfin user: dispatch LLM or non-LLM."""
+        if not seeds:
+            return
+
+        if self.use_llm:
+            movie_history = [
+                {"title": s["title"], "year": s.get("year"), "type": "movie"}
+                for s in seeds if s.get("media_type") == "movie"
+            ]
+            tv_history = [
+                {"title": s["title"], "year": s.get("year"), "type": "tv"}
+                for s in seeds if s.get("media_type") == "tv"
+            ]
             tasks = []
-            if self.use_llm:
-                self.logger.info("Advanced Algorithm enabled. Generating recommendations using LLM.")
-                # We extract all recently watched items across libraries for the LLM
-                all_recent_items = []
-                for library_name, items in recent_items_by_library.items():
-                    all_recent_items.extend(items)
-                
-                history_items = []
-                for item in all_recent_items:
-                    item_type_raw = item.get('Type', '').lower()
-                    if item_type_raw == 'episode':
-                        # Use the series name, not the individual episode title
-                        title = item.get('SeriesName') or item.get('Name')
-                        media_type = 'tv'
-                    else:
-                        title = item.get('Name')
-                        media_type = 'movie'
-                    year = item.get('ProductionYear')
-                    if title:
-                        history_items.append({
-                            "title": title,
-                            "year": year,
-                            "type": media_type,
-                        })
-                
-                if history_items:
-                    # Filter history list for movies vs tv to feed to LLM
-                    movie_history = [h for h in history_items if h['type'] == 'movie']
-                    tv_history = [h for h in history_items if h['type'] == 'tv']
-                    
-                    if movie_history:
-                        tasks.append(self.process_llm_recommendations(user, movie_history, 'movie', self.max_similar_movie))
-                    if tv_history:
-                        tasks.append(self.process_llm_recommendations(user, tv_history, 'tv', self.max_similar_tv))
-            else:
-                for library_name, items in recent_items_by_library.items():
-                    is_anime = self.library_anime_map.get(library_name, False)
-                    self.logger.debug(f"Processing library: {library_name} (anime={is_anime}) with items: {items}")
-                    tasks.extend([self.process_item(user, item, is_anime) for item in items])
-                    
+            if movie_history and self.max_similar_movie > 0:
+                tasks.append(self.process_llm_recommendations(user, movie_history, 'movie', self.max_similar_movie))
+            if tv_history and self.max_similar_tv > 0:
+                tasks.append(self.process_llm_recommendations(user, tv_history, 'tv', self.max_similar_tv))
             if tasks:
                 await asyncio.gather(*tasks)
+        else:
+            await asyncio.gather(*[
+                self._process_seed(user, seed) for seed in seeds
+            ])
+
+    async def _process_seed(self, user, seed):
+        """Find similar media for one TMDB-resolved seed and request via Seer."""
+        tmdb_id = seed.get("tmdb_id")
+        media_type = seed.get("media_type")
+        if not tmdb_id:
+            return
+        source_obj = seed.get("source_obj")
+        is_anime = seed.get("is_anime", False)
+        if media_type == "movie" and self.max_similar_movie > 0:
+            if not source_obj:
+                source_obj = await self.tmdb_client.get_metadata(tmdb_id, "movie")
+            if not source_obj:
+                return
+            similar = await self.tmdb_client.find_similar_movies(tmdb_id, dry_run=self.dry_run)
+            await self.request_similar_media(similar, "movie", self.max_similar_movie, source_obj, user, is_anime)
+        elif media_type == "tv" and self.max_similar_tv > 0:
+            if not source_obj:
+                source_obj = await self.tmdb_client.get_metadata(tmdb_id, "tv")
+            if not source_obj:
+                return
+            similar = await self.tmdb_client.find_similar_tvshows(tmdb_id, dry_run=self.dry_run)
+            await self.request_similar_media(similar, "tv", self.max_similar_tv, source_obj, user, is_anime)
 
     async def _request_llm_recommendation(self, media, item_type, source_obj, user):
         """Request a single LLM recommendation via Jellyfin."""

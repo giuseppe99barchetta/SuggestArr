@@ -62,6 +62,11 @@ BASE_ENV = {
     'PLEX_API_URL': 'http://plex.local',
     'PLEX_TOKEN': 'plex_tok',
     'PLEX_LIBRARIES': [],
+    'TRAKT_CLIENT_ID': 'trakt_client_id',
+    'TRAKT_CLIENT_SECRET': 'trakt_secret',
+    'TRAKT_ACCESS_TOKEN': 'trakt_access',
+    'TRAKT_REFRESH_TOKEN': 'trakt_refresh',
+    'TRAKT_EXPIRES_AT': 1234567890,
 }
 
 

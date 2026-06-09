@@ -12,6 +12,7 @@ from api_service.config.config import (
 )
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.integration_sanitizer import sanitize_integration_config
 
 logger = LoggerManager.get_logger(__name__)
 
@@ -32,10 +33,46 @@ _DB_INTEGRATION_KEYS: frozenset = frozenset({
     'OPENAI_API_KEY',
     'OPENAI_BASE_URL',
     'LLM_MODEL',
+    'TRAKT_CLIENT_ID',
+    'TRAKT_CLIENT_SECRET',
+})
+
+_TRAKT_ACCOUNT_TOKEN_SETTING_KEYS: frozenset = frozenset({
+    'TRAKT_ACCESS_TOKEN',
+    'TRAKT_REFRESH_TOKEN',
+    'TRAKT_EXPIRES_AT',
 })
 
 # All valid top-level setting keys (resolved once at module load).
-_VALID_SETTING_KEYS: frozenset = frozenset(get_default_values().keys()) - _DB_INTEGRATION_KEYS
+_VALID_SETTING_KEYS: frozenset = (
+    frozenset(get_default_values().keys())
+    - _DB_INTEGRATION_KEYS
+    - _TRAKT_ACCOUNT_TOKEN_SETTING_KEYS
+)
+
+_LOG_SECRET_KEY_FRAGMENTS: tuple = ("token", "api_key", "password", "secret")
+
+
+def _sanitize_integration_config(service: str, config: dict) -> dict:
+    """Return a copy of an integration config safe for global storage/export.
+
+    Thin wrapper delegating to the canonical public helper
+    :func:`api_service.services.integration_sanitizer.sanitize_integration_config`
+    so the Trakt-allowlist logic lives in a single place.
+    """
+    return sanitize_integration_config(service, config)
+
+
+def _redact_for_log(config: dict) -> dict:
+    """Return a copy with secret-like keys redacted for logging."""
+    safe = {}
+    for key, value in config.items():
+        key_lower = str(key).lower()
+        if any(fragment in key_lower for fragment in _LOG_SECRET_KEY_FRAGMENTS):
+            safe[key] = "***"
+        else:
+            safe[key] = value
+    return safe
 
 
 class ConfigService:
@@ -64,7 +101,10 @@ class ConfigService:
             dict with keys ``version``, ``integrations``, ``settings``.
         """
         db = DatabaseManager()
-        integrations = db.get_all_integrations()
+        integrations = {
+            service: _sanitize_integration_config(service, cfg)
+            for service, cfg in db.get_all_integrations().items()
+        }
         logger.info(
             "Config export: collected %d integration(s): %s",
             len(integrations),
@@ -75,7 +115,7 @@ class ConfigService:
         settings = {
             k: v
             for k, v in config.items()
-            if k not in _DB_INTEGRATION_KEYS
+            if k in _VALID_SETTING_KEYS
         }
 
         return {
@@ -120,8 +160,9 @@ class ConfigService:
                     "Skipping integration '%s': value is not a dict", service
                 )
                 continue
+            service_cfg = _sanitize_integration_config(service, service_cfg)
             # Log non-sensitive fields only.
-            safe = {k: v for k, v in service_cfg.items() if k not in ("api_key", "session_token")}
+            safe = _redact_for_log(service_cfg)
             logger.info("Importing integration '%s' %s", service, safe)
             db.set_integration(service, service_cfg)
 

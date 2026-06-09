@@ -1,16 +1,19 @@
 import os
+import json
 import tempfile
 import unittest
 import yaml
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from test import _verbose_dict_compare
 from api_service.config.config import (
     load_env_vars, save_env_vars, get_default_values,
     get_config_values, get_config_sections, get_config_section,
     save_config_section, clear_env_vars, save_session_token, is_setup_complete,
-    invalidate_config_cache,
+    invalidate_config_cache, INTEGRATION_TO_FLAT,
 )
+from api_service.db.database_manager import DatabaseManager
+from api_service.services import config_service
 
 
 class TestConfig(unittest.TestCase):
@@ -89,6 +92,11 @@ class TestConfig(unittest.TestCase):
         "OPENAI_API_KEY": "openai123abc",
         "OPENAI_BASE_URL": "https://api.openai.com/v1",
         "LLM_MODEL": "gpt-4-0613",
+        "TRAKT_CLIENT_ID": "trakt-client-id",
+        "TRAKT_CLIENT_SECRET": "trakt-client-secret",
+        "TRAKT_ACCESS_TOKEN": "trakt-access-token",
+        "TRAKT_REFRESH_TOKEN": "trakt-refresh-token",
+        "TRAKT_EXPIRES_AT": 1234567890,
         "SEER_REQUEST_DELAY": 0.5,
         "FILTER_INCLUDE_TVOD": "false",
         "ALLOW_REGISTRATION": False,
@@ -105,11 +113,23 @@ class TestConfig(unittest.TestCase):
         self._patch.start()
         self._db_patch = patch('api_service.db.database_manager.DatabaseManager')
         self._db_manager_cls = self._db_patch.start()
+        self._config_service_db_patch = patch(
+            'api_service.services.config_service.DatabaseManager',
+            self._db_manager_cls,
+        )
+        self._config_service_db_patch.start()
         self._db_manager_cls.return_value.get_all_integrations.return_value = {}
+        # _sanitize_integration_config is a pure static helper (no DB I/O); keep
+        # the real implementation on the mocked class so config import/export
+        # still strips Trakt account tokens as in production.
+        self._db_manager_cls._sanitize_integration_config = staticmethod(
+            DatabaseManager._sanitize_integration_config
+        )
         invalidate_config_cache()
 
     def tearDown(self):
         invalidate_config_cache()
+        self._config_service_db_patch.stop()
         self._db_patch.stop()
         self._patch.stop()
         os.unlink(self._tmp.name)
@@ -159,11 +179,240 @@ class TestConfig(unittest.TestCase):
         self._db_manager_cls.return_value.get_all_integrations.return_value = {
             'tmdb': {'api_key': 'db_tmdb'},
             'jellyfin': {'api_url': 'http://jf', 'api_key': 'jf_token'},
+            'trakt': {
+                'client_id': 'trakt_id',
+                'client_secret': 'trakt_secret',
+                'access_token': 'trakt_access',
+                'refresh_token': 'trakt_refresh',
+                'expires_at': 12345,
+            },
         }
         config = load_env_vars(force_reload=True)
         self.assertEqual(config['TMDB_API_KEY'], 'db_tmdb')
         self.assertEqual(config['JELLYFIN_API_URL'], 'http://jf')
         self.assertEqual(config['JELLYFIN_TOKEN'], 'jf_token')
+        self.assertEqual(config['TRAKT_CLIENT_ID'], 'trakt_id')
+        self.assertEqual(config['TRAKT_CLIENT_SECRET'], 'trakt_secret')
+        self.assertEqual(config['TRAKT_ACCESS_TOKEN'], '')
+        self.assertEqual(config['TRAKT_REFRESH_TOKEN'], '')
+        self.assertIsNone(config['TRAKT_EXPIRES_AT'])
+
+    def test_trakt_defaults_and_integration_mapping_are_present(self):
+        defaults = get_config_values()
+        self.assertEqual(defaults['TRAKT_CLIENT_ID'], '')
+        self.assertEqual(defaults['TRAKT_CLIENT_SECRET'], '')
+        self.assertEqual(defaults['TRAKT_ACCESS_TOKEN'], '')
+        self.assertEqual(defaults['TRAKT_REFRESH_TOKEN'], '')
+        self.assertIsNone(defaults['TRAKT_EXPIRES_AT'])
+        self.assertEqual(INTEGRATION_TO_FLAT['trakt'], {
+            'client_id': 'TRAKT_CLIENT_ID',
+            'client_secret': 'TRAKT_CLIENT_SECRET',
+        })
+
+    def test_trakt_is_valid_when_client_credentials_are_present(self):
+        self.assertTrue(DatabaseManager._is_integration_valid(
+            'trakt',
+            {'client_id': 'cid', 'client_secret': 'secret'},
+        ))
+        self.assertFalse(DatabaseManager._is_integration_valid(
+            'trakt',
+            {'client_id': 'cid', 'client_secret': ''},
+        ))
+
+    def test_migrate_integrations_from_config_includes_only_trakt_app_credentials(self):
+        manager = object.__new__(DatabaseManager)
+        manager.logger = unittest.mock.MagicMock()
+        manager.get_integration = unittest.mock.MagicMock(return_value=None)
+        manager.set_integration = unittest.mock.MagicMock()
+
+        with patch('api_service.db.database_manager.load_env_vars', return_value={
+            'TRAKT_CLIENT_ID': 'cid',
+            'TRAKT_CLIENT_SECRET': 'secret',
+            'TRAKT_ACCESS_TOKEN': 'access',
+            'TRAKT_REFRESH_TOKEN': 'refresh',
+            'TRAKT_EXPIRES_AT': 12345,
+        }):
+            manager.migrate_integrations_from_config()
+
+        manager.set_integration.assert_called_once_with('trakt', {
+            'client_id': 'cid',
+            'client_secret': 'secret',
+        })
+
+    def test_migrate_integrations_from_config_purges_stored_legacy_trakt_tokens(self):
+        import api_service.db.database_manager as dm_mod
+
+        real_db_cls = DatabaseManager
+        real_db_cls._instance = None
+        fd, db_file = tempfile.mkstemp(suffix='.db')
+        os.close(fd)
+
+        path_patch = patch.object(dm_mod, 'DB_PATH', db_file)
+        env_patch = patch(
+            'api_service.db.database_manager.load_env_vars',
+            return_value={'DB_TYPE': 'sqlite'},
+        )
+        path_patch.start()
+        env_patch.start()
+
+        try:
+            manager = real_db_cls()
+            with manager.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO integrations (service, config_json) VALUES (?, ?)",
+                    (
+                        'trakt',
+                        json.dumps({
+                            'client_id': 'cid',
+                            'client_secret': 'secret',
+                            'access_token': 'legacy-access',
+                            'refresh_token': 'legacy-refresh',
+                            'expires_at': 12345,
+                        }),
+                    ),
+                )
+                conn.commit()
+
+            env_patch.stop()
+            env_patch = patch(
+                'api_service.db.database_manager.load_env_vars',
+                return_value={
+                    'TRAKT_CLIENT_ID': 'cid',
+                    'TRAKT_CLIENT_SECRET': 'secret',
+                    'TRAKT_ACCESS_TOKEN': 'new-access',
+                    'TRAKT_REFRESH_TOKEN': 'new-refresh',
+                    'TRAKT_EXPIRES_AT': 67890,
+                },
+            )
+            env_patch.start()
+            manager.migrate_integrations_from_config()
+
+            with manager.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT config_json FROM integrations WHERE service = ?", ('trakt',))
+                stored = json.loads(cursor.fetchone()[0])
+
+            self.assertEqual(stored, {
+                'client_id': 'cid',
+                'client_secret': 'secret',
+            })
+        finally:
+            real_db_cls._instance = None
+            env_patch.stop()
+            path_patch.stop()
+            try:
+                os.unlink(db_file)
+            except FileNotFoundError:
+                pass
+
+    def test_config_service_classifies_trakt_keys_as_db_integration_keys(self):
+        for key in (
+            'TRAKT_CLIENT_ID',
+            'TRAKT_CLIENT_SECRET',
+        ):
+            self.assertIn(key, config_service._DB_INTEGRATION_KEYS)
+            self.assertNotIn(key, config_service._VALID_SETTING_KEYS)
+        for key in (
+            'TRAKT_ACCESS_TOKEN',
+            'TRAKT_REFRESH_TOKEN',
+            'TRAKT_EXPIRES_AT',
+        ):
+            self.assertNotIn(key, config_service._DB_INTEGRATION_KEYS)
+            self.assertNotIn(key, config_service._VALID_SETTING_KEYS)
+
+    def test_config_export_strips_legacy_trakt_account_tokens_from_integrations(self):
+        self._db_manager_cls.return_value.get_all_integrations.return_value = {
+            'trakt': {
+                'client_id': 'cid',
+                'client_secret': 'secret',
+                'access_token': 'legacy-access',
+                'refresh_token': 'legacy-refresh',
+                'expires_at': 12345,
+            },
+        }
+
+        exported = config_service.ConfigService.export_config()
+
+        self.assertEqual(exported['integrations']['trakt'], {
+            'client_id': 'cid',
+            'client_secret': 'secret',
+        })
+        self.assertNotIn('TRAKT_ACCESS_TOKEN', exported['settings'])
+        self.assertNotIn('TRAKT_REFRESH_TOKEN', exported['settings'])
+        self.assertNotIn('TRAKT_EXPIRES_AT', exported['settings'])
+
+    def test_config_import_strips_trakt_account_tokens_before_writing_integration(self):
+        self._db_manager_cls.return_value.get_all_integrations.return_value = {}
+        self._db_manager_cls.return_value.refresh_config.return_value = None
+
+        config_service.ConfigService.import_config({
+            'version': config_service.CURRENT_VERSION,
+            'integrations': {
+                'trakt': {
+                    'client_id': 'cid',
+                    'client_secret': 'secret',
+                    'access_token': 'legacy-access',
+                    'refresh_token': 'legacy-refresh',
+                    'expires_at': 12345,
+                },
+            },
+            'settings': {},
+        })
+
+        self._db_manager_cls.return_value.set_integration.assert_called_once_with('trakt', {
+            'client_id': 'cid',
+            'client_secret': 'secret',
+        })
+
+    def test_config_import_log_redacts_secret_like_keys(self):
+        self._db_manager_cls.return_value.get_all_integrations.return_value = {}
+        self._db_manager_cls.return_value.refresh_config.return_value = None
+
+        with patch.object(config_service, 'logger') as logger:
+            config_service.ConfigService.import_config({
+                'version': config_service.CURRENT_VERSION,
+                'integrations': {
+                    'trakt': {
+                        'client_id': 'cid',
+                        'client_secret': 'secret',
+                    },
+                },
+                'settings': {},
+            })
+
+        info_calls = [
+            call for call in logger.info.call_args_list
+            if call.args and call.args[0] == "Importing integration '%s' %s"
+        ]
+        self.assertEqual(len(info_calls), 1)
+        safe_payload = info_calls[0].args[2]
+        self.assertEqual(safe_payload['client_id'], 'cid')
+        self.assertEqual(safe_payload['client_secret'], '***')
+
+    def test_config_status_exposes_trakt_app_configured_without_secret_values(self):
+        from api_service.blueprints.config.routes import config_bp
+        from flask import Flask
+
+        app = Flask(__name__)
+        app.register_blueprint(config_bp, url_prefix='/api/config')
+        db = MagicMock()
+        db.get_all_integrations.return_value = {
+            'trakt': {'client_id': 'cid', 'client_secret': 'secret'},
+        }
+
+        with patch('api_service.blueprints.config.routes.load_env_vars', return_value={
+            'TMDB_API_KEY': 'tmdb',
+            'SELECTED_SERVICE': 'trakt',
+            'DB_TYPE': 'sqlite',
+        }), patch('api_service.blueprints.config.routes.DatabaseManager', return_value=db):
+            response = app.test_client().get('/api/config/status')
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertTrue(body['trakt_app_configured'])
+        self.assertNotIn('TRAKT_CLIENT_ID', body)
+        self.assertNotIn('TRAKT_CLIENT_SECRET', body)
 
     def test_load_env_vars_cache_is_used_until_invalidated(self):
         self._db_manager_cls.return_value.get_all_integrations.return_value = {

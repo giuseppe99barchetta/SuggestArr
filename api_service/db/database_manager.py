@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional, List, Tuple, Set
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.database_exceptions import DatabaseError
+from api_service.services.integration_sanitizer import sanitize_integration_config
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 DB_PATH = os.path.join(BASE_DIR, 'config', 'config_files', 'requests.db')
@@ -29,6 +30,7 @@ _INTEGRATION_REQUIRED_FIELDS: Dict[str, List[str]] = {
     'seer':     ['api_url', 'api_key'],
     'tmdb':     ['api_key'],
     'omdb':     ['api_key'],
+    'trakt':    ['client_id', 'client_secret'],
     # OpenAI/LLM: no hard required fields - either api_key (cloud) or base_url (local) is sufficient.
     # An existing row (even empty) is considered valid to prevent overwriting user configuration.
     'openai':   [],
@@ -324,6 +326,61 @@ class DatabaseManager:
                     config_json TEXT NOT NULL,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
+            """,
+            'media_user_identities': """
+                CREATE TABLE IF NOT EXISTS media_user_identities (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    provider TEXT NOT NULL,
+                    external_user_id TEXT NOT NULL,
+                    external_username TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (provider, external_user_id)
+                )
+            """,
+            'trakt_account_links': """
+                CREATE TABLE IF NOT EXISTS trakt_account_links (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    media_user_identity_id INTEGER NOT NULL,
+                    trakt_user_id TEXT,
+                    trakt_username TEXT,
+                    token_source TEXT NOT NULL DEFAULT 'manual_oauth',
+                    status TEXT NOT NULL DEFAULT 'connected',
+                    last_synced_at TIMESTAMP,
+                    last_error TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
+                    UNIQUE (media_user_identity_id)
+                )
+            """,
+            'trakt_oauth_tokens': """
+                CREATE TABLE IF NOT EXISTS trakt_oauth_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    link_id INTEGER NOT NULL UNIQUE,
+                    access_token TEXT NOT NULL,
+                    refresh_token TEXT NOT NULL,
+                    expires_at BIGINT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (link_id) REFERENCES trakt_account_links(id) ON DELETE CASCADE
+                )
+            """,
+            'trakt_sources': """
+                CREATE TABLE IF NOT EXISTS trakt_sources (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    media_user_identity_id INTEGER NOT NULL,
+                    source_type TEXT NOT NULL,
+                    source_key TEXT NOT NULL,
+                    list_id TEXT,
+                    list_slug TEXT,
+                    username TEXT,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    use_as_seed INTEGER NOT NULL DEFAULT 1,
+                    use_as_exclusion INTEGER NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
+                    UNIQUE (media_user_identity_id, source_type, source_key)
+                )
             """
         }
         
@@ -333,59 +390,11 @@ class DatabaseManager:
                 with self.get_connection() as conn:
                     cursor = conn.cursor()
                     
-                    # Database-specific modifications
-                    if self.db_type in ['mysql', 'mariadb']:
-                        # Keep full VARCHAR storage but constrain indexed prefixes to stay
-                        # under InnoDB's key-length limit when using utf8mb4.
-                        if table_name == 'requests':
-                            query = query.replace(
-                                "UNIQUE(media_type, tmdb_request_id, tmdb_source_id),",
-                                "UNIQUE KEY uniq_requests_identity (media_type(191), tmdb_request_id(191), tmdb_source_id(191)),"
-                            )
-                        elif table_name == 'metadata':
-                            query = query.replace(
-                                "UNIQUE(media_id, media_type)",
-                                "UNIQUE KEY uniq_metadata_media_type (media_id(191), media_type(191))"
-                            )
-                        elif table_name == 'pending_requests':
-                            query = query.replace(
-                                "UNIQUE(tmdb_id, media_type)",
-                                "UNIQUE KEY uniq_pending_tmdb_media_type (tmdb_id(191), media_type(191))"
-                            )
-                        elif table_name == 'ai_search_seen':
-                            query = """
-                                CREATE TABLE IF NOT EXISTS ai_search_seen (
-                                    tmdb_id VARCHAR(64) NOT NULL,
-                                    media_type VARCHAR(16) NOT NULL,
-                                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                    PRIMARY KEY (tmdb_id, media_type)
-                                ) ENGINE=InnoDB
-                            """
-                        elif table_name == 'ai_search_feedback':
-                            query = """
-                                CREATE TABLE IF NOT EXISTS ai_search_feedback (
-                                    tmdb_id VARCHAR(64) NOT NULL,
-                                    media_type VARCHAR(16) NOT NULL,
-                                    feedback VARCHAR(16) NOT NULL,
-                                    title VARCHAR(512),
-                                    year INTEGER,
-                                    rationale VARCHAR(512),
-                                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                                    PRIMARY KEY (tmdb_id, media_type)
-                                ) ENGINE=InnoDB
-                            """
-
-                        # Order matters: do specific replacements first
-                        query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "INT AUTO_INCREMENT PRIMARY KEY")
-                        query = query.replace("INTEGER", "INT")
-                        query = query.replace("TEXT", "VARCHAR(512)")
-                        query = query.replace("REAL", "DOUBLE")
-                        # Add ENGINE=InnoDB for foreign key support
-                        if not query.strip().endswith("ENGINE=InnoDB"):
-                            query = query.rstrip().rstrip(")").rstrip() + ") ENGINE=InnoDB"
-                    elif self.db_type == 'postgres':
-                        query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
-                        query = query.replace("AUTOINCREMENT", "")
+                    query = self._prepare_create_table_query_for_db(
+                        table_name,
+                        query,
+                        self.db_type,
+                    )
 
                     self.logger.info(f"Creating table '{table_name}'...")
                     cursor.execute(query)
@@ -404,11 +413,92 @@ class DatabaseManager:
                     db_type=self.db_type
                 )
         
+        if self.db_type in ('mysql', 'mariadb'):
+            try:
+                corrections = [
+                    ("ALTER TABLE trakt_account_links MODIFY media_user_identity_id INTEGER NOT NULL", ()),
+                    ("ALTER TABLE trakt_account_links MODIFY token_source TEXT NOT NULL", ()),
+                    ("ALTER TABLE trakt_account_links MODIFY last_error TEXT", ()),
+                    ("ALTER TABLE trakt_oauth_tokens MODIFY access_token TEXT NOT NULL", ()),
+                    ("ALTER TABLE trakt_oauth_tokens MODIFY refresh_token TEXT NOT NULL", ()),
+                    ("ALTER TABLE trakt_sources MODIFY media_user_identity_id INTEGER NOT NULL", ()),
+                ]
+                with self.get_connection() as conn:
+                    cursor = conn.cursor()
+                    for stmt, params in corrections:
+                        cursor.execute(stmt, params)
+                    conn.commit()
+                self.logger.debug("Applied MySQL column type corrections for new tables")
+            except Exception as e:
+                self.logger.error(f"Failed to apply MySQL column corrections: {e}")
+                raise DatabaseError(
+                    error=f"MySQL column correction failed: {str(e)}",
+                    db_type=self.db_type
+                )
+
         # Add missing columns
         self.add_missing_columns()
 
         # Create submission lock table (separate to control column types per DB engine)
         self._create_submission_locks_table()
+
+    def _prepare_create_table_query_for_db(self, table_name: str, query: str, db_type: str) -> str:
+        """Apply database-specific DDL rewrites for a table creation query."""
+        if db_type in ['mysql', 'mariadb']:
+            # Keep full VARCHAR storage but constrain indexed prefixes to stay
+            # under InnoDB's key-length limit when using utf8mb4.
+            if table_name == 'requests':
+                query = query.replace(
+                    "UNIQUE(media_type, tmdb_request_id, tmdb_source_id),",
+                    "UNIQUE KEY uniq_requests_identity (media_type(191), tmdb_request_id(191), tmdb_source_id(191)),"
+                )
+            elif table_name == 'metadata':
+                query = query.replace(
+                    "UNIQUE(media_id, media_type)",
+                    "UNIQUE KEY uniq_metadata_media_type (media_id(191), media_type(191))"
+                )
+            elif table_name == 'pending_requests':
+                query = query.replace(
+                    "UNIQUE(tmdb_id, media_type)",
+                    "UNIQUE KEY uniq_pending_tmdb_media_type (tmdb_id(191), media_type(191))"
+                )
+            elif table_name == 'ai_search_seen':
+                query = """
+                    CREATE TABLE IF NOT EXISTS ai_search_seen (
+                        tmdb_id VARCHAR(64) NOT NULL,
+                        media_type VARCHAR(16) NOT NULL,
+                        last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (tmdb_id, media_type)
+                    ) ENGINE=InnoDB
+                """
+            elif table_name == 'ai_search_feedback':
+                query = """
+                    CREATE TABLE IF NOT EXISTS ai_search_feedback (
+                        tmdb_id VARCHAR(64) NOT NULL,
+                        media_type VARCHAR(16) NOT NULL,
+                        feedback VARCHAR(16) NOT NULL,
+                        title VARCHAR(512),
+                        year INTEGER,
+                        rationale VARCHAR(512),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (tmdb_id, media_type)
+                    ) ENGINE=InnoDB
+                """
+
+            # Order matters: do specific replacements first.
+            query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "INT AUTO_INCREMENT PRIMARY KEY")
+            query = query.replace("INTEGER", "INT")
+            query = query.replace("TEXT", "VARCHAR(512)")
+            query = query.replace("REAL", "DOUBLE")
+
+            # Add ENGINE=InnoDB for foreign key support.
+            if not query.strip().endswith("ENGINE=InnoDB"):
+                query = query.rstrip().rstrip(")").rstrip() + ") ENGINE=InnoDB"
+        elif db_type == 'postgres':
+            query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+            query = query.replace("AUTOINCREMENT", "")
+
+        return query
 
     def _create_submission_locks_table(self):
         """Create the submission_locks table for cross-process submission deduplication."""
@@ -692,7 +782,7 @@ class DatabaseManager:
             row = cursor.fetchone()
         if row is None:
             return None
-        return json.loads(row[0])
+        return self._sanitize_integration_config(service, json.loads(row[0]))
 
     def get_all_integrations(self) -> dict:
         """
@@ -706,7 +796,10 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute(query)
             rows = cursor.fetchall()
-        return {row[0]: json.loads(row[1]) for row in rows}
+        return {
+            row[0]: self._sanitize_integration_config(row[0], json.loads(row[1]))
+            for row in rows
+        }
 
     def set_integration(self, service: str, config: dict) -> None:
         """
@@ -716,6 +809,7 @@ class DatabaseManager:
             service: Integration service name.
             config: Configuration dict to persist as JSON.
         """
+        config = self._sanitize_integration_config(service, config)
         config_json = json.dumps(config)
         now = datetime.now(timezone.utc)
 
@@ -762,6 +856,17 @@ class DatabaseManager:
         required = _INTEGRATION_REQUIRED_FIELDS.get(service, [])
         return all(config.get(field) for field in required)
 
+    @staticmethod
+    def _sanitize_integration_config(service: str, config: dict) -> dict:
+        """Return an integration config safe for generic integrations storage.
+
+        Thin delegator to the shared public helper
+        :func:`api_service.services.integration_sanitizer.sanitize_integration_config`
+        so the allow-listing logic lives in a single place. Retained as a
+        backward-compatible alias for existing call sites/tests.
+        """
+        return sanitize_integration_config(service, config)
+
     def migrate_integrations_from_config(self) -> None:
         """
         Startup migration: seed or repair the integrations table from config.yaml.
@@ -790,6 +895,10 @@ class DatabaseManager:
             'omdb': {
                 'api_key': env_vars.get('OMDB_API_KEY', ''),
             },
+            'trakt': {
+                'client_id': env_vars.get('TRAKT_CLIENT_ID', ''),
+                'client_secret': env_vars.get('TRAKT_CLIENT_SECRET', ''),
+            },
         }
 
         # AI provider: only seed the DB when YAML already has a key or base_url configured.
@@ -805,6 +914,9 @@ class DatabaseManager:
 
         for service, config in candidates.items():
             existing = self.get_integration(service)
+
+            if service == 'trakt' and existing is not None:
+                self.set_integration(service, existing)
 
             if existing is not None and self._is_integration_valid(service, existing):
                 self.logger.debug(
@@ -822,7 +934,9 @@ class DatabaseManager:
                 continue
 
             action = "Updating" if existing is not None else "Migrating"
-            safe_log = {k: v for k, v in config.items() if k not in ('api_key', 'session_token')}
+            safe_log = {k: v for k, v in config.items() if k not in (
+                'api_key', 'session_token', 'client_secret', 'access_token', 'refresh_token'
+            )}
             self.logger.info(
                 "%s '%s' credentials from config.yaml -> integrations table %s",
                 action, service, safe_log,
@@ -2418,6 +2532,403 @@ class DatabaseManager:
     # ---------------------------------------------------------------------------
     # User media profile methods
     # ---------------------------------------------------------------------------
+
+    @staticmethod
+    def _coerce_trakt_expires_at(expires_at: Any) -> Any:
+        """Normalize datetime expiry values while leaving epoch values intact."""
+        if isinstance(expires_at, datetime):
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            return int(expires_at.astimezone(timezone.utc).timestamp())
+        return expires_at
+
+    # ---- media_user_identities ------------------------------------------------
+    # A media-server user is identified by (provider, external_user_id); the
+    # identity row is the anchor that Trakt account links and sources hang off.
+
+    def upsert_media_user_identity(
+        self, provider: str, external_user_id: str, external_username: Optional[str] = None
+    ) -> Dict[str, Any]:
+        ph = self._ph()
+        provider = str(provider).lower()
+        external_user_id = str(external_user_id)
+        if self.db_type == 'sqlite':
+            query = (
+                f"INSERT INTO media_user_identities (provider, external_user_id, external_username) "
+                f"VALUES ({ph}, {ph}, {ph}) "
+                f"ON CONFLICT(provider, external_user_id) DO UPDATE SET "
+                f"external_username = COALESCE(excluded.external_username, media_user_identities.external_username)"
+            )
+        elif self.db_type == 'postgres':
+            query = (
+                f"INSERT INTO media_user_identities (provider, external_user_id, external_username) "
+                f"VALUES ({ph}, {ph}, {ph}) "
+                f"ON CONFLICT (provider, external_user_id) DO UPDATE SET "
+                f"external_username = COALESCE(EXCLUDED.external_username, media_user_identities.external_username)"
+            )
+        else:
+            query = (
+                f"INSERT INTO media_user_identities (provider, external_user_id, external_username) "
+                f"VALUES ({ph}, {ph}, {ph}) "
+                f"ON DUPLICATE KEY UPDATE "
+                f"external_username = COALESCE(VALUES(external_username), external_username)"
+            )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (provider, external_user_id, external_username))
+            conn.commit()
+        return self.get_media_user_identity(provider, external_user_id)
+
+    def get_media_user_identity(self, provider: str, external_user_id: str) -> Dict[str, Any]:
+        ph = self._ph()
+        query = (
+            f"SELECT id, provider, external_user_id, external_username, created_at "
+            f"FROM media_user_identities WHERE provider = {ph} AND external_user_id = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (provider.lower(), str(external_user_id)))
+            row = cursor.fetchone()
+        if row is None:
+            raise ValueError(f"Media user identity not found: {provider}/{external_user_id}")
+        return {"id": row[0], "provider": row[1], "external_user_id": row[2],
+                "external_username": row[3], "created_at": row[4]}
+
+    def get_media_user_identity_by_id(self, identity_id: int) -> Optional[Dict[str, Any]]:
+        ph = self._ph()
+        query = (
+            f"SELECT id, provider, external_user_id, external_username, created_at "
+            f"FROM media_user_identities WHERE id = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (identity_id,))
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return {"id": row[0], "provider": row[1], "external_user_id": row[2],
+                "external_username": row[3], "created_at": row[4]}
+
+    # ---- trakt_account_links --------------------------------------------------
+
+    def upsert_trakt_account_link(
+        self,
+        media_user_identity_id: int,
+        trakt_user_id: Optional[str],
+        trakt_username: Optional[str],
+        token_source: str = "manual_oauth",
+        status: str = "connected",
+    ) -> int:
+        ph = self._ph()
+        columns = (
+            "(media_user_identity_id, trakt_user_id, trakt_username, token_source, "
+            "status, updated_at)"
+        )
+        values = f"({ph}, {ph}, {ph}, {ph}, {ph}, CURRENT_TIMESTAMP)"
+        if self.db_type == 'sqlite':
+            query = (
+                f"INSERT INTO trakt_account_links {columns} VALUES {values} "
+                f"ON CONFLICT(media_user_identity_id) DO UPDATE SET "
+                f"trakt_user_id = excluded.trakt_user_id, "
+                f"trakt_username = excluded.trakt_username, "
+                f"token_source = excluded.token_source, "
+                f"status = excluded.status, "
+                f"last_error = NULL, "
+                f"updated_at = CURRENT_TIMESTAMP"
+            )
+        elif self.db_type == 'postgres':
+            query = (
+                f"INSERT INTO trakt_account_links {columns} VALUES {values} "
+                f"ON CONFLICT (media_user_identity_id) DO UPDATE SET "
+                f"trakt_user_id = EXCLUDED.trakt_user_id, "
+                f"trakt_username = EXCLUDED.trakt_username, "
+                f"token_source = EXCLUDED.token_source, "
+                f"status = EXCLUDED.status, "
+                f"last_error = NULL, "
+                f"updated_at = CURRENT_TIMESTAMP"
+            )
+        else:
+            query = (
+                f"INSERT INTO trakt_account_links {columns} VALUES {values} "
+                f"ON DUPLICATE KEY UPDATE "
+                f"trakt_user_id = VALUES(trakt_user_id), "
+                f"trakt_username = VALUES(trakt_username), "
+                f"token_source = VALUES(token_source), "
+                f"status = VALUES(status), "
+                f"last_error = NULL, "
+                f"updated_at = CURRENT_TIMESTAMP"
+            )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (
+                media_user_identity_id, trakt_user_id, trakt_username, token_source, status,
+            ))
+            conn.commit()
+            # Re-SELECT the id rather than trusting cursor.lastrowid: on the
+            # ON CONFLICT DO UPDATE (re-link) path no row is inserted, so
+            # lastrowid is 0 on a fresh SQLite connection, which would break the
+            # foreign-keyed token upsert that follows.
+            cursor.execute(
+                f"SELECT id FROM trakt_account_links WHERE media_user_identity_id = {ph}",
+                (media_user_identity_id,),
+            )
+            return cursor.fetchone()[0]
+
+    def _row_to_trakt_link(self, row) -> Dict[str, Any]:
+        status = row[5] or "connected"
+        return {
+            "id": row[0], "media_user_identity_id": row[1], "trakt_user_id": row[2],
+            "trakt_username": row[3], "token_source": row[4], "status": status,
+            "last_synced_at": row[6], "last_error": row[7],
+            "created_at": row[8], "updated_at": row[9],
+            "connected": status == "connected",
+        }
+
+    _TRAKT_LINK_COLUMNS = (
+        "id, media_user_identity_id, trakt_user_id, trakt_username, token_source, "
+        "status, last_synced_at, last_error, created_at, updated_at"
+    )
+
+    def get_trakt_account_link(self, media_user_identity_id: int) -> Optional[Dict[str, Any]]:
+        ph = self._ph()
+        query = (
+            f"SELECT {self._TRAKT_LINK_COLUMNS} FROM trakt_account_links "
+            f"WHERE media_user_identity_id = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (media_user_identity_id,))
+            row = cursor.fetchone()
+        return self._row_to_trakt_link(row) if row else None
+
+    def get_trakt_account_link_by_id(self, link_id: int) -> Optional[Dict[str, Any]]:
+        ph = self._ph()
+        query = f"SELECT {self._TRAKT_LINK_COLUMNS} FROM trakt_account_links WHERE id = {ph}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (link_id,))
+            row = cursor.fetchone()
+        return self._row_to_trakt_link(row) if row else None
+
+    def mark_trakt_account_link_error(
+        self, media_user_identity_id: int, status: str, last_error: Optional[str]
+    ) -> bool:
+        ph = self._ph()
+        query = (
+            f"UPDATE trakt_account_links SET status = {ph}, last_error = {ph}, "
+            f"updated_at = CURRENT_TIMESTAMP WHERE media_user_identity_id = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (status, last_error, media_user_identity_id))
+            updated = cursor.rowcount
+            conn.commit()
+        return updated > 0
+
+    def unlink_trakt_account(self, media_user_identity_id: int) -> bool:
+        ph = self._ph()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            # Explicitly remove dependent OAuth tokens first. The FK declares
+            # ON DELETE CASCADE, but we do not rely on runtime FK enforcement
+            # (PRAGMA foreign_keys) being on, so clean up the child rows here.
+            cursor.execute(
+                f"DELETE FROM trakt_oauth_tokens WHERE link_id IN "
+                f"(SELECT id FROM trakt_account_links WHERE media_user_identity_id = {ph})",
+                (media_user_identity_id,),
+            )
+            cursor.execute(
+                f"DELETE FROM trakt_account_links WHERE media_user_identity_id = {ph}",
+                (media_user_identity_id,),
+            )
+            deleted = cursor.rowcount
+            conn.commit()
+        return deleted > 0
+
+    def get_all_trakt_account_link_statuses(self) -> List[Dict[str, Any]]:
+        query = f"SELECT {self._TRAKT_LINK_COLUMNS} FROM trakt_account_links"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        return [self._row_to_trakt_link(row) for row in rows]
+
+    # ---- trakt_oauth_tokens ---------------------------------------------------
+
+    def upsert_trakt_oauth_tokens(
+        self, link_id: int, access_token: str, refresh_token: str, expires_at: Any
+    ) -> None:
+        ph = self._ph()
+        expires_at = self._coerce_trakt_expires_at(expires_at)
+        columns = "(link_id, access_token, refresh_token, expires_at, updated_at)"
+        values = f"({ph}, {ph}, {ph}, {ph}, CURRENT_TIMESTAMP)"
+        if self.db_type == 'sqlite':
+            query = (
+                f"INSERT INTO trakt_oauth_tokens {columns} VALUES {values} "
+                f"ON CONFLICT(link_id) DO UPDATE SET "
+                f"access_token = excluded.access_token, "
+                f"refresh_token = excluded.refresh_token, "
+                f"expires_at = excluded.expires_at, "
+                f"updated_at = CURRENT_TIMESTAMP"
+            )
+        elif self.db_type == 'postgres':
+            query = (
+                f"INSERT INTO trakt_oauth_tokens {columns} VALUES {values} "
+                f"ON CONFLICT (link_id) DO UPDATE SET "
+                f"access_token = EXCLUDED.access_token, "
+                f"refresh_token = EXCLUDED.refresh_token, "
+                f"expires_at = EXCLUDED.expires_at, "
+                f"updated_at = CURRENT_TIMESTAMP"
+            )
+        else:
+            query = (
+                f"INSERT INTO trakt_oauth_tokens {columns} VALUES {values} "
+                f"ON DUPLICATE KEY UPDATE "
+                f"access_token = VALUES(access_token), "
+                f"refresh_token = VALUES(refresh_token), "
+                f"expires_at = VALUES(expires_at), "
+                f"updated_at = CURRENT_TIMESTAMP"
+            )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (link_id, access_token, refresh_token, expires_at))
+            conn.commit()
+
+    def get_trakt_oauth_tokens(self, link_id: int) -> Optional[Dict[str, Any]]:
+        ph = self._ph()
+        query = (
+            f"SELECT access_token, refresh_token, expires_at "
+            f"FROM trakt_oauth_tokens WHERE link_id = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (link_id,))
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return {"access_token": row[0], "refresh_token": row[1], "expires_at": row[2]}
+
+    def update_trakt_oauth_tokens(
+        self, link_id: int, access_token: str, refresh_token: str, expires_at: Any
+    ) -> bool:
+        ph = self._ph()
+        expires_at = self._coerce_trakt_expires_at(expires_at)
+        query = (
+            f"UPDATE trakt_oauth_tokens SET access_token = {ph}, refresh_token = {ph}, "
+            f"expires_at = {ph}, updated_at = CURRENT_TIMESTAMP WHERE link_id = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (access_token, refresh_token, expires_at, link_id))
+            updated = cursor.rowcount
+            conn.commit()
+        return updated > 0
+
+    def delete_trakt_oauth_tokens(self, link_id: int) -> bool:
+        ph = self._ph()
+        query = f"DELETE FROM trakt_oauth_tokens WHERE link_id = {ph}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (link_id,))
+            deleted = cursor.rowcount
+            conn.commit()
+        return deleted > 0
+
+    # ---- trakt_sources --------------------------------------------------------
+
+    def upsert_trakt_source(
+        self,
+        media_user_identity_id: int,
+        source_type: str,
+        source_key: str,
+        enabled: bool = True,
+        use_as_seed: bool = True,
+        use_as_exclusion: bool = True,
+        **kwargs,
+    ) -> None:
+        ph = self._ph()
+        list_id = kwargs.get("list_id")
+        list_slug = kwargs.get("list_slug")
+        username = kwargs.get("username")
+        columns = (
+            "(media_user_identity_id, source_type, source_key, list_id, list_slug, username, "
+            "enabled, use_as_seed, use_as_exclusion, updated_at)"
+        )
+        values = f"({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, CURRENT_TIMESTAMP)"
+        if self.db_type == 'sqlite':
+            query = (
+                f"INSERT INTO trakt_sources {columns} VALUES {values} "
+                f"ON CONFLICT(media_user_identity_id, source_type, source_key) DO UPDATE SET "
+                f"list_id = excluded.list_id, list_slug = excluded.list_slug, "
+                f"username = excluded.username, enabled = excluded.enabled, "
+                f"use_as_seed = excluded.use_as_seed, "
+                f"use_as_exclusion = excluded.use_as_exclusion, "
+                f"updated_at = CURRENT_TIMESTAMP"
+            )
+        elif self.db_type == 'postgres':
+            query = (
+                f"INSERT INTO trakt_sources {columns} VALUES {values} "
+                f"ON CONFLICT (media_user_identity_id, source_type, source_key) DO UPDATE SET "
+                f"list_id = EXCLUDED.list_id, list_slug = EXCLUDED.list_slug, "
+                f"username = EXCLUDED.username, enabled = EXCLUDED.enabled, "
+                f"use_as_seed = EXCLUDED.use_as_seed, "
+                f"use_as_exclusion = EXCLUDED.use_as_exclusion, "
+                f"updated_at = CURRENT_TIMESTAMP"
+            )
+        else:
+            query = (
+                f"INSERT INTO trakt_sources {columns} VALUES {values} "
+                f"ON DUPLICATE KEY UPDATE "
+                f"list_id = VALUES(list_id), list_slug = VALUES(list_slug), "
+                f"username = VALUES(username), enabled = VALUES(enabled), "
+                f"use_as_seed = VALUES(use_as_seed), "
+                f"use_as_exclusion = VALUES(use_as_exclusion), "
+                f"updated_at = CURRENT_TIMESTAMP"
+            )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (
+                media_user_identity_id, source_type, source_key, list_id, list_slug, username,
+                int(enabled), int(use_as_seed), int(use_as_exclusion),
+            ))
+            conn.commit()
+
+    def _row_to_trakt_source(self, r) -> Dict[str, Any]:
+        return {
+            "id": r[0], "media_user_identity_id": r[1], "source_type": r[2], "source_key": r[3],
+            "list_id": r[4], "list_slug": r[5], "username": r[6],
+            "enabled": bool(r[7]), "use_as_seed": bool(r[8]), "use_as_exclusion": bool(r[9]),
+            "created_at": r[10], "updated_at": r[11],
+        }
+
+    _TRAKT_SOURCE_COLUMNS = (
+        "id, media_user_identity_id, source_type, source_key, list_id, list_slug, "
+        "username, enabled, use_as_seed, use_as_exclusion, created_at, updated_at"
+    )
+
+    def get_trakt_sources(self, media_user_identity_id: int) -> List[Dict[str, Any]]:
+        ph = self._ph()
+        query = (
+            f"SELECT {self._TRAKT_SOURCE_COLUMNS} FROM trakt_sources "
+            f"WHERE media_user_identity_id = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (media_user_identity_id,))
+            rows = cursor.fetchall()
+        return [self._row_to_trakt_source(r) for r in rows]
+
+    def get_enabled_trakt_sources(self, media_user_identity_id: int) -> List[Dict[str, Any]]:
+        ph = self._ph()
+        query = (
+            f"SELECT {self._TRAKT_SOURCE_COLUMNS} FROM trakt_sources "
+            f"WHERE media_user_identity_id = {ph} AND enabled = 1"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (media_user_identity_id,))
+            rows = cursor.fetchall()
+        return [self._row_to_trakt_source(r) for r in rows]
 
     def create_user_media_profile(
         self,

@@ -91,7 +91,7 @@
             </button>
 
             <button
-              :disabled="!!isSaving[user.id] || !selectedService"
+              :disabled="!!isSaving[user.id] || !supportsUserLinks"
               class="btn btn-outline btn-sm icon-btn"
               title="Assign media account"
               @click="openMediaLinkModal(user)"
@@ -519,6 +519,9 @@ export default {
     selectedService() {
       return (this.config?.SELECTED_SERVICE || '').toLowerCase();
     },
+    supportsUserLinks() {
+      return ['jellyfin', 'emby', 'plex'].includes(this.selectedService);
+    },
     providerLabel() {
       const labels = { plex: 'Plex', jellyfin: 'Jellyfin', emby: 'Emby' };
       return labels[this.selectedService] || 'media';
@@ -707,6 +710,7 @@ export default {
     },
 
     async openMediaLinkModal(user) {
+      if (!this.supportsUserLinks) return;
       this.mediaLinkTarget = user;
       this.mediaUsers = [];
       this.selectedMediaUserId = '';
@@ -716,7 +720,7 @@ export default {
     },
 
     async loadMediaUsers() {
-      if (!['plex', 'jellyfin', 'emby'].includes(this.selectedService)) {
+      if (!this.supportsUserLinks) {
         this.mediaLinkError = 'No supported media service configured';
         return;
       }

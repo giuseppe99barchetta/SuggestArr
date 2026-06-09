@@ -1,0 +1,1 @@
+"""Trakt service client package."""
