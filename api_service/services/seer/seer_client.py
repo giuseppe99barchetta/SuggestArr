@@ -7,6 +7,7 @@ from api_service.db.database_manager import DatabaseManager
 
 BATCH_SIZE = 20  # Number of requests fetched per batch
 HTTP_OK = {200, 201, 202}  # Include 202 Accepted for async operations
+PENDING_REQUEST_STATUSES = {1, "1", "pending", "PENDING"}
 
 
 def _as_bool(value):
@@ -204,6 +205,26 @@ class SeerClient(BaseHTTPClient):
         total = data.get('total', 0) if data else 0
         self.logger.debug("Total requests count: %d", total)
         return total
+
+    @staticmethod
+    def _is_pending_request(request_data):
+        """Return True when a Seer request still awaits approve/deny."""
+        status = request_data.get('status') if isinstance(request_data, dict) else None
+        return status in PENDING_REQUEST_STATUSES
+
+    async def has_pending_requests(self) -> bool:
+        """Check Seer for any request still pending approval/denial."""
+        self.logger.debug("Checking Seer for pending requests...")
+        total_requests = await self.get_total_request()
+        for skip in range(0, total_requests, BATCH_SIZE):
+            data = await self._make_request("GET", f"api/v1/request?take={BATCH_SIZE}&skip={skip}")
+            if not data:
+                continue
+            for request_data in data.get('results', []):
+                if self._is_pending_request(request_data):
+                    self.logger.info("Found pending Seer request; job should pause.")
+                    return True
+        return False
 
     async def get_radarr_servers(self):
         """Fetch available Radarr servers from the Seer service with their profiles, root folders, and tags."""

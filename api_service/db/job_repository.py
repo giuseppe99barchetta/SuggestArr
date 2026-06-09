@@ -29,7 +29,8 @@ class JobRepository:
 
         query = """
             SELECT id, name, job_type, enabled, media_type, filters, schedule_type,
-                   schedule_value, max_results, user_ids, is_system, owner_id, created_at, updated_at
+                   schedule_value, max_results, user_ids, is_system, owner_id,
+                   pause_if_pending_requests, created_at, updated_at
             FROM discover_jobs
             ORDER BY is_system DESC, created_at DESC
         """
@@ -60,7 +61,8 @@ class JobRepository:
 
         query = """
             SELECT id, name, job_type, enabled, media_type, filters, schedule_type,
-                   schedule_value, max_results, user_ids, is_system, owner_id, created_at, updated_at
+                   schedule_value, max_results, user_ids, is_system, owner_id,
+                   pause_if_pending_requests, created_at, updated_at
             FROM discover_jobs
             WHERE id = ?
         """
@@ -90,7 +92,8 @@ class JobRepository:
 
         query = """
             SELECT id, name, job_type, enabled, media_type, filters, schedule_type,
-                   schedule_value, max_results, user_ids, is_system, owner_id, created_at, updated_at
+                   schedule_value, max_results, user_ids, is_system, owner_id,
+                   pause_if_pending_requests, created_at, updated_at
             FROM discover_jobs
             WHERE enabled = 1
             ORDER BY is_system DESC, created_at DESC
@@ -137,11 +140,13 @@ class JobRepository:
         user_ids = json.dumps(job_data.get('user_ids', [])) if job_data.get('user_ids') else None
         is_system = 1 if job_data.get('is_system', False) else 0
         owner_id = job_data.get('owner_id')
+        pause_if_pending_requests = 1 if job_data.get('pause_if_pending_requests', False) else 0
 
         query = """
             INSERT INTO discover_jobs (name, job_type, enabled, media_type, filters,
-                                       schedule_type, schedule_value, max_results, user_ids, is_system, owner_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                       schedule_type, schedule_value, max_results, user_ids,
+                                       is_system, owner_id, pause_if_pending_requests)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = (
             job_data['name'],
@@ -154,7 +159,8 @@ class JobRepository:
             max_results,
             user_ids,
             is_system,
-            owner_id
+            owner_id,
+            pause_if_pending_requests
         )
 
         with self.db.get_connection() as conn:
@@ -230,6 +236,10 @@ class JobRepository:
         if 'user_ids' in job_data:
             update_fields.append("user_ids = ?")
             params.append(json.dumps(job_data['user_ids']) if job_data['user_ids'] else None)
+
+        if 'pause_if_pending_requests' in job_data:
+            update_fields.append("pause_if_pending_requests = ?")
+            params.append(1 if job_data['pause_if_pending_requests'] else 0)
 
         if not update_fields:
             self.logger.warning("No fields to update for job ID: %d", job_id)
@@ -455,7 +465,8 @@ class JobRepository:
         else:
             # Plain tuple - order matches SELECT query:
             # id, name, job_type, enabled, media_type, filters, schedule_type,
-            # schedule_value, max_results, user_ids, is_system, owner_id, created_at, updated_at
+            # schedule_value, max_results, user_ids, is_system, owner_id,
+            # pause_if_pending_requests, created_at, updated_at
             data = {
                 'id': row[0],
                 'name': row[1],
@@ -469,8 +480,9 @@ class JobRepository:
                 'user_ids': row[9],
                 'is_system': row[10],
                 'owner_id': row[11] if len(row) > 11 else None,
-                'created_at': row[12] if len(row) > 12 else row[11],
-                'updated_at': row[13] if len(row) > 13 else row[12]
+                'pause_if_pending_requests': row[12] if len(row) > 12 else 0,
+                'created_at': row[13] if len(row) > 13 else row[12],
+                'updated_at': row[14] if len(row) > 14 else row[13]
             }
 
         # Parse filters JSON
@@ -495,6 +507,9 @@ class JobRepository:
         # Convert is_system to boolean
         data['is_system'] = bool(data.get('is_system', 0))
 
+        # Convert pause_if_pending_requests to boolean
+        data['pause_if_pending_requests'] = bool(data.get('pause_if_pending_requests', 0))
+
         # Default job_type to 'discover' if not set
         if not data.get('job_type'):
             data['job_type'] = 'discover'
@@ -512,7 +527,8 @@ class JobRepository:
 
         query = """
             SELECT id, name, job_type, enabled, media_type, filters, schedule_type,
-                   schedule_value, max_results, user_ids, is_system, created_at, updated_at
+                   schedule_value, max_results, user_ids, is_system, owner_id,
+                   pause_if_pending_requests, created_at, updated_at
             FROM discover_jobs
             WHERE is_system = 1
             LIMIT 1

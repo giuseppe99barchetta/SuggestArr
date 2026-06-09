@@ -179,8 +179,8 @@ AI Search requires an LLM to be configured (same setup as AI-Powered Recommendat
 
 ---
 
-## Running Without Docker
-For detailed instructions on setting up SuggestArr withouth Docker or as a system service, please refer to our [Installation Guide](https://github.com/giuseppe99barchetta/SuggestArr/wiki/Installation#documentation-to-run-the-project-without-docker).
+## Installation
+For Docker, Unraid, source install, reverse proxy, backup, and recommended configuration instructions, see the [Installation Guide](/docs/INSTALLATION.md).
 
 ## Join Our Discord Community
 Feel free to join our Discord community to share ideas, ask questions, or get help with SuggestArr: [Join here](https://discord.gg/JXwFd3PnXY).

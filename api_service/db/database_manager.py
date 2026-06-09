@@ -239,6 +239,7 @@ class DatabaseManager:
                     max_results INTEGER DEFAULT 20,
                     user_ids TEXT,
                     owner_id INTEGER,
+                    pause_if_pending_requests INTEGER DEFAULT 0,
                     is_system INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -664,6 +665,17 @@ class DatabaseManager:
                             self.logger.info(f"Set default owner_id to admin (ID: {admin_id}) for existing jobs")
                     except Exception as e:
                         self.logger.warning(f"Could not set default owner_id: {e}")
+
+                # Add missing pause_if_pending_requests column
+                if 'pause_if_pending_requests' not in existing_columns:
+                    self.logger.info("Adding column pause_if_pending_requests to discover_jobs...")
+                    if self.db_type in ['mysql', 'mariadb']:
+                        cursor.execute("ALTER TABLE discover_jobs ADD COLUMN pause_if_pending_requests TINYINT(1) DEFAULT 0;")
+                    elif self.db_type == 'postgres':
+                        cursor.execute("ALTER TABLE discover_jobs ADD COLUMN pause_if_pending_requests SMALLINT DEFAULT 0;")
+                    else:
+                        cursor.execute("ALTER TABLE discover_jobs ADD COLUMN pause_if_pending_requests INTEGER DEFAULT 0;")
+                    conn.commit()
 
             except Exception as e:
                 self.logger.error(f"Failed to migrate discover_jobs table: {e}")
