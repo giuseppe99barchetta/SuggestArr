@@ -70,7 +70,7 @@
           <i class="fas fa-key"></i>
           Enter <strong>{{ traktUserCode }}</strong> at
           <a :href="traktVerificationUrl" target="_blank" rel="noopener noreferrer" class="link">{{ traktVerificationUrl }}</a>
-          <p v-if="traktPopupBlocked" class="list-empty" style="margin-top: 0.75rem;">
+          <p v-if="traktPopupBlocked" class="list-empty popup-blocked-hint">
             <i class="fas fa-exclamation-circle"></i>
             Pop-up blocked. Open the link above manually to authorize.
           </p>
@@ -424,6 +424,10 @@ export default {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.popup-blocked-hint {
+  margin-top: 0.75rem;
 }
 
 @media (max-width: 768px) {
