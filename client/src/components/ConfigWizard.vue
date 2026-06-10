@@ -330,6 +330,14 @@ export default {
           optional: false,
         },
         {
+          id: 'trakt',
+          label: 'Trakt',
+          description: 'Augment recommendations with your Trakt watch history.',
+          component: SettingsServices,
+          wizardSection: 'trakt',
+          optional: true,
+        },
+        {
           id: 'scheduling',
           label: 'Schedule',
           description: 'Set how often SuggestArr automatically finds and requests content for you.',
@@ -378,7 +386,9 @@ export default {
       const step = currentStep.value;
       if (step.id === 'service') {
         if (!config.value.SELECTED_SERVICE) return 'Select a media service above to continue.';
-        if (!stepValidity.value['media-server']) return 'Connect your media server to continue.';
+        if (!stepValidity.value['media-server']) {
+            return 'Connect your media server to continue.';
+          }
       }
       if (step.id === 'tmdb') return 'Test your TMDB connection above to continue.';
       if (step.id === 'seer') return 'Test your Seer connection above to continue.';
@@ -527,10 +537,9 @@ export default {
           stepValidity.value['media-server'] = true;
         } else if ((svc === 'jellyfin' || svc === 'emby') && cfg.JELLYFIN_API_URL && cfg.JELLYFIN_TOKEN) {
           stepValidity.value['media-server'] = true;
-        } else if (svc === 'trakt' && cfg.TRAKT_ACCESS_TOKEN) {
-          stepValidity.value['media-server'] = true;
         }
       }
+      if (cfg.TRAKT_CLIENT_ID && cfg.TRAKT_CLIENT_SECRET) stepValidity.value.trakt = true;
     }
 
     async function handleFileImport(event) {

@@ -20,6 +20,7 @@ INTEGRATION_TO_FLAT: dict = {
                  'session_token': 'SEER_SESSION_TOKEN'},
     'omdb':     {'api_key': 'OMDB_API_KEY'},
     'openai':   {'api_key': 'OPENAI_API_KEY', 'base_url': 'OPENAI_BASE_URL', 'model': 'LLM_MODEL'},
+    'trakt':    {'client_id': 'TRAKT_CLIENT_ID', 'client_secret': 'TRAKT_CLIENT_SECRET'},
 }
 
 _CONFIG_CACHE_LOCK = threading.Lock()
@@ -214,6 +215,11 @@ def get_default_values():
         'OPENAI_API_KEY': lambda: '',
         'OPENAI_BASE_URL': lambda: '',
         'LLM_MODEL': lambda: 'gpt-4o-mini',
+        'TRAKT_CLIENT_ID': lambda: '',
+        'TRAKT_CLIENT_SECRET': lambda: '',
+        'TRAKT_ACCESS_TOKEN': lambda: '',
+        'TRAKT_REFRESH_TOKEN': lambda: '',
+        'TRAKT_EXPIRES_AT': lambda: None,
         'CACHE_TTL': lambda: 24,
         'MAX_CACHE_SIZE': lambda: 100,
         'API_TIMEOUT': lambda: 30,
@@ -318,6 +324,8 @@ def get_config_sections():
                     'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
                     'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_USER_PSW',
                     'SEER_SESSION_TOKEN', 'SEER_ANIME_PROFILE_CONFIG', 'SEER_REQUEST_DELAY',
+                    'TRAKT_CLIENT_ID', 'TRAKT_CLIENT_SECRET', 'TRAKT_ACCESS_TOKEN',
+                    'TRAKT_REFRESH_TOKEN', 'TRAKT_EXPIRES_AT',
                     'SELECTED_USERS'],
         'database': ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
                     'DB_MIN_CONNECTIONS', 'DB_MAX_CONNECTIONS', 'DB_MAX_IDLE_TIME', 

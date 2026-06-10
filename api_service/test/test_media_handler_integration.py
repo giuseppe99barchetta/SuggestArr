@@ -220,9 +220,18 @@ class FakePlexClient(AsyncContextClient):
         self.recent_items = recent_items or deepcopy(PLEX_RECENT_ITEMS)
         self.existing_content = {}
         self.init_existing_content = AsyncMock()
+        self.get_metadata_provider_id = AsyncMock(side_effect=self._resolve_tmdb)
 
     async def get_recent_items(self):
         return deepcopy(self.recent_items)
+
+    async def _resolve_tmdb(self, key):
+        """Map rating keys to fake TMDB IDs: key /1 -> 10, /2 -> 20"""
+        if "1" in str(key):
+            return "10"
+        if "2" in str(key):
+            return "20"
+        return None
 
 
 class FakeJellyfinClient(AsyncContextClient):
@@ -574,7 +583,7 @@ async def test_recommendation_automation_dry_run_preserves_async_flow_and_logs(m
     assert {item["title"] for item in result.dry_run_items} == expected_titles
     assert llm_mock.await_count == 2
     assert "Starting recommendation job" in caplog.text
-    assert "Advanced Algorithm enabled. Generating recommendations using LLM." in caplog.text
+    assert "LLM matched" in caplog.text
     assert "Job completed: 2 would be requested" in caplog.text
     assert "TypeError" not in caplog.text
 
