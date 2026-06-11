@@ -223,7 +223,7 @@
       </div>
 
       <!-- No linkable service configured -->
-      <div v-else-if="hasProviderContext" class="settings-group">
+      <div v-if="!isLinkableService && hasProviderContext" class="settings-group">
         <h3>
           <i class="fas fa-plug"></i>
           Media Server
@@ -307,6 +307,7 @@ export default {
       isLinking: false,
       isUnlinking: false,
       linkError: null,
+
     };
   },
 

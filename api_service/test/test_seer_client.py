@@ -288,6 +288,36 @@ class TestGetTotalRequest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(total, 0)
 
 
+class TestPendingRequestDetection(unittest.IsolatedAsyncioTestCase):
+
+    def test_detects_numeric_pending_status(self):
+        self.assertTrue(SeerClient._is_pending_request({'status': 1}))
+
+    def test_detects_string_pending_status(self):
+        self.assertTrue(SeerClient._is_pending_request({'status': 'pending'}))
+
+    def test_ignores_approved_status(self):
+        self.assertFalse(SeerClient._is_pending_request({'status': 2}))
+
+    async def test_has_pending_requests_stops_on_pending_item(self):
+        client = _make_client()
+        pages = [
+            {'results': [{'status': 2}, {'status': 1}]},
+        ]
+        with patch.object(client, 'get_total_request', AsyncMock(return_value=2)), \
+             patch.object(client, '_make_request', AsyncMock(side_effect=pages)):
+            self.assertTrue(await client.has_pending_requests())
+
+    async def test_has_pending_requests_false_when_none_pending(self):
+        client = _make_client()
+        pages = [
+            {'results': [{'status': 2}, {'status': 3}]},
+        ]
+        with patch.object(client, 'get_total_request', AsyncMock(return_value=2)), \
+             patch.object(client, '_make_request', AsyncMock(side_effect=pages)):
+            self.assertFalse(await client.has_pending_requests())
+
+
 # ---------------------------------------------------------------------------
 # check_already_requested
 # ---------------------------------------------------------------------------

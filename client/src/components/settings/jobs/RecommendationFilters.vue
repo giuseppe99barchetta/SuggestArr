@@ -1,7 +1,7 @@
 <template>
   <div class="recommendation-filters">
     <!-- User Selection Mode -->
-    <div class="form-group">
+    <div v-if="!isTraktSource" class="form-group">
       <label>Monitor Users</label>
       <div class="user-mode-selector">
         <button
@@ -26,9 +26,13 @@
     </div>
 
     <!-- User Selection (when specific mode) -->
-    <div v-if="userMode === 'specific'" class="form-group">
+    <div v-if="!isTraktSource && userMode === 'specific'" class="form-group">
       <label>Select Users</label>
-      <div class="users-list" v-if="availableUsers.length > 0">
+      <div v-if="usersUnavailable" class="no-users">
+        <i class="fas fa-lock"></i>
+        <span>User selection is only available to administrators.</span>
+      </div>
+      <div class="users-list" v-else-if="availableUsers.length > 0">
         <div
           v-for="user in availableUsers"
           :key="user.id"
@@ -50,6 +54,14 @@
       <div v-else class="no-users">
         <i class="fas fa-user-slash"></i>
         <span>No users found. Configure SELECTED_USERS in settings.</span>
+      </div>
+    </div>
+
+    <div v-if="isTraktSource" class="form-group">
+      <label>Trakt Account</label>
+      <div class="no-users">
+        <i class="fas fa-tv"></i>
+        <span>This job uses the owner's linked Trakt account.</span>
       </div>
     </div>
 
@@ -189,6 +201,42 @@
             </BaseCheckbox>
           </div>
           <small class="toggle-help">Respect Seer's discovery settings for requests</small>
+
+          <div class="toggle-item">
+            <BaseCheckbox v-model="localFilters.use_trakt_as_seed" :disabled="!traktUsable">
+              <span class="toggle-label-modal" :class="{ 'toggle-disabled': !traktUsable }">
+                <i class="fas fa-seedling"></i>
+                Use Trakt as Seed
+              </span>
+            </BaseCheckbox>
+          </div>
+          <small v-if="!traktConfigured" class="toggle-help toggle-help--warn">
+            <i class="fas fa-exclamation-triangle"></i>
+            Trakt not configured — set Client ID / Secret in Services
+          </small>
+          <small v-else-if="!traktUsable" class="toggle-help toggle-help--warn">
+            <i class="fas fa-exclamation-triangle"></i>
+            No linked Trakt accounts — link accounts in Dashboard &gt; Trakt
+          </small>
+          <small v-else class="toggle-help">Use linked Trakt watch history to find similar content</small>
+
+          <div class="toggle-item">
+            <BaseCheckbox v-model="localFilters.use_trakt_as_exclusion" :disabled="!traktUsable">
+              <span class="toggle-label-modal" :class="{ 'toggle-disabled': !traktUsable }">
+                <i class="fas fa-ban"></i>
+                Exclude Trakt Watched
+              </span>
+            </BaseCheckbox>
+          </div>
+          <small v-if="!traktConfigured" class="toggle-help toggle-help--warn">
+            <i class="fas fa-exclamation-triangle"></i>
+            Trakt not configured — set Client ID / Secret in Services
+          </small>
+          <small v-else-if="!traktUsable" class="toggle-help toggle-help--warn">
+            <i class="fas fa-exclamation-triangle"></i>
+            No linked Trakt accounts — link accounts in Dashboard &gt; Trakt
+          </small>
+          <small v-else class="toggle-help">Skip content already watched on Trakt</small>
         </div>
       </div>
     </template>
@@ -198,6 +246,7 @@
 <script>
 import axios from 'axios';
 import { waitForAuthReady } from '@/composables/useAuth';
+import { listTraktMediaUsers } from '@/api/api';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 
 export default {
@@ -221,6 +270,7 @@ export default {
   data() {
     return {
       availableUsers: [],
+      usersUnavailable: false,
       isLoading: false,
       localFilters: {
         use_llm: false,
@@ -230,19 +280,38 @@ export default {
         search_size: 20,
         exclude_downloaded: true,
         exclude_requested: true,
-        honor_seer_discovery: false
+        honor_seer_discovery: false,
+        use_trakt_as_seed: true,
+        use_trakt_as_exclusion: true
       },
       isUpdatingFromParent: false,
-      localUserMode: 'all'
+      localUserMode: 'all',
+      selectedService: '',
+      traktConfigured: false,
+      traktMediaUsers: [],
     };
   },
   computed: {
+    isTraktSource() {
+      return this.selectedService === 'trakt';
+    },
     userMode() {
       return this.localUserMode;
     },
     maxResults() {
       return this.modelValue.max_results || 20;
-    }
+    },
+    traktUsable() {
+      if (!this.traktConfigured || !this.traktMediaUsers.length) return false;
+      if (this.userMode === 'all') {
+        return this.traktMediaUsers.some(u => u.trakt?.connected);
+      }
+      const selectedIds = this.modelValue.user_ids || [];
+      if (!selectedIds.length) return false;
+      return this.traktMediaUsers.some(
+        u => selectedIds.includes(u.external_user_id) && u.trakt?.connected
+      );
+    },
   },
   watch: {
     modelValue: {
@@ -257,14 +326,16 @@ export default {
             search_size: newVal.filters.search_size ?? 20,
             exclude_downloaded: newVal.filters.exclude_downloaded ?? true,
             exclude_requested: newVal.filters.exclude_requested ?? true,
-            honor_seer_discovery: newVal.filters.honor_seer_discovery ?? false
+            honor_seer_discovery: newVal.filters.honor_seer_discovery ?? false,
+            use_trakt_as_seed: newVal.filters.use_trakt_as_seed ?? true,
+            use_trakt_as_exclusion: newVal.filters.use_trakt_as_exclusion ?? true
           };
           this.$nextTick(() => {
             this.isUpdatingFromParent = false;
           });
         }
         // Initialize user mode based on user_ids
-        if (newVal.user_ids && newVal.user_ids.length > 0) {
+        if (!this.isTraktSource && newVal.user_ids && newVal.user_ids.length > 0) {
           this.localUserMode = 'specific';
         }
       },
@@ -290,16 +361,55 @@ export default {
       try {
         // Ensure auth is ready before making the protected API call
         await waitForAuthReady();
-        // Try to get users from the config
-        const response = await axios.get('/api/config/fetch');
-        if (response.data && response.data.SELECTED_USERS) {
-          const users = response.data.SELECTED_USERS;
-          this.availableUsers = users.map(u => {
-            if (typeof u === 'string') {
-              return { id: u, name: u };
-            }
-            return { id: u.id, name: u.name || u.id };
+        const statusResponse = await axios.get('/api/config/status');
+        this.selectedService = String(statusResponse.data?.selected_service || '').toLowerCase();
+        this.traktConfigured = statusResponse.data?.trakt_app_configured === true;
+        if (this.traktConfigured) {
+          try {
+            const traktRes = await listTraktMediaUsers();
+            this.traktMediaUsers = traktRes.data?.media_users || [];
+          } catch {
+            this.traktMediaUsers = [];
+          }
+        } else {
+          this.traktMediaUsers = [];
+        }
+        if (this.isTraktSource && this.modelValue.user_ids?.length) {
+          this.$emit('update:modelValue', {
+            ...this.modelValue,
+            user_ids: []
           });
+        }
+        if (this.isTraktSource) {
+          return;
+        }
+
+        // Admin users can still populate configured media users when available.
+        // /api/config/fetch is admin-only; non-admins receive a 403, which we
+        // handle gracefully instead of treating it as a hard error.
+        this.usersUnavailable = false;
+        try {
+          const response = await axios.get('/api/config/fetch');
+          if (response.data?.SELECTED_SERVICE) {
+            this.selectedService = String(response.data.SELECTED_SERVICE || '').toLowerCase();
+          }
+          if (response.data && response.data.SELECTED_USERS) {
+            const users = response.data.SELECTED_USERS;
+            this.availableUsers = users.map(u => {
+              if (typeof u === 'string') {
+                return { id: u, name: u };
+              }
+              return { id: u.id, name: u.name || u.id };
+            });
+          }
+        } catch (err) {
+          if (err.response?.status === 403) {
+            // Non-admins can't list configured users; surface a note instead of an error.
+            this.availableUsers = [];
+            this.usersUnavailable = true;
+          } else {
+            throw err;
+          }
         }
       } catch (error) {
         console.error('Failed to load users:', error);
@@ -566,6 +676,14 @@ export default {
   color: var(--color-text-muted);
   margin-left: 2.5rem;
   margin-bottom: 0.5rem;
+}
+
+.toggle-help--warn {
+  color: var(--color-warning);
+}
+
+.toggle-disabled {
+  opacity: 0.5;
 }
 
 /* LLM section */

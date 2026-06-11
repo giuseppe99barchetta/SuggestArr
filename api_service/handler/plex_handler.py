@@ -3,6 +3,7 @@ import unicodedata
 
 from api_service.handler.base_handler import BaseMediaHandler
 from api_service.services.plex.plex_client import PlexClient, normalize_guid_provider_id
+from api_service.db.database_manager import DatabaseManager
 
 def to_ascii(value):
     """
@@ -15,7 +16,7 @@ def to_ascii(value):
     return unicodedata.normalize('NFKD', value)
 
 class PlexHandler(BaseMediaHandler):
-    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None):
+    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, selected_users=None, max_content=10):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -29,6 +30,7 @@ class PlexHandler(BaseMediaHandler):
         :param request_delay: Seconds to wait between consecutive Seer service requests (0 = concurrent).
         :param dry_run: If True, simulate requests without touching download clients.
         :param max_total_requests: Max number of items to request for the whole run.
+        :param max_content: Max seeds to process after merging Trakt + Plex sources.
         """
         super().__init__(
             seer_client=seer_client,
@@ -42,9 +44,12 @@ class PlexHandler(BaseMediaHandler):
             honor_seer_discovery=honor_seer_discovery,
             seer_discovered_ids=seer_discovered_ids,
             dry_run=dry_run,
-            max_total_requests=max_total_requests
+            max_total_requests=max_total_requests,
+            trakt_augmentor=trakt_augmentor,
+            max_content=max_content,
         )
         self.plex_client = plex_client
+        self.selected_users = selected_users or []
         self._populate_existing_content_sets()
     
     def _populate_existing_content_sets(self):
@@ -63,64 +68,153 @@ class PlexHandler(BaseMediaHandler):
 
 
     async def process_recent_items(self):
-        """Process recently watched items for Plex (without user context)."""
+        """Process recently watched items for Plex, merged with Trakt seeds."""
+        # 1. Collect Trakt seeds (doesn't process them yet).
+        trakt_seeds = await self._collect_trakt_seeds()
+
+        # 2. Fetch Plex recent items and resolve their TMDB IDs.
         self.logger.info("Fetching recently watched content from Plex")
         recent_items_response = await self.plex_client.get_recent_items()
 
-        if isinstance(recent_items_response, list):
-            for response_item in recent_items_response:
-                title = response_item.get('title', response_item.get('grandparentTitle'))
-                if title is not None and isinstance(title, str):
-                    title = to_ascii(title)
-                # Look up anime status from the item's library section ID
-                library_section_id = str(response_item.get('librarySectionID', ''))
-                is_anime = self.library_anime_map.get(library_section_id, False)
-                self.logger.info(f"Processing item: {title} (anime={is_anime})")
-
-            if recent_items_response:
-                if self.use_llm:
-                    self.logger.info("Advanced Algorithm enabled. Generating recommendations using LLM.")
-                    movie_history, tv_history = [], []
-                    for response_item in recent_items_response:
-                        item_type_raw = response_item.get('type', '').lower()
-                        if item_type_raw == 'episode':
-                            title = response_item.get('grandparentTitle')
-                            media_type = 'tv'
-                        else:
-                            title = response_item.get('title')
-                            media_type = 'movie'
-                        year = response_item.get('year')
-                        if title:
-                            entry = {"title": title, "year": year}
-                            if media_type == 'movie':
-                                movie_history.append(entry)
-                            else:
-                                tv_history.append(entry)
-
-                    llm_tasks = []
-                    if movie_history and self.max_similar_movie > 0:
-                        llm_tasks.append(self.process_llm_recommendations(movie_history, 'movie', self.max_similar_movie))
-                    if tv_history and self.max_similar_tv > 0:
-                        llm_tasks.append(self.process_llm_recommendations(tv_history, 'tv', self.max_similar_tv))
-                    if llm_tasks:
-                        await asyncio.gather(*llm_tasks)
-                else:
-                    tasks = []
-                    for response_item in recent_items_response:
-                        title = response_item.get('title', response_item.get('grandparentTitle'))
-                        if title is not None and isinstance(title, str):
-                            title = to_ascii(title)
-                        library_section_id = str(response_item.get('librarySectionID', ''))
-                        is_anime = self.library_anime_map.get(library_section_id, False)
-                        tasks.append(self.process_item(response_item, title, is_anime))
-                    if tasks:
-                        await asyncio.gather(*tasks)
-                
-                self.logger.info(f"Total media requested: {self.request_count}")
+        if not isinstance(recent_items_response, list) or not recent_items_response:
+            if trakt_seeds:
+                trakt_seeds = self._merge_seeds(trakt_seeds)
+                await self._process_merged_seeds(trakt_seeds)
             else:
                 self.logger.warning("No recent items found in Plex response")
+            return
+
+        # Resolve all Plex items to seed dicts in parallel.
+        plex_seeds = await asyncio.gather(*[
+            self._plex_item_to_seed(item) for item in recent_items_response
+        ])
+        plex_seeds = [s for s in plex_seeds if s is not None]
+
+        # 3. Merge Trakt + Plex seeds, sort by date, dedup, cap.
+        all_seeds = trakt_seeds + plex_seeds
+        merged = self._merge_seeds(all_seeds)
+        if not merged:
+            return
+
+        self.logger.info("Processing %d merged seeds (Trakt + Plex)", len(merged))
+        await self._process_merged_seeds(merged)
+
+    async def _plex_item_to_seed(self, item):
+        """Resolve a Plex response item to a normalized seed dict or None."""
+        item_type = item.get('type', '').lower()
+        title = item.get('grandparentTitle') if item_type == 'episode' else item.get('title')
+        if not title:
+            return None
+
+        key = item.get('key') if item_type == 'movie' else item.get('grandparentKey')
+        if not key:
+            return None
+
+        try:
+            tmdb_id = await self.plex_client.get_metadata_provider_id(key)
+        except Exception:
+            self.logger.warning("Failed to resolve TMDB ID for Plex item '%s'", title)
+            return None
+        if not tmdb_id:
+            return None
+
+        media_type = 'movie' if item_type == 'movie' else 'tv'
+        library_section_id = str(item.get('librarySectionID', ''))
+        is_anime = self.library_anime_map.get(library_section_id, False)
+
+        # Parse date: prefer viewedAt, fall back to addedAt, then 0.
+        date = 0
+        for field in ('viewedAt', 'addedAt', 'updatedAt', 'originallyAvailableAt'):
+            val = item.get(field)
+            if val:
+                try:
+                    from datetime import datetime as dt
+                    date = int(dt.fromisoformat(str(val).replace('Z', '+00:00')).timestamp())
+                except (ValueError, TypeError):
+                    pass
+                break
+
+        source_obj = None
+        try:
+            source_obj = await self.tmdb_client.get_metadata(tmdb_id, media_type)
+        except (AttributeError, Exception):
+            pass
+        return {
+            'tmdb_id': str(tmdb_id), 'media_type': media_type,
+            'title': title, 'year': item.get('year'),
+            'date': date, 'source_obj': source_obj, 'is_anime': is_anime,
+        }
+
+    async def _collect_trakt_seeds(self):
+        """Fetch Trakt seeds for all linked users, return list without processing."""
+        if not self.trakt_augmentor or not self.selected_users:
+            return []
+
+        db = DatabaseManager()
+        all_seeds = []
+        for media_user in self.selected_users:
+            external_id = str(media_user.get('id')) if isinstance(media_user, dict) else str(media_user)
+            external_username = media_user.get('name') if isinstance(media_user, dict) else None
+            identity = db.upsert_media_user_identity(
+                provider="plex", external_user_id=external_id, external_username=external_username,
+            )
+            seeds = await self._augment_user_trakt(identity["id"])
+            if seeds:
+                all_seeds.extend(seeds)
+
+        for s in all_seeds:
+            s.setdefault('date', s.get('watched_at', 0))
+
+        return all_seeds
+
+    async def _process_merged_seeds(self, seeds):
+        """Process merged seeds: dispatch to LLM or non-LLM path."""
+        if not seeds:
+            return
+
+        if self.use_llm:
+            movie_history = [
+                {"title": s["title"], "year": s.get("year"), "type": "movie"}
+                for s in seeds if s.get("media_type") == "movie"
+            ]
+            tv_history = [
+                {"title": s["title"], "year": s.get("year"), "type": "tv"}
+                for s in seeds if s.get("media_type") == "tv"
+            ]
+            tasks = []
+            if movie_history and self.max_similar_movie > 0:
+                tasks.append(self.process_llm_recommendations(movie_history, 'movie', self.max_similar_movie))
+            if tv_history and self.max_similar_tv > 0:
+                tasks.append(self.process_llm_recommendations(tv_history, 'tv', self.max_similar_tv))
+            if tasks:
+                await asyncio.gather(*tasks)
         else:
-            self.logger.warning("Unexpected response format: expected a list")
+            await asyncio.gather(*[
+                self._process_seed(seed) for seed in seeds
+            ])
+
+    async def _process_seed(self, seed):
+        """Find similar media for one TMDB-resolved seed and request via Seer."""
+        tmdb_id = seed.get("tmdb_id")
+        media_type = seed.get("media_type")
+        if not tmdb_id:
+            return
+        source_obj = seed.get("source_obj")
+        is_anime = seed.get("is_anime", False)
+        if media_type == "movie" and self.max_similar_movie > 0:
+            if not source_obj:
+                source_obj = await self.tmdb_client.get_metadata(tmdb_id, "movie")
+            if not source_obj:
+                return
+            similar = await self.tmdb_client.find_similar_movies(tmdb_id, dry_run=self.dry_run)
+            await self.request_similar_media(similar, "movie", self.max_similar_movie, source_obj, is_anime)
+        elif media_type == "tv" and self.max_similar_tv > 0:
+            if not source_obj:
+                source_obj = await self.tmdb_client.get_metadata(tmdb_id, "tv")
+            if not source_obj:
+                return
+            similar = await self.tmdb_client.find_similar_tvshows(tmdb_id, dry_run=self.dry_run)
+            await self.request_similar_media(similar, "tv", self.max_similar_tv, source_obj, is_anime)
 
     async def _request_llm_recommendation(self, media, item_type, source_obj):
         """Request a single LLM recommendation via Plex."""

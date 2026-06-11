@@ -7,6 +7,7 @@ from api_service.services.seer.seer_client import SeerClient
 from api_service.services.omdb.omdb_client import OmdbClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
+from api_service.services.trakt.media_user_augmentor import MediaUserTraktAugmentor
 
 
 class ContentAutomation:
@@ -149,6 +150,9 @@ class ContentAutomation:
         )
         instance.logger.info("TMDb client initialized successfully")
 
+        # Build Trakt augmentor (no-op if app credentials are not configured)
+        trakt_augmentor = MediaUserTraktAugmentor.from_env(env_vars, instance.max_content)
+
         # Initialize media service handler (Jellyfin or Plex)
         if instance.selected_service in ('jellyfin', 'emby'):
             instance.logger.info(f"Initializing {instance.selected_service.upper()} client")
@@ -177,7 +181,9 @@ class ContentAutomation:
                 jellyfin_client, seer_client, tmdb_client, instance.logger,
                 instance.max_similar_movie, instance.max_similar_tv,
                 instance.selected_users, jellyfin_anime_map,
-                request_delay=request_delay
+                request_delay=request_delay,
+                trakt_augmentor=trakt_augmentor,
+                max_content=instance.max_content,
             )
             instance.logger.info(f"{instance.selected_service.upper()} client initialized successfully")
 
@@ -208,9 +214,13 @@ class ContentAutomation:
             instance.media_handler = PlexHandler(
                 plex_client, seer_client, tmdb_client, instance.logger,
                 instance.max_similar_movie, instance.max_similar_tv,
-                plex_anime_map, request_delay=request_delay
+                plex_anime_map, request_delay=request_delay,
+                trakt_augmentor=trakt_augmentor,
+                selected_users=instance.selected_users,
+                max_content=instance.max_content,
             )
             instance.logger.info("Plex client initialized successfully")
+
         else:
             instance.logger.warning(f"Unknown selected service: {instance.selected_service}")
             raise ValueError(f"Unsupported service: {instance.selected_service}")
@@ -241,4 +251,3 @@ class ContentAutomation:
         except Exception as e:
             self.logger.error(f"Content automation process failed: {str(e)}", exc_info=True)
             raise
-

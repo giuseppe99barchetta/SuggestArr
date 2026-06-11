@@ -1,0 +1,446 @@
+<template>
+  <div class="settings-section">
+    <div class="settings-group">
+      <h2 class="settings-group-title">
+        <i class="fas fa-tv"></i>
+        Trakt — Media Users
+      </h2>
+      <p class="settings-group-subtitle">
+        Link a Trakt account to each media-server user. Linked accounts add recent
+        watches as recommendation seeds and contribute watched history to the
+        skip-watched set during that user's run.
+      </p>
+
+      <!-- App credentials not configured -->
+      <div v-if="!traktAppConfigured" class="list-empty">
+        <i class="fas fa-info-circle"></i>
+        Trakt app credentials are not configured. Set the Trakt Client ID and Secret
+        under Services before linking accounts.
+      </div>
+
+      <div v-else>
+        <div v-if="loadError" class="error-banner" role="alert">
+          <i class="fas fa-exclamation-triangle"></i>
+          {{ loadError }}
+        </div>
+
+        <div v-if="isLoadingUsers" class="list-empty">
+          <i class="fas fa-spinner fa-spin"></i> Loading media users…
+        </div>
+
+        <div v-else-if="mediaUsers.length === 0" class="list-empty">
+          <i class="fas fa-users-slash"></i>
+          No media users selected. Choose users in the Services configuration first.
+        </div>
+
+        <ul v-else class="user-list">
+          <li v-for="user in mediaUsers" :key="rowKey(user)" class="user-row">
+            <div class="user-info">
+              <i class="fas fa-user"></i>
+              <div class="user-text">
+                <span class="user-name">{{ user.external_username || user.external_user_id }}</span>
+                <span class="user-meta">{{ statusLabel(user) }}</span>
+              </div>
+            </div>
+
+            <div class="user-actions">
+              <button
+                v-if="user.trakt && user.trakt.connected"
+                class="btn btn-danger btn-sm icon-btn"
+                :disabled="isUnlinking[rowKey(user)]"
+                title="Unlink Trakt"
+                @click="unlinkUser(user)"
+              >
+                <i :class="isUnlinking[rowKey(user)] ? 'fas fa-spinner fa-spin' : 'fas fa-unlink'"></i>
+              </button>
+              <button
+                class="btn btn-outline btn-sm"
+                :disabled="isBusy(user)"
+                @click="connectUser(user)"
+              >
+                <i :class="isBusy(user) ? 'fas fa-spinner fa-spin' : 'fas fa-link'"></i>
+                {{ connectLabel(user) }}
+              </button>
+            </div>
+          </li>
+        </ul>
+
+        <!-- Active device-code prompt -->
+        <div v-if="traktUserCode" class="oauth-success">
+          <i class="fas fa-key"></i>
+          Enter <strong>{{ traktUserCode }}</strong> at
+          <a :href="traktVerificationUrl" target="_blank" rel="noopener noreferrer" class="link">{{ traktVerificationUrl }}</a>
+          <p v-if="traktPopupBlocked" class="list-empty popup-blocked-hint">
+            <i class="fas fa-exclamation-circle"></i>
+            Pop-up blocked. Open the link above manually to authorize.
+          </p>
+        </div>
+        <div v-if="actionError" class="error-banner" role="alert">
+          <i class="fas fa-exclamation-triangle"></i>
+          {{ actionError }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirm unlink dialog -->
+    <teleport to="body">
+      <div v-if="showUnlinkConfirm" class="modal-overlay" @click.self="cancelUnlink">
+        <div class="modal-box">
+          <h3>Unlink Trakt Account</h3>
+          <p>
+            Are you sure you want to unlink the Trakt account for
+            <strong>{{ unlinkTargetLabel }}</strong>? This will remove their seed
+            and watched-history data from recommendation runs.
+          </p>
+          <div class="modal-actions">
+            <button class="btn btn-outline" @click="cancelUnlink">Cancel</button>
+            <button class="btn btn-danger" @click="confirmUnlink" :disabled="isUnlinking[unlinkTargetKey]">
+              <i v-if="isUnlinking[unlinkTargetKey]" class="fas fa-spinner fa-spin"></i>
+              Unlink
+            </button>
+          </div>
+        </div>
+      </div>
+    </teleport>
+  </div>
+</template>
+
+<script>
+import {
+  listTraktMediaUsers,
+  startMediaUserTraktDeviceCode,
+  pollMediaUserTraktDeviceToken,
+  unlinkMediaUserTrakt,
+} from '@/api/api';
+import traktDevicePolling from './mixins/traktDevicePolling';
+
+export default {
+  name: 'TraktMediaUsers',
+  mixins: [traktDevicePolling],
+  props: {
+    config: Object,
+  },
+  data() {
+    return {
+      mediaUsers: [],
+      isLoadingUsers: false,
+      loadError: null,
+      actionError: null,
+      isConnecting: {},
+      isUnlinking: {},
+      activeTarget: null,
+      showUnlinkConfirm: false,
+      unlinkTargetKey: '',
+      unlinkTargetLabel: '',
+      traktPopupBlocked: false,
+    };
+  },
+  computed: {
+    traktAppConfigured() {
+      return !!(this.config?.TRAKT_CLIENT_ID && this.config?.TRAKT_CLIENT_SECRET);
+    },
+  },
+  async mounted() {
+    if (this.traktAppConfigured) {
+      await this.loadMediaUsers();
+    }
+  },
+  methods: {
+    rowKey(user) {
+      return `${user.provider}:${user.external_user_id}`;
+    },
+    isBusy(user) {
+      return !!this.isConnecting[this.rowKey(user)] || (this.isPollingTrakt && this.activeTarget === this.rowKey(user));
+    },
+    connectLabel(user) {
+      if (this.isPollingTrakt && this.activeTarget === this.rowKey(user)) return 'Waiting for Trakt…';
+      return user.trakt && user.trakt.connected ? 'Re-link' : 'Link Trakt';
+    },
+    statusLabel(user) {
+      const t = user.trakt || {};
+      if (t.connected) return `Linked as ${t.trakt_username || 'Trakt user'}`;
+      if (t.status === 'expired' || t.status === 'error' || t.status === 'revoked') {
+        return t.last_error ? `Needs re-link — ${t.last_error}` : 'Needs re-link';
+      }
+      return 'Not linked';
+    },
+    async loadMediaUsers() {
+      this.isLoadingUsers = true;
+      this.loadError = null;
+      try {
+        const res = await listTraktMediaUsers();
+        this.mediaUsers = res.data?.media_users || [];
+      } catch (err) {
+        this.loadError = err.response?.data?.message || 'Failed to load media users';
+        this.mediaUsers = [];
+      } finally {
+        this.isLoadingUsers = false;
+      }
+    },
+    async connectUser(user) {
+      const key = this.rowKey(user);
+      this.actionError = null;
+      this.activeTarget = key;
+      this.isConnecting = { ...this.isConnecting, [key]: true };
+      this.traktPopupBlocked = false;
+      try {
+        const started = await this.startTraktPolling({
+          requestCode: () => startMediaUserTraktDeviceCode(user.provider, user.external_user_id),
+          pollToken: (deviceCode) => pollMediaUserTraktDeviceToken(user.provider, user.external_user_id, deviceCode),
+          onConnected: async (data) => {
+            await this.loadMediaUsers();
+            this.$toast.success(`Trakt linked for ${user.external_username || user.external_user_id} as ${data.trakt_username || 'Trakt user'}`);
+          },
+          setError: (message) => { this.actionError = message; },
+          onPopupBlocked: () => { this.traktPopupBlocked = true; },
+          windowName: 'trakt-oauth',
+        });
+        if (!started) {
+          this.traktPopupBlocked = true;
+        }
+      } finally {
+        this.isConnecting = { ...this.isConnecting, [key]: false };
+      }
+    },
+    unlinkUser(user) {
+      this.unlinkTargetKey = this.rowKey(user);
+      this.unlinkTargetLabel = user.external_username || user.external_user_id;
+      this.showUnlinkConfirm = true;
+    },
+    cancelUnlink() {
+      this.showUnlinkConfirm = false;
+      this.unlinkTargetKey = '';
+      this.unlinkTargetLabel = '';
+    },
+    async confirmUnlink() {
+      const key = this.unlinkTargetKey;
+      const label = this.unlinkTargetLabel;
+      this.isUnlinking = { ...this.isUnlinking, [key]: true };
+      try {
+        const [provider, externalUserId] = key.split(':');
+        await unlinkMediaUserTrakt(provider, externalUserId);
+        await this.loadMediaUsers();
+        this.$toast.success(`Trakt unlinked for ${label}`);
+      } catch (err) {
+        this.$toast.error(err.response?.data?.message || 'Failed to unlink Trakt');
+      } finally {
+        this.isUnlinking = { ...this.isUnlinking, [key]: false };
+        this.cancelUnlink();
+      }
+    },
+  },
+};
+</script>
+
+<style scoped>
+/* Shared with UserManagement / SettingsServices */
+.settings-section {
+  padding-bottom: 1.5rem;
+}
+
+.settings-group {
+  padding: 1.5rem 2rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--surface-glass-light);
+  border-radius: var(--border-radius);
+  background: var(--surface-glass-subtle);
+}
+
+.settings-group-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-group-title i {
+  opacity: 0.7;
+}
+
+.settings-group-subtitle {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: 0 0 1.25rem 0;
+  line-height: 1.5;
+}
+
+.list-empty {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: 0;
+  padding: 0.75rem;
+  background: var(--surface-glass-subtle);
+  border-radius: var(--border-radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.user-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-light);
+  border-radius: var(--border-radius-sm);
+  transition: border-color 0.15s ease;
+}
+
+.user-row:hover {
+  border-color: var(--surface-interactive);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.user-info > i {
+  opacity: 0.6;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.user-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.user-name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.user-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.error-banner {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  padding: 0.75rem 1rem;
+  border-radius: var(--border-radius-sm);
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.oauth-success {
+  padding: 0.75rem 1rem;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--border-radius-sm);
+  color: #10b981;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.oauth-success i {
+  margin-right: 0.35rem;
+}
+
+.link {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+/* Confirm dialog */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-box {
+  background: var(--surface-primary);
+  border: 1px solid var(--surface-glass-light);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  max-width: 420px;
+  width: 90%;
+}
+
+.modal-box h3 {
+  margin: 0 0 0.75rem 0;
+  color: var(--color-text-primary);
+  font-size: 1.05rem;
+}
+
+.modal-box p {
+  margin: 0 0 1.25rem 0;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.popup-blocked-hint {
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .settings-group {
+    padding: 1rem;
+  }
+  .user-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .user-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+</style>

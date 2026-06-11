@@ -344,6 +344,7 @@ import AiSearchPage from './settings/AiSearchPage.vue';
 import LogsComponent from './LogsComponent.vue';
 import UserManagement from './settings/UserManagement.vue';
 import UserProfile from './settings/UserProfile.vue';
+import TraktMediaUsers from './settings/TraktMediaUsers.vue';
 import { exportConfig, importConfig } from '@/api/api';
 
 const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
@@ -362,6 +363,7 @@ export default {
     LogsComponent,
     UserManagement,
     UserProfile,
+    TraktMediaUsers,
   },
   setup() {
     const { bg1Url, bg2Url, activeBg, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
@@ -418,6 +420,7 @@ export default {
         { id: 'database',  name: 'Database',  icon: 'fas fa-database',     tourId: 'tab-database', adminOnly: true },
         { id: 'advanced',  name: 'Advanced',  icon: 'fas fa-sliders-h',   tourId: 'tab-advanced', adminOnly: true },
         { id: 'users',     name: 'Users',      icon: 'fas fa-users',       adminOnly: true },
+        { id: 'trakt',     name: 'Trakt',      icon: 'fas fa-tv',          adminOnly: true },
         { id: 'profile',   name: 'Profile',    icon: 'fas fa-user-circle', nonAdminOnly: true },
         { id: 'logs',      name: 'Logs',       icon: 'fas fa-file-alt',    tourId: 'tab-logs', adminOnly: true },
       ],
@@ -523,6 +526,7 @@ export default {
         logs: 'LogsComponent',
         ai_search: 'AiSearchPage',
         users: 'UserManagement',
+        trakt: 'TraktMediaUsers',
         profile: 'UserProfile',
       };
       return componentMap[this.activeTab] ?? null;
@@ -948,6 +952,7 @@ export default {
       
       if (service === 'plex' && this.config.PLEX_TOKEN) return 'status-connected';
       if ((service === 'jellyfin' || service === 'emby') && this.config.JELLYFIN_TOKEN) return 'status-connected';
+      if (service === 'trakt' && this.config.TRAKT_CLIENT_ID && this.config.TRAKT_CLIENT_SECRET) return 'status-connected';
       
       return 'status-warning';
     },
@@ -956,7 +961,8 @@ export default {
       const icons = {
         plex: 'fas fa-play-circle',
         jellyfin: 'fas fa-server',
-        emby: 'fas fa-server'
+        emby: 'fas fa-server',
+        trakt: 'fas fa-tv',
       };
       return icons[this.config.SELECTED_SERVICE] || 'fas fa-question-circle';
     },

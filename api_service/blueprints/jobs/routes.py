@@ -422,6 +422,23 @@ def run_job_now(job_id: int):
         job_type = job.get('job_type', 'discover')
         logger.info(f"Running {job_type} job {job_id} immediately")
 
+        manager = get_job_manager()
+        if run_async(manager._should_pause_for_pending_requests(job)):
+            exec_id = repository.log_execution_start(job_id)
+            repository.log_execution_end(
+                exec_id=exec_id,
+                status='skipped',
+                results_count=0,
+                requested_count=0,
+                error_message='Paused: Seer has pending requests awaiting approval or denial.'
+            )
+            return jsonify({
+                'status': 'paused',
+                'message': 'Job paused because Seer has pending requests awaiting approval or denial.',
+                'results_count': 0,
+                'requested_count': 0
+            }), 200
+
         # Execute job based on type (async function called synchronously)
         if job_type == 'recommendation':
             result = run_async(execute_recommendation_job(job_id))
@@ -525,6 +542,21 @@ def _run_all_jobs_in_background():
             job_type = job.get('job_type', 'discover')
             try:
                 logger.info(f"Force run all: starting {job_type} job {job_id} ({job.get('name', '')})")
+                manager = get_job_manager()
+                if run_async(manager._should_pause_for_pending_requests(job)):
+                    exec_id = repository.log_execution_start(job_id)
+                    repository.log_execution_end(
+                        exec_id=exec_id,
+                        status='skipped',
+                        results_count=0,
+                        requested_count=0,
+                        error_message='Paused: Seer has pending requests awaiting approval or denial.'
+                    )
+                    logger.info(
+                        "Force run all: paused job %s because Seer has pending requests.",
+                        job_id,
+                    )
+                    continue
                 if job_type == 'recommendation':
                     run_async(execute_recommendation_job(job_id))
                 else:
