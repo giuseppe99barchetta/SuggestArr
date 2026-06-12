@@ -70,6 +70,7 @@
           >
             <i class="fas fa-chevron-right toggle-arrow" :class="{ expanded: previewExpanded }"></i>
             <span>Recent Trakt Preview</span>
+            <i v-if="previewLoading" class="fas fa-spinner fa-spin preview-loading-icon"></i>
           </button>
 
           <div v-show="previewExpanded" class="trakt-preview-content">
@@ -79,7 +80,7 @@
                 v-model="previewTargetKey"
                 class="form-control"
                 :disabled="previewLoading"
-                @change="clearPreviewItems"
+                @change="loadPreviewItems"
               >
                 <option
                   v-for="user in connectedTraktUsers"
@@ -89,18 +90,14 @@
                   {{ user.external_username || user.external_user_id }}
                 </option>
               </select>
-              <button
-                type="button"
-                class="btn btn-outline btn-sm"
-                :disabled="previewLoading || !previewTargetUser"
-                @click="loadPreviewItems"
-              >
-                <i :class="previewLoading ? 'fas fa-spinner fa-spin' : 'fas fa-vial'"></i>
-                {{ previewLoading ? 'Fetching...' : 'Test Fetch' }}
-              </button>
             </div>
 
-            <div v-if="previewError" class="error-banner" role="alert">
+            <div v-if="previewLoading" class="list-empty">
+              <i class="fas fa-spinner fa-spin"></i>
+              Loading recent Trakt items...
+            </div>
+
+            <div v-else-if="previewError" class="error-banner" role="alert">
               <i class="fas fa-exclamation-triangle"></i>
               {{ previewError }}
             </div>
@@ -298,6 +295,9 @@ export default {
           this.mediaUsers = res.data?.media_users || [];
         }
         this.ensurePreviewTarget();
+        if (this.previewExpanded && this.previewTargetUser) {
+          await this.loadPreviewItems();
+        }
       } catch (err) {
         this.loadError = err.response?.data?.message || 'Failed to load media users';
         this.mediaUsers = [];
@@ -387,6 +387,7 @@ export default {
       this.previewExpanded = !this.previewExpanded;
       if (this.previewExpanded) {
         this.ensurePreviewTarget();
+        this.loadPreviewItems();
       }
     },
     async loadPreviewItems() {
@@ -575,6 +576,11 @@ export default {
 
 .toggle-arrow.expanded {
   transform: rotate(90deg);
+}
+
+.preview-loading-icon {
+  margin-left: auto;
+  color: var(--color-text-muted);
 }
 
 .trakt-preview-content {
