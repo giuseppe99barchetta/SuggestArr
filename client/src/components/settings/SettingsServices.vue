@@ -393,14 +393,8 @@
         </div>
         <div class="oauth-success" v-if="isTraktAppConfigured">
           <i class="fas fa-check-circle"></i>
-          Trakt app credentials configured. Link Trakt accounts below.
+          Trakt app credentials configured. Users can link their own Trakt accounts from their profile.
         </div>
-
-        <TraktMediaUsers
-          v-if="!wizardMode"
-          :config="config"
-          embedded
-        />
       </div>
 
       <!-- Seer  -->
@@ -593,7 +587,6 @@
 <script>
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
-import TraktMediaUsers from './TraktMediaUsers.vue';
 import {
   testSeerApi, authenticateUser, fetchRadarrServers, fetchSonarrServers,
   fetchJellyfinLibraries, fetchJellyfinUsers, fetchPlexLibraries, fetchPlexUsers,
@@ -603,8 +596,7 @@ import {
 export default {
   name: 'SettingsServices',
   components: {
-    BaseDropdown,
-    TraktMediaUsers
+    BaseDropdown
   },
   props: {
     config: {

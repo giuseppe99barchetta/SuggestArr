@@ -527,6 +527,7 @@ class TestCreateUserMediaProfile(_DBBase):
         profiles = self.db.get_user_media_profiles(self._uid)
         self.assertEqual(len(profiles), 1)
         self.assertEqual(profiles[0]['provider'], 'jellyfin')
+        self.assertEqual(profiles[0]['external_user_id'], 'jf-001')
         self.assertEqual(profiles[0]['external_username'], 'alice_jf')
 
     def test_create_with_access_token(self):
@@ -594,7 +595,7 @@ class TestGetUserMediaProfiles(_DBBase):
         self.db.create_user_media_profile(self._uid, 'jellyfin', 'jf-001', 'alice_jf')
         profiles = self.db.get_user_media_profiles(self._uid)
         row = profiles[0]
-        for key in ('id', 'provider', 'external_username', 'created_at'):
+        for key in ('id', 'provider', 'external_user_id', 'external_username', 'created_at'):
             self.assertIn(key, row)
 
     def test_returns_empty_for_unknown_user(self):

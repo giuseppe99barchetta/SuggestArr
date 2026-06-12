@@ -159,6 +159,18 @@ export const previewMediaUserTraktRecent = (provider, externalUserId, limit = 10
 export const updateTraktSource = (provider, externalUserId, payload) =>
     axios.put(`/api/trakt/sources/${provider}/${encodeURIComponent(externalUserId)}`, payload);
 
+export const getMyTraktStatus = () => axios.get('/api/trakt/me');
+
+export const startMyTraktDeviceCode = () => axios.post('/api/trakt/me/device/code');
+
+export const pollMyTraktDeviceToken = (deviceCode) =>
+    axios.post('/api/trakt/me/device/token', { device_code: deviceCode });
+
+export const unlinkMyTrakt = () => axios.delete('/api/trakt/me');
+
+export const previewMyTraktRecent = (limit = 10) =>
+    axios.get('/api/trakt/me/recent', { params: { limit } });
+
 
 // Cleanup automation
 export const getCleanupSettings = () => axios.get('/api/cleanup/settings');

@@ -1,7 +1,7 @@
 from typing import Any, Optional
 
 from asgiref.sync import async_to_sync
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from api_service.auth.middleware import require_role
 from api_service.config.config import load_env_vars
@@ -91,6 +91,45 @@ def _find_selected_user(provider: str, external_user_id: str) -> Optional[dict]:
     return None
 
 
+def _current_user_id() -> int:
+    """Return the currently authenticated SuggestArr user id."""
+    return int(g.current_user["id"])
+
+
+def _current_user_media_profile(db: DatabaseManager) -> Optional[dict]:
+    """Return current user's media profile for the configured provider."""
+    provider = _selected_provider()
+    if provider not in {"jellyfin", "emby", "plex"}:
+        return None
+    for profile in db.get_user_media_profiles(_current_user_id()):
+        if profile.get("provider") == provider:
+            return profile
+    return None
+
+
+def _link_status_for_identity(db: DatabaseManager, identity_id: int) -> dict:
+    """Return token-safe Trakt link status for a media-user identity."""
+    link = db.get_trakt_account_link(identity_id)
+    if not link:
+        return {"connected": False}
+    if link.get("connected"):
+        sources = db.get_enabled_trakt_sources(identity_id)
+        watched = next((s for s in sources if s["source_type"] == "watched_history"), {})
+        link["use_as_seed"] = watched.get("use_as_seed", True)
+        link["use_as_exclusion"] = watched.get("use_as_exclusion", True)
+    return link
+
+
+def _media_user_payload(profile: dict, link: dict) -> dict:
+    """Build frontend media-user payload shape."""
+    return {
+        "provider": profile.get("provider"),
+        "external_user_id": str(profile.get("external_user_id")),
+        "external_username": profile.get("external_username"),
+        "trakt": link,
+    }
+
+
 async def _request_device_code(client_id: str, client_secret: str, db: DatabaseManager) -> dict[str, Any]:
     """Request a Trakt device-code activation payload."""
     async with TraktClient(client_id, client_secret, db=db) as client:
@@ -162,14 +201,7 @@ def list_media_users():
         link = {"connected": False}
         try:
             identity = db.get_media_user_identity(provider, ext_id)
-            existing = db.get_trakt_account_link(identity["id"])
-            if existing:
-                link = existing
-                if link.get("connected"):
-                    sources = db.get_enabled_trakt_sources(identity["id"])
-                    watched = next((s for s in sources if s["source_type"] == "watched_history"), {})
-                    link["use_as_seed"] = watched.get("use_as_seed", True)
-                    link["use_as_exclusion"] = watched.get("use_as_exclusion", True)
+            link = _link_status_for_identity(db, identity["id"])
         except ValueError:
             link = {"connected": False}
         result.append({
@@ -179,6 +211,114 @@ def list_media_users():
             "trakt": link,
         })
     return jsonify({"media_users": result}), 200
+
+
+@trakt_bp.route("/me", methods=["GET"])
+def get_my_trakt_status():
+    """Authenticated user: return own media-profile Trakt status."""
+    db = DatabaseManager()
+    profile = _current_user_media_profile(db)
+    if not profile:
+        return jsonify({"message": "Link your media server account first", "status": "error"}), 404
+
+    identity = db.upsert_media_user_identity(
+        profile["provider"],
+        profile["external_user_id"],
+        profile.get("external_username"),
+    )
+    link = _link_status_for_identity(db, identity["id"])
+    return jsonify({"media_user": _media_user_payload(profile, link)}), 200
+
+
+@trakt_bp.route("/me/device/code", methods=["POST"])
+def request_my_device_code():
+    """Authenticated user: start Trakt device-code OAuth for own media profile."""
+    db = DatabaseManager()
+    profile = _current_user_media_profile(db)
+    if not profile:
+        return jsonify({"message": "Link your media server account first", "status": "error"}), 404
+
+    client_id, client_secret, _ = _resolve_trakt_credentials({})
+    if not client_id or not client_secret:
+        return jsonify({"message": "Configure Trakt app credentials first", "status": "error"}), 400
+
+    try:
+        activation = async_to_sync(_request_device_code)(client_id, client_secret, db)
+        return jsonify(activation), 200
+    except RuntimeError as exc:
+        logger.warning("Trakt device-code request failed for user id=%s: %s", _current_user_id(), exc)
+        return jsonify({"message": str(exc), "status": "error"}), 400
+    except Exception as exc:
+        logger.error("Unexpected Trakt device-code error for user id=%s: %s", _current_user_id(), exc, exc_info=True)
+        return jsonify({"message": "Error requesting Trakt device code", "status": "error"}), 500
+
+
+@trakt_bp.route("/me/device/token", methods=["POST"])
+def poll_my_device_token():
+    """Authenticated user: poll Trakt OAuth completion and persist own link."""
+    db = DatabaseManager()
+    profile = _current_user_media_profile(db)
+    if not profile:
+        return jsonify({"message": "Link your media server account first", "status": "error"}), 404
+
+    payload = _get_json()
+    device_code = payload.get("device_code")
+    if not device_code:
+        return jsonify({"message": "device_code is required", "status": "error"}), 400
+
+    client_id, client_secret, _ = _resolve_trakt_credentials(payload)
+    if not client_id or not client_secret:
+        return jsonify({"message": "Configure Trakt app credentials first", "status": "error"}), 400
+
+    provider = profile["provider"]
+    external_user_id = str(profile["external_user_id"])
+    try:
+        token_payload, user_settings = async_to_sync(_poll_device_token)(
+            client_id, client_secret, str(device_code), db,
+        )
+        identity = db.upsert_media_user_identity(
+            provider, external_user_id, profile.get("external_username"),
+        )
+        link_id = db.upsert_trakt_account_link(
+            media_user_identity_id=identity["id"],
+            trakt_user_id=user_settings.get("trakt_user_id"),
+            trakt_username=user_settings.get("trakt_username"),
+            token_source="manual_oauth",
+            status="connected",
+        )
+        db.upsert_trakt_oauth_tokens(
+            link_id=link_id,
+            access_token=token_payload.get("access_token", ""),
+            refresh_token=token_payload.get("refresh_token", ""),
+            expires_at=token_payload.get("expires_at"),
+        )
+        db.upsert_trakt_source(
+            media_user_identity_id=identity["id"],
+            source_type="watched_history",
+            source_key="watched_history",
+            enabled=True,
+            use_as_seed=True,
+            use_as_exclusion=True,
+        )
+        return jsonify({
+            "connected": True,
+            "status": "connected",
+            "trakt_user_id": user_settings.get("trakt_user_id"),
+            "trakt_username": user_settings.get("trakt_username"),
+            "expires_at": token_payload.get("expires_at"),
+        }), 200
+    except TraktDevicePending:
+        return jsonify({"connected": False, "status": "pending"}), 202
+    except (TraktDeviceExpired, TraktDeviceDenied) as exc:
+        _mark_error_unless_connected(db, provider, external_user_id, str(exc))
+        return jsonify({"message": str(exc), "status": "error"}), 400
+    except RuntimeError as exc:
+        _mark_error_unless_connected(db, provider, external_user_id, "Trakt connection failed")
+        return jsonify({"message": str(exc), "status": "error"}), 400
+    except Exception as exc:
+        logger.error("Unexpected Trakt device-token error for user id=%s: %s", _current_user_id(), exc, exc_info=True)
+        _mark_error_unless_connected(db, provider, external_user_id, "Trakt connection failed")
+        return jsonify({"message": "Error connecting Trakt", "status": "error"}), 500
 
 
 @trakt_bp.route("/media-users/<provider>/<external_user_id>/device/code", methods=["POST"])
@@ -302,6 +442,21 @@ def delete_media_user_trakt_account(provider: str, external_user_id: str):
     return jsonify({"connected": False, "status": "deleted"}), 200
 
 
+@trakt_bp.route("/me", methods=["DELETE"])
+def delete_my_trakt_account():
+    """Authenticated user: unlink own Trakt account."""
+    db = DatabaseManager()
+    profile = _current_user_media_profile(db)
+    if not profile:
+        return jsonify({"message": "Link your media server account first", "status": "error"}), 404
+    try:
+        identity = db.get_media_user_identity(profile["provider"], str(profile["external_user_id"]))
+        db.unlink_trakt_account(identity["id"])
+    except (ValueError, KeyError):
+        pass
+    return jsonify({"connected": False, "status": "deleted"}), 200
+
+
 @trakt_bp.route("/media-users/<provider>/<external_user_id>/recent", methods=["GET"])
 @require_role("admin")
 def preview_media_user_recent_items(provider: str, external_user_id: str):
@@ -343,6 +498,50 @@ def preview_media_user_recent_items(provider: str, external_user_id: str):
         return jsonify({"message": str(exc), "status": "error"}), 400
     except Exception as exc:
         logger.error("Unexpected Trakt recent preview error for %s/%s: %s", provider, external_user_id, exc, exc_info=True)
+        return jsonify({"message": "Error fetching Trakt recent items", "status": "error"}), 500
+
+
+@trakt_bp.route("/me/recent", methods=["GET"])
+def preview_my_recent_items():
+    """Authenticated user: preview recent items fetched from own Trakt account."""
+    db = DatabaseManager()
+    profile = _current_user_media_profile(db)
+    if not profile:
+        return jsonify({"message": "Link your media server account first", "status": "error"}), 404
+
+    client_id, client_secret, _ = _resolve_trakt_credentials({})
+    if not client_id or not client_secret:
+        return jsonify({"message": "Configure Trakt app credentials first", "status": "error"}), 400
+
+    try:
+        limit = max(1, min(int(request.args.get("limit", 10)), 50))
+    except (TypeError, ValueError):
+        limit = 10
+
+    try:
+        identity = db.get_media_user_identity(profile["provider"], str(profile["external_user_id"]))
+        link = db.get_trakt_account_link(identity["id"])
+        if not link or not link.get("connected"):
+            return jsonify({"message": "Trakt account not linked", "status": "error"}), 404
+        tokens = db.get_trakt_oauth_tokens(link["id"])
+        if not tokens:
+            return jsonify({"message": "Trakt tokens not available", "status": "error"}), 404
+
+        items = async_to_sync(_get_recent_items)(client_id, client_secret, db, link, tokens, limit)
+        return jsonify({
+            "status": "success",
+            "provider": profile["provider"],
+            "external_user_id": str(profile["external_user_id"]),
+            "trakt_username": link.get("trakt_username"),
+            "items": items,
+        }), 200
+    except ValueError:
+        return jsonify({"message": "Media user not found", "status": "error"}), 404
+    except RuntimeError as exc:
+        logger.warning("Trakt recent preview failed for user id=%s: %s", _current_user_id(), exc)
+        return jsonify({"message": str(exc), "status": "error"}), 400
+    except Exception as exc:
+        logger.error("Unexpected Trakt recent preview error for user id=%s: %s", _current_user_id(), exc, exc_info=True)
         return jsonify({"message": "Error fetching Trakt recent items", "status": "error"}), 500
 
 

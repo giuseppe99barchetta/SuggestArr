@@ -6,16 +6,13 @@
         Trakt — Media Users
       </h2>
       <p class="settings-group-subtitle">
-        Link a Trakt account to each media-server user. Linked accounts add recent
-        watches as recommendation seeds and contribute watched history to the
-        skip-watched set during that user's run.
+        {{ subtitle }}
       </p>
 
       <!-- App credentials not configured -->
       <div v-if="!traktAppConfigured" class="list-empty">
         <i class="fas fa-info-circle"></i>
-        Trakt app credentials are not configured. Set the Trakt Client ID and Secret
-        under Services before linking accounts.
+        {{ credentialsMissingMessage }}
       </div>
 
       <div v-else>
@@ -30,7 +27,7 @@
 
         <div v-else-if="mediaUsers.length === 0" class="list-empty">
           <i class="fas fa-users-slash"></i>
-          No media users selected. Choose users in the Services configuration first.
+          {{ emptyUsersMessage }}
         </div>
 
         <ul v-else class="user-list">
@@ -77,7 +74,13 @@
 
           <div v-show="previewExpanded" class="trakt-preview-content">
             <div class="trakt-preview-controls">
-              <select v-model="previewTargetKey" class="form-control" :disabled="previewLoading" @change="clearPreviewItems">
+              <select
+                v-if="!isSelfMode"
+                v-model="previewTargetKey"
+                class="form-control"
+                :disabled="previewLoading"
+                @change="clearPreviewItems"
+              >
                 <option
                   v-for="user in connectedTraktUsers"
                   :key="rowKey(user)"
@@ -167,10 +170,15 @@
 <script>
 import {
   listTraktMediaUsers,
+  getMyTraktStatus,
   startMediaUserTraktDeviceCode,
   pollMediaUserTraktDeviceToken,
   unlinkMediaUserTrakt,
   previewMediaUserTraktRecent,
+  startMyTraktDeviceCode,
+  pollMyTraktDeviceToken,
+  unlinkMyTrakt,
+  previewMyTraktRecent,
 } from '@/api/api';
 import traktDevicePolling from './mixins/traktDevicePolling';
 
@@ -179,6 +187,15 @@ export default {
   mixins: [traktDevicePolling],
   props: {
     config: Object,
+    mode: {
+      type: String,
+      default: 'admin',
+      validator: value => ['admin', 'self'].includes(value),
+    },
+    traktConfigured: {
+      type: Boolean,
+      default: null,
+    },
     embedded: {
       type: Boolean,
       default: false,
@@ -206,8 +223,28 @@ export default {
     };
   },
   computed: {
+    isSelfMode() {
+      return this.mode === 'self';
+    },
     traktAppConfigured() {
+      if (this.traktConfigured !== null) return this.traktConfigured;
       return !!(this.config?.TRAKT_CLIENT_ID && this.config?.TRAKT_CLIENT_SECRET);
+    },
+    subtitle() {
+      if (this.isSelfMode) {
+        return 'Link your Trakt account to your media-server profile. SuggestArr uses your recent watches as recommendation seeds and watched history for skip-watched checks.';
+      }
+      return 'Link a Trakt account to each media-server user. Linked accounts add recent watches as recommendation seeds and contribute watched history to the skip-watched set during that user\'s run.';
+    },
+    emptyUsersMessage() {
+      if (this.isSelfMode) return 'Link your media server account first.';
+      return 'No media users selected. Choose users in the Services configuration first.';
+    },
+    credentialsMissingMessage() {
+      if (this.isSelfMode) {
+        return 'Trakt app credentials are not configured. Ask an admin to set the Trakt Client ID and Secret under Services.';
+      }
+      return 'Trakt app credentials are not configured. Set the Trakt Client ID and Secret under Services before linking accounts.';
     },
     connectedTraktUsers() {
       return this.mediaUsers.filter(user => user.trakt && user.trakt.connected);
@@ -253,8 +290,13 @@ export default {
       this.isLoadingUsers = true;
       this.loadError = null;
       try {
-        const res = await listTraktMediaUsers();
-        this.mediaUsers = res.data?.media_users || [];
+        if (this.isSelfMode) {
+          const res = await getMyTraktStatus();
+          this.mediaUsers = res.data?.media_user ? [res.data.media_user] : [];
+        } else {
+          const res = await listTraktMediaUsers();
+          this.mediaUsers = res.data?.media_users || [];
+        }
         this.ensurePreviewTarget();
       } catch (err) {
         this.loadError = err.response?.data?.message || 'Failed to load media users';
@@ -272,8 +314,12 @@ export default {
       this.traktPopupBlocked = false;
       try {
         const started = await this.startTraktPolling({
-          requestCode: () => startMediaUserTraktDeviceCode(user.provider, user.external_user_id),
-          pollToken: (deviceCode) => pollMediaUserTraktDeviceToken(user.provider, user.external_user_id, deviceCode),
+          requestCode: () => this.isSelfMode
+            ? startMyTraktDeviceCode()
+            : startMediaUserTraktDeviceCode(user.provider, user.external_user_id),
+          pollToken: (deviceCode) => this.isSelfMode
+            ? pollMyTraktDeviceToken(deviceCode)
+            : pollMediaUserTraktDeviceToken(user.provider, user.external_user_id, deviceCode),
           onConnected: async (data) => {
             await this.loadMediaUsers();
             this.$toast.success(`Trakt linked for ${user.external_username || user.external_user_id} as ${data.trakt_username || 'Trakt user'}`);
@@ -304,8 +350,12 @@ export default {
       const label = this.unlinkTargetLabel;
       this.isUnlinking = { ...this.isUnlinking, [key]: true };
       try {
-        const [provider, externalUserId] = key.split(':');
-        await unlinkMediaUserTrakt(provider, externalUserId);
+        if (this.isSelfMode) {
+          await unlinkMyTrakt();
+        } else {
+          const [provider, externalUserId] = key.split(':');
+          await unlinkMediaUserTrakt(provider, externalUserId);
+        }
         await this.loadMediaUsers();
         this.$toast.success(`Trakt unlinked for ${label}`);
       } catch (err) {
@@ -346,7 +396,9 @@ export default {
       this.previewError = null;
       this.previewFetched = false;
       try {
-        const res = await previewMediaUserTraktRecent(user.provider, user.external_user_id, 10);
+        const res = this.isSelfMode
+          ? await previewMyTraktRecent(10)
+          : await previewMediaUserTraktRecent(user.provider, user.external_user_id, 10);
         this.previewItems = res.data?.items || [];
         this.previewFetched = true;
       } catch (err) {

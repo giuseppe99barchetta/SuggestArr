@@ -222,3 +222,57 @@ def test_recent_preview_requires_linked_account():
         resp = app.test_client().get("/api/trakt/media-users/jellyfin/jf-1/recent")
     assert resp.status_code == 404
     assert resp.get_json()["message"] == "Trakt account not linked"
+
+
+def test_my_trakt_status_uses_current_users_media_profile():
+    app, _ = make_app(caller={"id": "7", "username": "alice", "role": "user"})
+    db = MagicMock()
+    db.get_user_media_profiles.return_value = [{
+        "provider": "jellyfin",
+        "external_user_id": "jf-1",
+        "external_username": "alice_jf",
+    }]
+    db.upsert_media_user_identity.return_value = {"id": 1}
+    db.get_trakt_account_link.return_value = {
+        "id": 5, "media_user_identity_id": 1, "connected": True, "trakt_username": "alice_t",
+    }
+    db.get_enabled_trakt_sources.return_value = [
+        {"source_type": "watched_history", "use_as_seed": True, "use_as_exclusion": True},
+    ]
+    p1, p2, p3, p4 = _patches(db)
+    with p1, p2, p3, p4:
+        resp = app.test_client().get("/api/trakt/me")
+    assert resp.status_code == 200
+    body = resp.get_json()["media_user"]
+    assert body["external_user_id"] == "jf-1"
+    assert body["trakt"]["trakt_username"] == "alice_t"
+
+
+def test_my_device_token_persists_against_current_users_media_profile():
+    app, _ = make_app(caller={"id": "7", "username": "alice", "role": "user"})
+    db = MagicMock()
+    db.get_user_media_profiles.return_value = [{
+        "provider": "jellyfin",
+        "external_user_id": "jf-1",
+        "external_username": "alice_jf",
+    }]
+    db.upsert_media_user_identity.return_value = {"id": 1}
+    db.upsert_trakt_account_link.return_value = 5
+    p1, p2, p3, p4 = _patches(db)
+    with p1, p2, p3, p4:
+        resp = app.test_client().post("/api/trakt/me/device/token", json={"device_code": "dev-1"})
+    assert resp.status_code == 200
+    db.upsert_media_user_identity.assert_called_once_with("jellyfin", "jf-1", "alice_jf")
+    assert db.upsert_trakt_account_link.call_args.kwargs["media_user_identity_id"] == 1
+    db.upsert_trakt_oauth_tokens.assert_called_once()
+
+
+def test_my_recent_preview_requires_own_media_profile():
+    app, _ = make_app(caller={"id": "7", "username": "alice", "role": "user"})
+    db = MagicMock()
+    db.get_user_media_profiles.return_value = []
+    p1, p2, p3, p4 = _patches(db)
+    with p1, p2, p3, p4:
+        resp = app.test_client().get("/api/trakt/me/recent")
+    assert resp.status_code == 404
+    assert resp.get_json()["message"] == "Link your media server account first"

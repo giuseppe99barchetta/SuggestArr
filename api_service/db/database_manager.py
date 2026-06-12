@@ -3020,7 +3020,7 @@ class DatabaseManager:
         """
         ph = self._ph()
         query = (
-            f"SELECT id, provider, external_username, created_at "
+            f"SELECT id, provider, external_user_id, external_username, created_at "
             f"FROM user_media_profiles WHERE user_id = {ph} ORDER BY provider"
         )
         with self.get_connection() as conn:
@@ -3031,8 +3031,9 @@ class DatabaseManager:
             {
                 "id": row[0],
                 "provider": row[1],
-                "external_username": row[2],
-                "created_at": row[3],
+                "external_user_id": row[2],
+                "external_username": row[3],
+                "created_at": row[4],
             }
             for row in rows
         ]
