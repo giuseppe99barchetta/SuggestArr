@@ -202,6 +202,32 @@ class TestJobManagerCronTrigger(unittest.TestCase):
         trigger = self.manager._create_trigger('interval', '60')
         self.assertIsNone(trigger)
 
+    def test_execute_job_skips_when_seer_has_pending_requests(self):
+        job_data = {
+            'id': 7,
+            'name': 'Paused Job',
+            'job_type': 'discover',
+            'pause_if_pending_requests': True,
+        }
+        self.manager.repository.get_job.return_value = job_data
+        self.manager.repository.log_execution_start.return_value = 99
+
+        async def should_pause(_job_data):
+            return True
+
+        executor = MagicMock()
+        self.manager.set_job_executor(executor, job_type='discover')
+
+        with patch.object(self.manager, '_should_pause_for_pending_requests', side_effect=should_pause):
+            self.manager._execute_job(7)
+
+        executor.assert_not_called()
+        self.manager.repository.log_execution_start.assert_called_once_with(7)
+        self.manager.repository.log_execution_end.assert_called_once()
+        args, kwargs = self.manager.repository.log_execution_end.call_args
+        self.assertEqual(kwargs['exec_id'], 99)
+        self.assertEqual(kwargs['status'], 'skipped')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -222,8 +222,20 @@
 
       </div>
 
+      <div v-if="isLinkableService" class="settings-group">
+        <h3>
+          <i class="fas fa-tv"></i>
+          Trakt Account
+        </h3>
+        <TraktMediaUsers
+          mode="self"
+          :trakt-configured="isTraktAppConfigured"
+          embedded
+        />
+      </div>
+
       <!-- No linkable service configured -->
-      <div v-else-if="hasProviderContext" class="settings-group">
+      <div v-if="!isLinkableService && hasProviderContext" class="settings-group">
         <h3>
           <i class="fas fa-plug"></i>
           Media Server
@@ -252,6 +264,7 @@ import {
   updateMyProfile,
 } from '@/api/api';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import TraktMediaUsers from './TraktMediaUsers.vue';
 
 const PROVIDER_META = {
   jellyfin: { label: 'Jellyfin', icon: 'fas fa-server' },
@@ -262,7 +275,7 @@ const PROVIDER_META = {
 export default {
   name: 'UserProfile',
 
-  components: { BaseDropdown },
+  components: { BaseDropdown, TraktMediaUsers },
 
   props: {
     config: Object,
@@ -298,6 +311,7 @@ export default {
       // Provider availability for non-admin users
       configStatus: {
         selected_service: '',
+        trakt_app_configured: false,
       },
 
       // Credential-based link form
@@ -307,6 +321,7 @@ export default {
       isLinking: false,
       isUnlinking: false,
       linkError: null,
+
     };
   },
 
@@ -346,6 +361,12 @@ export default {
 
     currentLink() {
       return this.links.find(l => l.provider === this.selectedService) || null;
+    },
+
+    isTraktAppConfigured() {
+      return !!(
+        this.config?.TRAKT_CLIENT_ID && this.config?.TRAKT_CLIENT_SECRET
+      ) || this.configStatus?.trakt_app_configured === true;
     },
 
     serverUserOptions() {

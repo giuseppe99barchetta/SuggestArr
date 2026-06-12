@@ -351,6 +351,52 @@
         </div>
       </div>
 
+      <!-- Trakt -->
+      <div v-if="showSection('trakt')" :class="wizardMode ? '' : 'service-card'">
+        <div v-if="!wizardMode" class="service-header">
+          <h3><i class="fas fa-history"></i> Trakt</h3>
+          <span class="status-badge" :class="getTraktStatus">
+            <span class="status-dot"></span>
+            {{ getTraktStatusText }}
+          </span>
+        </div>
+
+        <div class="form-group">
+          <label for="traktClientId">Client ID</label>
+          <input
+            id="traktClientId"
+            v-model="localConfig.TRAKT_CLIENT_ID"
+            type="text"
+            placeholder="Enter your Trakt Client ID"
+            class="form-control"
+            :disabled="isLoading"
+          />
+        </div>
+        <div class="form-group">
+          <label for="traktClientSecret">Client Secret</label>
+          <div class="input-group">
+            <input
+              id="traktClientSecret"
+              v-model="localConfig.TRAKT_CLIENT_SECRET"
+              :type="showTraktClientSecret ? 'text' : 'password'"
+              placeholder="Enter your Trakt Client Secret"
+              class="form-control"
+              :disabled="isLoading"
+            />
+            <button @click="showTraktClientSecret = !showTraktClientSecret" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
+              <i :class="showTraktClientSecret ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+            </button>
+          </div>
+          <small class="form-help">
+            Create an app at <a href="https://trakt.tv/oauth/applications" target="_blank" rel="noopener noreferrer" class="link">Trakt OAuth Applications</a>.
+          </small>
+        </div>
+        <div class="oauth-success" v-if="isTraktAppConfigured">
+          <i class="fas fa-check-circle"></i>
+          Trakt app credentials configured. Users can link their own Trakt accounts from their profile.
+        </div>
+      </div>
+
       <!-- Seer  -->
       <div v-if="showSection('seer')" :class="wizardMode ? '' : 'service-card'">
         <div v-if="!wizardMode" class="service-header">
@@ -587,6 +633,7 @@ export default {
       showPlexToken: false,
       showJellyfinToken: false,
       showSeerToken: false,
+      showTraktClientSecret: false,
       // Wizard-mode self-contained TMDB test state
       wizardTmdbTesting: false,
       wizardTmdbConnected: false,
@@ -655,6 +702,9 @@ export default {
     },
     mediaServerConnected() {
       return this.plexConnected || this.jellyfinConnected;
+    },
+    isTraktAppConfigured() {
+      return !!(this.localConfig.TRAKT_CLIENT_ID && this.localConfig.TRAKT_CLIENT_SECRET);
     },
     // Unified accessors for current service's libraries/users
     currentLibraries() {
@@ -754,6 +804,16 @@ export default {
         ? 'Not Tested'
         : 'Not Set';
     },
+    getTraktStatus() {
+      if (this.isTraktAppConfigured) return 'status-connected';
+      if (this.localConfig.TRAKT_CLIENT_ID || this.localConfig.TRAKT_CLIENT_SECRET) return 'status-warning';
+      return 'status-disconnected';
+    },
+    getTraktStatusText() {
+      if (this.isTraktAppConfigured) return 'Configured';
+      if (this.localConfig.TRAKT_CLIENT_ID || this.localConfig.TRAKT_CLIENT_SECRET) return 'Incomplete';
+      return 'Not Set';
+    },
     seerUserOptions() {
       return this.seerUsers.map(user => ({
         label: `${user.name}${user.email ? ` (${user.email})` : ''}`,
@@ -837,6 +897,14 @@ export default {
     },
     plexConnected(val) {
       if (this.wizardMode && this.wizardSection === 'media-server') {
+        this.$emit('validation-changed', val);
+      }
+    },
+    isTraktAppConfigured(val) {
+      if (
+        this.wizardMode
+        && this.wizardSection === 'trakt'
+      ) {
         this.$emit('validation-changed', val);
       }
     },
@@ -1379,6 +1447,8 @@ export default {
           TMDB_API_KEY: this._secretValue('TMDB_API_KEY'),
           OMDB_API_KEY: this._secretValue('OMDB_API_KEY') || '',
           SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE,
+          TRAKT_CLIENT_ID: this.localConfig.TRAKT_CLIENT_ID || '',
+          TRAKT_CLIENT_SECRET: this._secretValue('TRAKT_CLIENT_SECRET') || '',
         };
         if (this.localConfig.SELECTED_SERVICE === 'plex') {
           Object.assign(dataToSave, {
@@ -1414,6 +1484,7 @@ export default {
       const defaults = {
         TMDB_API_KEY: '', OMDB_API_KEY: '', SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
         JELLYFIN_API_URL: '', JELLYFIN_TOKEN: '', JELLYFIN_LIBRARIES: [],
+        TRAKT_CLIENT_ID: '', TRAKT_CLIENT_SECRET: '',
         SEER_API_URL: '', SEER_TOKEN: '', SEER_USER_NAME: null, SEER_USER_PSW: null,
         SEER_SESSION_TOKEN: null, SEER_ANIME_PROFILE_CONFIG: {}, SEER_REQUEST_DELAY: 2, SELECTED_USERS: [],
       };

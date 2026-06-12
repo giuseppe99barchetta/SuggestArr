@@ -24,7 +24,7 @@ admin_bp = Blueprint('admin', __name__)
 # Substring patterns used to identify secret fields inside integration configs.
 # Any integration config key whose name contains one of these strings is treated
 # as sensitive and stripped when include_secrets=false.
-_INTEGRATION_SECRET_PATTERNS = ('token', 'api_key', 'password')
+_INTEGRATION_SECRET_PATTERNS = ('token', 'api_key', 'password', 'secret')
 
 # Top-level keys in the settings dict (config.yaml) that hold secrets.
 _SETTINGS_SECRET_KEYS = frozenset({

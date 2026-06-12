@@ -379,5 +379,9 @@ config/suggestarr.db
 client/package-lock.json
 static/
 
+# AI agent planning artifacts (ephemeral)
+docs/superpowers/plans/
+branch-review-findings.md
+
 # macOS
 .DS_Store

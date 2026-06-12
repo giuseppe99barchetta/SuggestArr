@@ -140,6 +140,37 @@ export const aiSearchStatus = () => {
     return axios.get('/api/ai-search/status');
 };
 
+// Trakt OAuth device flow (admin, media-user scoped). App credentials are admin
+// settings; account tokens are stored per media-server user (provider + id).
+export const listTraktMediaUsers = () => axios.get('/api/trakt/media-users');
+
+export const startMediaUserTraktDeviceCode = (provider, externalUserId, credentials = {}) =>
+    axios.post(`/api/trakt/media-users/${provider}/${encodeURIComponent(externalUserId)}/device/code`, credentials);
+
+export const pollMediaUserTraktDeviceToken = (provider, externalUserId, deviceCode, credentials = {}) =>
+    axios.post(`/api/trakt/media-users/${provider}/${encodeURIComponent(externalUserId)}/device/token`, { ...credentials, device_code: deviceCode });
+
+export const unlinkMediaUserTrakt = (provider, externalUserId) =>
+    axios.delete(`/api/trakt/media-users/${provider}/${encodeURIComponent(externalUserId)}`);
+
+export const previewMediaUserTraktRecent = (provider, externalUserId, limit = 10) =>
+    axios.get(`/api/trakt/media-users/${provider}/${encodeURIComponent(externalUserId)}/recent`, { params: { limit } });
+
+export const updateTraktSource = (provider, externalUserId, payload) =>
+    axios.put(`/api/trakt/sources/${provider}/${encodeURIComponent(externalUserId)}`, payload);
+
+export const getMyTraktStatus = () => axios.get('/api/trakt/me');
+
+export const startMyTraktDeviceCode = () => axios.post('/api/trakt/me/device/code');
+
+export const pollMyTraktDeviceToken = (deviceCode) =>
+    axios.post('/api/trakt/me/device/token', { device_code: deviceCode });
+
+export const unlinkMyTrakt = () => axios.delete('/api/trakt/me');
+
+export const previewMyTraktRecent = (limit = 10) =>
+    axios.get('/api/trakt/me/recent', { params: { limit } });
+
 
 // Cleanup automation
 export const getCleanupSettings = () => axios.get('/api/cleanup/settings');

@@ -206,6 +206,15 @@ def _build_filters_from_config(env_vars: Dict[str, Any]) -> Dict[str, Any]:
     if exclude_requested is not None:
         filters['exclude_requested'] = bool(exclude_requested)
 
+    # Trakt seed / exclusion flags
+    trakt_use_as_seed = env_vars.get('TRAKT_USE_AS_SEED')
+    if trakt_use_as_seed is not None:
+        filters['use_trakt_as_seed'] = bool(trakt_use_as_seed)
+
+    trakt_use_as_exclusion = env_vars.get('TRAKT_USE_AS_EXCLUSION')
+    if trakt_use_as_exclusion is not None:
+        filters['use_trakt_as_exclusion'] = bool(trakt_use_as_exclusion)
+
     return filters
 
 

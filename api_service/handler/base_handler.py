@@ -27,7 +27,8 @@ class BaseMediaHandler(ABC):
     def __init__(self, seer_client, tmdb_client, logger,
                  max_similar_movie, max_similar_tv, library_anime_map=None,
                  use_llm=None, request_delay=0, honor_seer_discovery=False,
-                 seer_discovered_ids=None, dry_run=False, max_total_requests=None):
+                 seer_discovered_ids=None, dry_run=False, max_total_requests=None,
+                 trakt_augmentor=None, max_content=10):
         """
         Initialize base media handler.
         
@@ -44,12 +45,16 @@ class BaseMediaHandler(ABC):
             seer_discovered_ids: Set of already discovered item IDs
             dry_run: Whether to simulate requests
             max_total_requests: Maximum requestable items for the whole run
+            trakt_augmentor: Optional MediaUserTraktAugmentor used to add Trakt
+                watch-history seeds and merge fully-watched IDs into the skip set
+            max_content: Max seeds to process after merging server + Trakt sources
         """
         self.seer_client = seer_client
         self.tmdb_client = tmdb_client
         self.logger = logger
         self.max_similar_movie = max_similar_movie
         self.max_similar_tv = max_similar_tv
+        self.max_content = int(max_content) if max_content else 10
         self.request_count = 0
         
         # Optimization: Pre-process existing_content into sets for O(1) lookups
@@ -68,6 +73,7 @@ class BaseMediaHandler(ABC):
         self.max_total_requests = int(max_total_requests) if max_total_requests else None
         self._request_slots_reserved = 0
         self._request_limit_lock = asyncio.Lock()
+        self.trakt_augmentor = trakt_augmentor
         
         # Determine LLM mode
         if use_llm is not None:
@@ -108,7 +114,67 @@ class BaseMediaHandler(ABC):
 
         async with self._request_limit_lock:
             self._request_slots_reserved = max(self._request_slots_reserved - 1, 0)
-    
+
+    async def _augment_user_trakt(self, media_user_identity_id):
+        """Fetch a media user's Trakt watch history additively.
+
+        Merges fully-watched Trakt TMDB IDs into ``existing_content_sets`` (so
+        they are skipped like already-owned content) and returns a list of
+        normalized Trakt seed dicts (each with ``tmdb_id``, ``media_type``,
+        ``title``, ``year``) for the caller to process. A missing augmentor,
+        missing link, or any Trakt failure is a silent no-op returning ``[]``.
+        """
+        augmentor = getattr(self, "trakt_augmentor", None)
+        if not augmentor or not media_user_identity_id:
+            return []
+
+        augmentation = await augmentor.augment(media_user_identity_id)
+        if augmentation is None:
+            return []
+
+        total_watched = sum(len(v) for v in augmentation.watched_ids.values())
+        self.logger.info(
+            "Trakt: media user identity %s → %d seeds, %d watched IDs",
+            media_user_identity_id, len(augmentation.seed_items), total_watched,
+        )
+
+        # Skip-watched merge: Trakt fully-watched titles join existing content.
+        for media_type in ("movie", "tv"):
+            watched = augmentation.watched_ids.get(media_type)
+            if watched:
+                self.existing_content_sets.setdefault(media_type, set()).update(watched)
+
+        return list(augmentation.seed_items)
+
+    def _merge_seeds(self, seeds):
+        """Merge server and Trakt seeds, sort by date, dedup, cap to max_content.
+
+        Each seed dict must have: ``tmdb_id``, ``media_type``, ``date`` (Unix
+        timestamp). Seeds without ``date`` sort last.  Duplicate
+        ``(media_type, tmdb_id)`` pairs keep the newest entry (first seen in
+        descending sort).
+
+        Returns the merged list truncated to ``self.max_content`` items.
+        """
+        if not seeds:
+            return []
+
+        seen = set()
+        deduped = []
+        for s in sorted(seeds, key=lambda x: x.get("date", 0), reverse=True):
+            key = (s.get("media_type"), str(s.get("tmdb_id", "")))
+            if key in seen or not s.get("tmdb_id"):
+                continue
+            seen.add(key)
+            deduped.append(s)
+
+        if len(deduped) > self.max_content:
+            self.logger.info(
+                "Merged seeds capped from %d to %d (max_content)",
+                len(deduped), self.max_content,
+            )
+        return deduped[:self.max_content]
+
     @abstractmethod
     def _populate_existing_content_sets(self):
         """

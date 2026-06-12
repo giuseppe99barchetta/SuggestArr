@@ -279,6 +279,7 @@ def get_setup_status():
             'is_complete': is_complete,
             'selected_service': config.get('SELECTED_SERVICE'),
             'has_tmdb_key': bool(config.get('TMDB_API_KEY')),
+            'trakt_app_configured': bool(config.get('TRAKT_CLIENT_ID') and config.get('TRAKT_CLIENT_SECRET')),
             'status': 'success'
         }), 200
     except Exception as e:
