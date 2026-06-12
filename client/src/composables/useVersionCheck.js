@@ -2,6 +2,7 @@
 import { ref, onMounted } from "vue";
 import { useToast } from "vue-toast-notification";
 import axios from "axios";
+import { getLatestRelease } from "@/api/githubReleasesApi";
 
 export function useVersionCheck() {
   const toast = useToast();
@@ -63,10 +64,7 @@ export function useVersionCheck() {
 
   const getLatestVersion = async () => {
     try {
-      const response = await axios.get(
-        "https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases/latest",
-        { timeout: 8000, _skipAuth: true },
-      );
+      const response = await getLatestRelease();
       return response.data.tag_name;
     } catch (error) {
       console.error("GitHub latest version error:", error);

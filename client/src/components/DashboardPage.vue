@@ -345,6 +345,7 @@ import LogsComponent from './LogsComponent.vue';
 import UserManagement from './settings/UserManagement.vue';
 import UserProfile from './settings/UserProfile.vue';
 import { exportConfig, importConfig } from '@/api/api';
+import { getReleaseByTag } from '@/api/githubReleasesApi';
 
 const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
 
@@ -733,7 +734,7 @@ export default {
         this.isLoadingChangelog = true;
         try {
           // Get release info from GitHub API
-          const response = await axios.get(`https://api.github.com/repos/giuseppe99barchetta/SuggestArr/releases/tags/${this.currentVersion}`);
+          const response = await getReleaseByTag(this.currentVersion);
           
           if (response.data && response.data.body) {
             // Convert markdown to basic HTML
