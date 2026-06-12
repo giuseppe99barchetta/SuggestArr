@@ -216,7 +216,7 @@
           </small>
           <small v-else-if="!traktUsable" class="toggle-help toggle-help--warn">
             <i class="fas fa-exclamation-triangle"></i>
-            No linked Trakt accounts — link accounts in Dashboard &gt; Trakt
+            No linked Trakt accounts — link accounts in Services &gt; Trakt
           </small>
           <small v-else class="toggle-help">Use linked Trakt watch history to find similar content</small>
 
@@ -234,7 +234,7 @@
           </small>
           <small v-else-if="!traktUsable" class="toggle-help toggle-help--warn">
             <i class="fas fa-exclamation-triangle"></i>
-            No linked Trakt accounts — link accounts in Dashboard &gt; Trakt
+            No linked Trakt accounts — link accounts in Services &gt; Trakt
           </small>
           <small v-else class="toggle-help">Skip content already watched on Trakt</small>
         </div>

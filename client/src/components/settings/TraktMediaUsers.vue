@@ -1,7 +1,7 @@
 <template>
-  <div class="settings-section">
-    <div class="settings-group">
-      <h2 class="settings-group-title">
+  <div class="settings-section" :class="{ 'settings-section--embedded': embedded }">
+    <div class="settings-group" :class="{ 'settings-group--embedded': embedded }">
+      <h2 v-if="!embedded" class="settings-group-title">
         <i class="fas fa-tv"></i>
         Trakt — Media Users
       </h2>
@@ -119,6 +119,10 @@ export default {
   mixins: [traktDevicePolling],
   props: {
     config: Object,
+    embedded: {
+      type: Boolean,
+      default: false,
+    },
   },
   data() {
     return {
@@ -140,10 +144,18 @@ export default {
       return !!(this.config?.TRAKT_CLIENT_ID && this.config?.TRAKT_CLIENT_SECRET);
     },
   },
-  async mounted() {
-    if (this.traktAppConfigured) {
-      await this.loadMediaUsers();
-    }
+  watch: {
+    traktAppConfigured: {
+      immediate: true,
+      async handler(isConfigured) {
+        if (isConfigured) {
+          await this.loadMediaUsers();
+        } else {
+          this.mediaUsers = [];
+          this.loadError = null;
+        }
+      },
+    },
   },
   methods: {
     rowKey(user) {
@@ -238,12 +250,23 @@ export default {
   padding-bottom: 1.5rem;
 }
 
+.settings-section--embedded {
+  padding-bottom: 0;
+}
+
 .settings-group {
   padding: 1.5rem 2rem;
   margin-bottom: 1.5rem;
   border: 1px solid var(--surface-glass-light);
   border-radius: var(--border-radius);
   background: var(--surface-glass-subtle);
+}
+
+.settings-group--embedded {
+  padding: 0;
+  margin-bottom: 0;
+  border: 0;
+  background: transparent;
 }
 
 .settings-group-title {
@@ -347,9 +370,9 @@ export default {
 }
 
 .error-banner {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
+  background: var(--color-error-alpha-10);
+  border: 1px solid var(--color-error-alpha-20);
+  color: var(--color-error);
   padding: 0.75rem 1rem;
   border-radius: var(--border-radius-sm);
   margin-bottom: 1rem;
@@ -361,10 +384,10 @@ export default {
 
 .oauth-success {
   padding: 0.75rem 1rem;
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  background: var(--color-success-alpha-10);
+  border: 1px solid var(--color-success-alpha-20);
   border-radius: var(--border-radius-sm);
-  color: #10b981;
+  color: var(--color-success);
   font-size: 0.9rem;
   margin-bottom: 1rem;
   line-height: 1.6;
