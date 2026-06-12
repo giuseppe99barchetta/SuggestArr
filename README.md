@@ -18,7 +18,10 @@ SuggestArr is a project designed to automate media content recommendations and d
 - **TMDb Integration**: Searches for similar movies and TV shows on TMDb.
 - **AI-Powered Recommendations** *(beta)*: Uses any OpenAI-compatible LLM (OpenAI, Ollama, Gemini, LiteLLM…) to generate hyper-personalized suggestions based on watch history, complete with AI reasoning for each pick.
 - **AI Search** *(beta)*: Describe in natural language what you want to watch and let the AI find matching titles, personalised to your viewing history, with one-click request to Seer.
+- **Trakt Watch History**: Let each user link their own Trakt account. SuggestArr can use Trakt recent watches as recommendation seeds and skip content already watched on Trakt.
 - **Automated Requests**: Sends download requests for recommended content to Seer.
+- **Pending-Request Job Pause**: Skip scheduled or manual jobs while Seer still has requests waiting for approval or denial.
+- **Cleanup Automation**: Optionally prune old SuggestArr-originated requests and files when users never favorite them in Plex, Jellyfin, or Emby.
 - **Web Interface**: A user-friendly interface for configuration and management.
 - **Real-Time Logs**: View and filter logs in real time (e.g., `INFO`, `ERROR`, `DEBUG`).
 - **User Selection**: Choose specific users to initiate requests, allowing management and approval of auto-requested content.
@@ -33,6 +36,7 @@ SuggestArr is a project designed to automate media content recommendations and d
 - Configured **[Jellyfin](https://jellyfin.org/)**, **[Plex](https://www.plex.tv/)**, or **[Emby](https://emby.media/)**
 - Configured **[Seer](https://github.com/seerr-team/seerr)**
 - (Optional) External database (PostgreSQL or MySQL) for improved performance
+- (Optional) **[Trakt OAuth application](https://trakt.tv/oauth/applications)** for per-user Trakt watch-history integration
 
 ## Docker Usage
 
@@ -77,6 +81,54 @@ If you'd like to use a specific Seer user to make media requests, follow these s
 4. The system will now use this user to make media requests, rather than using the admin or default profile.
 
 Note: Currently, only local Seer users are supported.
+
+## Trakt Watch History Integration
+
+SuggestArr can enrich recommendations with each user's own Trakt watch history. Trakt is optional: media-server history still works without it.
+
+### What Trakt adds
+
+- Recent Trakt watches can be used as recommendation seeds.
+- Fully watched Trakt items can be added to the skip-watched set.
+- Each SuggestArr user links their own Trakt account from their profile.
+- Admins configure only the shared Trakt app credentials.
+- A collapsible **Recent Trakt Preview** panel shows the latest items fetched from Trakt when opened.
+
+### How to enable
+
+1. Create a Trakt OAuth app at <https://trakt.tv/oauth/applications>.
+2. In SuggestArr, go to **Services -> Trakt**.
+3. Enter the Trakt **Client ID** and **Client Secret**, then save.
+4. Each user goes to **Profile -> Trakt Account** and clicks **Link Trakt**.
+5. Enter the Trakt device code shown by SuggestArr at the Trakt activation URL.
+6. Open **Recent Trakt Preview** to verify the latest Trakt history is being read.
+
+For admins, the same profile panel is available under **Users**. Trakt links are tied to the user's linked Plex, Jellyfin, or Emby media profile, so users should link their media-server account first.
+
+## Job Pause and Cleanup Automation
+
+SuggestArr includes two safety tools for running automation without flooding Seer or keeping unwanted media forever.
+
+### Pause jobs while Seer has pending requests
+
+Each job has a **Pause while Seer requests are pending** option in its schedule settings.
+
+When enabled, SuggestArr checks Seer before running that job. If Seer has requests still awaiting approval or denial, the job is skipped and logged as paused/skipped. This applies to scheduled runs, single job runs, and force-run-all.
+
+Use this when Seer approvals are part of your workflow and you want new automation runs to wait until the previous batch has been reviewed.
+
+### Cleanup Automation
+
+Cleanup Automation is available under **Advanced -> Cleanup Automation**.
+
+It looks at requests created by SuggestArr, waits for the configured grace period, checks whether the item is favorited in Plex, Jellyfin, or Emby, and then:
+
+- keeps favorited items
+- skips items no longer present in the media library
+- logs what would be deleted in dry-run mode
+- asks Seer to delete matching media files when real mode is enabled
+
+Cleanup is off by default and starts safely in dry-run mode. Always run dry-run first and review the audit log before enabling real deletions.
 
 ## AI-Powered Recommendations (Beta)
 
