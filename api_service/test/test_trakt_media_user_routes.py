@@ -50,6 +50,17 @@ class FakeTraktClient:
     async def get_user_settings(self):
         return {"trakt_user_id": "trakt-user-1", "trakt_username": "trakt_name"}
 
+    async def get_recent_items(self, limit=10):
+        return [
+            {
+                "media_type": "movie",
+                "tmdb_id": "123",
+                "title": "Recent Movie",
+                "year": 2024,
+                "watched_at": 1710000000,
+            }
+        ][:limit]
+
 
 SELECTED = {"SELECTED_SERVICE": "jellyfin", "SELECTED_USERS": [{"id": "jf-1", "name": "alice"}]}
 
@@ -172,3 +183,42 @@ def test_delete_unlinks_trakt_account():
         resp = app.test_client().delete("/api/trakt/media-users/jellyfin/jf-1")
     assert resp.status_code == 200
     db.unlink_trakt_account.assert_called_once_with(1)
+
+
+def test_recent_preview_returns_normalized_items():
+    app, _ = make_app()
+    db = MagicMock()
+    db.get_media_user_identity.return_value = {"id": 1}
+    db.get_trakt_account_link.return_value = {
+        "id": 5,
+        "media_user_identity_id": 1,
+        "connected": True,
+        "trakt_username": "alice_t",
+        "token_source": "manual_oauth",
+    }
+    db.get_trakt_oauth_tokens.return_value = {
+        "access_token": "access",
+        "refresh_token": "refresh",
+        "expires_at": 12345,
+    }
+    p1, p2, p3, p4 = _patches(db)
+    with p1, p2, p3, p4:
+        resp = app.test_client().get("/api/trakt/media-users/jellyfin/jf-1/recent?limit=5")
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["status"] == "success"
+    assert payload["trakt_username"] == "alice_t"
+    assert payload["items"][0]["title"] == "Recent Movie"
+    assert payload["items"][0]["tmdb_id"] == "123"
+
+
+def test_recent_preview_requires_linked_account():
+    app, _ = make_app()
+    db = MagicMock()
+    db.get_media_user_identity.return_value = {"id": 1}
+    db.get_trakt_account_link.return_value = None
+    p1, p2, p3, p4 = _patches(db)
+    with p1, p2, p3, p4:
+        resp = app.test_client().get("/api/trakt/media-users/jellyfin/jf-1/recent")
+    assert resp.status_code == 404
+    assert resp.get_json()["message"] == "Trakt account not linked"

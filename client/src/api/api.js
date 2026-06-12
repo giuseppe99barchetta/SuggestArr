@@ -153,6 +153,9 @@ export const pollMediaUserTraktDeviceToken = (provider, externalUserId, deviceCo
 export const unlinkMediaUserTrakt = (provider, externalUserId) =>
     axios.delete(`/api/trakt/media-users/${provider}/${encodeURIComponent(externalUserId)}`);
 
+export const previewMediaUserTraktRecent = (provider, externalUserId, limit = 10) =>
+    axios.get(`/api/trakt/media-users/${provider}/${encodeURIComponent(externalUserId)}/recent`, { params: { limit } });
+
 export const updateTraktSource = (provider, externalUserId, payload) =>
     axios.put(`/api/trakt/sources/${provider}/${encodeURIComponent(externalUserId)}`, payload);
 

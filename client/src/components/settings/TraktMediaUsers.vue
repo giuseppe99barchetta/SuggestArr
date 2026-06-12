@@ -65,6 +65,65 @@
           </li>
         </ul>
 
+        <div v-if="connectedTraktUsers.length > 0" class="trakt-preview-panel">
+          <button
+            type="button"
+            class="collapsible-toggle"
+            @click="togglePreviewPanel"
+          >
+            <i class="fas fa-chevron-right toggle-arrow" :class="{ expanded: previewExpanded }"></i>
+            <span>Recent Trakt Preview</span>
+          </button>
+
+          <div v-show="previewExpanded" class="trakt-preview-content">
+            <div class="trakt-preview-controls">
+              <select v-model="previewTargetKey" class="form-control" :disabled="previewLoading" @change="clearPreviewItems">
+                <option
+                  v-for="user in connectedTraktUsers"
+                  :key="rowKey(user)"
+                  :value="rowKey(user)"
+                >
+                  {{ user.external_username || user.external_user_id }}
+                </option>
+              </select>
+              <button
+                type="button"
+                class="btn btn-outline btn-sm"
+                :disabled="previewLoading || !previewTargetUser"
+                @click="loadPreviewItems"
+              >
+                <i :class="previewLoading ? 'fas fa-spinner fa-spin' : 'fas fa-vial'"></i>
+                {{ previewLoading ? 'Fetching...' : 'Test Fetch' }}
+              </button>
+            </div>
+
+            <div v-if="previewError" class="error-banner" role="alert">
+              <i class="fas fa-exclamation-triangle"></i>
+              {{ previewError }}
+            </div>
+
+            <div v-else-if="previewItems.length === 0 && previewFetched" class="list-empty">
+              <i class="fas fa-inbox"></i>
+              No recent Trakt items returned.
+            </div>
+
+            <ul v-else-if="previewItems.length > 0" class="preview-list">
+              <li v-for="item in previewItems" :key="previewItemKey(item)" class="preview-row">
+                <div class="preview-title">
+                  <i :class="item.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
+                  <span>{{ item.title || 'Untitled' }}</span>
+                  <span v-if="item.year" class="preview-year">({{ item.year }})</span>
+                </div>
+                <div class="preview-meta">
+                  <span>{{ item.media_type === 'movie' ? 'Movie' : 'TV' }}</span>
+                  <span v-if="item.tmdb_id">TMDb {{ item.tmdb_id }}</span>
+                  <span v-if="item.watched_at">{{ formatPreviewDate(item.watched_at) }}</span>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+
         <!-- Active device-code prompt -->
         <div v-if="traktUserCode" class="oauth-success">
           <i class="fas fa-key"></i>
@@ -111,6 +170,7 @@ import {
   startMediaUserTraktDeviceCode,
   pollMediaUserTraktDeviceToken,
   unlinkMediaUserTrakt,
+  previewMediaUserTraktRecent,
 } from '@/api/api';
 import traktDevicePolling from './mixins/traktDevicePolling';
 
@@ -137,11 +197,23 @@ export default {
       unlinkTargetKey: '',
       unlinkTargetLabel: '',
       traktPopupBlocked: false,
+      previewExpanded: false,
+      previewTargetKey: '',
+      previewItems: [],
+      previewLoading: false,
+      previewError: null,
+      previewFetched: false,
     };
   },
   computed: {
     traktAppConfigured() {
       return !!(this.config?.TRAKT_CLIENT_ID && this.config?.TRAKT_CLIENT_SECRET);
+    },
+    connectedTraktUsers() {
+      return this.mediaUsers.filter(user => user.trakt && user.trakt.connected);
+    },
+    previewTargetUser() {
+      return this.connectedTraktUsers.find(user => this.rowKey(user) === this.previewTargetKey) || null;
     },
   },
   watch: {
@@ -153,6 +225,7 @@ export default {
         } else {
           this.mediaUsers = [];
           this.loadError = null;
+          this.resetPreview();
         }
       },
     },
@@ -182,9 +255,11 @@ export default {
       try {
         const res = await listTraktMediaUsers();
         this.mediaUsers = res.data?.media_users || [];
+        this.ensurePreviewTarget();
       } catch (err) {
         this.loadError = err.response?.data?.message || 'Failed to load media users';
         this.mediaUsers = [];
+        this.resetPreview();
       } finally {
         this.isLoadingUsers = false;
       }
@@ -239,6 +314,56 @@ export default {
         this.isUnlinking = { ...this.isUnlinking, [key]: false };
         this.cancelUnlink();
       }
+    },
+    ensurePreviewTarget() {
+      if (!this.connectedTraktUsers.length) {
+        this.resetPreview();
+        return;
+      }
+      if (!this.previewTargetUser) {
+        this.previewTargetKey = this.rowKey(this.connectedTraktUsers[0]);
+      }
+    },
+    resetPreview() {
+      this.previewTargetKey = '';
+      this.clearPreviewItems();
+    },
+    clearPreviewItems() {
+      this.previewItems = [];
+      this.previewError = null;
+      this.previewFetched = false;
+    },
+    togglePreviewPanel() {
+      this.previewExpanded = !this.previewExpanded;
+      if (this.previewExpanded) {
+        this.ensurePreviewTarget();
+      }
+    },
+    async loadPreviewItems() {
+      const user = this.previewTargetUser;
+      if (!user) return;
+      this.previewLoading = true;
+      this.previewError = null;
+      this.previewFetched = false;
+      try {
+        const res = await previewMediaUserTraktRecent(user.provider, user.external_user_id, 10);
+        this.previewItems = res.data?.items || [];
+        this.previewFetched = true;
+      } catch (err) {
+        this.previewItems = [];
+        this.previewFetched = true;
+        this.previewError = err.response?.data?.message || 'Failed to fetch recent Trakt items';
+      } finally {
+        this.previewLoading = false;
+      }
+    },
+    previewItemKey(item) {
+      return `${item.media_type || 'unknown'}:${item.tmdb_id || item.title}:${item.watched_at || ''}`;
+    },
+    formatPreviewDate(ts) {
+      const date = new Date(Number(ts) * 1000);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleDateString();
     },
   },
 };
@@ -369,6 +494,89 @@ export default {
   flex-shrink: 0;
 }
 
+.trakt-preview-panel {
+  margin-bottom: var(--spacing-md);
+  border: 1px solid var(--surface-glass-light);
+  border-radius: var(--radius-sm);
+  background: var(--surface-glass-subtle);
+}
+
+.collapsible-toggle {
+  width: 100%;
+  padding: var(--spacing-md);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  text-align: left;
+}
+
+.toggle-arrow {
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.toggle-arrow.expanded {
+  transform: rotate(90deg);
+}
+
+.trakt-preview-content {
+  padding: 0 var(--spacing-md) var(--spacing-md);
+}
+
+.trakt-preview-controls {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+}
+
+.preview-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.preview-row {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--surface-glass-light);
+  border-radius: var(--radius-sm);
+  background: var(--surface-glass-subtle);
+}
+
+.preview-title,
+.preview-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.preview-title {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.preview-title span {
+  min-width: 0;
+}
+
+.preview-year,
+.preview-meta {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 400;
+}
+
 .error-banner {
   background: var(--color-error-alpha-10);
   border: 1px solid var(--color-error-alpha-20);
@@ -464,6 +672,10 @@ export default {
   .user-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+  .trakt-preview-controls {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>
