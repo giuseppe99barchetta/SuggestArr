@@ -390,6 +390,75 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(safe_payload['client_id'], 'cid')
         self.assertEqual(safe_payload['client_secret'], '***')
 
+    def test_config_export_import_media_users_roundtrip(self):
+        import api_service.db.database_manager as dm_mod
+
+        real_db_cls = DatabaseManager
+        real_db_cls._instance = None
+        fd, db_file = tempfile.mkstemp(suffix='.db')
+        os.close(fd)
+
+        path_patch = patch.object(dm_mod, 'DB_PATH', db_file)
+        env_patch = patch(
+            'api_service.db.database_manager.load_env_vars',
+            return_value={'DB_TYPE': 'sqlite'},
+        )
+        config_db_patch = patch(
+            'api_service.services.config_service.DatabaseManager',
+            real_db_cls,
+        )
+        path_patch.start()
+        env_patch.start()
+        config_db_patch.start()
+
+        try:
+            manager = real_db_cls()
+            identity = manager.upsert_media_user_identity('jellyfin', 'jf-1', 'alice')
+            link_id = manager.upsert_trakt_account_link(
+                media_user_identity_id=identity['id'],
+                trakt_user_id='t-1',
+                trakt_username='trakt_alice',
+                token_source='manual_oauth',
+                status='connected',
+            )
+            manager.upsert_trakt_oauth_tokens(
+                link_id, 'access-token', 'refresh-token', 1234567890,
+            )
+            manager.upsert_trakt_source(
+                media_user_identity_id=identity['id'],
+                source_type='watched_history',
+                source_key='watched_history',
+                enabled=True,
+                use_as_seed=True,
+                use_as_exclusion=False,
+            )
+
+            exported = config_service.ConfigService.export_config()
+            self.assertEqual(len(exported['media_users']), 1)
+
+            real_db_cls._instance = None
+            manager = real_db_cls()
+            config_service.ConfigService.import_config(exported)
+
+            restored = manager.get_media_user_identity('jellyfin', 'jf-1')
+            self.assertEqual(restored['external_username'], 'alice')
+            link = manager.get_trakt_account_link(restored['id'])
+            self.assertEqual(link['trakt_username'], 'trakt_alice')
+            tokens = manager.get_trakt_oauth_tokens(link['id'])
+            self.assertEqual(tokens['access_token'], 'access-token')
+            sources = manager.get_trakt_sources(restored['id'])
+            self.assertEqual(len(sources), 1)
+            self.assertFalse(sources[0]['use_as_exclusion'])
+        finally:
+            real_db_cls._instance = None
+            config_db_patch.stop()
+            env_patch.stop()
+            path_patch.stop()
+            try:
+                os.unlink(db_file)
+            except FileNotFoundError:
+                pass
+
     def test_config_status_exposes_trakt_app_configured_without_secret_values(self):
         from api_service.blueprints.config.routes import config_bp
         from flask import Flask

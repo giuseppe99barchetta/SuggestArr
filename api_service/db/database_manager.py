@@ -2621,6 +2621,27 @@ class DatabaseManager:
         return {"id": row[0], "provider": row[1], "external_user_id": row[2],
                 "external_username": row[3], "created_at": row[4]}
 
+    def get_all_media_user_identities(self) -> List[Dict[str, Any]]:
+        """Return all media-user identity rows ordered by provider and external id."""
+        query = (
+            "SELECT id, provider, external_user_id, external_username, created_at "
+            "FROM media_user_identities ORDER BY provider, external_user_id"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        return [
+            {
+                "id": row[0],
+                "provider": row[1],
+                "external_user_id": row[2],
+                "external_username": row[3],
+                "created_at": row[4],
+            }
+            for row in rows
+        ]
+
     # ---- trakt_account_links --------------------------------------------------
 
     def upsert_trakt_account_link(
