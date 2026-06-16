@@ -336,7 +336,7 @@ class TestConfig(unittest.TestCase):
 
         self.assertEqual(exported['integrations']['trakt'], {
             'client_id': 'cid',
-            'client_secret': 'secret',
+            'client_secret': '***',
         })
         self.assertNotIn('TRAKT_ACCESS_TOKEN', exported['settings'])
         self.assertNotIn('TRAKT_REFRESH_TOKEN', exported['settings'])
@@ -390,6 +390,192 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(safe_payload['client_id'], 'cid')
         self.assertEqual(safe_payload['client_secret'], '***')
 
+    def test_config_export_redacts_integration_secrets_by_default(self):
+        self._db_manager_cls.return_value.get_all_integrations.return_value = {
+            'plex': {'api_url': 'http://plex', 'api_key': 'plex-secret'},
+            'trakt': {'client_id': 'cid', 'client_secret': 'secret'},
+        }
+
+        exported = config_service.ConfigService.export_config()
+
+        self.assertEqual(exported['integrations']['plex']['api_url'], 'http://plex')
+        self.assertEqual(exported['integrations']['plex']['api_key'], '***')
+        self.assertEqual(exported['integrations']['trakt']['client_id'], 'cid')
+        self.assertEqual(exported['integrations']['trakt']['client_secret'], '***')
+
+    def test_config_export_redacts_trakt_oauth_tokens_by_default(self):
+        import api_service.db.database_manager as dm_mod
+
+        real_db_cls = DatabaseManager
+        real_db_cls._instance = None
+        fd, db_file = tempfile.mkstemp(suffix='.db')
+        os.close(fd)
+
+        path_patch = patch.object(dm_mod, 'DB_PATH', db_file)
+        env_patch = patch(
+            'api_service.db.database_manager.load_env_vars',
+            return_value={'DB_TYPE': 'sqlite'},
+        )
+        config_db_patch = patch(
+            'api_service.services.config_service.DatabaseManager',
+            real_db_cls,
+        )
+        path_patch.start()
+        env_patch.start()
+        config_db_patch.start()
+
+        try:
+            manager = real_db_cls()
+            identity = manager.upsert_media_user_identity('jellyfin', 'jf-1', 'alice')
+            link_id = manager.upsert_trakt_account_link(
+                media_user_identity_id=identity['id'],
+                trakt_user_id='t-1',
+                trakt_username='trakt_alice',
+            )
+            manager.upsert_trakt_oauth_tokens(
+                link_id, 'access-token', 'refresh-token', 1234567890,
+            )
+
+            exported = config_service.ConfigService.export_config()
+
+            trakt = exported['media_users'][0]['trakt']
+            self.assertEqual(trakt['trakt_username'], 'trakt_alice')
+            self.assertEqual(trakt['oauth_tokens'], {
+                'access_token': '***',
+                'refresh_token': '***',
+                'expires_at': None,
+            })
+            self.assertNotIn('warnings', exported)
+        finally:
+            real_db_cls._instance = None
+            config_db_patch.stop()
+            env_patch.stop()
+            path_patch.stop()
+            try:
+                os.unlink(db_file)
+            except FileNotFoundError:
+                pass
+
+    def test_config_export_includes_secrets_when_requested(self):
+        import api_service.db.database_manager as dm_mod
+
+        real_db_cls = DatabaseManager
+        real_db_cls._instance = None
+        fd, db_file = tempfile.mkstemp(suffix='.db')
+        os.close(fd)
+
+        path_patch = patch.object(dm_mod, 'DB_PATH', db_file)
+        env_patch = patch(
+            'api_service.db.database_manager.load_env_vars',
+            return_value={'DB_TYPE': 'sqlite'},
+        )
+        config_db_patch = patch(
+            'api_service.services.config_service.DatabaseManager',
+            real_db_cls,
+        )
+        path_patch.start()
+        env_patch.start()
+        config_db_patch.start()
+
+        try:
+            manager = real_db_cls()
+            manager.set_integration('trakt', {'client_id': 'cid', 'client_secret': 'secret'})
+            identity = manager.upsert_media_user_identity('jellyfin', 'jf-1', 'alice')
+            link_id = manager.upsert_trakt_account_link(
+                media_user_identity_id=identity['id'],
+                trakt_user_id='t-1',
+                trakt_username='trakt_alice',
+            )
+            manager.upsert_trakt_oauth_tokens(
+                link_id, 'access-token', 'refresh-token', 1234567890,
+            )
+
+            exported = config_service.ConfigService.export_config(include_secrets=True)
+
+            tokens = exported['media_users'][0]['trakt']['oauth_tokens']
+            self.assertEqual(tokens['access_token'], 'access-token')
+            self.assertEqual(tokens['refresh_token'], 'refresh-token')
+            self.assertEqual(exported['integrations']['trakt']['client_secret'], 'secret')
+            self.assertIn('warnings', exported)
+        finally:
+            real_db_cls._instance = None
+            config_db_patch.stop()
+            env_patch.stop()
+            path_patch.stop()
+            try:
+                os.unlink(db_file)
+            except FileNotFoundError:
+                pass
+
+    def test_config_import_preserves_existing_secrets_when_snapshot_is_redacted(self):
+        self._db_manager_cls.return_value.get_all_integrations.return_value = {}
+        self._db_manager_cls.return_value.get_integration.return_value = {
+            'api_url': 'http://plex',
+            'api_key': 'live-token',
+        }
+        self._db_manager_cls.return_value.refresh_config.return_value = None
+
+        config_service.ConfigService.import_config({
+            'version': config_service.CURRENT_VERSION,
+            'integrations': {
+                'plex': {'api_url': 'http://new-plex', 'api_key': '***'},
+            },
+            'settings': {'PLEX_TOKEN': '***'},
+        })
+
+        written = self._db_manager_cls.return_value.set_integration.call_args.args[1]
+        self.assertEqual(written['api_url'], 'http://new-plex')
+        self.assertEqual(written['api_key'], 'live-token')
+
+    def test_config_import_preserves_oauth_tokens_when_snapshot_is_redacted(self):
+        import api_service.db.database_manager as dm_mod
+
+        real_db_cls = DatabaseManager
+        real_db_cls._instance = None
+        fd, db_file = tempfile.mkstemp(suffix='.db')
+        os.close(fd)
+
+        path_patch = patch.object(dm_mod, 'DB_PATH', db_file)
+        env_patch = patch(
+            'api_service.db.database_manager.load_env_vars',
+            return_value={'DB_TYPE': 'sqlite'},
+        )
+        config_db_patch = patch(
+            'api_service.services.config_service.DatabaseManager',
+            real_db_cls,
+        )
+        path_patch.start()
+        env_patch.start()
+        config_db_patch.start()
+
+        try:
+            manager = real_db_cls()
+            identity = manager.upsert_media_user_identity('jellyfin', 'jf-1', 'alice')
+            link_id = manager.upsert_trakt_account_link(
+                media_user_identity_id=identity['id'],
+                trakt_user_id='t-1',
+                trakt_username='trakt_alice',
+            )
+            manager.upsert_trakt_oauth_tokens(
+                link_id, 'live-access', 'live-refresh', 1234567890,
+            )
+
+            exported = config_service.ConfigService.export_config(include_secrets=False)
+            config_service.ConfigService.import_config(exported)
+
+            tokens = manager.get_trakt_oauth_tokens(link_id)
+            self.assertEqual(tokens['access_token'], 'live-access')
+            self.assertEqual(tokens['refresh_token'], 'live-refresh')
+        finally:
+            real_db_cls._instance = None
+            config_db_patch.stop()
+            env_patch.stop()
+            path_patch.stop()
+            try:
+                os.unlink(db_file)
+            except FileNotFoundError:
+                pass
+
     def test_config_export_import_media_users_roundtrip(self):
         import api_service.db.database_manager as dm_mod
 
@@ -433,7 +619,7 @@ class TestConfig(unittest.TestCase):
                 use_as_exclusion=False,
             )
 
-            exported = config_service.ConfigService.export_config()
+            exported = config_service.ConfigService.export_config(include_secrets=True)
             self.assertEqual(len(exported['media_users']), 1)
 
             real_db_cls._instance = None
@@ -458,6 +644,28 @@ class TestConfig(unittest.TestCase):
                 os.unlink(db_file)
             except FileNotFoundError:
                 pass
+
+    def test_config_export_rejects_non_admin(self):
+        from api_service.blueprints.config.routes import config_bp
+        from flask import Flask, g
+
+        app = Flask(__name__)
+        app.config['TESTING'] = True
+        self._caller = {'username': 'viewer', 'role': 'user'}
+
+        @app.before_request
+        def inject_caller():
+            g.current_user = self._caller
+
+        app.register_blueprint(config_bp, url_prefix='/api/config')
+        client = app.test_client()
+
+        resp = client.get('/api/config/export')
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.get_json(), {'error': 'Insufficient permissions'})
+
+        resp = client.get('/api/config/export?include_secrets=true')
+        self.assertEqual(resp.status_code, 403)
 
     def test_config_status_exposes_trakt_app_configured_without_secret_values(self):
         from api_service.blueprints.config.routes import config_bp

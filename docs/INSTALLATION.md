@@ -304,6 +304,8 @@ SuggestArr stores:
 
 SuggestArr does not expose Trakt access tokens in API responses or frontend lists.
 
+Configuration export (Dashboard **Export**) can include Trakt link metadata and source settings by default. OAuth tokens are redacted unless you choose a full backup. See [UI Export and Import](#ui-export-and-import).
+
 ### Create a Trakt OAuth app
 
 1. Open <https://trakt.tv/oauth/applications>.
@@ -637,24 +639,72 @@ SuggestArr has two backup methods:
 
 In the footer of the web interface, admins can use:
 
-- `Export`: downloads a full configuration snapshot as a JSON file.
+- `Export`: downloads a configuration snapshot as a JSON file.
 - `Import`: restores a configuration snapshot from a previously exported JSON file.
 
 Use this when you want to start a new SuggestArr instance and restore the same configuration without manually entering every value again.
 
-Recommended flow:
+The Dashboard uses `GET /api/config/export` and `POST /api/config/import`. This is the **canonical** backup path and restores integrations, settings, and per-user Trakt data.
+
+#### What is included
+
+Each export contains:
+
+- `integrations`: service credentials from the database (URLs, API keys, tokens, and similar fields).
+- `settings`: non-integration configuration from `config.yaml` (filters, scheduling, feature flags, and similar values).
+- `media_users`: media-server user identities and per-user Trakt link metadata (username, status, source settings).
+
+Trakt app credentials remain under `integrations.trakt`. Per-user OAuth tokens are stored under `media_users[].trakt.oauth_tokens`.
+
+Config schema version is `2`. Older exports without `media_users` still import normally.
+
+#### Safe export vs full backup
+
+By default, exports are **safe for troubleshooting**:
+
+- Secret fields are redacted as `***` (API keys, tokens, passwords, Trakt `client_secret`, and similar values).
+- When OAuth tokens exist, `oauth_tokens` is still present but redacted:
+
+```json
+"oauth_tokens": {
+  "access_token": "***",
+  "refresh_token": "***",
+  "expires_at": null
+}
+```
+
+To download a **fully restorable backup**, check **Include all secrets (full backup)** in the export dialog. This sends `include_secrets=true` and includes live credentials plus Trakt OAuth tokens. SuggestArr shows a warning when secrets are included.
+
+Treat full backups like password files. Do not attach them to GitHub issues, Discord, or other public channels.
+
+#### Import behavior
+
+Import merges the snapshot into the running instance:
+
+- Redacted `***` values do **not** overwrite existing secrets.
+- If you import a safe export on a fresh instance, service credentials and Trakt OAuth tokens must be re-entered or re-linked.
+- If you import a safe export on an instance that already has credentials, existing secrets are preserved.
+- A full backup import restores credentials and Trakt tokens without re-linking.
+
+After importing a safe export, Trakt links may still show as connected in metadata, but Trakt features will not work until each user links Trakt again unless the import included live OAuth tokens.
+
+#### Recommended flow
 
 1. Open the old SuggestArr instance.
 2. Click `Export` in the footer.
-3. Save the downloaded JSON file somewhere safe.
-4. Start the new SuggestArr instance.
-5. Complete initial admin setup if required.
-6. Click `Import` in the footer.
-7. Select the exported JSON file.
-8. Review services, database, jobs, and advanced settings.
-9. Save or restart the container if needed.
+3. For disaster recovery, enable **Include all secrets (full backup)**. For troubleshooting or sharing config structure, leave it unchecked.
+4. Save the downloaded JSON file somewhere safe.
+5. Start the new SuggestArr instance.
+6. Complete initial admin setup if required.
+7. Click `Import` in the footer.
+8. Select the exported JSON file.
+9. Review services, database, jobs, and advanced settings.
+10. Re-link Trakt accounts if you imported a safe export without OAuth tokens.
+11. Save or restart the container if needed.
 
-The exported JSON can include sensitive values such as API keys and tokens. Store it like a password file.
+#### API note
+
+`GET /api/admin/export-config` is a separate, older endpoint. It exports integrations and settings only and does **not** include `media_users` or restore them on import. Use the Dashboard export/import flow (or `/api/config/export` directly) when Trakt user links must move with the instance.
 
 ### Filesystem Backup
 

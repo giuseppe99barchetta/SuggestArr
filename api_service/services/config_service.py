@@ -12,6 +12,14 @@ from api_service.config.config import (
 )
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.config_secrets import (
+    EXPORT_SENSITIVE_DATA_WARNING,
+    REDACTED,
+    is_redacted,
+    merge_integration_config,
+    redact_settings,
+    strip_integration_secrets,
+)
 from api_service.services.integration_sanitizer import sanitize_integration_config
 
 logger = LoggerManager.get_logger(__name__)
@@ -63,8 +71,13 @@ def _sanitize_integration_config(service: str, config: dict) -> dict:
     return sanitize_integration_config(service, config)
 
 
-def _export_media_users(db: DatabaseManager) -> list:
-    """Serialize media-user identities and per-user Trakt data for export."""
+def _export_media_users(db: DatabaseManager, *, include_secrets: bool = False) -> list:
+    """Serialize media-user identities and per-user Trakt data for export.
+
+    Account metadata and source settings are always included.  When OAuth tokens
+    exist, ``oauth_tokens`` is always emitted; secret fields are redacted unless
+    ``include_secrets`` is True.
+    """
     media_users = []
     for identity in db.get_all_media_user_identities():
         entry = {
@@ -85,11 +98,18 @@ def _export_media_users(db: DatabaseManager) -> list:
         }
         tokens = db.get_trakt_oauth_tokens(link["id"])
         if tokens:
-            trakt_entry["oauth_tokens"] = {
-                "access_token": tokens["access_token"],
-                "refresh_token": tokens["refresh_token"],
-                "expires_at": tokens.get("expires_at"),
-            }
+            if include_secrets:
+                trakt_entry["oauth_tokens"] = {
+                    "access_token": tokens["access_token"],
+                    "refresh_token": tokens["refresh_token"],
+                    "expires_at": tokens.get("expires_at"),
+                }
+            else:
+                trakt_entry["oauth_tokens"] = {
+                    "access_token": REDACTED,
+                    "refresh_token": REDACTED,
+                    "expires_at": None,
+                }
         trakt_entry["sources"] = [
             {
                 "source_type": source["source_type"],
@@ -136,7 +156,11 @@ def _import_media_users(db: DatabaseManager, media_users: list) -> None:
         if isinstance(oauth, dict):
             access_token = oauth.get("access_token")
             refresh_token = oauth.get("refresh_token")
-            if access_token and refresh_token:
+            if (
+                access_token and refresh_token
+                and not is_redacted(access_token)
+                and not is_redacted(refresh_token)
+            ):
                 db.upsert_trakt_oauth_tokens(
                     link_id=link_id,
                     access_token=access_token,
@@ -187,24 +211,39 @@ class ConfigService:
         return load_env_vars()
 
     @staticmethod
-    def export_config() -> dict:
-        """Build a fully-restorable configuration snapshot.
+    def export_config(*, include_secrets: bool = False) -> dict:
+        """Build a configuration snapshot.
 
-        The snapshot has two sections:
-        - ``integrations``: per-service credentials read directly from the DB
-          integrations table (api_url, api_key, etc.).  API keys are included
-          verbatim – the caller must ensure only admin users receive this.
-        - ``settings``: every other configuration value stored in config.yaml
-          (filters, scheduling, feature flags, Plex/Trakt credentials, …).
+        By default, secret values are redacted so the export is safer to share
+        for troubleshooting.  Pass ``include_secrets=True`` for a fully
+        restorable backup.
+
+        The snapshot has three sections:
+        - ``integrations``: per-service credentials from the DB integrations
+          table.  Secret fields are redacted unless ``include_secrets`` is True.
+        - ``settings``: configuration values from config.yaml, with known
+          secret keys redacted by default.
+        - ``media_users``: media-user identities with Trakt account metadata
+          and source settings.  Per-user OAuth tokens follow ``include_secrets``.
+
+        Args:
+            include_secrets: When True, include raw secret values and Trakt
+                OAuth tokens.  Defaults to False.
 
         Returns:
-            dict with keys ``version``, ``integrations``, ``settings``.
+            dict with keys ``version``, ``integrations``, ``settings``,
+            ``media_users``, and optionally ``warnings``.
         """
         db = DatabaseManager()
         integrations = {
             service: _sanitize_integration_config(service, cfg)
             for service, cfg in db.get_all_integrations().items()
         }
+        if not include_secrets:
+            integrations = {
+                service: strip_integration_secrets(cfg)
+                for service, cfg in integrations.items()
+            }
         logger.info(
             "Config export: collected %d integration(s): %s",
             len(integrations),
@@ -217,13 +256,18 @@ class ConfigService:
             for k, v in config.items()
             if k in _VALID_SETTING_KEYS
         }
+        if not include_secrets:
+            settings = redact_settings(settings)
 
-        return {
+        snapshot = {
             "version": CURRENT_VERSION,
             "integrations": integrations,
             "settings": settings,
-            "media_users": _export_media_users(db),
+            "media_users": _export_media_users(db, include_secrets=include_secrets),
         }
+        if include_secrets:
+            snapshot["warnings"] = [EXPORT_SENSITIVE_DATA_WARNING]
+        return snapshot
 
     @staticmethod
     def import_config(data: dict) -> None:
@@ -262,6 +306,8 @@ class ConfigService:
                 )
                 continue
             service_cfg = _sanitize_integration_config(service, service_cfg)
+            existing = db.get_integration(service) or {}
+            service_cfg = merge_integration_config(service, service_cfg, existing)
             # Log non-sensitive fields only.
             safe = _redact_for_log(service_cfg)
             logger.info("Importing integration '%s' %s", service, safe)
@@ -273,7 +319,7 @@ class ConfigService:
             current_config = load_env_vars()
             updated_keys = []
             for key in _VALID_SETTING_KEYS:
-                if key in settings:
+                if key in settings and not is_redacted(settings[key]):
                     current_config[key] = settings[key]
                     updated_keys.append(key)
             logger.info("Restoring %d setting key(s) from import", len(updated_keys))
