@@ -174,11 +174,11 @@ class PlexHandler(BaseMediaHandler):
 
         if self.use_llm:
             movie_history = [
-                {"title": s["title"], "year": s.get("year"), "type": "movie"}
+                {"title": s["title"], "year": s.get("year"), "type": "movie", "source_origin": s.get("source_origin")}
                 for s in seeds if s.get("media_type") == "movie"
             ]
             tv_history = [
-                {"title": s["title"], "year": s.get("year"), "type": "tv"}
+                {"title": s["title"], "year": s.get("year"), "type": "tv", "source_origin": s.get("source_origin")}
                 for s in seeds if s.get("media_type") == "tv"
             ]
             tasks = []
@@ -200,12 +200,14 @@ class PlexHandler(BaseMediaHandler):
         if not tmdb_id:
             return
         source_obj = seed.get("source_obj")
+        source_origin = seed.get("source_origin")
         is_anime = seed.get("is_anime", False)
         if media_type == "movie" and self.max_similar_movie > 0:
             if not source_obj:
                 source_obj = await self.tmdb_client.get_metadata(tmdb_id, "movie")
             if not source_obj:
                 return
+            self._mark_source_origin(source_obj, source_origin)
             similar = await self.tmdb_client.find_similar_movies(tmdb_id, dry_run=self.dry_run)
             await self.request_similar_media(similar, "movie", self.max_similar_movie, source_obj, is_anime)
         elif media_type == "tv" and self.max_similar_tv > 0:
@@ -213,6 +215,7 @@ class PlexHandler(BaseMediaHandler):
                 source_obj = await self.tmdb_client.get_metadata(tmdb_id, "tv")
             if not source_obj:
                 return
+            self._mark_source_origin(source_obj, source_origin)
             similar = await self.tmdb_client.find_similar_tvshows(tmdb_id, dry_run=self.dry_run)
             await self.request_similar_media(similar, "tv", self.max_similar_tv, source_obj, is_anime)
 

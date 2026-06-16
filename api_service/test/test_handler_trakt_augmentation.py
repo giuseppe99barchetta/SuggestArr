@@ -37,6 +37,7 @@ def test_seed_and_skip_merge_for_linked_user():
     # Seeds are returned for the caller to process additively
     assert len(seeds) == 1
     assert seeds[0]["tmdb_id"] == "11"
+    assert seeds[0]["source_origin"] == "trakt_history"
 
 
 def test_unlinked_user_is_noop():
@@ -62,7 +63,7 @@ def test_seed_processing_failure_propagates():
     handler.tmdb_client.get_metadata = AsyncMock(side_effect=RuntimeError("tmdb down"))
     handler.request_similar_media = AsyncMock()
 
-    seed = {"tmdb_id": "11", "media_type": "movie", "title": "A"}
+    seed = {"tmdb_id": "11", "media_type": "movie", "title": "A", "source_origin": "trakt_history"}
     with pytest.raises(RuntimeError, match="tmdb down"):
         asyncio.run(handler._process_seed({"id": "jf-1"}, seed))
     handler.request_similar_media.assert_not_awaited()
@@ -80,12 +81,13 @@ def test_process_seed_requests_similar():
     handler.tmdb_client.find_similar_movies = AsyncMock(return_value=[{"id": 22}])
     handler.request_similar_media = AsyncMock()
 
-    seed = {"tmdb_id": "11", "media_type": "movie", "title": "A"}
+    seed = {"tmdb_id": "11", "media_type": "movie", "title": "A", "source_origin": "trakt_history"}
     asyncio.run(handler._process_seed({"id": "jf-1"}, seed))
 
     handler.request_similar_media.assert_awaited_once()
     awaited_args = handler.request_similar_media.await_args.args
     assert awaited_args[1] == "movie"
+    assert awaited_args[3]["_source_origin"] == "trakt_history"
 
 
 def test_collect_trakt_seeds_returns_seeds_not_processes():

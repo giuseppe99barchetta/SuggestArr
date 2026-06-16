@@ -144,7 +144,11 @@ class BaseMediaHandler(ABC):
             if watched:
                 self.existing_content_sets.setdefault(media_type, set()).update(watched)
 
-        return list(augmentation.seed_items)
+        seeds = list(augmentation.seed_items)
+        for seed in seeds:
+            seed['source_origin'] = 'trakt_history'
+            self._mark_source_origin(seed.get('source_obj'), 'trakt_history')
+        return seeds
 
     def _merge_seeds(self, seeds):
         """Merge server and Trakt seeds, sort by date, dedup, cap to max_content.
@@ -174,6 +178,18 @@ class BaseMediaHandler(ABC):
                 len(deduped), self.max_content,
             )
         return deduped[:self.max_content]
+
+    def _mark_source_origin(self, source_obj, origin):
+        """Attach private origin metadata to a TMDb source object."""
+        if isinstance(source_obj, dict) and origin:
+            source_obj['_source_origin'] = origin
+        return source_obj
+
+    @staticmethod
+    def _history_key(item):
+        title = str(item.get("title") or "").strip().lower()
+        media_type = str(item.get("type") or item.get("media_type") or "").strip().lower()
+        return (title, media_type)
 
     @abstractmethod
     def _populate_existing_content_sets(self):
@@ -249,6 +265,12 @@ class BaseMediaHandler(ABC):
 
         if max_results <= 0:
             return
+
+        trakt_history_keys = {
+            self._history_key(item)
+            for item in (history_items or [])
+            if item.get("source_origin") == "trakt_history"
+        }
         
         self.logger.info(f"Delegating {max_results} {item_type} recommendations to LLM service.")
         
@@ -276,6 +298,9 @@ class BaseMediaHandler(ABC):
                 search_fn(rec.get("title"), rec.get("year")),
                 self._resolve_llm_source(rec.get("source_title"), item_type),
             )
+            source_key = (str(rec.get("source_title") or "").strip().lower(), str(item_type).strip().lower())
+            if source_key in trakt_history_keys:
+                self._mark_source_origin(source_obj, "trakt_history")
             return rec, rec_results, source_obj
         
         resolved = await asyncio.gather(*[resolve(rec) for rec in llm_recommendations])
