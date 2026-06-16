@@ -558,17 +558,25 @@ def export_config():
     """
     Export the full application configuration as a portable JSON snapshot.
 
-    Requires admin role.  The response includes API keys in plain text so that
-    a configuration backup can be fully restored; callers must treat the
-    response as sensitive.
+    Requires admin role.  Secret values are redacted by default; pass
+    ``include_secrets=true`` for a fully restorable backup.
+
+    Query parameters:
+        include_secrets (str): 'true' to include raw secret values (API keys,
+            tokens, passwords) and Trakt OAuth tokens.  Defaults to 'false'.
 
     Returns:
-        200 JSON with keys: version, integrations, settings.
+        200 JSON with keys: version, integrations, settings, media_users.
         500 on unexpected server error.
     """
     try:
-        snapshot = ConfigService.export_config()
-        logger.info("Admin config export requested by user '%s'", _current_username())
+        include_secrets = request.args.get('include_secrets', 'false').lower() == 'true'
+        snapshot = ConfigService.export_config(include_secrets=include_secrets)
+        logger.info(
+            "Admin config export requested by user '%s' (include_secrets=%s)",
+            _current_username(),
+            include_secrets,
+        )
         return jsonify(snapshot), 200
     except Exception as e:
         logger.error('Error exporting configuration: %s', e, exc_info=True)

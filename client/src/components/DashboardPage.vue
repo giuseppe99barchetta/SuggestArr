@@ -158,7 +158,7 @@
         
         <div v-if="isAdmin" class="footer-actions" data-tour-id="footer-actions">
           <button
-            @click="exportConfig"
+            @click="showExportModal = true"
             class="btn btn-outline"
             :disabled="isLoading"
             title="Export configuration to JSON file">
@@ -263,6 +263,48 @@
         accept=".json"
         style="display: none"
       />
+
+      <!-- Export Configuration Modal -->
+      <transition name="fade">
+        <div v-if="showExportModal" class="modal-overlay" @click.self="showExportModal = false">
+          <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+            <div class="modal-header">
+              <div class="modal-title-wrap">
+                <h3 class="modal-title" id="export-modal-title">
+                  <i class="fas fa-download"></i> Export Configuration
+                </h3>
+                <p class="modal-subtitle">Download a JSON snapshot of your settings.</p>
+              </div>
+              <button type="button" class="modal-close" aria-label="Close export modal" @click="showExportModal = false">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div class="modal-body">
+              <p>Non-secret settings, media user identities, and Trakt account metadata are included by default. Live credentials are redacted unless you opt in below.</p>
+              <label class="export-sensitive-option">
+                <input v-model="exportIncludeSecrets" type="checkbox">
+                Include all secrets (full backup)
+              </label>
+              <p v-if="exportIncludeSecrets" class="export-sensitive-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                This export will contain API keys, tokens, and passwords. Do not share it for troubleshooting or attach it to public issues.
+              </p>
+            </div>
+
+            <div class="modal-footer">
+              <button @click="showExportModal = false" class="btn btn-outline">
+                <i class="fas fa-times"></i>
+                Cancel
+              </button>
+              <button @click="confirmExportConfig" class="btn btn-primary">
+                <i class="fas fa-download"></i>
+                Export
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
 
       <!-- Reset Confirmation Modal -->
       <transition name="fade">
@@ -396,6 +438,8 @@ export default {
       loadingMessage: 'Processing...',
       activeTab: 'requests',
       showResetModal: false,
+      showExportModal: false,
+      exportIncludeSecrets: false,
       showChangelogModal: false,
       changelogData: null,
       isLoadingChangelog: false,
@@ -966,12 +1010,19 @@ export default {
       this.$router.push({ name: 'Home' });
     },
 
-    async exportConfig() {
+    async confirmExportConfig() {
+      const includeSecrets = this.exportIncludeSecrets;
+      this.showExportModal = false;
+      this.exportIncludeSecrets = false;
+      await this.exportConfig(includeSecrets);
+    },
+
+    async exportConfig(includeSecrets = false) {
       this.loadingMessage = 'Exporting configuration...';
       this.isLoading = true;
     
       try {
-        const response = await exportConfig();
+        const response = await exportConfig(includeSecrets);
         const configData = response.data;
       
         const blob = new Blob(
@@ -986,10 +1037,13 @@ export default {
         link.click();
         URL.revokeObjectURL(url);
       
+        const warnings = configData.warnings || [];
         this.$toast.open({
-          message: 'Configuration exported successfully!',
-          type: 'success',
-          duration: 3000,
+          message: warnings.length
+            ? warnings[0]
+            : 'Configuration exported successfully!',
+          type: warnings.length ? 'warning' : 'success',
+          duration: warnings.length ? 8000 : 3000,
           position: 'top-right'
         });
       

@@ -13,28 +13,13 @@ from api_service.auth.middleware import require_role
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.config_secrets import (
+    redact_settings,
+    strip_integration_secrets,
+)
 
 logger = LoggerManager.get_logger("AdminRoute")
 admin_bp = Blueprint('admin', __name__)
-
-# ---------------------------------------------------------------------------
-# Secret-field detection
-# ---------------------------------------------------------------------------
-
-# Substring patterns used to identify secret fields inside integration configs.
-# Any integration config key whose name contains one of these strings is treated
-# as sensitive and stripped when include_secrets=false.
-_INTEGRATION_SECRET_PATTERNS = ('token', 'api_key', 'password', 'secret')
-
-# Top-level keys in the settings dict (config.yaml) that hold secrets.
-_SETTINGS_SECRET_KEYS = frozenset({
-    'TMDB_API_KEY', 'OMDB_API_KEY',
-    'PLEX_TOKEN', 'JELLYFIN_TOKEN',
-    'SEER_TOKEN', 'SEER_USER_PSW', 'SEER_SESSION_TOKEN',
-    'DB_PASSWORD',
-    'OPENAI_API_KEY',
-    'TRAKT_CLIENT_SECRET', 'TRAKT_ACCESS_TOKEN', 'TRAKT_REFRESH_TOKEN',
-})
 
 # ---------------------------------------------------------------------------
 # Legacy v1 format: flat env-var dict → v2 integrations dict
@@ -65,41 +50,6 @@ _V1_INTEGRATION_MAP = {
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _strip_integration_secrets(cfg: dict) -> dict:
-    """
-    Return a copy of an integration config with secret fields replaced by '***'.
-
-    A field is considered secret if its name contains any string from
-    _INTEGRATION_SECRET_PATTERNS.
-
-    Args:
-        cfg: Raw integration config dict.
-
-    Returns:
-        dict with secret values replaced by '***'.
-    """
-    return {
-        k: '***' if any(p in k for p in _INTEGRATION_SECRET_PATTERNS) else v
-        for k, v in cfg.items()
-    }
-
-
-def _redact_settings(settings: dict) -> dict:
-    """
-    Return a copy of the settings dict with known secret keys replaced by '***'.
-
-    Args:
-        settings: Flat settings dict from load_env_vars().
-
-    Returns:
-        dict with secret values replaced by '***'.
-    """
-    return {
-        k: ('***' if k in _SETTINGS_SECRET_KEYS and v else v)
-        for k, v in settings.items()
-    }
 
 
 def _integrations_from_v1(payload: dict) -> dict:
@@ -156,10 +106,10 @@ def export_config():
 
     if not include_secrets:
         integrations = {
-            svc: _strip_integration_secrets(cfg)
+            svc: strip_integration_secrets(cfg)
             for svc, cfg in integrations.items()
         }
-        settings = _redact_settings(settings)
+        settings = redact_settings(settings)
 
     return jsonify({
         'schema_version': 2,
