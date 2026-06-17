@@ -46,7 +46,7 @@
         <i class="fas fa-info-circle"></i>
       </div>
       <div class="info-content">
-        <h4>Two Types of Jobs</h4>
+        <h4>Job Types</h4>
         <div class="job-types-explanation">
           <div class="job-type-item">
             <span class="job-type-badge discover"><i class="fas fa-search"></i> Discover</span>
@@ -55,6 +55,10 @@
           <div class="job-type-item">
             <span class="job-type-badge recommendation"><i class="fas fa-users"></i> Recommendation</span>
             <span>Find similar content based on what your users have watched - like the original SuggestArr automation.</span>
+          </div>
+          <div class="job-type-item">
+            <span class="job-type-badge trakt_recommendations"><i class="fab fa-trakt"></i> Trakt</span>
+            <span>Fetch personalized movie and show recommendations from a linked Trakt.tv account.</span>
           </div>
         </div>
       </div>
@@ -108,8 +112,8 @@
               <h3>{{ job.name }}</h3>
               <div class="job-badges">
                 <span class="job-type-badge" :class="job.job_type || 'discover'">
-                  <i :class="job.job_type === 'recommendation' ? 'fas fa-users' : 'fas fa-search'"></i>
-                  {{ job.job_type === 'recommendation' ? 'Recommendation' : 'Discover' }}
+                  <i :class="getJobTypeIcon(job.job_type)"></i>
+                  {{ getJobTypeLabel(job.job_type) }}
                 </span>
                 <span class="media-type-badge" :class="job.media_type">
                   <i :class="getMediaTypeIcon(job.media_type)"></i>
@@ -277,6 +281,7 @@ import JobModal from './jobs/JobModal.vue';
 import JobHistoryModal from './jobs/JobHistoryModal.vue';
 import DryRunResultModal from './jobs/DryRunResultModal.vue';
 import OnboardingTour from '@/components/OnboardingTour.vue';
+import { getJobTypeIcon as resolveJobTypeIcon, getJobTypeLabel as resolveJobTypeLabel } from '@/utils/jobTypeVisuals.js';
 
 const JOBS_TOUR_KEY = 'suggestarr_jobs_tour_done';
 // Index of the first step that targets elements inside the job modal
@@ -716,6 +721,14 @@ export default {
       return icons[status] || 'fas fa-question';
     },
 
+    getJobTypeIcon(jobType) {
+      return resolveJobTypeIcon(jobType);
+    },
+
+    getJobTypeLabel(jobType) {
+      return resolveJobTypeLabel(jobType);
+    },
+
     getMediaTypeIcon(mediaType) {
       const icons = {
         movie: 'fas fa-film',
@@ -859,6 +872,11 @@ export default {
 .job-type-badge.recommendation {
   background: rgba(168, 85, 247, 0.15);
   color: #c084fc;
+}
+
+.job-type-badge.trakt_recommendations {
+  background: var(--color-error-alpha-10);
+  color: var(--color-error-light);
 }
 
 /* Job Badges Container */

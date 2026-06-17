@@ -262,6 +262,51 @@ def test_normalize_watched_items_includes_year():
     ]
 
 
+def test_normalize_recommendation_items_deduplicates_by_tmdb_id():
+    client = TraktClient("cid", "secret")
+    payload = [
+        {"title": "Inception", "year": 2010, "ids": {"tmdb": 27205}},
+        {"title": "Duplicate", "year": 2010, "ids": {"tmdb": 27205}},
+        {"title": "No TMDB"},
+    ]
+
+    normalized = client._normalize_recommendation_items(payload, "movie")
+
+    assert normalized == [{
+        "tmdb_id": "27205",
+        "media_type": "movie",
+        "title": "Inception",
+        "year": 2010,
+    }]
+
+
+@pytest.mark.asyncio
+async def test_get_recommendations_requests_trakt_endpoint():
+    session = FakeSession([
+        FakeResponse(200, [
+            {"title": "Arrival", "year": 2016, "ids": {"tmdb": 329865}},
+        ]),
+    ])
+    client = TraktClient("cid", "secret", "access", session=session)
+
+    result = await client.get_recommendations(
+        "movie",
+        limit=15,
+        ignore_collected=True,
+        ignore_watched=True,
+    )
+
+    assert result[0]["tmdb_id"] == "329865"
+    assert session.calls[0][0] == "GET"
+    assert session.calls[0][1] == "https://api.trakt.tv/recommendations/movies"
+    assert session.calls[0][2]["params"] == {
+        "limit": 15,
+        "extended": "min",
+        "ignore_collected": "true",
+        "ignore_watched": "true",
+    }
+
+
 @pytest.mark.asyncio
 async def test_401_refreshes_once_and_retries():
     session = FakeSession([

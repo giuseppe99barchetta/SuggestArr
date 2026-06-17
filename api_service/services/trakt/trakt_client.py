@@ -172,6 +172,42 @@ class TraktClient(BaseHTTPClient):
             "tv": self._normalize_watched_items(shows, "show"),
         }
 
+    async def get_recommendations(
+        self,
+        media_type: str,
+        *,
+        limit: int = 20,
+        ignore_collected: bool = False,
+        ignore_watched: bool = False,
+    ) -> list[dict[str, str]]:
+        """Fetch personalized Trakt recommendations for the authenticated user.
+
+        Args:
+            media_type: ``movie`` or ``tv``.
+            limit: Maximum number of recommendations to return.
+            ignore_collected: When True, omit items already in the user's collection.
+            ignore_watched: When True, omit items already marked watched.
+
+        Returns:
+            Normalized recommendation items with ``tmdb_id``, ``media_type``,
+            ``title``, and ``year`` keys.
+        """
+        if media_type not in ("movie", "tv"):
+            raise ValueError("media_type must be 'movie' or 'tv'")
+
+        path = "/recommendations/movies" if media_type == "movie" else "/recommendations/shows"
+        params: dict[str, Any] = {
+            "limit": max(1, min(int(limit), 100)),
+            "extended": "min",
+        }
+        if ignore_collected:
+            params["ignore_collected"] = "true"
+        if ignore_watched:
+            params["ignore_watched"] = "true"
+
+        payload = await self._request("GET", path, params=params, authenticated=True)
+        return self._normalize_recommendation_items(payload, media_type)
+
     async def _request(
         self,
         method: str,
@@ -316,6 +352,25 @@ class TraktClient(BaseHTTPClient):
             "title": title,
             "year": item.get("year"),
         }
+
+    def _normalize_recommendation_items(
+        self,
+        payload: list[dict[str, Any]],
+        media_type: str,
+    ) -> list[dict[str, str]]:
+        """Normalize Trakt recommendation payloads into TMDB-keyed items."""
+        items: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for entry in payload or []:
+            normalized = self._normalize_media_item(entry, media_type)
+            if not normalized:
+                continue
+            tmdb_id = normalized["tmdb_id"]
+            if tmdb_id in seen:
+                continue
+            seen.add(tmdb_id)
+            items.append(normalized)
+        return items
 
     @staticmethod
     def _normalize_watched_items(payload: list[dict[str, Any]], item_key: str) -> list[dict[str, str]]:

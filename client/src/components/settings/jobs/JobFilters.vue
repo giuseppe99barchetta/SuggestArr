@@ -112,8 +112,8 @@
       <small class="form-help">Also include content that doesn't have any rating data yet</small>
     </div>
 
-    <!-- Minimum Seasons Filter (TV only) -->
-    <div v-if="mediaType === 'tv'" class="form-group">
+    <!-- Minimum Seasons Filter (TV only, discover/recommendation) -->
+    <div v-if="mediaType === 'tv' && jobType !== 'trakt_recommendations'" class="form-group">
       <label for="minSeasons">Minimum Seasons: {{ localFilters.min_seasons || 1 }}</label>
       <input
         id="minSeasons"
@@ -248,8 +248,8 @@
       </p>
     </div>
 
-    <!-- Sort By -->
-    <div class="form-group dropdown-wrapper">
+    <!-- Sort By (discover jobs only) -->
+    <div v-if="jobType === 'discover'" class="form-group dropdown-wrapper">
       <BaseDropdown
         v-model="localFilters.sort_by"
         :options="sortOptions"
@@ -282,6 +282,10 @@ export default {
     mediaType: {
       type: String,
       default: 'movie'
+    },
+    jobType: {
+      type: String,
+      default: 'discover'
     }
   },
   emits: ['update:modelValue'],

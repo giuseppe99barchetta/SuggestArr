@@ -4,6 +4,7 @@ from typing import List, Set
 from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.request_sources import is_tmdb_metadata_source_id
 
 BATCH_SIZE = 20  # Number of requests fetched per batch
 HTTP_OK = {200, 201, 202}  # Include 202 Accepted for async operations
@@ -377,7 +378,7 @@ class SeerClient(BaseHTTPClient):
             db.save_metadata(media, media_type)
         except Exception:
             pass  # non-critical — metadata is display-only cache
-        if source:
+        if source and is_tmdb_metadata_source_id(source.get("id")):
             try:
                 db.save_metadata(source, media_type)
             except Exception:
