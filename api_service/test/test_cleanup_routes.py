@@ -1,6 +1,7 @@
 """Tests for cleanup automation blueprint RBAC."""
 
 import unittest
+from unittest.mock import AsyncMock, patch
 
 from flask import Flask, g
 
@@ -35,6 +36,24 @@ class TestCleanupRoutePermissions(unittest.TestCase):
 
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.get_json(), {"error": "Insufficient permissions"})
+
+    def test_admin_cleanup_run_awaits_coroutine(self):
+        self._caller = {"id": "1", "username": "admin", "role": "admin"}
+        result = {
+            "status": "ok",
+            "summary": "No requests older than 7 days.",
+            "dry_run": True,
+        }
+
+        with patch(
+            "api_service.blueprints.cleanup.routes.execute_cleanup_job",
+            new=AsyncMock(return_value=result),
+        ) as execute_cleanup_job:
+            resp = self.client.post("/api/cleanup/run", json={"dry_run": True})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json(), {"status": "success", "result": result})
+        execute_cleanup_job.assert_awaited_once_with(force_run=True, override_dry_run=True)
 
 
 if __name__ == "__main__":
