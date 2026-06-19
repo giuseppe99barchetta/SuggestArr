@@ -57,7 +57,7 @@
             <span>Find similar content based on what your users have watched - like the original SuggestArr automation.</span>
           </div>
           <div class="job-type-item">
-            <span class="job-type-badge trakt_recommendations"><i class="fab fa-trakt"></i> Trakt</span>
+            <span class="job-type-badge trakt_recommendations"><i class="icon-trakt"></i> Trakt</span>
             <span>Fetch personalized movie and show recommendations from a linked Trakt.tv account.</span>
           </div>
         </div>

@@ -51,7 +51,7 @@
                 :title="traktJobUnavailableReason"
                 @click="setJobType('trakt_recommendations')"
               >
-                <i class="fab fa-trakt"></i>
+                <i class="icon-trakt"></i>
                 <div class="job-type-info">
                   <span class="job-type-name">Trakt Recommendations</span>
                   <span class="job-type-desc">Personalized lists from Trakt.tv</span>

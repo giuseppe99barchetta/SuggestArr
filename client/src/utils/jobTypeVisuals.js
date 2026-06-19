@@ -14,7 +14,7 @@ export const JOB_TYPE_CONFIG = {
     gradient: 'linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 50%, var(--color-warning-light) 100%)',
   },
   trakt_recommendations: {
-    icon: 'fab fa-trakt',
+    icon: 'icon-trakt',
     label: 'Trakt Recommendations',
     color: 'var(--color-error-light)',
     gradient: 'linear-gradient(135deg, var(--color-error-hover) 0%, var(--color-error) 50%, var(--color-error-light) 100%)',
