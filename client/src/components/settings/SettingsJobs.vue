@@ -40,7 +40,7 @@
       </div>
     </transition>
 
-    <!-- Info Box explaining both job types -->
+    <!-- Info Box explaining job types -->
     <div v-if="showInfoBox" class="info-box" data-tour-id="jobs-info-box">
       <div class="info-icon">
         <i class="fas fa-info-circle"></i>
@@ -327,8 +327,8 @@ export default {
         },
         {
           targetId: 'jobs-info-box',
-          title: 'Two Types of Jobs',
-          description: 'Discover Jobs search TMDb catalogs using filters (genre, rating, year) — completely independent from your users. Recommendation Jobs analyse watch history to suggest similar content.',
+          title: 'Job Types',
+          description: 'Discover jobs search TMDb catalogs using filters. Recommendation jobs analyse media-user watch history. Trakt jobs fetch personalized recommendations from linked Trakt.tv accounts.',
           position: 'bottom'
         },
         {
@@ -340,7 +340,7 @@ export default {
         {
           targetId: 'jobs-first-card',
           title: 'Job Card',
-          description: 'Each card summarises a job: its type badge (Discover or Recommendation), media target, and whether it is currently active.',
+          description: 'Each card summarises a job: its type badge, media target, and whether it is currently active.',
           position: 'bottom'
         },
         {
@@ -364,7 +364,7 @@ export default {
         {
           targetId: 'job-modal-type-selector',
           title: 'Job Type',
-          description: 'Choose Discover to find new content via TMDb filters, or Recommendation to suggest titles based on what your users have already watched.',
+          description: 'Choose Discover for TMDb filter searches, Recommendation for watch-history suggestions, or Trakt for linked-account recommendations.',
           position: 'bottom'
         },
         {

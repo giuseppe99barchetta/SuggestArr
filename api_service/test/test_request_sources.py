@@ -1,4 +1,8 @@
 """Tests for request source tag helpers."""
+from unittest.mock import patch
+
+from api_service.db import database_manager as dm_mod
+from api_service.db.database_manager import DatabaseManager
 from api_service.services.request_sources import (
     DISCOVER_SOURCE,
     TRAKT_RECOMMENDATIONS_SOURCE,
@@ -20,3 +24,26 @@ def test_request_source_title_sql_includes_trakt_label():
     assert "Trakt Recommendations" in sql
     assert "discover" in sql
     assert "Discover" in sql
+
+
+def test_grouped_requests_labels_synthetic_sources(tmp_path):
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        db.save_metadata({"id": "101", "title": "Discover Request"}, "movie")
+        db.save_metadata({"id": "202", "title": "Trakt Request"}, "tv")
+        db.save_request("movie", "101", DISCOVER_SOURCE)
+        db.save_request("tv", "202", TRAKT_RECOMMENDATIONS_SOURCE)
+
+        result = db.get_all_requests_grouped_by_source(page=1, per_page=10)
+
+    DatabaseManager._instance = None
+
+    sources = {item["source_id"]: item for item in result["data"]}
+    assert result["total_sources"] == 2
+    assert sources[DISCOVER_SOURCE]["source_title"] == "Discover"
+    assert sources[TRAKT_RECOMMENDATIONS_SOURCE]["source_title"] == "Trakt Recommendations"

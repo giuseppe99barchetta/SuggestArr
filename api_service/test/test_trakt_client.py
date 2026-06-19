@@ -286,6 +286,7 @@ async def test_get_recommendations_requests_trakt_endpoint():
         FakeResponse(200, [
             {"title": "Arrival", "year": 2016, "ids": {"tmdb": 329865}},
         ]),
+        FakeResponse(200, []),
     ])
     client = TraktClient("cid", "secret", "access", session=session)
 
@@ -303,8 +304,33 @@ async def test_get_recommendations_requests_trakt_endpoint():
         "limit": 15,
         "extended": "min",
         "ignore_collected": "true",
-        "ignore_watched": "true",
+        "ignore_watchlisted": "true",
     }
+
+
+@pytest.mark.asyncio
+async def test_get_recommendations_filters_watched_items_locally():
+    session = FakeSession([
+        FakeResponse(200, [
+            {"title": "Arrival", "year": 2016, "ids": {"tmdb": 329865}},
+            {"title": "Heat", "year": 1995, "ids": {"tmdb": 949}},
+        ]),
+        FakeResponse(200, [
+            {"movie": {"title": "Heat", "year": 1995, "ids": {"tmdb": 949}}},
+        ]),
+    ])
+    client = TraktClient("cid", "secret", "access", session=session)
+
+    result = await client.get_recommendations("movie", ignore_watched=True)
+
+    assert result == [{
+        "tmdb_id": "329865",
+        "media_type": "movie",
+        "title": "Arrival",
+        "year": 2016,
+    }]
+    assert session.calls[1][0] == "GET"
+    assert session.calls[1][1] == "https://api.trakt.tv/sync/watched/movies"
 
 
 @pytest.mark.asyncio

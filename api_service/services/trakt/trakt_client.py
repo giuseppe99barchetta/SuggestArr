@@ -203,10 +203,20 @@ class TraktClient(BaseHTTPClient):
         if ignore_collected:
             params["ignore_collected"] = "true"
         if ignore_watched:
-            params["ignore_watched"] = "true"
+            params["ignore_watchlisted"] = "true"
 
         payload = await self._request("GET", path, params=params, authenticated=True)
-        return self._normalize_recommendation_items(payload, media_type)
+        items = self._normalize_recommendation_items(payload, media_type)
+        if ignore_watched:
+            watched_ids = await self._get_watched_tmdb_ids(media_type)
+            items = [item for item in items if item["tmdb_id"] not in watched_ids]
+        return items
+
+    async def _get_watched_tmdb_ids(self, media_type: str) -> set[str]:
+        item_key = "movie" if media_type == "movie" else "show"
+        path = "/sync/watched/movies" if media_type == "movie" else "/sync/watched/shows"
+        payload = await self._request("GET", path, authenticated=True)
+        return {item["tmdb_id"] for item in self._normalize_watched_items(payload, item_key)}
 
     async def _request(
         self,

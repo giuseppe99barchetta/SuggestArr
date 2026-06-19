@@ -5,6 +5,7 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build --skip-plugins @vue/cli-plugin-eslint",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.js\"",
     "lint": "vue-cli-service lint",
     "lint:styles": "stylelint \"src/**/*.{vue,css}\" --allow-empty-input",
     "lint:styles:fix": "stylelint \"src/**/*.{vue,css}\" --fix --allow-empty-input",
