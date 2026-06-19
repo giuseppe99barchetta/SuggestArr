@@ -461,12 +461,21 @@ class JellyfinClient(BaseHTTPClient):
                 elif index == 2:
                     self.logger.debug("Retrying Jellyfin request using api_key query parameter")
 
-                async with session.get(
-                    url,
-                    headers=headers,
-                    params=params,
-                    timeout=self.REQUEST_TIMEOUT,
-                ) as response:
+                try:
+                    request_cm = session.get(
+                        url,
+                        headers=headers,
+                        params=params,
+                        timeout=self.REQUEST_TIMEOUT,
+                    )
+                except StopIteration:
+                    self.logger.error(
+                        "Unexpected termination while retrieving libraries from %s",
+                        endpoint,
+                    )
+                    return None
+
+                async with request_cm as response:
                     if response.status == 200:
                         libraries = await response.json()
                         self.logger.debug(
@@ -517,6 +526,19 @@ class JellyfinClient(BaseHTTPClient):
                     url,
                     last_failure["body"],
                 )
+        except StopIteration:
+            self.logger.error(
+                "Unexpected termination while retrieving libraries from %s",
+                endpoint,
+            )
+        except RuntimeError as e:
+            if isinstance(e.__cause__, StopIteration):
+                self.logger.error(
+                    "Unexpected termination while retrieving libraries from %s",
+                    endpoint,
+                )
+            else:
+                raise
         except aiohttp.ClientError as e:
             self.logger.error(
                 "An error occurred while retrieving libraries: %s", str(e))
