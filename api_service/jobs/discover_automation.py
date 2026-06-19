@@ -12,6 +12,7 @@ from api_service.db.database_manager import DatabaseManager
 from api_service.db.job_repository import JobRepository
 from api_service.services.filter_normalization import normalize_filters
 from api_service.services.seer.seer_client import SeerClient
+from api_service.services.request_sources import DISCOVER_SOURCE
 from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
 
@@ -275,7 +276,12 @@ class DiscoverAutomation:
 
                 # Request the content
                 self.logger.info(f"Requesting {media_type}: {title} (ID: {tmdb_id})")
-                success = await self.seer_client.request_media(media_type, item, source=None, user=None)
+                success = await self.seer_client.request_media(
+                    media_type,
+                    item,
+                    source={"id": DISCOVER_SOURCE},
+                    user=None,
+                )
 
                 if success:
                     requested_count += 1

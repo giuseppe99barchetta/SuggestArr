@@ -13,6 +13,10 @@ from api_service.db.job_repository import JobRepository
 from api_service.jobs.job_manager import JobManager
 from api_service.jobs.discover_automation import DiscoverAutomation, execute_discover_job
 from api_service.jobs.recommendation_automation import RecommendationAutomation, execute_recommendation_job
+from api_service.jobs.trakt_recommendations_automation import (
+    TraktRecommendationsAutomation,
+    execute_trakt_recommendations_job,
+)
 from api_service.utils.asyncio_loop import run_coroutine_sync
 
 logger = LoggerManager.get_logger("JobsRoute")
@@ -44,6 +48,8 @@ def get_job_manager() -> JobManager:
         manager.set_job_executor(execute_discover_job, job_type='discover')
     if 'recommendation' not in manager._job_executors:
         manager.set_job_executor(execute_recommendation_job, job_type='recommendation')
+    if 'trakt_recommendations' not in manager._job_executors:
+        manager.set_job_executor(execute_trakt_recommendations_job, job_type='trakt_recommendations')
     return manager
 
 
@@ -165,10 +171,10 @@ def create_job():
 
         # Set default job_type
         job_type = data.get('job_type', 'discover')
-        if job_type not in ['discover', 'recommendation']:
+        if job_type not in ['discover', 'recommendation', 'trakt_recommendations']:
             return jsonify({
                 'status': 'error',
-                'message': 'job_type must be "discover" or "recommendation"'
+                'message': 'job_type must be one of: discover, recommendation, trakt_recommendations'
             }), 400
         data['job_type'] = job_type
         
@@ -186,6 +192,12 @@ def create_job():
             return jsonify({
                 'status': 'error',
                 'message': f'media_type must be one of: {", ".join(valid_media_types)}'
+            }), 400
+
+        if job_type == 'trakt_recommendations' and len(data.get('user_ids') or []) != 1:
+            return jsonify({
+                'status': 'error',
+                'message': 'Trakt recommendations jobs require exactly one linked media user'
             }), 400
 
         # Validate schedule_type
@@ -247,14 +259,29 @@ def update_job(job_id: int):
             if existing.get('owner_id') != user_id:
                 return jsonify({'status': 'error', 'message': 'Insufficient permissions'}), 403
 
-        # Validate media_type if provided
+        # Validate job_type if provided
         job_type = data.get('job_type', existing.get('job_type', 'discover'))
+        if 'job_type' in data and job_type not in ['discover', 'recommendation', 'trakt_recommendations']:
+            return jsonify({
+                'status': 'error',
+                'message': 'job_type must be one of: discover, recommendation, trakt_recommendations'
+            }), 400
+
+        # Validate media_type if provided
         valid_media_types = ['movie', 'tv'] if job_type == 'discover' else ['movie', 'tv', 'both']
         if 'media_type' in data and data['media_type'] not in valid_media_types:
             return jsonify({
                 'status': 'error',
                 'message': f'media_type must be one of: {", ".join(valid_media_types)}'
             }), 400
+
+        if job_type == 'trakt_recommendations':
+            user_ids = data.get('user_ids', existing.get('user_ids') or [])
+            if len(user_ids) != 1:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Trakt recommendations jobs require exactly one linked media user'
+                }), 400
 
         # Validate schedule_type if provided
         if 'schedule_type' in data and data['schedule_type'] not in ['preset', 'cron']:
@@ -442,6 +469,8 @@ def run_job_now(job_id: int):
         # Execute job based on type (async function called synchronously)
         if job_type == 'recommendation':
             result = run_async(execute_recommendation_job(job_id))
+        elif job_type == 'trakt_recommendations':
+            result = run_async(execute_trakt_recommendations_job(job_id))
         else:
             result = run_async(execute_discover_job(job_id))
 
@@ -502,6 +531,8 @@ def dry_run_job(job_id: int):
         async def _run():
             if job_type == 'recommendation':
                 automation = await RecommendationAutomation.create(job_id, dry_run=True)
+            elif job_type == 'trakt_recommendations':
+                automation = await TraktRecommendationsAutomation.create(job_id, dry_run=True)
             else:
                 automation = await DiscoverAutomation.create(job_id)
             return await automation.run(dry_run=True)
@@ -559,6 +590,8 @@ def _run_all_jobs_in_background():
                     continue
                 if job_type == 'recommendation':
                     run_async(execute_recommendation_job(job_id))
+                elif job_type == 'trakt_recommendations':
+                    run_async(execute_trakt_recommendations_job(job_id))
                 else:
                     run_async(execute_discover_job(job_id))
                 logger.info(f"Force run all: job {job_id} completed")
