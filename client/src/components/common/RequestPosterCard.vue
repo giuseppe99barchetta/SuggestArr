@@ -10,25 +10,28 @@
       <div v-else class="poster-placeholder">
         <i :class="placeholderIcon"></i>
       </div>
-    </div>
 
-    <div class="request-card-body">
-      <h3 class="request-card-title">{{ item.title }}</h3>
-
-      <div class="badge-container">
-        <span class="badge badge-media">
+      <div class="poster-overlay poster-overlay--top">
+        <span class="poster-pill poster-pill--media">
           <i :class="item.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
           {{ item.media_type.toUpperCase() }}
         </span>
-        <span v-if="showRating" class="badge badge-rating">
+        <span v-if="showRating" class="poster-pill poster-pill--rating">
           <i class="fas fa-star"></i>
           {{ item.rating || 'N/A' }}
         </span>
-        <span class="badge badge-requested">
+      </div>
+
+      <div class="poster-overlay poster-overlay--bottom">
+        <span class="poster-date">
           <i class="fas fa-clock"></i>
           {{ formatDate(item.requested_at) }}
         </span>
       </div>
+    </div>
+
+    <div class="request-card-body">
+      <h3 class="request-card-title">{{ item.title }}</h3>
 
       <div v-if="sourceMode === 'ai' && item.rationale" class="source-link">
         <i class="fas fa-search"></i>
@@ -115,6 +118,7 @@ export default {
   width: 100%;
   aspect-ratio: 2/3;
   overflow: hidden;
+  background-color: var(--color-bg-primary);
 }
 
 .poster-image {
@@ -128,6 +132,21 @@ export default {
   transform: scale(1.05);
 }
 
+.request-card-poster::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    var(--color-bg-overlay-light),
+    transparent 30%,
+    transparent 56%,
+    var(--surface-overlay)
+  );
+  opacity: var(--alpha-80);
+  pointer-events: none;
+}
+
 .poster-placeholder {
   width: 100%;
   height: 100%;
@@ -137,6 +156,77 @@ export default {
   justify-content: center;
   color: var(--color-text-muted);
   font-size: 3rem;
+}
+
+.poster-overlay {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  pointer-events: none;
+}
+
+.poster-overlay--top {
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  left: var(--spacing-sm);
+  justify-content: space-between;
+  gap: var(--spacing-xs);
+}
+
+.poster-overlay--bottom {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  justify-content: flex-start;
+  padding: var(--spacing-3xl) var(--spacing-sm) var(--spacing-sm);
+}
+
+.poster-pill,
+.poster-date {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  border: 1px solid var(--surface-glass-strong);
+  border-radius: var(--radius-full);
+  background-color: var(--color-bg-overlay-heavy);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.poster-pill {
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.poster-pill--media {
+  background-color: var(--color-primary-alpha-20);
+  border-color: var(--color-primary-alpha-20);
+  color: var(--color-primary-light);
+}
+
+.poster-pill--rating {
+  margin-left: auto;
+  background-color: var(--color-success-alpha-20);
+  border-color: var(--color-success-alpha-20);
+  color: var(--color-success-light);
+}
+
+.poster-date {
+  max-width: 100%;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  overflow: hidden;
+  color: var(--color-warning-light);
+  text-overflow: ellipsis;
+}
+
+.poster-pill i,
+.poster-date i {
+  flex: 0 0 auto;
+  font-size: var(--font-size-xs);
 }
 
 .request-card-body {
@@ -167,46 +257,6 @@ export default {
   text-overflow: ellipsis;
 }
 
-.badge-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.badge i {
-  font-size: 0.85rem;
-}
-
-.badge-media,
-.badge-rating,
-.badge-requested {
-  background-color: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-}
-
-.badge-media {
-  color: var(--color-info);
-}
-
-.badge-rating {
-  color: var(--color-success);
-}
-
-.badge-requested {
-  color: var(--color-primary);
-}
-
 .source-link {
   display: flex;
   align-items: center;
@@ -228,18 +278,20 @@ export default {
   line-height: 1.25;
 }
 
-.request-card--compact .badge-container {
-  gap: calc(var(--spacing-sm) - var(--spacing-2xs));
+.request-card--compact .poster-overlay--top {
+  top: var(--spacing-xs);
+  right: var(--spacing-xs);
+  left: var(--spacing-xs);
 }
 
-.request-card--compact .badge {
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  font-size: var(--font-size-xs);
+.request-card--compact .poster-overlay--bottom {
+  padding: var(--spacing-2xl) var(--spacing-xs) var(--spacing-xs);
 }
 
-.request-card--compact .badge i {
-  font-size: var(--font-size-xs);
+.request-card--compact .poster-pill,
+.request-card--compact .poster-date {
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-2xs) var(--spacing-xs);
 }
 
 @media (max-width: 768px) {
@@ -255,6 +307,16 @@ export default {
     font-size: 0.75rem;
     padding: 0.375rem 0.5rem;
   }
+
+  .poster-overlay--top {
+    top: var(--spacing-xs);
+    right: var(--spacing-xs);
+    left: var(--spacing-xs);
+  }
+
+  .poster-overlay--bottom {
+    padding: var(--spacing-2xl) var(--spacing-xs) var(--spacing-xs);
+  }
 }
 
 @media (max-width: 480px) {
@@ -265,10 +327,6 @@ export default {
   .request-card--compact .request-card-title {
     font-size: var(--font-size-xs);
     min-height: 1.8em;
-  }
-
-  .request-card--compact .badge {
-    font-size: var(--font-size-xs);
   }
 }
 </style>

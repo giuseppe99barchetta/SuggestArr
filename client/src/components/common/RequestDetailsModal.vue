@@ -12,101 +12,107 @@
 
           <div class="request-details-modal__layout">
             <div class="request-details-modal__poster-section">
-              <img
-                v-if="selectedSource.poster_path"
-                :src="selectedSource.poster_path"
-                :alt="selectedSource.title"
-                class="request-details-modal__poster" />
-              <div v-else class="request-details-modal__poster-placeholder">
-                <i class="fas fa-image text-6xl"></i>
+              <div class="request-details-modal__poster-frame">
+                <img
+                  v-if="selectedSource.poster_path"
+                  :src="selectedSource.poster_path"
+                  :alt="selectedSource.title"
+                  class="request-details-modal__poster" />
+                <div v-else class="request-details-modal__poster-placeholder">
+                  <i class="fas fa-image text-6xl"></i>
+                </div>
+
+                <div class="request-details-modal__poster-overlay request-details-modal__poster-overlay--top">
+                  <span v-if="selectedSource.media_type" class="request-details-modal__poster-pill request-details-modal__poster-pill--media">
+                    <i :class="selectedSource.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
+                    {{ selectedSource.media_type.toUpperCase() }}
+                  </span>
+                  <span v-if="selectedSource.rating" class="request-details-modal__poster-pill request-details-modal__poster-pill--rating">
+                    <i class="fas fa-star"></i>
+                    {{ selectedSource.rating }}
+                  </span>
+                </div>
+
+                <div v-if="posterDateLabel" class="request-details-modal__poster-overlay request-details-modal__poster-overlay--bottom">
+                  <span class="request-details-modal__poster-date">
+                    <i :class="selectedSource.requested_at ? 'fas fa-clock' : 'fas fa-calendar'"></i>
+                    {{ posterDateLabel }}
+                  </span>
+                </div>
               </div>
             </div>
 
             <div class="request-details-modal__details-section">
               <h2 class="request-details-modal__title">{{ selectedSource.title }}</h2>
 
-            <div class="request-details-modal__badges">
-              <span class="request-details-modal__badge request-details-modal__badge--media">
-                <i :class="selectedSource.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
-                {{ selectedSource.media_type?.toUpperCase() }}
-              </span>
-              <span class="request-details-modal__badge request-details-modal__badge--rating">
-                <i class="fas fa-star"></i>
-                {{ selectedSource.rating || 'N/A' }}
-              </span>
-              <span class="request-details-modal__badge request-details-modal__badge--date">
-                <i class="fas fa-calendar"></i>
-                {{ selectedSource.release_date }}
-              </span>
-              <span v-if="selectedSource.requested_at" class="request-details-modal__badge request-details-modal__badge--requested">
-                <i class="fas fa-clock"></i>
-                Requested {{ formatDate(selectedSource.requested_at) }}
-              </span>
-              <span v-if="selectedSource.source_origin === 'trakt_history'" class="request-details-modal__badge request-details-modal__badge--date">
-                <i class="fas fa-history"></i>
-                Trakt History
-              </span>
-            </div>
-
-            <div v-if="selectedSource.source_title" class="request-details-modal__source">
-              <i class="fas fa-link"></i>
-              <span>Requested from: <strong>{{ selectedSource.source_title }}</strong></span>
-            </div>
-
-            <div v-if="selectedSource.user_name" class="request-details-modal__source">
-              <i class="fas fa-user"></i>
-              <span>Requested for: <strong>{{ selectedSource.user_name }}</strong></span>
-            </div>
-
-            <div class="request-details-modal__separator"></div>
-
-            <div v-if="selectedSource.rationale" class="request-details-modal__section">
-              <h3 class="request-details-modal__section-title" :class="{ 'request-details-modal__section-title--ai': selectedSource._isAiRequest }">
-                <i :class="selectedSource._isAiRequest ? 'fas fa-search' : 'fas fa-robot'"></i>
-                {{ selectedSource._isAiRequest ? 'Search Query' : 'AI Reasoning' }}
-              </h3>
-              <p class="request-details-modal__overview request-details-modal__overview--rationale" :class="{ 'request-details-modal__overview--ai': selectedSource._isAiRequest }">
-                {{ selectedSource.rationale }}
-              </p>
-            </div>
-
-            <div class="request-details-modal__section">
-              <h3 class="request-details-modal__section-title">
-                <i class="fas fa-align-left"></i>
-                Overview
-              </h3>
-              <p class="request-details-modal__overview">{{ selectedSource.overview || 'No overview available.' }}</p>
-            </div>
-
-            <div v-if="selectedSource.requests && selectedSource.requests.length > 0" class="request-details-modal__section">
-              <h3 class="request-details-modal__section-title">
-                <i class="fas fa-list"></i>
-                Requested Media ({{ selectedSource.requests.length }})
-              </h3>
-              <div class="request-details-modal__requests-list">
-                <div
-                  v-for="request in selectedSource.requests"
-                  :key="request.request_id"
-                  class="request-details-modal__request-item"
-                  @click="$emit('select-related', request)">
-                  <div class="request-details-modal__request-info">
-                    <h4 class="request-details-modal__request-title">{{ request.title }}</h4>
-                    <p class="request-details-modal__request-date">
-                      <i class="fas fa-clock"></i>
-                      Requested on {{ formatDate(request.requested_at) }}
-                    </p>
-                    <p v-if="request.user_name" class="request-details-modal__request-date">
-                      <i class="fas fa-user"></i>
-                      {{ request.user_name }}
-                    </p>
-                  </div>
-                  <button class="request-details-modal__request-btn">
-                    <i class="fas fa-external-link-alt"></i>
-                    Details
-                  </button>
+              <div v-if="hasContextRows" class="request-details-modal__context">
+                <div v-if="selectedSource.release_date && selectedSource.requested_at" class="request-details-modal__context-row">
+                  <i class="fas fa-calendar"></i>
+                  <span>Released <strong>{{ selectedSource.release_date }}</strong></span>
+                </div>
+                <div v-if="selectedSource.source_origin === 'trakt_history'" class="request-details-modal__context-row">
+                  <i class="fas fa-history"></i>
+                  <span>Source <strong>Trakt History</strong></span>
+                </div>
+                <div v-if="selectedSource.source_title" class="request-details-modal__context-row">
+                  <i class="fas fa-link"></i>
+                  <span>Requested from <strong>{{ selectedSource.source_title }}</strong></span>
+                </div>
+                <div v-if="selectedSource.user_name" class="request-details-modal__context-row">
+                  <i class="fas fa-user"></i>
+                  <span>Requested for <strong>{{ selectedSource.user_name }}</strong></span>
                 </div>
               </div>
-            </div>
+
+              <div class="request-details-modal__separator"></div>
+
+              <div v-if="selectedSource.rationale" class="request-details-modal__section">
+                <h3 class="request-details-modal__section-title" :class="{ 'request-details-modal__section-title--ai': selectedSource._isAiRequest }">
+                  <i :class="selectedSource._isAiRequest ? 'fas fa-search' : 'fas fa-robot'"></i>
+                  {{ selectedSource._isAiRequest ? 'Search Query' : 'AI Reasoning' }}
+                </h3>
+                <p class="request-details-modal__overview request-details-modal__overview--rationale" :class="{ 'request-details-modal__overview--ai': selectedSource._isAiRequest }">
+                  {{ selectedSource.rationale }}
+                </p>
+              </div>
+
+              <div class="request-details-modal__section">
+                <h3 class="request-details-modal__section-title">
+                  <i class="fas fa-align-left"></i>
+                  Overview
+                </h3>
+                <p class="request-details-modal__overview">{{ selectedSource.overview || 'No overview available.' }}</p>
+              </div>
+
+              <div v-if="selectedSource.requests && selectedSource.requests.length > 0" class="request-details-modal__section">
+                <h3 class="request-details-modal__section-title">
+                  <i class="fas fa-list"></i>
+                  Requested Media ({{ selectedSource.requests.length }})
+                </h3>
+                <div class="request-details-modal__requests-list">
+                  <div
+                    v-for="request in selectedSource.requests"
+                    :key="request.request_id"
+                    class="request-details-modal__request-item"
+                    @click="$emit('select-related', request)">
+                    <div class="request-details-modal__request-info">
+                      <h4 class="request-details-modal__request-title">{{ request.title }}</h4>
+                      <p class="request-details-modal__request-date">
+                        <i class="fas fa-clock"></i>
+                        Requested on {{ formatDate(request.requested_at) }}
+                      </p>
+                      <p v-if="request.user_name" class="request-details-modal__request-date">
+                        <i class="fas fa-user"></i>
+                        {{ request.user_name }}
+                      </p>
+                    </div>
+                    <button class="request-details-modal__request-btn">
+                      <i class="fas fa-external-link-alt"></i>
+                      Details
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -131,6 +137,23 @@ export default {
     },
   },
   emits: ['close', 'select-related'],
+  computed: {
+    posterDateLabel() {
+      if (this.selectedSource?.requested_at) {
+        return `Requested ${this.formatDate(this.selectedSource.requested_at)}`;
+      }
+
+      return this.selectedSource?.release_date || '';
+    },
+    hasContextRows() {
+      return Boolean(
+        (this.selectedSource?.release_date && this.selectedSource?.requested_at) ||
+        this.selectedSource?.source_origin === 'trakt_history' ||
+        this.selectedSource?.source_title ||
+        this.selectedSource?.user_name
+      );
+    },
+  },
   methods: {
     formatDate,
   },
@@ -201,22 +224,117 @@ export default {
   width: 100%;
 }
 
-.request-details-modal__poster {
+.request-details-modal__poster-frame {
+  position: relative;
   width: 100%;
-  height: auto;
+  aspect-ratio: 2/3;
+  overflow: hidden;
+  background-color: var(--color-bg-primary);
   border-radius: var(--radius-lg);
   box-shadow: var(--elevation-3);
 }
 
+.request-details-modal__poster-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    var(--color-bg-overlay-light),
+    transparent 32%,
+    transparent 58%,
+    var(--surface-overlay)
+  );
+  opacity: var(--alpha-80);
+  pointer-events: none;
+}
+
+.request-details-modal__poster {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .request-details-modal__poster-placeholder {
   width: 100%;
-  aspect-ratio: 2/3;
+  height: 100%;
   background-color: var(--color-bg-primary);
-  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--color-text-muted);
+}
+
+.request-details-modal__poster-overlay {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  pointer-events: none;
+}
+
+.request-details-modal__poster-overlay--top {
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  left: var(--spacing-sm);
+  justify-content: space-between;
+  gap: var(--spacing-xs);
+}
+
+.request-details-modal__poster-overlay--bottom {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  justify-content: flex-start;
+  padding: var(--spacing-3xl) var(--spacing-sm) var(--spacing-sm);
+}
+
+.request-details-modal__poster-pill,
+.request-details-modal__poster-date {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  border: 1px solid var(--surface-glass-strong);
+  border-radius: var(--radius-full);
+  background-color: var(--color-bg-overlay-heavy);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.request-details-modal__poster-pill {
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.request-details-modal__poster-pill--media {
+  background-color: var(--color-primary-alpha-20);
+  border-color: var(--color-primary-alpha-20);
+  color: var(--color-primary-light);
+}
+
+.request-details-modal__poster-pill--rating {
+  margin-left: auto;
+  background-color: var(--color-success-alpha-20);
+  border-color: var(--color-success-alpha-20);
+  color: var(--color-success-light);
+}
+
+.request-details-modal__poster-date {
+  max-width: 100%;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  overflow: hidden;
+  color: var(--color-warning-light);
+  text-overflow: ellipsis;
+}
+
+.request-details-modal__poster-pill i,
+.request-details-modal__poster-date i {
+  flex: 0 0 auto;
+  font-size: var(--font-size-xs);
 }
 
 .request-details-modal__details-section {
@@ -225,73 +343,46 @@ export default {
 }
 
 .request-details-modal__title {
-  font-size: 2rem;
-  font-weight: bold;
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-md);
   line-height: 1.2;
   word-wrap: break-word;
 }
 
-.request-details-modal__badges {
+.request-details-modal__context {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
 }
 
-.request-details-modal__badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  background-color: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-}
-
-.request-details-modal__badge i {
-  font-size: 0.85rem;
-}
-
-.request-details-modal__badge--media {
-  color: var(--color-info);
-}
-
-.request-details-modal__badge--rating {
-  color: var(--color-success);
-}
-
-.request-details-modal__badge--date {
-  color: var(--color-warning);
-}
-
-.request-details-modal__badge--requested {
-  color: var(--color-primary);
-}
-
-.request-details-modal__source {
+.request-details-modal__context-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
-  padding: 0.5rem 0.75rem;
+  padding: var(--spacing-sm) calc(var(--spacing-sm) + var(--spacing-xs));
   background-color: var(--color-bg-primary);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border-light);
-  margin-bottom: 0.5rem;
 }
 
-.request-details-modal__source strong {
+.request-details-modal__context-row i {
+  width: var(--spacing-md);
+  color: var(--color-primary-light);
+  text-align: center;
+}
+
+.request-details-modal__context-row strong {
   color: var(--color-primary);
 }
 
 .request-details-modal__separator {
   border-top: 1px solid var(--color-border-light);
-  margin: 1rem 0;
+  margin: var(--spacing-md) 0;
 }
 
 .request-details-modal__section {
