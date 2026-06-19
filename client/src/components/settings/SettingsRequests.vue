@@ -76,35 +76,12 @@
 
       <div v-else class="requests-container">
         <div class="requests-grid-preview">
-          <div
+          <RequestPosterCard
             v-for="request in filteredRequests"
             :key="request.request_id"
-            class="request-card-compact">
-
-            <div class="request-poster-compact">
-              <img
-                v-if="request.poster_path"
-                :src="request.poster_path"
-                :alt="request.title"
-                loading="lazy" />
-              <div v-else class="poster-placeholder">
-                <i class="fas fa-image"></i>
-              </div>
-
-              <!-- Media Type Badge -->
-              <span class="badge-media-compact">
-                <i :class="request.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
-              </span>
-            </div>
-
-            <div class="request-info-compact">
-              <h4 class="request-title-compact">{{ request.title }}</h4>
-              <span class="request-date-compact">
-                <i class="fas fa-clock"></i>
-                {{ formatDate(request.requested_at) }}
-              </span>
-            </div>
-          </div>
+            :item="request"
+            compact
+            @select="openRequestModal" />
         </div>
 
         <!-- Fade Overlay & View All Button -->
@@ -118,15 +95,24 @@
         </div>
       </div>
     </div>
+    <RequestDetailsModal
+      :show="showModal"
+      :selected-source="selectedRequest"
+      @close="closeRequestModal" />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
-import { formatDate } from '@/utils/dateUtils.js';
+import RequestPosterCard from '@/components/common/RequestPosterCard.vue';
+import RequestDetailsModal from '@/components/common/RequestDetailsModal.vue';
 
 export default {
   name: 'SettingsRequests',
+  components: {
+    RequestPosterCard,
+    RequestDetailsModal,
+  },
   data() {
     return {
       stats: {
@@ -138,6 +124,8 @@ export default {
       recentRequests: [],
       totalRequests: 0,
       loading: false,
+      showModal: false,
+      selectedRequest: null,
       activeFilter: 'all',
       filters: [
         { value: 'all', label: 'All', icon: 'fas fa-list' },
@@ -158,9 +146,10 @@ export default {
     this.loadStats();
     this.loadRecentRequests();
   },
+  beforeUnmount() {
+    document.body.style.overflow = 'auto';
+  },
   methods: {
-    formatDate,
-
     async loadStats() {
       try {
         const response = await axios.get('/api/automation/requests/stats');
@@ -207,6 +196,18 @@ export default {
 
     getStatusClass(status) {
       return status || 'pending';
+    },
+
+    openRequestModal(request) {
+      this.selectedRequest = request;
+      this.showModal = true;
+      document.body.style.overflow = 'hidden';
+    },
+
+    closeRequestModal() {
+      this.showModal = false;
+      this.selectedRequest = null;
+      document.body.style.overflow = 'auto';
     },
 
     goToRequestsPage() {
@@ -444,111 +445,6 @@ export default {
   gap: 0.75rem;
 }
 
-.request-card-compact {
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--surface-interactive);
-  border-radius: 10px;
-  transition: all 0.25s ease;
-  overflow: hidden;
-  box-shadow: var(--elevation-1);
-}
-
-.request-card-compact:hover {
-  background: var(--surface-glass-light);
-  border-color: rgba(148, 163, 184, 0.2);
-  box-shadow: var(--elevation-2);
-}
-
-.request-poster-compact {
-  width: 100%;
-  aspect-ratio: 2/3;
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(135deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.5) 100%);
-}
-
-.request-poster-compact img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s ease;
-}
-
-.request-card-compact:hover .request-poster-compact img {
-  transform: scale(1.03);
-}
-
-.poster-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #6b7280;
-  font-size: 1.5rem;
-}
-
-.badge-media-compact {
-  position: absolute;
-  top: 0.375rem;
-  right: 0.375rem;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(8px);
-  padding: 0.25rem 0.375rem;
-  border-radius: 5px;
-  font-size: 0.65rem;
-  color: #f3f4f6;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  z-index: 2;
-}
-
-.badge-media-compact i {
-  font-size: 0.7rem;
-}
-
-.request-info-compact {
-  padding: 0.625rem 0.625rem 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.request-title-compact {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.request-card-compact:hover .request-title-compact {
-  color: #fff;
-}
-
-.request-date-compact {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.65rem;
-  color: #9ca3af;
-  font-weight: 500;
-  transition: color 0.2s ease;
-}
-
-.request-card-compact:hover .request-date-compact {
-  color: #cbd5e1;
-}
-
-.request-date-compact i {
-  font-size: 0.625rem;
-  opacity: 0.8;
-}
-
 /* Fade Overlay & View All Button */
 .fade-overlay {
   position: absolute;
@@ -648,13 +544,6 @@ export default {
     gap: 0.625rem;
   }
 
-  .request-title-compact {
-    font-size: 0.7rem;
-  }
-
-  .request-date-compact {
-    font-size: 0.625rem;
-  }
 }
 
 @media (max-width: 480px) {
@@ -674,20 +563,6 @@ export default {
   .requests-grid-preview {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.5rem;
-  }
-
-  .request-info-compact {
-    padding: 0.5rem;
-  }
-
-  .request-title-compact {
-    font-size: 0.6875rem;
-    min-height: 1.8em;
-  }
-
-  .badge-media-compact {
-    padding: 0.2rem 0.3rem;
-    font-size: 0.6rem;
   }
 
   .fade-overlay {

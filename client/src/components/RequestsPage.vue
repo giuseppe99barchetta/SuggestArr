@@ -215,51 +215,14 @@
               name="fade-slide"
               tag="div"
               class="requests-grid">
-              <div
+              <RequestPosterCard
                 v-for="item in aiRequests"
                 :key="item.request_id"
-                class="request-card"
-                @click="openModal(item, true)">
-
-                <div class="request-card-poster">
-                  <img
-                    v-if="item.poster_path"
-                    :src="item.poster_path"
-                    :alt="item.title"
-                    class="poster-image" />
-                  <div v-else class="poster-placeholder">
-                    <i class="fas fa-magic"></i>
-                  </div>
-                </div>
-
-                <div class="request-card-body">
-                  <h3 class="request-card-title">{{ item.title }}</h3>
-
-                  <div class="badge-container">
-                    <span class="badge badge-media">
-                      <i :class="item.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
-                      {{ item.media_type.toUpperCase() }}
-                    </span>
-                    <span v-if="item.rating" class="badge badge-rating">
-                      <i class="fas fa-star"></i>
-                      {{ item.rating }}
-                    </span>
-                    <span class="badge badge-requested">
-                      <i class="fas fa-clock"></i>
-                      {{ formatDate(item.requested_at) }}
-                    </span>
-                  </div>
-
-                  <div v-if="item.rationale" class="source-link">
-                    <i class="fas fa-search"></i>
-                    <span>Search: <em>"{{ item.rationale }}"</em></span>
-                  </div>
-                  <div v-else class="source-link">
-                    <i class="fas fa-magic"></i>
-                    <span>From: <strong>AI Search</strong></span>
-                  </div>
-                </div>
-              </div>
+                :item="item"
+                source-mode="ai"
+                placeholder-icon="fas fa-magic"
+                :show-missing-rating="false"
+                @select="openModal($event, true)" />
             </transition-group>
             <div v-if="aiRequestsHasMore" ref="loadMoreTriggerAi" class="load-more-trigger">
               <div class="spinner-small"></div>
@@ -273,49 +236,11 @@
               name="fade-slide" 
               tag="div"
               class="requests-grid">
-              <div 
+              <RequestPosterCard
                 v-for="request in filteredAndSortedRequests" 
                 :key="request.request_id"
-                class="request-card"
-                @click="openModal(request)">
-                
-                <div class="request-card-poster">
-                  <img 
-                    v-if="request.poster_path" 
-                    :src="request.poster_path" 
-                    :alt="request.title"
-                    class="poster-image" />
-                  <div v-else class="poster-placeholder">
-                    <i class="fas fa-image"></i>
-                  </div>
-                </div>
-
-                <div class="request-card-body">
-                  <h3 class="request-card-title">{{ request.title }}</h3>
-                  
-                  <!-- Request Badges -->
-                  <div class="badge-container">
-                    <span class="badge badge-media">
-                      <i :class="request.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
-                      {{ request.media_type.toUpperCase() }}
-                    </span>
-                    <span class="badge badge-rating">
-                      <i class="fas fa-star"></i>
-                      {{ request.rating || 'N/A' }}
-                    </span>
-                    <span class="badge badge-requested">
-                      <i class="fas fa-clock"></i>
-                      {{ formatDate(request.requested_at) }}
-                    </span>
-                  </div>
-
-                  <!-- Source Info -->
-                  <div class="source-link">
-                    <i class="fas fa-arrow-left"></i>
-                    <span>From: <strong>{{ request.source_title }}</strong></span>
-                  </div>
-                </div>
-              </div>
+                :item="request"
+                @select="openModal" />
             </transition-group>
 
 
@@ -350,128 +275,11 @@
         <Footer />
       </div>
 
-      <!-- Modal -->
-      <transition name="fade">
-        <div 
-          v-if="showModal" 
-          class="modal-overlay" 
-          @click.self="closeModal">
-          <div class="modal-content">
-            <!-- Close Button -->
-            <button @click="closeModal" class="modal-close">
-              <i class="fas fa-times"></i>
-            </button>
-
-            <div class="modal-layout">
-              <!-- Left: Poster -->
-              <div class="modal-poster-section">
-                <img 
-                  v-if="selectedSource.poster_path" 
-                  :src="selectedSource.poster_path" 
-                  :alt="selectedSource.title"
-                  class="modal-poster" />
-                <div v-else class="modal-poster-placeholder">
-                  <i class="fas fa-image text-6xl"></i>
-                </div>
-              </div>
-
-              <!-- Right: Details -->
-              <div class="modal-details-section">
-                <h2 class="modal-title">{{ selectedSource.title }}</h2>
-
-                <!-- Badges -->
-                <div class="badge-container mb-4">
-                  <span class="badge badge-media">
-                    <i :class="selectedSource.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
-                    {{ selectedSource.media_type?.toUpperCase() }}
-                  </span>
-                  <span class="badge badge-rating">
-                    <i class="fas fa-star"></i>
-                    {{ selectedSource.rating || 'N/A' }}
-                  </span>
-                  <span class="badge badge-date">
-                    <i class="fas fa-calendar"></i>
-                    {{ selectedSource.release_date }}
-                  </span>
-                  <span v-if="selectedSource.requested_at" class="badge badge-requested">
-                    <i class="fas fa-clock"></i>
-                    Requested {{ formatDate(selectedSource.requested_at) }}
-                  </span>
-                  <span v-if="selectedSource.source_origin === 'trakt_history'" class="badge badge-date">
-                    <i class="fas fa-history"></i>
-                    Trakt History
-                  </span>
-                </div>
-
-                <!-- Source Link (for requests view) -->
-                <div v-if="selectedSource.source_title" class="source-link-modal">
-                  <i class="fas fa-link"></i>
-                  <span>Requested from: <strong>{{ selectedSource.source_title }}</strong></span>
-                </div>
-
-                <!-- Requested For (user) -->
-                <div v-if="selectedSource.user_name" class="source-link-modal">
-                  <i class="fas fa-user"></i>
-                  <span>Requested for: <strong>{{ selectedSource.user_name }}</strong></span>
-                </div>
-
-                <div class="modal-separator"></div>
-
-                <!-- LLM Rationale / Search Query -->
-                <div v-if="selectedSource.rationale" class="modal-section">
-                  <h3 class="modal-section-title" :style="selectedSource._isAiRequest ? 'color: var(--color-info)' : 'color: #a855f7'">
-                    <i :class="selectedSource._isAiRequest ? 'fas fa-search' : 'fas fa-robot'"></i>
-                    {{ selectedSource._isAiRequest ? 'Search Query' : 'AI Reasoning' }}
-                  </h3>
-                  <p class="modal-overview" :style="selectedSource._isAiRequest ? 'border-left: 3px solid var(--color-info); padding-left: 1rem; margin-top: 0.5rem;' : 'font-style: italic; border-left: 3px solid #a855f7; padding-left: 1rem; margin-top: 0.5rem; white-space: pre-wrap;'">
-                    {{ selectedSource.rationale }}
-                  </p>
-                </div>
-
-                <!-- Overview -->
-                <div class="modal-section">
-                  <h3 class="modal-section-title">
-                    <i class="fas fa-align-left"></i>
-                    Overview
-                  </h3>
-                  <p class="modal-overview">{{ selectedSource.overview || 'No overview available.' }}</p>
-                </div>
-
-                <!-- Related Requests -->
-                <div v-if="selectedSource.requests && selectedSource.requests.length > 0" class="modal-section">
-                  <h3 class="modal-section-title">
-                    <i class="fas fa-list"></i>
-                    Requested Media ({{ selectedSource.requests.length }})
-                  </h3>
-                  <div class="modal-requests-list">
-                    <div
-                      v-for="request in selectedSource.requests"
-                      :key="request.request_id"
-                      class="modal-request-item"
-                      @click="openModal(request)">
-                      <div class="flex-1">
-                        <h4 class="modal-request-title">{{ request.title }}</h4>
-                        <p class="modal-request-date">
-                          <i class="fas fa-clock"></i>
-                          Requested on {{ formatDate(request.requested_at) }}
-                        </p>
-                        <p v-if="request.user_name" class="modal-request-date">
-                          <i class="fas fa-user"></i>
-                          {{ request.user_name }}
-                        </p>
-                      </div>
-                      <button class="modal-request-btn">
-                        <i class="fas fa-external-link-alt"></i>
-                        Details
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </transition>
+      <RequestDetailsModal
+        :show="showModal"
+        :selected-source="selectedSource"
+        @close="closeModal"
+        @select-related="openModal" />
     </div>
 </template>
 
@@ -481,6 +289,8 @@ import axios from "axios";
 import { useBackgroundImage } from '@/composables/useBackgroundImage';
 import Footer from './AppFooter.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import RequestPosterCard from '@/components/common/RequestPosterCard.vue';
+import RequestDetailsModal from '@/components/common/RequestDetailsModal.vue';
 import { formatDate } from '@/utils/dateUtils.js';
 import { getAiSearchRequests } from '@/api/api.js';
 
@@ -489,6 +299,8 @@ export default {
   components: {
     Footer,
     BaseDropdown,
+    RequestPosterCard,
+    RequestDetailsModal,
   },
   setup() {
     const { bg1Url, bg2Url, activeBg, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
