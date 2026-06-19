@@ -27,9 +27,9 @@
           <i class="fas fa-clock"></i>
           {{ formatDate(item.requested_at) }}
         </span>
-        <span v-if="originBadgeLabel" class="poster-origin">
-          <i class="fas fa-history"></i>
-          {{ originBadgeLabel }}
+        <span v-if="requestMethodLabel" class="poster-origin">
+          <i :class="requestMethodIcon"></i>
+          {{ requestMethodLabel }}
         </span>
       </div>
     </div>
@@ -90,15 +90,41 @@ export default {
     showRating() {
       return this.showMissingRating || Boolean(this.item.rating);
     },
-    originBadgeLabel() {
-      if (this.item.source_origin === 'trakt_history') {
-        return 'Seed: Trakt History';
+    showSourceContent() {
+      return this.showSource && this.item.source_title && this.item.source_id !== 'trakt_recommendations';
+    },
+    requestMethodLabel() {
+      const sourceId = String(this.item.source_id ?? this.item.id ?? '');
+
+      if (this.sourceMode === 'ai' || sourceId === 'ai_search') {
+        return 'AI';
+      }
+      if (sourceId === 'trakt_recommendations') {
+        return 'Trakt';
+      }
+      if (sourceId === 'discover') {
+        return 'Discover';
+      }
+      if (/^\d+$/.test(sourceId)) {
+        return 'TMDB';
       }
 
       return '';
     },
-    showSourceContent() {
-      return this.showSource && this.item.source_title && this.item.source_id !== 'trakt_recommendations';
+    requestMethodIcon() {
+      const sourceId = String(this.item.source_id ?? this.item.id ?? '');
+
+      if (this.sourceMode === 'ai' || sourceId === 'ai_search') {
+        return 'fas fa-magic';
+      }
+      if (sourceId === 'trakt_recommendations') {
+        return 'icon-trakt';
+      }
+      if (sourceId === 'discover') {
+        return 'fas fa-search';
+      }
+
+      return 'fas fa-database';
     },
   },
   methods: {

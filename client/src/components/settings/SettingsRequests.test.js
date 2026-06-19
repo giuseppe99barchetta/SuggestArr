@@ -44,10 +44,15 @@ test('request details modal uses poster overlays for request metadata', () => {
   assert.match(requestDetailsModalSource, /class="request-details-modal__poster-overlay request-details-modal__poster-overlay--bottom"/);
   assert.match(requestDetailsModalSource, /class="request-details-modal__poster-date"/);
   assert.match(requestDetailsModalSource, /class="request-details-modal__poster-origin"/);
+  assert.match(requestDetailsModalSource, /Request method <strong>{{ requestMethodLabel }}<\/strong>/);
   assert.match(requestDetailsModalSource, /Source content <strong>{{ selectedSource\.source_title }}<\/strong>/);
-  assert.match(requestDetailsModalSource, /Origin <strong>Trakt History<\/strong>/);
+  assert.match(requestDetailsModalSource, /Seed origin <strong>Trakt History<\/strong>/);
   assert.match(requestDetailsModalSource, /showSourceContent\(\) \{/);
   assert.match(requestDetailsModalSource, /selectedSource\?\.source_id !== 'trakt_recommendations'/);
+  assert.match(requestDetailsModalSource, /requestMethodLabel\(\) \{/);
+  assert.match(requestDetailsModalSource, /sourceId === 'trakt_recommendations'/);
+  assert.match(requestDetailsModalSource, /return 'TMDB'/);
+  assert.doesNotMatch(requestDetailsModalSource, /Seed: Trakt History/);
   assert.match(requestDetailsModalSource, /class="request-details-modal__context"/);
   assert.doesNotMatch(requestDetailsModalSource, /class="request-details-modal__badges"/);
   assert.doesNotMatch(requestDetailsModalSource, /class="request-details-modal__badge/);
@@ -60,7 +65,9 @@ test('request poster card keeps metadata on the poster artwork', () => {
   assert.match(requestPosterCardSource, /class="poster-overlay poster-overlay--bottom"/);
   assert.match(requestPosterCardSource, /class="poster-date"/);
   assert.match(requestPosterCardSource, /class="poster-origin"/);
-  assert.match(requestPosterCardSource, /source_origin === 'trakt_history'/);
+  assert.match(requestPosterCardSource, /requestMethodLabel\(\) \{/);
+  assert.match(requestPosterCardSource, /sourceId === 'trakt_recommendations'/);
+  assert.match(requestPosterCardSource, /return 'TMDB'/);
   assert.match(requestPosterCardSource, /From: <strong>{{ item\.source_title }}<\/strong>/);
   assert.match(requestPosterCardSource, /showSourceContent\(\) \{/);
   assert.match(requestPosterCardSource, /item\.source_id !== 'trakt_recommendations'/);

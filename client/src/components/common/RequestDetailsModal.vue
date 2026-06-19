@@ -38,9 +38,9 @@
                     <i :class="selectedSource.requested_at ? 'fas fa-clock' : 'fas fa-calendar'"></i>
                     {{ posterDateLabel }}
                   </span>
-                  <span v-if="originBadgeLabel" class="request-details-modal__poster-origin">
-                    <i class="fas fa-history"></i>
-                    {{ originBadgeLabel }}
+                  <span v-if="requestMethodLabel" class="request-details-modal__poster-origin">
+                    <i :class="requestMethodIcon"></i>
+                    {{ requestMethodLabel }}
                   </span>
                 </div>
               </div>
@@ -50,13 +50,17 @@
               <h2 class="request-details-modal__title">{{ selectedSource.title }}</h2>
 
               <div v-if="hasContextRows" class="request-details-modal__context">
+                <div v-if="requestMethodLabel" class="request-details-modal__context-row">
+                  <i :class="requestMethodIcon"></i>
+                  <span>Request method <strong>{{ requestMethodLabel }}</strong></span>
+                </div>
                 <div v-if="selectedSource.release_date && selectedSource.requested_at" class="request-details-modal__context-row">
                   <i class="fas fa-calendar"></i>
                   <span>Released <strong>{{ selectedSource.release_date }}</strong></span>
                 </div>
                 <div v-if="selectedSource.source_origin === 'trakt_history'" class="request-details-modal__context-row">
                   <i class="fas fa-history"></i>
-                  <span>Origin <strong>Trakt History</strong></span>
+                  <span>Seed origin <strong>Trakt History</strong></span>
                 </div>
                 <div v-if="showSourceContent" class="request-details-modal__context-row">
                   <i class="fas fa-link"></i>
@@ -149,15 +153,9 @@ export default {
 
       return this.selectedSource?.release_date || '';
     },
-    originBadgeLabel() {
-      if (this.selectedSource?.source_origin === 'trakt_history') {
-        return 'Seed: Trakt History';
-      }
-
-      return '';
-    },
     hasContextRows() {
       return Boolean(
+        this.requestMethodLabel ||
         (this.selectedSource?.release_date && this.selectedSource?.requested_at) ||
         this.selectedSource?.source_origin === 'trakt_history' ||
         this.showSourceContent ||
@@ -166,6 +164,39 @@ export default {
     },
     showSourceContent() {
       return Boolean(this.selectedSource?.source_title && this.selectedSource?.source_id !== 'trakt_recommendations');
+    },
+    requestMethodLabel() {
+      const sourceId = String(this.selectedSource?.source_id ?? this.selectedSource?.id ?? '');
+
+      if (this.selectedSource?._isAiRequest || sourceId === 'ai_search') {
+        return 'AI Search';
+      }
+      if (sourceId === 'trakt_recommendations') {
+        return 'Trakt Recommendations';
+      }
+      if (sourceId === 'discover') {
+        return 'Discover';
+      }
+      if (/^\d+$/.test(sourceId)) {
+        return 'TMDB';
+      }
+
+      return '';
+    },
+    requestMethodIcon() {
+      const sourceId = String(this.selectedSource?.source_id ?? this.selectedSource?.id ?? '');
+
+      if (this.selectedSource?._isAiRequest || sourceId === 'ai_search') {
+        return 'fas fa-magic';
+      }
+      if (sourceId === 'trakt_recommendations') {
+        return 'icon-trakt';
+      }
+      if (sourceId === 'discover') {
+        return 'fas fa-search';
+      }
+
+      return 'fas fa-database';
     },
   },
   methods: {
