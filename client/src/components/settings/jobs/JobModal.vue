@@ -290,9 +290,9 @@ export default {
         return 'Discover Jobs find content using TMDb filters, independent from user watch history.';
       }
       if (this.form.job_type === 'trakt_recommendations') {
-        return 'Trakt Recommendations Jobs fetch personalized movie and show lists from a linked Trakt account.';
+        return 'Trakt Recommendations Jobs fetch personalized movie and show lists only from a linked Trakt account.';
       }
-      return 'Recommendation Jobs find similar content based on what your users have watched.';
+      return 'Recommendation Jobs find similar content based on what your users have watched on your media server or Trakt.tv.';
     },
     jobNamePlaceholder() {
       if (this.form.job_type === 'discover') return 'e.g., Popular Movies 2024';

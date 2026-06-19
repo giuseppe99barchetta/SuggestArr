@@ -54,11 +54,11 @@
           </div>
           <div class="job-type-item">
             <span class="job-type-badge recommendation"><i class="fas fa-users"></i> Recommendation</span>
-            <span>Find similar content based on what your users have watched - like the original SuggestArr automation.</span>
+            <span>Find similar content based on what you have watched (on your media server or Trakt.tv) - like the original SuggestArr automation.</span>
           </div>
           <div class="job-type-item">
             <span class="job-type-badge trakt_recommendations"><i class="icon-trakt"></i> Trakt</span>
-            <span>Fetch personalized movie and show recommendations from a linked Trakt.tv account.</span>
+            <span>Fetch personalized movie and show recommendations only from a linked Trakt.tv account.</span>
           </div>
         </div>
       </div>
