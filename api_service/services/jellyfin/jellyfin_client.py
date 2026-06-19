@@ -39,7 +39,7 @@ class JellyfinClient(BaseHTTPClient):
         }
         self.existing_content = {}
         self._series_provider_ids_cache = {}
-        
+
     async def init_existing_content(self):
         self.logger.info('Initializing existing content.')
         self.existing_content = await self.get_all_library_items()
@@ -64,7 +64,7 @@ class JellyfinClient(BaseHTTPClient):
             self.logger.error("An error occurred while retrieving users: %s", str(e))
 
         return []
-    
+
     async def get_all_library_items(self):
         """
         Retrieves all Movie and Series items from the specified libraries.
@@ -354,15 +354,17 @@ class JellyfinClient(BaseHTTPClient):
             )
             return {}
 
-    
     async def get_libraries(self):
         """
-        Retrieves list of library asynchronously.
+        Retrieves list of libraries asynchronously.
+
+        Tries /Library/VirtualFolders first (works with user session tokens on all
+        Jellyfin versions). If that returns an empty list, falls back to
+        /Library/MediaFolders which works with system API keys on Jellyfin 10.10+.
+        The MediaFolders response is normalized to the VirtualFolders format
+        (list of dicts with ItemId/Name/CollectionType keys).
         """
         self.logger.info("Searching Jellyfin libraries.")
-
-        url = f"{self.api_url}/Library/VirtualFolders"
-        endpoint = "/Library/VirtualFolders"
 
         auth_attempts = [
             {
@@ -370,7 +372,7 @@ class JellyfinClient(BaseHTTPClient):
                 "headers": {
                     "X-Emby-Token": self.api_token,
                     "Authorization": f'MediaBrowser Token="{self.api_token}"'
-                    },
+                },
                 "params": None,
             },
             {
@@ -397,6 +399,44 @@ class JellyfinClient(BaseHTTPClient):
                     sanitized[key] = value
             return sanitized
 
+        # Try /Library/VirtualFolders first
+        libraries = await self._fetch_libraries_from_endpoint(
+            "/Library/VirtualFolders", auth_attempts, _sanitize_headers
+        )
+
+        if libraries:
+            return libraries
+
+        # VirtualFolders returned empty or failed — fall back to /Library/MediaFolders
+        # which works with system API keys on Jellyfin 10.10+.
+        self.logger.info(
+            "VirtualFolders returned no libraries, trying /Library/MediaFolders fallback."
+        )
+        libraries = await self._fetch_libraries_from_endpoint(
+            "/Library/MediaFolders", auth_attempts, _sanitize_headers
+        )
+
+        if libraries is None:
+            return None
+
+        # Normalize MediaFolders response format.
+        # MediaFolders returns {"Items": [...]} with "Id" keys,
+        # while VirtualFolders returns a flat list with "ItemId" keys.
+        if isinstance(libraries, dict) and "Items" in libraries:
+            libraries = [
+                {"ItemId": lib["Id"], "Name": lib["Name"], "CollectionType": lib.get("CollectionType")}
+                for lib in libraries["Items"]
+                if lib.get("Id") and lib.get("Name")
+            ]
+
+        return libraries if libraries else None
+
+    async def _fetch_libraries_from_endpoint(self, endpoint, auth_attempts, _sanitize_headers):
+        """
+        Attempts to fetch libraries from the given endpoint using multiple auth methods.
+        Returns the parsed JSON response on success, or None on failure.
+        """
+        url = f"{self.api_url}{endpoint}"
         last_failure = None
 
         try:
@@ -430,8 +470,9 @@ class JellyfinClient(BaseHTTPClient):
                     if response.status == 200:
                         libraries = await response.json()
                         self.logger.debug(
-                            "Jellyfin libraries request succeeded using auth method: %s",
+                            "Jellyfin libraries request succeeded using auth method: %s (endpoint: %s)",
                             attempt["name"],
+                            endpoint,
                         )
                         self.logger.debug(f'Libraries retrieved: {libraries}')
                         return libraries
@@ -479,3 +520,5 @@ class JellyfinClient(BaseHTTPClient):
         except aiohttp.ClientError as e:
             self.logger.error(
                 "An error occurred while retrieving libraries: %s", str(e))
+
+        return None
