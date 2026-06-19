@@ -81,6 +81,7 @@
             :key="request.request_id"
             :item="request"
             compact
+            :show-source="false"
             @select="openRequestModal" />
         </div>
 

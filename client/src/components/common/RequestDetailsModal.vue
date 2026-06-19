@@ -1,116 +1,118 @@
 <template>
-  <transition name="fade">
-    <div
-      v-if="show && selectedSource"
-      class="modal-overlay"
-      @click.self="$emit('close')">
-      <div class="modal-content">
-        <button @click="$emit('close')" class="modal-close">
-          <i class="fas fa-times"></i>
-        </button>
+  <Teleport to="body">
+    <transition name="request-details-fade">
+      <div
+        v-if="show && selectedSource"
+        class="request-details-modal"
+        @click.self="$emit('close')">
+        <div class="request-details-modal__content">
+          <button @click="$emit('close')" class="request-details-modal__close">
+            <i class="fas fa-times"></i>
+          </button>
 
-        <div class="modal-layout">
-          <div class="modal-poster-section">
-            <img
-              v-if="selectedSource.poster_path"
-              :src="selectedSource.poster_path"
-              :alt="selectedSource.title"
-              class="modal-poster" />
-            <div v-else class="modal-poster-placeholder">
-              <i class="fas fa-image text-6xl"></i>
+          <div class="request-details-modal__layout">
+            <div class="request-details-modal__poster-section">
+              <img
+                v-if="selectedSource.poster_path"
+                :src="selectedSource.poster_path"
+                :alt="selectedSource.title"
+                class="request-details-modal__poster" />
+              <div v-else class="request-details-modal__poster-placeholder">
+                <i class="fas fa-image text-6xl"></i>
+              </div>
             </div>
-          </div>
 
-          <div class="modal-details-section">
-            <h2 class="modal-title">{{ selectedSource.title }}</h2>
+            <div class="request-details-modal__details-section">
+              <h2 class="request-details-modal__title">{{ selectedSource.title }}</h2>
 
-            <div class="badge-container mb-4">
-              <span class="badge badge-media">
+            <div class="request-details-modal__badges">
+              <span class="request-details-modal__badge request-details-modal__badge--media">
                 <i :class="selectedSource.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
                 {{ selectedSource.media_type?.toUpperCase() }}
               </span>
-              <span class="badge badge-rating">
+              <span class="request-details-modal__badge request-details-modal__badge--rating">
                 <i class="fas fa-star"></i>
                 {{ selectedSource.rating || 'N/A' }}
               </span>
-              <span class="badge badge-date">
+              <span class="request-details-modal__badge request-details-modal__badge--date">
                 <i class="fas fa-calendar"></i>
                 {{ selectedSource.release_date }}
               </span>
-              <span v-if="selectedSource.requested_at" class="badge badge-requested">
+              <span v-if="selectedSource.requested_at" class="request-details-modal__badge request-details-modal__badge--requested">
                 <i class="fas fa-clock"></i>
                 Requested {{ formatDate(selectedSource.requested_at) }}
               </span>
-              <span v-if="selectedSource.source_origin === 'trakt_history'" class="badge badge-date">
+              <span v-if="selectedSource.source_origin === 'trakt_history'" class="request-details-modal__badge request-details-modal__badge--date">
                 <i class="fas fa-history"></i>
                 Trakt History
               </span>
             </div>
 
-            <div v-if="selectedSource.source_title" class="source-link-modal">
+            <div v-if="selectedSource.source_title" class="request-details-modal__source">
               <i class="fas fa-link"></i>
               <span>Requested from: <strong>{{ selectedSource.source_title }}</strong></span>
             </div>
 
-            <div v-if="selectedSource.user_name" class="source-link-modal">
+            <div v-if="selectedSource.user_name" class="request-details-modal__source">
               <i class="fas fa-user"></i>
               <span>Requested for: <strong>{{ selectedSource.user_name }}</strong></span>
             </div>
 
-            <div class="modal-separator"></div>
+            <div class="request-details-modal__separator"></div>
 
-            <div v-if="selectedSource.rationale" class="modal-section">
-              <h3 class="modal-section-title" :class="{ 'modal-section-title--ai': selectedSource._isAiRequest }">
+            <div v-if="selectedSource.rationale" class="request-details-modal__section">
+              <h3 class="request-details-modal__section-title" :class="{ 'request-details-modal__section-title--ai': selectedSource._isAiRequest }">
                 <i :class="selectedSource._isAiRequest ? 'fas fa-search' : 'fas fa-robot'"></i>
                 {{ selectedSource._isAiRequest ? 'Search Query' : 'AI Reasoning' }}
               </h3>
-              <p class="modal-overview modal-overview--rationale" :class="{ 'modal-overview--ai': selectedSource._isAiRequest }">
+              <p class="request-details-modal__overview request-details-modal__overview--rationale" :class="{ 'request-details-modal__overview--ai': selectedSource._isAiRequest }">
                 {{ selectedSource.rationale }}
               </p>
             </div>
 
-            <div class="modal-section">
-              <h3 class="modal-section-title">
+            <div class="request-details-modal__section">
+              <h3 class="request-details-modal__section-title">
                 <i class="fas fa-align-left"></i>
                 Overview
               </h3>
-              <p class="modal-overview">{{ selectedSource.overview || 'No overview available.' }}</p>
+              <p class="request-details-modal__overview">{{ selectedSource.overview || 'No overview available.' }}</p>
             </div>
 
-            <div v-if="selectedSource.requests && selectedSource.requests.length > 0" class="modal-section">
-              <h3 class="modal-section-title">
+            <div v-if="selectedSource.requests && selectedSource.requests.length > 0" class="request-details-modal__section">
+              <h3 class="request-details-modal__section-title">
                 <i class="fas fa-list"></i>
                 Requested Media ({{ selectedSource.requests.length }})
               </h3>
-              <div class="modal-requests-list">
+              <div class="request-details-modal__requests-list">
                 <div
                   v-for="request in selectedSource.requests"
                   :key="request.request_id"
-                  class="modal-request-item"
+                  class="request-details-modal__request-item"
                   @click="$emit('select-related', request)">
-                  <div class="flex-1">
-                    <h4 class="modal-request-title">{{ request.title }}</h4>
-                    <p class="modal-request-date">
+                  <div class="request-details-modal__request-info">
+                    <h4 class="request-details-modal__request-title">{{ request.title }}</h4>
+                    <p class="request-details-modal__request-date">
                       <i class="fas fa-clock"></i>
                       Requested on {{ formatDate(request.requested_at) }}
                     </p>
-                    <p v-if="request.user_name" class="modal-request-date">
+                    <p v-if="request.user_name" class="request-details-modal__request-date">
                       <i class="fas fa-user"></i>
                       {{ request.user_name }}
                     </p>
                   </div>
-                  <button class="modal-request-btn">
+                  <button class="request-details-modal__request-btn">
                     <i class="fas fa-external-link-alt"></i>
                     Details
                   </button>
                 </div>
               </div>
             </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </transition>
+    </transition>
+  </Teleport>
 </template>
 
 <script>
@@ -136,7 +138,7 @@ export default {
 </script>
 
 <style scoped>
-.modal-overlay {
+.request-details-modal {
   position: fixed;
   inset: 0;
   background-color: var(--color-bg-overlay-heavy);
@@ -148,7 +150,7 @@ export default {
   overflow-y: auto;
 }
 
-.modal-content {
+.request-details-modal__content {
   position: relative;
   background-color: var(--surface-overlay);
   backdrop-filter: blur(15px);
@@ -162,7 +164,7 @@ export default {
   margin: auto;
 }
 
-.modal-close {
+.request-details-modal__close {
   position: absolute;
   top: 1rem;
   right: 1rem;
@@ -180,33 +182,33 @@ export default {
   z-index: 10;
 }
 
-.modal-close:hover {
+.request-details-modal__close:hover {
   background-color: var(--color-danger);
   color: var(--color-text-primary);
   border-color: var(--color-danger);
   transform: rotate(90deg);
 }
 
-.modal-layout {
+.request-details-modal__layout {
   display: flex;
   flex-direction: column;
   gap: 2rem;
   padding: 2rem;
 }
 
-.modal-poster-section {
+.request-details-modal__poster-section {
   flex-shrink: 0;
   width: 100%;
 }
 
-.modal-poster {
+.request-details-modal__poster {
   width: 100%;
   height: auto;
   border-radius: var(--radius-lg);
   box-shadow: var(--elevation-3);
 }
 
-.modal-poster-placeholder {
+.request-details-modal__poster-placeholder {
   width: 100%;
   aspect-ratio: 2/3;
   background-color: var(--color-bg-primary);
@@ -217,12 +219,12 @@ export default {
   color: var(--color-text-muted);
 }
 
-.modal-details-section {
+.request-details-modal__details-section {
   flex: 1;
   min-width: 0;
 }
 
-.modal-title {
+.request-details-modal__title {
   font-size: 2rem;
   font-weight: bold;
   color: var(--color-text-primary);
@@ -231,14 +233,14 @@ export default {
   word-wrap: break-word;
 }
 
-.badge-container {
+.request-details-modal__badges {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
-.badge {
+.request-details-modal__badge {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
@@ -250,27 +252,27 @@ export default {
   border: 1px solid var(--color-border-light);
 }
 
-.badge i {
+.request-details-modal__badge i {
   font-size: 0.85rem;
 }
 
-.badge-media {
+.request-details-modal__badge--media {
   color: var(--color-info);
 }
 
-.badge-rating {
+.request-details-modal__badge--rating {
   color: var(--color-success);
 }
 
-.badge-date {
+.request-details-modal__badge--date {
   color: var(--color-warning);
 }
 
-.badge-requested {
+.request-details-modal__badge--requested {
   color: var(--color-primary);
 }
 
-.source-link-modal {
+.request-details-modal__source {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -283,20 +285,20 @@ export default {
   margin-bottom: 0.5rem;
 }
 
-.source-link-modal strong {
+.request-details-modal__source strong {
   color: var(--color-primary);
 }
 
-.modal-separator {
+.request-details-modal__separator {
   border-top: 1px solid var(--color-border-light);
   margin: 1rem 0;
 }
 
-.modal-section {
+.request-details-modal__section {
   margin-bottom: 2rem;
 }
 
-.modal-section-title {
+.request-details-modal__section-title {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -306,16 +308,16 @@ export default {
   margin-bottom: 1rem;
 }
 
-.modal-section-title--ai {
+.request-details-modal__section-title--ai {
   color: var(--color-info);
 }
 
-.modal-overview {
+.request-details-modal__overview {
   color: var(--color-text-secondary);
   line-height: 1.6;
 }
 
-.modal-overview--rationale {
+.request-details-modal__overview--rationale {
   border-left: 3px solid var(--color-primary);
   padding-left: 1rem;
   margin-top: 0.5rem;
@@ -323,18 +325,18 @@ export default {
   font-style: italic;
 }
 
-.modal-overview--ai {
+.request-details-modal__overview--ai {
   border-left-color: var(--color-info);
   font-style: normal;
 }
 
-.modal-requests-list {
+.request-details-modal__requests-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.modal-request-item {
+.request-details-modal__request-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -347,18 +349,22 @@ export default {
   transition: var(--transition-base);
 }
 
-.modal-request-item:hover {
+.request-details-modal__request-item:hover {
   background-color: var(--color-bg-interactive);
   border-color: var(--color-primary);
 }
 
-.modal-request-title {
+.request-details-modal__request-info {
+  flex: 1;
+}
+
+.request-details-modal__request-title {
   font-weight: 600;
   color: var(--color-text-primary);
   margin-bottom: 0.25rem;
 }
 
-.modal-request-date {
+.request-details-modal__request-date {
   font-size: 0.85rem;
   color: var(--color-text-muted);
   display: flex;
@@ -366,7 +372,7 @@ export default {
   gap: 0.375rem;
 }
 
-.modal-request-btn {
+.request-details-modal__request-btn {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -382,34 +388,34 @@ export default {
   flex-shrink: 0;
 }
 
-.modal-request-btn:hover {
+.request-details-modal__request-btn:hover {
   background-color: var(--color-primary-hover);
 }
 
-.fade-enter-active,
-.fade-leave-active {
+.request-details-fade-enter-active,
+.request-details-fade-leave-active {
   transition: opacity 0.3s ease;
 }
 
-.fade-enter-from,
-.fade-leave-to {
+.request-details-fade-enter-from,
+.request-details-fade-leave-to {
   opacity: 0;
 }
 
 @media (min-width: 768px) {
-  .modal-layout {
+  .request-details-modal__layout {
     flex-direction: row;
     gap: 3rem;
     padding: 3rem;
   }
 
-  .modal-poster-section {
+  .request-details-modal__poster-section {
     width: 300px;
   }
 }
 
 @media (min-width: 1024px) {
-  .modal-layout {
+  .request-details-modal__layout {
     gap: 3.5rem;
     padding: 3.5rem 4rem;
   }

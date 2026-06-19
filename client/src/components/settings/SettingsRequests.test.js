@@ -5,8 +5,10 @@ const test = require('node:test');
 
 const settingsRequestsPath = path.join(__dirname, 'SettingsRequests.vue');
 const requestsPagePath = path.join(__dirname, '..', 'RequestsPage.vue');
+const requestDetailsModalPath = path.join(__dirname, '..', 'common', 'RequestDetailsModal.vue');
 const settingsRequestsSource = fs.readFileSync(settingsRequestsPath, 'utf8');
 const requestsPageSource = fs.readFileSync(requestsPagePath, 'utf8');
+const requestDetailsModalSource = fs.readFileSync(requestDetailsModalPath, 'utf8');
 
 test('recent requests and requests page reuse RequestPosterCard', () => {
   assert.match(settingsRequestsSource, /<RequestPosterCard/);
@@ -21,4 +23,12 @@ test('recent requests and requests page reuse RequestPosterCard', () => {
   assert.match(requestsPageSource, /<RequestDetailsModal/);
   assert.match(requestsPageSource, /import RequestPosterCard from '@\/components\/common\/RequestPosterCard.vue';/);
   assert.match(requestsPageSource, /import RequestDetailsModal from '@\/components\/common\/RequestDetailsModal.vue';/);
+});
+
+test('request details modal avoids generic dashboard modal classes', () => {
+  assert.match(requestDetailsModalSource, /<Teleport to="body">/);
+  assert.doesNotMatch(requestDetailsModalSource, /class="modal-overlay"/);
+  assert.doesNotMatch(requestDetailsModalSource, /class="modal-content"/);
+  assert.doesNotMatch(requestDetailsModalSource, /\.modal-overlay/);
+  assert.doesNotMatch(requestDetailsModalSource, /\.modal-content/);
 });

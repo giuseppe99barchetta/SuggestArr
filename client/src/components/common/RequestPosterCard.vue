@@ -92,13 +92,17 @@ export default {
 
 <style scoped>
 .request-card {
-  border: 1px solid var(--color-border-light);
+  border: none;
   border-radius: var(--radius-lg);
   cursor: pointer;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   transition: var(--transition-base);
+}
+
+.request-card--compact {
+  border-radius: var(--radius-md);
 }
 
 .request-card:hover {
@@ -146,7 +150,8 @@ export default {
 }
 
 .request-card--compact .request-card-body {
-  padding: 1rem;
+  gap: var(--spacing-sm);
+  padding: calc(var(--spacing-sm) + var(--spacing-xs));
 }
 
 .request-card-title {
@@ -218,18 +223,32 @@ export default {
   color: var(--color-primary);
 }
 
+.request-card--compact .request-card-title {
+  font-size: var(--font-size-sm);
+  line-height: 1.25;
+}
+
+.request-card--compact .badge-container {
+  gap: calc(var(--spacing-sm) - var(--spacing-2xs));
+}
+
+.request-card--compact .badge {
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
+}
+
+.request-card--compact .badge i {
+  font-size: var(--font-size-xs);
+}
+
 @media (max-width: 768px) {
   .request-card-title {
     font-size: 0.95rem;
   }
 
   .request-card--compact .request-card-title {
-    font-size: 0.7rem;
-  }
-
-  .request-card--compact .badge {
-    font-size: 0.625rem;
-    padding: 0.25rem 0.5rem;
+    font-size: var(--font-size-xs);
   }
 
   .source-link {
@@ -240,12 +259,16 @@ export default {
 
 @media (max-width: 480px) {
   .request-card--compact .request-card-body {
-    padding: 0.5rem;
+    padding: var(--spacing-sm);
   }
 
   .request-card--compact .request-card-title {
-    font-size: 0.6875rem;
+    font-size: var(--font-size-xs);
     min-height: 1.8em;
+  }
+
+  .request-card--compact .badge {
+    font-size: var(--font-size-xs);
   }
 }
 </style>
