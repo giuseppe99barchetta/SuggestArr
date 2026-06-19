@@ -1232,12 +1232,13 @@ class DatabaseManager:
     
         count_query = """
             SELECT 
-                COUNT(DISTINCT s.media_id) as total_sources,
+                COUNT(DISTINCT COALESCE(s.media_id, r.tmdb_source_id, '0')) as total_sources,
                 COUNT(r.tmdb_request_id) as total_requests
             FROM requests r
-            JOIN metadata m ON r.tmdb_request_id = m.media_id
-            JOIN metadata s ON r.tmdb_source_id = s.media_id
+            JOIN metadata m ON r.tmdb_request_id = m.media_id AND r.media_type = m.media_type
+            LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id
             WHERE r.requested_by = 'SuggestArr'
+            AND COALESCE(r.tmdb_source_id, '') != 'ai_search'
         """
     
         total_sources = 0
@@ -1276,11 +1277,14 @@ class DatabaseManager:
             }
 
         order_by_clause = sort_mapping.get(sort_by, sort_mapping['date-desc'])
+
+        from api_service.services.request_sources import request_source_title_sql
+        source_title_expr = request_source_title_sql("r")
     
         query = f"""
             SELECT
-                COALESCE(s.media_id, '0') AS source_id,
-                COALESCE(s.title, 'LLM Recommendation') AS source_title,
+                COALESCE(s.media_id, r.tmdb_source_id, '0') AS source_id,
+                {source_title_expr} AS source_title,
                 s.overview AS source_overview,
                 s.release_date AS source_release_date, s.poster_path AS source_poster_path, s.rating as rating,
                 r.tmdb_request_id, r.media_type, r.requested_at, s.logo_path, s.backdrop_path,
@@ -1289,7 +1293,7 @@ class DatabaseManager:
                 m.logo_path, m.backdrop_path, r.is_anime, r.rationale,
                 r.user_id, u.user_name, r.source_origin
             FROM requests r
-            JOIN metadata m ON r.tmdb_request_id = m.media_id
+            JOIN metadata m ON r.tmdb_request_id = m.media_id AND r.media_type = m.media_type
             LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id
             LEFT JOIN users u ON r.user_id = u.user_id
             WHERE r.requested_by = 'SuggestArr'
@@ -1331,7 +1335,7 @@ class DatabaseManager:
             else:
                 if requested_at > source_max_dates[source_id]:
                     source_max_dates[source_id] = requested_at
-    
+
             sources[source_id]["requests"].append({
                 "request_id": row[6],
                 "media_type": row[7],
@@ -1663,7 +1667,7 @@ class DatabaseManager:
         count_query = """
             SELECT COUNT(*)
             FROM requests r
-            JOIN metadata m ON r.tmdb_request_id = m.media_id
+            JOIN metadata m ON r.tmdb_request_id = m.media_id AND r.media_type = m.media_type
             WHERE r.requested_by = 'SuggestArr'
             AND r.tmdb_source_id = 'ai_search'
         """
@@ -1674,7 +1678,7 @@ class DatabaseManager:
                 m.title, m.overview, m.poster_path, m.release_date, m.rating,
                 m.backdrop_path, m.logo_path
             FROM requests r
-            JOIN metadata m ON r.tmdb_request_id = m.media_id
+            JOIN metadata m ON r.tmdb_request_id = m.media_id AND r.media_type = m.media_type
             WHERE r.requested_by = 'SuggestArr'
             AND r.tmdb_source_id = 'ai_search'
             ORDER BY {order_by_clause}
