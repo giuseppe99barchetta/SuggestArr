@@ -27,6 +27,10 @@
           <i class="fas fa-clock"></i>
           {{ formatDate(item.requested_at) }}
         </span>
+        <span v-if="originBadgeLabel" class="poster-origin">
+          <i class="fas fa-history"></i>
+          {{ originBadgeLabel }}
+        </span>
       </div>
     </div>
 
@@ -85,6 +89,13 @@ export default {
   computed: {
     showRating() {
       return this.showMissingRating || Boolean(this.item.rating);
+    },
+    originBadgeLabel() {
+      if (this.item.source_origin === 'trakt_history') {
+        return 'Trakt History';
+      }
+
+      return '';
     },
   },
   methods: {
@@ -178,11 +189,14 @@ export default {
   bottom: 0;
   left: 0;
   justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
   padding: var(--spacing-3xl) var(--spacing-sm) var(--spacing-sm);
 }
 
 .poster-pill,
-.poster-date {
+.poster-date,
+.poster-origin {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
@@ -223,8 +237,16 @@ export default {
   text-overflow: ellipsis;
 }
 
+.poster-origin {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--color-info-alpha-20);
+  border-color: var(--color-info-alpha-20);
+  color: var(--color-info-light);
+}
+
 .poster-pill i,
-.poster-date i {
+.poster-date i,
+.poster-origin i {
   flex: 0 0 auto;
   font-size: var(--font-size-xs);
 }
@@ -289,7 +311,8 @@ export default {
 }
 
 .request-card--compact .poster-pill,
-.request-card--compact .poster-date {
+.request-card--compact .poster-date,
+.request-card--compact .poster-origin {
   gap: var(--spacing-2xs);
   padding: var(--spacing-2xs) var(--spacing-xs);
 }

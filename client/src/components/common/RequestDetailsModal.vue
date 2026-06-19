@@ -38,6 +38,10 @@
                     <i :class="selectedSource.requested_at ? 'fas fa-clock' : 'fas fa-calendar'"></i>
                     {{ posterDateLabel }}
                   </span>
+                  <span v-if="originBadgeLabel" class="request-details-modal__poster-origin">
+                    <i class="fas fa-history"></i>
+                    {{ originBadgeLabel }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -52,11 +56,11 @@
                 </div>
                 <div v-if="selectedSource.source_origin === 'trakt_history'" class="request-details-modal__context-row">
                   <i class="fas fa-history"></i>
-                  <span>Source <strong>Trakt History</strong></span>
+                  <span>Origin <strong>Trakt History</strong></span>
                 </div>
                 <div v-if="selectedSource.source_title" class="request-details-modal__context-row">
                   <i class="fas fa-link"></i>
-                  <span>Requested from <strong>{{ selectedSource.source_title }}</strong></span>
+                  <span>Source content <strong>{{ selectedSource.source_title }}</strong></span>
                 </div>
                 <div v-if="selectedSource.user_name" class="request-details-modal__context-row">
                   <i class="fas fa-user"></i>
@@ -144,6 +148,13 @@ export default {
       }
 
       return this.selectedSource?.release_date || '';
+    },
+    originBadgeLabel() {
+      if (this.selectedSource?.source_origin === 'trakt_history') {
+        return 'Trakt History';
+      }
+
+      return '';
     },
     hasContextRows() {
       return Boolean(
@@ -286,11 +297,14 @@ export default {
   bottom: 0;
   left: 0;
   justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
   padding: var(--spacing-3xl) var(--spacing-sm) var(--spacing-sm);
 }
 
 .request-details-modal__poster-pill,
-.request-details-modal__poster-date {
+.request-details-modal__poster-date,
+.request-details-modal__poster-origin {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
@@ -331,8 +345,16 @@ export default {
   text-overflow: ellipsis;
 }
 
+.request-details-modal__poster-origin {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--color-info-alpha-20);
+  border-color: var(--color-info-alpha-20);
+  color: var(--color-info-light);
+}
+
 .request-details-modal__poster-pill i,
-.request-details-modal__poster-date i {
+.request-details-modal__poster-date i,
+.request-details-modal__poster-origin i {
   flex: 0 0 auto;
   font-size: var(--font-size-xs);
 }
