@@ -58,7 +58,7 @@
                   <i class="fas fa-history"></i>
                   <span>Origin <strong>Trakt History</strong></span>
                 </div>
-                <div v-if="selectedSource.source_title" class="request-details-modal__context-row">
+                <div v-if="showSourceContent" class="request-details-modal__context-row">
                   <i class="fas fa-link"></i>
                   <span>Source content <strong>{{ selectedSource.source_title }}</strong></span>
                 </div>
@@ -151,7 +151,7 @@ export default {
     },
     originBadgeLabel() {
       if (this.selectedSource?.source_origin === 'trakt_history') {
-        return 'Trakt History';
+        return 'Seed: Trakt History';
       }
 
       return '';
@@ -160,9 +160,12 @@ export default {
       return Boolean(
         (this.selectedSource?.release_date && this.selectedSource?.requested_at) ||
         this.selectedSource?.source_origin === 'trakt_history' ||
-        this.selectedSource?.source_title ||
+        this.showSourceContent ||
         this.selectedSource?.user_name
       );
+    },
+    showSourceContent() {
+      return Boolean(this.selectedSource?.source_title && this.selectedSource?.source_id !== 'trakt_recommendations');
     },
   },
   methods: {

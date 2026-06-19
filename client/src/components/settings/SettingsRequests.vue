@@ -174,6 +174,7 @@ export default {
         const allRequests = response.data.data.flatMap(source =>
           source.requests.map(req => ({
             ...req,
+            source_id: source.source_id,
             source_title: source.source_title
           }))
         );

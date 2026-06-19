@@ -19,6 +19,7 @@ test('recent requests and requests page reuse RequestPosterCard', () => {
   assert.match(settingsRequestsSource, /import RequestDetailsModal from '@\/components\/common\/RequestDetailsModal.vue';/);
   assert.match(settingsRequestsSource, /@select="openRequestModal"/);
   assert.match(settingsRequestsSource, /goToRequestsPage\(\) \{/);
+  assert.match(settingsRequestsSource, /source_id: source\.source_id/);
   assert.doesNotMatch(settingsRequestsSource, /class="request-card request-card-compact"/);
 
   assert.match(requestsPageSource, /<RequestPosterCard/);
@@ -45,6 +46,8 @@ test('request details modal uses poster overlays for request metadata', () => {
   assert.match(requestDetailsModalSource, /class="request-details-modal__poster-origin"/);
   assert.match(requestDetailsModalSource, /Source content <strong>{{ selectedSource\.source_title }}<\/strong>/);
   assert.match(requestDetailsModalSource, /Origin <strong>Trakt History<\/strong>/);
+  assert.match(requestDetailsModalSource, /showSourceContent\(\) \{/);
+  assert.match(requestDetailsModalSource, /selectedSource\?\.source_id !== 'trakt_recommendations'/);
   assert.match(requestDetailsModalSource, /class="request-details-modal__context"/);
   assert.doesNotMatch(requestDetailsModalSource, /class="request-details-modal__badges"/);
   assert.doesNotMatch(requestDetailsModalSource, /class="request-details-modal__badge/);
@@ -59,6 +62,8 @@ test('request poster card keeps metadata on the poster artwork', () => {
   assert.match(requestPosterCardSource, /class="poster-origin"/);
   assert.match(requestPosterCardSource, /source_origin === 'trakt_history'/);
   assert.match(requestPosterCardSource, /From: <strong>{{ item\.source_title }}<\/strong>/);
+  assert.match(requestPosterCardSource, /showSourceContent\(\) \{/);
+  assert.match(requestPosterCardSource, /item\.source_id !== 'trakt_recommendations'/);
   assert.doesNotMatch(requestPosterCardSource, /class="badge-container"/);
   assert.doesNotMatch(requestPosterCardSource, /class="badge badge-media"/);
 });

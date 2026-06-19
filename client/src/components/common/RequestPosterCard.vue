@@ -45,7 +45,7 @@
         <i class="fas fa-magic"></i>
         <span>From: <strong>AI Search</strong></span>
       </div>
-      <div v-else-if="showSource && item.source_title" class="source-link">
+      <div v-else-if="showSourceContent" class="source-link">
         <i class="fas fa-arrow-left"></i>
         <span>From: <strong>{{ item.source_title }}</strong></span>
       </div>
@@ -92,10 +92,13 @@ export default {
     },
     originBadgeLabel() {
       if (this.item.source_origin === 'trakt_history') {
-        return 'Trakt History';
+        return 'Seed: Trakt History';
       }
 
       return '';
+    },
+    showSourceContent() {
+      return this.showSource && this.item.source_title && this.item.source_id !== 'trakt_recommendations';
     },
   },
   methods: {
