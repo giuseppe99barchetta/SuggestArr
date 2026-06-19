@@ -133,6 +133,10 @@ export default {
       autoUpdate: true,
       updateInterval: null,
       batchSize: 100,
+      filteredDisplayLimit: 100,
+      logOffset: 0,
+      hasMoreLogs: true,
+      fetchingLogs: false,
       loadingMore: false,
       severityOptions: [
         { value: '', label: 'All Severities' },
@@ -178,16 +182,18 @@ export default {
         return;
       }
 
+      this.filteredDisplayLimit = this.batchSize;
       this.applyFilters();
 
       if (oldVal && (!newVal || newVal === '') && !this.filterText) {
-        this.displayedLogs = this.logs.slice(0, this.batchSize);
+        this.displayedLogs = this.logs;
       }
     },
     filterText(newVal, oldVal) {
+      this.filteredDisplayLimit = this.batchSize;
       this.applyFilters();
       if (oldVal && !newVal && (!this.selectedSeverity || this.selectedSeverity === '')) {
-        this.displayedLogs = this.logs.slice(0, this.batchSize);
+        this.displayedLogs = this.logs;
       }
     }
   },
@@ -218,56 +224,103 @@ export default {
           return matchesText && matchesSeverity;
         });
 
-        this.filteredDisplayedLogs = filtered.slice(0, this.batchSize);
+        this.filteredDisplayedLogs = filtered.slice(0, this.filteredDisplayLimit);
       }
     },
     fetchLogs() {
-      axios.get('/api/logs')
+      this.fetchLogPage(true);
+    },
+    fetchLogPage(reset = false) {
+      if (this.fetchingLogs || (!reset && !this.hasMoreLogs)) {
+        return Promise.resolve();
+      }
+
+      this.fetchingLogs = true;
+      const offset = reset ? 0 : this.logOffset;
+
+      return axios.get('/api/logs', {
+        params: {
+          limit: this.batchSize,
+          offset
+        }
+      })
         .then(response => {
-          this.logs = this.parseLogs(response.data).reverse();
+          const parsedLogs = this.parseLogs(response.data).reverse();
+          this.hasMoreLogs = parsedLogs.length === this.batchSize;
+
+          if (reset) {
+            this.logs = parsedLogs;
+            this.logOffset = parsedLogs.length;
+          } else {
+            this.logs = [...this.logs, ...parsedLogs];
+            this.logOffset += parsedLogs.length;
+          }
+
           if (!this.filterText && !this.selectedSeverity) {
-            this.displayedLogs = this.logs.slice(0, this.batchSize);
+            this.displayedLogs = this.logs;
+          } else {
+            this.applyFilters();
           }
         })
         .catch(error => {
           console.error('Error fetching logs:', error);
+        })
+        .finally(() => {
+          this.fetchingLogs = false;
         });
     },
     loadMoreLogs() {
-      const severity = (this.selectedSeverity === 'All Severities' || !this.selectedSeverity) ? '' : this.selectedSeverity;
-      const hasFilter = this.filterText.trim() !== '' || severity !== '';
-
-      if (this.loadingMore) return;
+      if (this.loadingMore || !this.hasMoreLogs) return;
 
       this.loadingMore = true;
 
-      setTimeout(() => {
-        if (!hasFilter) {
-          if (this.displayedLogs.length >= this.logs.length) {
-            this.loadingMore = false;
-            return;
-          }
+      this.fetchLogPage(false)
+        .finally(() => {
+          this.loadingMore = false;
+        });
+    },
+    hasMoreVisibleLogs() {
+      const severity = (this.selectedSeverity === 'All Severities' || !this.selectedSeverity) ? '' : this.selectedSeverity;
+      const hasFilter = this.filterText.trim() !== '' || severity !== '';
 
-          const nextBatch = this.logs.slice(
-            this.displayedLogs.length,
-            this.displayedLogs.length + this.batchSize
-          );
-          this.displayedLogs = [...this.displayedLogs, ...nextBatch];
-        } else {
-          if (this.filteredDisplayedLogs.length >= this.allFilteredLogs.length) {
-            this.loadingMore = false;
-            return;
-          }
+      if (!hasFilter) {
+        return this.hasMoreLogs;
+      }
 
-          const nextBatch = this.allFilteredLogs.slice(
-            this.filteredDisplayedLogs.length,
-            this.filteredDisplayedLogs.length + this.batchSize
-          );
-          this.filteredDisplayedLogs = [...this.filteredDisplayedLogs, ...nextBatch];
-        }
+      return this.hasMoreLogs || this.filteredDisplayedLogs.length < this.allFilteredLogs.length;
+    },
+    loadMoreFilteredLogs() {
+      if (this.filteredDisplayedLogs.length < this.allFilteredLogs.length) {
+        this.filteredDisplayLimit += this.batchSize;
+        this.applyFilters();
+        return;
+      }
 
-        this.loadingMore = false;
-      }, 500);
+      this.loadMoreLogs();
+    },
+    loadMoreVisibleLogs() {
+      const severity = (this.selectedSeverity === 'All Severities' || !this.selectedSeverity) ? '' : this.selectedSeverity;
+      const hasFilter = this.filterText.trim() !== '' || severity !== '';
+
+      if (hasFilter) {
+        this.loadMoreFilteredLogs();
+      } else {
+        this.loadMoreLogs();
+      }
+    },
+    shouldLoadMoreLogs() {
+      if (!this.hasMoreVisibleLogs()) {
+        return false;
+      }
+
+      const severity = (this.selectedSeverity === 'All Severities' || !this.selectedSeverity) ? '' : this.selectedSeverity;
+      const hasFilter = this.filterText.trim() !== '' || severity !== '';
+
+      if (!hasFilter) {
+        return true;
+      }
+
+      return this.filteredDisplayedLogs.length < this.allFilteredLogs.length || this.hasMoreLogs;
     },
     handleScroll() {
       const container = this.$el.querySelector('.table-scroll-container');
@@ -276,14 +329,8 @@ export default {
       const scrollPosition = container.scrollTop + container.clientHeight;
       const bottomPosition = container.scrollHeight;
       
-      const severity = (this.selectedSeverity === 'All Severities' || !this.selectedSeverity) ? '' : this.selectedSeverity;
-      const hasFilter = this.filterText.trim() !== '' || severity !== '';
-      
-      const currentLength = hasFilter ? this.filteredDisplayedLogs.length : this.displayedLogs.length;
-      const totalLength = hasFilter ? this.allFilteredLogs.length : this.logs.length;
-    
-      if (scrollPosition >= bottomPosition * 0.9 && currentLength < totalLength) {
-        this.loadMoreLogs();
+      if (scrollPosition >= bottomPosition * 0.9 && this.shouldLoadMoreLogs()) {
+        this.loadMoreVisibleLogs();
       }
     },
     parseLogs(logData) {

@@ -397,6 +397,10 @@
                     <i class="fas fa-clock"></i>
                     Requested {{ formatDate(selectedSource.requested_at) }}
                   </span>
+                  <span v-if="selectedSource.source_origin === 'trakt_history'" class="badge badge-date">
+                    <i class="fas fa-history"></i>
+                    Trakt History
+                  </span>
                 </div>
 
                 <!-- Source Link (for requests view) -->
@@ -828,6 +832,7 @@ export default {
             rationale: request.rationale,
             user_id: request.user_id,
             user_name: request.user_name,
+            source_origin: request.source_origin,
           })),
         }));
 

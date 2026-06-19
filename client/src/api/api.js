@@ -178,9 +178,12 @@ export const setCleanupSettings = (payload) => axios.post('/api/cleanup/settings
 export const runCleanupNow = (dryRun = null) => axios.post('/api/cleanup/run', dryRun === null ? {} : { dry_run: dryRun });
 export const getCleanupLog = (limit = 100) => axios.get('/api/cleanup/log', { params: { limit } });
 
-// Config export: download a full configuration snapshot (admin only, includes API keys)
-export const exportConfig = () => {
-    return axios.get('/api/config/export', { responseType: 'json' });
+// Config export: download a configuration snapshot (admin only)
+export const exportConfig = (includeSecrets = false) => {
+    return axios.get('/api/config/export', {
+        responseType: 'json',
+        params: { include_secrets: includeSecrets ? 'true' : 'false' },
+    });
 };
 
 // Config import: restore a configuration snapshot (admin only)

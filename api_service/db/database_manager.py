@@ -203,6 +203,7 @@ class DatabaseManager:
                     tmdb_request_id TEXT NOT NULL PRIMARY KEY,
                     media_type TEXT NOT NULL,
                     tmdb_source_id TEXT,
+                    source_origin TEXT,
                     requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     requested_by TEXT,
                     user_id TEXT,
@@ -585,6 +586,12 @@ class DatabaseManager:
                     self.logger.debug("Adding column rationale...")
                     cursor.execute("ALTER TABLE requests ADD COLUMN rationale TEXT;")
                     conn.commit()
+
+                # Add missing source_origin column
+                if 'source_origin' not in existing_columns:
+                    self.logger.debug("Adding column source_origin...")
+                    cursor.execute("ALTER TABLE requests ADD COLUMN source_origin TEXT;")
+                    conn.commit()
                     
             except Exception as e:
                 self.logger.error(f"Failed to add missing columns to requests: {e}")
@@ -961,16 +968,16 @@ class DatabaseManager:
         # Connection pooling handles connection management automatically
         pass
     
-    def save_request(self, media_type: str, media_id: str, source: str, user_id: Optional[str] = None, is_anime: bool = False, rationale: Optional[str] = None) -> None:
+    def save_request(self, media_type: str, media_id: str, source: str, user_id: Optional[str] = None, is_anime: bool = False, rationale: Optional[str] = None, source_origin: Optional[str] = None) -> None:
         """Save a new media request to the database, ignoring duplicates."""
-        self.logger.debug(f"Saving request: {media_type} {media_id} from {source} (anime={is_anime})")
+        self.logger.debug(f"Saving request: {media_type} {media_id} from {source} (anime={is_anime}, origin={source_origin})")
 
         query = """
 
-            INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, tmdb_source_id, requested_by, user_id, is_anime, rationale)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO requests (media_type, tmdb_request_id, tmdb_source_id, source_origin, requested_by, user_id, is_anime, rationale)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
-        params = (media_type, str(media_id), source, 'SuggestArr', user_id, is_anime, rationale)
+        params = (media_type, str(media_id), source, source_origin, 'SuggestArr', user_id, is_anime, rationale)
         
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -1280,7 +1287,7 @@ class DatabaseManager:
                 m.title AS request_title, m.overview AS request_overview,
                 m.release_date AS request_release_date, m.poster_path AS request_poster_path, m.rating as request_rating,
                 m.logo_path, m.backdrop_path, r.is_anime, r.rationale,
-                r.user_id, u.user_name
+                r.user_id, u.user_name, r.source_origin
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id
             LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id
@@ -1339,6 +1346,7 @@ class DatabaseManager:
                 "rationale": row[19] if len(row) > 19 else None,
                 "user_id": row[20] if len(row) > 20 else None,
                 "user_name": row[21] if len(row) > 21 else None,
+                "source_origin": row[22] if len(row) > 22 else None,
             })
     
         # Sort sources
@@ -2620,6 +2628,27 @@ class DatabaseManager:
             return None
         return {"id": row[0], "provider": row[1], "external_user_id": row[2],
                 "external_username": row[3], "created_at": row[4]}
+
+    def get_all_media_user_identities(self) -> List[Dict[str, Any]]:
+        """Return all media-user identity rows ordered by provider and external id."""
+        query = (
+            "SELECT id, provider, external_user_id, external_username, created_at "
+            "FROM media_user_identities ORDER BY provider, external_user_id"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        return [
+            {
+                "id": row[0],
+                "provider": row[1],
+                "external_user_id": row[2],
+                "external_username": row[3],
+                "created_at": row[4],
+            }
+            for row in rows
+        ]
 
     # ---- trakt_account_links --------------------------------------------------
 

@@ -7,6 +7,7 @@ from api_service.auth.middleware import require_role
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.jobs.cleanup_automation import execute_cleanup_job, _run_lock as _shared_run_lock
+from api_service.utils.asyncio_loop import run_coroutine_sync
 
 cleanup_bp = Blueprint("cleanup", __name__)
 _run_lock = _shared_run_lock
@@ -55,7 +56,7 @@ def cleanup_settings_set():
 
 @cleanup_bp.route("/run", methods=["POST"])
 @require_role("admin")
-async def cleanup_run_now():
+def cleanup_run_now():
     if not _run_lock.acquire(blocking=False):
         return jsonify({
             "status": "error",
@@ -67,7 +68,10 @@ async def cleanup_run_now():
         override_dry_run = data.get("dry_run")
         if override_dry_run is not None and not isinstance(override_dry_run, bool):
             return jsonify({"status": "error", "message": "dry_run must be a boolean"}), 400
-        result = await execute_cleanup_job(force_run=True, override_dry_run=override_dry_run)
+        result = run_coroutine_sync(
+            execute_cleanup_job(force_run=True, override_dry_run=override_dry_run),
+            logger,
+        )
         return jsonify({"status": "success", "result": result}), 200
     except Exception as exc:
         logger.error("Manual cleanup run failed: %s", exc)

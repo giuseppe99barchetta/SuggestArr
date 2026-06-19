@@ -327,6 +327,7 @@ class SeerClient(BaseHTTPClient):
 
         # Private meta-keys — consumed by the worker, not sent to Seer
         data["_source_id"] = source.get('id') if source else None
+        data["_source_origin"] = source.get('_source_origin') if source else None
         data["_user_id"] = user.get('id') if user else None
         data["_rationale"] = rationale
         data["_is_anime"] = is_anime
