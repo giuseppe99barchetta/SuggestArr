@@ -30,4 +30,4 @@ xmltodict==1.0.4
 mysql-connector-python==9.7.0
 psycopg2-binary==2.9.12
 
-openai==2.41.1
+openai==2.43.0
