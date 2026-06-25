@@ -40,9 +40,11 @@ from api_service.services.llm.llm_service import (
     _deduplicate_history,
     _extract_json_object,
     _is_duplicate_of_history,
+    _litellm_completion,
     _normalize_title,
     _repair_title_qualifiers,
     _strip_markdown_fences,
+    _use_litellm,
     get_recommendations_from_history,
     interpret_search_query,
 )
@@ -625,6 +627,93 @@ class TestInterpretSearchQuery(unittest.IsolatedAsyncioTestCase):
         # Should not raise
         serialised = json.dumps(result)
         self.assertIsInstance(serialised, str)
+
+
+# ---------------------------------------------------------------------------
+# LiteLLM provider integration
+# ---------------------------------------------------------------------------
+
+class TestUseLitellm(unittest.TestCase):
+
+    def test_returns_false_when_provider_is_openai(self):
+        config = {"LLM_PROVIDER": "openai"}
+        with patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=config):
+            self.assertFalse(_use_litellm())
+
+    def test_returns_false_when_provider_unset(self):
+        config = {}
+        with patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=config):
+            self.assertFalse(_use_litellm())
+
+    def test_returns_true_when_provider_is_litellm_and_installed(self):
+        config = {"LLM_PROVIDER": "litellm"}
+        with patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=config), \
+             patch("api_service.services.llm.llm_service._HAS_LITELLM", True):
+            self.assertTrue(_use_litellm())
+
+    def test_returns_false_when_litellm_not_installed(self):
+        config = {"LLM_PROVIDER": "litellm"}
+        with patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=config), \
+             patch("api_service.services.llm.llm_service._HAS_LITELLM", False):
+            self.assertFalse(_use_litellm())
+
+
+class TestLitellmCompletion(unittest.IsolatedAsyncioTestCase):
+
+    async def test_calls_litellm_acompletion_with_drop_params(self):
+        mock_response = _mock_openai_response('{"recommendations": []}')
+        with patch("api_service.services.llm.llm_service.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
+            result = await _litellm_completion(
+                model="anthropic/claude-sonnet-4-6",
+                messages=[{"role": "user", "content": "test"}],
+                temperature=0.7,
+            )
+            mock_litellm.acompletion.assert_called_once_with(
+                model="anthropic/claude-sonnet-4-6",
+                messages=[{"role": "user", "content": "test"}],
+                drop_params=True,
+                temperature=0.7,
+            )
+            self.assertEqual(result, mock_response)
+
+
+class TestCallWithValidationLitellm(unittest.IsolatedAsyncioTestCase):
+
+    async def test_routes_through_litellm_when_provider_set(self):
+        valid_payload = _wrap_recs([
+            {"title": "Interstellar", "year": 2014, "rationale": "Similar sci-fi.", "source_title": "Inception"}
+        ])
+        mock_response = _mock_openai_response(valid_payload)
+
+        with patch("api_service.services.llm.llm_service._use_litellm", return_value=True), \
+             patch("api_service.services.llm.llm_service._litellm_completion", new_callable=AsyncMock, return_value=mock_response):
+            result = await _call_with_validation(
+                client=None,
+                model="anthropic/claude-sonnet-4-6",
+                messages=[{"role": "user", "content": "test"}],
+                schema_cls=RecommendationList,
+            )
+            self.assertEqual(result.recommendations[0].title, "Interstellar")
+
+    async def test_uses_openai_client_when_provider_not_litellm(self):
+        valid_payload = _wrap_recs([
+            {"title": "Inception", "year": 2010, "rationale": "Mind-bending.", "source_title": "The Matrix"}
+        ])
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response(valid_payload)
+        )
+
+        with patch("api_service.services.llm.llm_service._use_litellm", return_value=False):
+            result = await _call_with_validation(
+                client=mock_client,
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": "test"}],
+                schema_cls=RecommendationList,
+            )
+            mock_client.chat.completions.create.assert_called()
+            self.assertEqual(result.recommendations[0].title, "Inception")
 
 
 if __name__ == "__main__":

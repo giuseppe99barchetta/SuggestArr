@@ -19,6 +19,12 @@ from typing import Any, Dict, List, Optional, Type, TypeVar
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
+try:
+    import litellm
+    _HAS_LITELLM = True
+except ImportError:
+    _HAS_LITELLM = False
+
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.api_exceptions import LLMValidationError
 from api_service.services.config_service import ConfigService
@@ -58,17 +64,33 @@ _RECOMMENDATION_SCHEMA_HINT = (
 
 def get_llm_client(user_id: Optional[int] = None) -> Optional[AsyncOpenAI]:
     """Initialize and return the OpenAI-compatible async client if configured.
-    
+
     Checks for user-specific OpenAI config first (if user_id provided and user has
     can_manage_ai permission), then falls back to global admin config.
 
+    When ``LLM_PROVIDER`` is ``litellm``, returns a sentinel object (not
+    ``None``) so callers know the LLM is configured.  Actual calls go through
+    :func:`_litellm_completion` instead of the returned client.
+
     :param user_id: Optional user ID to check for per-user OpenAI config
-    :return: Configured :class:`AsyncOpenAI` instance, or ``None`` when the
-        provider is not set up.
+    :return: Configured :class:`AsyncOpenAI` instance (or a sentinel when
+        using LiteLLM), or ``None`` when the provider is not set up.
     """
+    if _use_litellm():
+        config = ConfigService.get_runtime_config()
+        model = config.get("LLM_MODEL", "")
+        if not model:
+            logger.warning(
+                "LLM_PROVIDER is 'litellm' but LLM_MODEL is not set. "
+                "Set it to a litellm model string like 'anthropic/claude-sonnet-4-6'."
+            )
+            return None
+        logger.debug("Using LiteLLM provider with model %s", model)
+        return AsyncOpenAI(api_key="litellm-placeholder")
+
     api_key = None
     base_url = None
-    
+
     # Try to load user-specific config first
     if user_id is not None:
         try:
@@ -87,7 +109,7 @@ def get_llm_client(user_id: Optional[int] = None) -> Optional[AsyncOpenAI]:
                     logger.warning(f"Invalid JSON in user OpenAI config for user_id={user_id}")
         except Exception as e:
             logger.warning(f"Failed to load user OpenAI config for user_id={user_id}: {e}")
-    
+
     # Fall back to global config if no user-specific config
     if not api_key and not base_url:
         config = ConfigService.get_runtime_config()
@@ -116,6 +138,21 @@ def get_llm_client(user_id: Optional[int] = None) -> Optional[AsyncOpenAI]:
     except Exception as exc:
         logger.error("Failed to initialize OpenAI client: %s", exc)
         return None
+
+
+def _use_litellm() -> bool:
+    """Return True when LiteLLM provider is selected and the package is installed."""
+    config = ConfigService.get_runtime_config()
+    provider = config.get("LLM_PROVIDER", "openai")
+    if provider == "litellm":
+        if not _HAS_LITELLM:
+            logger.error(
+                "LLM_PROVIDER is set to 'litellm' but the litellm package is not installed. "
+                "Install it with: pip install litellm"
+            )
+            return False
+        return True
+    return False
 
 
 def is_llm_configured(config: Optional[Dict[str, Any]] = None) -> bool:
@@ -324,8 +361,28 @@ def _is_duplicate_of_history(rec_title: str, watched_titles: set) -> bool:
 # Core validation / retry engine
 # ---------------------------------------------------------------------------
 
+async def _litellm_completion(
+    model: str,
+    messages: List[Dict[str, str]],
+    **kwargs: Any,
+) -> Any:
+    """Call litellm.acompletion with drop_params enabled.
+
+    :param model: LiteLLM model string (e.g. ``"anthropic/claude-sonnet-4-6"``).
+    :param messages: Chat messages in OpenAI format.
+    :param kwargs: Additional kwargs forwarded to ``litellm.acompletion``.
+    :return: LiteLLM ModelResponse (OpenAI-compatible).
+    """
+    return await litellm.acompletion(
+        model=model,
+        messages=messages,
+        drop_params=True,
+        **kwargs,
+    )
+
+
 async def _call_with_validation(
-    client: AsyncOpenAI,
+    client: Optional[AsyncOpenAI],
     model: str,
     messages: List[Dict[str, str]],
     schema_cls: Type[_T],
@@ -350,7 +407,12 @@ async def _call_with_validation(
     reject a ``response_format`` with a 400 response fall back to JSON-object
     mode, then to plain prompting without burning a validation retry.
 
-    :param client: Initialised async OpenAI-compatible client.
+    When ``LLM_PROVIDER`` is ``litellm``, calls go through
+    :func:`_litellm_completion` (which uses ``litellm.acompletion`` with
+    ``drop_params=True``) instead of the OpenAI client.
+
+    :param client: Initialised async OpenAI-compatible client, or ``None``
+        when using the LiteLLM provider.
     :param model: Model identifier string (e.g. ``"gpt-4o-mini"``).
     :param messages: Chat messages in OpenAI format.
     :param schema_cls: Pydantic model class to validate against.
@@ -359,6 +421,7 @@ async def _call_with_validation(
     :raises LLMValidationError: When all attempts are exhausted.
     :return: Validated Pydantic model instance.
     """
+    use_litellm = _use_litellm()
     current_messages = list(messages)
     last_error: Exception = RuntimeError("No attempts made")
 
@@ -374,7 +437,10 @@ async def _call_with_validation(
                 request_kwargs["response_format"] = response_format
 
             try:
-                response = await client.chat.completions.create(**request_kwargs)
+                if use_litellm:
+                    response = await _litellm_completion(**request_kwargs)
+                else:
+                    response = await client.chat.completions.create(**request_kwargs)
                 break
             except Exception as exc:
                 if response_format is not None and _is_response_format_rejection(exc):
@@ -405,12 +471,10 @@ async def _call_with_validation(
                 "LLM response validation failed (attempt %d/%d): %s; response preview=%r",
                 attempt + 1,
                 max_retries + 1,
-                # Truncate to avoid leaking excessive content in logs.
                 str(exc)[:300],
                 preview,
             )
             if attempt < max_retries:
-                # Inject correction hint as the first system message and retry.
                 current_messages = [
                     {"role": "system", "content": _validation_retry_message(schema_cls)},
                     *messages,
