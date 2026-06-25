@@ -47,7 +47,7 @@
       </div>
       <div v-else-if="showSourceContent" class="source-link">
         <i class="fas fa-arrow-left"></i>
-        <span>From: <strong>{{ item.source_title }}</strong></span>
+        <span>From: <strong>{{ sourceContentMetadata.label }}</strong></span>
       </div>
     </div>
   </div>
@@ -55,6 +55,10 @@
 
 <script>
 import { formatDate } from '@/utils/dateUtils.js';
+import {
+  getRequestMethodMetadata,
+  getRequestSourceContentMetadata,
+} from '@/utils/requestSourceMetadata.js';
 
 export default {
   name: 'RequestPosterCard',
@@ -91,40 +95,19 @@ export default {
       return this.showMissingRating || Boolean(this.item.rating);
     },
     showSourceContent() {
-      return this.showSource && this.item.source_title && this.item.source_id !== 'trakt_recommendations';
+      return this.showSource && Boolean(this.sourceContentMetadata);
+    },
+    sourceContentMetadata() {
+      return getRequestSourceContentMetadata(this.item);
+    },
+    requestMethodMetadata() {
+      return getRequestMethodMetadata(this.item, { sourceMode: this.sourceMode });
     },
     requestMethodLabel() {
-      const sourceId = String(this.item.source_id ?? this.item.id ?? '');
-
-      if (this.sourceMode === 'ai' || sourceId === 'ai_search') {
-        return 'AI';
-      }
-      if (sourceId === 'trakt_recommendations') {
-        return 'Trakt';
-      }
-      if (sourceId === 'discover') {
-        return 'Discover';
-      }
-      if (/^\d+$/.test(sourceId)) {
-        return 'TMDB';
-      }
-
-      return '';
+      return this.requestMethodMetadata?.shortLabel || '';
     },
     requestMethodIcon() {
-      const sourceId = String(this.item.source_id ?? this.item.id ?? '');
-
-      if (this.sourceMode === 'ai' || sourceId === 'ai_search') {
-        return 'fas fa-magic';
-      }
-      if (sourceId === 'trakt_recommendations') {
-        return 'icon-trakt';
-      }
-      if (sourceId === 'discover') {
-        return 'fas fa-search';
-      }
-
-      return 'fas fa-database';
+      return this.requestMethodMetadata?.icon || '';
     },
   },
   methods: {

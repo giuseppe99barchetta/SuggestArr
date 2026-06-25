@@ -62,9 +62,9 @@
                   <i class="fas fa-history"></i>
                   <span>Seed origin <strong>Trakt History</strong></span>
                 </div>
-                <div v-if="showSourceContent" class="request-details-modal__context-row">
-                  <i class="fas fa-link"></i>
-                  <span>Source content <strong>{{ selectedSource.source_title }}</strong></span>
+                <div v-if="sourceContentMetadata" class="request-details-modal__context-row">
+                  <i :class="sourceContentMetadata.icon"></i>
+                  <span>{{ sourceContentMetadata.kind }} <strong>{{ sourceContentMetadata.label }}</strong></span>
                 </div>
                 <div v-if="selectedSource.user_name" class="request-details-modal__context-row">
                   <i class="fas fa-user"></i>
@@ -131,6 +131,10 @@
 
 <script>
 import { formatDate } from '@/utils/dateUtils.js';
+import {
+  getRequestMethodMetadata,
+  getRequestSourceContentMetadata,
+} from '@/utils/requestSourceMetadata.js';
 
 export default {
   name: 'RequestDetailsModal',
@@ -158,45 +162,21 @@ export default {
         this.requestMethodLabel ||
         (this.selectedSource?.release_date && this.selectedSource?.requested_at) ||
         this.selectedSource?.source_origin === 'trakt_history' ||
-        this.showSourceContent ||
+        this.sourceContentMetadata ||
         this.selectedSource?.user_name
       );
     },
-    showSourceContent() {
-      return Boolean(this.selectedSource?.source_title && this.selectedSource?.source_id !== 'trakt_recommendations');
+    sourceContentMetadata() {
+      return getRequestSourceContentMetadata(this.selectedSource);
+    },
+    requestMethodMetadata() {
+      return getRequestMethodMetadata(this.selectedSource);
     },
     requestMethodLabel() {
-      const sourceId = String(this.selectedSource?.source_id ?? this.selectedSource?.id ?? '');
-
-      if (this.selectedSource?._isAiRequest || sourceId === 'ai_search') {
-        return 'AI Search';
-      }
-      if (sourceId === 'trakt_recommendations') {
-        return 'Trakt Recommendations';
-      }
-      if (sourceId === 'discover') {
-        return 'Discover';
-      }
-      if (/^\d+$/.test(sourceId)) {
-        return 'TMDB';
-      }
-
-      return '';
+      return this.requestMethodMetadata?.label || '';
     },
     requestMethodIcon() {
-      const sourceId = String(this.selectedSource?.source_id ?? this.selectedSource?.id ?? '');
-
-      if (this.selectedSource?._isAiRequest || sourceId === 'ai_search') {
-        return 'fas fa-magic';
-      }
-      if (sourceId === 'trakt_recommendations') {
-        return 'icon-trakt';
-      }
-      if (sourceId === 'discover') {
-        return 'fas fa-search';
-      }
-
-      return 'fas fa-database';
+      return this.requestMethodMetadata?.icon || '';
     },
   },
   methods: {
