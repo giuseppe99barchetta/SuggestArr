@@ -19,7 +19,8 @@ INTEGRATION_TO_FLAT: dict = {
     'seer':     {'api_url': 'SEER_API_URL', 'api_key': 'SEER_TOKEN',
                  'session_token': 'SEER_SESSION_TOKEN'},
     'omdb':     {'api_key': 'OMDB_API_KEY'},
-    'openai':   {'api_key': 'OPENAI_API_KEY', 'base_url': 'OPENAI_BASE_URL', 'model': 'LLM_MODEL'},
+    'openai':   {'api_key': 'OPENAI_API_KEY', 'base_url': 'OPENAI_BASE_URL', 'model': 'LLM_MODEL',
+                 'provider': 'LLM_PROVIDER'},
     'trakt':    {'client_id': 'TRAKT_CLIENT_ID', 'client_secret': 'TRAKT_CLIENT_SECRET'},
 }
 
@@ -215,6 +216,7 @@ def get_default_values():
         'OPENAI_API_KEY': lambda: '',
         'OPENAI_BASE_URL': lambda: '',
         'LLM_MODEL': lambda: 'gpt-4o-mini',
+        'LLM_PROVIDER': lambda: 'openai',
         'TRAKT_CLIENT_ID': lambda: '',
         'TRAKT_CLIENT_SECRET': lambda: '',
         'TRAKT_ACCESS_TOKEN': lambda: '',
@@ -342,7 +344,7 @@ def get_config_sections():
                      'ENABLE_STATIC_BACKGROUND', 'STATIC_BACKGROUND_COLOR',
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
                      'ENABLE_API_CACHING', 'OPENAI_API_KEY', 'OPENAI_BASE_URL',
-                     'LLM_MODEL', 'SUBPATH', 'ALLOW_REGISTRATION',
+                     'LLM_MODEL', 'LLM_PROVIDER', 'SUBPATH', 'ALLOW_REGISTRATION',
                      'AUTH_MODE', 'AUTH_TRUSTED_CIDRS', 'AUTH_BYPASS_USERNAME']
     }
 
