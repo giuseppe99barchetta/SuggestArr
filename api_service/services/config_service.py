@@ -60,6 +60,11 @@ _VALID_SETTING_KEYS: frozenset = (
 
 _LOG_SECRET_KEY_FRAGMENTS: tuple = ("token", "api_key", "password", "secret")
 
+_TRAKT_MISSING_TOKENS_ERROR = (
+    "Trakt OAuth tokens were not included in this config export. "
+    "Re-link the Trakt account."
+)
+
 
 def _sanitize_integration_config(service: str, config: dict) -> dict:
     """Return a copy of an integration config safe for global storage/export.
@@ -130,13 +135,16 @@ def _export_media_users(db: DatabaseManager, *, include_secrets: bool = False) -
 
 def _import_media_users(db: DatabaseManager, media_users: list) -> None:
     """Restore media-user identities and per-user Trakt data from a snapshot."""
+    if not isinstance(media_users, list):
+        raise ValueError('"media_users" must be a list')
+
     for entry in media_users:
         if not isinstance(entry, dict):
-            continue
+            raise ValueError('Each media user entry must be an object')
         provider = entry.get("provider")
         external_user_id = entry.get("external_user_id")
         if not provider or external_user_id is None:
-            continue
+            raise ValueError('Media user entries require provider and external_user_id')
 
         identity = db.upsert_media_user_identity(
             str(provider), str(external_user_id), entry.get("external_username"),
@@ -145,35 +153,64 @@ def _import_media_users(db: DatabaseManager, media_users: list) -> None:
         if not isinstance(trakt, dict):
             continue
 
+        token_source = trakt.get("token_source") or "manual_oauth"
+        requested_status = trakt.get("status") or "connected"
+        oauth = trakt.get("oauth_tokens")
+        imported_tokens_available = False
+        if isinstance(oauth, dict):
+            access_token = oauth.get("access_token")
+            refresh_token = oauth.get("refresh_token")
+            imported_tokens_available = bool(
+                access_token and refresh_token
+                and not is_redacted(access_token)
+                and not is_redacted(refresh_token)
+            )
+
+        existing_tokens_available = False
+        existing_link = db.get_trakt_account_link(identity["id"])
+        if existing_link:
+            existing_tokens_available = bool(db.get_trakt_oauth_tokens(existing_link["id"]))
+
+        status = requested_status
+        missing_manual_oauth_tokens = (
+            token_source == "manual_oauth"
+            and requested_status == "connected"
+            and not imported_tokens_available
+            and not existing_tokens_available
+        )
+        if missing_manual_oauth_tokens:
+            status = "error"
+
         link_id = db.upsert_trakt_account_link(
             media_user_identity_id=identity["id"],
             trakt_user_id=trakt.get("trakt_user_id"),
             trakt_username=trakt.get("trakt_username"),
-            token_source=trakt.get("token_source") or "manual_oauth",
-            status=trakt.get("status") or "connected",
+            token_source=token_source,
+            status=status,
         )
-        oauth = trakt.get("oauth_tokens")
-        if isinstance(oauth, dict):
-            access_token = oauth.get("access_token")
-            refresh_token = oauth.get("refresh_token")
-            if (
-                access_token and refresh_token
-                and not is_redacted(access_token)
-                and not is_redacted(refresh_token)
-            ):
-                db.upsert_trakt_oauth_tokens(
-                    link_id=link_id,
-                    access_token=access_token,
-                    refresh_token=refresh_token,
-                    expires_at=oauth.get("expires_at"),
-                )
-        for source in trakt.get("sources") or []:
+
+        if imported_tokens_available:
+            db.upsert_trakt_oauth_tokens(
+                link_id=link_id,
+                access_token=oauth.get("access_token"),
+                refresh_token=oauth.get("refresh_token"),
+                expires_at=oauth.get("expires_at"),
+            )
+        elif missing_manual_oauth_tokens:
+            db.mark_trakt_account_link_error(
+                identity["id"], "error", _TRAKT_MISSING_TOKENS_ERROR,
+            )
+
+        sources = trakt.get("sources") or []
+        if not isinstance(sources, list):
+            raise ValueError('Trakt sources must be a list')
+        for source in sources:
             if not isinstance(source, dict):
-                continue
+                raise ValueError('Each Trakt source entry must be an object')
             source_type = source.get("source_type")
             source_key = source.get("source_key")
             if not source_type or not source_key:
-                continue
+                raise ValueError('Trakt source entries require source_type and source_key')
             db.upsert_trakt_source(
                 media_user_identity_id=identity["id"],
                 source_type=source_type,
@@ -295,10 +332,34 @@ class ConfigService:
                 f"Expected {CURRENT_VERSION}."
             )
 
+        integrations = data.get("integrations") or {}
+        settings = data.get("settings") or {}
+        media_users = data.get("media_users") or []
+        if not isinstance(integrations, dict):
+            raise ValueError('"integrations" must be an object')
+        if not isinstance(settings, dict):
+            raise ValueError('"settings" must be an object')
+        if media_users and not isinstance(media_users, list):
+            raise ValueError('"media_users" must be a list')
+
         db = DatabaseManager()
 
-        # --- 1. Upsert integrations -------------------------------------------
-        integrations: dict = data.get("integrations") or {}
+        # --- 1. Restore settings ----------------------------------------------
+        if settings:
+            current_config = load_env_vars()
+            updated_keys = []
+            for key in _VALID_SETTING_KEYS:
+                if key in settings and not is_redacted(settings[key]):
+                    current_config[key] = settings[key]
+                    updated_keys.append(key)
+            logger.info("Restoring %d setting key(s) from import", len(updated_keys))
+            save_env_vars(current_config)
+
+        # Refresh DB config before DB-backed restores. Imported database
+        # settings must take effect before integrations/media users are written.
+        db.refresh_config()
+
+        # --- 2. Upsert integrations -------------------------------------------
         for service, service_cfg in integrations.items():
             if not isinstance(service_cfg, dict):
                 logger.warning(
@@ -313,23 +374,8 @@ class ConfigService:
             logger.info("Importing integration '%s' %s", service, safe)
             db.set_integration(service, service_cfg)
 
-        # --- 2. Restore settings ----------------------------------------------
-        settings: dict = data.get("settings") or {}
-        if settings:
-            current_config = load_env_vars()
-            updated_keys = []
-            for key in _VALID_SETTING_KEYS:
-                if key in settings and not is_redacted(settings[key]):
-                    current_config[key] = settings[key]
-                    updated_keys.append(key)
-            logger.info("Restoring %d setting key(s) from import", len(updated_keys))
-            save_env_vars(current_config)
-
         # --- 3. Restore media users (optional) --------------------------------
-        media_users = data.get("media_users") or []
         if media_users:
             _import_media_users(db, media_users)
 
-        # --- 4. Refresh DB config in case DB connection settings changed ------
-        db.refresh_config()
         logger.info("Config import completed successfully")

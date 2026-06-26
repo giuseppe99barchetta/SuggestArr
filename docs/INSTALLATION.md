@@ -686,7 +686,7 @@ Import merges the snapshot into the running instance:
 - If you import a safe export on an instance that already has credentials, existing secrets are preserved.
 - A full backup import restores credentials and Trakt tokens without re-linking.
 
-After importing a safe export, Trakt links may still show as connected in metadata, but Trakt features will not work until each user links Trakt again unless the import included live OAuth tokens.
+After importing a safe export on a fresh instance, Trakt links without live OAuth tokens are marked as needing re-linking. Trakt features will not work for those users until each user links Trakt again, unless the import included live OAuth tokens or the target instance already had matching tokens.
 
 #### Recommended flow
 

@@ -576,6 +576,94 @@ class TestConfig(unittest.TestCase):
             except FileNotFoundError:
                 pass
 
+    def test_config_import_marks_redacted_trakt_link_unusable_without_existing_tokens(self):
+        import api_service.db.database_manager as dm_mod
+
+        real_db_cls = DatabaseManager
+        real_db_cls._instance = None
+        fd, db_file = tempfile.mkstemp(suffix='.db')
+        os.close(fd)
+
+        path_patch = patch.object(dm_mod, 'DB_PATH', db_file)
+        env_patch = patch(
+            'api_service.db.database_manager.load_env_vars',
+            return_value={'DB_TYPE': 'sqlite'},
+        )
+        config_db_patch = patch(
+            'api_service.services.config_service.DatabaseManager',
+            real_db_cls,
+        )
+        path_patch.start()
+        env_patch.start()
+        config_db_patch.start()
+
+        try:
+            manager = real_db_cls()
+
+            config_service.ConfigService.import_config({
+                'version': config_service.CURRENT_VERSION,
+                'integrations': {},
+                'settings': {},
+                'media_users': [{
+                    'provider': 'jellyfin',
+                    'external_user_id': 'jf-1',
+                    'external_username': 'alice',
+                    'trakt': {
+                        'trakt_user_id': 't-1',
+                        'trakt_username': 'trakt_alice',
+                        'token_source': 'manual_oauth',
+                        'status': 'connected',
+                        'oauth_tokens': {
+                            'access_token': '***',
+                            'refresh_token': '***',
+                            'expires_at': None,
+                        },
+                    },
+                }],
+            })
+
+            identity = manager.get_media_user_identity('jellyfin', 'jf-1')
+            link = manager.get_trakt_account_link(identity['id'])
+            self.assertFalse(link['connected'])
+            self.assertEqual(link['status'], 'error')
+            self.assertIn('OAuth tokens were not included', link['last_error'])
+            self.assertIsNone(manager.get_trakt_oauth_tokens(link['id']))
+        finally:
+            real_db_cls._instance = None
+            config_db_patch.stop()
+            env_patch.stop()
+            path_patch.stop()
+            try:
+                os.unlink(db_file)
+            except FileNotFoundError:
+                pass
+
+    def test_config_import_refreshes_database_before_restoring_media_users(self):
+        db = MagicMock()
+        call_order = []
+        db.get_integration.return_value = {}
+        db.set_integration.side_effect = lambda *args, **kwargs: call_order.append('set_integration')
+        db.refresh_config.side_effect = lambda *args, **kwargs: call_order.append('refresh_config')
+        db.upsert_media_user_identity.side_effect = lambda *args, **kwargs: call_order.append('media_user') or {'id': 10}
+
+        self._db_manager_cls.return_value = db
+
+        with patch('api_service.services.config_service.load_env_vars', return_value={'DB_TYPE': 'sqlite'}), \
+                patch('api_service.services.config_service.save_env_vars'):
+            config_service.ConfigService.import_config({
+                'version': config_service.CURRENT_VERSION,
+                'integrations': {'trakt': {'client_id': 'cid', 'client_secret': 'secret'}},
+                'settings': {'DB_TYPE': 'sqlite'},
+                'media_users': [{
+                    'provider': 'jellyfin',
+                    'external_user_id': 'jf-1',
+                    'external_username': 'alice',
+                }],
+            })
+
+        self.assertLess(call_order.index('refresh_config'), call_order.index('set_integration'))
+        self.assertLess(call_order.index('refresh_config'), call_order.index('media_user'))
+
     def test_config_export_import_media_users_roundtrip(self):
         import api_service.db.database_manager as dm_mod
 
