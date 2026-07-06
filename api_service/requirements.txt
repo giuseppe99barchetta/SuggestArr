@@ -4,17 +4,17 @@ Flask-Limiter==4.1.1
 PyJWT==2.13.0
 bcrypt==5.0.0
 gunicorn==26.0.0
-uvicorn==0.49.0
+uvicorn==0.50.1
 asgiref==3.11.1
 
-redis==8.0.0
+redis==8.0.1
 aiohttp==3.14.1
 amqp==5.3.1
 billiard==4.2.4
 kombu==5.6.2
 
-APScheduler==3.11.2
-croniter==6.2.2
+APScheduler==3.11.3
+croniter==6.2.3
 
 concurrent-log-handler==0.9.29
 requests==2.34.2
@@ -30,4 +30,4 @@ xmltodict==1.0.4
 mysql-connector-python==9.7.0
 psycopg2-binary==2.9.12
 
-openai==2.41.1
+openai==2.44.0
