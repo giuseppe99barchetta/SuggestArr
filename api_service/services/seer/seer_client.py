@@ -38,7 +38,7 @@ class SeerClient(BaseHTTPClient):
             Each value is a dict with optional keys: serverId, profileId, rootFolder, tags, languageProfileId.
         """
         super().__init__()
-        self.api_url = api_url
+        self.api_url = api_url.rstrip('/')
         self.api_key = api_key
         self.username = seer_user_name
         self.password = seer_password

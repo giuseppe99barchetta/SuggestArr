@@ -182,6 +182,25 @@ class TestMakeRequest(unittest.IsolatedAsyncioTestCase):
 
 class TestLogin(unittest.IsolatedAsyncioTestCase):
 
+    async def test_trailing_slash_does_not_create_double_slash_login_url(self):
+        resp = AsyncMock()
+        resp.status = 401
+        resp.cookies = {}
+        resp.__aenter__ = AsyncMock(return_value=resp)
+        resp.__aexit__ = AsyncMock(return_value=False)
+        session = MagicMock()
+        session.post = MagicMock(return_value=resp)
+        client = _make_client(api_url='http://seer.local/')
+
+        with patch.object(client, '_get_session', AsyncMock(return_value=session)):
+            await client.login()
+
+        session.post.assert_called_once_with(
+            'http://seer.local/api/v1/auth/local',
+            json={'email': client.username, 'password': client.password},
+            timeout=client.REQUEST_TIMEOUT,
+        )
+
     async def test_sets_session_token_on_success(self):
         cookie_mock = MagicMock()
         cookie_mock.value = 'session_xyz'
