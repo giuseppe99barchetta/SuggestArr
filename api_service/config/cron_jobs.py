@@ -1,7 +1,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from api_service.config.logger_manager import LoggerManager
-#395from api_service.utils.cron import cron_trigger
+from api_service.utils.cron import cron_trigger
 import requests
 
 # Logging configuration
