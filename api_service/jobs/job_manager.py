@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from api_service.utils.cron import cron_trigger
 
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
@@ -295,7 +296,7 @@ class JobManager:
             # Constructing CronTrigger manually with day_of_week='*' causes APScheduler
             # to apply OR logic between 'day' and 'day_of_week', so a schedule like
             # '0 0 1 * *' would fire every day instead of only on the 1st of the month.
-            return CronTrigger.from_crontab(cron_expr.strip())
+            return cron_trigger(cron_expr)
         except Exception as e:
             self.logger.error(f"Error parsing cron expression '{cron_expr}': {str(e)}")
             return None

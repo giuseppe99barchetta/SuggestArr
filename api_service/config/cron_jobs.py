@@ -1,6 +1,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from api_service.config.logger_manager import LoggerManager
+#395from api_service.utils.cron import cron_trigger
 import requests
 
 # Logging configuration
@@ -61,7 +62,7 @@ def parse_cron_expression(cron_expression):
         expression = default_expression
 
     try:
-        trigger = CronTrigger.from_crontab(expression)
+        trigger = cron_trigger(expression)
         logger.debug(f'Cron expression parsed to trigger: {trigger}')
         return trigger
     except Exception as e:
@@ -69,4 +70,4 @@ def parse_cron_expression(cron_expression):
             f"Failed to parse cron expression '{expression}': {e}. "
             f"Falling back to default: '{default_expression}'"
         )
-        return CronTrigger.from_crontab(default_expression)
+        return cron_trigger(default_expression)

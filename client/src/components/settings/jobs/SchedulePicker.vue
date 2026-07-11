@@ -228,8 +228,8 @@ export default {
         this.cronError = 'Invalid month field (1-12)';
         return;
       }
-      if (!isValidField(parts[4], 0, 6)) {
-        this.cronError = 'Invalid day of week field (0-6)';
+      if (!isValidField(parts[4], 0, 7)) {
+        this.cronError = 'Invalid day of week field (0-7, Sunday is 0 or 7)';
         return;
       }
 
