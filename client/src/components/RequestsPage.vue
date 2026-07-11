@@ -136,17 +136,24 @@
                 <!-- Card Header with Backdrop -->
                 <div class="card-header" @click="openModal(source)">
                   <div class="backdrop-container">
-                    <img 
-                      v-if="source.backdrop_path" 
-                      :src="source.backdrop_path" 
+                    <img
+                      v-if="source.backdrop_path && !source.visual"
+                      :src="source.backdrop_path"
                       :alt="source.title"
                       class="backdrop-image" />
-                    
+                    <div
+                      v-else-if="source.visual"
+                      class="source-visual-backdrop"
+                      :class="source.visual.key"
+                      :style="{ background: source.visual.gradient }">
+                      <i :class="source.visual.icon" class="source-visual-icon"></i>
+                    </div>
+
                     <!-- Logo overlay -->
                     <div class="backdrop-overlay">
-                      <img 
-                        v-if="source.logo_path" 
-                        :src="source.logo_path" 
+                      <img
+                        v-if="source.logo_path && !source.visual"
+                        :src="source.logo_path"
                         alt="Logo"
                         class="content-logo" />
                       <h3 v-else class="content-title-overlay">{{ source.title }}</h3>
@@ -158,15 +165,15 @@
                 <div class="card-body">
                   <!-- Badges -->
                   <div class="badge-container">
-                    <span class="badge badge-media">
+                    <span v-if="shouldShowSourceMediaBadge(source)" class="badge badge-media">
                       <i :class="source.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
                       {{ source.media_type.toUpperCase() }}
                     </span>
-                    <span class="badge badge-rating">
+                    <span v-if="!source.visual" class="badge badge-rating">
                       <i class="fas fa-star"></i>
                       {{ source.rating || 'N/A' }}
                     </span>
-                    <span class="badge badge-date">
+                    <span v-if="!source.visual && source.release_date" class="badge badge-date">
                       <i class="fas fa-calendar"></i>
                       {{ source.release_date }}
                     </span>
@@ -365,11 +372,18 @@
             <div class="modal-layout">
               <!-- Left: Poster -->
               <div class="modal-poster-section">
-                <img 
-                  v-if="selectedSource.poster_path" 
-                  :src="selectedSource.poster_path" 
+                <img
+                  v-if="selectedSource.poster_path && !getSourceVisual(selectedSource)"
+                  :src="selectedSource.poster_path"
                   :alt="selectedSource.title"
                   class="modal-poster" />
+                <div
+                  v-else-if="getSourceVisual(selectedSource)"
+                  class="modal-poster-placeholder source-visual-modal"
+                  :class="getSourceVisual(selectedSource).key"
+                  :style="{ background: getSourceVisual(selectedSource).gradient }">
+                  <i :class="getSourceVisual(selectedSource).icon" class="source-visual-icon"></i>
+                </div>
                 <div v-else class="modal-poster-placeholder">
                   <i class="fas fa-image text-6xl"></i>
                 </div>
@@ -482,6 +496,7 @@ import { useBackgroundImage } from '@/composables/useBackgroundImage';
 import Footer from './AppFooter.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import { formatDate } from '@/utils/dateUtils.js';
+import { getRequestSourceVisual } from '@/utils/jobTypeVisuals.js';
 import { getAiSearchRequests } from '@/api/api.js';
 
 export default {
@@ -568,12 +583,20 @@ export default {
       const query = this.searchQuery.toLowerCase();
       let filtered = this.sources;
 
-      // Filter by media type
       if (this.mediaTypeFilter !== 'all') {
-        filtered = filtered.filter(source => source.media_type === this.mediaTypeFilter);
+        filtered = filtered
+          .map((source) => {
+            const matchingRequests = source.requests.filter(
+              (request) => request.media_type === this.mediaTypeFilter
+            );
+            if (matchingRequests.length === 0) {
+              return null;
+            }
+            return { ...source, requests: matchingRequests };
+          })
+          .filter(Boolean);
       }
 
-      // Filter by search query
       if (query) {
         filtered = filtered.filter((source) => {
           const sourceMatch = source.title && source.title.toLowerCase().includes(query);
@@ -657,6 +680,25 @@ export default {
   },
   methods: {
     formatDate,
+
+    getSourceVisual(source) {
+      return source?.visual ?? getRequestSourceVisual(source);
+    },
+
+    shouldShowSourceMediaBadge(source) {
+      if (!source?.media_type) {
+        return false;
+      }
+      if (source.visual && this.sourceHasMixedMediaTypes(source)) {
+        return false;
+      }
+      return true;
+    },
+
+    sourceHasMixedMediaTypes(source) {
+      const types = new Set((source?.requests || []).map((request) => request.media_type));
+      return types.size > 1;
+    },
 
     resetAndReload() {
       console.log('🔄 Sorting changed, reloading data...');
@@ -818,6 +860,10 @@ export default {
           showRequests: false,
           logo_path: sourceData.logo_path,
           backdrop_path: sourceData.backdrop_path,
+          visual: getRequestSourceVisual({
+            id: sourceData.source_id,
+            title: sourceData.source_title,
+          }),
           requests: sourceData.requests.map((request) => ({
             request_id: request.request_id,
             title: request.title,
