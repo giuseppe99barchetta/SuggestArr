@@ -30,7 +30,8 @@ class JobRepository:
         query = """
             SELECT id, name, job_type, enabled, media_type, filters, schedule_type,
                    schedule_value, max_results, user_ids, is_system, owner_id,
-                   pause_if_pending_requests, created_at, updated_at
+                   pause_if_pending_requests, prevent_suggestions_if_unwatched,
+                   unwatched_suggestion_days, created_at, updated_at
             FROM discover_jobs
             ORDER BY is_system DESC, created_at DESC
         """
@@ -62,7 +63,8 @@ class JobRepository:
         query = """
             SELECT id, name, job_type, enabled, media_type, filters, schedule_type,
                    schedule_value, max_results, user_ids, is_system, owner_id,
-                   pause_if_pending_requests, created_at, updated_at
+                   pause_if_pending_requests, prevent_suggestions_if_unwatched,
+                   unwatched_suggestion_days, created_at, updated_at
             FROM discover_jobs
             WHERE id = ?
         """
@@ -93,7 +95,8 @@ class JobRepository:
         query = """
             SELECT id, name, job_type, enabled, media_type, filters, schedule_type,
                    schedule_value, max_results, user_ids, is_system, owner_id,
-                   pause_if_pending_requests, created_at, updated_at
+                   pause_if_pending_requests, prevent_suggestions_if_unwatched,
+                   unwatched_suggestion_days, created_at, updated_at
             FROM discover_jobs
             WHERE enabled = 1
             ORDER BY is_system DESC, created_at DESC
@@ -141,12 +144,15 @@ class JobRepository:
         is_system = 1 if job_data.get('is_system', False) else 0
         owner_id = job_data.get('owner_id')
         pause_if_pending_requests = 1 if job_data.get('pause_if_pending_requests', False) else 0
+        prevent_unwatched = 1 if job_data.get('prevent_suggestions_if_unwatched', False) else 0
+        unwatched_days = int(job_data.get('unwatched_suggestion_days', 7))
 
         query = """
             INSERT INTO discover_jobs (name, job_type, enabled, media_type, filters,
                                        schedule_type, schedule_value, max_results, user_ids,
-                                       is_system, owner_id, pause_if_pending_requests)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                       is_system, owner_id, pause_if_pending_requests,
+                                       prevent_suggestions_if_unwatched, unwatched_suggestion_days)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = (
             job_data['name'],
@@ -160,7 +166,9 @@ class JobRepository:
             user_ids,
             is_system,
             owner_id,
-            pause_if_pending_requests
+            pause_if_pending_requests,
+            prevent_unwatched,
+            unwatched_days
         )
 
         with self.db.get_connection() as conn:
@@ -240,6 +248,14 @@ class JobRepository:
         if 'pause_if_pending_requests' in job_data:
             update_fields.append("pause_if_pending_requests = ?")
             params.append(1 if job_data['pause_if_pending_requests'] else 0)
+
+        if 'prevent_suggestions_if_unwatched' in job_data:
+            update_fields.append("prevent_suggestions_if_unwatched = ?")
+            params.append(1 if job_data['prevent_suggestions_if_unwatched'] else 0)
+
+        if 'unwatched_suggestion_days' in job_data:
+            update_fields.append("unwatched_suggestion_days = ?")
+            params.append(int(job_data['unwatched_suggestion_days']))
 
         if not update_fields:
             self.logger.warning("No fields to update for job ID: %d", job_id)
@@ -466,7 +482,8 @@ class JobRepository:
             # Plain tuple - order matches SELECT query:
             # id, name, job_type, enabled, media_type, filters, schedule_type,
             # schedule_value, max_results, user_ids, is_system, owner_id,
-            # pause_if_pending_requests, created_at, updated_at
+            # pause_if_pending_requests, prevent_suggestions_if_unwatched,
+            # unwatched_suggestion_days, created_at, updated_at
             data = {
                 'id': row[0],
                 'name': row[1],
@@ -481,8 +498,10 @@ class JobRepository:
                 'is_system': row[10],
                 'owner_id': row[11] if len(row) > 11 else None,
                 'pause_if_pending_requests': row[12] if len(row) > 12 else 0,
-                'created_at': row[13] if len(row) > 13 else row[12],
-                'updated_at': row[14] if len(row) > 14 else row[13]
+                'prevent_suggestions_if_unwatched': row[13] if len(row) > 13 else 0,
+                'unwatched_suggestion_days': row[14] if len(row) > 14 else 7,
+                'created_at': row[15] if len(row) > 15 else None,
+                'updated_at': row[16] if len(row) > 16 else None
             }
 
         # Parse filters JSON
@@ -509,6 +528,8 @@ class JobRepository:
 
         # Convert pause_if_pending_requests to boolean
         data['pause_if_pending_requests'] = bool(data.get('pause_if_pending_requests', 0))
+        data['prevent_suggestions_if_unwatched'] = bool(data.get('prevent_suggestions_if_unwatched', 0))
+        data['unwatched_suggestion_days'] = int(data.get('unwatched_suggestion_days') or 7)
 
         # Default job_type to 'discover' if not set
         if not data.get('job_type'):
@@ -528,7 +549,8 @@ class JobRepository:
         query = """
             SELECT id, name, job_type, enabled, media_type, filters, schedule_type,
                    schedule_value, max_results, user_ids, is_system, owner_id,
-                   pause_if_pending_requests, created_at, updated_at
+                   pause_if_pending_requests, prevent_suggestions_if_unwatched,
+                   unwatched_suggestion_days, created_at, updated_at
             FROM discover_jobs
             WHERE is_system = 1
             LIMIT 1

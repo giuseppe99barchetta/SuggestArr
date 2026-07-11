@@ -152,6 +152,18 @@
                 <small>Skip this job when Seer still has requests awaiting approval or denial.</small>
               </span>
             </label>
+            <label v-if="form.job_type !== 'discover'" class="pause-pending-toggle">
+              <input v-model="form.prevent_suggestions_if_unwatched" type="checkbox" />
+              <span>
+                <strong>Pause if suggestions remain unwatched</strong>
+                <small>Scheduled runs only. Manual Run now remains available.</small>
+              </span>
+            </label>
+            <div v-if="form.job_type !== 'discover' && form.prevent_suggestions_if_unwatched" class="form-group">
+              <label for="unwatchedDays">Days before pausing</label>
+              <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days"
+                class="form-control" type="number" min="1" required />
+            </div>
           </div>
 
           <!-- Advanced Settings Toggle -->
@@ -253,7 +265,9 @@ export default {
         filters: {},
         user_ids: [],
         enabled: true,
-        pause_if_pending_requests: false
+        pause_if_pending_requests: false,
+        prevent_suggestions_if_unwatched: false,
+        unwatched_suggestion_days: 7
       },
       schedule: {
         type: 'preset',
@@ -303,6 +317,9 @@ export default {
       if (!this.form.name.trim().length || !this.form.media_type) {
         return false;
       }
+      if (this.form.prevent_suggestions_if_unwatched && this.form.unwatched_suggestion_days < 1) {
+        return false;
+      }
       if (this.form.job_type === 'trakt_recommendations') {
         return (this.form.user_ids || []).length === 1;
       }
@@ -319,7 +336,9 @@ export default {
         filters: this.job.filters ? JSON.parse(JSON.stringify(this.job.filters)) : {},
         user_ids: this.job.user_ids ? [...this.job.user_ids] : [],
         enabled: this.job.enabled !== false,
-        pause_if_pending_requests: this.job.pause_if_pending_requests === true
+        pause_if_pending_requests: this.job.pause_if_pending_requests === true,
+        prevent_suggestions_if_unwatched: this.job.prevent_suggestions_if_unwatched === true,
+        unwatched_suggestion_days: this.job.unwatched_suggestion_days || 7
       };
       this.schedule = {
         type: this.job.schedule_type || 'preset',

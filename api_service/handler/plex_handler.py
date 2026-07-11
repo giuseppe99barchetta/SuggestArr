@@ -143,6 +143,7 @@ class PlexHandler(BaseMediaHandler):
             'tmdb_id': str(tmdb_id), 'media_type': media_type,
             'title': title, 'year': item.get('year'),
             'date': date, 'source_obj': source_obj, 'is_anime': is_anime,
+            'user_id': item.get('_user_id'),
         }
 
     async def _collect_trakt_seeds(self):
@@ -160,6 +161,8 @@ class PlexHandler(BaseMediaHandler):
             )
             seeds = await self._augment_user_trakt(identity["id"])
             if seeds:
+                for seed in seeds:
+                    seed['user_id'] = external_id
                 all_seeds.extend(seeds)
 
         for s in all_seeds:
@@ -202,6 +205,7 @@ class PlexHandler(BaseMediaHandler):
         source_obj = seed.get("source_obj")
         source_origin = seed.get("source_origin")
         is_anime = seed.get("is_anime", False)
+        user_id = seed.get("user_id")
         if media_type == "movie" and self.max_similar_movie > 0:
             if not source_obj:
                 source_obj = await self.tmdb_client.get_metadata(tmdb_id, "movie")
@@ -209,7 +213,7 @@ class PlexHandler(BaseMediaHandler):
                 return
             self._mark_source_origin(source_obj, source_origin)
             similar = await self.tmdb_client.find_similar_movies(tmdb_id, dry_run=self.dry_run)
-            await self.request_similar_media(similar, "movie", self.max_similar_movie, source_obj, is_anime)
+            await self.request_similar_media(similar, "movie", self.max_similar_movie, source_obj, is_anime, user_id)
         elif media_type == "tv" and self.max_similar_tv > 0:
             if not source_obj:
                 source_obj = await self.tmdb_client.get_metadata(tmdb_id, "tv")
@@ -217,7 +221,7 @@ class PlexHandler(BaseMediaHandler):
                 return
             self._mark_source_origin(source_obj, source_origin)
             similar = await self.tmdb_client.find_similar_tvshows(tmdb_id, dry_run=self.dry_run)
-            await self.request_similar_media(similar, "tv", self.max_similar_tv, source_obj, is_anime)
+            await self.request_similar_media(similar, "tv", self.max_similar_tv, source_obj, is_anime, user_id)
 
     async def _request_llm_recommendation(self, media, item_type, source_obj):
         """Request a single LLM recommendation via Plex."""
@@ -286,7 +290,7 @@ class PlexHandler(BaseMediaHandler):
             else:
                 self.logger.warning(f"Error while processing item: 'tmdb_id' not found for tv show '{title}'. Skipping.")
 
-    async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj, is_anime=False):
+    async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj, is_anime=False, user_id=None):
         """Request similar media (movie/TV show) via the Seer service."""
         self.logger.debug(f"Requesting {max_items} similar media (anime={is_anime})")
         if not media_ids:
@@ -431,7 +435,7 @@ class PlexHandler(BaseMediaHandler):
             if 'title' in media_to_send and isinstance(media_to_send['title'], str):
                 media_to_send['title'] = to_ascii(media_to_send['title'])
 
-            tasks.append(self._request_media_and_log(media_type, media_to_send, source_tmdb_obj, is_anime))
+            tasks.append(self._request_media_and_log(media_type, media_to_send, source_tmdb_obj, is_anime, user_id))
 
         if self.request_delay > 0:
             for task in tasks:
@@ -441,8 +445,11 @@ class PlexHandler(BaseMediaHandler):
             if tasks:
                 await asyncio.gather(*tasks)
 
-    async def _request_media_and_log(self, media_type, media, source_tmdb_obj, is_anime=False):
+    async def _request_media_and_log(self, media_type, media, source_tmdb_obj, is_anime=False, user_id=None):
         """Helper method to request media and log the result."""
+        if not user_id and len(self.selected_users or []) == 1:
+            selected = self.selected_users[0]
+            user_id = selected.get('id') if isinstance(selected, dict) else selected
         self.logger.debug(f"Requesting media: {media} of type: {media_type} (anime={is_anime})")
         if self.dry_run:
             title = media.get('title') or media.get('name') or 'Unknown'
@@ -467,7 +474,8 @@ class PlexHandler(BaseMediaHandler):
                 self.max_total_requests,
             )
             return
-        if await self.seer_client.request_media(media_type, media, source_tmdb_obj, is_anime=is_anime, rationale=media.get('rationale')):
+        user = {'id': user_id} if user_id else None
+        if await self.seer_client.request_media(media_type, media, source_tmdb_obj, user=user, is_anime=is_anime, rationale=media.get('rationale')):
             self.request_count += 1
             title_for_log = media.get('title') or media.get('name') or ''
             if title_for_log is not None and isinstance(title_for_log, str):

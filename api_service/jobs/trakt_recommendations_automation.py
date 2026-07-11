@@ -41,7 +41,7 @@ class TraktRecommendationsAutomation:
         self.env_vars: Dict[str, Any] = {}
 
     @classmethod
-    async def create(cls, job_id: int, dry_run: bool = False) -> "TraktRecommendationsAutomation":
+    async def create(cls, job_id: int, dry_run: bool = False, overrides=None) -> "TraktRecommendationsAutomation":
         """Create and initialize TraktRecommendationsAutomation for a job.
 
         Args:
@@ -63,6 +63,8 @@ class TraktRecommendationsAutomation:
         instance.job_data = instance.repository.get_job(job_id)
         if not instance.job_data:
             raise ValueError(f"Job not found: {job_id}")
+        if overrides:
+            instance.job_data.update(overrides)
         if instance.job_data.get("job_type") != "trakt_recommendations":
             raise ValueError(f"Job {job_id} is not a trakt_recommendations job")
 
@@ -559,7 +561,7 @@ class TraktRecommendationsAutomation:
                     media_type,
                     item,
                     source={"id": TRAKT_RECOMMENDATIONS_SOURCE},
-                    user=None,
+                    user={"id": str(self.job_data["user_ids"][0])},
                 )
                 if success:
                     requested_count += 1
@@ -584,13 +586,13 @@ class TraktRecommendationsAutomation:
         }
 
 
-async def execute_trakt_recommendations_job(job_id: int) -> ExecutionResult:
+async def execute_trakt_recommendations_job(job_id: int, overrides=None) -> ExecutionResult:
     """Execute a trakt_recommendations job by ID."""
     logger = LoggerManager.get_logger("TraktRecommendationsJobExecutor")
     logger.info("Starting execution of trakt recommendations job: %s", job_id)
 
     try:
-        automation = await TraktRecommendationsAutomation.create(job_id)
+        automation = await TraktRecommendationsAutomation.create(job_id, overrides=overrides)
         return await automation.run()
     except Exception as exc:
         logger.error("Failed to execute job %s: %s", job_id, exc)

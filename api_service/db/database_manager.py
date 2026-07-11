@@ -243,6 +243,8 @@ class DatabaseManager:
                     user_ids TEXT,
                     owner_id INTEGER,
                     pause_if_pending_requests INTEGER DEFAULT 0,
+                    prevent_suggestions_if_unwatched INTEGER DEFAULT 0,
+                    unwatched_suggestion_days INTEGER DEFAULT 7,
                     is_system INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -258,6 +260,16 @@ class DatabaseManager:
                     results_count INTEGER DEFAULT 0,
                     requested_count INTEGER DEFAULT 0,
                     error_message TEXT,
+                    FOREIGN KEY (job_id) REFERENCES discover_jobs(id) ON DELETE CASCADE
+                )
+            """,
+            'unwatched_suggestion_cycles': """
+                CREATE TABLE IF NOT EXISTS unwatched_suggestion_cycles (
+                    job_id INTEGER NOT NULL,
+                    user_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    reset_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (job_id, user_id, media_type),
                     FOREIGN KEY (job_id) REFERENCES discover_jobs(id) ON DELETE CASCADE
                 )
             """,
@@ -464,6 +476,17 @@ class DatabaseManager:
                     "UNIQUE(tmdb_id, media_type)",
                     "UNIQUE KEY uniq_pending_tmdb_media_type (tmdb_id(191), media_type(191))"
                 )
+            elif table_name == 'unwatched_suggestion_cycles':
+                query = """
+                    CREATE TABLE IF NOT EXISTS unwatched_suggestion_cycles (
+                        job_id INT NOT NULL,
+                        user_id VARCHAR(191) NOT NULL,
+                        media_type VARCHAR(16) NOT NULL,
+                        reset_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (job_id, user_id, media_type),
+                        FOREIGN KEY (job_id) REFERENCES discover_jobs(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB
+                """
             elif table_name == 'ai_search_seen':
                 query = """
                     CREATE TABLE IF NOT EXISTS ai_search_seen (
@@ -773,6 +796,18 @@ class DatabaseManager:
                     else:
                         cursor.execute("ALTER TABLE discover_jobs ADD COLUMN pause_if_pending_requests INTEGER DEFAULT 0;")
                     conn.commit()
+
+                additions = {
+                    'prevent_suggestions_if_unwatched': (
+                        "TINYINT(1) DEFAULT 0" if self.db_type in ['mysql', 'mariadb'] else
+                        "SMALLINT DEFAULT 0" if self.db_type == 'postgres' else "INTEGER DEFAULT 0"
+                    ),
+                    'unwatched_suggestion_days': "INTEGER DEFAULT 7",
+                }
+                for column, definition in additions.items():
+                    if column not in existing_columns:
+                        cursor.execute(f"ALTER TABLE discover_jobs ADD COLUMN {column} {definition};")
+                conn.commit()
 
             except Exception as e:
                 self.logger.error(f"Failed to migrate discover_jobs table: {e}")

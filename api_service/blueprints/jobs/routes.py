@@ -177,6 +177,12 @@ def create_job():
                 'message': 'job_type must be one of: discover, recommendation, trakt_recommendations'
             }), 400
         data['job_type'] = job_type
+        try:
+            data['unwatched_suggestion_days'] = int(data.get('unwatched_suggestion_days', 7))
+            if data['unwatched_suggestion_days'] < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            return jsonify({'status': 'error', 'message': 'unwatched_suggestion_days must be a positive integer'}), 400
         
         # Set owner_id from current user - never allow client to override
         current_user = getattr(g, 'current_user', None)
@@ -261,6 +267,13 @@ def update_job(job_id: int):
 
         # Validate job_type if provided
         job_type = data.get('job_type', existing.get('job_type', 'discover'))
+        if 'unwatched_suggestion_days' in data:
+            try:
+                data['unwatched_suggestion_days'] = int(data['unwatched_suggestion_days'])
+                if data['unwatched_suggestion_days'] < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return jsonify({'status': 'error', 'message': 'unwatched_suggestion_days must be a positive integer'}), 400
         if 'job_type' in data and job_type not in ['discover', 'recommendation', 'trakt_recommendations']:
             return jsonify({
                 'status': 'error',

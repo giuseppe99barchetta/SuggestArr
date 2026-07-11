@@ -99,6 +99,17 @@ def test_update_trakt_job_accepts_single_user_id(monkeypatch):
     repository.update_job.assert_called_once_with(2, {"user_ids": ["plex-user-2"]})
 
 
+def test_update_job_rejects_non_positive_unwatched_days(monkeypatch):
+    existing = {"id": 1, "job_type": "recommendation", "owner_id": 1, "media_type": "movie", "user_ids": ["u1"]}
+    client, repository = _make_client(monkeypatch, existing_job=existing)
+
+    response = client.put("/api/jobs/1", json={"unwatched_suggestion_days": 0})
+
+    assert response.status_code == 400
+    assert "positive integer" in response.get_json()["message"]
+    repository.update_job.assert_not_called()
+
+
 def test_dry_run_trakt_job_initializes_in_dry_run_mode(monkeypatch):
     existing = {
         "id": 2,
