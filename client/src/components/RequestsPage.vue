@@ -745,7 +745,13 @@ export default {
       try {
         const { data } = await axios.get('/api/jobs');
         this.approvalEnabled = (data.jobs || []).some(job => job.delivery_mode === 'manual');
-        if (!this.approvalEnabled) this.requestStatusFilter = 'sent';
+        if (!this.approvalEnabled) {
+          this.requestStatusFilter = 'sent';
+          this.workflowTotal = 0;
+          return;
+        }
+        const workflow = await axios.get('/api/automation/requests/workflow', { params: { status: this.requestStatusFilter, page: 1, per_page: 1 } });
+        this.workflowTotal = workflow.data.total || 0;
       } catch (error) {
         console.error('Error loading approval jobs:', error);
       }
