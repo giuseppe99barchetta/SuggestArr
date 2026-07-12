@@ -391,7 +391,7 @@ class SeerClient(BaseHTTPClient):
             if profile.get(key) is not None:
                 payload[key] = profile[key]
         payload['_seer_identity_mode'] = context.get('seer_identity_mode', 'technical_user')
-        if context.get('seer_identity_mode') == 'matching_user' and context.get('owner_id'):
+        if context.get('seer_identity_mode') in ('matching_user', 'admin_user') and context.get('owner_id'):
             owner = db.get_auth_user_by_id(context['owner_id']) or {}
             if owner.get('seer_user_id') is not None:
                 payload['userId'] = owner['seer_user_id']

@@ -159,26 +159,43 @@ class RequestQueueMixin:
                            (str(tmdb_id), media_type))
             return cursor.fetchone() is not None
 
-    def list_suggestions(self, owner_id=None):
+    def list_suggestions(self, owner_id=None, status='awaiting_approval', search='', page=1, per_page=24):
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.owner_id,
+                          p.retry_count,p.last_attempt_at,p.last_error,p.payload,
                           m.title,m.poster_path,m.overview,j.name
                    FROM pending_requests p
                    LEFT JOIN metadata m ON m.media_id=p.tmdb_id AND m.media_type=p.media_type
                    LEFT JOIN discover_jobs j ON j.id=p.job_id
-                   WHERE p.status='awaiting_approval'"""
-        params = ()
+                   WHERE p.status=""" + ph
+        params = [status]
         if owner_id is not None:
             query += f" AND p.owner_id={ph}"
-            params = (owner_id,)
-        query += " ORDER BY p.created_at DESC"
+            params.append(owner_id)
+        if search:
+            query += f" AND (LOWER(COALESCE(m.title,'')) LIKE {ph} OR p.tmdb_id LIKE {ph})"
+            term = f"%{search.lower()}%"
+            params.extend((term, term))
+        count_query = f"SELECT COUNT(*) FROM ({query}) suggestion_rows"
+        query += f" ORDER BY p.created_at DESC LIMIT {ph} OFFSET {ph}"
+        params.extend((per_page, (page - 1) * per_page))
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query, params)
+            cursor.execute(count_query, tuple(params[:-2]))
+            total = cursor.fetchone()[0]
+            cursor.execute(query, tuple(params))
             cols = [d[0] for d in cursor.description]
-            return [dict(zip(cols, row)) for row in cursor.fetchall()]
+            items = [dict(zip(cols, row)) for row in cursor.fetchall()]
+            for item in items:
+                try:
+                    payload = json.loads(item.pop('payload') or '{}')
+                except (TypeError, json.JSONDecodeError):
+                    payload = {}
+                item['seer_identity_mode'] = payload.get('_seer_identity_mode', 'technical_user')
+                item['request_profile'] = {key: payload.get(key) for key in ('serverId', 'profileId', 'rootFolder')}
+            return items, total
 
-    def decide_suggestions(self, ids, owner_id, decided_by, approve):
+    def decide_suggestions(self, ids, owner_id, decided_by, approve, blacklist=False):
         if not ids:
             return 0
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
@@ -192,7 +209,7 @@ class RequestQueueMixin:
             cursor.execute(f"UPDATE pending_requests SET status={ph},decided_by={ph},decided_at=CURRENT_TIMESTAMP "
                            f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}", tuple(params))
             changed = cursor.rowcount
-            if not approve:
+            if blacklist:
                 insert = "INSERT OR IGNORE" if self.db_type == 'sqlite' else "INSERT IGNORE"
                 if self.db_type == 'postgres':
                     insert = "INSERT"
@@ -205,6 +222,20 @@ class RequestQueueMixin:
                     cursor.execute(sql, (tmdb_id, media_type, decided_by))
             conn.commit()
             return changed
+
+    def retry_suggestions(self, ids, owner_id):
+        if not ids:
+            return 0
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        marks = ','.join([ph] * len(ids))
+        owner_clause = '' if owner_id is None else f' AND owner_id={ph}'
+        params = [*ids] + ([] if owner_id is None else [owner_id])
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"UPDATE pending_requests SET status='queued',retry_count=0,next_attempt_at=NULL "
+                           f"WHERE status='failed' AND id IN ({marks}){owner_clause}", tuple(params))
+            conn.commit()
+            return cursor.rowcount
 
     def list_blacklist(self):
         with self.get_connection() as conn:
@@ -286,7 +317,7 @@ class RequestQueueMixin:
         """
         self._update_pending_status(row_id, 'submitted', retry_count)
 
-    def mark_pending_failed(self, row_id: int, retry_count: int) -> None:
+    def mark_pending_failed(self, row_id: int, retry_count: int, error: str = None) -> None:
         """Mark a row as permanently failed (max retries exceeded).
 
         :param row_id: Primary key of the pending_requests row.
@@ -294,6 +325,12 @@ class RequestQueueMixin:
         """
         self._update_pending_status(row_id, 'failed', retry_count,
                                     last_attempt_at=datetime.now(timezone.utc))
+        if error:
+            ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"UPDATE pending_requests SET last_error={ph} WHERE id={ph}", (error[:500], row_id))
+                conn.commit()
 
     def increment_pending_retry(self, row_id: int, new_retry_count: int,
                                 next_attempt_at: datetime) -> None:

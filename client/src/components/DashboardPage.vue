@@ -550,7 +550,6 @@ export default {
       return this.tabs.filter(tab => {
         if (tab.adminOnly && !isAdmin) return false;
         if (tab.nonAdminOnly && isAdmin) return false;
-        if (tab.id === 'suggestions') return true;
         if (!isAdmin && allowedTabs.size > 0 && !allowedTabs.has(tab.id)) return false;
         return true;
       });

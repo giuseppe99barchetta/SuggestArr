@@ -84,7 +84,7 @@ async def _run_worker() -> int:
                     "Queue worker: corrupt payload for %s tmdb:%s (row %s) — %s. Marking as failed.",
                     media_type, tmdb_id, row_id, exc,
                 )
-                db.mark_pending_failed(row_id, retry_count)
+                db.mark_pending_failed(row_id, retry_count, "Corrupt queued payload")
                 continue
 
             # Skip if the item was submitted by another path while it sat in the queue
@@ -122,7 +122,7 @@ async def _run_worker() -> int:
             else:
                 new_retry = retry_count + 1
                 if new_retry >= MAX_RETRIES:
-                    db.mark_pending_failed(row_id, new_retry)
+                    db.mark_pending_failed(row_id, new_retry, "Seer rejected the request after maximum retries")
                     logger.error(
                         "Queue worker: %s tmdb:%s permanently failed after %d retries.",
                         media_type, tmdb_id, new_retry,

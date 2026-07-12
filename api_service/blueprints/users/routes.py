@@ -43,7 +43,7 @@ users_bp = Blueprint('users', __name__)
 _VALID_ROLES = {'admin', 'user'}
 _VALID_PROVIDERS = {'jellyfin', 'plex', 'emby'}
 _VALID_VISIBLE_TABS = {
-    'requests', 'ai_search', 'jobs', 'profile',
+    'suggestions', 'requests', 'ai_search', 'jobs', 'profile',
 }
 _TAB_ALIASES = {
     'ai-search': 'ai_search',

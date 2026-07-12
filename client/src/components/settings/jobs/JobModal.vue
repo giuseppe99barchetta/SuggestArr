@@ -150,7 +150,7 @@
               <select id="seerIdentity" v-model="form.seer_identity_mode" class="form-control">
                 <option value="technical_user">Configured technical user</option>
                 <option value="matching_user">Mapped Seer user (fallback to technical)</option>
-                <option value="admin_user">Configured Seer admin</option>
+                <option v-if="currentUser?.role === 'admin'" value="admin_user">Mapped Seer admin</option>
               </select>
             </div>
             <label class="pause-pending-toggle">
@@ -270,7 +270,7 @@ import TraktRecommendationFilters from './TraktRecommendationFilters.vue';
 import SchedulePicker from './SchedulePicker.vue';
 import { jobsApi } from '@/api/jobsApi';
 import { listTraktMediaUsers } from '@/api/api';
-import { waitForAuthReady } from '@/composables/useAuth';
+import { waitForAuthReady, useAuth } from '@/composables/useAuth';
 import { getJobTypeIcon } from '@/utils/jobTypeVisuals.js';
 import axios from 'axios';
 
@@ -289,6 +289,7 @@ export default {
     }
   },
   emits: ['close', 'save'],
+  setup() { const { currentUser } = useAuth(); return { currentUser }; },
   data() {
     return {
       connectedUsers: [],

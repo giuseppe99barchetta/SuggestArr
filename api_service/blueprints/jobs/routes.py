@@ -18,6 +18,8 @@ from api_service.jobs.trakt_recommendations_automation import (
     execute_trakt_recommendations_job,
 )
 from api_service.utils.asyncio_loop import run_coroutine_sync
+from api_service.services.config_service import ConfigService
+from api_service.services.seer.seer_client import SeerClient
 
 logger = LoggerManager.get_logger("JobsRoute")
 jobs_bp = Blueprint('jobs', __name__)
@@ -49,7 +51,31 @@ def _validate_request_profiles(value):
             raise ValueError('profileId must be an integer')
         if profile.get('rootFolder') is not None and not isinstance(profile['rootFolder'], str):
             raise ValueError('rootFolder must be a string')
+        present = [profile.get(key) is not None for key in ('serverId', 'profileId', 'rootFolder')]
+        if any(present) and not all(present):
+            raise ValueError('serverId, profileId and rootFolder must be selected together')
     return value
+
+
+def _validate_request_profiles_with_seer(profiles):
+    if not any(profiles.values()):
+        return
+    env = ConfigService.get_runtime_config()
+    async def check():
+        async with SeerClient(env.get('SEER_API_URL', ''), env.get('SEER_TOKEN', ''),
+                              session_token=env.get('SEER_SESSION_TOKEN')) as seer:
+            for media_type, profile in profiles.items():
+                if not profile or profile.get('serverId') is None:
+                    continue
+                servers = await (seer.get_radarr_servers() if media_type == 'movie' else seer.get_sonarr_servers())
+                server = next((item for item in servers or [] if item.get('id') == profile['serverId']), None)
+                if not server:
+                    raise ValueError(f"Unknown {media_type} server")
+                if profile.get('profileId') not in {item.get('id') for item in server.get('profiles', [])}:
+                    raise ValueError(f"Unknown {media_type} quality profile")
+                if profile.get('rootFolder') not in {item.get('path') for item in server.get('rootFolders', [])}:
+                    raise ValueError(f"Unknown {media_type} root folder")
+    run_async(check())
 
 
 def get_job_manager() -> JobManager:
@@ -109,8 +135,18 @@ def get_jobs():
 def get_suggestions():
     user = g.current_user
     owner_id = None if user.get('role') == 'admin' else int(user['id'])
-    items = JobRepository().db.list_suggestions(owner_id)
-    return jsonify({'status': 'success', 'items': items, 'total': len(items)}), 200
+    status = request.args.get('status', 'awaiting_approval')
+    if status not in ('awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed'):
+        return jsonify({'status': 'error', 'message': 'Invalid status'}), 400
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+        per_page = min(100, max(1, int(request.args.get('per_page', 24))))
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid pagination'}), 400
+    items, total = JobRepository().db.list_suggestions(
+        owner_id, status, request.args.get('search', '').strip()[:100], page, per_page)
+    return jsonify({'status': 'success', 'items': items, 'total': total,
+                    'page': page, 'pages': max(1, (total + per_page - 1) // per_page)}), 200
 
 
 @jobs_bp.route('/suggestions/approve', methods=['POST'])
@@ -122,7 +158,26 @@ def approve_suggestions():
 @jobs_bp.route('/suggestions/blacklist', methods=['POST'])
 @limiter.limit("20 per minute")
 def blacklist_suggestions():
+    return _decide_suggestions(False, blacklist=True)
+
+
+@jobs_bp.route('/suggestions/reject', methods=['POST'])
+@limiter.limit("20 per minute")
+def reject_suggestions():
     return _decide_suggestions(False)
+
+
+@jobs_bp.route('/suggestions/retry', methods=['POST'])
+@limiter.limit("20 per minute")
+def retry_suggestions():
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids')
+    if not isinstance(ids, list) or not ids or any(not isinstance(item, int) for item in ids):
+        return jsonify({'status': 'error', 'message': 'ids must be a non-empty integer list'}), 400
+    user = g.current_user
+    owner_id = None if user.get('role') == 'admin' else int(user['id'])
+    changed = JobRepository().db.retry_suggestions(ids, owner_id)
+    return jsonify({'status': 'success', 'updated': changed}), 200
 
 
 @jobs_bp.route('/suggestions/blacklist', methods=['GET'])
@@ -140,14 +195,14 @@ def restore_blacklisted_suggestion(media_type, tmdb_id):
     return jsonify({'status': 'success', 'removed': removed}), 200
 
 
-def _decide_suggestions(approve):
+def _decide_suggestions(approve, blacklist=False):
     data = request.get_json(silent=True) or {}
     ids = data.get('ids')
     if not isinstance(ids, list) or not ids or any(not isinstance(item, int) for item in ids):
         return jsonify({'status': 'error', 'message': 'ids must be a non-empty integer list'}), 400
     user = g.current_user
     owner_id = None if user.get('role') == 'admin' else int(user['id'])
-    changed = JobRepository().db.decide_suggestions(ids, owner_id, int(user['id']), approve)
+    changed = JobRepository().db.decide_suggestions(ids, owner_id, int(user['id']), approve, blacklist)
     return jsonify({'status': 'success', 'updated': changed}), 200
 
 
@@ -246,6 +301,7 @@ def create_job():
         data['delivery_mode'] = delivery_mode
         try:
             data['request_profiles'] = _validate_request_profiles(data.get('request_profiles'))
+            _validate_request_profiles_with_seer(data['request_profiles'])
         except ValueError as exc:
             return jsonify({'status': 'error', 'message': str(exc)}), 400
         identity_mode = data.get('seer_identity_mode', 'technical_user')
@@ -346,6 +402,7 @@ def update_job(job_id: int):
         if 'request_profiles' in data:
             try:
                 data['request_profiles'] = _validate_request_profiles(data['request_profiles'])
+                _validate_request_profiles_with_seer(data['request_profiles'])
             except ValueError as exc:
                 return jsonify({'status': 'error', 'message': str(exc)}), 400
         if 'delivery_mode' in data and data['delivery_mode'] not in ('automatic', 'manual'):
