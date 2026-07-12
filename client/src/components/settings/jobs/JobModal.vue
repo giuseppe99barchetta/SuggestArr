@@ -141,36 +141,24 @@
           <!-- Schedule -->
           <div class="settings-group">
             <h4>Seer delivery</h4>
-            <label class="pause-pending-toggle">
-              <input v-model="form.delivery_mode" type="radio" value="automatic" />
-              <span><strong>Send automatically</strong><small>Queue requests for Seer immediately.</small></span>
-            </label>
-            <div class="form-group">
-              <label for="seerIdentity">Request as</label>
-              <select id="seerIdentity" v-model="form.seer_identity_mode" class="form-control">
-                <option value="technical_user">Configured technical user</option>
-                <option value="matching_user">Mapped Seer user (fallback to technical)</option>
-                <option v-if="currentUser?.role === 'admin'" value="admin_user">Mapped Seer admin</option>
-              </select>
+            <div class="delivery-mode-selector">
+              <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'automatic' }" @click="form.delivery_mode = 'automatic'">
+                <i class="fas fa-paper-plane"></i><span><strong>Send automatically</strong><small>Queue for Seer immediately</small></span>
+              </button>
+              <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'manual' }" @click="form.delivery_mode = 'manual'">
+                <i class="fas fa-user-check"></i><span><strong>Approve first</strong><small>Review in Requests</small></span>
+              </button>
             </div>
-            <label class="pause-pending-toggle">
-              <input v-model="form.delivery_mode" type="radio" value="manual" />
-              <span><strong>Approve in SuggestArr</strong><small>Hold suggestions until you approve them.</small></span>
-            </label>
-            <div v-for="type in ['movie', 'tv']" :key="type" v-show="form.media_type === type || form.media_type === 'both'" class="form-group">
-              <label>{{ type === 'movie' ? 'Radarr' : 'Sonarr' }} request profile</label>
-              <select v-model="form.request_profiles[type].serverId" class="form-control" @change="resetRequestProfile(type)">
-                <option :value="null">Use Seer default</option>
-                <option v-for="server in serversFor(type)" :key="server.id" :value="server.id">{{ server.name }}</option>
-              </select>
-              <select v-if="form.request_profiles[type].serverId != null" v-model="form.request_profiles[type].profileId" class="form-control">
-                <option :value="null">Quality profile</option>
-                <option v-for="profile in selectedServer(type)?.profiles || []" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
-              </select>
-              <select v-if="form.request_profiles[type].serverId != null" v-model="form.request_profiles[type].rootFolder" class="form-control">
-                <option :value="null">Root folder</option>
-                <option v-for="folder in selectedServer(type)?.rootFolders || []" :key="folder.path" :value="folder.path">{{ folder.path }}</option>
-              </select>
+            <BaseDropdown v-model="form.seer_identity_mode" :options="seerIdentityOptions" label="Request as" placeholder="Select Seer identity" />
+            <div class="request-profiles-grid">
+              <div v-for="type in visibleProfileTypes" :key="type" class="request-profile-card">
+                <div class="request-profile-heading"><i :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
+                <BaseDropdown :model-value="form.request_profiles[type].serverId || ''" :options="serverOptions(type)" label="Server" placeholder="Use Seer default" @update:model-value="setRequestServer(type, $event)" />
+                <template v-if="form.request_profiles[type].serverId">
+                  <BaseDropdown v-model="form.request_profiles[type].profileId" :options="profileOptions(type)" label="Quality profile" placeholder="Select quality profile" />
+                  <BaseDropdown v-model="form.request_profiles[type].rootFolder" :options="rootFolderOptions(type)" label="Root folder" placeholder="Select root folder" />
+                </template>
+              </div>
             </div>
           </div>
 
@@ -273,6 +261,7 @@ import { listTraktMediaUsers } from '@/api/api';
 import { waitForAuthReady, useAuth } from '@/composables/useAuth';
 import { getJobTypeIcon } from '@/utils/jobTypeVisuals.js';
 import axios from 'axios';
+import BaseDropdown from '@/components/common/BaseDropdown.vue';
 
 export default {
   name: 'JobModal',
@@ -281,6 +270,7 @@ export default {
     RecommendationFilters,
     TraktRecommendationFilters,
     SchedulePicker
+    , BaseDropdown
   },
   props: {
     job: {
@@ -320,6 +310,17 @@ export default {
     };
   },
   computed: {
+    seerIdentityOptions() {
+      const options = [
+        { value: 'technical_user', label: 'Configured technical user' },
+        { value: 'matching_user', label: 'Mapped Seer user (fallback to technical)' }
+      ];
+      if (this.currentUser?.role === 'admin') options.push({ value: 'admin_user', label: 'Mapped Seer admin' });
+      return options;
+    },
+    visibleProfileTypes() {
+      return this.form.media_type === 'both' ? ['movie', 'tv'] : [this.form.media_type];
+    },
     isEditing() {
       return this.job && this.job.id;
     },
@@ -427,7 +428,12 @@ export default {
   methods: {
     serversFor(type) { return type === 'movie' ? this.radarrServers : this.sonarrServers; },
     selectedServer(type) { return this.serversFor(type).find(server => String(server.id) === String(this.form.request_profiles[type].serverId)); },
-    resetRequestProfile(type) { this.form.request_profiles[type].profileId = null; this.form.request_profiles[type].rootFolder = null; },
+    serverOptions(type) { return this.serversFor(type).map(server => ({ value: server.id, label: server.name })); },
+    profileOptions(type) { return (this.selectedServer(type)?.profiles || []).map(profile => ({ value: profile.id, label: profile.name })); },
+    rootFolderOptions(type) { return (this.selectedServer(type)?.rootFolders || []).map(folder => ({ value: folder.path, label: folder.path })); },
+    setRequestServer(type, serverId) {
+      this.form.request_profiles[type] = { serverId, profileId: '', rootFolder: '' };
+    },
     openAdvanced() {
       this.showAdvanced = true;
     },
@@ -472,6 +478,14 @@ export default {
       try {
         const jobData = {
           ...this.form,
+          request_profiles: Object.fromEntries(Object.entries(this.form.request_profiles).map(([type, profile]) => [
+            type,
+            profile.serverId && profile.profileId && profile.rootFolder ? {
+              serverId: Number(profile.serverId),
+              profileId: Number(profile.profileId),
+              rootFolder: profile.rootFolder
+            } : {}
+          ])),
           schedule_type: this.schedule.type,
           schedule_value: this.schedule.value
         };
@@ -660,6 +674,56 @@ export default {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin: 0 0 1rem 0;
+}
+
+.delivery-mode-selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.delivery-mode-selector .media-type-btn span {
+  display: grid;
+  gap: var(--spacing-xs);
+  text-align: left;
+}
+
+.delivery-mode-selector small {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+}
+
+.request-profiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
+.request-profile-card {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-light);
+  border-radius: var(--radius-md);
+}
+
+.request-profile-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (max-width: 768px) {
+  .delivery-mode-selector,
+  .request-profiles-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .form-group {

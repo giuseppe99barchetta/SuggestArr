@@ -486,6 +486,15 @@ export default {
   position: relative;
   padding: 0.875rem 3rem 0.875rem 1.125rem;
   z-index: 2;
+  min-width: 0;
+}
+
+.value-text,
+.placeholder-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .value-text {
@@ -672,11 +681,10 @@ export default {
     rgba(107, 114, 128, 0.4) 0%,
     rgba(75, 85, 99, 0.3) 100%
   );
-  transform: translateX(4px);
 }
 
 .dropdown-item:not(.is-disabled):active {
-  transform: scale(0.98) translateX(4px);
+  transform: scale(0.98);
 }
 
 /* Ripple effect - Grigio */

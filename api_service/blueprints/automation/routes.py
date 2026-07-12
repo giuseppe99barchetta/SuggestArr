@@ -29,7 +29,7 @@ def _workflow_owner():
 @automation_bp.route('/requests/workflow', methods=['GET'])
 def request_workflow():
     status = request.args.get('status', 'awaiting_approval')
-    if status not in ('all', 'awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed'):
+    if status not in ('all', 'awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed', 'blacklisted'):
         return jsonify({'status': 'error', 'message': 'Invalid status'}), 400
     try:
         page = max(1, int(request.args.get('page', 1)))
@@ -79,6 +79,17 @@ def retry_workflow():
     if ids is None:
         return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
     changed = DatabaseManager().retry_suggestions(ids, _workflow_owner())
+    return jsonify({'status': 'success', 'updated': changed}), 200
+
+
+@automation_bp.route('/requests/workflow/request-again', methods=['POST'])
+@limiter.limit('20 per minute')
+def request_workflow_again():
+    ids = _workflow_ids()
+    if ids is None:
+        return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
+    remove_blacklist = bool((request.get_json(silent=True) or {}).get('remove_blacklist'))
+    changed = DatabaseManager().request_rejected(ids, _workflow_owner(), remove_blacklist)
     return jsonify({'status': 'success', 'updated': changed}), 200
 
 

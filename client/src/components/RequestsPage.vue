@@ -25,7 +25,7 @@
         <div class="request-header">
           <!-- Back Button -->
           <div class="header-top">
-            <button @click="goHome" class="back-button">
+            <button type="button" class="back-button" @click="goHome">
               <i class="fas fa-arrow-left"></i>
               <span>Back to Home</span>
             </button>
@@ -84,8 +84,9 @@
                 <i class="fas fa-times"></i>
               </span>
             </div>
+            <button type="button" class="mobile-filters-toggle" :class="{ active: showMobileFilters }" :aria-expanded="showMobileFilters.toString()" aria-controls="request-filters" @click="showMobileFilters = !showMobileFilters"><span><i class="fas fa-sliders-h"></i> Filters</span><span v-if="activeFilterCount" class="mobile-filter-count">{{ activeFilterCount }}</span><i class="fas fa-chevron-down mobile-filter-chevron"></i></button>
             <!-- Filter Buttons -->
-            <div class="filter-bar">
+            <div id="request-filters" class="filter-bar" :class="{ 'mobile-open': showMobileFilters }">
               <!-- Sort By -->
               <BaseDropdown
                 v-model="sortBy"
@@ -105,13 +106,14 @@
               />
 
               <BaseDropdown
-                v-if="viewMode === 'all-requests'"
+                v-if="viewMode === 'all-requests' && approvalEnabled"
                 v-model="requestStatusFilter"
                 :options="requestStatusOptions"
                 placeholder="Request status"
                 :disabled="loading"
                 id="requestStatus"
               />
+              <button v-if="viewMode === 'all-requests'" type="button" class="btn btn-outline workflow-bulk-toggle" :class="{ active: workflowBulkMode }" :disabled="!approvalEnabled || requestStatusFilter === 'sent' || workflowTotal < 1" :title="bulkModeDisabledReason" @click="workflowBulkMode = !workflowBulkMode"><i class="fas fa-check-double"></i><span>{{ workflowBulkMode ? 'Exit bulk mode' : 'Bulk mode' }}</span></button>
             
               <!-- Clear Filters -->
               <button 
@@ -180,7 +182,7 @@
                     </span>
                     <span v-if="!source.visual" class="badge badge-rating">
                       <i class="fas fa-star"></i>
-                      {{ source.rating || 'N/A' }}
+                      {{ formatRating(source.rating) }}
                     </span>
                     <span v-if="!source.visual && source.release_date" class="badge badge-date">
                       <i class="fas fa-calendar"></i>
@@ -258,7 +260,7 @@
                     </span>
                     <span v-if="item.rating" class="badge badge-rating">
                       <i class="fas fa-star"></i>
-                      {{ item.rating }}
+                      {{ formatRating(item.rating) }}
                     </span>
                     <span class="badge badge-requested">
                       <i class="fas fa-clock"></i>
@@ -285,8 +287,27 @@
 
           <!-- View: All Requests -->
           <div v-else key="all-requests">
+            <div v-if="approvalEnabled && requestStatusFilter === 'all' && workflowTotal > 0" class="requests-section-heading">
+              <span class="requests-section-icon"><i class="fas fa-hourglass-half"></i></span>
+              <div><h2>Requests in progress</h2><p>Suggestions waiting for approval or still being processed.</p></div>
+            </div>
+            <RequestWorkflowPanel
+              v-if="approvalEnabled && requestStatusFilter !== 'sent'"
+              :status-filter="requestStatusFilter"
+              :search-query="searchQuery"
+              :media-type="mediaTypeFilter"
+              :show-header="false"
+              :show-empty="false"
+              :bulk-mode="workflowBulkMode"
+              @open="openWorkflowModal"
+              @update:total="workflowTotal = $event"
+            />
+            <div v-if="approvalEnabled && requestStatusFilter === 'all' && workflowTotal > 0" class="requests-section-heading requests-section-heading--sent">
+              <span class="requests-section-icon"><i class="fas fa-check"></i></span>
+              <div><h2>Requested media</h2><p>Items already submitted to your media request service.</p></div>
+            </div>
             <transition-group 
-              v-if="requestStatusFilter === 'all' || requestStatusFilter === 'sent'"
+              v-if="!approvalEnabled || requestStatusFilter === 'all' || requestStatusFilter === 'sent'"
               name="fade-slide" 
               tag="div"
               class="requests-grid">
@@ -318,7 +339,7 @@
                     </span>
                     <span class="badge badge-rating">
                       <i class="fas fa-star"></i>
-                      {{ request.rating || 'N/A' }}
+                      {{ formatRating(request.rating) }}
                     </span>
                     <span class="badge badge-requested">
                       <i class="fas fa-clock"></i>
@@ -334,13 +355,6 @@
                 </div>
               </div>
             </transition-group>
-            <RequestWorkflowPanel
-              v-if="requestStatusFilter !== 'sent'"
-              :status-filter="requestStatusFilter"
-              :search-query="searchQuery"
-              :media-type="mediaTypeFilter"
-              :show-header="false"
-            />
           </div>
         </transition>
         <div
@@ -416,7 +430,7 @@
                   </span>
                   <span class="badge badge-rating">
                     <i class="fas fa-star"></i>
-                    {{ selectedSource.rating || 'N/A' }}
+                    {{ formatRating(selectedSource.rating) }}
                   </span>
                   <span class="badge badge-date">
                     <i class="fas fa-calendar"></i>
@@ -573,17 +587,32 @@ export default {
         { value: 'tv', label: 'TV Shows' }
       ],
       requestStatusFilter: 'all',
+      approvalEnabled: false,
+      workflowTotal: null,
+      showMobileFilters: false,
+      workflowBulkMode: false,
       requestStatusOptions: [
         { value: 'all', label: 'All statuses' },
         { value: 'awaiting_approval', label: 'Waiting approval' },
         { value: 'queued', label: 'Queued' },
         { value: 'sent', label: 'Sent' },
         { value: 'rejected', label: 'Rejected' },
-        { value: 'failed', label: 'Failed' }
+        { value: 'failed', label: 'Failed' },
+        { value: 'blacklisted', label: 'Blacklisted' }
       ]
     };
   },
   computed: {
+    activeFilterCount() {
+      return Number(this.sortBy !== 'date-desc') + Number(this.mediaTypeFilter !== 'all') + Number(this.requestStatusFilter !== 'all') + Number(this.workflowBulkMode);
+    },
+    bulkModeDisabledReason() {
+      if (!this.approvalEnabled) return 'Bulk mode requires a job with manual approval enabled';
+      if (this.requestStatusFilter === 'sent') return 'Sent requests cannot be edited in bulk';
+      if (this.workflowTotal === null) return 'Loading requests';
+      if (this.workflowTotal === 0) return 'No requests available for bulk actions';
+      return '';
+    },
     totalRequests() {
       return this.totalRequestsCount || this.sources.reduce((sum, source) => sum + source.requests.length, 0);
     },
@@ -673,6 +702,13 @@ export default {
     },
   },
   watch: {
+    workflowTotal(value) {
+      if (value === 0) this.workflowBulkMode = false;
+    },
+    requestStatusFilter() {
+      this.workflowBulkMode = false;
+      this.workflowTotal = null;
+    },
     viewMode(newMode) {
       if (newMode === 'ai-requests') return;
       this.$nextTick(() => {
@@ -705,7 +741,21 @@ export default {
     },
   },
   methods: {
+    async loadApprovalState() {
+      try {
+        const { data } = await axios.get('/api/jobs');
+        this.approvalEnabled = (data.jobs || []).some(job => job.delivery_mode === 'manual');
+        if (!this.approvalEnabled) this.requestStatusFilter = 'sent';
+      } catch (error) {
+        console.error('Error loading approval jobs:', error);
+      }
+    },
     formatDate,
+    formatRating(value) {
+      if (value === null || value === undefined || value === '') return 'N/A';
+      const rating = Number(value);
+      return Number.isFinite(rating) ? rating.toFixed(1) : 'N/A';
+    },
 
     getSourceVisual(source) {
       return source?.visual ?? getRequestSourceVisual(source);
@@ -940,6 +990,14 @@ export default {
       this.showModal = true;
       document.body.style.overflow = 'hidden';
     },
+    openWorkflowModal(item) {
+      this.openModal({
+        ...item,
+        poster_path: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
+        requested_at: item.created_at,
+        source_title: item.name
+      });
+    },
 
     closeModal() {
       this.showModal = false;
@@ -948,6 +1006,7 @@ export default {
     },
   },
   mounted() {
+    this.loadApprovalState();
     if (this.$route.query.status) {
       this.viewMode = 'all-requests';
       this.requestStatusFilter = this.$route.query.status;

@@ -163,14 +163,17 @@ class RequestQueueMixin:
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.owner_id,
                           p.retry_count,p.last_attempt_at,p.last_error,p.payload,
-                          m.title,m.poster_path,m.overview,j.name
+                          m.title,m.poster_path,m.overview,m.rating,m.release_date,
+                          m.logo_path,m.backdrop_path,j.name
                    FROM pending_requests p
                    LEFT JOIN metadata m ON m.media_id=p.tmdb_id AND m.media_type=p.media_type
                    LEFT JOIN discover_jobs j ON j.id=p.job_id
                    WHERE 1=1"""
         params = []
         if status == 'all':
-            query += " AND p.status <> 'submitted'"
+            query += " AND p.status IN ('awaiting_approval','queued','submitting')"
+        elif status == 'blacklisted':
+            query += " AND EXISTS (SELECT 1 FROM suggestion_blacklist b WHERE b.tmdb_id=p.tmdb_id AND b.media_type=p.media_type)"
         else:
             query += f" AND p.status={ph}"
             params.append(status)
@@ -185,7 +188,9 @@ class RequestQueueMixin:
             query += f" AND p.media_type={ph}"
             params.append(media_type)
         count_query = f"SELECT COUNT(*) FROM ({query}) suggestion_rows"
-        query += f" ORDER BY p.created_at DESC LIMIT {ph} OFFSET {ph}"
+        query += (" ORDER BY CASE p.status WHEN 'awaiting_approval' THEN 0 WHEN 'queued' THEN 1 "
+                  "WHEN 'submitting' THEN 2 WHEN 'failed' THEN 3 WHEN 'rejected' THEN 4 ELSE 5 END, "
+                  f"p.created_at DESC LIMIT {ph} OFFSET {ph}")
         params.extend((per_page, (page - 1) * per_page))
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -201,6 +206,8 @@ class RequestQueueMixin:
                     payload = {}
                 item['seer_identity_mode'] = payload.get('_seer_identity_mode', 'technical_user')
                 item['request_profile'] = {key: payload.get(key) for key in ('serverId', 'profileId', 'rootFolder')}
+                if status == 'blacklisted':
+                    item['status'] = 'blacklisted'
             return items, total
 
     def decide_suggestions(self, ids, owner_id, decided_by, approve, blacklist=False):
@@ -248,6 +255,28 @@ class RequestQueueMixin:
             cursor.execute(f"UPDATE pending_requests SET status='queued',retry_count=0,next_attempt_at=NULL,"
                            f"last_attempt_at=NULL,last_error=NULL "
                            f"WHERE status='failed' AND id IN ({marks}){owner_clause}", tuple(params))
+            conn.commit()
+            return cursor.rowcount
+
+    def request_rejected(self, ids, owner_id, remove_blacklist=False):
+        if not ids:
+            return 0
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        marks = ','.join([ph] * len(ids))
+        owner_clause = '' if owner_id is None else f' AND owner_id={ph}'
+        params = [*ids] + ([] if owner_id is None else [owner_id])
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT tmdb_id,media_type FROM pending_requests WHERE status='rejected' "
+                           f"AND id IN ({marks}){owner_clause}", tuple(params))
+            eligible = cursor.fetchall()
+            if remove_blacklist:
+                for tmdb_id, media_type in eligible:
+                    cursor.execute(f"DELETE FROM suggestion_blacklist WHERE tmdb_id={ph} AND media_type={ph}",
+                                   (tmdb_id, media_type))
+            cursor.execute(f"UPDATE pending_requests SET status='queued',retry_count=0,last_error=NULL,"
+                           f"next_attempt_at=NULL WHERE status='rejected' AND id IN ({marks}){owner_clause}",
+                           tuple(params))
             conn.commit()
             return cursor.rowcount
 
