@@ -43,10 +43,11 @@ users_bp = Blueprint('users', __name__)
 _VALID_ROLES = {'admin', 'user'}
 _VALID_PROVIDERS = {'jellyfin', 'plex', 'emby'}
 _VALID_VISIBLE_TABS = {
-    'suggestions', 'requests', 'ai_search', 'jobs', 'profile',
+    'requests', 'ai_search', 'jobs', 'profile',
 }
 _TAB_ALIASES = {
     'ai-search': 'ai_search',
+    'suggestions': 'requests',
 }
 
 # Plex application identifier — stable across instances.

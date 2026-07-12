@@ -510,7 +510,6 @@ export default {
       ],
 
       availableTabs: [
-        { value: 'suggestions', label: 'Suggestions', icon: 'fas fa-lightbulb', required: false },
         { value: 'requests', label: 'Requests', icon: 'fas fa-film', required: false },
         { value: 'jobs', label: 'Jobs', icon: 'fas fa-briefcase', required: false },
         { value: 'ai_search', label: 'AI Search', icon: 'fas fa-robot', required: false },
@@ -564,6 +563,7 @@ export default {
 
   methods: {
     normalizeTabValue(tabValue) {
+      if (tabValue === 'suggestions') return 'requests';
       if (tabValue === 'ai-search') {
         return 'ai_search';
       }

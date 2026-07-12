@@ -1,6 +1,6 @@
 import asyncio
 import threading
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, g
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_role
 from api_service.automate_process import ContentAutomation
@@ -13,6 +13,70 @@ automation_bp = Blueprint('automation', __name__)
 
 _force_run_lock = threading.Lock()
 _force_run_running = False
+
+
+def _workflow_ids():
+    ids = (request.get_json(silent=True) or {}).get('ids')
+    if not isinstance(ids, list) or not ids or len(ids) > 100 or any(not isinstance(item, int) for item in ids):
+        return None
+    return ids
+
+
+def _workflow_owner():
+    return None if g.current_user.get('role') == 'admin' else int(g.current_user['id'])
+
+
+@automation_bp.route('/requests/workflow', methods=['GET'])
+def request_workflow():
+    status = request.args.get('status', 'awaiting_approval')
+    if status not in ('awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed'):
+        return jsonify({'status': 'error', 'message': 'Invalid status'}), 400
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+        per_page = min(100, max(1, int(request.args.get('per_page', 24))))
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid pagination'}), 400
+    items, total = DatabaseManager().list_suggestions(
+        _workflow_owner(), status, request.args.get('search', '').strip()[:100], page, per_page)
+    return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
+                    'pages': max(1, (total + per_page - 1) // per_page)}), 200
+
+
+def _decide_workflow(approve, blacklist=False):
+    ids = _workflow_ids()
+    if ids is None:
+        return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
+    changed = DatabaseManager().decide_suggestions(
+        ids, _workflow_owner(), int(g.current_user['id']), approve, blacklist)
+    return jsonify({'status': 'success', 'updated': changed}), 200
+
+
+@automation_bp.route('/requests/workflow/approve', methods=['POST'])
+@limiter.limit('20 per minute')
+def approve_workflow():
+    return _decide_workflow(True)
+
+
+@automation_bp.route('/requests/workflow/reject', methods=['POST'])
+@limiter.limit('20 per minute')
+def reject_workflow():
+    return _decide_workflow(False)
+
+
+@automation_bp.route('/requests/workflow/blacklist', methods=['POST'])
+@limiter.limit('20 per minute')
+def blacklist_workflow():
+    return _decide_workflow(False, True)
+
+
+@automation_bp.route('/requests/workflow/retry', methods=['POST'])
+@limiter.limit('20 per minute')
+def retry_workflow():
+    ids = _workflow_ids()
+    if ids is None:
+        return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
+    changed = DatabaseManager().retry_suggestions(ids, _workflow_owner())
+    return jsonify({'status': 'success', 'updated': changed}), 200
 
 
 def _run_automation_in_background():

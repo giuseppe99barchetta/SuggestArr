@@ -386,7 +386,6 @@ import AiSearchPage from './settings/AiSearchPage.vue';
 import LogsComponent from './LogsComponent.vue';
 import UserManagement from './settings/UserManagement.vue';
 import UserProfile from './settings/UserProfile.vue';
-import SuggestionsPage from './settings/SuggestionsPage.vue';
 import { exportConfig, importConfig } from '@/api/api';
 import { getReleaseByTag } from '@/api/githubReleasesApi';
 
@@ -406,7 +405,6 @@ export default {
     LogsComponent,
     UserManagement,
     UserProfile,
-    SuggestionsPage,
   },
   setup() {
     const { bg1Url, bg2Url, activeBg, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
@@ -458,7 +456,6 @@ export default {
         database: false,
       },
       tabs: [
-        { id: 'suggestions', name: 'Suggestions', icon: 'fas fa-lightbulb' },
         { id: 'requests',  name: 'Requests',  icon: 'fas fa-paper-plane', tourId: 'tab-requests' },
         { id: 'ai_search', name: 'AI Search', icon: 'fas fa-magic',       isBeta: true,           tourId: 'tab-ai-search' },
         { id: 'services',  name: 'Services',  icon: 'fas fa-plug',         tourId: 'tab-services', adminOnly: true },
@@ -563,7 +560,6 @@ export default {
         return null;
       }
       const componentMap = {
-        suggestions: 'SuggestionsPage',
         requests: 'SettingsRequests',
         services: 'SettingsServices',
         jobs: 'SettingsJobs',
@@ -660,6 +656,7 @@ export default {
   },
   methods: {
     normalizeTabId(tabId) {
+      if (tabId === 'suggestions') return 'requests';
       if (tabId === 'ai-search') {
         return 'ai_search';
       }

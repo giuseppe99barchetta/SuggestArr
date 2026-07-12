@@ -206,6 +206,13 @@ class RequestQueueMixin:
             params.append(owner_id)
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            eligible = []
+            if blacklist:
+                select_params = [*ids] + ([] if owner_id is None else [owner_id])
+                cursor.execute(f"SELECT tmdb_id,media_type FROM pending_requests "
+                               f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}",
+                               tuple(select_params))
+                eligible = cursor.fetchall()
             cursor.execute(f"UPDATE pending_requests SET status={ph},decided_by={ph},decided_at=CURRENT_TIMESTAMP "
                            f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}", tuple(params))
             changed = cursor.rowcount
@@ -213,9 +220,7 @@ class RequestQueueMixin:
                 insert = "INSERT OR IGNORE" if self.db_type == 'sqlite' else "INSERT IGNORE"
                 if self.db_type == 'postgres':
                     insert = "INSERT"
-                cursor.execute(f"SELECT tmdb_id,media_type FROM pending_requests WHERE status='rejected' "
-                               f"AND decided_by={ph} AND id IN ({marks})", (decided_by, *ids))
-                for tmdb_id, media_type in cursor.fetchall():
+                for tmdb_id, media_type in eligible:
                     sql = f"{insert} INTO suggestion_blacklist(tmdb_id,media_type,created_by) VALUES ({ph},{ph},{ph})"
                     if self.db_type == 'postgres':
                         sql += " ON CONFLICT DO NOTHING"
@@ -232,7 +237,8 @@ class RequestQueueMixin:
         params = [*ids] + ([] if owner_id is None else [owner_id])
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(f"UPDATE pending_requests SET status='queued',retry_count=0,next_attempt_at=NULL "
+            cursor.execute(f"UPDATE pending_requests SET status='queued',retry_count=0,next_attempt_at=NULL,"
+                           f"last_attempt_at=NULL,last_error=NULL "
                            f"WHERE status='failed' AND id IN ({marks}){owner_clause}", tuple(params))
             conn.commit()
             return cursor.rowcount

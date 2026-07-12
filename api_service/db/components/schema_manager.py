@@ -24,7 +24,7 @@ class SchemaManager:
                     last_login TIMESTAMP,
                     is_active INTEGER NOT NULL DEFAULT 1,
                     can_manage_ai INTEGER DEFAULT 0,
-                    visible_tabs TEXT DEFAULT 'suggestions,requests,jobs,profile'
+                    visible_tabs TEXT DEFAULT 'requests,jobs,profile'
                     , seer_user_id INTEGER
                 )
             """,
@@ -588,11 +588,6 @@ class SchemaManager:
                 if 'seer_user_id' not in existing_columns:
                     cursor.execute("ALTER TABLE auth_users ADD COLUMN seer_user_id INTEGER")
                     conn.commit()
-                if self.db_type in ('mysql', 'mariadb'):
-                    cursor.execute("UPDATE auth_users SET visible_tabs=CONCAT('suggestions,',visible_tabs) WHERE visible_tabs NOT LIKE '%suggestions%'")
-                else:
-                    cursor.execute("UPDATE auth_users SET visible_tabs='suggestions,' || visible_tabs WHERE visible_tabs NOT LIKE '%suggestions%'")
-                conn.commit()
 
             except Exception as e:
                 self.logger.error(f"Failed to migrate auth_users table: {e}")

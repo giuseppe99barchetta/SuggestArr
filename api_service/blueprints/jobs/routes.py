@@ -172,8 +172,8 @@ def reject_suggestions():
 def retry_suggestions():
     data = request.get_json(silent=True) or {}
     ids = data.get('ids')
-    if not isinstance(ids, list) or not ids or any(not isinstance(item, int) for item in ids):
-        return jsonify({'status': 'error', 'message': 'ids must be a non-empty integer list'}), 400
+    if not isinstance(ids, list) or not ids or len(ids) > 100 or any(not isinstance(item, int) for item in ids):
+        return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
     user = g.current_user
     owner_id = None if user.get('role') == 'admin' else int(user['id'])
     changed = JobRepository().db.retry_suggestions(ids, owner_id)
@@ -198,8 +198,8 @@ def restore_blacklisted_suggestion(media_type, tmdb_id):
 def _decide_suggestions(approve, blacklist=False):
     data = request.get_json(silent=True) or {}
     ids = data.get('ids')
-    if not isinstance(ids, list) or not ids or any(not isinstance(item, int) for item in ids):
-        return jsonify({'status': 'error', 'message': 'ids must be a non-empty integer list'}), 400
+    if not isinstance(ids, list) or not ids or len(ids) > 100 or any(not isinstance(item, int) for item in ids):
+        return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
     user = g.current_user
     owner_id = None if user.get('role') == 'admin' else int(user['id'])
     changed = JobRepository().db.decide_suggestions(ids, owner_id, int(user['id']), approve, blacklist)

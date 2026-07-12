@@ -33,15 +33,15 @@
           </div>
 
           <div class="header-content">
-            <h1 class="page-title">Request History</h1>
-            <p class="page-subtitle">Track your content requests and viewing patterns</p>
+            <h1 class="page-title">Requests</h1>
+            <p class="page-subtitle">Review approvals and track requests sent to Seer</p>
           </div>
         </div>
 
         <!-- View Toggle -->
         <div class="view-toggle-section">
           <div class="view-toggle">
-            <button 
+            <button
               @click="viewMode = 'by-content'" 
               :class="{ active: viewMode === 'by-content' }"
               class="view-toggle-btn">
@@ -65,11 +65,14 @@
               <span>AI Requests</span>
               <span class="view-count">{{ aiRequestsTotal }}</span>
             </button>
+            <button @click="viewMode = 'workflow'" :class="{ active: viewMode === 'workflow' }" class="view-toggle-btn">
+              <i class="fas fa-user-check"></i><span>Approval Workflow</span>
+            </button>
           </div>
         </div>
 
         <!-- Filters & Search Bar -->
-        <div class="filters-section">
+        <div v-if="viewMode !== 'workflow'" class="filters-section">
           <!-- Container per affiancare filtri e search -->
           <div class="filters-search-container">
             <!-- Search Bar (affiancata ai filtri) -->
@@ -273,6 +276,8 @@
               <p>Loading more...</p>
             </div>
           </div>
+
+          <RequestWorkflowPanel v-else-if="viewMode === 'workflow'" key="workflow" />
 
           <!-- View: All Requests -->
           <div v-else key="all-requests">
@@ -498,12 +503,14 @@ import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import { formatDate } from '@/utils/dateUtils.js';
 import { getRequestSourceVisual } from '@/utils/jobTypeVisuals.js';
 import { getAiSearchRequests } from '@/api/api.js';
+import RequestWorkflowPanel from './RequestWorkflowPanel.vue';
 
 export default {
   name: "RequestsPage",
   components: {
     Footer,
     BaseDropdown,
+    RequestWorkflowPanel,
   },
   setup() {
     const { bg1Url, bg2Url, activeBg, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
@@ -648,7 +655,7 @@ export default {
   },
   watch: {
     viewMode(newMode) {
-      if (newMode === 'ai-requests') return; // handled by switchToAiRequests
+      if (newMode === 'ai-requests' || newMode === 'workflow') return;
       this.$nextTick(() => {
         setTimeout(() => {
           this.initObserver();
@@ -922,6 +929,7 @@ export default {
     },
   },
   mounted() {
+    if (this.$route.query.status) this.viewMode = 'workflow';
     const savedConfig = localStorage.getItem('suggestarr_config');
     if (savedConfig) {
       try {
