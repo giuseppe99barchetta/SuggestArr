@@ -1,6 +1,7 @@
 import sqlite3
 
 from api_service.db.components.request_queue_mixin import RequestQueueMixin
+from api_service.db.components.schema_manager import SchemaManager
 
 
 class Queue(RequestQueueMixin):
@@ -43,3 +44,11 @@ def test_reject_and_blacklist_are_separate_actions():
     assert connection.execute("SELECT COUNT(*) FROM suggestion_blacklist").fetchone()[0] == 0
     assert queue.decide_suggestions([2], 7, 7, False, blacklist=True) == 1
     assert connection.execute("SELECT tmdb_id FROM suggestion_blacklist").fetchone()[0] == '20'
+
+
+def test_mysql_blacklist_uses_bounded_primary_key_columns():
+    manager = object.__new__(SchemaManager)
+    query = manager._prepare_create_table_query_for_db(
+        'suggestion_blacklist', 'CREATE TABLE suggestion_blacklist (tmdb_id TEXT)', 'mysql')
+    assert 'tmdb_id VARCHAR(32)' in query
+    assert 'media_type VARCHAR(16)' in query

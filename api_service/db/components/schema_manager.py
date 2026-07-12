@@ -353,6 +353,16 @@ class SchemaManager:
                     "UNIQUE(tmdb_id, media_type)",
                     "UNIQUE KEY uniq_pending_tmdb_media_type (tmdb_id(191), media_type(191))"
                 )
+            elif table_name == 'suggestion_blacklist':
+                query = """
+                    CREATE TABLE IF NOT EXISTS suggestion_blacklist (
+                        tmdb_id VARCHAR(32) NOT NULL,
+                        media_type VARCHAR(16) NOT NULL,
+                        created_by INTEGER,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (tmdb_id, media_type)
+                    ) ENGINE=InnoDB
+                """
             elif table_name == 'unwatched_suggestion_cycles':
                 query = """
                     CREATE TABLE IF NOT EXISTS unwatched_suggestion_cycles (
