@@ -139,7 +139,10 @@ class TraktRecommendationsAutomation:
         )
 
         filter_language = []
-        if normalized_filters.get("language"):
+        if "with_original_language" in job_filters:
+            filter_language = ([normalized_filters["language"]]
+                               if normalized_filters.get("language") else [])
+        elif normalized_filters.get("language"):
             filter_language = [normalized_filters["language"]]
         elif self.env_vars.get("FILTER_LANGUAGE"):
             filter_language = self.env_vars.get("FILTER_LANGUAGE", [])
@@ -217,6 +220,7 @@ class TraktRecommendationsAutomation:
             omdb_client=omdb_client,
             include_tvod=filter_include_tvod,
             filter_release_year_to=filter_release_year_to,
+            filter_genres_include=normalized_filters.get("genres"),
         )
 
     def _get_seer_discovered_tmdb_ids(self) -> set[str]:

@@ -158,6 +158,9 @@
               <span v-if="job.filters.without_genres && job.filters.without_genres.length" class="filter-tag exclude">
                 -{{ job.filters.without_genres.length }} genres excluded
               </span>
+              <span v-if="job.filters.with_genres && job.filters.with_genres.length" class="filter-tag">
+                +{{ job.filters.with_genres.length }} genres included
+              </span>
             </div>
           </div>
 

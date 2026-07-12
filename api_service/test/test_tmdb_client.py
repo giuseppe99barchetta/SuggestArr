@@ -32,6 +32,7 @@ def _make_client(
     filter_release_year_to=None,
     filter_language=None,
     filter_genre=None,
+    filter_genres_include=None,
     filter_region_provider=None,
     filter_streaming_services=None,
     rating_source='tmdb',
@@ -47,6 +48,7 @@ def _make_client(
         filter_release_year_to=filter_release_year_to,
         filter_language=filter_language,
         filter_genre=filter_genre,
+        filter_genres_include=filter_genres_include,
         filter_region_provider=filter_region_provider,
         filter_streaming_services=filter_streaming_services,
         rating_source=rating_source,
@@ -153,6 +155,12 @@ class TestApplyFilters(unittest.TestCase):
         client = _make_client(filter_genre=[{'id': 99, 'name': 'Comedy'}])
         item = {**_MOVIE_ITEM, 'genre_ids': [28]}
         self.assertTrue(client._apply_filters(item, 'movie')['passed'])
+
+    def test_included_genres_match_any_and_exclusions_still_apply(self):
+        client = _make_client(filter_genres_include=[16], filter_genre=[37])
+        self.assertTrue(client._apply_filters({**_MOVIE_ITEM, 'genre_ids': [16, 18]}, 'movie')['passed'])
+        self.assertFalse(client._apply_filters({**_MOVIE_ITEM, 'genre_ids': [18]}, 'movie')['passed'])
+        self.assertFalse(client._apply_filters({**_MOVIE_ITEM, 'genre_ids': [16, 37]}, 'movie')['passed'])
 
     def test_skips_tmdb_rating_check_when_rating_source_is_imdb(self):
         """When rating_source='imdb', TMDB rating/votes filters should be skipped."""

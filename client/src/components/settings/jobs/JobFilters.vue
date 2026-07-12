@@ -230,6 +230,26 @@
 
     <!-- Genre Filters -->
     <div class="form-group">
+      <label>Genres to Include</label>
+      <div class="genre-grid" v-if="genres.length > 0">
+        <button
+          v-for="genre in genres"
+          :key="genre.id"
+          type="button"
+          class="genre-btn include"
+          :class="{ active: isGenreIncluded(genre.id) }"
+          @click="toggleGenreInclude(genre.id)"
+        >
+          {{ genre.name }}
+        </button>
+      </div>
+      <p v-else class="loading-text">
+        <i class="fas fa-spinner fa-spin"></i> Loading genres...
+      </p>
+      <small class="form-help">Content must match at least one selected genre</small>
+    </div>
+
+    <div class="form-group">
       <label>Genres to Exclude</label>
       <div class="genre-grid" v-if="genres.length > 0">
         <button
@@ -409,6 +429,16 @@ export default {
     }
   },
   methods: {
+    isGenreIncluded(genreId) {
+      return (this.localFilters.with_genres || []).includes(genreId);
+    },
+
+    toggleGenreInclude(genreId) {
+      const included = this.localFilters.with_genres || (this.localFilters.with_genres = []);
+      const index = included.indexOf(genreId);
+      index === -1 ? included.push(genreId) : included.splice(index, 1);
+    },
+
     async loadGenres() {
       try {
         const response = await jobsApi.getGenres(this.mediaType);
@@ -719,6 +749,12 @@ input[type="date"] {
   background: var(--color-error-alpha-10);
   border-color: var(--color-error);
   color: var(--color-error);
+}
+
+.genre-btn.include.active {
+  background: var(--color-success-alpha-10);
+  border-color: var(--color-success);
+  color: var(--color-success);
 }
 
 .loading-text {

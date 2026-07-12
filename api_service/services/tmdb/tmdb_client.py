@@ -28,7 +28,8 @@ class TMDbClient(BaseHTTPClient):
                 include_no_ratings, filter_release_year, filter_language, filter_genre,
                 filter_region_provider, filter_streaming_services, filter_min_runtime=None,
                 rating_source='tmdb', imdb_threshold=None, imdb_min_votes=None,
-                omdb_client=None, include_tvod=False, filter_release_year_to=None
+                omdb_client=None, include_tvod=False, filter_release_year_to=None,
+                filter_genres_include=None
                 ):
         """
         Initializes the TMDbClient with the provided API key.
@@ -51,6 +52,7 @@ class TMDbClient(BaseHTTPClient):
         self.release_year_filter = filter_release_year
         self.release_year_filter_to = int(filter_release_year_to) if filter_release_year_to is not None else None
         self.genre_filter = filter_genre
+        self.included_genres = filter_genres_include or []
         self.pages = (self.search_size + CONTENT_PER_PAGE - 1) // CONTENT_PER_PAGE
         self.region_provider = filter_region_provider
         self.excluded_streaming_services = filter_streaming_services
@@ -353,9 +355,20 @@ class TMDbClient(BaseHTTPClient):
             else:
                 results['release_year'] = {'passed': True, 'label': 'Year', 'value': year_str}
 
-        # Genre exclusion filter
+        # Genre filters
+        item_genres = item.get('genre_ids', [])
+        if self.included_genres:
+            included = {int(genre.get('id')) if isinstance(genre, dict) else int(genre)
+                        for genre in self.included_genres}
+            if not included.intersection(item_genres):
+                self._log_exclusion_reason(item, "no included genre matched", content_type)
+                results['genres'] = {
+                    'passed': False, 'label': 'Genres',
+                    'reason': 'Does not match an included genre',
+                }
+                overall = False
+
         if self.genre_filter:
-            item_genres = item.get('genre_ids', [])
             genre_ids_to_exclude = []
             excluded_genres_names = []
 
