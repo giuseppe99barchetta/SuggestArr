@@ -159,7 +159,7 @@ class RequestQueueMixin:
                            (str(tmdb_id), media_type))
             return cursor.fetchone() is not None
 
-    def list_suggestions(self, owner_id=None, status='awaiting_approval', search='', page=1, per_page=24):
+    def list_suggestions(self, owner_id=None, status='awaiting_approval', search='', page=1, per_page=24, media_type='all'):
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.owner_id,
                           p.retry_count,p.last_attempt_at,p.last_error,p.payload,
@@ -167,8 +167,13 @@ class RequestQueueMixin:
                    FROM pending_requests p
                    LEFT JOIN metadata m ON m.media_id=p.tmdb_id AND m.media_type=p.media_type
                    LEFT JOIN discover_jobs j ON j.id=p.job_id
-                   WHERE p.status=""" + ph
-        params = [status]
+                   WHERE 1=1"""
+        params = []
+        if status == 'all':
+            query += " AND p.status <> 'submitted'"
+        else:
+            query += f" AND p.status={ph}"
+            params.append(status)
         if owner_id is not None:
             query += f" AND p.owner_id={ph}"
             params.append(owner_id)
@@ -176,6 +181,9 @@ class RequestQueueMixin:
             query += f" AND (LOWER(COALESCE(m.title,'')) LIKE {ph} OR p.tmdb_id LIKE {ph})"
             term = f"%{search.lower()}%"
             params.extend((term, term))
+        if media_type != 'all':
+            query += f" AND p.media_type={ph}"
+            params.append(media_type)
         count_query = f"SELECT COUNT(*) FROM ({query}) suggestion_rows"
         query += f" ORDER BY p.created_at DESC LIMIT {ph} OFFSET {ph}"
         params.extend((per_page, (page - 1) * per_page))

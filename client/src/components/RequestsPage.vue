@@ -65,14 +65,11 @@
               <span>AI Requests</span>
               <span class="view-count">{{ aiRequestsTotal }}</span>
             </button>
-            <button @click="viewMode = 'workflow'" :class="{ active: viewMode === 'workflow' }" class="view-toggle-btn">
-              <i class="fas fa-user-check"></i><span>Approval Workflow</span>
-            </button>
           </div>
         </div>
 
         <!-- Filters & Search Bar -->
-        <div v-if="viewMode !== 'workflow'" class="filters-section">
+        <div class="filters-section">
           <!-- Container per affiancare filtri e search -->
           <div class="filters-search-container">
             <!-- Search Bar (affiancata ai filtri) -->
@@ -105,6 +102,15 @@
                 placeholder="Select media type"
                 :disabled="loading"
                 id="mediaType"
+              />
+
+              <BaseDropdown
+                v-if="viewMode === 'all-requests'"
+                v-model="requestStatusFilter"
+                :options="requestStatusOptions"
+                placeholder="Request status"
+                :disabled="loading"
+                id="requestStatus"
               />
             
               <!-- Clear Filters -->
@@ -277,11 +283,10 @@
             </div>
           </div>
 
-          <RequestWorkflowPanel v-else-if="viewMode === 'workflow'" key="workflow" />
-
           <!-- View: All Requests -->
           <div v-else key="all-requests">
             <transition-group 
+              v-if="requestStatusFilter === 'all' || requestStatusFilter === 'sent'"
               name="fade-slide" 
               tag="div"
               class="requests-grid">
@@ -329,19 +334,24 @@
                 </div>
               </div>
             </transition-group>
-
-
+            <RequestWorkflowPanel
+              v-if="requestStatusFilter !== 'sent'"
+              :status-filter="requestStatusFilter"
+              :search-query="searchQuery"
+              :media-type="mediaTypeFilter"
+              :show-header="false"
+            />
           </div>
         </transition>
         <div
-          v-if="hasMoreData && viewMode !== 'ai-requests'"
+          v-if="hasMoreData && viewMode !== 'ai-requests' && (viewMode !== 'all-requests' || requestStatusFilter === 'all' || requestStatusFilter === 'sent')"
           :ref="viewMode === 'by-content' ? 'loadMoreTrigger' : 'loadMoreTriggerRequests'"
           class="load-more-trigger">
           <div class="spinner-small"></div>
           <p>Loading more requests...</p>
         </div>
         <!-- No Results -->
-        <div v-if="viewMode !== 'ai-requests' && (viewMode === 'by-content' ? filteredAndSortedSources : filteredAndSortedRequests).length === 0 && !loading" class="no-results">
+        <div v-if="viewMode !== 'ai-requests' && (viewMode !== 'all-requests' || requestStatusFilter === 'all' || requestStatusFilter === 'sent') && (viewMode === 'by-content' ? filteredAndSortedSources : filteredAndSortedRequests).length === 0 && !loading" class="no-results">
           <i class="fas fa-inbox text-6xl mb-4"></i>
           <h3>No {{ viewMode === 'by-content' ? 'content' : 'requests' }} found</h3>
           <p v-if="searchQuery || mediaTypeFilter !== 'all'">Try adjusting your filters</p>
@@ -561,6 +571,15 @@ export default {
         { value: 'all', label: 'All Types' },
         { value: 'movie', label: 'Movies' },
         { value: 'tv', label: 'TV Shows' }
+      ],
+      requestStatusFilter: 'all',
+      requestStatusOptions: [
+        { value: 'all', label: 'All statuses' },
+        { value: 'awaiting_approval', label: 'Waiting approval' },
+        { value: 'queued', label: 'Queued' },
+        { value: 'sent', label: 'Sent' },
+        { value: 'rejected', label: 'Rejected' },
+        { value: 'failed', label: 'Failed' }
       ]
     };
   },
@@ -655,7 +674,7 @@ export default {
   },
   watch: {
     viewMode(newMode) {
-      if (newMode === 'ai-requests' || newMode === 'workflow') return;
+      if (newMode === 'ai-requests') return;
       this.$nextTick(() => {
         setTimeout(() => {
           this.initObserver();
@@ -929,7 +948,10 @@ export default {
     },
   },
   mounted() {
-    if (this.$route.query.status) this.viewMode = 'workflow';
+    if (this.$route.query.status) {
+      this.viewMode = 'all-requests';
+      this.requestStatusFilter = this.$route.query.status;
+    }
     const savedConfig = localStorage.getItem('suggestarr_config');
     if (savedConfig) {
       try {

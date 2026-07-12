@@ -29,15 +29,18 @@ def _workflow_owner():
 @automation_bp.route('/requests/workflow', methods=['GET'])
 def request_workflow():
     status = request.args.get('status', 'awaiting_approval')
-    if status not in ('awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed'):
+    if status not in ('all', 'awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed'):
         return jsonify({'status': 'error', 'message': 'Invalid status'}), 400
     try:
         page = max(1, int(request.args.get('page', 1)))
         per_page = min(100, max(1, int(request.args.get('per_page', 24))))
     except ValueError:
         return jsonify({'status': 'error', 'message': 'Invalid pagination'}), 400
+    media_type = request.args.get('media_type', 'all')
+    if media_type not in ('all', 'movie', 'tv'):
+        return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400
     items, total = DatabaseManager().list_suggestions(
-        _workflow_owner(), status, request.args.get('search', '').strip()[:100], page, per_page)
+        _workflow_owner(), status, request.args.get('search', '').strip()[:100], page, per_page, media_type)
     return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
 
