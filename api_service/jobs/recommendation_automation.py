@@ -343,7 +343,8 @@ class RecommendationAutomation:
             exclude_downloaded,
             exclude_requested,
             anime_profile_config,
-            request_first_season_only
+            request_first_season_only,
+            queue_context={**self.job_data, 'job_id': self.job_data['id']}
         )
         if dry_run:
             self.logger.info("Dry-run mode: skipping Seer request cache sync.")

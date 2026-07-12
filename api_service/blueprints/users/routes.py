@@ -120,6 +120,11 @@ def _extract_permission_updates(data: dict) -> dict:
 
     if 'can_manage_ai' in data:
         updates['can_manage_ai'] = 1 if data['can_manage_ai'] else 0
+    if 'seer_user_id' in data:
+        value = data['seer_user_id']
+        if value is not None and not isinstance(value, int):
+            raise ValueError('seer_user_id must be an integer or null')
+        updates['seer_user_id'] = value
 
     if 'allowed_tabs' in data or 'visible_tabs' in data:
         raw_tabs = data['allowed_tabs'] if 'allowed_tabs' in data else data['visible_tabs']

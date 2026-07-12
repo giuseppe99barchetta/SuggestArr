@@ -131,7 +131,7 @@ class AuthMixin:
         try:
             query = (
                 f"SELECT id, username, password_hash, role, is_active, last_login, "
-                f"can_manage_ai, visible_tabs "
+                f"can_manage_ai, visible_tabs, seer_user_id "
                 f"FROM auth_users WHERE id = {ph}"
             )
             with self.get_connection() as conn:
@@ -149,6 +149,7 @@ class AuthMixin:
                 "last_login": row[5],
                 "can_manage_ai": row[6] if len(row) > 6 else 0,
                 "visible_tabs": row[7] if len(row) > 7 else 'requests,jobs,profile',
+                "seer_user_id": row[8] if len(row) > 8 else None,
             }
         except Exception as e:
             # Fall back to old schema without new columns (for migration compatibility)
@@ -312,7 +313,7 @@ class AuthMixin:
         try:
             query = (
                 "SELECT id, username, role, is_active, created_at, last_login, "
-                "can_manage_ai, visible_tabs "
+                "can_manage_ai, visible_tabs, seer_user_id "
                 "FROM auth_users ORDER BY id"
             )
             with self.get_connection() as conn:
@@ -329,6 +330,7 @@ class AuthMixin:
                     "last_login": row[5],
                     "can_manage_ai": row[6] if len(row) > 6 else 0,
                     "visible_tabs": row[7] if len(row) > 7 else 'requests,jobs,profile',
+                    "seer_user_id": row[8] if len(row) > 8 else None,
                 }
                 for row in rows
             ]
@@ -374,7 +376,7 @@ class AuthMixin:
         Returns:
             bool: True if a row was updated, False if the user was not found.
         """
-        allowed = {'role', 'is_active', 'can_manage_ai', 'visible_tabs'}
+        allowed = {'role', 'is_active', 'can_manage_ai', 'visible_tabs', 'seer_user_id'}
         fields = {k: v for k, v in updates.items() if k in allowed}
         if not fields:
             return False

@@ -30,7 +30,7 @@ class SeerClient(BaseHTTPClient):
 
     def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None, session_token=None,
                 number_of_seasons="all", exclude_downloaded=True, exclude_watched=True,
-                anime_profile_config=None, request_first_season_only=False):
+                anime_profile_config=None, request_first_season_only=False, queue_context=None):
         """
         Initializes the SeerClient with the API URL and logs in the user.
         :param anime_profile_config: Dict with anime/default profile routing settings.
@@ -51,6 +51,7 @@ class SeerClient(BaseHTTPClient):
         self.exclude_downloaded = exclude_downloaded
         self.exclude_requested = exclude_watched
         self.anime_profile_config = anime_profile_config or {}
+        self.queue_context = queue_context or {}
         self.logger.debug("SeerClient initialized with API URL: %s", api_url)
 
     def _resolve_tv_seasons(self):
@@ -384,7 +385,19 @@ class SeerClient(BaseHTTPClient):
             except Exception:
                 pass
 
-        enqueued = db.enqueue_request(tmdb_id, media_type, user_id, payload)
+        context = self.queue_context
+        profile = (context.get('request_profiles') or {}).get(media_type) or {}
+        for key in ('serverId', 'profileId', 'rootFolder'):
+            if profile.get(key) is not None:
+                payload[key] = profile[key]
+        payload['_seer_identity_mode'] = context.get('seer_identity_mode', 'technical_user')
+        if context.get('seer_identity_mode') == 'matching_user' and context.get('owner_id'):
+            owner = db.get_auth_user_by_id(context['owner_id']) or {}
+            if owner.get('seer_user_id') is not None:
+                payload['userId'] = owner['seer_user_id']
+        status = 'awaiting_approval' if context.get('delivery_mode') == 'manual' else 'queued'
+        enqueued = db.enqueue_request(tmdb_id, media_type, user_id, payload, status=status,
+                                      job_id=context.get('job_id'), owner_id=context.get('owner_id'))
         if enqueued:
             self.logger.info("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)
         return enqueued

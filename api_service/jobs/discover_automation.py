@@ -93,7 +93,8 @@ class DiscoverAutomation:
             exclude_downloaded,
             exclude_requested,
             anime_profile_config,
-            request_first_season_only
+            request_first_season_only,
+            queue_context={**instance.job_data, 'job_id': instance.job_data['id']}
         )
         await instance.seer_client.init()
 

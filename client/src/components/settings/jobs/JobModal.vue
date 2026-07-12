@@ -139,6 +139,41 @@
           </div>
 
           <!-- Schedule -->
+          <div class="settings-group">
+            <h4>Seer delivery</h4>
+            <label class="pause-pending-toggle">
+              <input v-model="form.delivery_mode" type="radio" value="automatic" />
+              <span><strong>Send automatically</strong><small>Queue requests for Seer immediately.</small></span>
+            </label>
+            <div class="form-group">
+              <label for="seerIdentity">Request as</label>
+              <select id="seerIdentity" v-model="form.seer_identity_mode" class="form-control">
+                <option value="technical_user">Configured technical user</option>
+                <option value="matching_user">Mapped Seer user (fallback to technical)</option>
+                <option value="admin_user">Configured Seer admin</option>
+              </select>
+            </div>
+            <label class="pause-pending-toggle">
+              <input v-model="form.delivery_mode" type="radio" value="manual" />
+              <span><strong>Approve in SuggestArr</strong><small>Hold suggestions until you approve them.</small></span>
+            </label>
+            <div v-for="type in ['movie', 'tv']" :key="type" v-show="form.media_type === type || form.media_type === 'both'" class="form-group">
+              <label>{{ type === 'movie' ? 'Radarr' : 'Sonarr' }} request profile</label>
+              <select v-model="form.request_profiles[type].serverId" class="form-control" @change="resetRequestProfile(type)">
+                <option :value="null">Use Seer default</option>
+                <option v-for="server in serversFor(type)" :key="server.id" :value="server.id">{{ server.name }}</option>
+              </select>
+              <select v-if="form.request_profiles[type].serverId != null" v-model="form.request_profiles[type].profileId" class="form-control">
+                <option :value="null">Quality profile</option>
+                <option v-for="profile in selectedServer(type)?.profiles || []" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
+              </select>
+              <select v-if="form.request_profiles[type].serverId != null" v-model="form.request_profiles[type].rootFolder" class="form-control">
+                <option :value="null">Root folder</option>
+                <option v-for="folder in selectedServer(type)?.rootFolders || []" :key="folder.path" :value="folder.path">{{ folder.path }}</option>
+              </select>
+            </div>
+          </div>
+
           <div class="settings-group" data-tour-id="job-modal-schedule">
             <h4>Schedule</h4>
             <SchedulePicker v-model="schedule" />
@@ -268,6 +303,8 @@ export default {
         pause_if_pending_requests: false,
         prevent_suggestions_if_unwatched: false,
         unwatched_suggestion_days: 7
+        , delivery_mode: 'automatic', seer_identity_mode: 'technical_user',
+        request_profiles: { movie: {}, tv: {} }
       },
       schedule: {
         type: 'preset',
@@ -278,6 +315,7 @@ export default {
       llmConfigured: false,
       traktConfigured: false,
       traktLoading: false
+      , radarrServers: [], sonarrServers: []
     };
   },
   computed: {
@@ -339,6 +377,12 @@ export default {
         pause_if_pending_requests: this.job.pause_if_pending_requests === true,
         prevent_suggestions_if_unwatched: this.job.prevent_suggestions_if_unwatched === true,
         unwatched_suggestion_days: this.job.unwatched_suggestion_days || 7
+        , delivery_mode: this.job.delivery_mode || 'automatic',
+        seer_identity_mode: this.job.seer_identity_mode || 'technical_user',
+        request_profiles: {
+          movie: { ...(this.job.request_profiles?.movie || {}) },
+          tv: { ...(this.job.request_profiles?.tv || {}) }
+        }
       };
       this.schedule = {
         type: this.job.schedule_type || 'preset',
@@ -373,8 +417,16 @@ export default {
       this.llmConfigured = false;
     }
     await this.refreshTraktSetup();
+    try {
+      const [radarr, sonarr] = await Promise.all([axios.get('/api/seer/radarr-servers'), axios.get('/api/seer/sonarr-servers')]);
+      this.radarrServers = radarr.data.servers || [];
+      this.sonarrServers = sonarr.data.servers || [];
+    } catch { /* Seer defaults remain available. */ }
   },
   methods: {
+    serversFor(type) { return type === 'movie' ? this.radarrServers : this.sonarrServers; },
+    selectedServer(type) { return this.serversFor(type).find(server => String(server.id) === String(this.form.request_profiles[type].serverId)); },
+    resetRequestProfile(type) { this.form.request_profiles[type].profileId = null; this.form.request_profiles[type].rootFolder = null; },
     openAdvanced() {
       this.showAdvanced = true;
     },

@@ -25,6 +25,7 @@ class SchemaManager:
                     is_active INTEGER NOT NULL DEFAULT 1,
                     can_manage_ai INTEGER DEFAULT 0,
                     visible_tabs TEXT DEFAULT 'requests,jobs,profile'
+                    , seer_user_id INTEGER
                 )
             """,
             'refresh_tokens': """
@@ -104,6 +105,9 @@ class SchemaManager:
                     pause_if_pending_requests INTEGER DEFAULT 0,
                     prevent_suggestions_if_unwatched INTEGER DEFAULT 0,
                     unwatched_suggestion_days INTEGER DEFAULT 7,
+                    delivery_mode TEXT NOT NULL DEFAULT 'automatic',
+                    seer_identity_mode TEXT NOT NULL DEFAULT 'technical_user',
+                    request_profiles TEXT,
                     is_system INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -143,8 +147,21 @@ class SchemaManager:
                     retry_count INTEGER DEFAULT 0,
                     last_attempt_at TIMESTAMP,
                     next_attempt_at TIMESTAMP,
+                    job_id INTEGER,
+                    owner_id INTEGER,
+                    decided_at TIMESTAMP,
+                    decided_by INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(tmdb_id, media_type)
+                )
+            """,
+            'suggestion_blacklist': """
+                CREATE TABLE IF NOT EXISTS suggestion_blacklist (
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    created_by INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (tmdb_id, media_type)
                 )
             """,
             'cleanup_settings': """
@@ -557,6 +574,9 @@ class SchemaManager:
                     else:
                         cursor.execute("ALTER TABLE auth_users ADD COLUMN visible_tabs TEXT DEFAULT 'requests,jobs,profile';")
                     conn.commit()
+                if 'seer_user_id' not in existing_columns:
+                    cursor.execute("ALTER TABLE auth_users ADD COLUMN seer_user_id INTEGER")
+                    conn.commit()
 
             except Exception as e:
                 self.logger.error(f"Failed to migrate auth_users table: {e}")
@@ -662,10 +682,31 @@ class SchemaManager:
                         "SMALLINT DEFAULT 0" if self.db_type == 'postgres' else "INTEGER DEFAULT 0"
                     ),
                     'unwatched_suggestion_days': "INTEGER DEFAULT 7",
+                    'delivery_mode': ("VARCHAR(20) NOT NULL DEFAULT 'automatic'" if self.db_type in ['mysql', 'mariadb'] else "TEXT NOT NULL DEFAULT 'automatic'"),
+                    'seer_identity_mode': ("VARCHAR(30) NOT NULL DEFAULT 'technical_user'" if self.db_type in ['mysql', 'mariadb'] else "TEXT NOT NULL DEFAULT 'technical_user'"),
+                    'request_profiles': "TEXT",
                 }
                 for column, definition in additions.items():
                     if column not in existing_columns:
                         cursor.execute(f"ALTER TABLE discover_jobs ADD COLUMN {column} {definition};")
+                conn.commit()
+
+                # Keep the existing delivery queue and add approval metadata in place.
+                if self.db_type == 'sqlite':
+                    cursor.execute("PRAGMA table_info(pending_requests)")
+                    pending_columns = {row[1] for row in cursor.fetchall()}
+                elif self.db_type == 'postgres':
+                    cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='pending_requests'")
+                    pending_columns = {row[0] for row in cursor.fetchall()}
+                else:
+                    cursor.execute("SHOW COLUMNS FROM pending_requests")
+                    pending_columns = {row[0] for row in cursor.fetchall()}
+                for column, definition in {
+                    'job_id': 'INTEGER', 'owner_id': 'INTEGER',
+                    'decided_at': 'TIMESTAMP', 'decided_by': 'INTEGER',
+                }.items():
+                    if column not in pending_columns:
+                        cursor.execute(f"ALTER TABLE pending_requests ADD COLUMN {column} {definition}")
                 conn.commit()
 
             except Exception as e:

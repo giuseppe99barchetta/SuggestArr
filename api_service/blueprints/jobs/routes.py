@@ -35,6 +35,23 @@ def run_async(coro):
     return run_coroutine_sync(coro, logger)
 
 
+def _validate_request_profiles(value):
+    if value is None:
+        return {}
+    if not isinstance(value, dict) or any(key not in ('movie', 'tv') for key in value):
+        raise ValueError('request_profiles must contain only movie and tv')
+    for profile in value.values():
+        if not isinstance(profile, dict) or any(key not in ('serverId', 'profileId', 'rootFolder') for key in profile):
+            raise ValueError('Invalid request profile')
+        if profile.get('serverId') is not None and not isinstance(profile['serverId'], int):
+            raise ValueError('serverId must be an integer')
+        if profile.get('profileId') is not None and not isinstance(profile['profileId'], int):
+            raise ValueError('profileId must be an integer')
+        if profile.get('rootFolder') is not None and not isinstance(profile['rootFolder'], str):
+            raise ValueError('rootFolder must be a string')
+    return value
+
+
 def get_job_manager() -> JobManager:
     """
     Get the JobManager instance and ensure it's configured.
@@ -86,6 +103,52 @@ def get_jobs():
     except Exception as e:
         logger.error(f"Error retrieving jobs: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
+
+
+@jobs_bp.route('/suggestions', methods=['GET'])
+def get_suggestions():
+    user = g.current_user
+    owner_id = None if user.get('role') == 'admin' else int(user['id'])
+    items = JobRepository().db.list_suggestions(owner_id)
+    return jsonify({'status': 'success', 'items': items, 'total': len(items)}), 200
+
+
+@jobs_bp.route('/suggestions/approve', methods=['POST'])
+@limiter.limit("20 per minute")
+def approve_suggestions():
+    return _decide_suggestions(True)
+
+
+@jobs_bp.route('/suggestions/blacklist', methods=['POST'])
+@limiter.limit("20 per minute")
+def blacklist_suggestions():
+    return _decide_suggestions(False)
+
+
+@jobs_bp.route('/suggestions/blacklist', methods=['GET'])
+@require_role('admin')
+def get_suggestion_blacklist():
+    return jsonify({'status': 'success', 'items': JobRepository().db.list_blacklist()}), 200
+
+
+@jobs_bp.route('/suggestions/blacklist/<media_type>/<tmdb_id>', methods=['DELETE'])
+@require_role('admin')
+def restore_blacklisted_suggestion(media_type, tmdb_id):
+    if media_type not in ('movie', 'tv'):
+        return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400
+    removed = JobRepository().db.remove_blacklist(tmdb_id, media_type)
+    return jsonify({'status': 'success', 'removed': removed}), 200
+
+
+def _decide_suggestions(approve):
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids')
+    if not isinstance(ids, list) or not ids or any(not isinstance(item, int) for item in ids):
+        return jsonify({'status': 'error', 'message': 'ids must be a non-empty integer list'}), 400
+    user = g.current_user
+    owner_id = None if user.get('role') == 'admin' else int(user['id'])
+    changed = JobRepository().db.decide_suggestions(ids, owner_id, int(user['id']), approve)
+    return jsonify({'status': 'success', 'updated': changed}), 200
 
 
 @jobs_bp.route('/<int:job_id>', methods=['GET'])
@@ -177,6 +240,19 @@ def create_job():
                 'message': 'job_type must be one of: discover, recommendation, trakt_recommendations'
             }), 400
         data['job_type'] = job_type
+        delivery_mode = data.get('delivery_mode', 'automatic')
+        if delivery_mode not in ('automatic', 'manual'):
+            return jsonify({'status': 'error', 'message': 'delivery_mode must be automatic or manual'}), 400
+        data['delivery_mode'] = delivery_mode
+        try:
+            data['request_profiles'] = _validate_request_profiles(data.get('request_profiles'))
+        except ValueError as exc:
+            return jsonify({'status': 'error', 'message': str(exc)}), 400
+        identity_mode = data.get('seer_identity_mode', 'technical_user')
+        if identity_mode not in ('matching_user', 'technical_user', 'admin_user'):
+            return jsonify({'status': 'error', 'message': 'Invalid seer_identity_mode'}), 400
+        if identity_mode == 'admin_user' and getattr(g, 'current_user', {}).get('role') != 'admin':
+            return jsonify({'status': 'error', 'message': 'admin_user identity requires an admin job owner'}), 403
         try:
             data['unwatched_suggestion_days'] = int(data.get('unwatched_suggestion_days', 7))
             if data['unwatched_suggestion_days'] < 1:
@@ -267,6 +343,18 @@ def update_job(job_id: int):
 
         # Validate job_type if provided
         job_type = data.get('job_type', existing.get('job_type', 'discover'))
+        if 'request_profiles' in data:
+            try:
+                data['request_profiles'] = _validate_request_profiles(data['request_profiles'])
+            except ValueError as exc:
+                return jsonify({'status': 'error', 'message': str(exc)}), 400
+        if 'delivery_mode' in data and data['delivery_mode'] not in ('automatic', 'manual'):
+            return jsonify({'status': 'error', 'message': 'delivery_mode must be automatic or manual'}), 400
+        if 'seer_identity_mode' in data:
+            if data['seer_identity_mode'] not in ('matching_user', 'technical_user', 'admin_user'):
+                return jsonify({'status': 'error', 'message': 'Invalid seer_identity_mode'}), 400
+            if data['seer_identity_mode'] == 'admin_user' and current_user.get('role') != 'admin':
+                return jsonify({'status': 'error', 'message': 'admin_user identity requires an admin job owner'}), 403
         if 'unwatched_suggestion_days' in data:
             try:
                 data['unwatched_suggestion_days'] = int(data['unwatched_suggestion_days'])

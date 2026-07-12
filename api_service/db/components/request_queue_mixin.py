@@ -98,7 +98,7 @@ class RequestQueueMixin:
             )
 
     def enqueue_request(self, tmdb_id: str, media_type: str, user_id: Optional[str],
-                        payload: dict) -> bool:
+                        payload: dict, status: str = 'queued', job_id=None, owner_id=None) -> bool:
         """Enqueue a Seer submission for background delivery.
 
         Idempotent: silently no-ops when an entry for (tmdb_id, media_type) already
@@ -117,12 +117,14 @@ class RequestQueueMixin:
             self.logger.debug("enqueue_request: %s %s already submitted, skipping.", media_type, tmdb_id)
             return False
 
+        if self.is_suggestion_blacklisted(tmdb_id, media_type):
+            return False
         query = """
             INSERT OR IGNORE INTO pending_requests
-                (tmdb_id, media_type, user_id, payload, status)
-            VALUES (?, ?, ?, ?, 'queued')
+                (tmdb_id, media_type, user_id, payload, status, job_id, owner_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """
-        params = (str(tmdb_id), media_type, user_id, json.dumps(payload))
+        params = (str(tmdb_id), media_type, user_id, json.dumps(payload), status, job_id, owner_id)
 
         if self.db_type in ['mysql', 'mariadb']:
             query = query.replace("INSERT OR IGNORE", "INSERT IGNORE").replace("?", "%s")
@@ -148,6 +150,77 @@ class RequestQueueMixin:
         except Exception as e:
             self.logger.error("Failed to enqueue %s tmdb:%s: %s", media_type, tmdb_id, e)
             return False
+
+    def is_suggestion_blacklisted(self, tmdb_id: str, media_type: str) -> bool:
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT 1 FROM suggestion_blacklist WHERE tmdb_id={ph} AND media_type={ph}",
+                           (str(tmdb_id), media_type))
+            return cursor.fetchone() is not None
+
+    def list_suggestions(self, owner_id=None):
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.owner_id,
+                          m.title,m.poster_path,m.overview,j.name
+                   FROM pending_requests p
+                   LEFT JOIN metadata m ON m.media_id=p.tmdb_id AND m.media_type=p.media_type
+                   LEFT JOIN discover_jobs j ON j.id=p.job_id
+                   WHERE p.status='awaiting_approval'"""
+        params = ()
+        if owner_id is not None:
+            query += f" AND p.owner_id={ph}"
+            params = (owner_id,)
+        query += " ORDER BY p.created_at DESC"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            cols = [d[0] for d in cursor.description]
+            return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+    def decide_suggestions(self, ids, owner_id, decided_by, approve):
+        if not ids:
+            return 0
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        marks = ','.join([ph] * len(ids))
+        owner_clause = '' if owner_id is None else f' AND owner_id={ph}'
+        params = [('queued' if approve else 'rejected'), decided_by, *ids]
+        if owner_id is not None:
+            params.append(owner_id)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"UPDATE pending_requests SET status={ph},decided_by={ph},decided_at=CURRENT_TIMESTAMP "
+                           f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}", tuple(params))
+            changed = cursor.rowcount
+            if not approve:
+                insert = "INSERT OR IGNORE" if self.db_type == 'sqlite' else "INSERT IGNORE"
+                if self.db_type == 'postgres':
+                    insert = "INSERT"
+                cursor.execute(f"SELECT tmdb_id,media_type FROM pending_requests WHERE status='rejected' "
+                               f"AND decided_by={ph} AND id IN ({marks})", (decided_by, *ids))
+                for tmdb_id, media_type in cursor.fetchall():
+                    sql = f"{insert} INTO suggestion_blacklist(tmdb_id,media_type,created_by) VALUES ({ph},{ph},{ph})"
+                    if self.db_type == 'postgres':
+                        sql += " ON CONFLICT DO NOTHING"
+                    cursor.execute(sql, (tmdb_id, media_type, decided_by))
+            conn.commit()
+            return changed
+
+    def list_blacklist(self):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT tmdb_id,media_type,created_by,created_at FROM suggestion_blacklist ORDER BY created_at DESC")
+            cols = [d[0] for d in cursor.description]
+            return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+    def remove_blacklist(self, tmdb_id, media_type):
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"DELETE FROM suggestion_blacklist WHERE tmdb_id={ph} AND media_type={ph}",
+                           (str(tmdb_id), media_type))
+            conn.commit()
+            return cursor.rowcount > 0
 
     def get_due_requests(self, max_items: int = 50) -> List[Dict[str, Any]]:
         """Return up to *max_items* queued rows whose next_attempt_at is due.
