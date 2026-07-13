@@ -255,8 +255,11 @@ export default {
     async loadApprovalState() {
       try {
         const { data } = await axios.get('/api/jobs');
-        this.approvalEnabled = (data.jobs || []).some(job => job.delivery_mode === 'manual');
-        if (this.approvalEnabled) await this.loadPendingRequests();
+        await this.loadPendingRequests();
+        this.approvalEnabled = this.pendingTotal > 0 || (data.jobs || []).some(job =>
+          job.delivery_mode === 'manual' ||
+          ((job.delivery_mode || 'inherit') === 'inherit' && data.request_approval_default !== false)
+        );
       } catch (error) {
         console.error('Error loading approval jobs:', error);
       }

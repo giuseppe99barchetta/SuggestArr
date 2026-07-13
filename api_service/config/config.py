@@ -225,6 +225,9 @@ def get_default_values():
         'API_TIMEOUT': lambda: 30,
         'API_RETRIES': lambda: 3,
         'ENABLE_API_CACHING': lambda: True,
+        'REQUIRE_REQUEST_APPROVAL': lambda: False,
+        'PAUSE_JOBS_WITH_PENDING_APPROVALS': lambda: False,
+        'AUTO_REJECT_APPROVAL_DAYS': lambda: 0,
         # Database connection pool settings
         'DB_MIN_CONNECTIONS': lambda: '2',
         'DB_MAX_CONNECTIONS': lambda: '10',
@@ -341,7 +344,9 @@ def get_config_sections():
                      'ENABLE_DEBUG_MODE', 'ENABLE_PERFORMANCE_MONITORING', 'ENABLE_VISUAL_EFFECTS',
                      'ENABLE_STATIC_BACKGROUND', 'STATIC_BACKGROUND_COLOR',
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
-                     'ENABLE_API_CACHING', 'OPENAI_API_KEY', 'OPENAI_BASE_URL',
+                     'ENABLE_API_CACHING', 'REQUIRE_REQUEST_APPROVAL',
+                     'PAUSE_JOBS_WITH_PENDING_APPROVALS', 'AUTO_REJECT_APPROVAL_DAYS',
+                     'OPENAI_API_KEY', 'OPENAI_BASE_URL',
                      'LLM_MODEL', 'SUBPATH', 'ALLOW_REGISTRATION',
                      'AUTH_MODE', 'AUTH_TRUSTED_CIDRS', 'AUTH_BYPASS_USERNAME']
     }

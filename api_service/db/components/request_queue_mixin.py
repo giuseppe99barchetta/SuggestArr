@@ -243,6 +243,28 @@ class RequestQueueMixin:
             conn.commit()
             return changed
 
+    def has_pending_approvals(self, job_id) -> bool:
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT 1 FROM pending_requests WHERE status='awaiting_approval' AND job_id={ph}",
+                           (job_id,))
+            return cursor.fetchone() is not None
+
+    def expire_pending_approvals(self, days: int) -> int:
+        if days <= 0:
+            return 0
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).replace(tzinfo=None)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"UPDATE pending_requests SET status='rejected',decided_at=CURRENT_TIMESTAMP,"
+                           f"last_error='Automatically rejected after approval timeout' "
+                           f"WHERE status='awaiting_approval' AND created_at < {ph}", (cutoff,))
+            changed = cursor.rowcount
+            conn.commit()
+            return changed
+
     def retry_suggestions(self, ids, owner_id):
         if not ids:
             return 0

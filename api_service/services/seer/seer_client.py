@@ -3,6 +3,7 @@ import asyncio
 from typing import List, Set
 from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
+from api_service.config.config import load_env_vars
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.request_sources import is_tmdb_metadata_source_id
 
@@ -18,6 +19,14 @@ def _as_bool(value):
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
     return bool(value)
+
+
+def requires_request_approval(delivery_mode, global_default):
+    if delivery_mode == 'manual':
+        return True
+    if delivery_mode == 'automatic':
+        return False
+    return _as_bool(global_default)
 
 
 class SeerClient(BaseHTTPClient):
@@ -395,7 +404,10 @@ class SeerClient(BaseHTTPClient):
             owner = db.get_auth_user_by_id(context['owner_id']) or {}
             if owner.get('seer_user_id') is not None:
                 payload['userId'] = owner['seer_user_id']
-        status = 'awaiting_approval' if context.get('delivery_mode') == 'manual' else 'queued'
+        approval_default = load_env_vars().get('REQUIRE_REQUEST_APPROVAL', False)
+        status = 'awaiting_approval' if requires_request_approval(
+            context.get('delivery_mode', 'inherit'), approval_default
+        ) else 'queued'
         enqueued = db.enqueue_request(tmdb_id, media_type, user_id, payload, status=status,
                                       job_id=context.get('job_id'), owner_id=context.get('owner_id'))
         if enqueued:

@@ -2,6 +2,7 @@ import sqlite3
 
 from api_service.db.components.request_queue_mixin import RequestQueueMixin
 from api_service.db.components.schema_manager import SchemaManager
+from api_service.services.seer.seer_client import requires_request_approval
 
 
 class Queue(RequestQueueMixin):
@@ -12,6 +13,28 @@ class Queue(RequestQueueMixin):
 
     def get_connection(self):
         return self.connection
+
+
+def test_job_delivery_mode_overrides_global_approval_default():
+    assert requires_request_approval('inherit', True)
+    assert not requires_request_approval('inherit', False)
+    assert requires_request_approval('manual', False)
+    assert not requires_request_approval('automatic', True)
+
+
+def test_pending_approvals_can_be_found_and_expired_per_job():
+    connection = sqlite3.connect(":memory:")
+    connection.executescript("""
+        CREATE TABLE pending_requests (id INTEGER PRIMARY KEY, status TEXT, job_id INTEGER,
+            created_at TIMESTAMP, decided_at TIMESTAMP, last_error TEXT);
+        INSERT INTO pending_requests VALUES (1,'awaiting_approval',7,'2020-01-01',NULL,NULL);
+        INSERT INTO pending_requests VALUES (2,'awaiting_approval',8,CURRENT_TIMESTAMP,NULL,NULL);
+    """)
+    queue = Queue(connection)
+    assert queue.has_pending_approvals(7)
+    assert queue.expire_pending_approvals(1) == 1
+    assert not queue.has_pending_approvals(7)
+    assert queue.has_pending_approvals(8)
 
 
 def test_owner_can_only_approve_own_suggestions():

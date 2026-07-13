@@ -13,10 +13,15 @@
 
 SuggestArr is a project designed to automate media content recommendations and download requests based on user activity in media servers like **Jellyfin**, **Plex**, and now **Emby**. It retrieves recently watched content, searches for similar titles using the TMDb API, and sends automated download requests to **Seer**.
 
-Jobs send requests automatically by default. Select **Approve in SuggestArr** in a
-job's Seer delivery settings to hold results in the **Approval Workflow** view on
-the Requests page, where the job owner or an administrator can send them to Seer,
+New jobs follow the global **Approve requests before sending them to Seer** setting,
+disabled by default under **Advanced**. Each job can inherit that setting or override
+it to always approve or always send automatically. Held results appear on the
+Requests page, where the job owner or an administrator can send them to Seer,
 reject them, or blacklist them globally.
+
+The global Request Workflow settings can also pause a job while its SuggestArr
+suggestions await review and automatically reject suggestions left pending for a
+configured number of days. The pause behavior can be overridden per job.
 
 ## Features
 - **Multi-Media Server Support**: Supports Jellyfin, Plex, and Emby for retrieving media content.

@@ -142,6 +142,9 @@
           <div class="settings-group">
             <h4>Seer delivery</h4>
             <div class="delivery-mode-selector">
+              <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'inherit' }" @click="form.delivery_mode = 'inherit'">
+                <i class="fas fa-sliders"></i><span><strong>Use global setting</strong><small>Follow Advanced settings</small></span>
+              </button>
               <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'automatic' }" @click="form.delivery_mode = 'automatic'">
                 <i class="fas fa-paper-plane"></i><span><strong>Send automatically</strong><small>Queue for Seer immediately</small></span>
               </button>
@@ -175,6 +178,20 @@
                 <small>Skip this job when Seer still has requests awaiting approval or denial.</small>
               </span>
             </label>
+            <div class="form-group">
+              <label>Pause while this job has SuggestArr approvals pending</label>
+              <div class="delivery-mode-selector">
+                <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'inherit' }" @click="form.approval_pause_mode = 'inherit'">
+                  <i class="fas fa-sliders"></i><span><strong>Use global setting</strong><small>Follow Advanced settings</small></span>
+                </button>
+                <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'always' }" @click="form.approval_pause_mode = 'always'">
+                  <i class="fas fa-pause"></i><span><strong>Always pause</strong><small>Wait for this job's approvals</small></span>
+                </button>
+                <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'never' }" @click="form.approval_pause_mode = 'never'">
+                  <i class="fas fa-play"></i><span><strong>Never pause</strong><small>Ignore pending approvals</small></span>
+                </button>
+              </div>
+            </div>
             <label v-if="form.job_type !== 'discover'" class="pause-pending-toggle">
               <input v-model="form.prevent_suggestions_if_unwatched" type="checkbox" />
               <span>
@@ -294,7 +311,7 @@ export default {
         pause_if_pending_requests: false,
         prevent_suggestions_if_unwatched: false,
         unwatched_suggestion_days: 7
-        , delivery_mode: 'automatic', seer_identity_mode: 'technical_user',
+        , delivery_mode: 'inherit', approval_pause_mode: 'inherit', seer_identity_mode: 'technical_user',
         request_profiles: { movie: {}, tv: {} }
       },
       schedule: {
@@ -380,6 +397,7 @@ export default {
         prevent_suggestions_if_unwatched: this.job.prevent_suggestions_if_unwatched === true,
         unwatched_suggestion_days: this.job.unwatched_suggestion_days || 7
         , delivery_mode: this.job.delivery_mode || 'automatic',
+        approval_pause_mode: this.job.approval_pause_mode || 'inherit',
         seer_identity_mode: this.job.seer_identity_mode || 'technical_user',
         request_profiles: {
           movie: { ...(this.job.request_profiles?.movie || {}) },
@@ -678,7 +696,7 @@ export default {
 
 .delivery-mode-selector {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
 }

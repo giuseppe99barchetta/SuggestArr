@@ -125,7 +125,11 @@ def get_jobs():
             scheduler_id = f"discover_job_{job['id']}"
             job['next_run'] = scheduled.get(scheduler_id)
 
-        return jsonify({'status': 'success', 'jobs': jobs}), 200
+        return jsonify({
+            'status': 'success',
+            'jobs': jobs,
+            'request_approval_default': load_env_vars().get('REQUIRE_REQUEST_APPROVAL', False),
+        }), 200
     except Exception as e:
         logger.error(f"Error retrieving jobs: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
@@ -295,10 +299,14 @@ def create_job():
                 'message': 'job_type must be one of: discover, recommendation, trakt_recommendations'
             }), 400
         data['job_type'] = job_type
-        delivery_mode = data.get('delivery_mode', 'automatic')
-        if delivery_mode not in ('automatic', 'manual'):
-            return jsonify({'status': 'error', 'message': 'delivery_mode must be automatic or manual'}), 400
+        delivery_mode = data.get('delivery_mode', 'inherit')
+        if delivery_mode not in ('inherit', 'automatic', 'manual'):
+            return jsonify({'status': 'error', 'message': 'delivery_mode must be inherit, automatic or manual'}), 400
         data['delivery_mode'] = delivery_mode
+        approval_pause_mode = data.get('approval_pause_mode', 'inherit')
+        if approval_pause_mode not in ('inherit', 'always', 'never'):
+            return jsonify({'status': 'error', 'message': 'approval_pause_mode must be inherit, always or never'}), 400
+        data['approval_pause_mode'] = approval_pause_mode
         try:
             data['request_profiles'] = _validate_request_profiles(data.get('request_profiles'))
             _validate_request_profiles_with_seer(data['request_profiles'])
@@ -405,8 +413,10 @@ def update_job(job_id: int):
                 _validate_request_profiles_with_seer(data['request_profiles'])
             except ValueError as exc:
                 return jsonify({'status': 'error', 'message': str(exc)}), 400
-        if 'delivery_mode' in data and data['delivery_mode'] not in ('automatic', 'manual'):
-            return jsonify({'status': 'error', 'message': 'delivery_mode must be automatic or manual'}), 400
+        if 'delivery_mode' in data and data['delivery_mode'] not in ('inherit', 'automatic', 'manual'):
+            return jsonify({'status': 'error', 'message': 'delivery_mode must be inherit, automatic or manual'}), 400
+        if 'approval_pause_mode' in data and data['approval_pause_mode'] not in ('inherit', 'always', 'never'):
+            return jsonify({'status': 'error', 'message': 'approval_pause_mode must be inherit, always or never'}), 400
         if 'seer_identity_mode' in data:
             if data['seer_identity_mode'] not in ('matching_user', 'technical_user', 'admin_user'):
                 return jsonify({'status': 'error', 'message': 'Invalid seer_identity_mode'}), 400

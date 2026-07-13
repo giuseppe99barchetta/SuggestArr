@@ -433,6 +433,52 @@ LLM_MODEL=gpt-4o-mini</code></pre>
         </div>
       </div>
 
+      <!-- Request Workflow -->
+      <div class="settings-group">
+        <h3>
+          <i class="fas fa-user-check"></i>
+          Request Workflow
+        </h3>
+
+        <div class="form-group">
+          <BaseCheckbox
+            v-model="localConfig.REQUIRE_REQUEST_APPROVAL"
+            :disabled="isLoading"
+            label="Approve requests before sending them to Seer"
+          />
+          <small class="form-help">
+            Default for jobs using the global delivery setting. Each job can override it.
+          </small>
+        </div>
+
+        <div class="form-group">
+          <BaseCheckbox
+            v-model="localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS"
+            :disabled="isLoading"
+            label="Pause jobs while SuggestArr approvals are pending"
+          />
+          <small class="form-help">
+            Default for jobs using the global pause setting. Each job can override it.
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label for="autoRejectApprovalDays">Auto-reject pending suggestions after days</label>
+          <input
+            id="autoRejectApprovalDays"
+            v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS"
+            type="number"
+            min="0"
+            max="365"
+            class="form-control"
+            :disabled="isLoading"
+          />
+          <small class="form-help">
+            Use 0 to keep pending suggestions until they are reviewed manually.
+          </small>
+        </div>
+      </div>
+
       <!-- API Settings -->
       <div class="settings-group">
         <h3>
@@ -671,6 +717,9 @@ export default {
           API_TIMEOUT: 30,
           API_RETRIES: 3,
           ENABLE_API_CACHING: true,
+          REQUIRE_REQUEST_APPROVAL: false,
+          PAUSE_JOBS_WITH_PENDING_APPROVALS: false,
+          AUTO_REJECT_APPROVAL_DAYS: 0,
           ENABLE_BETA_FEATURES: false,
           ENABLE_ADVANCED_ALGORITHM: false,
           OPENAI_API_KEY: '',
@@ -845,6 +894,9 @@ export default {
             API_TIMEOUT: this.localConfig.API_TIMEOUT || 30,
             API_RETRIES: this.localConfig.API_RETRIES || 3,
             ENABLE_API_CACHING: this.localConfig.ENABLE_API_CACHING !== false,
+            REQUIRE_REQUEST_APPROVAL: this.localConfig.REQUIRE_REQUEST_APPROVAL !== false,
+            PAUSE_JOBS_WITH_PENDING_APPROVALS: this.localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS === true,
+            AUTO_REJECT_APPROVAL_DAYS: Math.max(0, Number(this.localConfig.AUTO_REJECT_APPROVAL_DAYS) || 0),
             ENABLE_BETA_FEATURES: this.localConfig.ENABLE_BETA_FEATURES || false,
             ENABLE_ADVANCED_ALGORITHM: this.localConfig.ENABLE_ADVANCED_ALGORITHM || false,
             OPENAI_API_KEY: this.localConfig.OPENAI_API_KEY || '',

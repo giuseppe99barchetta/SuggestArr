@@ -105,9 +105,10 @@ class SchemaManager:
                     pause_if_pending_requests INTEGER DEFAULT 0,
                     prevent_suggestions_if_unwatched INTEGER DEFAULT 0,
                     unwatched_suggestion_days INTEGER DEFAULT 7,
-                    delivery_mode TEXT NOT NULL DEFAULT 'automatic',
+                    delivery_mode TEXT NOT NULL DEFAULT 'inherit',
                     seer_identity_mode TEXT NOT NULL DEFAULT 'technical_user',
                     request_profiles TEXT,
+                    approval_pause_mode TEXT NOT NULL DEFAULT 'inherit',
                     is_system INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -693,9 +694,10 @@ class SchemaManager:
                         "SMALLINT DEFAULT 0" if self.db_type == 'postgres' else "INTEGER DEFAULT 0"
                     ),
                     'unwatched_suggestion_days': "INTEGER DEFAULT 7",
-                    'delivery_mode': ("VARCHAR(20) NOT NULL DEFAULT 'automatic'" if self.db_type in ['mysql', 'mariadb'] else "TEXT NOT NULL DEFAULT 'automatic'"),
+                    'delivery_mode': ("VARCHAR(20) NOT NULL DEFAULT 'inherit'" if self.db_type in ['mysql', 'mariadb'] else "TEXT NOT NULL DEFAULT 'inherit'"),
                     'seer_identity_mode': ("VARCHAR(30) NOT NULL DEFAULT 'technical_user'" if self.db_type in ['mysql', 'mariadb'] else "TEXT NOT NULL DEFAULT 'technical_user'"),
                     'request_profiles': "TEXT",
+                    'approval_pause_mode': ("VARCHAR(20) NOT NULL DEFAULT 'inherit'" if self.db_type in ['mysql', 'mariadb'] else "TEXT NOT NULL DEFAULT 'inherit'"),
                 }
                 for column, definition in additions.items():
                     if column not in existing_columns:

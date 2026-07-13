@@ -32,7 +32,7 @@ class JobRepository:
                    schedule_value, max_results, user_ids, is_system, owner_id,
                    pause_if_pending_requests, prevent_suggestions_if_unwatched,
                    unwatched_suggestion_days, created_at, updated_at
-                   , delivery_mode, seer_identity_mode, request_profiles
+                   , delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode
             FROM discover_jobs
             ORDER BY is_system DESC, created_at DESC
         """
@@ -66,7 +66,7 @@ class JobRepository:
                    schedule_value, max_results, user_ids, is_system, owner_id,
                    pause_if_pending_requests, prevent_suggestions_if_unwatched,
                    unwatched_suggestion_days, created_at, updated_at
-                   , delivery_mode, seer_identity_mode, request_profiles
+                   , delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode
             FROM discover_jobs
             WHERE id = ?
         """
@@ -99,7 +99,7 @@ class JobRepository:
                    schedule_value, max_results, user_ids, is_system, owner_id,
                    pause_if_pending_requests, prevent_suggestions_if_unwatched,
                    unwatched_suggestion_days, created_at, updated_at
-                   , delivery_mode, seer_identity_mode, request_profiles
+                   , delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode
             FROM discover_jobs
             WHERE enabled = 1
             ORDER BY is_system DESC, created_at DESC
@@ -149,17 +149,19 @@ class JobRepository:
         pause_if_pending_requests = 1 if job_data.get('pause_if_pending_requests', False) else 0
         prevent_unwatched = 1 if job_data.get('prevent_suggestions_if_unwatched', False) else 0
         unwatched_days = int(job_data.get('unwatched_suggestion_days', 7))
-        delivery_mode = job_data.get('delivery_mode', 'automatic')
+        delivery_mode = job_data.get('delivery_mode', 'inherit')
         identity_mode = job_data.get('seer_identity_mode', 'technical_user')
         request_profiles = json.dumps(job_data.get('request_profiles') or {})
+        approval_pause_mode = job_data.get('approval_pause_mode', 'inherit')
 
         query = """
             INSERT INTO discover_jobs (name, job_type, enabled, media_type, filters,
                                        schedule_type, schedule_value, max_results, user_ids,
                                        is_system, owner_id, pause_if_pending_requests,
                                        prevent_suggestions_if_unwatched, unwatched_suggestion_days,
-                                       delivery_mode, seer_identity_mode, request_profiles)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                       delivery_mode, seer_identity_mode, request_profiles,
+                                       approval_pause_mode)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = (
             job_data['name'],
@@ -175,7 +177,7 @@ class JobRepository:
             owner_id,
             pause_if_pending_requests,
             prevent_unwatched,
-            unwatched_days, delivery_mode, identity_mode, request_profiles
+            unwatched_days, delivery_mode, identity_mode, request_profiles, approval_pause_mode
         )
 
         with self.db.get_connection() as conn:
@@ -264,7 +266,7 @@ class JobRepository:
             update_fields.append("unwatched_suggestion_days = ?")
             params.append(int(job_data['unwatched_suggestion_days']))
 
-        for field in ('delivery_mode', 'seer_identity_mode'):
+        for field in ('delivery_mode', 'seer_identity_mode', 'approval_pause_mode'):
             if field in job_data:
                 update_fields.append(f"{field} = ?")
                 params.append(job_data[field])
@@ -520,6 +522,7 @@ class JobRepository:
                 , 'delivery_mode': row[17] if len(row) > 17 else 'automatic'
                 , 'seer_identity_mode': row[18] if len(row) > 18 else 'technical_user'
                 , 'request_profiles': row[19] if len(row) > 19 else None
+                , 'approval_pause_mode': row[20] if len(row) > 20 else 'inherit'
             }
 
         # Parse filters JSON
@@ -549,6 +552,7 @@ class JobRepository:
         data['prevent_suggestions_if_unwatched'] = bool(data.get('prevent_suggestions_if_unwatched', 0))
         data['unwatched_suggestion_days'] = int(data.get('unwatched_suggestion_days') or 7)
         data['delivery_mode'] = data.get('delivery_mode') or 'automatic'
+        data['approval_pause_mode'] = data.get('approval_pause_mode') or 'inherit'
         if isinstance(data.get('request_profiles'), str):
             try:
                 data['request_profiles'] = json.loads(data['request_profiles'])

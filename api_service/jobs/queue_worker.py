@@ -44,6 +44,11 @@ async def _run_worker() -> int:
     :return: Number of items successfully submitted.
     """
     db = DatabaseManager()
+    env = ConfigService.get_runtime_config()
+
+    expired = db.expire_pending_approvals(int(env.get('AUTO_REJECT_APPROVAL_DAYS') or 0))
+    if expired:
+        logger.info("Queue worker: automatically rejected %d expired approval(s).", expired)
 
     # Recover rows stuck in 'submitting' from a previous crash
     db.reset_stale_inflight(cutoff_minutes=10)
@@ -55,7 +60,6 @@ async def _run_worker() -> int:
 
     logger.info("Queue worker: processing %d item(s).", len(items))
 
-    env = ConfigService.get_runtime_config()
     seer = SeerClient(
         env.get('SEER_API_URL', ''),
         env.get('SEER_TOKEN', ''),

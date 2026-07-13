@@ -194,7 +194,8 @@ class JobManager:
             asyncio.set_event_loop(loop)
 
             try:
-                if loop.run_until_complete(self._should_pause_for_pending_requests(job_data)):
+                if (self._should_pause_for_suggestarr_approvals(job_data) or
+                        loop.run_until_complete(self._should_pause_for_pending_requests(job_data))):
                     exec_id = self.repository.log_execution_start(job_id)
                     self.repository.log_execution_end(
                         exec_id=exec_id,
@@ -252,6 +253,13 @@ class JobManager:
 
         async with seer_client:
             return await seer_client.has_pending_requests()
+
+    def _should_pause_for_suggestarr_approvals(self, job_data: Dict[str, Any]) -> bool:
+        mode = job_data.get('approval_pause_mode', 'inherit')
+        enabled = mode == 'always'
+        if mode == 'inherit':
+            enabled = ConfigService.get_runtime_config().get('PAUSE_JOBS_WITH_PENDING_APPROVALS', False) is True
+        return enabled and self.repository.db.has_pending_approvals(job_data['id'])
 
     def _create_trigger(self, schedule_type: str, schedule_value: str) -> Optional[CronTrigger]:
         """
