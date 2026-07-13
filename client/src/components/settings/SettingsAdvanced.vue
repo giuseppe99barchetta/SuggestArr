@@ -451,6 +451,17 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           </small>
         </div>
 
+        <BaseDropdown
+          v-model="localConfig.REQUEST_VISIBILITY"
+          :options="requestVisibilityOptions"
+          label="Requests visible to regular users"
+          :disabled="isLoading"
+          id="requestVisibility"
+        />
+        <small class="form-help">
+          Admins can always view all requests. “Own account only” uses each user's linked Plex, Jellyfin, or Emby profile.
+        </small>
+
         <div class="form-group">
           <BaseCheckbox
             v-model="localConfig.ENABLE_API_CACHING"
@@ -639,6 +650,10 @@ export default {
         { value: 'enabled', label: 'Require Login' },
         { value: 'local_bypass', label: 'Allow Local Network Without Login' },
         { value: 'disabled', label: 'Disable Authentication' },
+      ],
+      requestVisibilityOptions: [
+        { value: 'all', label: 'All requests' },
+        { value: 'own', label: 'Own linked account only' },
       ]
     };
   },
@@ -674,6 +689,7 @@ export default {
           MAX_CACHE_SIZE: 100,
           ENABLE_API_CACHING: true,
           REQUIRE_REQUEST_APPROVAL: false,
+          REQUEST_VISIBILITY: 'all',
           PAUSE_JOBS_WITH_PENDING_APPROVALS: false,
           AUTO_REJECT_APPROVAL_DAYS: 0,
           ENABLE_BETA_FEATURES: false,
@@ -849,6 +865,7 @@ export default {
             MAX_CACHE_SIZE: this.localConfig.MAX_CACHE_SIZE || 100,
             ENABLE_API_CACHING: this.localConfig.ENABLE_API_CACHING !== false,
             REQUIRE_REQUEST_APPROVAL: this.localConfig.REQUIRE_REQUEST_APPROVAL !== false,
+            REQUEST_VISIBILITY: this.localConfig.REQUEST_VISIBILITY === 'own' ? 'own' : 'all',
             PAUSE_JOBS_WITH_PENDING_APPROVALS: this.localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS === true,
             AUTO_REJECT_APPROVAL_DAYS: Math.max(0, Number(this.localConfig.AUTO_REJECT_APPROVAL_DAYS) || 0),
             ENABLE_BETA_FEATURES: this.localConfig.ENABLE_BETA_FEATURES || false,

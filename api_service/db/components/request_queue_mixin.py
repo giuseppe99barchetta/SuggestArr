@@ -159,7 +159,7 @@ class RequestQueueMixin:
                            (str(tmdb_id), media_type))
             return cursor.fetchone() is not None
 
-    def list_suggestions(self, owner_id=None, status='awaiting_approval', search='', page=1, per_page=24, media_type='all'):
+    def list_suggestions(self, owner_id=None, status='awaiting_approval', search='', page=1, per_page=24, media_type='all', media_user_ids=None):
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.owner_id,
                           p.retry_count,p.last_attempt_at,p.last_error,p.payload,
@@ -187,6 +187,15 @@ class RequestQueueMixin:
         if media_type != 'all':
             query += f" AND p.media_type={ph}"
             params.append(media_type)
+        if media_user_ids is not None:
+            if self.db_type == 'postgres':
+                expression = "(p.payload::jsonb ->> '_user_id')"
+            elif self.db_type in ('mysql', 'mariadb'):
+                expression = "JSON_UNQUOTE(JSON_EXTRACT(p.payload, '$._user_id'))"
+            else:
+                expression = "json_extract(p.payload, '$._user_id')"
+            query += f" AND {expression} IN ({','.join([ph] * len(media_user_ids))})" if media_user_ids else " AND 1=0"
+            params.extend(str(user_id) for user_id in media_user_ids)
         count_query = f"SELECT COUNT(*) FROM ({query}) suggestion_rows"
         query += (" ORDER BY CASE p.status WHEN 'awaiting_approval' THEN 0 WHEN 'queued' THEN 1 "
                   "WHEN 'submitting' THEN 2 WHEN 'failed' THEN 3 WHEN 'rejected' THEN 4 ELSE 5 END, "
@@ -206,6 +215,19 @@ class RequestQueueMixin:
                     payload = {}
                 item['seer_identity_mode'] = payload.get('_seer_identity_mode', 'technical_user')
                 item['request_profile'] = {key: payload.get(key) for key in ('serverId', 'profileId', 'rootFolder')}
+                item['media_user_id'] = payload.get('_user_id')
+                item['user_name'] = None
+                if item['media_user_id'] is not None:
+                    cursor.execute(
+                        f"SELECT user_name FROM users WHERE user_id={ph} "
+                        f"UNION ALL SELECT external_username FROM media_user_identities WHERE external_user_id={ph} "
+                        f"AND external_username IS NOT NULL "
+                        f"UNION ALL SELECT external_username FROM user_media_profiles WHERE external_user_id={ph} "
+                        f"AND external_username IS NOT NULL LIMIT 1",
+                        (str(item['media_user_id']),) * 3,
+                    )
+                    user = cursor.fetchone()
+                    item['user_name'] = user[0] if user else None
                 if status == 'blacklisted':
                     item['status'] = 'blacklisted'
             return items, total

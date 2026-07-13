@@ -36,6 +36,7 @@ configured number of days. The pause behavior can be overridden per job.
 - **Web Interface**: A user-friendly interface for configuration and management.
 - **Real-Time Logs**: View and filter logs in real time (e.g., `INFO`, `ERROR`, `DEBUG`).
 - **User Selection**: Choose specific users to initiate requests, allowing management and approval of auto-requested content.
+- **Per-User Request Visibility**: Filter requests by media-server account, or let administrators limit regular users to requests for their linked Plex, Jellyfin, or Emby account.
 - **Cron Job Management**: Update the cron job schedule directly from the web interface.
 - **Configuration Pre-testing**: Automatically validates API keys and URLs during setup.
 - **Content Filtering**: Exclude requests for content already available on streaming platforms in your country.

@@ -22,7 +22,7 @@
       <article v-for="item in items" :key="item.id" class="request-card card card--column card--interactive card--padding-none" :class="{ 'card--selected': selected.includes(item.id) }" tabindex="0" @click="openItem(item)" @keydown.enter="openItem(item)">
         <label v-if="bulkMode" class="workflow-checkbox tabs-checkboxes" @click.stop><input v-model="selected" type="checkbox" :value="item.id" /><span class="sr-only">Select {{ item.title }}</span></label>
         <div class="request-card-poster"><img v-if="item.poster_path" :src="`https://image.tmdb.org/t/p/w342${item.poster_path}`" :alt="item.title" class="poster-image" /><div v-else class="poster-placeholder"><i class="fas fa-image"></i></div><div v-if="!bulkMode && item.status === 'awaiting_approval'" class="poster-actions"><button type="button" class="poster-action poster-action--approve" :disabled="actionLoading" aria-label="Approve request" title="Approve" @click.stop="decideOne('approve', item.id)"><i class="fas fa-check"></i></button><button type="button" class="poster-action poster-action--reject" :disabled="actionLoading" aria-label="Reject request" title="Reject" @click.stop="confirmSingle('reject', item.id)"><i class="fas fa-times"></i></button></div><div v-else-if="!bulkMode && item.status === 'failed'" class="poster-actions"><button type="button" class="poster-action poster-action--retry" :disabled="actionLoading" aria-label="Retry request" title="Retry" @click.stop="decideOne('retry', item.id)"><i class="fas fa-redo"></i></button></div><div v-else-if="!bulkMode && (item.status === 'rejected' || item.status === 'blacklisted')" class="poster-actions"><button type="button" class="poster-action poster-action--retry" :disabled="actionLoading" aria-label="Request again" title="Request again" @click.stop="confirmRequestAgain(item)"><i class="fas fa-paper-plane"></i></button></div></div>
-        <div class="request-card-body"><h3 class="request-card-title">{{ item.title || `TMDb ${item.tmdb_id}` }}</h3><div class="badge-container"><span class="badge badge-media">{{ item.media_type.toUpperCase() }}</span><span class="badge badge-rating"><i class="fas fa-star"></i> {{ formatRating(item.rating) }}</span><span class="badge badge-requested">{{ statusLabel(item.status) }}</span></div><div class="source-link"><span>From: <strong>{{ item.name }}</strong></span></div><small v-if="item.status === 'failed'">{{ item.last_error || `Failed after ${item.retry_count} attempts` }}</small></div>
+        <div class="request-card-body"><h3 class="request-card-title">{{ item.title || `TMDb ${item.tmdb_id}` }}</h3><div class="badge-container"><span class="badge badge-media">{{ item.media_type.toUpperCase() }}</span><span class="badge badge-rating"><i class="fas fa-star"></i> {{ formatRating(item.rating) }}</span><span class="badge badge-requested">{{ statusLabel(item.status) }}</span></div><div class="source-link"><span>From: <strong>{{ item.name }}</strong></span></div><div v-if="item.user_name || item.media_user_id" class="source-link"><i class="fas fa-user"></i><span>For: <strong>{{ item.user_name || item.media_user_id }}</strong></span></div><small v-if="item.status === 'failed'">{{ item.last_error || `Failed after ${item.retry_count} attempts` }}</small></div>
       </article>
     </div>
     <div v-if="page < pages" ref="loadMoreTrigger" class="load-more-trigger"><div class="spinner-small"></div><p>Loading more requests...</p></div>
@@ -44,7 +44,7 @@ import BaseButton from '@/components/ui/BaseButton.vue';
 export default {
   name: 'RequestWorkflowPanel', components: { BaseButton },
   emits: ['open', 'update:total'],
-  props: { statusFilter: { type: String, default: 'all' }, searchQuery: { type: String, default: '' }, mediaType: { type: String, default: 'all' }, showHeader: { type: Boolean, default: true }, showEmpty: { type: Boolean, default: true }, bulkMode: { type: Boolean, default: false } },
+  props: { statusFilter: { type: String, default: 'all' }, searchQuery: { type: String, default: '' }, mediaType: { type: String, default: 'all' }, requestedFor: { type: String, default: 'all' }, showHeader: { type: Boolean, default: true }, showEmpty: { type: Boolean, default: true }, bulkMode: { type: Boolean, default: false } },
   data() { return { items: [], selected: [], actionLoading: false, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null,
     statuses: [{ value: 'awaiting_approval', label: 'Awaiting approval' }, { value: 'queued', label: 'Queued' }, { value: 'submitted', label: 'Submitted' }, { value: 'rejected', label: 'Rejected' }, { value: 'failed', label: 'Failed' }, { value: 'blacklisted', label: 'Blacklisted' }] }; },
   computed: {
@@ -57,6 +57,7 @@ export default {
     statusFilter(value) { this.status = value; this.load(1); },
     searchQuery(value) { this.search = value; this.reloadSoon(); },
     mediaType() { this.load(1); },
+    requestedFor() { this.load(1); },
     bulkMode(value) { if (!value) this.selected = []; }
   },
   async mounted() { const requested = this.$route.query.status; if (this.statuses.some(option => option.value === requested)) this.status = requested; const response = await axios.get('/api/jobs'); this.jobs = (response.data.jobs || []).filter(job => job.delivery_mode === 'manual'); this.load(); },
@@ -66,7 +67,7 @@ export default {
       if (this.loading) return;
       this.loading = true;
       try {
-        const data = (await axios.get('/api/automation/requests/workflow', { params: { status: this.status, search: this.search, media_type: this.mediaType, page, per_page: 24 } })).data;
+        const data = (await axios.get('/api/automation/requests/workflow', { params: { status: this.status, search: this.search, media_type: this.mediaType, user_id: this.requestedFor === 'all' ? undefined : this.requestedFor, page, per_page: 24 } })).data;
         this.items = page === 1 ? data.items : [...this.items, ...data.items];
         Object.assign(this, { total: data.total, page: data.page, pages: data.pages });
         this.$emit('update:total', data.total);

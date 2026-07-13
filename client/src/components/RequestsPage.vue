@@ -106,6 +106,15 @@
               />
 
               <BaseDropdown
+                v-if="requestUserOptions.length > 1"
+                v-model="requestUserFilter"
+                :options="requestUserOptions"
+                placeholder="Requested for"
+                :disabled="loading"
+                id="requestUser"
+              />
+
+              <BaseDropdown
                 v-if="viewMode === 'all-requests' && approvalEnabled"
                 v-model="requestStatusFilter"
                 :options="requestStatusOptions"
@@ -117,17 +126,18 @@
             
               <!-- Clear Filters -->
               <button 
-                v-if="sortBy !== 'date-desc' || mediaTypeFilter !== 'all'" 
+                v-if="sortBy !== 'date-desc' || mediaTypeFilter !== 'all' || requestUserFilter !== 'all'"
                 @click="clearFilters" 
-                class="clear-filters-btn">
+                class="clear-filters-btn"
+                aria-label="Reset filters"
+                title="Reset filters">
                 <i class="fas fa-undo"></i>
-                <span>Reset</span>
               </button>
             </div>
           </div>
         
           <!-- Search Results Count -->
-          <div class="search-results-count" v-if="searchQuery || mediaTypeFilter !== 'all'">
+          <div class="search-results-count" v-if="searchQuery || mediaTypeFilter !== 'all' || requestUserFilter !== 'all'">
             Found {{ viewMode === 'by-content' ? filteredAndSortedSources.length : filteredAndSortedRequests.length }} result(s)
           </div>
         </div>
@@ -217,6 +227,10 @@
                             <i class="fas fa-clock"></i>
                             Requested {{ formatDate(request.requested_at) }}
                           </p>
+                          <p v-if="request.user_name || request.user_id" class="request-date">
+                            <i class="fas fa-user"></i>
+                            For {{ request.user_name || request.user_id }}
+                          </p>
                         </div>
                         <i class="fas fa-chevron-right request-arrow"></i>
                       </div>
@@ -296,6 +310,7 @@
               :status-filter="requestStatusFilter"
               :search-query="searchQuery"
               :media-type="mediaTypeFilter"
+              :requested-for="requestUserFilter"
               :show-header="false"
               :show-empty="false"
               :bulk-mode="workflowBulkMode"
@@ -351,6 +366,10 @@
                   <div class="source-link">
                     <i class="fas fa-arrow-left"></i>
                     <span>From: <strong>{{ request.source_title }}</strong></span>
+                  </div>
+                  <div v-if="request.user_name || request.user_id" class="source-link">
+                    <i class="fas fa-user"></i>
+                    <span>For: <strong>{{ request.user_name || request.user_id }}</strong></span>
                   </div>
                 </div>
               </div>
@@ -453,9 +472,9 @@
                 </div>
 
                 <!-- Requested For (user) -->
-                <div v-if="selectedSource.user_name" class="source-link-modal">
+                <div v-if="selectedSource.user_name || selectedSource.user_id" class="source-link-modal">
                   <i class="fas fa-user"></i>
-                  <span>Requested for: <strong>{{ selectedSource.user_name }}</strong></span>
+                  <span>Requested for: <strong>{{ selectedSource.user_name || selectedSource.user_id }}</strong></span>
                 </div>
 
                 <div class="modal-separator"></div>
@@ -498,9 +517,9 @@
                           <i class="fas fa-clock"></i>
                           Requested on {{ formatDate(request.requested_at) }}
                         </p>
-                        <p v-if="request.user_name" class="modal-request-date">
+                        <p v-if="request.user_name || request.user_id" class="modal-request-date">
                           <i class="fas fa-user"></i>
-                          {{ request.user_name }}
+                          {{ request.user_name || request.user_id }}
                         </p>
                       </div>
                       <button class="modal-request-btn">
@@ -558,6 +577,8 @@ export default {
       searchQuery: "",
       sortBy: 'date-desc',
       mediaTypeFilter: 'all',
+      requestUserFilter: 'all',
+      requestUsers: [],
       showModal: false,
       selectedSource: null,
       loading: false,
@@ -604,7 +625,7 @@ export default {
   },
   computed: {
     activeFilterCount() {
-      return Number(this.sortBy !== 'date-desc') + Number(this.mediaTypeFilter !== 'all') + Number(this.requestStatusFilter !== 'all') + Number(this.workflowBulkMode);
+      return Number(this.sortBy !== 'date-desc') + Number(this.mediaTypeFilter !== 'all') + Number(this.requestUserFilter !== 'all') + Number(this.requestStatusFilter !== 'all') + Number(this.workflowBulkMode);
     },
     bulkModeDisabledReason() {
       if (!this.approvalEnabled) return 'Bulk mode requires a job with manual approval enabled';
@@ -619,6 +640,10 @@ export default {
 
     totalSources() {
       return this.totalSourcesCount || this.sources.length;
+    },
+
+    requestUserOptions() {
+      return [{ value: 'all', label: 'All accounts' }, ...this.requestUsers.map(user => ({ value: String(user.id), label: user.name }))];
     },
 
     allRequestsFlat() {
@@ -733,6 +758,10 @@ export default {
         this.initObserver();
       });
     },
+
+    requestUserFilter() {
+      this.resetAndReload();
+    },
     
     searchQuery() {
       this.$nextTick(() => {
@@ -756,6 +785,7 @@ export default {
         console.error('Error loading approval jobs:', error);
       }
     },
+
     formatDate,
     formatRating(value) {
       if (value === null || value === undefined || value === '') return 'N/A';
@@ -848,6 +878,7 @@ export default {
     clearFilters() {
       this.sortBy = 'date-desc';
       this.mediaTypeFilter = 'all';
+      this.requestUserFilter = 'all';
       this.searchQuery = '';
     },
 
@@ -922,13 +953,15 @@ export default {
           page: page,
           sort_by: this.sortBy,
         };
+        if (this.requestUserFilter !== 'all') params.user_id = this.requestUserFilter;
 
         const response = await axios.get('/api/automation/requests', { params });
-        const { data, total_pages, total_sources, total_requests } = response.data;
+        const { data, total_pages, total_sources, total_requests, request_users } = response.data;
         
         if (page === 1) {
           this.totalSourcesCount = total_sources;
           this.totalRequestsCount = total_requests;
+          if (this.requestUserFilter === 'all') this.requestUsers = request_users || [];
         }
         
         const newSources = data.map((sourceData) => ({

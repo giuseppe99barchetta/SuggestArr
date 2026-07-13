@@ -103,7 +103,7 @@ class RequestMixin:
             results = cursor.fetchall()
             return {str(row[0]) for row in results}
     
-    def get_all_requests_grouped_by_source(self, page: int = 1, per_page: int = 8, sort_by: str = 'date-desc') -> Dict[str, Any]:
+    def get_all_requests_grouped_by_source(self, page: int = 1, per_page: int = 8, sort_by: str = 'date-desc', user_ids: Optional[List[str]] = None) -> Dict[str, Any]:
         """Retrieve all requests grouped by source with dynamic sorting and pagination."""
         self.logger.debug(f"Retrieving all requests grouped by source: page={page}, per_page={per_page}, sort_by={sort_by}")
     
@@ -117,6 +117,11 @@ class RequestMixin:
             WHERE r.requested_by = 'SuggestArr'
             AND COALESCE(r.tmdb_source_id, '') != 'ai_search'
         """
+        params = []
+        if user_ids is not None:
+            placeholders = ','.join(['?' if self.db_type not in ['mysql', 'postgres'] else '%s'] * len(user_ids))
+            count_query += f" AND r.user_id IN ({placeholders})" if user_ids else " AND 1=0"
+            params.extend(str(user_id) for user_id in user_ids)
     
         total_sources = 0
         total_requests = 0
@@ -127,7 +132,7 @@ class RequestMixin:
             # Get count
             if self.db_type in ['mysql', 'postgres']:
                 count_query = count_query.replace("?", "%s")
-            cursor.execute(count_query)
+            cursor.execute(count_query, tuple(params))
             count_result = cursor.fetchone()
             if count_result:
                 total_sources, total_requests = count_result
@@ -168,22 +173,31 @@ class RequestMixin:
                 m.title AS request_title, m.overview AS request_overview,
                 m.release_date AS request_release_date, m.poster_path AS request_poster_path, m.rating as request_rating,
                 m.logo_path, m.backdrop_path, r.is_anime, r.rationale,
-                r.user_id, u.user_name, r.source_origin
+                r.user_id, COALESCE(
+                    u.user_name,
+                    (SELECT mui.external_username FROM media_user_identities mui
+                     WHERE mui.external_user_id = r.user_id AND mui.external_username IS NOT NULL LIMIT 1),
+                    (SELECT ump.external_username FROM user_media_profiles ump
+                     WHERE ump.external_user_id = r.user_id AND ump.external_username IS NOT NULL LIMIT 1)
+                ) AS user_name, r.source_origin
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id AND r.media_type = m.media_type
             LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id
             LEFT JOIN users u ON r.user_id = u.user_id
             WHERE r.requested_by = 'SuggestArr'
             AND COALESCE(r.tmdb_source_id, '') != 'ai_search'
-            ORDER BY {order_by_clause}
         """
+        if user_ids is not None:
+            placeholders = ','.join(['?' if self.db_type not in ['mysql', 'postgres'] else '%s'] * len(user_ids))
+            query += f" AND r.user_id IN ({placeholders})" if user_ids else " AND 1=0"
+        query += f" ORDER BY {order_by_clause}"
         
         if self.db_type in ['mysql', 'postgres']:
             query = query.replace("?", "%s")
         
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query)
+            cursor.execute(query, tuple(params))
             result = cursor.fetchall()
         
         # Group and sort results (maintaining existing logic)
@@ -259,6 +273,13 @@ class RequestMixin:
     
         return {
             "data": paginated_data,
+            "request_users": [
+                {"id": user_id, "name": user_name or user_id}
+                for user_id, user_name in sorted({
+                    (request["user_id"], request["user_name"])
+                    for source in source_list for request in source["requests"] if request["user_id"]
+                }, key=lambda user: (user[1] or user[0]).lower())
+            ],
             "total_pages": total_pages,
             "total_sources": total_sources,
             "total_requests": total_requests,

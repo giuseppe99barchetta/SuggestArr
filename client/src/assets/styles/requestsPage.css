@@ -993,7 +993,7 @@
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-  padding: 0.75rem 1rem;
+  padding: 0;
   flex: 2;
   justify-content: flex-start;
 }
@@ -1088,6 +1088,11 @@
   white-space: nowrap;
   min-height: 44px;
   min-width: 44px;
+  flex: 0 0 var(--btn-height-lg);
+  width: var(--btn-height-lg);
+  height: var(--btn-height-lg);
+  padding: 0;
+  justify-content: center;
 }
 
 .clear-filters-btn:hover {
@@ -1190,8 +1195,8 @@
 @media (min-width: 768px) {
   .filters-search-container {
     flex-direction: row;
-    align-items: center;
-    gap: 2rem;
+    align-items: flex-start;
+    gap: var(--spacing-lg);
   }
 
   .filter-bar {
@@ -1217,8 +1222,8 @@
 
 @media (min-width: 1024px) {
   .filters-search-container {
-    gap: 2rem;
-    align-items: center;
+    gap: var(--spacing-lg);
+    align-items: flex-start;
   }
 
   .search-wrapper {

@@ -47,3 +47,64 @@ def test_grouped_requests_labels_synthetic_sources(tmp_path):
     assert result["total_sources"] == 2
     assert sources[DISCOVER_SOURCE]["source_title"] == "Discover"
     assert sources[TRAKT_RECOMMENDATIONS_SOURCE]["source_title"] == "Trakt Recommendations"
+
+
+def test_grouped_requests_include_requested_for_user(tmp_path):
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        db.save_user({"id": "plex-1", "name": "Alice"})
+        db.save_user({"id": "plex-2", "name": "Bob"})
+        db.save_metadata({"id": "101", "title": "Request"}, "movie")
+        db.save_metadata({"id": "102", "title": "Other Request"}, "movie")
+        db.save_request("movie", "101", DISCOVER_SOURCE, user_id="plex-1")
+        db.save_request("movie", "102", DISCOVER_SOURCE, user_id="plex-2")
+
+        result = db.get_all_requests_grouped_by_source(user_ids=["plex-1"])
+        request = result["data"][0]["requests"][0]
+
+    DatabaseManager._instance = None
+    assert request["user_id"] == "plex-1"
+    assert request["user_name"] == "Alice"
+    assert result["total_requests"] == 1
+    assert result["request_users"] == [{"id": "plex-1", "name": "Alice"}]
+
+
+def test_grouped_requests_resolve_name_from_media_identity(tmp_path):
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        db.upsert_media_user_identity("jellyfin", "jellyfin-code", "Alice Jellyfin")
+        db.save_metadata({"id": "101", "title": "Request"}, "movie")
+        db.save_request("movie", "101", DISCOVER_SOURCE, user_id="jellyfin-code")
+
+        request = db.get_all_requests_grouped_by_source()["data"][0]["requests"][0]
+
+    DatabaseManager._instance = None
+    assert request["user_name"] == "Alice Jellyfin"
+
+
+def test_pending_requests_filter_by_requested_for_user(tmp_path):
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        db.enqueue_request("101", "movie", None, {"_user_id": "plex-1"}, status="awaiting_approval")
+        db.enqueue_request("102", "movie", None, {"_user_id": "plex-2"}, status="awaiting_approval")
+
+        items, total = db.list_suggestions(media_user_ids=["plex-1"])
+
+    DatabaseManager._instance = None
+    assert total == 1
+    assert items[0]["media_user_id"] == "plex-1"

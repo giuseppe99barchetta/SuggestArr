@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request, g
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_role
 from api_service.automate_process import ContentAutomation
+from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.utils.asyncio_loop import close_event_loop
@@ -26,6 +27,16 @@ def _workflow_owner():
     return None if g.current_user.get('role') == 'admin' else int(g.current_user['id'])
 
 
+def _visible_request_user_ids(db):
+    selected = request.args.get('user_id', '').strip()
+    if g.current_user.get('role') == 'admin':
+        return [selected] if selected else None
+    if load_env_vars().get('REQUEST_VISIBILITY', 'all') != 'own':
+        return [selected] if selected else None
+    linked = [str(profile['external_user_id']) for profile in db.get_user_media_profiles(int(g.current_user['id']))]
+    return [selected] if selected and selected in linked else linked
+
+
 @automation_bp.route('/requests/workflow', methods=['GET'])
 def request_workflow():
     status = request.args.get('status', 'awaiting_approval')
@@ -39,8 +50,10 @@ def request_workflow():
     media_type = request.args.get('media_type', 'all')
     if media_type not in ('all', 'movie', 'tv'):
         return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400
-    items, total = DatabaseManager().list_suggestions(
-        _workflow_owner(), status, request.args.get('search', '').strip()[:100], page, per_page, media_type)
+    db = DatabaseManager()
+    items, total = db.list_suggestions(
+        _workflow_owner(), status, request.args.get('search', '').strip()[:100], page, per_page, media_type,
+        _visible_request_user_ids(db))
     return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
 
@@ -145,7 +158,8 @@ def get_requests():
         result = db_manager.get_all_requests_grouped_by_source(
             page=page, 
             per_page=per_page,
-            sort_by=sort_by
+            sort_by=sort_by,
+            user_ids=_visible_request_user_ids(db_manager),
         )
         
         return jsonify(result), 200

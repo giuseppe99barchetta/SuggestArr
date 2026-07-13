@@ -116,6 +116,10 @@
                 <i class="fas fa-clock"></i>
                 {{ request._pending ? 'Awaiting approval' : formatDate(request.requested_at) }}
               </span>
+              <span v-if="request.user_name || request.user_id" class="request-date-compact">
+                <i class="fas fa-user"></i>
+                For {{ request.user_name || request.user_id }}
+              </span>
             </div>
           </div>
         </div>
@@ -141,6 +145,7 @@
               <h2 class="modal-title">{{ selectedRequest.title }}</h2>
               <div class="badge-container"><span class="badge badge-media"><i :class="selectedRequest.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i> {{ selectedRequest.media_type?.toUpperCase() }}</span><span class="badge badge-rating"><i class="fas fa-star"></i> {{ selectedRequest.rating || 'N/A' }}</span><span v-if="selectedRequest.release_date" class="badge badge-date"><i class="fas fa-calendar"></i> {{ selectedRequest.release_date }}</span></div>
               <div v-if="selectedRequest.source_title" class="source-link-modal"><i class="fas fa-link"></i><span>Requested from: <strong>{{ selectedRequest.source_title }}</strong></span></div>
+              <div v-if="selectedRequest.user_name || selectedRequest.user_id" class="source-link-modal"><i class="fas fa-user"></i><span>Requested for: <strong>{{ selectedRequest.user_name || selectedRequest.user_id }}</strong></span></div>
               <div class="modal-separator"></div>
               <div class="modal-section"><h3 class="modal-section-title"><i class="fas fa-align-left"></i> Overview</h3><p class="modal-overview">{{ selectedRequest.overview || 'No overview available.' }}</p></div>
             </div>
