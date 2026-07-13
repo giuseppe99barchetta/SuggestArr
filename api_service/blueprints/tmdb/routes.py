@@ -1,6 +1,11 @@
+from collections import OrderedDict
+import json
+import threading
 import time
 from flask import Blueprint, request, jsonify
 import aiohttp
+from api_service.auth.middleware import require_role
+from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 
@@ -10,22 +15,67 @@ logger = LoggerManager.get_logger("TMDBRoute")
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 
 # ── In-memory cache ───────────────────────────────────────────────────────────
-_cache: dict = {}
-_POPULAR_TTL = 300   # 5 minutes — popular results change often
-_STATIC_TTL  = 600   # 10 minutes — genres / languages / regions / providers
+_cache: OrderedDict = OrderedDict()
+_cache_size = 0
+_cache_lock = threading.Lock()
 
 
-def _cache_get(key: str, ttl: int):
+def _cache_settings() -> tuple[bool, int, int]:
+    config = load_env_vars()
+    enabled = config.get('ENABLE_API_CACHING', True) is not False
+    ttl = max(1, int(config.get('CACHE_TTL', 24))) * 3600
+    max_size = max(1, int(config.get('MAX_CACHE_SIZE', 100))) * 1024 * 1024
+    return enabled, ttl, max_size
+
+
+def _cache_get(key: str):
     """Return cached value if it exists and has not expired, else None."""
-    entry = _cache.get(key)
-    if entry and time.time() - entry[1] < ttl:
+    global _cache_size
+    enabled, ttl, _ = _cache_settings()
+    with _cache_lock:
+        if not enabled:
+            _cache.clear()
+            _cache_size = 0
+            return None
+        entry = _cache.get(key)
+        if not entry:
+            return None
+        if time.time() - entry[1] >= ttl:
+            _cache_size -= entry[2]
+            del _cache[key]
+            return None
+        _cache.move_to_end(key)
         return entry[0]
-    return None
 
 
 def _cache_set(key: str, data) -> None:
     """Store data in the cache together with the current timestamp."""
-    _cache[key] = (data, time.time())
+    global _cache_size
+    enabled, _, max_size = _cache_settings()
+    if not enabled:
+        return
+    size = len(json.dumps(data, separators=(',', ':')).encode('utf-8'))
+    if size > max_size:
+        return
+    with _cache_lock:
+        previous = _cache.pop(key, None)
+        if previous:
+            _cache_size -= previous[2]
+        while _cache and _cache_size + size > max_size:
+            _, evicted = _cache.popitem(last=False)
+            _cache_size -= evicted[2]
+        _cache[key] = (data, time.time(), size)
+        _cache_size += size
+
+
+def clear_cache() -> int:
+    """Clear cached TMDb responses and return the number removed."""
+    global _cache_size
+    with _cache_lock:
+        count = len(_cache)
+        _cache.clear()
+        _cache_size = 0
+        return count
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -80,6 +130,16 @@ def _run(coro):
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+@tmdb_bp.route('/cache/clear', methods=['POST'])
+@require_role('admin')
+def clear_tmdb_cache():
+    count = clear_cache()
+    return jsonify({
+        'status': 'success',
+        'message': f'Cache cleared ({count} entries removed)',
+    }), 200
+
 
 @tmdb_bp.route('/test', methods=['POST'])
 def test_tmdb_connection():
@@ -148,7 +208,7 @@ def get_popular_movies():
     Proxy GET /movie/popular from TMDB.
 
     Loads the API key from the database — it is never sent to the client.
-    Results are cached for 5 minutes per (page, include_adult) combination.
+    Results are cached for the configured TTL per (page, include_adult) combination.
 
     Query params:
         page          (int, default 1)
@@ -163,7 +223,7 @@ def get_popular_movies():
     include_adult = request.args.get('include_adult', 'false')
     cache_key     = f'popular:{page}:{include_adult}'
 
-    cached = _cache_get(cache_key, _POPULAR_TTL)
+    cached = _cache_get(cache_key)
     if cached is not None:
         return jsonify(cached), 200
 
@@ -207,7 +267,7 @@ def get_movie_genres():
     """
     Proxy GET /genre/movie/list from TMDB.
 
-    API key is loaded from the database. Cached for 10 minutes.
+    API key is loaded from the database. Cached for the configured TTL.
 
     Returns:
         200 with { status, genres: [...] }
@@ -215,7 +275,7 @@ def get_movie_genres():
         502 if TMDB upstream returns an error.
     """
     cache_key = 'genres:movie'
-    cached = _cache_get(cache_key, _STATIC_TTL)
+    cached = _cache_get(cache_key)
     if cached is not None:
         return jsonify(cached), 200
 
@@ -242,7 +302,7 @@ def get_tv_genres():
     """
     Proxy GET /genre/tv/list from TMDB.
 
-    API key is loaded from the database. Cached for 10 minutes.
+    API key is loaded from the database. Cached for the configured TTL.
 
     Returns:
         200 with { status, genres: [...] }
@@ -250,7 +310,7 @@ def get_tv_genres():
         502 if TMDB upstream returns an error.
     """
     cache_key = 'genres:tv'
-    cached = _cache_get(cache_key, _STATIC_TTL)
+    cached = _cache_get(cache_key)
     if cached is not None:
         return jsonify(cached), 200
 
@@ -277,7 +337,7 @@ def get_languages():
     """
     Proxy GET /configuration/languages from TMDB.
 
-    API key is loaded from the database. Cached for 10 minutes.
+    API key is loaded from the database. Cached for the configured TTL.
 
     Returns:
         200 with { status, languages: [...] }
@@ -285,7 +345,7 @@ def get_languages():
         502 if TMDB upstream returns an error.
     """
     cache_key = 'languages'
-    cached = _cache_get(cache_key, _STATIC_TTL)
+    cached = _cache_get(cache_key)
     if cached is not None:
         return jsonify(cached), 200
 
@@ -313,7 +373,7 @@ def get_provider_regions():
     """
     Proxy GET /watch/providers/regions from TMDB.
 
-    API key is loaded from the database. Cached for 10 minutes.
+    API key is loaded from the database. Cached for the configured TTL.
 
     Returns:
         200 with { status, results: [...] }
@@ -321,7 +381,7 @@ def get_provider_regions():
         502 if TMDB upstream returns an error.
     """
     cache_key = 'providers:regions'
-    cached = _cache_get(cache_key, _STATIC_TTL)
+    cached = _cache_get(cache_key)
     if cached is not None:
         return jsonify(cached), 200
 
@@ -348,7 +408,7 @@ def get_movie_providers():
     """
     Proxy GET /watch/providers/movie from TMDB filtered by region.
 
-    API key is loaded from the database. Cached for 10 minutes per region.
+    API key is loaded from the database. Cached for the configured TTL per region.
 
     Query params:
         watch_region (str, required) — ISO 3166-1 region code (e.g. 'US').
@@ -363,7 +423,7 @@ def get_movie_providers():
         return jsonify({'message': 'watch_region is required', 'status': 'error'}), 400
 
     cache_key = f'providers:movie:{watch_region}'
-    cached = _cache_get(cache_key, _STATIC_TTL)
+    cached = _cache_get(cache_key)
     if cached is not None:
         return jsonify(cached), 200
 

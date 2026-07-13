@@ -428,7 +428,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             Clear Cache
           </button>
           <small class="form-help">
-            Clear all cached data and force fresh API calls
+            Clear cached TMDb metadata and force fresh API calls
           </small>
         </div>
       </div>
@@ -448,6 +448,17 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           />
           <small class="form-help">
             Default for jobs using the global delivery setting. Each job can override it.
+          </small>
+        </div>
+
+        <div class="form-group">
+          <BaseCheckbox
+            v-model="localConfig.ENABLE_API_CACHING"
+            :disabled="isLoading"
+            label="Enable TMDb response caching"
+          />
+          <small class="form-help">
+            Cache repeated TMDb metadata requests to reduce external API calls
           </small>
         </div>
 
@@ -477,59 +488,6 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             Use 0 to keep pending suggestions until they are reviewed manually.
           </small>
         </div>
-      </div>
-
-      <!-- API Settings -->
-      <div class="settings-group">
-        <h3>
-          <i class="fas fa-code"></i>
-          API Settings
-        </h3>
-
-        <div class="form-group">
-          <label for="apiTimeout">API Timeout (seconds)</label>
-          <input
-            id="apiTimeout"
-            v-model.number="localConfig.API_TIMEOUT"
-            type="number"
-            min="5"
-            max="120"
-            placeholder="30"
-            class="form-control"
-            :disabled="isLoading"
-          />
-          <small class="form-help">
-            Timeout for external API calls (5-120 seconds)
-          </small>
-        </div>
-
-        <div class="form-group">
-          <label for="apiRetries">API Retry Attempts</label>
-          <input
-            id="apiRetries"
-            v-model.number="localConfig.API_RETRIES"
-            type="number"
-            min="0"
-            max="5"
-            placeholder="3"
-            class="form-control"
-            :disabled="isLoading"
-          />
-          <small class="form-help">
-            Number of retry attempts for failed API calls (0-5)
-          </small>
-        </div>
-
-        <div class="form-group">
-          <BaseCheckbox
-            v-model="localConfig.ENABLE_API_CACHING"
-            :disabled="isLoading"
-            label="Enable API response caching"
-          />
-          <small class="form-help">
-            Cache API responses to reduce external service load
-          </small>
-       </div>
       </div>
 
       <div class="settings-group">
@@ -714,8 +672,6 @@ export default {
           ENABLE_PERFORMANCE_MONITORING: false,
           CACHE_TTL: 24,
           MAX_CACHE_SIZE: 100,
-          API_TIMEOUT: 30,
-          API_RETRIES: 3,
           ENABLE_API_CACHING: true,
           REQUIRE_REQUEST_APPROVAL: false,
           PAUSE_JOBS_WITH_PENDING_APPROVALS: false,
@@ -848,9 +804,9 @@ export default {
     },
 
     async clearCache() {
-      if (confirm('Are you sure you want to clear all cached data? This may temporarily slow down the application.')) {
+      if (confirm('Are you sure you want to clear cached TMDb data? This may temporarily slow down metadata requests.')) {
         try {
-          await axios.post('/api/cache/clear');
+          await axios.post('/api/tmdb/cache/clear');
           this.$toast.success('Cache cleared successfully!');
         } catch (error) {
           this.$toast.error('Failed to clear cache');
@@ -891,8 +847,6 @@ export default {
             ENABLE_PERFORMANCE_MONITORING: this.localConfig.ENABLE_PERFORMANCE_MONITORING || false,
             CACHE_TTL: this.localConfig.CACHE_TTL || 24,
             MAX_CACHE_SIZE: this.localConfig.MAX_CACHE_SIZE || 100,
-            API_TIMEOUT: this.localConfig.API_TIMEOUT || 30,
-            API_RETRIES: this.localConfig.API_RETRIES || 3,
             ENABLE_API_CACHING: this.localConfig.ENABLE_API_CACHING !== false,
             REQUIRE_REQUEST_APPROVAL: this.localConfig.REQUIRE_REQUEST_APPROVAL !== false,
             PAUSE_JOBS_WITH_PENDING_APPROVALS: this.localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS === true,
@@ -948,8 +902,6 @@ export default {
         ENABLE_PERFORMANCE_MONITORING: false,
         CACHE_TTL: 24,
         MAX_CACHE_SIZE: 100,
-        API_TIMEOUT: 30,
-        API_RETRIES: 3,
         ENABLE_API_CACHING: true,
         ENABLE_BETA_FEATURES: false,
         ENABLE_ADVANCED_ALGORITHM: false,
