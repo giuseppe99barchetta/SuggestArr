@@ -43,7 +43,7 @@ def _validate_request_profiles(value):
     if not isinstance(value, dict) or any(key not in ('movie', 'tv') for key in value):
         raise ValueError('request_profiles must contain only movie and tv')
     for profile in value.values():
-        if not isinstance(profile, dict) or any(key not in ('serverId', 'profileId', 'rootFolder') for key in profile):
+        if not isinstance(profile, dict) or any(key not in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId') for key in profile):
             raise ValueError('Invalid request profile')
         if profile.get('serverId') is not None and not isinstance(profile['serverId'], int):
             raise ValueError('serverId must be an integer')
@@ -51,6 +51,10 @@ def _validate_request_profiles(value):
             raise ValueError('profileId must be an integer')
         if profile.get('rootFolder') is not None and not isinstance(profile['rootFolder'], str):
             raise ValueError('rootFolder must be a string')
+        if profile.get('is4k') is not None and not isinstance(profile['is4k'], bool):
+            raise ValueError('is4k must be a boolean')
+        if profile.get('languageProfileId') is not None and not isinstance(profile['languageProfileId'], int):
+            raise ValueError('languageProfileId must be an integer')
         present = [profile.get(key) is not None for key in ('serverId', 'profileId', 'rootFolder')]
         if any(present) and not all(present):
             raise ValueError('serverId, profileId and rootFolder must be selected together')

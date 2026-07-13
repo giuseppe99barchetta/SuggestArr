@@ -240,12 +240,40 @@ class SeerClient(BaseHTTPClient):
     async def get_radarr_servers(self):
         """Fetch available Radarr servers from the Seer service with their profiles, root folders, and tags."""
         self.logger.debug("Fetching Radarr servers from the Seer service")
-        return await self._make_request("GET", "api/v1/service/radarr")
+        return await self._get_arr_servers('radarr')
 
     async def get_sonarr_servers(self):
         """Fetch available Sonarr servers from the Seer service with their profiles, root folders, and tags."""
         self.logger.debug("Fetching Sonarr servers from the Seer service")
-        return await self._make_request("GET", "api/v1/service/sonarr")
+        return await self._get_arr_servers('sonarr')
+
+    async def _get_arr_servers(self, service):
+        """Fetch servers and enrich list-only responses when cookie auth is available."""
+        servers = await self._make_request("GET", f"api/v1/service/{service}") or []
+        if not self.session_token:
+            return servers
+        for index, server in enumerate(servers):
+            if server.get('profiles') and server.get('rootFolders'):
+                continue
+            details = await self._make_request(
+                "GET", f"api/v1/service/{service}/{server['id']}", use_cookie=True
+            )
+            if details:
+                detail_server = details.get('server', {})
+                safe_fields = (
+                    'activeProfileId', 'activeProfileName', 'activeDirectory',
+                    'activeLanguageProfileId', 'activeAnimeProfileId',
+                    'activeAnimeLanguageProfileId', 'activeAnimeProfileName',
+                    'activeAnimeDirectory', 'is4k', 'minimumAvailability',
+                    'enableSeasonFolders', 'monitorNewItems', 'isDefault',
+                    'syncEnabled', 'preventSearch',
+                )
+                servers[index] = {
+                    **server,
+                    **{key: detail_server[key] for key in safe_fields if key in detail_server},
+                    **{key: details[key] for key in ('profiles', 'rootFolders', 'languageProfiles', 'tags') if key in details},
+                }
+        return servers
 
     async def _fetch_server_defaults(self, media_type: str, server_id) -> dict:
         """Fetch default profileId and rootFolder from Jellyseerr for the given media type.
@@ -306,7 +334,7 @@ class SeerClient(BaseHTTPClient):
         if not profile:
             return
 
-        for key in ['serverId', 'profileId', 'rootFolder', 'tags']:
+        for key in ['serverId', 'profileId', 'rootFolder', 'tags', 'is4k']:
             if key in profile:
                 data[key] = profile[key]
         if media_type == 'tv' and 'languageProfileId' in profile:
@@ -396,7 +424,7 @@ class SeerClient(BaseHTTPClient):
 
         context = self.queue_context
         profile = (context.get('request_profiles') or {}).get(media_type) or {}
-        for key in ('serverId', 'profileId', 'rootFolder'):
+        for key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId'):
             if profile.get(key) is not None:
                 payload[key] = profile[key]
         payload['_seer_identity_mode'] = context.get('seer_identity_mode', 'technical_user')

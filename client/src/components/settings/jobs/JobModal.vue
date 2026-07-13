@@ -160,6 +160,7 @@
                 <template v-if="form.request_profiles[type].serverId">
                   <BaseDropdown v-model="form.request_profiles[type].profileId" :options="profileOptions(type)" label="Quality profile" placeholder="Select quality profile" />
                   <BaseDropdown v-model="form.request_profiles[type].rootFolder" :options="rootFolderOptions(type)" label="Root folder" placeholder="Select root folder" />
+                  <BaseDropdown v-if="type === 'tv' && languageProfileOptions(type).length" v-model="form.request_profiles[type].languageProfileId" :options="languageProfileOptions(type)" label="Language profile" placeholder="Use Sonarr default" />
                 </template>
               </div>
             </div>
@@ -446,11 +447,13 @@ export default {
   methods: {
     serversFor(type) { return type === 'movie' ? this.radarrServers : this.sonarrServers; },
     selectedServer(type) { return this.serversFor(type).find(server => String(server.id) === String(this.form.request_profiles[type].serverId)); },
-    serverOptions(type) { return this.serversFor(type).map(server => ({ value: server.id, label: server.name })); },
+    serverOptions(type) { return this.serversFor(type).map(server => ({ value: server.id, label: `${server.name}${server.is4k ? ' (4K)' : ''}` })); },
     profileOptions(type) { return (this.selectedServer(type)?.profiles || []).map(profile => ({ value: profile.id, label: profile.name })); },
     rootFolderOptions(type) { return (this.selectedServer(type)?.rootFolders || []).map(folder => ({ value: folder.path, label: folder.path })); },
+    languageProfileOptions(type) { return (this.selectedServer(type)?.languageProfiles || []).map(profile => ({ value: profile.id, label: profile.name })); },
     setRequestServer(type, serverId) {
-      this.form.request_profiles[type] = { serverId, profileId: '', rootFolder: '' };
+      const server = this.serversFor(type).find(item => String(item.id) === String(serverId));
+      this.form.request_profiles[type] = { serverId, profileId: '', rootFolder: '', is4k: server?.is4k === true, languageProfileId: server?.activeLanguageProfileId ?? '' };
     },
     openAdvanced() {
       this.showAdvanced = true;
@@ -501,7 +504,9 @@ export default {
             profile.serverId && profile.profileId && profile.rootFolder ? {
               serverId: Number(profile.serverId),
               profileId: Number(profile.profileId),
-              rootFolder: profile.rootFolder
+              rootFolder: profile.rootFolder,
+              is4k: profile.is4k === true,
+              ...(profile.languageProfileId !== '' && profile.languageProfileId != null ? { languageProfileId: Number(profile.languageProfileId) } : {})
             } : {}
           ])),
           schedule_type: this.schedule.type,
