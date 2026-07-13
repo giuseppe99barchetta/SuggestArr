@@ -419,6 +419,17 @@ LLM_MODEL=gpt-4o-mini</code></pre>
         </div>
 
         <div class="form-group">
+          <BaseCheckbox
+            v-model="localConfig.ENABLE_API_CACHING"
+            :disabled="isLoading"
+            label="Enable TMDb response caching"
+          />
+          <small class="form-help">
+            Cache repeated TMDb metadata requests to reduce external API calls
+          </small>
+        </div>
+
+        <div class="form-group">
           <button
             @click="clearCache"
             class="btn btn-outline btn-sm"
@@ -434,58 +445,45 @@ LLM_MODEL=gpt-4o-mini</code></pre>
       </div>
 
       <!-- Request Workflow -->
-      <div class="settings-group">
+      <div class="settings-group request-workflow-settings">
         <h3>
           <i class="fas fa-user-check"></i>
           Request Workflow
         </h3>
 
-        <div class="form-group">
+        <div class="form-group workflow-setting">
           <BaseCheckbox
             v-model="localConfig.REQUIRE_REQUEST_APPROVAL"
             :disabled="isLoading"
             label="Approve requests before sending them to Seer"
+            description="Default for jobs using the global delivery setting. Each job can override it."
           />
-          <small class="form-help">
-            Default for jobs using the global delivery setting. Each job can override it.
-          </small>
         </div>
 
-        <BaseDropdown
-          v-model="localConfig.REQUEST_VISIBILITY"
-          :options="requestVisibilityOptions"
-          label="Requests visible to regular users"
-          :disabled="isLoading"
-          id="requestVisibility"
-        />
-        <small class="form-help">
-          Admins can always view all requests. “Own account only” uses each user's linked Plex, Jellyfin, or Emby profile.
-        </small>
-
-        <div class="form-group">
-          <BaseCheckbox
-            v-model="localConfig.ENABLE_API_CACHING"
+        <div class="form-group workflow-setting">
+          <label class="workflow-setting__label" for="requestVisibility">Requests visible to regular users</label>
+          <BaseDropdown
+            v-model="localConfig.REQUEST_VISIBILITY"
+            :options="requestVisibilityOptions"
             :disabled="isLoading"
-            label="Enable TMDb response caching"
+            id="requestVisibility"
           />
-          <small class="form-help">
-            Cache repeated TMDb metadata requests to reduce external API calls
-          </small>
+          <p class="workflow-setting__help">
+            Admins always see every request. Regular users can be limited to their linked Plex, Jellyfin, or Emby account.
+          </p>
         </div>
 
-        <div class="form-group">
+        <div class="form-group workflow-setting">
           <BaseCheckbox
             v-model="localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS"
             :disabled="isLoading"
             label="Pause jobs while SuggestArr approvals are pending"
+            description="Default for jobs using the global pause setting. Each job can override it."
           />
-          <small class="form-help">
-            Default for jobs using the global pause setting. Each job can override it.
-          </small>
         </div>
 
-        <div class="form-group">
-          <label for="autoRejectApprovalDays">Auto-reject pending suggestions after days</label>
+        <div class="form-group workflow-setting">
+          <label class="workflow-setting__label" for="autoRejectApprovalDays">Auto-reject pending suggestions after days</label>
           <input
             id="autoRejectApprovalDays"
             v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS"
@@ -495,9 +493,9 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             class="form-control"
             :disabled="isLoading"
           />
-          <small class="form-help">
+          <p class="workflow-setting__help">
             Use 0 to keep pending suggestions until they are reviewed manually.
-          </small>
+          </p>
         </div>
       </div>
 
@@ -1042,6 +1040,43 @@ export default {
   font-size: 0.875rem;
   color: var(--color-text-muted);
   line-height: 1.4;
+}
+
+.request-workflow-settings h3 {
+  margin-bottom: 0;
+}
+
+.request-workflow-settings .workflow-setting {
+  margin: 0;
+  padding: var(--spacing-md) 0;
+}
+
+.request-workflow-settings .workflow-setting:last-child {
+  padding-bottom: 0;
+}
+
+.request-workflow-settings .workflow-setting__label {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-normal);
+}
+
+.request-workflow-settings .workflow-setting__help {
+  margin: var(--spacing-2xs) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+}
+
+.request-workflow-settings .form-control,
+.request-workflow-settings :deep(.value-text),
+.request-workflow-settings :deep(.placeholder-text) {
+  font-size: var(--font-size-sm);
+}
+
+.request-workflow-settings :deep(.base-checkbox) {
+  width: 100%;
 }
 
 .section-description {
