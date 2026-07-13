@@ -1,7 +1,7 @@
 <template>
   <div class="requests-wrapper">
     <!-- Quick Stats Header -->
-    <div class="requests-stats-header">
+    <div class="requests-stats-header" :class="{ 'has-approval': approvalEnabled }">
       <div class="stat-card-mini">
         <div class="stat-icon">
           <i class="fas fa-paper-plane"></i>
@@ -41,6 +41,14 @@
           <div class="stat-label">This Month</div>
         </div>
       </div>
+
+      <div v-if="approvalEnabled" class="stat-card-mini">
+        <div class="stat-icon pending"><i class="fas fa-hourglass-half"></i></div>
+        <div class="stat-info">
+          <div class="stat-value">{{ pendingTotal }}</div>
+          <div class="stat-label">Awaiting Approval</div>
+        </div>
+      </div>
     </div>
 
     <!-- Recent Requests Preview -->
@@ -78,8 +86,9 @@
         <div class="requests-grid-preview">
           <div
             v-for="request in filteredRequests"
-            :key="request.request_id"
-            class="request-card-compact">
+            :key="request._key"
+            class="request-card-compact"
+            @click="openDetails(request)">
 
             <div class="request-poster-compact">
               <img
@@ -95,13 +104,21 @@
               <span class="badge-media-compact">
                 <i :class="request.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
               </span>
+              <div v-if="request._pending" class="pending-card-actions" @click.stop>
+                <template v-if="confirmRejectId === request.id"><button type="button" class="poster-action pending-cancel" aria-label="Cancel rejection" @click="confirmRejectId = null"><i class="fas fa-undo"></i></button><button type="button" class="poster-action pending-reject" :disabled="actionLoadingId === request.id" aria-label="Confirm rejection" @click="decidePending('reject', request.id)"><i class="fas fa-check"></i></button></template>
+                <template v-else><button type="button" class="poster-action pending-approve" :disabled="actionLoadingId === request.id" aria-label="Approve request" @click="decidePending('approve', request.id)"><i class="fas fa-check"></i></button><button type="button" class="poster-action pending-reject" :disabled="actionLoadingId === request.id" aria-label="Reject request" @click="confirmRejectId = request.id"><i class="fas fa-times"></i></button></template>
+              </div>
             </div>
 
             <div class="request-info-compact">
               <h4 class="request-title-compact">{{ request.title }}</h4>
               <span class="request-date-compact">
                 <i class="fas fa-clock"></i>
-                {{ formatDate(request.requested_at) }}
+                {{ request._pending ? 'Awaiting approval' : formatDate(request.requested_at) }}
+              </span>
+              <span v-if="request.user_name || request.user_id" class="request-date-compact">
+                <i class="fas fa-user"></i>
+                For {{ request.user_name || request.user_id }}
               </span>
             </div>
           </div>
@@ -118,12 +135,31 @@
         </div>
       </div>
     </div>
+    <Teleport to="body">
+      <div v-if="selectedRequest" class="modal-overlay" @click.self="selectedRequest = null">
+        <div class="modal-content request-details-modal">
+          <button type="button" class="modal-close" aria-label="Close details" @click="selectedRequest = null"><i class="fas fa-times"></i></button>
+          <div class="modal-layout">
+            <div class="modal-poster-section"><img v-if="selectedRequest.poster_path" :src="selectedRequest.poster_path" :alt="selectedRequest.title" class="modal-poster" /><div v-else class="modal-poster-placeholder"><i class="fas fa-image"></i></div></div>
+            <div class="modal-details-section">
+              <h2 class="modal-title">{{ selectedRequest.title }}</h2>
+              <div class="badge-container"><span class="badge badge-media"><i :class="selectedRequest.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i> {{ selectedRequest.media_type?.toUpperCase() }}</span><span class="badge badge-rating"><i class="fas fa-star"></i> {{ selectedRequest.rating || 'N/A' }}</span><span v-if="selectedRequest.release_date" class="badge badge-date"><i class="fas fa-calendar"></i> {{ selectedRequest.release_date }}</span></div>
+              <div v-if="selectedRequest.source_title" class="source-link-modal"><i class="fas fa-link"></i><span>Requested from: <strong>{{ selectedRequest.source_title }}</strong></span></div>
+              <div v-if="selectedRequest.user_name || selectedRequest.user_id" class="source-link-modal"><i class="fas fa-user"></i><span>Requested for: <strong>{{ selectedRequest.user_name || selectedRequest.user_id }}</strong></span></div>
+              <div class="modal-separator"></div>
+              <div class="modal-section"><h3 class="modal-section-title"><i class="fas fa-align-left"></i> Overview</h3><p class="modal-overview">{{ selectedRequest.overview || 'No overview available.' }}</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script>
 import axios from 'axios';
 import { formatDate } from '@/utils/dateUtils.js';
+import '@/assets/styles/requestsPage.css';
 
 export default {
   name: 'SettingsRequests',
@@ -136,6 +172,12 @@ export default {
         this_month: 0
       },
       recentRequests: [],
+      pendingRequests: [],
+      pendingTotal: 0,
+      confirmRejectId: null,
+      actionLoadingId: null,
+      approvalEnabled: false,
+      selectedRequest: null,
       totalRequests: 0,
       loading: false,
       activeFilter: 'all',
@@ -148,15 +190,17 @@ export default {
   },
   computed: {
     filteredRequests() {
+      const requests = [...this.pendingRequests, ...this.recentRequests];
       if (this.activeFilter === 'all') {
-        return this.recentRequests;
+        return requests.slice(0, 20);
       }
-      return this.recentRequests.filter(req => req.media_type === this.activeFilter);
+      return requests.filter(req => req.media_type === this.activeFilter).slice(0, 20);
     }
   },
   mounted() {
     this.loadStats();
     this.loadRecentRequests();
+    this.loadApprovalState();
   },
   methods: {
     formatDate,
@@ -195,11 +239,46 @@ export default {
           return dateB - dateA;
         });
 
-        this.recentRequests = allRequests.slice(0, 20);
+        this.recentRequests = allRequests.slice(0, 20).map(request => ({ ...request, _key: `sent-${request.request_id}` }));
       } catch (error) {
         console.error('Error loading recent requests:', error);
       } finally {
         this.loading = false;
+      }
+    },
+
+    async loadPendingRequests() {
+      try {
+        const { data } = await axios.get('/api/automation/requests/workflow', { params: { status: 'awaiting_approval', page: 1, per_page: 20 } });
+        this.pendingRequests = (data.items || []).map(item => ({ ...item, _pending: true, _key: `pending-${item.id}`, requested_at: item.created_at, source_title: item.name, poster_path: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null }));
+        this.pendingTotal = data.total || 0;
+      } catch (error) {
+        console.error('Error loading pending requests:', error);
+      }
+    },
+
+    async loadApprovalState() {
+      try {
+        const { data } = await axios.get('/api/jobs');
+        await this.loadPendingRequests();
+        this.approvalEnabled = this.pendingTotal > 0 || (data.jobs || []).some(job =>
+          job.delivery_mode === 'manual' ||
+          ((job.delivery_mode || 'inherit') === 'inherit' && data.request_approval_default !== false)
+        );
+      } catch (error) {
+        console.error('Error loading approval jobs:', error);
+      }
+    },
+
+    async decidePending(action, id) {
+      this.actionLoadingId = id;
+      try {
+        await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] });
+        this.confirmRejectId = null;
+        await this.loadPendingRequests();
+        this.$toast.open({ message: action === 'approve' ? 'Request queued for Seer' : 'Request rejected', type: 'success' });
+      } finally {
+        this.actionLoadingId = null;
       }
     },
 
@@ -211,6 +290,10 @@ export default {
 
     goToRequestsPage() {
       this.$router.push('/requests');
+    },
+
+    openDetails(request) {
+      this.selectedRequest = request;
     }
   }
 };
@@ -229,6 +312,14 @@ export default {
   gap: 1.25rem;
   margin-bottom: 2rem;
 }
+
+.requests-stats-header.has-approval { grid-template-columns: repeat(5, 1fr); }
+
+.pending-card-actions { position: absolute; right: var(--spacing-sm); bottom: var(--spacing-sm); display: flex; gap: var(--spacing-sm); z-index: 3; }
+.poster-action { display: grid; place-items: center; width: var(--btn-height-md); height: var(--btn-height-md); padding: 0; border: 1px solid var(--color-border-medium); border-radius: var(--radius-full); color: var(--color-text-primary); cursor: pointer; box-shadow: var(--shadow-md); }
+.pending-approve { color: var(--color-text-primary); background: var(--color-success); }
+.pending-reject { color: var(--color-text-primary); background: var(--color-error); }
+.pending-cancel { background: var(--surface-elevated-solid); }
 
 @media (max-width: 992px) {
   .requests-stats-header {

@@ -141,7 +141,7 @@ class RecommendationAutomation:
         return discovered_ids
 
     @classmethod
-    async def create(cls, job_id: int, dry_run: bool = False) -> 'RecommendationAutomation':
+    async def create(cls, job_id: int, dry_run: bool = False, overrides=None) -> 'RecommendationAutomation':
         """
         Async factory method to create and initialize RecommendationAutomation.
 
@@ -165,6 +165,8 @@ class RecommendationAutomation:
         instance.job_data = instance.repository.get_job(job_id)
         if not instance.job_data:
             raise ValueError(f"Job not found: {job_id}")
+        if overrides:
+            instance.job_data.update(overrides)
 
         if instance.job_data.get('job_type') != 'recommendation':
             raise ValueError(f"Job {job_id} is not a recommendation job")
@@ -250,7 +252,10 @@ class RecommendationAutomation:
 
         # Language filter
         filter_language = []
-        if normalized_filters.get('language'):
+        if 'with_original_language' in job_filters:
+            filter_language = ([normalized_filters['language']]
+                               if normalized_filters.get('language') else [])
+        elif normalized_filters.get('language'):
             filter_language = [normalized_filters['language']]
         elif self.env_vars.get('FILTER_LANGUAGE'):
             filter_language = self.env_vars.get('FILTER_LANGUAGE', [])
@@ -338,7 +343,8 @@ class RecommendationAutomation:
             exclude_downloaded,
             exclude_requested,
             anime_profile_config,
-            request_first_season_only
+            request_first_season_only,
+            queue_context={**self.job_data, 'job_id': self.job_data['id']}
         )
         if dry_run:
             self.logger.info("Dry-run mode: skipping Seer request cache sync.")
@@ -365,6 +371,8 @@ class RecommendationAutomation:
             omdb_client=omdb_client,
             include_tvod=filter_include_tvod,
             filter_release_year_to=filter_release_year_to,
+            filter_genres_include=normalized_filters.get('genres'),
+            only_first_movie_in_collection=bool(job_filters.get('only_first_movie_in_collection', False)),
         )
 
         # Determine which users to process
@@ -612,7 +620,7 @@ class RecommendationAutomation:
                 error_message=error_msg
             )
 
-async def execute_recommendation_job(job_id: int) -> ExecutionResult:
+async def execute_recommendation_job(job_id: int, overrides=None) -> ExecutionResult:
     """
     Execute a recommendation job by ID.
     This is the function to be called by JobManager.
@@ -627,7 +635,7 @@ async def execute_recommendation_job(job_id: int) -> ExecutionResult:
     logger.info(f"Starting execution of recommendation job: {job_id}")
 
     try:
-        automation = await RecommendationAutomation.create(job_id)
+        automation = await RecommendationAutomation.create(job_id, overrides=overrides)
         result = await automation.run()
         return result
     except Exception as e:

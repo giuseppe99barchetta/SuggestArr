@@ -18,7 +18,7 @@
             <div class="job-type-selector">
               <button
                 type="button"
-                class="job-type-btn"
+                class="job-type-btn discover"
                 :class="{ active: form.job_type === 'discover' }"
                 @click="setJobType('discover')"
               >
@@ -30,7 +30,7 @@
               </button>
               <button
                 type="button"
-                class="job-type-btn"
+                class="job-type-btn recommendation"
                 :class="{ active: form.job_type === 'recommendation' }"
                 @click="setJobType('recommendation')"
               >
@@ -40,18 +40,34 @@
                   <span class="job-type-desc">Based on user watch history</span>
                 </div>
               </button>
+              <button
+                type="button"
+                class="job-type-btn trakt_recommendations"
+                :class="{
+                  active: form.job_type === 'trakt_recommendations',
+                  disabled: !traktJobAvailable
+                }"
+                :disabled="!traktJobAvailable"
+                :title="traktJobUnavailableReason"
+                @click="setJobType('trakt_recommendations')"
+              >
+                <i class="icon-trakt"></i>
+                <div class="job-type-info">
+                  <span class="job-type-name">Trakt Recommendations</span>
+                  <span class="job-type-desc">Personalized lists from Trakt.tv</span>
+                </div>
+              </button>
+            </div>
+            <div v-if="!traktJobAvailable" class="trakt-setup-alert" role="status">
+              <i class="fas fa-circle-info"></i>
+              <span>{{ traktJobUnavailableReason }}</span>
             </div>
           </div>
 
           <!-- Info Note based on job type -->
           <div class="info-note" :class="form.job_type">
-            <i :class="form.job_type === 'discover' ? 'fas fa-search' : 'fas fa-history'"></i>
-            <span v-if="form.job_type === 'discover'">
-              Discover Jobs find content using TMDb filters, independent from user watch history.
-            </span>
-            <span v-else>
-              Recommendation Jobs find similar content based on what your users have watched.
-            </span>
+            <i :class="jobTypeInfoIcon"></i>
+            <span>{{ jobTypeInfoText }}</span>
           </div>
 
           <!-- Basic Info -->
@@ -64,7 +80,7 @@
                 id="jobName"
                 v-model="form.name"
                 type="text"
-                :placeholder="form.job_type === 'discover' ? 'e.g., Popular Movies 2024' : 'e.g., Weekly Recommendations'"
+                :placeholder="jobNamePlaceholder"
                 class="form-control"
                 required
               />
@@ -92,7 +108,7 @@
                   TV Shows
                 </button>
                 <button
-                  v-if="form.job_type === 'recommendation'"
+                  v-if="form.job_type !== 'discover'"
                   type="button"
                   class="media-type-btn"
                   :class="{ active: form.media_type === 'both' }"
@@ -111,7 +127,45 @@
             <RecommendationFilters v-model="form" :show-advanced="showAdvanced" :llm-configured="llmConfigured" />
           </div>
 
+          <div v-if="form.job_type === 'trakt_recommendations'" class="settings-group">
+            <h4>Trakt User</h4>
+            <TraktRecommendationFilters
+              v-model="form"
+              :show-advanced="showAdvanced"
+              :trakt-configured="traktConfigured"
+              :connected-users="connectedUsers"
+              :is-loading="traktLoading"
+            />
+          </div>
+
           <!-- Schedule -->
+          <div class="settings-group">
+            <h4>Seer delivery</h4>
+            <div class="delivery-mode-selector">
+              <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'inherit' }" @click="form.delivery_mode = 'inherit'">
+                <i class="fas fa-sliders"></i><span><strong>Use global setting</strong><small>Follow Advanced settings</small></span>
+              </button>
+              <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'automatic' }" @click="form.delivery_mode = 'automatic'">
+                <i class="fas fa-paper-plane"></i><span><strong>Send automatically</strong><small>Queue for Seer immediately</small></span>
+              </button>
+              <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'manual' }" @click="form.delivery_mode = 'manual'">
+                <i class="fas fa-user-check"></i><span><strong>Approve first</strong><small>Review in Requests</small></span>
+              </button>
+            </div>
+            <BaseDropdown v-model="form.seer_identity_mode" :options="seerIdentityOptions" label="Request as" placeholder="Select Seer identity" />
+            <div class="request-profiles-grid">
+              <div v-for="type in visibleProfileTypes" :key="type" class="request-profile-card">
+                <div class="request-profile-heading"><i :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
+                <BaseDropdown :model-value="form.request_profiles[type].serverId || ''" :options="serverOptions(type)" label="Server" placeholder="Use Seer default" @update:model-value="setRequestServer(type, $event)" />
+                <template v-if="form.request_profiles[type].serverId">
+                  <BaseDropdown v-model="form.request_profiles[type].profileId" :options="profileOptions(type)" label="Quality profile" placeholder="Select quality profile" />
+                  <BaseDropdown v-model="form.request_profiles[type].rootFolder" :options="rootFolderOptions(type)" label="Root folder" placeholder="Select root folder" />
+                  <BaseDropdown v-if="type === 'tv' && languageProfileOptions(type).length" v-model="form.request_profiles[type].languageProfileId" :options="languageProfileOptions(type)" label="Language profile" placeholder="Use Sonarr default" />
+                </template>
+              </div>
+            </div>
+          </div>
+
           <div class="settings-group" data-tour-id="job-modal-schedule">
             <h4>Schedule</h4>
             <SchedulePicker v-model="schedule" />
@@ -125,6 +179,32 @@
                 <small>Skip this job when Seer still has requests awaiting approval or denial.</small>
               </span>
             </label>
+            <div class="form-group">
+              <label>Pause while this job has SuggestArr approvals pending</label>
+              <div class="delivery-mode-selector">
+                <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'inherit' }" @click="form.approval_pause_mode = 'inherit'">
+                  <i class="fas fa-sliders"></i><span><strong>Use global setting</strong><small>Follow Advanced settings</small></span>
+                </button>
+                <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'always' }" @click="form.approval_pause_mode = 'always'">
+                  <i class="fas fa-pause"></i><span><strong>Always pause</strong><small>Wait for this job's approvals</small></span>
+                </button>
+                <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'never' }" @click="form.approval_pause_mode = 'never'">
+                  <i class="fas fa-play"></i><span><strong>Never pause</strong><small>Ignore pending approvals</small></span>
+                </button>
+              </div>
+            </div>
+            <label v-if="form.job_type !== 'discover'" class="pause-pending-toggle">
+              <input v-model="form.prevent_suggestions_if_unwatched" type="checkbox" />
+              <span>
+                <strong>Pause if suggestions remain unwatched</strong>
+                <small>Scheduled runs only. Manual Run now remains available.</small>
+              </span>
+            </label>
+            <div v-if="form.job_type !== 'discover' && form.prevent_suggestions_if_unwatched" class="form-group">
+              <label for="unwatchedDays">Days before pausing</label>
+              <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days"
+                class="form-control" type="number" min="1" required />
+            </div>
           </div>
 
           <!-- Advanced Settings Toggle -->
@@ -137,7 +217,7 @@
           <transition name="slide">
             <div v-if="showAdvanced" class="advanced-section">
               <!-- Max Results -->
-              <div v-if="form.job_type === 'discover'" class="settings-group" data-tour-id="job-modal-max-results">
+              <div v-if="form.job_type !== 'recommendation'" class="settings-group" data-tour-id="job-modal-max-results">
                 <h4>Results</h4>
                 <div class="form-group">
                   <label for="maxResults">Max Results: {{ form.max_results }}</label>
@@ -159,7 +239,11 @@
               <!-- Filters -->
               <div class="settings-group filters-section" data-tour-id="job-modal-filters">
                 <h4>{{ form.job_type === 'discover' ? 'Discovery Filters' : 'Quality Filters' }}</h4>
-                <JobFilters v-model="form.filters" :media-type="form.media_type" />
+                <JobFilters
+                  v-model="form.filters"
+                  :media-type="form.media_type"
+                  :job-type="form.job_type"
+                />
               </div>
 
               <!-- Spacer for dropdown overflow -->
@@ -188,15 +272,23 @@
 <script>
 import JobFilters from './JobFilters.vue';
 import RecommendationFilters from './RecommendationFilters.vue';
+import TraktRecommendationFilters from './TraktRecommendationFilters.vue';
 import SchedulePicker from './SchedulePicker.vue';
 import { jobsApi } from '@/api/jobsApi';
+import { listTraktMediaUsers } from '@/api/api';
+import { waitForAuthReady, useAuth } from '@/composables/useAuth';
+import { getJobTypeIcon } from '@/utils/jobTypeVisuals.js';
+import axios from 'axios';
+import BaseDropdown from '@/components/common/BaseDropdown.vue';
 
 export default {
   name: 'JobModal',
   components: {
     JobFilters,
     RecommendationFilters,
+    TraktRecommendationFilters,
     SchedulePicker
+    , BaseDropdown
   },
   props: {
     job: {
@@ -205,8 +297,10 @@ export default {
     }
   },
   emits: ['close', 'save'],
+  setup() { const { currentUser } = useAuth(); return { currentUser }; },
   data() {
     return {
+      connectedUsers: [],
       form: {
         name: '',
         job_type: 'discover',
@@ -215,7 +309,11 @@ export default {
         filters: {},
         user_ids: [],
         enabled: true,
-        pause_if_pending_requests: false
+        pause_if_pending_requests: false,
+        prevent_suggestions_if_unwatched: false,
+        unwatched_suggestion_days: 7
+        , delivery_mode: 'inherit', approval_pause_mode: 'inherit', seer_identity_mode: 'technical_user',
+        request_profiles: { movie: {}, tv: {} }
       },
       schedule: {
         type: 'preset',
@@ -223,15 +321,67 @@ export default {
       },
       isSaving: false,
       showAdvanced: false,
-      llmConfigured: false
+      llmConfigured: false,
+      traktConfigured: false,
+      traktLoading: false
+      , radarrServers: [], sonarrServers: []
     };
   },
   computed: {
+    seerIdentityOptions() {
+      const options = [
+        { value: 'technical_user', label: 'Configured technical user' },
+        { value: 'matching_user', label: 'Mapped Seer user (fallback to technical)' }
+      ];
+      if (this.currentUser?.role === 'admin') options.push({ value: 'admin_user', label: 'Mapped Seer admin' });
+      return options;
+    },
+    visibleProfileTypes() {
+      return this.form.media_type === 'both' ? ['movie', 'tv'] : [this.form.media_type];
+    },
     isEditing() {
       return this.job && this.job.id;
     },
+    traktJobAvailable() {
+      return this.traktConfigured && this.connectedUsers.length > 0;
+    },
+    traktJobUnavailableReason() {
+      if (!this.traktConfigured) {
+        return 'Configure Trakt app credentials in Services before creating a Trakt recommendations job.';
+      }
+      if (this.connectedUsers.length === 0) {
+        return 'Link at least one media user to Trakt in Services before creating a Trakt recommendations job.';
+      }
+      return '';
+    },
+    jobTypeInfoIcon() {
+      return getJobTypeIcon(this.form.job_type);
+    },
+    jobTypeInfoText() {
+      if (this.form.job_type === 'discover') {
+        return 'Discover Jobs find content using TMDb filters, independent from user watch history.';
+      }
+      if (this.form.job_type === 'trakt_recommendations') {
+        return 'Trakt Recommendations Jobs fetch personalized movie and show lists only from a linked Trakt account.';
+      }
+      return 'Recommendation Jobs find similar content based on what your users have watched on your media server or Trakt.tv.';
+    },
+    jobNamePlaceholder() {
+      if (this.form.job_type === 'discover') return 'e.g., Popular Movies 2024';
+      if (this.form.job_type === 'trakt_recommendations') return 'e.g., Weekly Trakt Picks';
+      return 'e.g., Weekly Recommendations';
+    },
     isValid() {
-      return this.form.name.trim().length > 0 && this.form.media_type;
+      if (!this.form.name.trim().length || !this.form.media_type) {
+        return false;
+      }
+      if (this.form.prevent_suggestions_if_unwatched && this.form.unwatched_suggestion_days < 1) {
+        return false;
+      }
+      if (this.form.job_type === 'trakt_recommendations') {
+        return (this.form.user_ids || []).length === 1;
+      }
+      return true;
     }
   },
   async mounted() {
@@ -244,7 +394,16 @@ export default {
         filters: this.job.filters ? JSON.parse(JSON.stringify(this.job.filters)) : {},
         user_ids: this.job.user_ids ? [...this.job.user_ids] : [],
         enabled: this.job.enabled !== false,
-        pause_if_pending_requests: this.job.pause_if_pending_requests === true
+        pause_if_pending_requests: this.job.pause_if_pending_requests === true,
+        prevent_suggestions_if_unwatched: this.job.prevent_suggestions_if_unwatched === true,
+        unwatched_suggestion_days: this.job.unwatched_suggestion_days || 7
+        , delivery_mode: this.job.delivery_mode || 'automatic',
+        approval_pause_mode: this.job.approval_pause_mode || 'inherit',
+        seer_identity_mode: this.job.seer_identity_mode || 'technical_user',
+        request_profiles: {
+          movie: { ...(this.job.request_profiles?.movie || {}) },
+          tv: { ...(this.job.request_profiles?.tv || {}) }
+        }
       };
       this.schedule = {
         type: this.job.schedule_type || 'preset',
@@ -278,19 +437,57 @@ export default {
     } catch {
       this.llmConfigured = false;
     }
+    await this.refreshTraktSetup();
+    try {
+      const [radarr, sonarr] = await Promise.all([axios.get('/api/seer/radarr-servers'), axios.get('/api/seer/sonarr-servers')]);
+      this.radarrServers = radarr.data.servers || [];
+      this.sonarrServers = sonarr.data.servers || [];
+    } catch { /* Seer defaults remain available. */ }
   },
   methods: {
+    serversFor(type) { return type === 'movie' ? this.radarrServers : this.sonarrServers; },
+    selectedServer(type) { return this.serversFor(type).find(server => String(server.id) === String(this.form.request_profiles[type].serverId)); },
+    serverOptions(type) { return this.serversFor(type).map(server => ({ value: server.id, label: `${server.name}${server.is4k ? ' (4K)' : ''}` })); },
+    profileOptions(type) { return (this.selectedServer(type)?.profiles || []).map(profile => ({ value: profile.id, label: profile.name })); },
+    rootFolderOptions(type) { return (this.selectedServer(type)?.rootFolders || []).map(folder => ({ value: folder.path, label: folder.path })); },
+    languageProfileOptions(type) { return (this.selectedServer(type)?.languageProfiles || []).map(profile => ({ value: profile.id, label: profile.name })); },
+    setRequestServer(type, serverId) {
+      const server = this.serversFor(type).find(item => String(item.id) === String(serverId));
+      this.form.request_profiles[type] = { serverId, profileId: '', rootFolder: '', is4k: server?.is4k === true, languageProfileId: server?.activeLanguageProfileId ?? '' };
+    },
     openAdvanced() {
       this.showAdvanced = true;
     },
 
+    async refreshTraktSetup() {
+      this.traktLoading = true;
+      try {
+        await waitForAuthReady();
+        const statusResponse = await axios.get('/api/config/status');
+        this.traktConfigured = statusResponse.data?.trakt_app_configured === true;
+        if (!this.traktConfigured) {
+          this.connectedUsers = [];
+          return;
+        }
+        const traktRes = await listTraktMediaUsers();
+        this.connectedUsers = (traktRes.data?.media_users || [])
+          .filter((user) => user.trakt?.connected);
+      } catch {
+        this.traktConfigured = false;
+        this.connectedUsers = [];
+      } finally {
+        this.traktLoading = false;
+      }
+    },
+
     setJobType(jobType) {
+      if (jobType === 'trakt_recommendations' && !this.traktJobAvailable) {
+        return;
+      }
       this.form.job_type = jobType;
-      // Reset media_type if switching from recommendation to discover and 'both' was selected
       if (jobType === 'discover' && this.form.media_type === 'both') {
         this.form.media_type = 'movie';
       }
-      // Clear user_ids when switching to discover
       if (jobType === 'discover') {
         this.form.user_ids = [];
       }
@@ -302,6 +499,16 @@ export default {
       try {
         const jobData = {
           ...this.form,
+          request_profiles: Object.fromEntries(Object.entries(this.form.request_profiles).map(([type, profile]) => [
+            type,
+            profile.serverId && profile.profileId && profile.rootFolder ? {
+              serverId: Number(profile.serverId),
+              profileId: Number(profile.profileId),
+              rootFolder: profile.rootFolder,
+              is4k: profile.is4k === true,
+              ...(profile.languageProfileId !== '' && profile.languageProfileId != null ? { languageProfileId: Number(profile.languageProfileId) } : {})
+            } : {}
+          ])),
           schedule_type: this.schedule.type,
           schedule_value: this.schedule.value
         };
@@ -360,6 +567,18 @@ export default {
   text-align: center;
 }
 
+.job-type-btn.discover > i {
+  color: var(--color-primary-light);
+}
+
+.job-type-btn.recommendation > i {
+  color: var(--color-warning-light);
+}
+
+.job-type-btn.trakt_recommendations > i {
+  color: var(--color-error-light);
+}
+
 .job-type-btn.active i {
   color: white;
 }
@@ -384,6 +603,36 @@ export default {
   color: rgba(255, 255, 255, 0.8);
 }
 
+.job-type-btn.disabled,
+.job-type-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.job-type-btn.disabled:hover,
+.job-type-btn:disabled:hover {
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-light);
+}
+
+.trakt-setup-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px dashed var(--color-border-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.trakt-setup-alert i {
+  color: var(--color-primary);
+  margin-top: 0.1rem;
+}
+
 /* Info Note */
 .info-note {
   display: flex;
@@ -399,6 +648,18 @@ export default {
 
 .info-note.recommendation {
   background: var(--color-bg-overlay-light);
+}
+
+.info-note.discover i {
+  color: var(--color-primary-light);
+}
+
+.info-note.recommendation i {
+  color: var(--color-warning-light);
+}
+
+.info-note.trakt_recommendations i {
+  color: var(--color-error-light);
 }
 
 .info-note i {
@@ -436,6 +697,56 @@ export default {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin: 0 0 1rem 0;
+}
+
+.delivery-mode-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.delivery-mode-selector .media-type-btn span {
+  display: grid;
+  gap: var(--spacing-xs);
+  text-align: left;
+}
+
+.delivery-mode-selector small {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+}
+
+.request-profiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
+.request-profile-card {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-light);
+  border-radius: var(--radius-md);
+}
+
+.request-profile-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (max-width: 768px) {
+  .delivery-mode-selector,
+  .request-profiles-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .form-group {

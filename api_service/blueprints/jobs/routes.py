@@ -13,7 +13,13 @@ from api_service.db.job_repository import JobRepository
 from api_service.jobs.job_manager import JobManager
 from api_service.jobs.discover_automation import DiscoverAutomation, execute_discover_job
 from api_service.jobs.recommendation_automation import RecommendationAutomation, execute_recommendation_job
+from api_service.jobs.trakt_recommendations_automation import (
+    TraktRecommendationsAutomation,
+    execute_trakt_recommendations_job,
+)
 from api_service.utils.asyncio_loop import run_coroutine_sync
+from api_service.services.config_service import ConfigService
+from api_service.services.seer.seer_client import SeerClient
 
 logger = LoggerManager.get_logger("JobsRoute")
 jobs_bp = Blueprint('jobs', __name__)
@@ -31,6 +37,51 @@ def run_async(coro):
     return run_coroutine_sync(coro, logger)
 
 
+def _validate_request_profiles(value):
+    if value is None:
+        return {}
+    if not isinstance(value, dict) or any(key not in ('movie', 'tv') for key in value):
+        raise ValueError('request_profiles must contain only movie and tv')
+    for profile in value.values():
+        if not isinstance(profile, dict) or any(key not in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId') for key in profile):
+            raise ValueError('Invalid request profile')
+        if profile.get('serverId') is not None and not isinstance(profile['serverId'], int):
+            raise ValueError('serverId must be an integer')
+        if profile.get('profileId') is not None and not isinstance(profile['profileId'], int):
+            raise ValueError('profileId must be an integer')
+        if profile.get('rootFolder') is not None and not isinstance(profile['rootFolder'], str):
+            raise ValueError('rootFolder must be a string')
+        if profile.get('is4k') is not None and not isinstance(profile['is4k'], bool):
+            raise ValueError('is4k must be a boolean')
+        if profile.get('languageProfileId') is not None and not isinstance(profile['languageProfileId'], int):
+            raise ValueError('languageProfileId must be an integer')
+        present = [profile.get(key) is not None for key in ('serverId', 'profileId', 'rootFolder')]
+        if any(present) and not all(present):
+            raise ValueError('serverId, profileId and rootFolder must be selected together')
+    return value
+
+
+def _validate_request_profiles_with_seer(profiles):
+    if not any(profiles.values()):
+        return
+    env = ConfigService.get_runtime_config()
+    async def check():
+        async with SeerClient(env.get('SEER_API_URL', ''), env.get('SEER_TOKEN', ''),
+                              session_token=env.get('SEER_SESSION_TOKEN')) as seer:
+            for media_type, profile in profiles.items():
+                if not profile or profile.get('serverId') is None:
+                    continue
+                servers = await (seer.get_radarr_servers() if media_type == 'movie' else seer.get_sonarr_servers())
+                server = next((item for item in servers or [] if item.get('id') == profile['serverId']), None)
+                if not server:
+                    raise ValueError(f"Unknown {media_type} server")
+                if profile.get('profileId') not in {item.get('id') for item in server.get('profiles', [])}:
+                    raise ValueError(f"Unknown {media_type} quality profile")
+                if profile.get('rootFolder') not in {item.get('path') for item in server.get('rootFolders', [])}:
+                    raise ValueError(f"Unknown {media_type} root folder")
+    run_async(check())
+
+
 def get_job_manager() -> JobManager:
     """
     Get the JobManager instance and ensure it's configured.
@@ -44,6 +95,8 @@ def get_job_manager() -> JobManager:
         manager.set_job_executor(execute_discover_job, job_type='discover')
     if 'recommendation' not in manager._job_executors:
         manager.set_job_executor(execute_recommendation_job, job_type='recommendation')
+    if 'trakt_recommendations' not in manager._job_executors:
+        manager.set_job_executor(execute_trakt_recommendations_job, job_type='trakt_recommendations')
     return manager
 
 
@@ -76,10 +129,89 @@ def get_jobs():
             scheduler_id = f"discover_job_{job['id']}"
             job['next_run'] = scheduled.get(scheduler_id)
 
-        return jsonify({'status': 'success', 'jobs': jobs}), 200
+        return jsonify({
+            'status': 'success',
+            'jobs': jobs,
+            'request_approval_default': load_env_vars().get('REQUIRE_REQUEST_APPROVAL', False),
+        }), 200
     except Exception as e:
         logger.error(f"Error retrieving jobs: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
+
+
+@jobs_bp.route('/suggestions', methods=['GET'])
+def get_suggestions():
+    user = g.current_user
+    owner_id = None if user.get('role') == 'admin' else int(user['id'])
+    status = request.args.get('status', 'awaiting_approval')
+    if status not in ('awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed'):
+        return jsonify({'status': 'error', 'message': 'Invalid status'}), 400
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+        per_page = min(100, max(1, int(request.args.get('per_page', 24))))
+    except ValueError:
+        return jsonify({'status': 'error', 'message': 'Invalid pagination'}), 400
+    items, total = JobRepository().db.list_suggestions(
+        owner_id, status, request.args.get('search', '').strip()[:100], page, per_page)
+    return jsonify({'status': 'success', 'items': items, 'total': total,
+                    'page': page, 'pages': max(1, (total + per_page - 1) // per_page)}), 200
+
+
+@jobs_bp.route('/suggestions/approve', methods=['POST'])
+@limiter.limit("20 per minute")
+def approve_suggestions():
+    return _decide_suggestions(True)
+
+
+@jobs_bp.route('/suggestions/blacklist', methods=['POST'])
+@limiter.limit("20 per minute")
+def blacklist_suggestions():
+    return _decide_suggestions(False, blacklist=True)
+
+
+@jobs_bp.route('/suggestions/reject', methods=['POST'])
+@limiter.limit("20 per minute")
+def reject_suggestions():
+    return _decide_suggestions(False)
+
+
+@jobs_bp.route('/suggestions/retry', methods=['POST'])
+@limiter.limit("20 per minute")
+def retry_suggestions():
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids')
+    if not isinstance(ids, list) or not ids or len(ids) > 100 or any(not isinstance(item, int) for item in ids):
+        return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
+    user = g.current_user
+    owner_id = None if user.get('role') == 'admin' else int(user['id'])
+    changed = JobRepository().db.retry_suggestions(ids, owner_id)
+    return jsonify({'status': 'success', 'updated': changed}), 200
+
+
+@jobs_bp.route('/suggestions/blacklist', methods=['GET'])
+@require_role('admin')
+def get_suggestion_blacklist():
+    return jsonify({'status': 'success', 'items': JobRepository().db.list_blacklist()}), 200
+
+
+@jobs_bp.route('/suggestions/blacklist/<media_type>/<tmdb_id>', methods=['DELETE'])
+@require_role('admin')
+def restore_blacklisted_suggestion(media_type, tmdb_id):
+    if media_type not in ('movie', 'tv'):
+        return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400
+    removed = JobRepository().db.remove_blacklist(tmdb_id, media_type)
+    return jsonify({'status': 'success', 'removed': removed}), 200
+
+
+def _decide_suggestions(approve, blacklist=False):
+    data = request.get_json(silent=True) or {}
+    ids = data.get('ids')
+    if not isinstance(ids, list) or not ids or len(ids) > 100 or any(not isinstance(item, int) for item in ids):
+        return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
+    user = g.current_user
+    owner_id = None if user.get('role') == 'admin' else int(user['id'])
+    changed = JobRepository().db.decide_suggestions(ids, owner_id, int(user['id']), approve, blacklist)
+    return jsonify({'status': 'success', 'updated': changed}), 200
 
 
 @jobs_bp.route('/<int:job_id>', methods=['GET'])
@@ -165,12 +297,36 @@ def create_job():
 
         # Set default job_type
         job_type = data.get('job_type', 'discover')
-        if job_type not in ['discover', 'recommendation']:
+        if job_type not in ['discover', 'recommendation', 'trakt_recommendations']:
             return jsonify({
                 'status': 'error',
-                'message': 'job_type must be "discover" or "recommendation"'
+                'message': 'job_type must be one of: discover, recommendation, trakt_recommendations'
             }), 400
         data['job_type'] = job_type
+        delivery_mode = data.get('delivery_mode', 'inherit')
+        if delivery_mode not in ('inherit', 'automatic', 'manual'):
+            return jsonify({'status': 'error', 'message': 'delivery_mode must be inherit, automatic or manual'}), 400
+        data['delivery_mode'] = delivery_mode
+        approval_pause_mode = data.get('approval_pause_mode', 'inherit')
+        if approval_pause_mode not in ('inherit', 'always', 'never'):
+            return jsonify({'status': 'error', 'message': 'approval_pause_mode must be inherit, always or never'}), 400
+        data['approval_pause_mode'] = approval_pause_mode
+        try:
+            data['request_profiles'] = _validate_request_profiles(data.get('request_profiles'))
+            _validate_request_profiles_with_seer(data['request_profiles'])
+        except ValueError as exc:
+            return jsonify({'status': 'error', 'message': str(exc)}), 400
+        identity_mode = data.get('seer_identity_mode', 'technical_user')
+        if identity_mode not in ('matching_user', 'technical_user', 'admin_user'):
+            return jsonify({'status': 'error', 'message': 'Invalid seer_identity_mode'}), 400
+        if identity_mode == 'admin_user' and getattr(g, 'current_user', {}).get('role') != 'admin':
+            return jsonify({'status': 'error', 'message': 'admin_user identity requires an admin job owner'}), 403
+        try:
+            data['unwatched_suggestion_days'] = int(data.get('unwatched_suggestion_days', 7))
+            if data['unwatched_suggestion_days'] < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            return jsonify({'status': 'error', 'message': 'unwatched_suggestion_days must be a positive integer'}), 400
         
         # Set owner_id from current user - never allow client to override
         current_user = getattr(g, 'current_user', None)
@@ -186,6 +342,12 @@ def create_job():
             return jsonify({
                 'status': 'error',
                 'message': f'media_type must be one of: {", ".join(valid_media_types)}'
+            }), 400
+
+        if job_type == 'trakt_recommendations' and len(data.get('user_ids') or []) != 1:
+            return jsonify({
+                'status': 'error',
+                'message': 'Trakt recommendations jobs require exactly one linked media user'
             }), 400
 
         # Validate schedule_type
@@ -247,14 +409,51 @@ def update_job(job_id: int):
             if existing.get('owner_id') != user_id:
                 return jsonify({'status': 'error', 'message': 'Insufficient permissions'}), 403
 
-        # Validate media_type if provided
+        # Validate job_type if provided
         job_type = data.get('job_type', existing.get('job_type', 'discover'))
+        if 'request_profiles' in data:
+            try:
+                data['request_profiles'] = _validate_request_profiles(data['request_profiles'])
+                _validate_request_profiles_with_seer(data['request_profiles'])
+            except ValueError as exc:
+                return jsonify({'status': 'error', 'message': str(exc)}), 400
+        if 'delivery_mode' in data and data['delivery_mode'] not in ('inherit', 'automatic', 'manual'):
+            return jsonify({'status': 'error', 'message': 'delivery_mode must be inherit, automatic or manual'}), 400
+        if 'approval_pause_mode' in data and data['approval_pause_mode'] not in ('inherit', 'always', 'never'):
+            return jsonify({'status': 'error', 'message': 'approval_pause_mode must be inherit, always or never'}), 400
+        if 'seer_identity_mode' in data:
+            if data['seer_identity_mode'] not in ('matching_user', 'technical_user', 'admin_user'):
+                return jsonify({'status': 'error', 'message': 'Invalid seer_identity_mode'}), 400
+            if data['seer_identity_mode'] == 'admin_user' and current_user.get('role') != 'admin':
+                return jsonify({'status': 'error', 'message': 'admin_user identity requires an admin job owner'}), 403
+        if 'unwatched_suggestion_days' in data:
+            try:
+                data['unwatched_suggestion_days'] = int(data['unwatched_suggestion_days'])
+                if data['unwatched_suggestion_days'] < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return jsonify({'status': 'error', 'message': 'unwatched_suggestion_days must be a positive integer'}), 400
+        if 'job_type' in data and job_type not in ['discover', 'recommendation', 'trakt_recommendations']:
+            return jsonify({
+                'status': 'error',
+                'message': 'job_type must be one of: discover, recommendation, trakt_recommendations'
+            }), 400
+
+        # Validate media_type if provided
         valid_media_types = ['movie', 'tv'] if job_type == 'discover' else ['movie', 'tv', 'both']
         if 'media_type' in data and data['media_type'] not in valid_media_types:
             return jsonify({
                 'status': 'error',
                 'message': f'media_type must be one of: {", ".join(valid_media_types)}'
             }), 400
+
+        if job_type == 'trakt_recommendations':
+            user_ids = data.get('user_ids', existing.get('user_ids') or [])
+            if len(user_ids) != 1:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Trakt recommendations jobs require exactly one linked media user'
+                }), 400
 
         # Validate schedule_type if provided
         if 'schedule_type' in data and data['schedule_type'] not in ['preset', 'cron']:
@@ -442,6 +641,8 @@ def run_job_now(job_id: int):
         # Execute job based on type (async function called synchronously)
         if job_type == 'recommendation':
             result = run_async(execute_recommendation_job(job_id))
+        elif job_type == 'trakt_recommendations':
+            result = run_async(execute_trakt_recommendations_job(job_id))
         else:
             result = run_async(execute_discover_job(job_id))
 
@@ -502,6 +703,8 @@ def dry_run_job(job_id: int):
         async def _run():
             if job_type == 'recommendation':
                 automation = await RecommendationAutomation.create(job_id, dry_run=True)
+            elif job_type == 'trakt_recommendations':
+                automation = await TraktRecommendationsAutomation.create(job_id, dry_run=True)
             else:
                 automation = await DiscoverAutomation.create(job_id)
             return await automation.run(dry_run=True)
@@ -559,6 +762,8 @@ def _run_all_jobs_in_background():
                     continue
                 if job_type == 'recommendation':
                     run_async(execute_recommendation_job(job_id))
+                elif job_type == 'trakt_recommendations':
+                    run_async(execute_trakt_recommendations_job(job_id))
                 else:
                     run_async(execute_discover_job(job_id))
                 logger.info(f"Force run all: job {job_id} completed")

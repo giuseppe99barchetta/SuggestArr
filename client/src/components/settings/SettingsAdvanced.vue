@@ -419,6 +419,17 @@ LLM_MODEL=gpt-4o-mini</code></pre>
         </div>
 
         <div class="form-group">
+          <BaseCheckbox
+            v-model="localConfig.ENABLE_API_CACHING"
+            :disabled="isLoading"
+            label="Enable TMDb response caching"
+          />
+          <small class="form-help">
+            Cache repeated TMDb metadata requests to reduce external API calls
+          </small>
+        </div>
+
+        <div class="form-group">
           <button
             @click="clearCache"
             class="btn btn-outline btn-sm"
@@ -428,62 +439,64 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             Clear Cache
           </button>
           <small class="form-help">
-            Clear all cached data and force fresh API calls
+            Clear cached TMDb metadata and force fresh API calls
           </small>
         </div>
       </div>
 
-      <!-- API Settings -->
-      <div class="settings-group">
+      <!-- Request Workflow -->
+      <div class="settings-group request-workflow-settings">
         <h3>
-          <i class="fas fa-code"></i>
-          API Settings
+          <i class="fas fa-user-check"></i>
+          Request Workflow
         </h3>
 
-        <div class="form-group">
-          <label for="apiTimeout">API Timeout (seconds)</label>
-          <input
-            id="apiTimeout"
-            v-model.number="localConfig.API_TIMEOUT"
-            type="number"
-            min="5"
-            max="120"
-            placeholder="30"
-            class="form-control"
+        <div class="form-group workflow-setting">
+          <BaseCheckbox
+            v-model="localConfig.REQUIRE_REQUEST_APPROVAL"
             :disabled="isLoading"
+            label="Approve requests before sending them to Seer"
+            description="Default for jobs using the global delivery setting. Each job can override it."
           />
-          <small class="form-help">
-            Timeout for external API calls (5-120 seconds)
-          </small>
         </div>
 
-        <div class="form-group">
-          <label for="apiRetries">API Retry Attempts</label>
+        <div class="form-group workflow-setting">
+          <label class="workflow-setting__label" for="requestVisibility">Requests visible to regular users</label>
+          <BaseDropdown
+            v-model="localConfig.REQUEST_VISIBILITY"
+            :options="requestVisibilityOptions"
+            :disabled="isLoading"
+            id="requestVisibility"
+          />
+          <p class="workflow-setting__help">
+            Admins always see every request. Regular users can be limited to their linked Plex, Jellyfin, or Emby account.
+          </p>
+        </div>
+
+        <div class="form-group workflow-setting">
+          <BaseCheckbox
+            v-model="localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS"
+            :disabled="isLoading"
+            label="Pause jobs while SuggestArr approvals are pending"
+            description="Default for jobs using the global pause setting. Each job can override it."
+          />
+        </div>
+
+        <div class="form-group workflow-setting">
+          <label class="workflow-setting__label" for="autoRejectApprovalDays">Auto-reject pending suggestions after days</label>
           <input
-            id="apiRetries"
-            v-model.number="localConfig.API_RETRIES"
+            id="autoRejectApprovalDays"
+            v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS"
             type="number"
             min="0"
-            max="5"
-            placeholder="3"
+            max="365"
             class="form-control"
             :disabled="isLoading"
           />
-          <small class="form-help">
-            Number of retry attempts for failed API calls (0-5)
-          </small>
+          <p class="workflow-setting__help">
+            Use 0 to keep pending suggestions until they are reviewed manually.
+          </p>
         </div>
-
-        <div class="form-group">
-          <BaseCheckbox
-            v-model="localConfig.ENABLE_API_CACHING"
-            :disabled="isLoading"
-            label="Enable API response caching"
-          />
-          <small class="form-help">
-            Cache API responses to reduce external service load
-          </small>
-       </div>
       </div>
 
       <div class="settings-group">
@@ -635,6 +648,10 @@ export default {
         { value: 'enabled', label: 'Require Login' },
         { value: 'local_bypass', label: 'Allow Local Network Without Login' },
         { value: 'disabled', label: 'Disable Authentication' },
+      ],
+      requestVisibilityOptions: [
+        { value: 'all', label: 'All requests' },
+        { value: 'own', label: 'Own linked account only' },
       ]
     };
   },
@@ -668,9 +685,11 @@ export default {
           ENABLE_PERFORMANCE_MONITORING: false,
           CACHE_TTL: 24,
           MAX_CACHE_SIZE: 100,
-          API_TIMEOUT: 30,
-          API_RETRIES: 3,
           ENABLE_API_CACHING: true,
+          REQUIRE_REQUEST_APPROVAL: false,
+          REQUEST_VISIBILITY: 'all',
+          PAUSE_JOBS_WITH_PENDING_APPROVALS: false,
+          AUTO_REJECT_APPROVAL_DAYS: 0,
           ENABLE_BETA_FEATURES: false,
           ENABLE_ADVANCED_ALGORITHM: false,
           OPENAI_API_KEY: '',
@@ -799,9 +818,9 @@ export default {
     },
 
     async clearCache() {
-      if (confirm('Are you sure you want to clear all cached data? This may temporarily slow down the application.')) {
+      if (confirm('Are you sure you want to clear cached TMDb data? This may temporarily slow down metadata requests.')) {
         try {
-          await axios.post('/api/cache/clear');
+          await axios.post('/api/tmdb/cache/clear');
           this.$toast.success('Cache cleared successfully!');
         } catch (error) {
           this.$toast.error('Failed to clear cache');
@@ -842,9 +861,11 @@ export default {
             ENABLE_PERFORMANCE_MONITORING: this.localConfig.ENABLE_PERFORMANCE_MONITORING || false,
             CACHE_TTL: this.localConfig.CACHE_TTL || 24,
             MAX_CACHE_SIZE: this.localConfig.MAX_CACHE_SIZE || 100,
-            API_TIMEOUT: this.localConfig.API_TIMEOUT || 30,
-            API_RETRIES: this.localConfig.API_RETRIES || 3,
             ENABLE_API_CACHING: this.localConfig.ENABLE_API_CACHING !== false,
+            REQUIRE_REQUEST_APPROVAL: this.localConfig.REQUIRE_REQUEST_APPROVAL !== false,
+            REQUEST_VISIBILITY: this.localConfig.REQUEST_VISIBILITY === 'own' ? 'own' : 'all',
+            PAUSE_JOBS_WITH_PENDING_APPROVALS: this.localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS === true,
+            AUTO_REJECT_APPROVAL_DAYS: Math.max(0, Number(this.localConfig.AUTO_REJECT_APPROVAL_DAYS) || 0),
             ENABLE_BETA_FEATURES: this.localConfig.ENABLE_BETA_FEATURES || false,
             ENABLE_ADVANCED_ALGORITHM: this.localConfig.ENABLE_ADVANCED_ALGORITHM || false,
             OPENAI_API_KEY: this.localConfig.OPENAI_API_KEY || '',
@@ -896,8 +917,6 @@ export default {
         ENABLE_PERFORMANCE_MONITORING: false,
         CACHE_TTL: 24,
         MAX_CACHE_SIZE: 100,
-        API_TIMEOUT: 30,
-        API_RETRIES: 3,
         ENABLE_API_CACHING: true,
         ENABLE_BETA_FEATURES: false,
         ENABLE_ADVANCED_ALGORITHM: false,
@@ -982,12 +1001,13 @@ export default {
 
 .form-group label:not(.base-checkbox) {
   display: block;
-  margin-top: 0.5rem;
+  margin-bottom: var(--spacing-xs);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
 }
 
 .form-control {
+  box-sizing: border-box;
   width: 100%;
   padding: 0.75rem;
   background: var(--color-bg-interactive);
@@ -996,6 +1016,10 @@ export default {
   color: var(--color-text-primary);
   font-size: 1rem;
   transition: var(--transition-base);
+}
+
+.settings-group > :deep(.form-group-modern) {
+  margin-bottom: var(--spacing-lg);
 }
 
 .form-control:focus {
@@ -1016,6 +1040,43 @@ export default {
   font-size: 0.875rem;
   color: var(--color-text-muted);
   line-height: 1.4;
+}
+
+.request-workflow-settings h3 {
+  margin-bottom: 0;
+}
+
+.request-workflow-settings .workflow-setting {
+  margin: 0;
+  padding: var(--spacing-md) 0;
+}
+
+.request-workflow-settings .workflow-setting:last-child {
+  padding-bottom: 0;
+}
+
+.request-workflow-settings .workflow-setting__label {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-normal);
+}
+
+.request-workflow-settings .workflow-setting__help {
+  margin: var(--spacing-2xs) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+}
+
+.request-workflow-settings .form-control,
+.request-workflow-settings :deep(.value-text),
+.request-workflow-settings :deep(.placeholder-text) {
+  font-size: var(--font-size-sm);
+}
+
+.request-workflow-settings :deep(.base-checkbox) {
+  width: 100%;
 }
 
 .section-description {

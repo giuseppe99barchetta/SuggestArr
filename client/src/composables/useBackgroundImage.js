@@ -1,5 +1,7 @@
 import { ref, onUnmounted } from 'vue';
-import { fetchRandomMovieImage } from '@/api/tmdbApi';
+import { fetchRandomMovieImages } from '@/api/tmdbApi';
+
+const ROTATION_INTERVAL = 10000;
 
 export function useBackgroundImage() {
   const bg1Url = ref('/images/default1.jpg');
@@ -10,6 +12,9 @@ export function useBackgroundImage() {
   const intervalId = ref(null);
   const defaultImages = ['/images/default1.jpg', '/images/default2.jpg', '/images/default3.jpg'];
   const currentDefaultImageIndex = ref(0);
+  const movieImages = ref([]);
+  const currentMovieImageIndex = ref(0);
+  const rotationMode = ref(null);
 
   // Crossfade to a new image using two alternating layers.
   // Step 1: write the new URL onto the hidden layer.
@@ -63,25 +68,30 @@ export function useBackgroundImage() {
   }
 
   function startDefaultImageRotation() {
-    stopBackgroundImageRotation();
+    clearRotationTimer();
+    rotationMode.value = 'default';
     intervalId.value = setInterval(() => {
       currentDefaultImageIndex.value = (currentDefaultImageIndex.value + 1) % defaultImages.length;
       changeBackground(defaultImages[currentDefaultImageIndex.value]);
-    }, 10000);
+    }, ROTATION_INTERVAL);
   }
 
   function startBackgroundImageRotation() {
-    stopBackgroundImageRotation();
-    fetchRandomMovieImageAsync();
-    intervalId.value = setInterval(() => fetchRandomMovieImageAsync(), 10000);
+    clearRotationTimer();
+    rotationMode.value = 'tmdb';
+    showNextMovieImage();
+    intervalId.value = setInterval(showNextMovieImage, ROTATION_INTERVAL);
   }
 
-  async function fetchRandomMovieImageAsync() {
+  async function showNextMovieImage() {
     try {
-      const imageUrl = await fetchRandomMovieImage();
-      if (imageUrl) {
-        changeBackground(imageUrl);
-      } else if (imageUrl === null) {
+      const images = await fetchRandomMovieImages();
+      if (images?.length) {
+        movieImages.value = images;
+        currentMovieImageIndex.value %= images.length;
+        changeBackground(images[currentMovieImageIndex.value]);
+        currentMovieImageIndex.value = (currentMovieImageIndex.value + 1) % images.length;
+      } else {
         console.warn("TMDB not configured or no image, falling back to default rotation.");
         startDefaultImageRotation();
       }
@@ -91,15 +101,33 @@ export function useBackgroundImage() {
     }
   }
 
-  function stopBackgroundImageRotation() {
+  function clearRotationTimer() {
     if (intervalId.value) {
       clearInterval(intervalId.value);
       intervalId.value = null;
     }
   }
 
+  function stopBackgroundImageRotation() {
+    clearRotationTimer();
+    rotationMode.value = null;
+  }
+
+  function handleVisibilityChange() {
+    if (document.hidden) {
+      clearRotationTimer();
+    } else if (rotationMode.value === 'tmdb') {
+      startBackgroundImageRotation();
+    } else if (rotationMode.value === 'default') {
+      startDefaultImageRotation();
+    }
+  }
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
   onUnmounted(() => {
     stopBackgroundImageRotation();
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
   });
 
   return {

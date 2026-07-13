@@ -28,7 +28,8 @@ class TMDbClient(BaseHTTPClient):
                 include_no_ratings, filter_release_year, filter_language, filter_genre,
                 filter_region_provider, filter_streaming_services, filter_min_runtime=None,
                 rating_source='tmdb', imdb_threshold=None, imdb_min_votes=None,
-                omdb_client=None, include_tvod=False, filter_release_year_to=None
+                omdb_client=None, include_tvod=False, filter_release_year_to=None,
+                filter_genres_include=None, only_first_movie_in_collection=False
                 ):
         """
         Initializes the TMDbClient with the provided API key.
@@ -51,6 +52,7 @@ class TMDbClient(BaseHTTPClient):
         self.release_year_filter = filter_release_year
         self.release_year_filter_to = int(filter_release_year_to) if filter_release_year_to is not None else None
         self.genre_filter = filter_genre
+        self.included_genres = filter_genres_include or []
         self.pages = (self.search_size + CONTENT_PER_PAGE - 1) // CONTENT_PER_PAGE
         self.region_provider = filter_region_provider
         self.excluded_streaming_services = filter_streaming_services
@@ -60,6 +62,8 @@ class TMDbClient(BaseHTTPClient):
         self.imdb_min_votes = int(imdb_min_votes) if imdb_min_votes is not None else 100
         self.omdb_client = omdb_client
         self.include_tvod = include_tvod
+        self.only_first_movie_in_collection = bool(only_first_movie_in_collection)
+        self._collection_first_movie_ids = {}
         self.tmdb_api_url = "https://api.themoviedb.org/3"
         self.logger.debug("TMDbClient initialized with API key: ***")
 
@@ -82,7 +86,11 @@ class TMDbClient(BaseHTTPClient):
             if not dry_run and not core_passed:
                 return None
 
-            needs_detail_call = self.filter_min_runtime or self.rating_source in ('imdb', 'both')
+            needs_detail_call = (
+                self.filter_min_runtime
+                or self.rating_source in ('imdb', 'both')
+                or (content_type == 'movie' and self.only_first_movie_in_collection)
+            )
             runtime = None
             imdb_id = None
 
@@ -92,6 +100,19 @@ class TMDbClient(BaseHTTPClient):
                 details = await self._get_item_details(item['id'], content_type)
                 runtime = details.get('runtime') if details else None
                 imdb_id = details.get('imdb_id') if details else None
+
+            if content_type == 'movie' and self.only_first_movie_in_collection:
+                is_first = await self.is_first_movie_in_collection(item['id'], details)
+                if dry_run:
+                    filter_result['movie_collection'] = {
+                        'passed': is_first, 'label': 'Movie collection',
+                        'reason': None if is_first else 'Not the first movie in its collection',
+                    }
+                    if not is_first:
+                        filter_result['passed'] = False
+                elif not is_first:
+                    self._log_exclusion_reason(item, 'not the first movie in its collection', content_type)
+                    return None
 
             # Runtime check
             if self.filter_min_runtime:
@@ -353,9 +374,20 @@ class TMDbClient(BaseHTTPClient):
             else:
                 results['release_year'] = {'passed': True, 'label': 'Year', 'value': year_str}
 
-        # Genre exclusion filter
+        # Genre filters
+        item_genres = item.get('genre_ids', [])
+        if self.included_genres:
+            included = {int(genre.get('id')) if isinstance(genre, dict) else int(genre)
+                        for genre in self.included_genres}
+            if not included.intersection(item_genres):
+                self._log_exclusion_reason(item, "no included genre matched", content_type)
+                results['genres'] = {
+                    'passed': False, 'label': 'Genres',
+                    'reason': 'Does not match an included genre',
+                }
+                overall = False
+
         if self.genre_filter:
-            item_genres = item.get('genre_ids', [])
             genre_ids_to_exclude = []
             excluded_genres_names = []
 
@@ -410,6 +442,7 @@ class TMDbClient(BaseHTTPClient):
                         return {
                             'runtime': data.get('runtime'),
                             'imdb_id': data.get('imdb_id'),
+                            'belongs_to_collection': data.get('belongs_to_collection'),
                         }
                     else:
                         run_times = data.get('episode_run_time', [])
@@ -424,6 +457,37 @@ class TMDbClient(BaseHTTPClient):
             self.logger.warning("Error fetching details for %s ID %s: %s",
                                 content_type, content_id, str(e).replace(self.api_key, "***"))
         return {}
+
+    async def is_first_movie_in_collection(self, movie_id, details=None):
+        """Return True for standalone movies or the earliest released collection entry."""
+        details = details or await self._get_item_details(movie_id, 'movie')
+        collection = details.get('belongs_to_collection') if details else None
+        if not collection:
+            return True
+
+        collection_id = collection.get('id')
+        if collection_id not in self._collection_first_movie_ids:
+            url = f"{self.tmdb_api_url}/collection/{collection_id}?api_key={self.api_key}"
+            try:
+                session = await self._get_session()
+                async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
+                    if response.status not in HTTP_OK:
+                        return True
+                    parts = (await response.json()).get('parts', [])
+            except aiohttp.ClientError:
+                return True
+
+            released = [
+                part for part in parts
+                if part.get('id') is not None and part.get('release_date')
+            ]
+            if not released:
+                return True
+            self._collection_first_movie_ids[collection_id] = min(
+                released, key=lambda part: part['release_date']
+            )['id']
+
+        return int(movie_id) == int(self._collection_first_movie_ids[collection_id])
 
     async def _get_tv_imdb_id(self, tv_id):
         """

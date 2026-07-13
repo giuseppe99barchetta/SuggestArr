@@ -44,6 +44,11 @@ async def _run_worker() -> int:
     :return: Number of items successfully submitted.
     """
     db = DatabaseManager()
+    env = ConfigService.get_runtime_config()
+
+    expired = db.expire_pending_approvals(int(env.get('AUTO_REJECT_APPROVAL_DAYS') or 0))
+    if expired:
+        logger.info("Queue worker: automatically rejected %d expired approval(s).", expired)
 
     # Recover rows stuck in 'submitting' from a previous crash
     db.reset_stale_inflight(cutoff_minutes=10)
@@ -55,7 +60,6 @@ async def _run_worker() -> int:
 
     logger.info("Queue worker: processing %d item(s).", len(items))
 
-    env = ConfigService.get_runtime_config()
     seer = SeerClient(
         env.get('SEER_API_URL', ''),
         env.get('SEER_TOKEN', ''),
@@ -84,7 +88,7 @@ async def _run_worker() -> int:
                     "Queue worker: corrupt payload for %s tmdb:%s (row %s) — %s. Marking as failed.",
                     media_type, tmdb_id, row_id, exc,
                 )
-                db.mark_pending_failed(row_id, retry_count)
+                db.mark_pending_failed(row_id, retry_count, "Corrupt queued payload")
                 continue
 
             # Skip if the item was submitted by another path while it sat in the queue
@@ -122,7 +126,7 @@ async def _run_worker() -> int:
             else:
                 new_retry = retry_count + 1
                 if new_retry >= MAX_RETRIES:
-                    db.mark_pending_failed(row_id, new_retry)
+                    db.mark_pending_failed(row_id, new_retry, "Seer rejected the request after maximum retries")
                     logger.error(
                         "Queue worker: %s tmdb:%s permanently failed after %d retries.",
                         media_type, tmdb_id, new_retry,

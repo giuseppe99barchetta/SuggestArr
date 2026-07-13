@@ -25,7 +25,7 @@
         <div class="request-header">
           <!-- Back Button -->
           <div class="header-top">
-            <button @click="goHome" class="back-button">
+            <button type="button" class="back-button" @click="goHome">
               <i class="fas fa-arrow-left"></i>
               <span>Back to Home</span>
             </button>
@@ -33,15 +33,15 @@
           </div>
 
           <div class="header-content">
-            <h1 class="page-title">Request History</h1>
-            <p class="page-subtitle">Track your content requests and viewing patterns</p>
+            <h1 class="page-title">Requests</h1>
+            <p class="page-subtitle">Review approvals and track requests sent to Seer</p>
           </div>
         </div>
 
         <!-- View Toggle -->
         <div class="view-toggle-section">
           <div class="view-toggle">
-            <button 
+            <button
               @click="viewMode = 'by-content'" 
               :class="{ active: viewMode === 'by-content' }"
               class="view-toggle-btn">
@@ -84,8 +84,9 @@
                 <i class="fas fa-times"></i>
               </span>
             </div>
+            <button type="button" class="mobile-filters-toggle" :class="{ active: showMobileFilters }" :aria-expanded="showMobileFilters.toString()" aria-controls="request-filters" @click="showMobileFilters = !showMobileFilters"><span><i class="fas fa-sliders-h"></i> Filters</span><span v-if="activeFilterCount" class="mobile-filter-count">{{ activeFilterCount }}</span><i class="fas fa-chevron-down mobile-filter-chevron"></i></button>
             <!-- Filter Buttons -->
-            <div class="filter-bar">
+            <div id="request-filters" class="filter-bar" :class="{ 'mobile-open': showMobileFilters }">
               <!-- Sort By -->
               <BaseDropdown
                 v-model="sortBy"
@@ -103,20 +104,40 @@
                 :disabled="loading"
                 id="mediaType"
               />
+
+              <BaseDropdown
+                v-if="requestUserOptions.length > 1"
+                v-model="requestUserFilter"
+                :options="requestUserOptions"
+                placeholder="Requested for"
+                :disabled="loading"
+                id="requestUser"
+              />
+
+              <BaseDropdown
+                v-if="viewMode === 'all-requests' && approvalEnabled"
+                v-model="requestStatusFilter"
+                :options="requestStatusOptions"
+                placeholder="Request status"
+                :disabled="loading"
+                id="requestStatus"
+              />
+              <button v-if="viewMode === 'all-requests'" type="button" class="btn btn-outline workflow-bulk-toggle" :class="{ active: workflowBulkMode }" :disabled="!approvalEnabled || requestStatusFilter === 'sent' || workflowTotal < 1" :title="bulkModeDisabledReason" @click="workflowBulkMode = !workflowBulkMode"><i class="fas fa-check-double"></i><span>{{ workflowBulkMode ? 'Exit bulk mode' : 'Bulk mode' }}</span></button>
             
               <!-- Clear Filters -->
               <button 
-                v-if="sortBy !== 'date-desc' || mediaTypeFilter !== 'all'" 
+                v-if="sortBy !== 'date-desc' || mediaTypeFilter !== 'all' || requestUserFilter !== 'all'"
                 @click="clearFilters" 
-                class="clear-filters-btn">
+                class="clear-filters-btn"
+                aria-label="Reset filters"
+                title="Reset filters">
                 <i class="fas fa-undo"></i>
-                <span>Reset</span>
               </button>
             </div>
           </div>
         
           <!-- Search Results Count -->
-          <div class="search-results-count" v-if="searchQuery || mediaTypeFilter !== 'all'">
+          <div class="search-results-count" v-if="searchQuery || mediaTypeFilter !== 'all' || requestUserFilter !== 'all'">
             Found {{ viewMode === 'by-content' ? filteredAndSortedSources.length : filteredAndSortedRequests.length }} result(s)
           </div>
         </div>
@@ -136,17 +157,24 @@
                 <!-- Card Header with Backdrop -->
                 <div class="card-header" @click="openModal(source)">
                   <div class="backdrop-container">
-                    <img 
-                      v-if="source.backdrop_path" 
-                      :src="source.backdrop_path" 
+                    <img
+                      v-if="source.backdrop_path && !source.visual"
+                      :src="source.backdrop_path"
                       :alt="source.title"
                       class="backdrop-image" />
-                    
+                    <div
+                      v-else-if="source.visual"
+                      class="source-visual-backdrop"
+                      :class="source.visual.key"
+                      :style="{ background: source.visual.gradient }">
+                      <i :class="source.visual.icon" class="source-visual-icon"></i>
+                    </div>
+
                     <!-- Logo overlay -->
                     <div class="backdrop-overlay">
-                      <img 
-                        v-if="source.logo_path" 
-                        :src="source.logo_path" 
+                      <img
+                        v-if="source.logo_path && !source.visual"
+                        :src="source.logo_path"
                         alt="Logo"
                         class="content-logo" />
                       <h3 v-else class="content-title-overlay">{{ source.title }}</h3>
@@ -158,15 +186,15 @@
                 <div class="card-body">
                   <!-- Badges -->
                   <div class="badge-container">
-                    <span class="badge badge-media">
+                    <span v-if="shouldShowSourceMediaBadge(source)" class="badge badge-media">
                       <i :class="source.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
                       {{ source.media_type.toUpperCase() }}
                     </span>
-                    <span class="badge badge-rating">
+                    <span v-if="!source.visual" class="badge badge-rating">
                       <i class="fas fa-star"></i>
-                      {{ source.rating || 'N/A' }}
+                      {{ formatRating(source.rating) }}
                     </span>
-                    <span class="badge badge-date">
+                    <span v-if="!source.visual && source.release_date" class="badge badge-date">
                       <i class="fas fa-calendar"></i>
                       {{ source.release_date }}
                     </span>
@@ -198,6 +226,10 @@
                           <p class="request-date">
                             <i class="fas fa-clock"></i>
                             Requested {{ formatDate(request.requested_at) }}
+                          </p>
+                          <p v-if="request.user_name || request.user_id" class="request-date">
+                            <i class="fas fa-user"></i>
+                            For {{ request.user_name || request.user_id }}
                           </p>
                         </div>
                         <i class="fas fa-chevron-right request-arrow"></i>
@@ -242,7 +274,7 @@
                     </span>
                     <span v-if="item.rating" class="badge badge-rating">
                       <i class="fas fa-star"></i>
-                      {{ item.rating }}
+                      {{ formatRating(item.rating) }}
                     </span>
                     <span class="badge badge-requested">
                       <i class="fas fa-clock"></i>
@@ -269,7 +301,28 @@
 
           <!-- View: All Requests -->
           <div v-else key="all-requests">
+            <div v-if="approvalEnabled && requestStatusFilter === 'all' && workflowTotal > 0" class="requests-section-heading">
+              <span class="requests-section-icon"><i class="fas fa-hourglass-half"></i></span>
+              <div><h2>Requests in progress</h2><p>Suggestions waiting for approval or still being processed.</p></div>
+            </div>
+            <RequestWorkflowPanel
+              v-if="approvalEnabled && requestStatusFilter !== 'sent'"
+              :status-filter="requestStatusFilter"
+              :search-query="searchQuery"
+              :media-type="mediaTypeFilter"
+              :requested-for="requestUserFilter"
+              :show-header="false"
+              :show-empty="false"
+              :bulk-mode="workflowBulkMode"
+              @open="openWorkflowModal"
+              @update:total="workflowTotal = $event"
+            />
+            <div v-if="approvalEnabled && requestStatusFilter === 'all' && workflowTotal > 0" class="requests-section-heading requests-section-heading--sent">
+              <span class="requests-section-icon"><i class="fas fa-check"></i></span>
+              <div><h2>Requested media</h2><p>Items already submitted to your media request service.</p></div>
+            </div>
             <transition-group 
+              v-if="!approvalEnabled || requestStatusFilter === 'all' || requestStatusFilter === 'sent'"
               name="fade-slide" 
               tag="div"
               class="requests-grid">
@@ -301,7 +354,7 @@
                     </span>
                     <span class="badge badge-rating">
                       <i class="fas fa-star"></i>
-                      {{ request.rating || 'N/A' }}
+                      {{ formatRating(request.rating) }}
                     </span>
                     <span class="badge badge-requested">
                       <i class="fas fa-clock"></i>
@@ -314,22 +367,24 @@
                     <i class="fas fa-arrow-left"></i>
                     <span>From: <strong>{{ request.source_title }}</strong></span>
                   </div>
+                  <div v-if="request.user_name || request.user_id" class="source-link">
+                    <i class="fas fa-user"></i>
+                    <span>For: <strong>{{ request.user_name || request.user_id }}</strong></span>
+                  </div>
                 </div>
               </div>
             </transition-group>
-
-
           </div>
         </transition>
         <div
-          v-if="hasMoreData && viewMode !== 'ai-requests'"
+          v-if="hasMoreData && viewMode !== 'ai-requests' && (viewMode !== 'all-requests' || requestStatusFilter === 'all' || requestStatusFilter === 'sent')"
           :ref="viewMode === 'by-content' ? 'loadMoreTrigger' : 'loadMoreTriggerRequests'"
           class="load-more-trigger">
           <div class="spinner-small"></div>
           <p>Loading more requests...</p>
         </div>
         <!-- No Results -->
-        <div v-if="viewMode !== 'ai-requests' && (viewMode === 'by-content' ? filteredAndSortedSources : filteredAndSortedRequests).length === 0 && !loading" class="no-results">
+        <div v-if="viewMode !== 'ai-requests' && (viewMode !== 'all-requests' || requestStatusFilter === 'all' || requestStatusFilter === 'sent') && (viewMode === 'by-content' ? filteredAndSortedSources : filteredAndSortedRequests).length === 0 && !loading" class="no-results">
           <i class="fas fa-inbox text-6xl mb-4"></i>
           <h3>No {{ viewMode === 'by-content' ? 'content' : 'requests' }} found</h3>
           <p v-if="searchQuery || mediaTypeFilter !== 'all'">Try adjusting your filters</p>
@@ -365,11 +420,18 @@
             <div class="modal-layout">
               <!-- Left: Poster -->
               <div class="modal-poster-section">
-                <img 
-                  v-if="selectedSource.poster_path" 
-                  :src="selectedSource.poster_path" 
+                <img
+                  v-if="selectedSource.poster_path && !getSourceVisual(selectedSource)"
+                  :src="selectedSource.poster_path"
                   :alt="selectedSource.title"
                   class="modal-poster" />
+                <div
+                  v-else-if="getSourceVisual(selectedSource)"
+                  class="modal-poster-placeholder source-visual-modal"
+                  :class="getSourceVisual(selectedSource).key"
+                  :style="{ background: getSourceVisual(selectedSource).gradient }">
+                  <i :class="getSourceVisual(selectedSource).icon" class="source-visual-icon"></i>
+                </div>
                 <div v-else class="modal-poster-placeholder">
                   <i class="fas fa-image text-6xl"></i>
                 </div>
@@ -387,7 +449,7 @@
                   </span>
                   <span class="badge badge-rating">
                     <i class="fas fa-star"></i>
-                    {{ selectedSource.rating || 'N/A' }}
+                    {{ formatRating(selectedSource.rating) }}
                   </span>
                   <span class="badge badge-date">
                     <i class="fas fa-calendar"></i>
@@ -410,9 +472,9 @@
                 </div>
 
                 <!-- Requested For (user) -->
-                <div v-if="selectedSource.user_name" class="source-link-modal">
+                <div v-if="selectedSource.user_name || selectedSource.user_id" class="source-link-modal">
                   <i class="fas fa-user"></i>
-                  <span>Requested for: <strong>{{ selectedSource.user_name }}</strong></span>
+                  <span>Requested for: <strong>{{ selectedSource.user_name || selectedSource.user_id }}</strong></span>
                 </div>
 
                 <div class="modal-separator"></div>
@@ -455,9 +517,9 @@
                           <i class="fas fa-clock"></i>
                           Requested on {{ formatDate(request.requested_at) }}
                         </p>
-                        <p v-if="request.user_name" class="modal-request-date">
+                        <p v-if="request.user_name || request.user_id" class="modal-request-date">
                           <i class="fas fa-user"></i>
-                          {{ request.user_name }}
+                          {{ request.user_name || request.user_id }}
                         </p>
                       </div>
                       <button class="modal-request-btn">
@@ -482,13 +544,16 @@ import { useBackgroundImage } from '@/composables/useBackgroundImage';
 import Footer from './AppFooter.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import { formatDate } from '@/utils/dateUtils.js';
+import { getRequestSourceVisual } from '@/utils/jobTypeVisuals.js';
 import { getAiSearchRequests } from '@/api/api.js';
+import RequestWorkflowPanel from './RequestWorkflowPanel.vue';
 
 export default {
   name: "RequestsPage",
   components: {
     Footer,
     BaseDropdown,
+    RequestWorkflowPanel,
   },
   setup() {
     const { bg1Url, bg2Url, activeBg, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
@@ -512,6 +577,8 @@ export default {
       searchQuery: "",
       sortBy: 'date-desc',
       mediaTypeFilter: 'all',
+      requestUserFilter: 'all',
+      requestUsers: [],
       showModal: false,
       selectedSource: null,
       loading: false,
@@ -539,16 +606,44 @@ export default {
         { value: 'all', label: 'All Types' },
         { value: 'movie', label: 'Movies' },
         { value: 'tv', label: 'TV Shows' }
+      ],
+      requestStatusFilter: 'all',
+      approvalEnabled: false,
+      workflowTotal: null,
+      showMobileFilters: false,
+      workflowBulkMode: false,
+      requestStatusOptions: [
+        { value: 'all', label: 'All statuses' },
+        { value: 'awaiting_approval', label: 'Waiting approval' },
+        { value: 'queued', label: 'Queued' },
+        { value: 'sent', label: 'Sent' },
+        { value: 'rejected', label: 'Rejected' },
+        { value: 'failed', label: 'Failed' },
+        { value: 'blacklisted', label: 'Blacklisted' }
       ]
     };
   },
   computed: {
+    activeFilterCount() {
+      return Number(this.sortBy !== 'date-desc') + Number(this.mediaTypeFilter !== 'all') + Number(this.requestUserFilter !== 'all') + Number(this.requestStatusFilter !== 'all') + Number(this.workflowBulkMode);
+    },
+    bulkModeDisabledReason() {
+      if (!this.approvalEnabled) return 'Bulk mode requires a job with manual approval enabled';
+      if (this.requestStatusFilter === 'sent') return 'Sent requests cannot be edited in bulk';
+      if (this.workflowTotal === null) return 'Loading requests';
+      if (this.workflowTotal === 0) return 'No requests available for bulk actions';
+      return '';
+    },
     totalRequests() {
       return this.totalRequestsCount || this.sources.reduce((sum, source) => sum + source.requests.length, 0);
     },
 
     totalSources() {
       return this.totalSourcesCount || this.sources.length;
+    },
+
+    requestUserOptions() {
+      return [{ value: 'all', label: 'All accounts' }, ...this.requestUsers.map(user => ({ value: String(user.id), label: user.name }))];
     },
 
     allRequestsFlat() {
@@ -568,12 +663,20 @@ export default {
       const query = this.searchQuery.toLowerCase();
       let filtered = this.sources;
 
-      // Filter by media type
       if (this.mediaTypeFilter !== 'all') {
-        filtered = filtered.filter(source => source.media_type === this.mediaTypeFilter);
+        filtered = filtered
+          .map((source) => {
+            const matchingRequests = source.requests.filter(
+              (request) => request.media_type === this.mediaTypeFilter
+            );
+            if (matchingRequests.length === 0) {
+              return null;
+            }
+            return { ...source, requests: matchingRequests };
+          })
+          .filter(Boolean);
       }
 
-      // Filter by search query
       if (query) {
         filtered = filtered.filter((source) => {
           const sourceMatch = source.title && source.title.toLowerCase().includes(query);
@@ -624,8 +727,15 @@ export default {
     },
   },
   watch: {
+    workflowTotal(value) {
+      if (value === 0) this.workflowBulkMode = false;
+    },
+    requestStatusFilter() {
+      this.workflowBulkMode = false;
+      this.workflowTotal = null;
+    },
     viewMode(newMode) {
-      if (newMode === 'ai-requests') return; // handled by switchToAiRequests
+      if (newMode === 'ai-requests') return;
       this.$nextTick(() => {
         setTimeout(() => {
           this.initObserver();
@@ -648,6 +758,10 @@ export default {
         this.initObserver();
       });
     },
+
+    requestUserFilter() {
+      this.resetAndReload();
+    },
     
     searchQuery() {
       this.$nextTick(() => {
@@ -656,7 +770,47 @@ export default {
     },
   },
   methods: {
+    async loadApprovalState() {
+      try {
+        const { data } = await axios.get('/api/jobs');
+        this.approvalEnabled = (data.jobs || []).some(job => job.delivery_mode === 'manual');
+        if (!this.approvalEnabled) {
+          this.requestStatusFilter = 'sent';
+          this.workflowTotal = 0;
+          return;
+        }
+        const workflow = await axios.get('/api/automation/requests/workflow', { params: { status: this.requestStatusFilter, page: 1, per_page: 1 } });
+        this.workflowTotal = workflow.data.total || 0;
+      } catch (error) {
+        console.error('Error loading approval jobs:', error);
+      }
+    },
+
     formatDate,
+    formatRating(value) {
+      if (value === null || value === undefined || value === '') return 'N/A';
+      const rating = Number(value);
+      return Number.isFinite(rating) ? rating.toFixed(1) : 'N/A';
+    },
+
+    getSourceVisual(source) {
+      return source?.visual ?? getRequestSourceVisual(source);
+    },
+
+    shouldShowSourceMediaBadge(source) {
+      if (!source?.media_type) {
+        return false;
+      }
+      if (source.visual && this.sourceHasMixedMediaTypes(source)) {
+        return false;
+      }
+      return true;
+    },
+
+    sourceHasMixedMediaTypes(source) {
+      const types = new Set((source?.requests || []).map((request) => request.media_type));
+      return types.size > 1;
+    },
 
     resetAndReload() {
       console.log('🔄 Sorting changed, reloading data...');
@@ -724,6 +878,7 @@ export default {
     clearFilters() {
       this.sortBy = 'date-desc';
       this.mediaTypeFilter = 'all';
+      this.requestUserFilter = 'all';
       this.searchQuery = '';
     },
 
@@ -798,13 +953,15 @@ export default {
           page: page,
           sort_by: this.sortBy,
         };
+        if (this.requestUserFilter !== 'all') params.user_id = this.requestUserFilter;
 
         const response = await axios.get('/api/automation/requests', { params });
-        const { data, total_pages, total_sources, total_requests } = response.data;
+        const { data, total_pages, total_sources, total_requests, request_users } = response.data;
         
         if (page === 1) {
           this.totalSourcesCount = total_sources;
           this.totalRequestsCount = total_requests;
+          if (this.requestUserFilter === 'all') this.requestUsers = request_users || [];
         }
         
         const newSources = data.map((sourceData) => ({
@@ -818,6 +975,10 @@ export default {
           showRequests: false,
           logo_path: sourceData.logo_path,
           backdrop_path: sourceData.backdrop_path,
+          visual: getRequestSourceVisual({
+            id: sourceData.source_id,
+            title: sourceData.source_title,
+          }),
           requests: sourceData.requests.map((request) => ({
             request_id: request.request_id,
             title: request.title,
@@ -868,6 +1029,14 @@ export default {
       this.showModal = true;
       document.body.style.overflow = 'hidden';
     },
+    openWorkflowModal(item) {
+      this.openModal({
+        ...item,
+        poster_path: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
+        requested_at: item.created_at,
+        source_title: item.name
+      });
+    },
 
     closeModal() {
       this.showModal = false;
@@ -876,6 +1045,11 @@ export default {
     },
   },
   mounted() {
+    this.loadApprovalState();
+    if (this.$route.query.status) {
+      this.viewMode = 'all-requests';
+      this.requestStatusFilter = this.$route.query.status;
+    }
     const savedConfig = localStorage.getItem('suggestarr_config');
     if (savedConfig) {
       try {

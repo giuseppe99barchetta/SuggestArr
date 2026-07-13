@@ -1417,6 +1417,15 @@ export default {
       if (this.defaultTvServerId) { profileConfig.default_tv = { serverId: parseInt(this.defaultTvServerId) }; if (this.defaultTvProfileId) profileConfig.default_tv.profileId = parseInt(this.defaultTvProfileId); if (this.defaultTvRootFolder) profileConfig.default_tv.rootFolder = this.defaultTvRootFolder; }
       if (this.animeMovieServerId) { profileConfig.anime_movie = { serverId: parseInt(this.animeMovieServerId) }; if (this.animeMovieProfileId) profileConfig.anime_movie.profileId = parseInt(this.animeMovieProfileId); if (this.animeMovieRootFolder) profileConfig.anime_movie.rootFolder = this.animeMovieRootFolder; }
       if (this.animeTvServerId) { profileConfig.anime_tv = { serverId: parseInt(this.animeTvServerId) }; if (this.animeTvProfileId) profileConfig.anime_tv.profileId = parseInt(this.animeTvProfileId); if (this.animeTvRootFolder) profileConfig.anime_tv.rootFolder = this.animeTvRootFolder; }
+      Object.entries(profileConfig).forEach(([key, profile]) => {
+        const servers = key.endsWith('_movie') ? this.radarrServers : this.sonarrServers;
+        const server = servers.find(item => String(item.id) === String(profile.serverId));
+        if (server?.is4k === true) profile.is4k = true;
+        if (key.endsWith('_tv')) {
+          const languageProfileId = key.startsWith('anime_') ? server?.activeAnimeLanguageProfileId : server?.activeLanguageProfileId;
+          if (languageProfileId != null) profile.languageProfileId = languageProfileId;
+        }
+      });
       this.localConfig.SEER_ANIME_PROFILE_CONFIG = profileConfig;
     },
     loadSavedProfileConfig() {

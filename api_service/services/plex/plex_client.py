@@ -156,6 +156,10 @@ class PlexClient(BaseHTTPClient):
 
                         # Filter items for this specific user (or all users) and add to the combined list
                         filtered_items = await self.filter_recent_items(metadata)
+                        if user_id:
+                            user_identifier = user_id.get('id') if isinstance(user_id, dict) else user_id
+                            for item in filtered_items:
+                                item['_user_id'] = str(user_identifier)
                         all_filtered_items.extend(filtered_items)
                         if user_id:
                             # Get user identifier for logging (handle both dict and string formats)

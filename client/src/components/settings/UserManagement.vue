@@ -326,6 +326,11 @@
                 </section>
 
                 <section class="permissions-section um-section-card">
+                  <div class="um-section-head"><h4><i class="fas fa-paper-plane"></i> Seer Identity</h4><p>Attribute approved requests to this Seer user.</p></div>
+                  <BaseDropdown v-model="editPermissions.seer_user_id" :options="seerUserOptions" placeholder="Use technical user fallback" :disabled="isSavingPermissions" />
+                </section>
+
+                <section class="permissions-section um-section-card">
                   <div class="um-section-head">
                     <h4><i class="fas fa-th-large"></i> Visible Tabs</h4>
                     <p>Select which tabs this account can access in the interface.</p>
@@ -485,7 +490,9 @@ export default {
       editPermissions: {
         can_manage_ai: false,
         visible_tabs_array: [],
+        seer_user_id: null,
       },
+      seerUsers: [],
       permissionsError: null,
       isSavingPermissions: false,
 
@@ -532,6 +539,9 @@ export default {
         value: String(user.id),
       }));
     },
+    seerUserOptions() {
+      return [{ label: 'Technical user fallback', value: null }, ...this.seerUsers.map(user => ({ label: user.displayName || user.username || user.email || String(user.id), value: user.id }))];
+    },
     selectedMediaUser() {
       return this.mediaUsers.find((user) => String(user.id) === String(this.selectedMediaUserId)) || null;
     },
@@ -548,10 +558,12 @@ export default {
 
   mounted() {
     this.loadUsers();
+    this.loadSeerUsers();
   },
 
   methods: {
     normalizeTabValue(tabValue) {
+      if (tabValue === 'suggestions') return 'requests';
       if (tabValue === 'ai-search') {
         return 'ai_search';
       }
@@ -569,6 +581,10 @@ export default {
       } finally {
         this.isLoadingUsers = false;
       }
+    },
+    async loadSeerUsers() {
+      try { this.seerUsers = (await axios.get('/api/seer/get_users')).data.users || []; }
+      catch { this.seerUsers = []; }
     },
 
     async updateUserRole(user) {
@@ -662,6 +678,7 @@ export default {
       this.editPermissions = {
         can_manage_ai: user.can_manage_ai || false,
         visible_tabs_array: [...new Set(normalizedTabs)],
+        seer_user_id: user.seer_user_id ?? null,
       };
       this.permissionsError = null;
       this.showPermissionsModal = true;
@@ -693,6 +710,7 @@ export default {
         const payload = {
           can_manage_ai: this.editPermissions.can_manage_ai,
           allowed_tabs: allowedTabs,
+          seer_user_id: this.editPermissions.seer_user_id == null ? null : Number(this.editPermissions.seer_user_id),
         };
         const response = await updateUserPermissions(this.permissionsTarget.id, payload);
         if (response?.data?.success !== true) {
