@@ -82,6 +82,7 @@ class TestConfig(unittest.TestCase):
         "API_RETRIES": 3,
         "ENABLE_API_CACHING": True,
         "REQUIRE_REQUEST_APPROVAL": True,
+        "REQUEST_VISIBILITY": "all",
         "PAUSE_JOBS_WITH_PENDING_APPROVALS": False,
         "AUTO_REJECT_APPROVAL_DAYS": 0,
         "FILTER_MIN_RUNTIME": 0,
