@@ -1034,12 +1034,13 @@ export default {
 
 .form-group label:not(.base-checkbox) {
   display: block;
-  margin-top: 0.5rem;
+  margin-bottom: var(--spacing-xs);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
 }
 
 .form-control {
+  box-sizing: border-box;
   width: 100%;
   padding: 0.75rem;
   background: var(--color-bg-interactive);
@@ -1048,6 +1049,10 @@ export default {
   color: var(--color-text-primary);
   font-size: 1rem;
   transition: var(--transition-base);
+}
+
+.settings-group > :deep(.form-group-modern) {
+  margin-bottom: var(--spacing-lg);
 }
 
 .form-control:focus {
