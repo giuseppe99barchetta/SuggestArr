@@ -203,6 +203,16 @@
           <small class="toggle-help">Respect Seer's discovery settings for requests</small>
 
           <div class="toggle-item">
+            <BaseCheckbox v-model="localFilters.only_first_movie_in_collection">
+              <span class="toggle-label-modal">
+                <i class="fas fa-layer-group"></i>
+                Only First Movie in Collections
+              </span>
+            </BaseCheckbox>
+          </div>
+          <small class="toggle-help">Skip sequels while still introducing new movie collections</small>
+
+          <div class="toggle-item">
             <BaseCheckbox v-model="localFilters.use_trakt_as_seed" :disabled="!traktUsable">
               <span class="toggle-label-modal" :class="{ 'toggle-disabled': !traktUsable }">
                 <i class="fas fa-seedling"></i>
@@ -281,6 +291,7 @@ export default {
         exclude_downloaded: true,
         exclude_requested: true,
         honor_seer_discovery: false,
+        only_first_movie_in_collection: false,
         use_trakt_as_seed: true,
         use_trakt_as_exclusion: true
       },
@@ -327,6 +338,7 @@ export default {
             exclude_downloaded: newVal.filters.exclude_downloaded ?? true,
             exclude_requested: newVal.filters.exclude_requested ?? true,
             honor_seer_discovery: newVal.filters.honor_seer_discovery ?? false,
+            only_first_movie_in_collection: newVal.filters.only_first_movie_in_collection ?? false,
             use_trakt_as_seed: newVal.filters.use_trakt_as_seed ?? true,
             use_trakt_as_exclusion: newVal.filters.use_trakt_as_exclusion ?? true
           };

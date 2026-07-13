@@ -372,6 +372,7 @@ class RecommendationAutomation:
             include_tvod=filter_include_tvod,
             filter_release_year_to=filter_release_year_to,
             filter_genres_include=normalized_filters.get('genres'),
+            only_first_movie_in_collection=bool(job_filters.get('only_first_movie_in_collection', False)),
         )
 
         # Determine which users to process
