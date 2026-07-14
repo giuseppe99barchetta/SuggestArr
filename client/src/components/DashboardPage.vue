@@ -112,11 +112,14 @@
             :getServiceIcon="getServiceIcon"
             @save-section="saveSection"
             @test-connection="testConnection"
+            @export-config="showExportModal = true"
+            @import-config="importConfig"
+            @reset-config="showResetModal = true"
           />
         </transition>
       </div>
 
-      <!-- Action Footer -->
+      <!-- Footer -->
       <div class="settings-footer">
         <div class="footer-info">
           <button
@@ -153,45 +156,8 @@
             </button>
           </div>
         </div>
-        
-        <div v-if="isAdmin" class="footer-actions" data-tour-id="footer-actions">
-          <button
-            @click="showExportModal = true"
-            class="btn btn-outline"
-            :disabled="isLoading"
-            title="Export configuration to JSON file">
-            <i class="fas fa-download"></i>
-            <span>Export</span>
-          </button>
 
-          <button
-            @click="importConfig"
-            class="btn btn-outline"
-            :disabled="isLoading"
-            title="Import configuration from JSON file">
-            <i class="fas fa-upload"></i>
-            <span>Import</span>
-          </button>
-
-          <button
-            @click="resetConfig"
-            class="btn btn-danger"
-            :disabled="isLoading"
-            title="Reset all settings to defaults">
-            <i class="fas fa-undo"></i>
-            <span>Reset</span>
-          </button>
-
-          <button
-            @click="forceRunAutomation"
-            class="btn btn-secondary"
-            data-tour-id="footer-force-run"
-            :disabled="isForceRunning"
-            title="Force run automation script now">
-            <i :class="isForceRunning ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
-            <span>Force Run</span>
-          </button>
-        </div>
+        <Footer />
       </div>
 
       <!-- Loading Overlay -->
@@ -344,7 +310,6 @@
         </div>
       </transition>
 
-      <Footer />
     </div>
 
     <div v-else class="settings-content">
@@ -432,7 +397,6 @@ export default {
       currentUser: null,
       config: {},
       isLoading: false,
-      isForceRunning: false,
       loadingMessage: 'Processing...',
       activeTab: 'requests',
       showResetModal: false,
@@ -513,18 +477,6 @@ export default {
           description: 'View real-time application logs to debug issues, monitor job execution, or check why a specific request was skipped.',
           position: 'bottom',
         },
-        {
-          targetId: 'footer-force-run',
-          title: 'Force Run',
-          description: 'Trigger SuggestArr immediately without waiting for the next scheduled job — great for testing your setup right after configuration.',
-          position: 'top',
-        },
-        {
-          targetId: 'footer-actions',
-          title: 'Backup & Restore',
-          description: 'Export your full configuration to a JSON file and import it on another instance or after a reset. You can replay this tour anytime with the ? button.',
-          position: 'top',
-        },
       ],
     };
   },
@@ -548,9 +500,6 @@ export default {
         if (!isAdmin && allowedTabs.size > 0 && !allowedTabs.has(tab.id)) return false;
         return true;
       });
-    },
-    isAdmin() {
-      return this.currentUser?.role === 'admin';
     },
     activeTabComponent() {
       // Never resolve a component for a tab the current user cannot access.
@@ -1102,53 +1051,6 @@ export default {
       } finally {
         this.isLoading = false;
         event.target.value = '';
-      }
-    },
-
-    resetConfig() {
-      this.showResetModal = true;
-    },
-
-    async forceRunAutomation() {
-      this.isForceRunning = true;
-      this.loadingMessage = 'Manually running jobs...';
-
-      try {
-        const response = await axios.post('/api/jobs/run-all');
-        const count = response.data?.jobs_count ?? '';
-        this.$toast.open({
-          message: count ? `Running ${count} job(s) in the background!` : 'Jobs started in the background!',
-          type: 'success',
-          duration: 3000,
-          position: 'top-right'
-        });
-      } catch (error) {
-        if (error.response && error.response.status === 409) {
-          this.$toast.open({
-            message: 'A force run is already in progress.',
-            type: 'warning',
-            duration: 4000,
-            position: 'top-right'
-          });
-        } else if (error.response && error.response.status === 404) {
-          this.$toast.open({
-            message: 'No enabled jobs found. Create a job first.',
-            type: 'warning',
-            duration: 5000,
-            position: 'top-right'
-          });
-        } else {
-          this.$toast.open({
-            message: 'Force run failed, see logs for details.',
-            type: 'error',
-            duration: 5000,
-            position: 'top-right'
-          });
-          console.error('Error force running jobs:', error);
-        }
-      } finally {
-        this.isForceRunning = false;
-        this.loadingMessage = 'Processing...';
       }
     },
 

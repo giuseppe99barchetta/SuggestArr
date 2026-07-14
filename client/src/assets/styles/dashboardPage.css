@@ -276,22 +276,30 @@
 
 /* Footer */
 .settings-footer {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   margin-top: var(--spacing-xl);
   padding-top: var(--spacing-xl);
   border-top: 1px solid var(--color-border-light);
-  flex-wrap: wrap;
   gap: var(--spacing-md);
 }
 
 .footer-info {
+  grid-column: 1;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
+}
+
+.settings-footer > .footer {
+  grid-column: 2;
+  margin: 0;
+  padding: 0;
+  border-top: 0;
+  gap: 0;
 }
 
 .version-info {
@@ -385,12 +393,6 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-
-.footer-actions {
-  display: flex;
-  gap: calc(var(--spacing-sm) + var(--spacing-xs));
-  flex-wrap: wrap;
 }
 
 /* Buttons */
@@ -871,13 +873,17 @@
   }
 
   .settings-footer {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: 1fr;
+    justify-items: center;
   }
 
   .footer-info {
-    order: 2;
+    grid-column: 1;
     justify-content: center;
+  }
+
+  .settings-footer > .footer {
+    grid-column: 1;
   }
 
   .version-info {
@@ -902,11 +908,6 @@
   .changelog-modal {
     max-width: 95%;
     margin: var(--spacing-md);
-  }
-
-  .footer-actions {
-    order: 1;
-    flex-direction: column;
   }
 
   .btn {
