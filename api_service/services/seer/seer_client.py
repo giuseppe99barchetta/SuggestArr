@@ -3,7 +3,9 @@ import asyncio
 from typing import List, Set
 from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
+from api_service.config.config import load_env_vars
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.request_sources import is_tmdb_metadata_source_id
 
 BATCH_SIZE = 20  # Number of requests fetched per batch
 HTTP_OK = {200, 201, 202}  # Include 202 Accepted for async operations
@@ -19,6 +21,14 @@ def _as_bool(value):
     return bool(value)
 
 
+def requires_request_approval(delivery_mode, global_default):
+    if delivery_mode == 'manual':
+        return True
+    if delivery_mode == 'automatic':
+        return False
+    return _as_bool(global_default)
+
+
 class SeerClient(BaseHTTPClient):
     """
     A client to interact with the Seer service API for handling media requests and authentication.
@@ -29,7 +39,7 @@ class SeerClient(BaseHTTPClient):
 
     def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None, session_token=None,
                 number_of_seasons="all", exclude_downloaded=True, exclude_watched=True,
-                anime_profile_config=None, request_first_season_only=False):
+                anime_profile_config=None, request_first_season_only=False, queue_context=None):
         """
         Initializes the SeerClient with the API URL and logs in the user.
         :param anime_profile_config: Dict with anime/default profile routing settings.
@@ -37,7 +47,7 @@ class SeerClient(BaseHTTPClient):
             Each value is a dict with optional keys: serverId, profileId, rootFolder, tags, languageProfileId.
         """
         super().__init__()
-        self.api_url = api_url
+        self.api_url = api_url.rstrip('/')
         self.api_key = api_key
         self.username = seer_user_name
         self.password = seer_password
@@ -50,6 +60,7 @@ class SeerClient(BaseHTTPClient):
         self.exclude_downloaded = exclude_downloaded
         self.exclude_requested = exclude_watched
         self.anime_profile_config = anime_profile_config or {}
+        self.queue_context = queue_context or {}
         self.logger.debug("SeerClient initialized with API URL: %s", api_url)
 
     def _resolve_tv_seasons(self):
@@ -229,12 +240,40 @@ class SeerClient(BaseHTTPClient):
     async def get_radarr_servers(self):
         """Fetch available Radarr servers from the Seer service with their profiles, root folders, and tags."""
         self.logger.debug("Fetching Radarr servers from the Seer service")
-        return await self._make_request("GET", "api/v1/service/radarr")
+        return await self._get_arr_servers('radarr')
 
     async def get_sonarr_servers(self):
         """Fetch available Sonarr servers from the Seer service with their profiles, root folders, and tags."""
         self.logger.debug("Fetching Sonarr servers from the Seer service")
-        return await self._make_request("GET", "api/v1/service/sonarr")
+        return await self._get_arr_servers('sonarr')
+
+    async def _get_arr_servers(self, service):
+        """Fetch servers and enrich list-only responses when cookie auth is available."""
+        servers = await self._make_request("GET", f"api/v1/service/{service}") or []
+        if not self.session_token:
+            return servers
+        for index, server in enumerate(servers):
+            if server.get('profiles') and server.get('rootFolders'):
+                continue
+            details = await self._make_request(
+                "GET", f"api/v1/service/{service}/{server['id']}", use_cookie=True
+            )
+            if details:
+                detail_server = details.get('server', {})
+                safe_fields = (
+                    'activeProfileId', 'activeProfileName', 'activeDirectory',
+                    'activeLanguageProfileId', 'activeAnimeProfileId',
+                    'activeAnimeLanguageProfileId', 'activeAnimeProfileName',
+                    'activeAnimeDirectory', 'is4k', 'minimumAvailability',
+                    'enableSeasonFolders', 'monitorNewItems', 'isDefault',
+                    'syncEnabled', 'preventSearch',
+                )
+                servers[index] = {
+                    **server,
+                    **{key: detail_server[key] for key in safe_fields if key in detail_server},
+                    **{key: details[key] for key in ('profiles', 'rootFolders', 'languageProfiles', 'tags') if key in details},
+                }
+        return servers
 
     async def _fetch_server_defaults(self, media_type: str, server_id) -> dict:
         """Fetch default profileId and rootFolder from Jellyseerr for the given media type.
@@ -295,7 +334,7 @@ class SeerClient(BaseHTTPClient):
         if not profile:
             return
 
-        for key in ['serverId', 'profileId', 'rootFolder', 'tags']:
+        for key in ['serverId', 'profileId', 'rootFolder', 'tags', 'is4k']:
             if key in profile:
                 data[key] = profile[key]
         if media_type == 'tv' and 'languageProfileId' in profile:
@@ -377,13 +416,28 @@ class SeerClient(BaseHTTPClient):
             db.save_metadata(media, media_type)
         except Exception:
             pass  # non-critical — metadata is display-only cache
-        if source:
+        if source and is_tmdb_metadata_source_id(source.get("id")):
             try:
                 db.save_metadata(source, media_type)
             except Exception:
                 pass
 
-        enqueued = db.enqueue_request(tmdb_id, media_type, user_id, payload)
+        context = self.queue_context
+        profile = (context.get('request_profiles') or {}).get(media_type) or {}
+        for key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId'):
+            if profile.get(key) is not None:
+                payload[key] = profile[key]
+        payload['_seer_identity_mode'] = context.get('seer_identity_mode', 'technical_user')
+        if context.get('seer_identity_mode') in ('matching_user', 'admin_user') and context.get('owner_id'):
+            owner = db.get_auth_user_by_id(context['owner_id']) or {}
+            if owner.get('seer_user_id') is not None:
+                payload['userId'] = owner['seer_user_id']
+        approval_default = load_env_vars().get('REQUIRE_REQUEST_APPROVAL', False)
+        status = 'awaiting_approval' if requires_request_approval(
+            context.get('delivery_mode', 'inherit'), approval_default
+        ) else 'queued'
+        enqueued = db.enqueue_request(tmdb_id, media_type, user_id, payload, status=status,
+                                      job_id=context.get('job_id'), owner_id=context.get('owner_id'))
         if enqueued:
             self.logger.info("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)
         return enqueued

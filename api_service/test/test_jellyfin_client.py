@@ -167,11 +167,13 @@ class TestGetLibraries(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(third_call.kwargs.get('params'), {'api_key': 'fake_token'})
 
     async def test_returns_none_when_all_auth_methods_fail_after_401(self):
-        responses = [
+        # VirtualFolders and MediaFolders fallback each try 3 auth methods.
+        auth_failures = [
             _mock_response(401, text_data='unauthorized method1'),
             _mock_response(401, text_data='unauthorized method2'),
             _mock_response(401, text_data='unauthorized method3'),
         ]
+        responses = auth_failures + auth_failures
 
         session = MagicMock()
         session.get = MagicMock(side_effect=responses)
@@ -180,7 +182,7 @@ class TestGetLibraries(unittest.IsolatedAsyncioTestCase):
             result = await self.client.get_libraries()
 
         self.assertIsNone(result)
-        self.assertEqual(session.get.call_count, 3)
+        self.assertEqual(session.get.call_count, 6)
 
 
 # ---------------------------------------------------------------------------

@@ -120,13 +120,6 @@
       <div class="settings-footer">
         <div class="footer-info">
           <button
-                @click="showChangelog"
-                class="changelog-btn"
-                title="View changelog for current version"
-              >
-          <i class="fas fa-info-circle"></i>
-          </button>
-          <button
             @click="restartTour"
             class="changelog-btn"
             title="Replay the onboarding tour"
@@ -134,7 +127,12 @@
             <i class="fas fa-question-circle"></i>
           </button>
           <div class="version-info">
-            <div class="version-text-container">
+            <button
+              type="button"
+              class="version-text-container"
+              title="View changelog for current version"
+              @click="showChangelog"
+            >
               <span>SuggestArr {{ currentVersion }}</span>
               <span 
                 v-if="currentImageTag === 'nightly'" 
@@ -142,7 +140,7 @@
               >
                 ({{ currentImageTag }})
               </span>
-            </div>
+            </button>
             <button 
               @click="checkForUpdates" 
               :disabled="updateAvailable === null"
@@ -656,6 +654,7 @@ export default {
   },
   methods: {
     normalizeTabId(tabId) {
+      if (tabId === 'suggestions') return 'requests';
       if (tabId === 'ai-search') {
         return 'ai_search';
       }
@@ -761,10 +760,16 @@ export default {
 
     async loadRequestCount() {
       try {
-        const response = await axios.get('/api/automation/requests/stats', {
+        const jobs = await axios.get('/api/jobs', { timeout: 5000 });
+        if (!(jobs.data.jobs || []).some(job => job.delivery_mode === 'manual')) {
+          this.requestCount = 0;
+          return;
+        }
+        const response = await axios.get('/api/automation/requests/workflow', {
+          params: { status: 'awaiting_approval', page: 1, per_page: 1 },
           timeout: 5000 // 5 second timeout
         });
-        this.requestCount = response.data.today || 0;
+        this.requestCount = response.data.total || 0;
       } catch (error) {
         console.error('Error loading request count:', error);
       }

@@ -382,6 +382,7 @@ static/
 # AI agent planning artifacts (ephemeral)
 docs/superpowers/plans/
 branch-review-findings.md
+.github/skills/
 
 # macOS
 .DS_Store

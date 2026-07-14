@@ -200,6 +200,7 @@ every_12h
 ```
 
 Use standard cron only if presets are not enough.
+Numeric weekdays follow standard cron: `0` and `7` are Sunday, `1` is Monday.
 
 ### Pause Jobs While Seer Requests Are Pending
 

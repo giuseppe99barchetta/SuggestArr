@@ -2,17 +2,40 @@ import axios from 'axios';
 
 const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY = 1000; // ms
+const CATALOG_TTL = 2 * 60 * 60 * 1000;
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+let cachedImages = null;
+let cachedAt = 0;
+let pendingRequest = null;
 
 /**
- * Fetch a random movie backdrop URL via the backend TMDB proxy.
+ * Fetch movie backdrop URLs via the backend TMDB proxy.
  *
  * The backend loads the API key from the database and calls TMDB on behalf
  * of the client. The key is never sent to or visible in the browser.
  *
- * @returns {Promise<string|null>} Full image URL or null on failure / not configured.
+ * Results are shared by all consumers for two hours.
+ *
+ * @returns {Promise<string[]|null>} Full image URLs or null on failure / not configured.
  */
-export const fetchRandomMovieImage = async () => {
+export const fetchRandomMovieImages = async () => {
+  if (cachedImages && Date.now() - cachedAt < CATALOG_TTL) return cachedImages;
+  if (pendingRequest) return pendingRequest;
+
+  pendingRequest = fetchMovieImages();
+  try {
+    const images = await pendingRequest;
+    if (images) {
+      cachedImages = images;
+      cachedAt = Date.now();
+    }
+    return images;
+  } finally {
+    pendingRequest = null;
+  }
+};
+
+const fetchMovieImages = async () => {
   const randomPage = Math.floor(Math.random() * 100) + 1;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -27,12 +50,9 @@ export const fetchRandomMovieImage = async () => {
         throw new Error('No movies found on page');
       }
 
-      const randomMovie = movies[Math.floor(Math.random() * movies.length)];
-      if (!randomMovie?.backdrop_path) {
-        throw new Error('Selected movie has no backdrop');
-      }
-
-      return `https://image.tmdb.org/t/p/w1280${randomMovie.backdrop_path}`;
+      return movies
+        .filter(movie => movie.backdrop_path)
+        .map(movie => `https://image.tmdb.org/t/p/w1280${movie.backdrop_path}`);
     } catch (error) {
       // Backend rate-limit pass-through
       if (error.response?.status === 429 && error.response.headers['retry-after']) {

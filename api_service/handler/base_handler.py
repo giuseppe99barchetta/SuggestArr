@@ -323,6 +323,17 @@ class BaseMediaHandler(ABC):
                              if k != 'passed' and isinstance(v, dict) and v.get('passed') is False)
                 )
                 continue
+
+            if (
+                item_type == 'movie'
+                and getattr(self.tmdb_client, 'only_first_movie_in_collection', False)
+                and not await self.tmdb_client.is_first_movie_in_collection(best_match['id'])
+            ):
+                self.logger.info(
+                    "Skipping LLM movie recommendation '%s': not the first movie in its collection",
+                    best_match.get('title', 'Unknown'),
+                )
+                continue
             
             best_match['rationale'] = rec.get('rationale')
             if user is None:

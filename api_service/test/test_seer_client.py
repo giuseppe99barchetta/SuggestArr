@@ -182,6 +182,25 @@ class TestMakeRequest(unittest.IsolatedAsyncioTestCase):
 
 class TestLogin(unittest.IsolatedAsyncioTestCase):
 
+    async def test_trailing_slash_does_not_create_double_slash_login_url(self):
+        resp = AsyncMock()
+        resp.status = 401
+        resp.cookies = {}
+        resp.__aenter__ = AsyncMock(return_value=resp)
+        resp.__aexit__ = AsyncMock(return_value=False)
+        session = MagicMock()
+        session.post = MagicMock(return_value=resp)
+        client = _make_client(api_url='http://seer.local/')
+
+        with patch.object(client, '_get_session', AsyncMock(return_value=session)):
+            await client.login()
+
+        session.post.assert_called_once_with(
+            'http://seer.local/api/v1/auth/local',
+            json={'email': client.username, 'password': client.password},
+            timeout=client.REQUEST_TIMEOUT,
+        )
+
     async def test_sets_session_token_on_success(self):
         cookie_mock = MagicMock()
         cookie_mock.value = 'session_xyz'
@@ -398,7 +417,7 @@ class TestApplyProfileConfig(unittest.TestCase):
 
     def test_applies_all_supported_keys(self):
         client = _make_client(anime_profile_config={
-            'anime_movie': {'serverId': 1, 'profileId': 5, 'rootFolder': '/movies', 'tags': [10]}
+            'anime_movie': {'serverId': 1, 'profileId': 5, 'rootFolder': '/movies', 'tags': [10], 'is4k': True}
         })
         data = {}
         client._apply_profile_config(data, 'anime_movie', 'movie')
@@ -406,6 +425,7 @@ class TestApplyProfileConfig(unittest.TestCase):
         self.assertEqual(data['profileId'], 5)
         self.assertEqual(data['rootFolder'], '/movies')
         self.assertEqual(data['tags'], [10])
+        self.assertTrue(data['is4k'])
 
     def test_applies_language_profile_id_for_tv(self):
         client = _make_client(anime_profile_config={
@@ -597,6 +617,26 @@ class TestFetchServerDefaults(unittest.IsolatedAsyncioTestCase):
         mock_sonarr.assert_called_once()
         mock_radarr.assert_not_called()
         self.assertEqual(result['profileId'], 2)
+
+
+class TestGetArrServers(unittest.IsolatedAsyncioTestCase):
+
+    async def test_enriches_list_without_exposing_arr_credentials(self):
+        client = _make_client(session_token='cookie')
+        client._make_request = AsyncMock(side_effect=[
+            [{'id': 7, 'name': 'TV'}],
+            {'server': {'apiKey': 'secret', 'is4k': True, 'activeLanguageProfileId': 2},
+             'profiles': [{'id': 1, 'name': 'HD'}], 'rootFolders': [{'path': '/tv'}]},
+        ])
+
+        servers = await client.get_sonarr_servers()
+
+        self.assertTrue(servers[0]['is4k'])
+        self.assertEqual(servers[0]['activeLanguageProfileId'], 2)
+        self.assertNotIn('apiKey', servers[0])
+        client._make_request.assert_any_await(
+            'GET', 'api/v1/service/sonarr/7', use_cookie=True
+        )
 
 
 # ---------------------------------------------------------------------------

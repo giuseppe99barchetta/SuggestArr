@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from api_service.utils.cron import cron_trigger
 
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
@@ -193,7 +194,8 @@ class JobManager:
             asyncio.set_event_loop(loop)
 
             try:
-                if loop.run_until_complete(self._should_pause_for_pending_requests(job_data)):
+                if (self._should_pause_for_suggestarr_approvals(job_data) or
+                        loop.run_until_complete(self._should_pause_for_pending_requests(job_data))):
                     exec_id = self.repository.log_execution_start(job_id)
                     self.repository.log_execution_end(
                         exec_id=exec_id,
@@ -207,7 +209,27 @@ class JobManager:
                         job_id,
                     )
                     return
-                loop.run_until_complete(executor(job_id))
+                slices = None
+                if (job_data.get('prevent_suggestions_if_unwatched') and
+                        job_data.get('job_type') != 'discover'):
+                    from api_service.jobs.unwatched_suggestion_gate import UnwatchedSuggestionGate
+                    slices = loop.run_until_complete(UnwatchedSuggestionGate().allowed_slices(job_data))
+                if slices == []:
+                    exec_id = self.repository.log_execution_start(job_id)
+                    self.repository.log_execution_end(
+                        exec_id=exec_id,
+                        status='skipped',
+                        results_count=0,
+                        requested_count=0,
+                        error_message='Paused: suggested content has remained unwatched past the configured limit.'
+                    )
+                    self.logger.info("Job %s paused because its suggested content remains unwatched.", job_id)
+                    return
+                if slices is None:
+                    loop.run_until_complete(executor(job_id))
+                else:
+                    for overrides in slices:
+                        loop.run_until_complete(executor(job_id, overrides))
             finally:
                 close_event_loop(loop, self.logger)
 
@@ -231,6 +253,13 @@ class JobManager:
 
         async with seer_client:
             return await seer_client.has_pending_requests()
+
+    def _should_pause_for_suggestarr_approvals(self, job_data: Dict[str, Any]) -> bool:
+        mode = job_data.get('approval_pause_mode', 'inherit')
+        enabled = mode == 'always'
+        if mode == 'inherit':
+            enabled = ConfigService.get_runtime_config().get('PAUSE_JOBS_WITH_PENDING_APPROVALS', False) is True
+        return enabled and self.repository.db.has_pending_approvals(job_data['id'])
 
     def _create_trigger(self, schedule_type: str, schedule_value: str) -> Optional[CronTrigger]:
         """
@@ -295,7 +324,7 @@ class JobManager:
             # Constructing CronTrigger manually with day_of_week='*' causes APScheduler
             # to apply OR logic between 'day' and 'day_of_week', so a schedule like
             # '0 0 1 * *' would fire every day instead of only on the 1st of the month.
-            return CronTrigger.from_crontab(cron_expr.strip())
+            return cron_trigger(cron_expr)
         except Exception as e:
             self.logger.error(f"Error parsing cron expression '{cron_expr}': {str(e)}")
             return None

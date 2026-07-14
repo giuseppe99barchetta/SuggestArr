@@ -32,10 +32,12 @@ def _make_client(
     filter_release_year_to=None,
     filter_language=None,
     filter_genre=None,
+    filter_genres_include=None,
     filter_region_provider=None,
     filter_streaming_services=None,
     rating_source='tmdb',
     include_tvod=False,
+    only_first_movie_in_collection=False,
 ):
     return TMDbClient(
         api_key='fake_tmdb_key',
@@ -47,10 +49,12 @@ def _make_client(
         filter_release_year_to=filter_release_year_to,
         filter_language=filter_language,
         filter_genre=filter_genre,
+        filter_genres_include=filter_genres_include,
         filter_region_provider=filter_region_provider,
         filter_streaming_services=filter_streaming_services,
         rating_source=rating_source,
         include_tvod=include_tvod,
+        only_first_movie_in_collection=only_first_movie_in_collection,
     )
 
 
@@ -153,6 +157,12 @@ class TestApplyFilters(unittest.TestCase):
         client = _make_client(filter_genre=[{'id': 99, 'name': 'Comedy'}])
         item = {**_MOVIE_ITEM, 'genre_ids': [28]}
         self.assertTrue(client._apply_filters(item, 'movie')['passed'])
+
+    def test_included_genres_match_any_and_exclusions_still_apply(self):
+        client = _make_client(filter_genres_include=[16], filter_genre=[37])
+        self.assertTrue(client._apply_filters({**_MOVIE_ITEM, 'genre_ids': [16, 18]}, 'movie')['passed'])
+        self.assertFalse(client._apply_filters({**_MOVIE_ITEM, 'genre_ids': [18]}, 'movie')['passed'])
+        self.assertFalse(client._apply_filters({**_MOVIE_ITEM, 'genre_ids': [16, 37]}, 'movie')['passed'])
 
     def test_skips_tmdb_rating_check_when_rating_source_is_imdb(self):
         """When rating_source='imdb', TMDB rating/votes filters should be skipped."""
@@ -269,6 +279,26 @@ class TestGetItemDetails(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
             result = await self.client._get_item_details(999, 'movie')
         self.assertEqual(result, {})
+
+
+class TestMovieCollectionFilter(unittest.IsolatedAsyncioTestCase):
+
+    async def test_allows_only_earliest_released_collection_movie(self):
+        client = _make_client(only_first_movie_in_collection=True)
+        collection_response = _mock_response(200, {'parts': [
+            {'id': 20, 'release_date': '2003-06-01'},
+            {'id': 10, 'release_date': '2001-01-01'},
+        ]})
+        with patch.object(client, '_get_session', AsyncMock(return_value=_mock_session(collection_response))):
+            details = {'belongs_to_collection': {'id': 5}}
+            self.assertTrue(await client.is_first_movie_in_collection(10, details))
+            self.assertFalse(await client.is_first_movie_in_collection(20, details))
+
+    async def test_allows_standalone_movie(self):
+        client = _make_client(only_first_movie_in_collection=True)
+        self.assertTrue(await client.is_first_movie_in_collection(
+            10, {'belongs_to_collection': None}
+        ))
 
 
 # ---------------------------------------------------------------------------

@@ -53,6 +53,14 @@ class TestParseCronExpression(unittest.TestCase):
         nxt = _next_fire(trigger, now)
         self.assertEqual(nxt.weekday(), 0)  # Python weekday: 0 = Monday
 
+    def test_standard_numeric_sunday_not_monday(self):
+        now = datetime(2026, 2, 15, 1, 0, 0, tzinfo=timezone.utc)  # Sunday
+        for weekday in ('0', '7'):
+            with self.subTest(weekday=weekday):
+                nxt = _next_fire(parse_cron_expression(f'0 0 * * {weekday}'), now)
+                self.assertEqual(nxt.weekday(), 6)
+                self.assertEqual(nxt.day, 22)
+
     def test_every_12_hours(self):
         trigger = parse_cron_expression('0 */12 * * *')
         now = datetime(2026, 2, 15, 1, 0, 0, tzinfo=timezone.utc)
