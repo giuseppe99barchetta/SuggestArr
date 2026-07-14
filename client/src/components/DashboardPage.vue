@@ -120,13 +120,6 @@
       <div class="settings-footer">
         <div class="footer-info">
           <button
-                @click="showChangelog"
-                class="changelog-btn"
-                title="View changelog for current version"
-              >
-          <i class="fas fa-info-circle"></i>
-          </button>
-          <button
             @click="restartTour"
             class="changelog-btn"
             title="Replay the onboarding tour"
@@ -134,7 +127,12 @@
             <i class="fas fa-question-circle"></i>
           </button>
           <div class="version-info">
-            <div class="version-text-container">
+            <button
+              type="button"
+              class="version-text-container"
+              title="View changelog for current version"
+              @click="showChangelog"
+            >
               <span>SuggestArr {{ currentVersion }}</span>
               <span 
                 v-if="currentImageTag === 'nightly'" 
@@ -142,7 +140,7 @@
               >
                 ({{ currentImageTag }})
               </span>
-            </div>
+            </button>
             <button 
               @click="checkForUpdates" 
               :disabled="updateAvailable === null"

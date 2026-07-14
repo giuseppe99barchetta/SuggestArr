@@ -305,6 +305,23 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.version-text-container:hover {
+  color: var(--color-text-primary);
+}
+
+.version-text-container:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .changelog-btn {

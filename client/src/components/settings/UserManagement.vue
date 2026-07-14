@@ -899,7 +899,7 @@ export default {
   margin-bottom: 0;
 }
 
-.form-group label {
+.form-group label:not(.base-checkbox) {
   display: block;
   margin-top: 0;
   margin-bottom: var(--spacing-sm);
