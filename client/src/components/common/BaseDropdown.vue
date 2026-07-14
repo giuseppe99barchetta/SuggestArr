@@ -47,7 +47,7 @@
     
     <transition name="fade-slide-up">
       <div v-if="helpText && !error" class="modern-help">
-        <i class="fas fa-lightbulb"></i>
+        <i class="fas fa-info-circle"></i>
         <span>{{ helpText }}</span>
       </div>
     </transition>
@@ -399,7 +399,9 @@ export default {
 .modern-label {
   display: inline-flex;
   align-items: center;
-  font-weight: 500;
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
 }
 

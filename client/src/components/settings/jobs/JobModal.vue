@@ -152,7 +152,13 @@
                 <i class="fas fa-user-check"></i><span><strong>Approve first</strong><small>Review in Requests</small></span>
               </button>
             </div>
-            <BaseDropdown v-model="form.seer_identity_mode" :options="seerIdentityOptions" label="Request as" placeholder="Select Seer identity" />
+            <BaseDropdown
+              v-model="form.seer_identity_mode"
+              :options="seerIdentityOptions"
+              label="Request as"
+              placeholder="Select Seer identity"
+              help-text="Choose who Seer credits for these requests. Mapped users fall back to the technical user configured in Services."
+            />
             <div class="request-profiles-grid">
               <div v-for="type in visibleProfileTypes" :key="type" class="request-profile-card">
                 <div class="request-profile-heading"><i :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
@@ -169,41 +175,37 @@
           <div class="settings-group" data-tour-id="job-modal-schedule">
             <h4>Schedule</h4>
             <SchedulePicker v-model="schedule" />
-            <label class="pause-pending-toggle">
-              <input
+            <div class="schedule-options">
+              <BaseCheckbox
                 v-model="form.pause_if_pending_requests"
-                type="checkbox"
+                label="Pause while Seer requests are pending"
+                description="Skip this job when Seer still has requests awaiting approval or denial."
               />
-              <span>
-                <strong>Pause while Seer requests are pending</strong>
-                <small>Skip this job when Seer still has requests awaiting approval or denial.</small>
-              </span>
-            </label>
-            <div class="form-group">
-              <label>Pause while this job has SuggestArr approvals pending</label>
-              <div class="delivery-mode-selector">
-                <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'inherit' }" @click="form.approval_pause_mode = 'inherit'">
-                  <i class="fas fa-sliders"></i><span><strong>Use global setting</strong><small>Follow Advanced settings</small></span>
-                </button>
-                <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'always' }" @click="form.approval_pause_mode = 'always'">
-                  <i class="fas fa-pause"></i><span><strong>Always pause</strong><small>Wait for this job's approvals</small></span>
-                </button>
-                <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'never' }" @click="form.approval_pause_mode = 'never'">
-                  <i class="fas fa-play"></i><span><strong>Never pause</strong><small>Ignore pending approvals</small></span>
-                </button>
+              <div class="form-group">
+                <label>Pause while this job has SuggestArr approvals pending</label>
+                <div class="delivery-mode-selector">
+                  <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'inherit' }" @click="form.approval_pause_mode = 'inherit'">
+                    <i class="fas fa-sliders"></i><span><strong>Use global setting</strong><small>Follow Advanced settings</small></span>
+                  </button>
+                  <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'always' }" @click="form.approval_pause_mode = 'always'">
+                    <i class="fas fa-pause"></i><span><strong>Always pause</strong><small>Wait for this job's approvals</small></span>
+                  </button>
+                  <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'never' }" @click="form.approval_pause_mode = 'never'">
+                    <i class="fas fa-play"></i><span><strong>Never pause</strong><small>Ignore pending approvals</small></span>
+                  </button>
+                </div>
               </div>
-            </div>
-            <label v-if="form.job_type !== 'discover'" class="pause-pending-toggle">
-              <input v-model="form.prevent_suggestions_if_unwatched" type="checkbox" />
-              <span>
-                <strong>Pause if suggestions remain unwatched</strong>
-                <small>Scheduled runs only. Manual Run now remains available.</small>
-              </span>
-            </label>
-            <div v-if="form.job_type !== 'discover' && form.prevent_suggestions_if_unwatched" class="form-group">
-              <label for="unwatchedDays">Days before pausing</label>
-              <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days"
-                class="form-control" type="number" min="1" required />
+              <BaseCheckbox
+                v-if="form.job_type !== 'discover'"
+                v-model="form.prevent_suggestions_if_unwatched"
+                label="Pause if suggestions remain unwatched"
+                description="Scheduled runs only. Manual Run now remains available."
+              />
+              <div v-if="form.job_type !== 'discover' && form.prevent_suggestions_if_unwatched" class="form-group">
+                <label for="unwatchedDays">Days before pausing</label>
+                <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days"
+                  class="form-control" type="number" min="1" required />
+              </div>
             </div>
           </div>
 
@@ -279,6 +281,7 @@ import { listTraktMediaUsers } from '@/api/api';
 import { waitForAuthReady, useAuth } from '@/composables/useAuth';
 import { getJobTypeIcon } from '@/utils/jobTypeVisuals.js';
 import axios from 'axios';
+import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 
 export default {
@@ -287,8 +290,9 @@ export default {
     JobFilters,
     RecommendationFilters,
     TraktRecommendationFilters,
-    SchedulePicker
-    , BaseDropdown
+    SchedulePicker,
+    BaseCheckbox,
+    BaseDropdown
   },
   props: {
     job: {
@@ -330,7 +334,7 @@ export default {
   computed: {
     seerIdentityOptions() {
       const options = [
-        { value: 'technical_user', label: 'Configured technical user' },
+        { value: 'technical_user', label: 'Technical user configured in Services' },
         { value: 'matching_user', label: 'Mapped Seer user (fallback to technical)' }
       ];
       if (this.currentUser?.role === 'admin') options.push({ value: 'admin_user', label: 'Mapped Seer admin' });
@@ -708,8 +712,19 @@ export default {
 
 .delivery-mode-selector .media-type-btn span {
   display: grid;
+  flex: 1;
   gap: var(--spacing-xs);
   text-align: left;
+}
+
+.delivery-mode-selector .media-type-btn {
+  justify-content: flex-start;
+  gap: var(--spacing-md);
+}
+
+.delivery-mode-selector .media-type-btn > i {
+  flex: 0 0 var(--spacing-md);
+  text-align: center;
 }
 
 .delivery-mode-selector small {
@@ -759,10 +774,10 @@ export default {
 
 .form-group label {
   display: block;
-  font-size: 0.8rem;
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
-  margin-bottom: 0.4rem;
+  margin-bottom: var(--spacing-sm);
 }
 
 .form-control {
@@ -793,36 +808,18 @@ export default {
   margin-top: 0.35rem;
 }
 
-.pause-pending-toggle {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
-  margin-top: 1rem;
-  padding: 0.75rem;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
-  cursor: pointer;
+.schedule-options {
+  display: grid;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
 }
 
-.pause-pending-toggle input {
-  margin-top: 0.2rem;
+.schedule-options > .form-group {
+  margin-bottom: 0;
 }
 
-.pause-pending-toggle span {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.pause-pending-toggle strong {
-  font-size: 0.85rem;
-  color: var(--color-text-primary);
-}
-
-.pause-pending-toggle small {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
+.schedule-options .delivery-mode-selector {
+  margin-bottom: 0;
 }
 
 .media-type-selector {
