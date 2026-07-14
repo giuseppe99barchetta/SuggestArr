@@ -577,6 +577,30 @@ LLM_MODEL=gpt-4o-mini</code></pre>
         </div>
       </div>
 
+      <div class="settings-group">
+        <h3>
+          <i class="fas fa-file-export"></i>
+          Configuration Management
+        </h3>
+        <p class="section-description">
+          Back up, restore, or reset the complete SuggestArr configuration.
+        </p>
+        <div class="configuration-actions">
+          <button class="btn btn-outline" :disabled="isLoading" @click="$emit('export-config')">
+            <i class="fas fa-download"></i>
+            Export
+          </button>
+          <button class="btn btn-outline" :disabled="isLoading" @click="$emit('import-config')">
+            <i class="fas fa-upload"></i>
+            Import
+          </button>
+          <button class="btn btn-danger" :disabled="isLoading" @click="$emit('reset-config')">
+            <i class="fas fa-undo"></i>
+            Reset SuggestArr
+          </button>
+        </div>
+      </div>
+
       <SettingsCleanup embedded />
     </div>
 
@@ -628,7 +652,7 @@ export default {
       default: false,
     },
   },
-  emits: ['save-section'],
+  emits: ['save-section', 'export-config', 'import-config', 'reset-config'],
   data() {
     return {
       localConfig: {},
@@ -1084,6 +1108,12 @@ export default {
   font-size: 0.9rem;
   color: var(--color-text-muted);
   line-height: 1.5;
+}
+
+.configuration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
 }
 
 .warning-box {

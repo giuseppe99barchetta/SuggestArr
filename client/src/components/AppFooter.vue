@@ -31,6 +31,28 @@
       >
         <font-awesome-icon :icon="['fab', 'discord']" />
       </a>
+
+      <a
+        href="https://ko-fi.com/ciuse99"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Support SuggestArr on Ko-fi"
+        title="Support SuggestArr on Ko-fi"
+        class="footer-link"
+      >
+        <font-awesome-icon :icon="['fas', 'heart']" />
+      </a>
+
+      <a
+        href="https://buymeacoffee.com/suggestarr"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Support SuggestArr on Buy Me a Coffee"
+        title="Support SuggestArr on Buy Me a Coffee"
+        class="footer-link"
+      >
+        <font-awesome-icon :icon="['fas', 'mug-hot']" />
+      </a>
     </div>
   </footer>
 </template>
@@ -38,9 +60,10 @@
 <script>
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { faGithub, faDocker, faDiscord } from '@fortawesome/free-brands-svg-icons';
+import { faHeart, faMugHot } from '@fortawesome/free-solid-svg-icons';
 import { library } from '@fortawesome/fontawesome-svg-core';
 
-library.add(faGithub, faDocker, faDiscord);
+library.add(faGithub, faDocker, faDiscord, faHeart, faMugHot);
 
 export default {
   components: {
