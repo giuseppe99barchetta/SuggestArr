@@ -248,6 +248,14 @@ AI Search requires an LLM to be configured (same setup as AI-Powered Recommendat
 ## Installation
 For Docker, Unraid, source install, reverse proxy, backup, and recommended configuration instructions, see the [Installation Guide](/docs/INSTALLATION.md).
 
+## Support SuggestArr ❤️
+If you enjoy SuggestArr, consider making a donation to support its continued development and help keep the project running at its best:
+
+- ☕ [Ko-fi](https://ko-fi.com/ciuse99)
+- 💛 [Buy Me a Coffee](https://buymeacoffee.com/suggestarr)
+
+Every contribution, no matter the size, is greatly appreciated. Thank you for supporting SuggestArr!
+
 ## Join Our Discord Community
 Feel free to join our Discord community to share ideas, ask questions, or get help with SuggestArr: [Join here](https://discord.gg/JXwFd3PnXY).
 
