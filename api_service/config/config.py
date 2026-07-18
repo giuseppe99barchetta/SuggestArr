@@ -143,6 +143,9 @@ def load_env_vars(force_reload: bool = False):
         # Parse JSON string fields
         resolved_config = _parse_json_fields(resolved_config)
         resolved_config = merge_db_integrations_into_flat(resolved_config)
+        # Configs created before the setup flag existed are complete when their required values are.
+        if 'SETUP_COMPLETED' not in config_data:
+            resolved_config['SETUP_COMPLETED'] = is_setup_complete(resolved_config)
         with _CONFIG_CACHE_LOCK:
             _CONFIG_CACHE = copy.deepcopy(resolved_config)
         return copy.deepcopy(resolved_config)
