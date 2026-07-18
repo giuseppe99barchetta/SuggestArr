@@ -343,7 +343,10 @@ class JellyfinClient(BaseHTTPClient):
                     return {}
 
                 data = await response.json()
-                provider_ids = data.get("ProviderIds") or {}
+                items = data.get("Items") or []
+                provider_ids = data.get("ProviderIds") or (
+                    (items[0].get("ProviderIds") or {}) if items else {}
+                )
                 self._series_provider_ids_cache[series_id] = provider_ids
                 return provider_ids
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
