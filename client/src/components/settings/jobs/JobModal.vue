@@ -277,7 +277,7 @@ import RecommendationFilters from './RecommendationFilters.vue';
 import TraktRecommendationFilters from './TraktRecommendationFilters.vue';
 import SchedulePicker from './SchedulePicker.vue';
 import { jobsApi } from '@/api/jobsApi';
-import { listTraktMediaUsers } from '@/api/api';
+import { listTraktJobUsers } from '@/api/api';
 import { waitForAuthReady, useAuth } from '@/composables/useAuth';
 import { getJobTypeIcon } from '@/utils/jobTypeVisuals.js';
 import axios from 'axios';
@@ -473,8 +473,8 @@ export default {
           this.connectedUsers = [];
           return;
         }
-        const traktRes = await listTraktMediaUsers();
-        this.connectedUsers = (traktRes.data?.media_users || [])
+        const traktUsers = await listTraktJobUsers(this.currentUser?.role);
+        this.connectedUsers = traktUsers
           .filter((user) => user.trakt?.connected);
       } catch {
         this.traktConfigured = false;

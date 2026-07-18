@@ -161,6 +161,11 @@ export const updateTraktSource = (provider, externalUserId, payload) =>
 
 export const getMyTraktStatus = () => axios.get('/api/trakt/me');
 
+export const listTraktJobUsers = async (role) => {
+    const response = role === 'user' ? await getMyTraktStatus() : await listTraktMediaUsers();
+    return response.data?.media_users || (response.data?.media_user ? [response.data.media_user] : []);
+};
+
 export const startMyTraktDeviceCode = () => axios.post('/api/trakt/me/device/code');
 
 export const pollMyTraktDeviceToken = (deviceCode) =>
