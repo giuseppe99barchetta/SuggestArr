@@ -34,13 +34,17 @@ class RequestMixin:
     
     def save_user(self, user: Dict[str, Any]) -> None:
         """Save a new user to the database, ignoring duplicates."""
-        self.logger.debug(f"Saving user: {user['id']} {user['name']}")
-        
+        # Some callers (e.g. the Trakt recommendations job) only have the media
+        # user id available, not the display name. Fall back to the id so a
+        # missing 'name' key never raises KeyError and aborts the request.
+        user_name = user.get('name') or user['id']
+        self.logger.debug(f"Saving user: {user['id']} {user_name}")
+
         query = """
             INSERT OR IGNORE INTO users (user_id, user_name)
             VALUES (?, ?)
         """
-        params = (user['id'], user['name'])
+        params = (user['id'], user_name)
         
         with self.get_connection() as conn:
             cursor = conn.cursor()
