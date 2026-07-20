@@ -863,3 +863,14 @@ class TestConfig(unittest.TestCase):
         save_env_vars(config)
         result = is_setup_complete(None)
         self.assertTrue(result)
+
+    def test_load_env_vars_marks_complete_legacy_config_as_setup_complete(self):
+        legacy_config = {
+            'TMDB_API_KEY': 'key', 'SELECTED_SERVICE': 'plex',
+            'PLEX_TOKEN': 'tok', 'PLEX_API_URL': 'http://plex',
+            'DB_TYPE': 'sqlite',
+        }
+        with open(self._tmp.name, 'w', encoding='utf-8') as config_file:
+            yaml.safe_dump(legacy_config, config_file)
+
+        self.assertTrue(load_env_vars(force_reload=True)['SETUP_COMPLETED'])

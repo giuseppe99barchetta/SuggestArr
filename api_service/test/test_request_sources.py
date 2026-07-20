@@ -108,3 +108,29 @@ def test_pending_requests_filter_by_requested_for_user(tmp_path):
     DatabaseManager._instance = None
     assert total == 1
     assert items[0]["media_user_id"] == "plex-1"
+
+
+def test_save_user_without_name_falls_back_to_id(tmp_path):
+    """Regression: the Trakt recommendations job calls save_user with only an
+    'id' (no display name). save_user must not raise KeyError on 'name'."""
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+
+        # Must not raise even though 'name' is absent.
+        db.save_user({"id": "trakt-user-1"})
+
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT user_name FROM users WHERE user_id = ?", ("trakt-user-1",)
+            )
+            row = cursor.fetchone()
+
+    DatabaseManager._instance = None
+    assert row is not None
+    assert row[0] == "trakt-user-1"  # falls back to the id when name is missing

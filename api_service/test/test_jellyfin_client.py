@@ -454,7 +454,9 @@ class TestGetSeriesProviderIds(unittest.IsolatedAsyncioTestCase):
         self.client = _make_client()
 
     async def test_returns_parent_series_provider_ids(self):
-        resp = _mock_response(200, {'ProviderIds': {'Tmdb': '1418'}})
+        resp = _mock_response(200, {
+            'Items': [{'ProviderIds': {'Tmdb': '1418'}}],
+        })
         session = _mock_session(resp)
 
         with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
