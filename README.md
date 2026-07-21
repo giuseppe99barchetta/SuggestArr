@@ -248,6 +248,18 @@ AI Search requires an LLM to be configured (same setup as AI-Powered Recommendat
 ## Installation
 For Docker, Unraid, source install, reverse proxy, backup, and recommended configuration instructions, see the [Installation Guide](/docs/INSTALLATION.md).
 
+## Public API and Swagger
+
+External integrations use the stable public API at `/api/v1`; dashboard
+endpoints under `/api/*` are internal. The interactive Swagger UI is served by
+the backend at `http://localhost:5000/docs` (or
+`http://localhost:5000/<SUBPATH>/docs` when `SUBPATH` is configured). The
+OpenAPI document is also available as
+`/api/v1/openapi.json` and `/api/v1/openapi.yaml`.
+
+See the [Public API v1 guide](/docs/API.md) for authentication, addresses, and
+usage details.
+
 ## Support SuggestArr ❤️
 If you enjoy SuggestArr, consider making a donation to support its continued development and help keep the project running at its best:
 

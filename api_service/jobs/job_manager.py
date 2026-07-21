@@ -164,7 +164,16 @@ class JobManager:
         self.logger.info(f"Running job {job_id} immediately")
         self._execute_job(job_id)
 
-    def _execute_job(self, job_id: int) -> None:
+    def enqueue_job_run(self, job_id: int, initiated_by_user_id=None, api_key_id=None) -> int:
+        """Queue one public run and return its persistent history id immediately."""
+        job = self.repository.get_job(job_id)
+        if not job:
+            raise ValueError('Job not found')
+        execution_id = self.repository.create_queued_execution(job_id, 'api', initiated_by_user_id, api_key_id)
+        threading.Thread(target=self._execute_job, args=(job_id, execution_id), daemon=True).start()
+        return execution_id
+
+    def _execute_job(self, job_id: int, execution_id=None) -> None:
         """
         Internal method to execute a job.
         Creates a new event loop for async execution.
@@ -194,9 +203,11 @@ class JobManager:
             asyncio.set_event_loop(loop)
 
             try:
+                if execution_id is not None:
+                    self.repository.mark_execution_running(execution_id)
                 if (self._should_pause_for_suggestarr_approvals(job_data) or
                         loop.run_until_complete(self._should_pause_for_pending_requests(job_data))):
-                    exec_id = self.repository.log_execution_start(job_id)
+                    exec_id = execution_id or self.repository.log_execution_start(job_id)
                     self.repository.log_execution_end(
                         exec_id=exec_id,
                         status='skipped',
@@ -215,7 +226,7 @@ class JobManager:
                     from api_service.jobs.unwatched_suggestion_gate import UnwatchedSuggestionGate
                     slices = loop.run_until_complete(UnwatchedSuggestionGate().allowed_slices(job_data))
                 if slices == []:
-                    exec_id = self.repository.log_execution_start(job_id)
+                    exec_id = execution_id or self.repository.log_execution_start(job_id)
                     self.repository.log_execution_end(
                         exec_id=exec_id,
                         status='skipped',
@@ -226,16 +237,18 @@ class JobManager:
                     self.logger.info("Job %s paused because its suggested content remains unwatched.", job_id)
                     return
                 if slices is None:
-                    loop.run_until_complete(executor(job_id))
+                    loop.run_until_complete(executor(job_id, execution_id=execution_id) if execution_id is not None else executor(job_id))
                 else:
                     for overrides in slices:
-                        loop.run_until_complete(executor(job_id, overrides))
+                        loop.run_until_complete(executor(job_id, overrides, execution_id=execution_id) if execution_id is not None else executor(job_id, overrides))
             finally:
                 close_event_loop(loop, self.logger)
 
             self.logger.info(f"Job {job_id} execution completed")
         except Exception as e:
             self.logger.error(f"Job {job_id} execution failed: {str(e)}")
+            if execution_id is not None:
+                self.repository.log_execution_end(execution_id, 'failed', error_message='Job execution failed')
 
     async def _should_pause_for_pending_requests(self, job_data: Dict[str, Any]) -> bool:
         """Return True when this job should skip because Seer has pending requests."""

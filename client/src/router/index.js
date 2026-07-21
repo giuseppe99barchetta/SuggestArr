@@ -8,6 +8,7 @@ const RequestsPage = () => import("@/components/RequestsPage.vue");
 const ConfigWizard = () => import("@/components/ConfigWizard.vue");
 const DashboardPage = () => import("@/components/DashboardPage.vue");
 const LoginPage = () => import("@/components/LoginPage.vue");
+const ApiDocsPage = () => import("@/components/ApiDocsPage.vue");
 
 function readSubpathFromMeta() {
   const metaTag = document.querySelector('meta[name="suggestarr-subpath"]');
@@ -252,6 +253,12 @@ export async function createAppRouter() {
       name: "Login",
       component: LoginPage,
     },
+    {
+      path: `/docs`,
+      name: "ApiDocs",
+      component: ApiDocsPage,
+      meta: { public: true },
+    },
     // Redirect legacy routes
     {
       path: `/wizard`,
@@ -269,6 +276,7 @@ export async function createAppRouter() {
 
   // Add navigation guards
   router.beforeEach(async (to) => {
+    if (to.meta.public) return;
     // Wait for initial auth setup to complete before allowing navigation
     // This ensures the access token is set and any refresh has completed
     await waitForAuthReady();

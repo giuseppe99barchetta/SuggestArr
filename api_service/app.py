@@ -2,8 +2,9 @@
 Main Flask application for managing environment variables and running processes.
 """
 from concurrent.futures import ThreadPoolExecutor
+import json
 import os
-from flask import Flask, jsonify
+from flask import Flask, Response, jsonify, send_from_directory, url_for
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 from asgiref.wsgi import WsgiToAsgi
@@ -34,6 +35,7 @@ from api_service.blueprints.admin.routes import admin_bp
 from api_service.blueprints.users.routes import users_bp
 from api_service.blueprints.cleanup.routes import cleanup_bp
 from api_service.blueprints.trakt.routes import trakt_bp
+from api_service.api.v1 import public_api_v1_bp
 
 class SubpathMiddleware:
     """
@@ -79,6 +81,8 @@ def create_app():
         AppUtils.print_welcome_message() # Print only for last worker
 
     static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
+    if not os.path.isdir(static_dir):
+        static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "client", "dist"))
     application = Flask(__name__, static_folder=static_dir)
 
     # ------------------------------------------------------------------
@@ -103,14 +107,14 @@ def create_app():
         CORS(application,
              origins=allowed_origins,
              supports_credentials=True,
-             allow_headers=["Authorization", "Content-Type"],
+             allow_headers=["Authorization", "Content-Type", "X-API-Key"],
              methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
         logger.info("CORS restricted to: %s", allowed_origins)
     else:
         CORS(application,
              origins=DEFAULT_CORS_ORIGINS,
              supports_credentials=True,
-             allow_headers=["Authorization", "Content-Type"],
+             allow_headers=["Authorization", "Content-Type", "X-API-Key"],
              methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
         logger.info("CORS using default frontend origins: %s", DEFAULT_CORS_ORIGINS)
 
@@ -189,6 +193,31 @@ def create_app():
     application.register_blueprint(users_bp, url_prefix='/api/users')
     application.register_blueprint(cleanup_bp, url_prefix='/api/cleanup')
     application.register_blueprint(trakt_bp, url_prefix='/api/trakt')
+    application.register_blueprint(public_api_v1_bp, url_prefix='/api/v1')
+
+    def swagger_ui_directory():
+        packaged = os.path.join(application.static_folder, 'swagger-ui')
+        if os.path.isdir(packaged):
+            return packaged
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'client', 'node_modules', 'swagger-ui-dist'))
+
+    @application.route('/swagger-ui/<path:filename>')
+    def swagger_ui_asset(filename):
+        return send_from_directory(swagger_ui_directory(), filename)
+
+    @application.route('/docs')
+    def swagger_docs():
+        document_url = url_for('public_api_v1.openapi_json')
+        css_url = url_for('swagger_ui_asset', filename='swagger-ui.css')
+        bundle_url = url_for('swagger_ui_asset', filename='swagger-ui-bundle.js')
+        preset_url = url_for('swagger_ui_asset', filename='swagger-ui-standalone-preset.js')
+        html = f'''<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SuggestArr Public API v1</title><link rel="stylesheet" href="{css_url}"></head>
+<body><div id="swagger-ui"></div><script src="{bundle_url}"></script><script src="{preset_url}"></script>
+<script>SwaggerUIBundle({{url:{json.dumps(document_url)},dom_id:'#swagger-ui',layout:'StandaloneLayout',deepLinking:true,displayRequestDuration:true,persistAuthorization:false,tryItOutEnabled:true,presets:[SwaggerUIBundle.presets.apis,SwaggerUIStandalonePreset]}});</script>
+</body></html>'''
+        return Response(html, mimetype='text/html')
 
     # Register routes
     register_routes(application)

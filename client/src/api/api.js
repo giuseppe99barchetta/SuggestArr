@@ -222,3 +222,6 @@ export const linkPlexIntegration = (data) => axios.post('/api/integrations/plex/
 
 // Own profile update (any authenticated user)
 export const updateMyProfile = (data) => axios.patch('/api/auth/me', data);
+export const getApiKeys = () => axios.get('/api/auth/api-keys');
+export const createApiKey = (data) => axios.post('/api/auth/api-keys', data);
+export const revokeApiKey = (id) => axios.delete(`/api/auth/api-keys/${id}`);

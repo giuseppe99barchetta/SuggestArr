@@ -1,0 +1,266 @@
+openapi: 3.1.0
+info:
+  title: SuggestArr Public API
+  version: v1
+  description: Stable, intentionally limited external API.
+tags:
+  - name: Status
+    description: Public connectivity and API contract discovery.
+  - name: Identity
+    description: Identity resolved from a JWT or named API key.
+  - name: Jobs
+    description: Read, preview, and start jobs visible to the authenticated user.
+  - name: Runs
+    description: Poll asynchronous public job executions.
+  - name: Suggestions
+    description: Inspect and act on suggestions visible to the authenticated user.
+  - name: Requests
+    description: Inspect SuggestArr requests and aggregate statistics.
+x-error-responses: &errorResponses
+  '400': {$ref: '#/components/responses/BadRequest'}
+  '401': {$ref: '#/components/responses/Unauthorized'}
+  '500': {$ref: '#/components/responses/InternalError'}
+paths:
+  /api/v1/status:
+    get:
+      operationId: publicStatus
+      tags: [Status]
+      summary: Service status
+      description: Public, minimal health response. It never exposes configuration or integration data.
+      security: []
+      responses:
+        '200': {description: Service status, content: {application/json: {schema: {$ref: '#/components/schemas/StatusResponse'}}}}
+  /api/v1/openapi.json:
+    get:
+      operationId: publicOpenApiJson
+      tags: [Status]
+      summary: OpenAPI document as JSON
+      security: []
+      responses:
+        '200': {description: OpenAPI document}
+  /api/v1/openapi.yaml:
+    get:
+      operationId: publicOpenApiYaml
+      tags: [Status]
+      summary: OpenAPI document as YAML
+      security: []
+      responses:
+        '200': {description: OpenAPI document}
+  /api/v1/me:
+    get:
+      operationId: publicMe
+      tags: [Identity]
+      summary: Current API identity
+      description: Shows the user and the authentication method used for this public request.
+      responses:
+        '200': {description: Current public API identity, content: {application/json: {schema: {$ref: '#/components/schemas/IdentityResponse'}}}}
+        <<: *errorResponses
+  /api/v1/jobs:
+    get:
+      operationId: publicJobs
+      tags: [Jobs]
+      summary: List visible jobs
+      description: Administrators see all jobs; other users see only their own jobs.
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1}}
+        - {name: per_page, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
+      responses:
+        <<: *errorResponses
+        '200': {description: Visible jobs, content: {application/json: {schema: {$ref: '#/components/schemas/JobListResponse'}}}}
+  /api/v1/jobs/{job_id}:
+    get:
+      operationId: publicJob
+      tags: [Jobs]
+      summary: Get a visible job
+      parameters:
+        - {name: job_id, in: path, required: true, schema: {type: integer}}
+      responses:
+        <<: *errorResponses
+        '200': {description: Visible job, content: {application/json: {schema: {$ref: '#/components/schemas/JobResponse'}}}}
+        '404': {description: Job not found}
+  /api/v1/jobs/{job_id}/preview:
+    post:
+      operationId: publicJobPreview
+      tags: [Jobs]
+      summary: Preview a job
+      description: Runs the existing dry-run pipeline without submitting requests or writing execution history.
+      parameters:
+        - {name: job_id, in: path, required: true, schema: {type: integer}}
+      responses:
+        <<: *errorResponses
+        '200': {description: Dry-run result, content: {application/json: {schema: {$ref: '#/components/schemas/PreviewResponse'}}}}
+  /api/v1/jobs/{job_id}/runs:
+    post:
+      operationId: publicStartRun
+      tags: [Jobs]
+      summary: Start an asynchronous job run
+      description: Returns a queued run resource. Poll the Location response header until its status is final.
+      parameters:
+        - {name: job_id, in: path, required: true, schema: {type: integer}}
+      responses:
+        <<: *errorResponses
+        '202': {description: Queued run, headers: {Location: {schema: {type: string}, description: URL of the queued run}}, content: {application/json: {schema: {$ref: '#/components/schemas/RunResponse'}}}}
+  /api/v1/runs:
+    get:
+      operationId: publicRuns
+      tags: [Runs]
+      summary: List visible runs
+      responses:
+        <<: *errorResponses
+        '200': {description: Visible runs, content: {application/json: {schema: {$ref: '#/components/schemas/RunListResponse'}}}}
+  /api/v1/runs/{run_id}:
+    get:
+      operationId: publicRun
+      tags: [Runs]
+      summary: Get a visible run
+      parameters:
+        - {name: run_id, in: path, required: true, schema: {type: integer}}
+      responses:
+        <<: *errorResponses
+        '200': {description: Visible run, content: {application/json: {schema: {$ref: '#/components/schemas/RunResponse'}}}}
+  /api/v1/suggestions:
+    get:
+      operationId: publicSuggestions
+      tags: [Suggestions]
+      summary: List visible suggestions
+      responses:
+        <<: *errorResponses
+        '200': {description: Visible suggestions, content: {application/json: {schema: {$ref: '#/components/schemas/PaginatedResponse'}}}}
+  /api/v1/suggestions/actions:
+    post:
+      operationId: publicSuggestionAction
+      tags: [Suggestions]
+      summary: Apply a suggestion action
+      description: A caller can approve, reject, blacklist, retry, or request again for up to 100 accessible suggestions.
+      responses:
+        <<: *errorResponses
+        '200': {description: Action result, content: {application/json: {schema: {$ref: '#/components/schemas/SuggestionActionResponse'}}}}
+  /api/v1/requests:
+    get:
+      operationId: publicRequests
+      tags: [Requests]
+      summary: List visible requests
+      responses:
+        <<: *errorResponses
+        '200': {description: Visible requests, content: {application/json: {schema: {$ref: '#/components/schemas/PaginatedResponse'}}}}
+  /api/v1/requests/stats:
+    get:
+      operationId: publicRequestStats
+      tags: [Requests]
+      summary: Get visible request statistics
+      responses:
+        <<: *errorResponses
+        '200': {description: Visible request statistics, content: {application/json: {schema: {$ref: '#/components/schemas/RequestStatsResponse'}}}}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+    apiKeyAuth: {type: apiKey, in: header, name: X-API-Key}
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: validation_error, message: The request is invalid.}}
+    Unauthorized:
+      description: Missing, invalid, expired, or ambiguous credentials
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {error: {code: authentication_required, message: Authentication required.}}
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    StatusResponse:
+      type: object
+      properties: {data: {type: object, properties: {service: {type: string, example: SuggestArr}, api_version: {type: string, example: v1}, status: {type: string, example: ok}}}}
+    IdentityResponse:
+      type: object
+      properties: {data: {type: object, properties: {id: {type: integer}, username: {type: string}, role: {type: string}, permissions: {type: object}, authentication: {type: object}}}}
+    JobResponse:
+      type: object
+      properties: {data: {$ref: '#/components/schemas/Job'}}
+    JobListResponse:
+      type: object
+      properties: {data: {type: array, items: {$ref: '#/components/schemas/Job'}}, meta: {$ref: '#/components/schemas/Meta'}}
+    RunResponse:
+      type: object
+      properties: {data: {$ref: '#/components/schemas/Run'}}
+    RunListResponse:
+      type: object
+      properties: {data: {type: array, items: {$ref: '#/components/schemas/Run'}}, meta: {$ref: '#/components/schemas/Meta'}}
+    PreviewResponse:
+      type: object
+      properties: {data: {type: object, properties: {job_id: {type: integer}, items_count: {type: integer}, items: {type: array, items: {type: object, additionalProperties: true}}}}}
+    PaginatedResponse:
+      type: object
+      properties: {data: {type: array, items: {type: object, additionalProperties: true}}, meta: {$ref: '#/components/schemas/Meta'}}
+    SuggestionActionResponse:
+      type: object
+      properties: {data: {type: object, properties: {action: {type: string}, updated: {type: integer}}}}
+    RequestStatsResponse:
+      type: object
+      properties: {data: {type: object, properties: {total: {type: integer}}}}
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: {type: string, example: validation_error}
+            message: {type: string, example: The request is invalid.}
+            details: {type: object, additionalProperties: true}
+    Meta:
+      type: object
+      required: [page, per_page, total, pages]
+      properties:
+        page: {type: integer, minimum: 1}
+        per_page: {type: integer, minimum: 1, maximum: 100}
+        total: {type: integer, minimum: 0}
+        pages: {type: integer, minimum: 1}
+    Job:
+      type: object
+      required: [id, name, job_type, enabled, media_type]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+        job_type: {type: string, enum: [discover, recommendation, trakt_recommendations]}
+        enabled: {type: boolean}
+        media_type: {type: string}
+        max_results: {type: integer}
+        created_at: {type: [string, 'null'], format: date-time}
+        updated_at: {type: [string, 'null'], format: date-time}
+    Run:
+      type: object
+      required: [id, job_id, status]
+      properties:
+        id: {type: integer}
+        job_id: {type: integer}
+        job_name: {type: [string, 'null']}
+        status: {type: string, enum: [queued, running, completed, failed, skipped]}
+        trigger_source: {type: [string, 'null'], example: api}
+        results_count: {type: integer}
+        requested_count: {type: integer}
+        error_message: {type: [string, 'null']}
+        started_at: {type: [string, 'null'], format: date-time}
+        finished_at: {type: [string, 'null'], format: date-time}
+    SuggestionAction:
+      type: object
+      required: [action, ids]
+      properties:
+        action: {type: string, enum: [approve, reject, blacklist, retry, request_again]}
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: {type: integer}
+        remove_blacklist: {type: boolean, default: false}
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []

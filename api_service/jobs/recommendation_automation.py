@@ -531,7 +531,7 @@ class RecommendationAutomation:
         )
         self.logger.info("Plex handler initialized")
 
-    async def run(self, dry_run: bool = False) -> ExecutionResult:
+    async def run(self, dry_run: bool = False, execution_id=None) -> ExecutionResult:
         """
         Execute the recommendation job.
 
@@ -554,7 +554,7 @@ class RecommendationAutomation:
         self.logger.info(
             f"{'[DRY RUN] ' if dry_run else ''}Starting recommendation job: {self.job_data['name']}"
         )
-        exec_id = None if dry_run else self.repository.log_execution_start(self.job_id)
+        exec_id = None if dry_run else (execution_id or self.repository.log_execution_start(self.job_id))
 
         try:
             # Process recent items (this is the main recommendation logic)
@@ -620,7 +620,7 @@ class RecommendationAutomation:
                 error_message=error_msg
             )
 
-async def execute_recommendation_job(job_id: int, overrides=None) -> ExecutionResult:
+async def execute_recommendation_job(job_id: int, overrides=None, execution_id=None) -> ExecutionResult:
     """
     Execute a recommendation job by ID.
     This is the function to be called by JobManager.
@@ -636,7 +636,7 @@ async def execute_recommendation_job(job_id: int, overrides=None) -> ExecutionRe
 
     try:
         automation = await RecommendationAutomation.create(job_id, overrides=overrides)
-        result = await automation.run()
+        result = await automation.run(execution_id=execution_id)
         return result
     except Exception as e:
         logger.error(f"Failed to execute job {job_id}: {str(e)}")

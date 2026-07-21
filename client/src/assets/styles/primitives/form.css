@@ -338,6 +338,11 @@
   margin-bottom: 1.25rem;
 }
 
+.form-group > label:not(.base-checkbox) {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+}
+
 .form-group.form-group--compact {
   margin-bottom: 0.875rem;
 }

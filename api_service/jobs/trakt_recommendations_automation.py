@@ -337,7 +337,7 @@ class TraktRecommendationsAutomation:
             token_source=resolved.get("token_source", "manual_oauth"),
         )
 
-    async def run(self, dry_run: bool = False) -> ExecutionResult:
+    async def run(self, dry_run: bool = False, execution_id=None) -> ExecutionResult:
         """Execute the Trakt recommendations job.
 
         Args:
@@ -359,7 +359,7 @@ class TraktRecommendationsAutomation:
             "[DRY RUN] " if dry_run else "",
             self.job_data["name"],
         )
-        exec_id = None if dry_run else self.repository.log_execution_start(self.job_id)
+        exec_id = None if dry_run else (execution_id or self.repository.log_execution_start(self.job_id))
 
         try:
             from contextlib import AsyncExitStack
@@ -591,14 +591,14 @@ class TraktRecommendationsAutomation:
         }
 
 
-async def execute_trakt_recommendations_job(job_id: int, overrides=None) -> ExecutionResult:
+async def execute_trakt_recommendations_job(job_id: int, overrides=None, execution_id=None) -> ExecutionResult:
     """Execute a trakt_recommendations job by ID."""
     logger = LoggerManager.get_logger("TraktRecommendationsJobExecutor")
     logger.info("Starting execution of trakt recommendations job: %s", job_id)
 
     try:
         automation = await TraktRecommendationsAutomation.create(job_id, overrides=overrides)
-        return await automation.run()
+        return await automation.run(execution_id=execution_id)
     except Exception as exc:
         logger.error("Failed to execute job %s: %s", job_id, exc)
         logger.error("Traceback: %s", traceback.format_exc())

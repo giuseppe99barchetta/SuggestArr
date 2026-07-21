@@ -36,7 +36,10 @@ from api_service.auth.middleware import (
     _is_trusted_local_ip,
     _load_bypass_user_context,
     invalidate_setup_cache,
+    require_interactive_auth,
 )
+from api_service.auth.api_key_service import ApiKeyService
+from api_service.db.api_key_repository import ApiKeyRepository
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
@@ -57,6 +60,57 @@ _REFRESH_COOKIE = "suggestarr_refresh"
 # key-derivation work instead of raising ValueError and short-circuiting,
 # which would defeat the timing-safe username-enumeration protection.
 _DUMMY_HASH = "$2b$12$Mw9OodX1LL0TkdqxKIjoReHVW2LdwqWmTdAtDPXjNxT34V55xST86"
+
+
+def _api_key_payload(row):
+    return {key: (value.isoformat() if isinstance(value, datetime) else value) for key, value in row.items()}
+
+
+@auth_bp.route('/api-keys', methods=['GET'])
+@require_interactive_auth
+def list_api_keys():
+    user_id = int(g.current_user['id'])
+    keys = ApiKeyRepository(DatabaseManager()).list_keys_for_user(user_id)
+    return jsonify({'keys': [_api_key_payload(key) for key in keys], 'active_limit': 10}), 200
+
+
+@auth_bp.route('/api-keys', methods=['POST'])
+@require_interactive_auth
+@limiter.limit('5 per hour')
+def create_api_key():
+    data = request.get_json(silent=True) or {}
+    name = str(data.get('name') or '').strip()
+    if not name or len(name) > 100:
+        return jsonify({'error': 'Name must contain between 1 and 100 characters'}), 400
+    expires_at = data.get('expires_at')
+    if expires_at:
+        try:
+            expires_at = datetime.fromisoformat(str(expires_at).replace('Z', '+00:00'))
+            if expires_at.tzinfo is not None:
+                expires_at = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
+            if expires_at <= datetime.now(timezone.utc).replace(tzinfo=None):
+                raise ValueError
+        except ValueError:
+            return jsonify({'error': 'expires_at must be a future ISO-8601 timestamp'}), 400
+    else:
+        expires_at = None
+    db = DatabaseManager()
+    service = ApiKeyService(db)
+    user_id = int(g.current_user['id'])
+    if service.repository.count_active_keys_for_user(user_id) >= 10:
+        return jsonify({'error': 'Active API-key limit reached'}), 409
+    result = service.create_key(user_id, name, expires_at)
+    logger.info('api_key.created user_id=%s key_id=%s', user_id, result['id'])
+    return jsonify(_api_key_payload(result)), 201
+
+
+@auth_bp.route('/api-keys/<int:key_id>', methods=['DELETE'])
+@require_interactive_auth
+def revoke_api_key(key_id):
+    if not ApiKeyRepository(DatabaseManager()).revoke_key(int(g.current_user['id']), key_id):
+        return jsonify({'error': 'Not found'}), 404
+    logger.info('api_key.revoked user_id=%s key_id=%s', g.current_user['id'], key_id)
+    return '', 204
 
 
 # ---------------------------------------------------------------------------
