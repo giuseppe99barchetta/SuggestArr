@@ -2,9 +2,8 @@
 Main Flask application for managing environment variables and running processes.
 """
 from concurrent.futures import ThreadPoolExecutor
-import json
 import os
-from flask import Flask, Response, jsonify, send_from_directory, url_for
+from flask import Flask, jsonify, render_template, send_from_directory, url_for
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 from asgiref.wsgi import WsgiToAsgi
@@ -211,13 +210,21 @@ def create_app():
         css_url = url_for('swagger_ui_asset', filename='swagger-ui.css')
         bundle_url = url_for('swagger_ui_asset', filename='swagger-ui-bundle.js')
         preset_url = url_for('swagger_ui_asset', filename='swagger-ui-standalone-preset.js')
-        html = f'''<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SuggestArr Public API v1</title><link rel="stylesheet" href="{css_url}"></head>
-<body><div id="swagger-ui"></div><script src="{bundle_url}"></script><script src="{preset_url}"></script>
-<script>SwaggerUIBundle({{url:{json.dumps(document_url)},dom_id:'#swagger-ui',layout:'StandaloneLayout',deepLinking:true,displayRequestDuration:true,persistAuthorization:false,tryItOutEnabled:true,presets:[SwaggerUIBundle.presets.apis,SwaggerUIStandalonePreset],plugins:[SwaggerUIBundle.plugins.DownloadUrl]}});</script>
-</body></html>'''
-        return Response(html, mimetype='text/html')
+        return render_template(
+            'api/swagger.html',
+            css_url=css_url,
+            bundle_url=bundle_url,
+            preset_url=preset_url,
+            swagger_config={
+                'url': document_url,
+                'dom_id': '#swagger-ui',
+                'layout': 'StandaloneLayout',
+                'deepLinking': True,
+                'displayRequestDuration': True,
+                'persistAuthorization': False,
+                'tryItOutEnabled': True,
+            },
+        )
 
     # Register routes
     register_routes(application)

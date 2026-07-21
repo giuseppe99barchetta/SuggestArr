@@ -75,7 +75,10 @@ def me():
 def _job_payload(job):
     """Stable, credential-free subset of the internal job record."""
     fields = ('id', 'name', 'job_type', 'enabled', 'media_type', 'filters', 'schedule_type',
-              'schedule_value', 'max_results', 'user_ids', 'owner_id', 'created_at', 'updated_at')
+              'schedule_value', 'max_results', 'user_ids', 'is_system', 'owner_id',
+              'pause_if_pending_requests', 'prevent_suggestions_if_unwatched',
+              'unwatched_suggestion_days', 'delivery_mode', 'seer_identity_mode',
+              'request_profiles', 'approval_pause_mode', 'created_at', 'updated_at')
     return {field: job.get(field) for field in fields}
 
 
@@ -270,7 +273,7 @@ def suggestions():
     pagination = _page_args()
     status = request.args.get('status', 'awaiting_approval')
     media_type = request.args.get('media_type', 'all')
-    if not pagination or status not in ('awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed', 'blacklisted') or media_type not in ('all', 'movie', 'tv'):
+    if not pagination or status not in ('all', 'awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed', 'blacklisted') or media_type not in ('all', 'movie', 'tv'):
         return jsonify({'error': {'code': 'validation_error', 'message': 'Invalid query parameters.'}}), 400
     search = request.args.get('search', '')
     if len(search) > 100:

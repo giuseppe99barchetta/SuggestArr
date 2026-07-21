@@ -66,6 +66,8 @@ paths:
       parameters:
         - {name: page, in: query, schema: {type: integer, minimum: 1}}
         - {name: per_page, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
+        - {name: enabled, in: query, schema: {type: boolean}, description: Filter enabled or disabled jobs.}
+        - {name: job_type, in: query, schema: {type: string, enum: [discover, recommendation, trakt_recommendations]}}
       responses:
         <<: *errorResponses
         '200': {description: Visible jobs, content: {application/json: {schema: {$ref: '#/components/schemas/JobListResponse'}}}}
@@ -107,6 +109,11 @@ paths:
       operationId: publicRuns
       tags: [Runs]
       summary: List visible runs
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1}}
+        - {name: per_page, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
+        - {name: job_id, in: query, schema: {type: integer, minimum: 1}}
+        - {name: status, in: query, schema: {type: string, enum: [queued, running, completed, failed, skipped]}}
       responses:
         <<: *errorResponses
         '200': {description: Visible runs, content: {application/json: {schema: {$ref: '#/components/schemas/RunListResponse'}}}}
@@ -125,15 +132,27 @@ paths:
       operationId: publicSuggestions
       tags: [Suggestions]
       summary: List visible suggestions
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1}}
+        - {name: per_page, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
+        - {name: status, in: query, schema: {type: string, default: awaiting_approval, enum: [all, awaiting_approval, queued, submitting, submitted, rejected, failed, blacklisted]}}
+        - {name: media_type, in: query, schema: {type: string, default: all, enum: [all, movie, tv]}}
+        - {name: search, in: query, schema: {type: string, maxLength: 100}, description: Match a title or TMDb ID.}
+        - {name: user_id, in: query, schema: {type: string}, description: Filter by media-service user ID when permitted by the installation visibility policy.}
       responses:
         <<: *errorResponses
-        '200': {description: Visible suggestions, content: {application/json: {schema: {$ref: '#/components/schemas/PaginatedResponse'}}}}
+        '200': {description: Visible suggestions, content: {application/json: {schema: {$ref: '#/components/schemas/SuggestionListResponse'}}}}
   /api/v1/suggestions/actions:
     post:
       operationId: publicSuggestionAction
       tags: [Suggestions]
       summary: Apply a suggestion action
       description: A caller can approve, reject, blacklist, retry, or request again for up to 100 accessible suggestions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SuggestionAction'}
       responses:
         <<: *errorResponses
         '200': {description: Action result, content: {application/json: {schema: {$ref: '#/components/schemas/SuggestionActionResponse'}}}}
@@ -142,14 +161,22 @@ paths:
       operationId: publicRequests
       tags: [Requests]
       summary: List visible requests
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1}}
+        - {name: per_page, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
+        - {name: sort, in: query, schema: {type: string, default: date_desc, enum: [date_desc, date_asc, title_asc, title_desc, rating_desc, rating_asc]}}
+        - {name: source, in: query, schema: {type: string}, description: Exact source-origin filter.}
+        - {name: user_id, in: query, schema: {type: string}, description: Filter by media-service user ID when permitted by the installation visibility policy.}
       responses:
         <<: *errorResponses
-        '200': {description: Visible requests, content: {application/json: {schema: {$ref: '#/components/schemas/PaginatedResponse'}}}}
+        '200': {description: Visible requests, content: {application/json: {schema: {$ref: '#/components/schemas/RequestListResponse'}}}}
   /api/v1/requests/stats:
     get:
       operationId: publicRequestStats
       tags: [Requests]
       summary: Get visible request statistics
+      parameters:
+        - {name: user_id, in: query, schema: {type: string}, description: Filter by media-service user ID when permitted by the installation visibility policy.}
       responses:
         <<: *errorResponses
         '200': {description: Visible request statistics, content: {application/json: {schema: {$ref: '#/components/schemas/RequestStatsResponse'}}}}
@@ -193,10 +220,37 @@ components:
   schemas:
     StatusResponse:
       type: object
-      properties: {data: {type: object, properties: {service: {type: string, example: SuggestArr}, api_version: {type: string, example: v1}, status: {type: string, example: ok}}}}
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [service, api_version, status]
+          properties:
+            service: {type: string, example: SuggestArr}
+            api_version: {type: string, example: v1}
+            status: {type: string, example: ok}
     IdentityResponse:
       type: object
-      properties: {data: {type: object, properties: {id: {type: integer}, username: {type: string}, role: {type: string}, permissions: {type: object}, authentication: {type: object}}}}
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, username, role, permissions, authentication]
+          properties:
+            id: {type: [integer, string]}
+            username: {type: string}
+            role: {type: string, enum: [admin, user]}
+            permissions:
+              type: object
+              required: [can_manage_ai]
+              properties: {can_manage_ai: {type: boolean}}
+            authentication:
+              type: object
+              required: [method, api_key_id, api_key_name]
+              properties:
+                method: {type: string, enum: [jwt, api_key, local_bypass, disabled]}
+                api_key_id: {type: [integer, 'null']}
+                api_key_name: {type: [string, 'null']}
     JobResponse:
       type: object
       properties: {data: {$ref: '#/components/schemas/Job'}}
@@ -215,6 +269,18 @@ components:
     PaginatedResponse:
       type: object
       properties: {data: {type: array, items: {type: object, additionalProperties: true}}, meta: {$ref: '#/components/schemas/Meta'}}
+    SuggestionListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: {type: array, items: {$ref: '#/components/schemas/Suggestion'}}
+        meta: {$ref: '#/components/schemas/Meta'}
+    RequestListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: {type: array, items: {$ref: '#/components/schemas/Request'}}
+        meta: {$ref: '#/components/schemas/Meta'}
     SuggestionActionResponse:
       type: object
       properties: {data: {type: object, properties: {action: {type: string}, updated: {type: integer}}}}
@@ -292,6 +358,58 @@ components:
         failed: {type: integer, minimum: 0}
         total_pending: {type: integer, minimum: 0, description: Sum of queued and submitting items.}
         total: {type: integer, minimum: 0, description: All suggestions in the delivery queue, including non-pending outcomes.}
+    Suggestion:
+      type: object
+      required: [id, tmdb_id, media_type, status, created_at, retry_count]
+      properties:
+        id: {type: integer}
+        tmdb_id: {type: string}
+        media_type: {type: string, enum: [movie, tv]}
+        status: {type: string, enum: [awaiting_approval, queued, submitting, submitted, rejected, failed, blacklisted]}
+        created_at: {type: [string, 'null'], format: date-time}
+        job_id: {type: [integer, 'null']}
+        owner_id: {type: [integer, 'null']}
+        retry_count: {type: integer, minimum: 0}
+        last_attempt_at: {type: [string, 'null'], format: date-time}
+        last_error: {type: [string, 'null']}
+        title: {type: [string, 'null']}
+        poster_path: {type: [string, 'null']}
+        overview: {type: [string, 'null']}
+        rating: {type: [number, 'null']}
+        release_date: {type: [string, 'null'], format: date}
+        logo_path: {type: [string, 'null']}
+        backdrop_path: {type: [string, 'null']}
+        name: {type: [string, 'null'], description: Source job name.}
+        seer_identity_mode: {type: string, enum: [matching_user, technical_user, admin_user]}
+        request_profile:
+          type: object
+          properties:
+            serverId: {type: [integer, string, 'null']}
+            profileId: {type: [integer, string, 'null']}
+            rootFolder: {type: [string, 'null']}
+        media_user_id: {type: [string, 'null']}
+        user_name: {type: [string, 'null']}
+    Request:
+      type: object
+      required: [id, tmdb_id, media_type, requested_at, requested_by, media_user, metadata]
+      properties:
+        id: {type: string, description: TMDb request identifier.}
+        tmdb_id: {type: string}
+        media_type: {type: string, enum: [movie, tv]}
+        title: {type: [string, 'null']}
+        source_origin: {type: [string, 'null']}
+        source_media_id: {type: [string, 'null']}
+        requested_at: {type: [string, 'null'], format: date-time}
+        requested_by: {type: [string, 'null']}
+        media_user:
+          type: [object, 'null']
+          properties: {id: {type: string}}
+        metadata:
+          type: object
+          required: [poster_path, rating]
+          properties:
+            poster_path: {type: [string, 'null']}
+            rating: {type: [number, 'null']}
     Error:
       type: object
       required: [error]
@@ -313,14 +431,27 @@ components:
         pages: {type: integer, minimum: 1}
     Job:
       type: object
-      required: [id, name, job_type, enabled, media_type]
+      required: [id, name, job_type, enabled, media_type, filters, schedule_type, schedule_value, max_results, user_ids, is_system, owner_id, pause_if_pending_requests, prevent_suggestions_if_unwatched, unwatched_suggestion_days, delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode, created_at, updated_at]
       properties:
         id: {type: integer}
         name: {type: string}
         job_type: {type: string, enum: [discover, recommendation, trakt_recommendations]}
         enabled: {type: boolean}
-        media_type: {type: string}
-        max_results: {type: integer}
+        media_type: {type: string, enum: [movie, tv, both]}
+        filters: {type: object, additionalProperties: true}
+        schedule_type: {type: string}
+        schedule_value: {type: string}
+        max_results: {type: integer, minimum: 1}
+        user_ids: {type: array, items: {type: [string, integer]}}
+        is_system: {type: boolean}
+        owner_id: {type: [integer, 'null']}
+        pause_if_pending_requests: {type: boolean}
+        prevent_suggestions_if_unwatched: {type: boolean}
+        unwatched_suggestion_days: {type: integer, minimum: 1}
+        delivery_mode: {type: string, enum: [inherit, automatic, manual]}
+        seer_identity_mode: {type: string, enum: [matching_user, technical_user, admin_user]}
+        request_profiles: {type: object, additionalProperties: true}
+        approval_pause_mode: {type: string, enum: [inherit, always, never]}
         created_at: {type: [string, 'null'], format: date-time}
         updated_at: {type: [string, 'null'], format: date-time}
     Run:
