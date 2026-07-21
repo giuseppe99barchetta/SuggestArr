@@ -204,25 +204,49 @@ def create_app():
     def swagger_ui_asset(filename):
         return send_from_directory(swagger_ui_directory(), filename)
 
+    @application.route('/swagger-ui/custom/<path:filename>')
+    def swagger_custom_asset(filename):
+        packaged = os.path.join(application.static_folder, 'swagger')
+        source = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'client', 'public', 'swagger'))
+        return send_from_directory(source if os.path.isdir(source) else packaged, filename)
+
+    @application.route('/swagger-ui/logo')
+    def swagger_logo():
+        image_dir = os.path.join(application.static_folder, 'img')
+        if os.path.isdir(image_dir):
+            logo = next((name for name in os.listdir(image_dir) if name.startswith('logo.') and name.endswith('.png')), None)
+            if logo:
+                return send_from_directory(image_dir, logo)
+        source_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'client', 'src', 'assets'))
+        return send_from_directory(source_dir, 'logo.png')
+
     @application.route('/docs')
     def swagger_docs():
-        document_url = url_for('public_api_v1.openapi_json')
-        css_url = url_for('swagger_ui_asset', filename='swagger-ui.css')
-        bundle_url = url_for('swagger_ui_asset', filename='swagger-ui-bundle.js')
-        preset_url = url_for('swagger_ui_asset', filename='swagger-ui-standalone-preset.js')
+        openapi_url = url_for('public_api_v1.openapi_json')
         return render_template(
             'api/swagger.html',
-            css_url=css_url,
-            bundle_url=bundle_url,
-            preset_url=preset_url,
+            docs_url=url_for('swagger_docs'),
+            openapi_url=openapi_url,
+            css_url=url_for('swagger_ui_asset', filename='swagger-ui.css'),
+            bundle_url=url_for('swagger_ui_asset', filename='swagger-ui-bundle.js'),
+            preset_url=url_for('swagger_ui_asset', filename='swagger-ui-standalone-preset.js'),
+            custom_css_url=url_for('swagger_custom_asset', filename='swagger-custom.css'),
+            custom_js_url=url_for('swagger_custom_asset', filename='swagger-init.js'),
+            logo_url=url_for('swagger_logo'),
             swagger_config={
-                'url': document_url,
+                'url': openapi_url,
                 'dom_id': '#swagger-ui',
-                'layout': 'StandaloneLayout',
+                'layout': 'BaseLayout',
                 'deepLinking': True,
                 'displayRequestDuration': True,
                 'persistAuthorization': False,
                 'tryItOutEnabled': True,
+                'docExpansion': 'list',
+                'defaultModelsExpandDepth': 1,
+                'defaultModelExpandDepth': 1,
+                'filter': True,
+                'showExtensions': True,
+                'showCommonExtensions': True,
             },
         )
 

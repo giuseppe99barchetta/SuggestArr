@@ -3,21 +3,34 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive documentation for the SuggestArr Public API v1.">
+  <meta name="color-scheme" content="light">
   <title>SuggestArr Public API v1</title>
   <link rel="stylesheet" href="{{ css_url }}">
+  <link rel="stylesheet" href="{{ custom_css_url }}">
 </head>
 <body>
-  <div id="swagger-ui"></div>
+  <header class="api-header">
+    <div class="api-header__content">
+      <a class="api-brand" href="{{ docs_url }}">
+        <img class="api-brand__logo" src="{{ logo_url }}" alt="SuggestArr">
+        <span class="api-brand__text"><strong>SuggestArr</strong><small>Public API</small></span>
+      </a>
+      <span class="api-version" aria-label="API version">v1</span>
+    </div>
+  </header>
+  <main class="api-main">
+    <noscript><div class="api-notice">JavaScript is required to display the API documentation.</div></noscript>
+    <div id="swagger-loading" class="api-loading" role="status" aria-live="polite">Loading API documentation…</div>
+    <div id="swagger-ui"></div>
+  </main>
+  <footer class="api-footer">
+    <span>SuggestArr Public API v1</span>
+    <a href="{{ openapi_url }}" target="_blank" rel="noopener noreferrer">OpenAPI specification</a>
+  </footer>
+  <script id="swagger-config" type="application/json">{{ swagger_config | tojson }}</script>
   <script src="{{ bundle_url }}"></script>
   <script src="{{ preset_url }}"></script>
-  <script>
-    const swaggerConfig = {
-      ...{{ swagger_config | tojson }},
-      validatorUrl: null,
-    };
-    swaggerConfig.presets = [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset];
-    swaggerConfig.plugins = [SwaggerUIBundle.plugins.DownloadUrl];
-    SwaggerUIBundle(swaggerConfig);
-  </script>
+  <script src="{{ custom_js_url }}"></script>
 </body>
 </html>
