@@ -150,9 +150,14 @@ paths:
       description: A caller can approve, reject, blacklist, retry, or request again for up to 100 accessible suggestions.
       requestBody:
         required: true
+        description: Specify one action and from 1 to 100 accessible suggestion IDs.
         content:
           application/json:
             schema: {$ref: '#/components/schemas/SuggestionAction'}
+            example:
+              action: approve
+              ids: [123]
+              remove_blacklist: false
       responses:
         <<: *errorResponses
         '200': {description: Action result, content: {application/json: {schema: {$ref: '#/components/schemas/SuggestionActionResponse'}}}}
@@ -472,14 +477,15 @@ components:
       type: object
       required: [action, ids]
       properties:
-        action: {type: string, enum: [approve, reject, blacklist, retry, request_again]}
+        action: {type: string, enum: [approve, reject, blacklist, retry, request_again], description: Action to apply to every supplied suggestion.}
         ids:
           type: array
           minItems: 1
           maxItems: 100
           uniqueItems: true
           items: {type: integer}
-        remove_blacklist: {type: boolean, default: false}
+          description: Suggestion IDs to update.
+        remove_blacklist: {type: boolean, default: false, description: Valid only with request_again; removes a matching blacklist entry.}
 security:
   - bearerAuth: []
   - apiKeyAuth: []

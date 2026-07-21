@@ -76,3 +76,8 @@ def test_openapi_documents_public_filters_and_full_resource_schemas():
     assert {'filters', 'request_profiles', 'approval_pause_mode'} <= set(spec['components']['schemas']['Job']['properties'])
     assert {'request_profile', 'media_user_id', 'user_name'} <= set(spec['components']['schemas']['Suggestion']['properties'])
     assert {'source_origin', 'source_media_id', 'media_user', 'metadata'} <= set(spec['components']['schemas']['Request']['properties'])
+    action_request = spec['paths']['/api/v1/suggestions/actions']['post']['requestBody']
+    assert action_request['required'] is True
+    assert action_request['content']['application/json']['example'] == {
+        'action': 'approve', 'ids': [123], 'remove_blacklist': False,
+    }
