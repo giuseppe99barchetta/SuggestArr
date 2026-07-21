@@ -215,7 +215,7 @@ def create_app():
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SuggestArr Public API v1</title><link rel="stylesheet" href="{css_url}"></head>
 <body><div id="swagger-ui"></div><script src="{bundle_url}"></script><script src="{preset_url}"></script>
-<script>SwaggerUIBundle({{url:{json.dumps(document_url)},dom_id:'#swagger-ui',layout:'StandaloneLayout',deepLinking:true,displayRequestDuration:true,persistAuthorization:false,tryItOutEnabled:true,presets:[SwaggerUIBundle.presets.apis,SwaggerUIStandalonePreset]}});</script>
+<script>SwaggerUIBundle({{url:{json.dumps(document_url)},dom_id:'#swagger-ui',layout:'StandaloneLayout',deepLinking:true,displayRequestDuration:true,persistAuthorization:false,tryItOutEnabled:true,presets:[SwaggerUIBundle.presets.apis,SwaggerUIStandalonePreset],plugins:[SwaggerUIBundle.plugins.DownloadUrl]}});</script>
 </body></html>'''
         return Response(html, mimetype='text/html')
 

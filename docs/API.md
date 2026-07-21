@@ -36,9 +36,16 @@ JWT bearer tokens and `X-API-Key` both work on public routes, but never send
 both in one request. Responses use `data` and optional pagination `meta`.
 
 Available v1 operations currently cover service status, identity, jobs and
-their previews, asynchronous job runs, suggestions/actions, and
-requests/statistics. Swagger groups these operations by context and documents
-the request and response schemas, including common error responses.
+their previews, asynchronous job runs, suggestions/actions, and requests.
+`GET /api/v1/requests/stats` returns the request counters visible to the
+authenticated user (total, today, this week, and this month).
+
+For an installation-wide operational snapshot, administrators can use
+`GET /api/v1/installation/stats`. It groups counts for requests, enabled and
+disabled jobs, job executions, suggestions by status, and the Seer delivery
+queue. It returns counters only; it never exposes configuration, identities,
+or credentials, and returns `403` for non-administrator keys. Swagger groups
+endpoint under **Installation** and documents its complete response schema.
 
 The in-memory rate limiter is per worker. Treat API keys like passwords: do
 not place them in URLs, logs, browser storage, or source control.

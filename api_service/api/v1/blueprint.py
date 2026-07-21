@@ -6,6 +6,7 @@ import yaml
 from flask import Blueprint, Response, jsonify, g, request
 
 from api_service.auth.limiter import limiter
+from api_service.auth.middleware import require_role
 from api_service.config.config import load_env_vars
 from api_service.db.database_manager import DatabaseManager
 from api_service.db.job_repository import JobRepository
@@ -205,6 +206,64 @@ def _visible_request_user_ids(db):
     return [selected] if selected and selected in linked else linked
 
 
+def _request_statistics(db, users=None):
+    """Return request counters for all users or a visible-user subset."""
+    ph = '%s' if db.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+    where, params = ["requested_by = 'SuggestArr'"], []
+    if users is not None:
+        where.append(f"user_id IN ({','.join([ph] * len(users))})" if users else '1=0')
+        params.extend(users)
+    base_where = ' AND '.join(where)
+
+    date_conditions = {
+        'sqlite': {
+            'today': "DATE(requested_at) = DATE('now')",
+            'this_week': "DATE(requested_at) >= DATE('now', '-' || ((CAST(strftime('%w', 'now') AS INTEGER) + 6) % 7) || ' days')",
+            'this_month': "strftime('%Y-%m', requested_at) = strftime('%Y-%m', 'now')",
+        },
+        'postgres': {
+            'today': 'DATE(requested_at) = CURRENT_DATE',
+            'this_week': "DATE(requested_at) >= DATE_TRUNC('week', CURRENT_DATE)",
+            'this_month': "DATE_TRUNC('month', requested_at) = DATE_TRUNC('month', CURRENT_DATE)",
+        },
+        'mysql': {
+            'today': 'DATE(requested_at) = CURDATE()',
+            'this_week': 'DATE(requested_at) >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)',
+            'this_month': 'YEAR(requested_at) = YEAR(CURDATE()) AND MONTH(requested_at) = MONTH(CURDATE())',
+        },
+        'mariadb': {
+            'today': 'DATE(requested_at) = CURDATE()',
+            'this_week': 'DATE(requested_at) >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)',
+            'this_month': 'YEAR(requested_at) = YEAR(CURDATE()) AND MONTH(requested_at) = MONTH(CURDATE())',
+        },
+    }.get(db.db_type, {})
+
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT COUNT(*) FROM requests WHERE {base_where}", tuple(params))
+        stats = {'total': cursor.fetchone()[0]}
+        for period in ('today', 'this_week', 'this_month'):
+            condition = date_conditions.get(period)
+            if not condition:
+                stats[period] = stats['total']
+                continue
+            cursor.execute(
+                f"SELECT COUNT(*) FROM requests WHERE {base_where} AND {condition}",
+                tuple(params),
+            )
+            stats[period] = cursor.fetchone()[0]
+    return stats
+
+
+def _status_counts(db, table, statuses):
+    """Count a fixed table's status values, preserving zero-valued known states."""
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(f'SELECT status, COUNT(*) FROM {table} GROUP BY status')
+        counts = {str(row[0]): int(row[1]) for row in cursor.fetchall()}
+    return {status: counts.get(status, 0) for status in statuses}, sum(counts.values())
+
+
 @public_api_v1_bp.route('/suggestions', methods=['GET'])
 @limiter.limit('120 per minute')
 def suggestions():
@@ -286,14 +345,40 @@ def requests_list():
 @limiter.limit('120 per minute')
 def request_stats():
     db = DatabaseManager()
-    users = _visible_request_user_ids(db)
-    ph = '%s' if db.db_type in ('mysql', 'mariadb', 'postgres') else '?'
-    where, params = ["requested_by = 'SuggestArr'"], []
-    if users is not None:
-        where.append(f"user_id IN ({','.join([ph] * len(users))})" if users else '1=0')
-        params.extend(users)
-    with db.get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(f"SELECT COUNT(*) FROM requests WHERE {' AND '.join(where)}", tuple(params))
-        total = cursor.fetchone()[0]
-    return jsonify({'data': {'total': total}}), 200
+    return jsonify({'data': _request_statistics(db, _visible_request_user_ids(db))}), 200
+
+
+@public_api_v1_bp.route('/installation/stats', methods=['GET'])
+@require_role('admin')
+@limiter.limit('60 per minute')
+def installation_stats():
+    """Return installation-wide, non-sensitive operational counters for admins."""
+    db = DatabaseManager()
+    jobs = JobRepository().get_all_jobs()
+    job_types = ('discover', 'recommendation', 'trakt_recommendations')
+    jobs_by_type = {job_type: sum(job.get('job_type') == job_type for job in jobs) for job_type in job_types}
+
+    suggestion_statuses = ('awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed', 'blacklisted')
+    run_statuses = ('queued', 'running', 'completed', 'failed', 'skipped')
+    suggestion_by_status, suggestion_total = _status_counts(db, 'pending_requests', suggestion_statuses)
+    run_by_status, run_total = _status_counts(db, 'job_execution_history', run_statuses)
+    queue = {
+        status: suggestion_by_status[status]
+        for status in ('queued', 'submitting', 'submitted', 'failed')
+    }
+    queue['total_pending'] = queue['queued'] + queue['submitting']
+    queue['total'] = suggestion_total
+
+    return jsonify({'data': {
+        'requests': _request_statistics(db),
+        'jobs': {
+            'total': len(jobs),
+            'enabled': sum(bool(job.get('enabled')) for job in jobs),
+            'disabled': sum(not bool(job.get('enabled')) for job in jobs),
+            'system': sum(bool(job.get('is_system')) for job in jobs),
+            'by_type': jobs_by_type,
+        },
+        'runs': {'total': run_total, 'by_status': run_by_status},
+        'suggestions': {'total': suggestion_total, 'by_status': suggestion_by_status},
+        'queue': queue,
+    }}), 200

@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: SuggestArr Public API
   version: v1
-  description: Stable, intentionally limited external API.
+  description: Public API for integrating with a SuggestArr installation.
 tags:
   - name: Status
     description: Public connectivity and API contract discovery.
@@ -16,6 +16,8 @@ tags:
     description: Inspect and act on suggestions visible to the authenticated user.
   - name: Requests
     description: Inspect SuggestArr requests and aggregate statistics.
+  - name: Installation
+    description: Administrator-only operational statistics for the entire SuggestArr installation.
 x-error-responses: &errorResponses
   '400': {$ref: '#/components/responses/BadRequest'}
   '401': {$ref: '#/components/responses/Unauthorized'}
@@ -151,6 +153,16 @@ paths:
       responses:
         <<: *errorResponses
         '200': {description: Visible request statistics, content: {application/json: {schema: {$ref: '#/components/schemas/RequestStatsResponse'}}}}
+  /api/v1/installation/stats:
+    get:
+      operationId: publicInstallationStats
+      tags: [Installation]
+      summary: Get installation statistics
+      description: Administrator-only aggregate counters for requests, jobs, executions, suggestions, and the Seer delivery queue. This endpoint intentionally exposes counts only, never configuration or credentials.
+      responses:
+        <<: *errorResponses
+        '200': {description: Installation-wide operational statistics, content: {application/json: {schema: {$ref: '#/components/schemas/InstallationStatsResponse'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
 components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
@@ -168,6 +180,11 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
           example: {error: {code: authentication_required, message: Authentication required.}}
+    Forbidden:
+      description: Authenticated identity is not an administrator
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
     InternalError:
       description: Unexpected server error
       content:
@@ -203,7 +220,78 @@ components:
       properties: {data: {type: object, properties: {action: {type: string}, updated: {type: integer}}}}
     RequestStatsResponse:
       type: object
-      properties: {data: {type: object, properties: {total: {type: integer}}}}
+      properties: {data: {$ref: '#/components/schemas/RequestStatistics'}}
+    InstallationStatsResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            requests: {$ref: '#/components/schemas/RequestStatistics'}
+            jobs: {$ref: '#/components/schemas/JobStatistics'}
+            runs: {$ref: '#/components/schemas/ExecutionStatistics'}
+            suggestions: {$ref: '#/components/schemas/SuggestionStatistics'}
+            queue: {$ref: '#/components/schemas/QueueStatistics'}
+    RequestStatistics:
+      type: object
+      required: [total, today, this_week, this_month]
+      properties:
+        total: {type: integer, minimum: 0}
+        today: {type: integer, minimum: 0}
+        this_week: {type: integer, minimum: 0, description: Requests from Monday through today.}
+        this_month: {type: integer, minimum: 0}
+    JobStatistics:
+      type: object
+      required: [total, enabled, disabled, system, by_type]
+      properties:
+        total: {type: integer, minimum: 0}
+        enabled: {type: integer, minimum: 0}
+        disabled: {type: integer, minimum: 0}
+        system: {type: integer, minimum: 0}
+        by_type:
+          type: object
+          properties:
+            discover: {type: integer, minimum: 0}
+            recommendation: {type: integer, minimum: 0}
+            trakt_recommendations: {type: integer, minimum: 0}
+    ExecutionStatistics:
+      type: object
+      required: [total, by_status]
+      properties:
+        total: {type: integer, minimum: 0}
+        by_status:
+          type: object
+          properties:
+            queued: {type: integer, minimum: 0}
+            running: {type: integer, minimum: 0}
+            completed: {type: integer, minimum: 0}
+            failed: {type: integer, minimum: 0}
+            skipped: {type: integer, minimum: 0}
+    SuggestionStatistics:
+      type: object
+      required: [total, by_status]
+      properties:
+        total: {type: integer, minimum: 0}
+        by_status:
+          type: object
+          properties:
+            awaiting_approval: {type: integer, minimum: 0}
+            queued: {type: integer, minimum: 0}
+            submitting: {type: integer, minimum: 0}
+            submitted: {type: integer, minimum: 0}
+            rejected: {type: integer, minimum: 0}
+            failed: {type: integer, minimum: 0}
+            blacklisted: {type: integer, minimum: 0}
+    QueueStatistics:
+      type: object
+      required: [queued, submitting, submitted, failed, total_pending, total]
+      properties:
+        queued: {type: integer, minimum: 0}
+        submitting: {type: integer, minimum: 0}
+        submitted: {type: integer, minimum: 0}
+        failed: {type: integer, minimum: 0}
+        total_pending: {type: integer, minimum: 0, description: Sum of queued and submitting items.}
+        total: {type: integer, minimum: 0, description: All suggestions in the delivery queue, including non-pending outcomes.}
     Error:
       type: object
       required: [error]
