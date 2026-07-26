@@ -1,0 +1,70 @@
+name: Rebuild deploy branch
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+      - 'fix/**'
+      - 'ci/**'
+  workflow_dispatch:
+
+concurrency:
+  group: rebuild-deploy
+  cancel-in-progress: true
+
+jobs:
+  rebuild:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Rebuild deploy from main plus topic branches
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          set -euo pipefail
+
+          git fetch origin --prune
+
+          if ! git show-ref --verify --quiet refs/remotes/origin/main; then
+            echo "::error::origin/main not found"
+            exit 1
+          fi
+
+          git checkout -B deploy origin/main
+
+          mapfile -t branches < <(
+            git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
+              | sed 's|^origin/||' \
+              | grep -E '^(feat|fix|ci)/' \
+              | sort -u
+          )
+
+          if [ "${#branches[@]}" -eq 0 ]; then
+            echo "No topic branches to merge; deploy will match main."
+          fi
+
+          for branch in "${branches[@]}"; do
+            echo "Merging origin/${branch}"
+            if ! git merge --no-ff --no-edit "origin/${branch}"; then
+              echo "::error::Merge conflict while merging origin/${branch} into deploy"
+              git merge --abort || true
+              exit 1
+            fi
+          done
+
+          echo "Merged branches: ${branches[*]:-none}"
+          git push --force origin deploy

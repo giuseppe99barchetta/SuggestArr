@@ -6,14 +6,11 @@ permissions:
 on:
   push:
     branches:
-      - main
-      - 'feat/**'
-    tags:
-      - 'v*'
+      - deploy
   workflow_dispatch:
 
 concurrency:
-  group: ghcr-${{ github.ref }}
+  group: ghcr-deploy
   cancel-in-progress: true
 
 jobs:
@@ -44,10 +41,9 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           flavor: latest=false
           tags: |
-            type=ref,event=branch
-            type=ref,event=tag
+            type=raw,value=deploy
             type=sha,format=short
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
       - name: Build and push image
         uses: docker/build-push-action@v7.3.0
