@@ -21,6 +21,8 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
+    outputs:
+      deploy_sha: ${{ steps.deploy.outputs.sha }}
 
     steps:
       - name: Checkout repository
@@ -29,6 +31,7 @@ jobs:
           fetch-depth: 0
 
       - name: Rebuild deploy from main plus topic branches
+        id: deploy
         env:
           GIT_AUTHOR_NAME: github-actions[bot]
           GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
@@ -67,14 +70,25 @@ jobs:
           done
 
           echo "Merged branches: ${branches[*]:-none}"
+          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           git push --force origin deploy
 
-  publish:
+  build:
     needs: rebuild
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runs-on: ubuntu-latest
+          - platform: linux/arm64
+            runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runs-on }}
     permissions:
       contents: read
       packages: write
-    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/suggestarr
 
     steps:
       - name: Checkout deploy branch
@@ -92,25 +106,48 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Derive image tags
-        id: meta
-        uses: docker/metadata-action@v6.2.0
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: latest=false
-          tags: |
-            type=raw,value=deploy
-            type=sha,format=short
-            type=raw,value=latest
+      - name: Prepare platform slug
+        id: prep
+        run: echo "platform_slug=$(echo '${{ matrix.platform }}' | tr '/' '-')" >> $GITHUB_OUTPUT
 
-      - name: Build and push image
+      - name: Build and push platform image
         uses: docker/build-push-action@v7.3.0
         with:
           context: .
           file: docker/Dockerfile
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=ghcr
-          cache-to: type=gha,scope=ghcr,mode=max
+          tags: ${{ env.IMAGE }}:${{ needs.rebuild.outputs.deploy_sha }}-${{ steps.prep.outputs.platform_slug }}
+          cache-from: type=gha,scope=ghcr-${{ matrix.platform }}
+          cache-to: type=gha,scope=ghcr-${{ matrix.platform }},mode=max
+
+  merge:
+    needs: [rebuild, build]
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/suggestarr
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4.2.0
+
+      - name: Create and push multi-platform manifest
+        env:
+          VERSION: ${{ needs.rebuild.outputs.deploy_sha }}
+        run: |
+          docker buildx imagetools create \
+            -t "${IMAGE}:deploy" \
+            -t "${IMAGE}:latest" \
+            -t "${IMAGE}:${VERSION}" \
+            "${IMAGE}:${VERSION}-linux-amd64" \
+            "${IMAGE}:${VERSION}-linux-arm64"
