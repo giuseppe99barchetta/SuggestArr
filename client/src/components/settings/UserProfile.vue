@@ -9,18 +9,22 @@
 
       <!-- ── Account Information ─────────────────────────────────────────── -->
       <div class="settings-group accounts-group">
-        <div class="group-title-row">
+        <div class="group-title-row accounts-group__heading">
           <h3>
             <i class="fas fa-user-circle"></i>
             Account Information
           </h3>
         </div>
+        <p class="card-desc">Manage your username and password.</p>
 
         <!-- Username -->
-        <form @submit.prevent="saveUsername">
-          <h4 class="subsection-title">Username</h4>
+        <form class="account-form-section" @submit.prevent="saveUsername">
+          <div class="account-section-heading">
+            <span class="account-section-heading__icon"><i class="fas fa-user"></i></span>
+            <div><h4 class="subsection-title">Username</h4><p>How your account is identified in SuggestArr.</p></div>
+          </div>
           <div class="form-group">
-            <label for="newUsername">New username</label>
+            <label class="account-field-label" for="newUsername">New username</label>
             <input
               id="newUsername"
               v-model="usernameForm.value"
@@ -52,10 +56,13 @@
         <div class="section-divider"></div>
 
         <!-- Password -->
-        <form @submit.prevent="savePassword">
-          <h4 class="subsection-title">Change Password</h4>
+        <form class="account-form-section" @submit.prevent="savePassword">
+          <div class="account-section-heading">
+            <span class="account-section-heading__icon"><i class="fas fa-shield-alt"></i></span>
+            <div><h4 class="subsection-title">Password</h4><p>Use a strong password to protect your account.</p></div>
+          </div>
           <div class="form-group">
-            <label for="currentPassword">Current password</label>
+            <label class="account-field-label" for="currentPassword">Current password</label>
             <input
               id="currentPassword"
               v-model="passwordForm.current"
@@ -67,7 +74,7 @@
             />
           </div>
           <div class="form-group">
-            <label for="newPassword">New password</label>
+            <label class="account-field-label" for="newPassword">New password</label>
             <input
               id="newPassword"
               v-model="passwordForm.new"
@@ -79,7 +86,7 @@
             />
           </div>
           <div class="form-group">
-            <label for="confirmPassword">Confirm new password</label>
+            <label class="account-field-label" for="confirmPassword">Confirm new password</label>
             <input
               id="confirmPassword"
               v-model="passwordForm.confirm"
@@ -109,6 +116,8 @@
         </form>
 
       </div>
+
+      <ApiKeysPanel />
 
       <!-- ── Media Server Link ────────────────────────────────────────────── -->
       <div v-if="isLinkableService" class="settings-group">
@@ -220,13 +229,8 @@
           </form>
         </template>
 
-      </div>
-
-      <div v-if="isLinkableService" class="settings-group">
-        <h3>
-          <i class="fas fa-tv"></i>
-          Trakt Account
-        </h3>
+        <div class="section-divider"></div>
+        <h3><i class="fas fa-tv"></i> Trakt Account</h3>
         <TraktMediaUsers
           mode="self"
           :trakt-configured="isTraktAppConfigured"
@@ -265,6 +269,7 @@ import {
 } from '@/api/api';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
+import ApiKeysPanel from './ApiKeysPanel.vue';
 
 const PROVIDER_META = {
   jellyfin: { label: 'Jellyfin', icon: 'fas fa-server' },
@@ -275,7 +280,7 @@ const PROVIDER_META = {
 export default {
   name: 'UserProfile',
 
-  components: { BaseDropdown, TraktMediaUsers },
+  components: { BaseDropdown, TraktMediaUsers, ApiKeysPanel },
 
   props: {
     config: Object,
@@ -641,14 +646,48 @@ export default {
   grid-column: 1 / 1;
 }
 
+.accounts-group__heading {
+  margin-bottom: var(--spacing-md);
+}
+
+.account-form-section {
+  gap: var(--spacing-sm);
+}
+
+.account-section-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+}
+
+.account-section-heading__icon {
+  display: inline-flex;
+  width: var(--spacing-xl);
+  height: var(--spacing-xl);
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-full);
+}
+
+.account-section-heading p {
+  margin: var(--spacing-xs) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
 
 /* Form elements */
 
 .form-group label {
   display: block;
-  margin-top: 0.5rem;
-  font-weight: 500;
-  color: #e5e7eb;
+  margin-top: 0;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
 }
 .form-control {
   width: 100%;

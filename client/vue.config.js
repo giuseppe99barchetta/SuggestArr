@@ -1,5 +1,4 @@
 const { defineConfig } = require('@vue/cli-service')
-const webpack = require('webpack')
 const path = require('path')
 
 module.exports = defineConfig({

@@ -112,7 +112,7 @@ class DiscoverAutomation:
         instance.logger.info("DiscoverAutomation initialized successfully")
         return instance
 
-    async def run(self, dry_run: bool = False) -> ExecutionResult:
+    async def run(self, dry_run: bool = False, execution_id=None) -> ExecutionResult:
         """
         Execute the discover job.
 
@@ -133,7 +133,7 @@ class DiscoverAutomation:
             )
 
         self.logger.info(f"{'[DRY RUN] ' if dry_run else ''}Starting discover job: {self.job_data['name']}")
-        exec_id = None if dry_run else self.repository.log_execution_start(self.job_id)
+        exec_id = None if dry_run else (execution_id or self.repository.log_execution_start(self.job_id))
 
         try:
             from contextlib import AsyncExitStack
@@ -349,7 +349,7 @@ class DiscoverAutomation:
             self.logger.warning(f"Failed to save metadata for {item.get('title')}: {str(e)}")
 
 
-async def execute_discover_job(job_id: int) -> ExecutionResult:
+async def execute_discover_job(job_id: int, execution_id=None) -> ExecutionResult:
     """
     Execute a discover job by ID.
     This is the function to be called by JobManager.
@@ -365,7 +365,7 @@ async def execute_discover_job(job_id: int) -> ExecutionResult:
 
     try:
         automation = await DiscoverAutomation.create(job_id)
-        result = await automation.run()
+        result = await automation.run(execution_id=execution_id)
         return result
     except Exception as e:
         logger.error(f"Failed to execute job {job_id}: {str(e)}")

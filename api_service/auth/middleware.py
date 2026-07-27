@@ -45,6 +45,7 @@ from typing import Optional
 from flask import request, jsonify, g
 
 from api_service.auth.auth_service import AuthService
+from api_service.auth.api_key_service import ApiKeyService
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 
@@ -74,6 +75,8 @@ PUBLIC_ROUTES: frozenset[str] = frozenset({
     "/api/auth/logout",     # Token revocation (guarded internally by user-count check).
     "/api/auth/register",   # Self-registration (gated by ALLOW_REGISTRATION config flag).
 })
+
+PUBLIC_V1_ROUTES = frozenset({"/api/v1/status", "/api/v1/openapi.yaml", "/api/v1/openapi.json"})
 
 # ---------------------------------------------------------------------------
 # Setup-mode cache
@@ -296,6 +299,22 @@ def _is_public_route(path: str) -> bool:
 # Main middleware hook
 # ---------------------------------------------------------------------------
 
+def _apply_auth_context(user: dict, method: str, api_key_id=None, api_key_name=None) -> None:
+    g.current_user = {"id": str(user.get("id", user.get("sub"))), "username": user.get("username", ""), "role": user.get("role", "user"), "can_manage_ai": user.get("can_manage_ai", 0), "visible_tabs": user.get("visible_tabs", "requests,jobs,profile")}
+    g.auth_method, g.api_key_id, g.api_key_name = method, api_key_id, api_key_name
+
+
+def require_interactive_auth(f):
+    """Profile credential management requires JWT or a real bypass user."""
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        user = getattr(g, 'current_user', None)
+        if not user or getattr(g, 'auth_method', 'jwt') == 'api_key' or str(user.get('id')) == '0':
+            return jsonify({"error": "Interactive authentication required"}), 401
+        return f(*args, **kwargs)
+    return wrapped
+
+
 def enforce_authentication() -> Optional[tuple]:
     """
     before_request hook that enforces JWT authentication on all /api/* routes.
@@ -321,7 +340,7 @@ def enforce_authentication() -> Optional[tuple]:
         return None
 
     # Explicit public allowlist — auth endpoints, health probe, etc.
-    if _is_public_route(path):
+    if _is_public_route(path) or path in PUBLIC_V1_ROUTES:
         return None
 
     auth_mode = _resolve_auth_mode()
@@ -335,46 +354,36 @@ def enforce_authentication() -> Optional[tuple]:
         f"AUTH DEBUG - ip={client_ip} mode={auth_mode} trusted={is_trusted_ip} cidrs={trusted_cidrs}"
     )
 
-    if auth_mode == "disabled":
-        if getattr(g, "current_user", None) is None:
-            g.current_user = _load_bypass_user_context()
-        return None
-
-    if auth_mode == "local_bypass" and is_trusted_ip:
-        if getattr(g, "current_user", None) is None:
-            g.current_user = _load_bypass_user_context()
-        return None
-
-    # Setup mode: if no admin account exists yet, allow everything so the
-    # first-run wizard can configure the application.
-    if _is_setup_mode():
-        return None
-
-    # --- From here the request MUST carry a valid Bearer token ---
-
     auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        # No token at all or wrong scheme.
-        return jsonify({"error": "Authentication required"}), 401
-
-    token = auth_header[len("Bearer "):]
-    payload = AuthService.verify_access_token(token)
-
-    if payload is None:
-        # Expired or cryptographically invalid token.
-        return jsonify({"error": "Invalid or expired token"}), 401
-
-    # Attach decoded identity to the request context so route handlers and
-    # the require_role decorator can access it without re-decoding the token.
-    g.current_user = {
-        "id": payload["sub"],
-        "username": payload.get("username", ""),
-        "role": payload.get("role", "user"),
-        "can_manage_ai": payload.get("can_manage_ai", 0),
-        "visible_tabs": payload.get("visible_tabs", "requests,jobs,profile"),
-    }
-
-    return None  # Allow the request to continue.
+    bearer = auth_header[len("Bearer "):].strip() if auth_header.startswith("Bearer ") else None
+    api_key = request.headers.get("X-API-Key")
+    if bearer and api_key:
+        return jsonify({"error": {"code": "ambiguous_credentials", "message": "Use one authentication method."}}), 400
+    if api_key and not path.startswith("/api/v1/"):
+        return jsonify({"error": "Invalid credentials"}), 401
+    if auth_header and not bearer:
+        return jsonify({"error": "Invalid credentials"}), 401
+    if bearer:
+        payload = AuthService.verify_access_token(bearer)
+        if payload is None:
+            return jsonify({"error": "Invalid or expired token"}), 401
+        _apply_auth_context(payload, "jwt")
+        return None
+    if api_key:
+        identity = ApiKeyService(_get_database_manager()()).resolve(api_key)
+        if not identity:
+            return jsonify({"error": "Invalid credentials"}), 401
+        _apply_auth_context(identity['user'], "api_key", identity['api_key_id'], identity['api_key_name'])
+        return None
+    if auth_mode == "disabled":
+        _apply_auth_context(_load_bypass_user_context(), "disabled")
+        return None
+    if auth_mode == "local_bypass" and is_trusted_ip:
+        _apply_auth_context(_load_bypass_user_context(), "local_bypass")
+        return None
+    if not path.startswith('/api/v1/') and _is_setup_mode():
+        return None
+    return jsonify({"error": "Authentication required"}), 401
 
 
 # ---------------------------------------------------------------------------
