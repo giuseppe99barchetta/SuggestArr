@@ -376,10 +376,12 @@ def enforce_authentication() -> Optional[tuple]:
         _apply_auth_context(identity['user'], "api_key", identity['api_key_id'], identity['api_key_name'])
         return None
     if auth_mode == "disabled":
-        _apply_auth_context(_load_bypass_user_context(), "disabled")
+        if getattr(g, "current_user", None) is None:
+            _apply_auth_context(_load_bypass_user_context(), "disabled")
         return None
     if auth_mode == "local_bypass" and is_trusted_ip:
-        _apply_auth_context(_load_bypass_user_context(), "local_bypass")
+        if getattr(g, "current_user", None) is None:
+            _apply_auth_context(_load_bypass_user_context(), "local_bypass")
         return None
     if not path.startswith('/api/v1/') and _is_setup_mode():
         return None
