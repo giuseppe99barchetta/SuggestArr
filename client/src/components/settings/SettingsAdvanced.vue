@@ -112,31 +112,70 @@
             </small>
           </div>
 
-          <div class="form-group">
-            <label for="llmTemperature">Temperature</label>
-            <input
-              id="llmTemperature"
-              v-model.trim="localConfig.LLM_TEMPERATURE"
-              type="text"
-              inputmode="decimal"
-              placeholder="legacy"
-              class="form-control"
-              :disabled="isLoading"
-            />
-            <small class="form-help">
-              Use <code>legacy</code> to keep current behavior (0.7 for recommendations, 0.8 for AI Search). Clear and save to omit the parameter, or enter a value from 0 to 2.
-            </small>
-          </div>
+          <div class="ai-advanced-section">
+            <button
+              type="button"
+              class="ai-advanced-toggle"
+              :aria-expanded="aiAdvancedExpanded.toString()"
+              aria-controls="ai-advanced-settings"
+              @click="aiAdvancedExpanded = !aiAdvancedExpanded"
+            >
+              <span class="ai-advanced-icon"><i class="fas fa-sliders-h"></i></span>
+              <span class="ai-advanced-copy">
+                <span class="ai-advanced-title">Advanced AI settings</span>
+                <span class="ai-advanced-summary">Temperature, reasoning effort, and web search</span>
+              </span>
+              <i class="fas fa-chevron-right ai-advanced-chevron" :class="{ expanded: aiAdvancedExpanded }"></i>
+            </button>
 
-          <div class="form-group">
-            <BaseDropdown
-              v-model="localConfig.LLM_REASONING_EFFORT"
-              :options="reasoningEffortOptions"
-              label="Reasoning effort"
-              help-text="Sent only to direct OpenAI GPT-5 and o-series models. Other OpenAI-compatible provider/model combinations omit it."
-              :disabled="isLoading"
-              id="llmReasoningEffort"
-            />
+            <transition name="ai-advanced-slide">
+              <div id="ai-advanced-settings" class="ai-advanced-content" v-show="aiAdvancedExpanded">
+                <div class="form-group">
+                  <label for="llmTemperature">Temperature</label>
+                  <input
+                    id="llmTemperature"
+                    v-model.trim="localConfig.LLM_TEMPERATURE"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="legacy"
+                    class="form-control"
+                    :disabled="isLoading"
+                  />
+                  <small class="form-help">
+                    Use <code>legacy</code> to keep current behavior (0.7 for recommendations, 0.8 for AI Search). Clear and save to omit the parameter, or enter a value from 0 to 2.
+                  </small>
+                </div>
+
+                <div class="form-group">
+                  <BaseDropdown
+                    v-model="localConfig.LLM_REASONING_EFFORT"
+                    :options="reasoningEffortOptions"
+                    label="Reasoning effort"
+                    help-text="Sent only to direct OpenAI GPT-5 and o-series models. Other OpenAI-compatible provider/model combinations omit it."
+                    :disabled="isLoading"
+                    id="llmReasoningEffort"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="searxngBaseUrl">
+                    SearXNG Base URL
+                    <span class="optional-tag">Optional</span>
+                  </label>
+                  <input
+                    id="searxngBaseUrl"
+                    v-model.trim="localConfig.SEARXNG_BASE_URL"
+                    type="url"
+                    placeholder="http://searxng:8080"
+                    class="form-control"
+                    :disabled="isLoading"
+                  />
+                  <small class="form-help">
+                    Optional self-hosted SearXNG instance. Its top three JSON search results add current context to AI Search and AI recommendations; leave blank to disable it.
+                  </small>
+                </div>
+              </div>
+            </transition>
           </div>
 
           <div class="form-group">
@@ -687,6 +726,7 @@ export default {
       availableUsers: [],
       isLoadingUsers: false,
       showAiInfoModal: false,
+      aiAdvancedExpanded: false,
       activeAiGuideTab: 'openai',
       isTestingLlm: false,
       logLevelOptions: [
@@ -757,6 +797,7 @@ export default {
           LLM_MODEL: 'gpt-4o-mini',
           LLM_TEMPERATURE: 'legacy',
           LLM_REASONING_EFFORT: '',
+          SEARXNG_BASE_URL: '',
           ENABLE_SOCIAL_FEATURES: false,
           ENABLE_VISUAL_EFFECTS: true,
           ENABLE_STATIC_BACKGROUND: false,
@@ -942,6 +983,7 @@ export default {
             LLM_MODEL: this.localConfig.LLM_MODEL || 'gpt-4o-mini',
             LLM_TEMPERATURE: temperature || 'unset',
             LLM_REASONING_EFFORT: this.localConfig.LLM_REASONING_EFFORT || '',
+            SEARXNG_BASE_URL: this.localConfig.SEARXNG_BASE_URL || '',
             ENABLE_SOCIAL_FEATURES: this.localConfig.ENABLE_SOCIAL_FEATURES || false,
             ENABLE_VISUAL_EFFECTS: this.localConfig.ENABLE_VISUAL_EFFECTS !== false,
             ENABLE_STATIC_BACKGROUND: this.localConfig.ENABLE_STATIC_BACKGROUND || false,
@@ -996,6 +1038,7 @@ export default {
         LLM_MODEL: 'gpt-4o-mini',
         LLM_TEMPERATURE: 'legacy',
         LLM_REASONING_EFFORT: '',
+        SEARXNG_BASE_URL: '',
         ENABLE_SOCIAL_FEATURES: false,
         ENABLE_VISUAL_EFFECTS: true,
         ENABLE_STATIC_BACKGROUND: false,
@@ -1438,6 +1481,94 @@ export default {
 
 .settings-group.ai-group h3 i {
   color: #818cf8;
+}
+
+.ai-advanced-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--font-family-base);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  text-align: left;
+  transition: var(--transition-base);
+  width: 100%;
+}
+
+.ai-advanced-section {
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--surface-glass-light);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.ai-advanced-toggle:hover {
+  background: var(--surface-glass-light);
+}
+
+.ai-advanced-icon {
+  align-items: center;
+  background: var(--color-primary-alpha-10);
+  border-radius: var(--radius-sm);
+  color: var(--color-primary);
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-sm);
+}
+
+.ai-advanced-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+}
+
+.ai-advanced-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.ai-advanced-summary {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.ai-advanced-chevron {
+  color: var(--color-text-muted);
+  margin-left: auto;
+  transition: var(--transition-base);
+}
+
+.ai-advanced-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.ai-advanced-content {
+  padding: 0 var(--spacing-md) var(--spacing-md);
+}
+
+.ai-advanced-slide-enter-active,
+.ai-advanced-slide-leave-active {
+  overflow: hidden;
+  transition: max-height var(--transition-base), opacity var(--transition-base), transform var(--transition-base);
+}
+
+.ai-advanced-slide-enter-from,
+.ai-advanced-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(calc(var(--spacing-sm) * -1));
+}
+
+.ai-advanced-slide-enter-to,
+.ai-advanced-slide-leave-from {
+  max-height: 100vh;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .optional-tag {

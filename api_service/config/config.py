@@ -221,6 +221,7 @@ def get_default_values():
         # Preserve per-flow historic values unless the user explicitly overrides or unsets them.
         'LLM_TEMPERATURE': lambda: 'legacy',
         'LLM_REASONING_EFFORT': lambda: '',
+        'SEARXNG_BASE_URL': lambda: '',
         'TRAKT_CLIENT_ID': lambda: '',
         'TRAKT_CLIENT_SECRET': lambda: '',
         'TRAKT_ACCESS_TOKEN': lambda: '',
@@ -354,7 +355,7 @@ def get_config_sections():
                      'ENABLE_API_CACHING', 'REQUIRE_REQUEST_APPROVAL', 'REQUEST_VISIBILITY',
                      'PAUSE_JOBS_WITH_PENDING_APPROVALS', 'AUTO_REJECT_APPROVAL_DAYS',
                      'OPENAI_API_KEY', 'OPENAI_BASE_URL',
-                     'LLM_MODEL', 'LLM_TEMPERATURE', 'LLM_REASONING_EFFORT',
+                     'LLM_MODEL', 'LLM_TEMPERATURE', 'LLM_REASONING_EFFORT', 'SEARXNG_BASE_URL',
                      'SUBPATH', 'ALLOW_REGISTRATION',
                      'AUTH_MODE', 'AUTH_TRUSTED_CIDRS', 'AUTH_BYPASS_USERNAME']
     }
