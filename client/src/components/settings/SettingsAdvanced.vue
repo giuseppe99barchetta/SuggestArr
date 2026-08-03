@@ -113,6 +113,40 @@
           </div>
 
           <div class="form-group">
+            <label for="llmTemperature">Temperature</label>
+            <input
+              id="llmTemperature"
+              v-model.trim="localConfig.LLM_TEMPERATURE"
+              type="text"
+              inputmode="decimal"
+              placeholder="legacy"
+              class="form-control"
+              :disabled="isLoading"
+            />
+            <small class="form-help">
+              Use <code>legacy</code> to keep current behavior (0.7 for recommendations, 0.8 for AI Search). Clear and save to omit the parameter, or enter a value from 0 to 2.
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label for="llmReasoningEffort">Reasoning effort</label>
+            <select
+              id="llmReasoningEffort"
+              v-model="localConfig.LLM_REASONING_EFFORT"
+              class="form-control"
+              :disabled="isLoading"
+            >
+              <option value="">Provider/model default</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+            <small class="form-help">
+              Sent only to direct OpenAI GPT-5 and o-series models. Other OpenAI-compatible provider/model combinations omit it.
+            </small>
+          </div>
+
+          <div class="form-group">
             <button
               @click="testLlmConnection"
               class="btn btn-outline btn-sm"
@@ -689,7 +723,10 @@ export default {
       immediate: true,
       handler(newConfig) {
         this.localConfig = { ...newConfig };
-        this.originalConfig = { ...newConfig };
+        if (this.localConfig.LLM_TEMPERATURE === 'unset') {
+          this.localConfig.LLM_TEMPERATURE = '';
+        }
+        this.originalConfig = { ...this.localConfig };
 
         // Ensure SELECTED_USERS is always a parsed array
         if (typeof this.localConfig.SELECTED_USERS === 'string') {
@@ -719,6 +756,8 @@ export default {
           OPENAI_API_KEY: '',
           OPENAI_BASE_URL: '',
           LLM_MODEL: 'gpt-4o-mini',
+          LLM_TEMPERATURE: 'legacy',
+          LLM_REASONING_EFFORT: '',
           ENABLE_SOCIAL_FEATURES: false,
           ENABLE_VISUAL_EFFECTS: true,
           ENABLE_STATIC_BACKGROUND: false,
@@ -855,9 +894,16 @@ export default {
 
     async saveSettings() {
       const cidrText = String(this.localConfig.AUTH_TRUSTED_CIDRS || '').trim();
+      const temperatureText = String(this.localConfig.LLM_TEMPERATURE ?? '').trim();
+      const temperature = temperatureText.toLowerCase() === 'legacy' ? 'legacy' : temperatureText;
       const authMode = this.authModeOptions.some(option => option.value === this.localConfig.AUTH_MODE)
         ? this.localConfig.AUTH_MODE
         : 'enabled';
+
+      if (temperature && (Number.isNaN(Number(temperature)) || Number(temperature) < 0 || Number(temperature) > 2)) {
+        this.$toast.error('Temperature must be legacy, blank, or a number from 0 to 2.');
+        return;
+      }
 
       if (authMode === 'local_bypass' && !cidrText) {
         this.$toast.error('Trusted CIDRs are required when Authentication Mode is local_bypass.');
@@ -895,6 +941,8 @@ export default {
             OPENAI_API_KEY: this.localConfig.OPENAI_API_KEY || '',
             OPENAI_BASE_URL: this.localConfig.OPENAI_BASE_URL || '',
             LLM_MODEL: this.localConfig.LLM_MODEL || 'gpt-4o-mini',
+            LLM_TEMPERATURE: temperature || 'unset',
+            LLM_REASONING_EFFORT: this.localConfig.LLM_REASONING_EFFORT || '',
             ENABLE_SOCIAL_FEATURES: this.localConfig.ENABLE_SOCIAL_FEATURES || false,
             ENABLE_VISUAL_EFFECTS: this.localConfig.ENABLE_VISUAL_EFFECTS !== false,
             ENABLE_STATIC_BACKGROUND: this.localConfig.ENABLE_STATIC_BACKGROUND || false,
@@ -947,6 +995,8 @@ export default {
         OPENAI_API_KEY: '',
         OPENAI_BASE_URL: '',
         LLM_MODEL: 'gpt-4o-mini',
+        LLM_TEMPERATURE: 'legacy',
+        LLM_REASONING_EFFORT: '',
         ENABLE_SOCIAL_FEATURES: false,
         ENABLE_VISUAL_EFFECTS: true,
         ENABLE_STATIC_BACKGROUND: false,

@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import re
 from typing import Any, Dict, List, Optional, Type, TypeVar
+from urllib.parse import urlparse
 
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
@@ -50,6 +52,10 @@ _RECOMMENDATION_SCHEMA_HINT = (
     '"rationale": "Why this fits.", "source_title": "Watched title"}'
     "]}. Do not return {}, an array, or any other top-level key."
 )
+
+_LEGACY_TEMPERATURE = "legacy"
+_UNSET_TEMPERATURE = "unset"
+_REASONING_EFFORTS = {"low", "medium", "high"}
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +130,55 @@ def is_llm_configured(config: Optional[Dict[str, Any]] = None) -> bool:
     api_key = cfg.get("OPENAI_API_KEY")
     base_url = cfg.get("OPENAI_BASE_URL")
     return bool(api_key or base_url)
+
+
+def _supports_reasoning_effort(config: Dict[str, Any], model: str) -> bool:
+    """Return whether SuggestArr knows this provider/model accepts reasoning effort."""
+    base_url = str(config.get("OPENAI_BASE_URL") or "").strip()
+    if base_url and urlparse(base_url).hostname != "api.openai.com":
+        return False
+
+    return str(model or "").strip().lower().startswith(("gpt-5", "o1", "o3", "o4"))
+
+
+def _resolve_generation_settings(
+    config: Dict[str, Any],
+    model: str,
+    legacy_temperature: float,
+) -> Dict[str, Optional[Any]]:
+    """Resolve optional LLM request settings while retaining legacy defaults."""
+    raw_temperature = config.get("LLM_TEMPERATURE", _LEGACY_TEMPERATURE)
+    temperature_text = str(raw_temperature or "").strip().lower()
+
+    if raw_temperature is None or temperature_text in ("", _UNSET_TEMPERATURE):
+        temperature = None
+    elif temperature_text in (_LEGACY_TEMPERATURE, "default"):
+        temperature = legacy_temperature
+    else:
+        try:
+            temperature = float(raw_temperature)
+            if not math.isfinite(temperature) or not 0 <= temperature <= 2:
+                raise ValueError
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid LLM_TEMPERATURE=%r; using legacy temperature %s.",
+                raw_temperature,
+                legacy_temperature,
+            )
+            temperature = legacy_temperature
+
+    reasoning_effort = str(config.get("LLM_REASONING_EFFORT") or "").strip().lower()
+    if reasoning_effort not in _REASONING_EFFORTS:
+        if reasoning_effort:
+            logger.warning("Invalid LLM_REASONING_EFFORT=%r; omitting it.", reasoning_effort)
+        reasoning_effort = None
+    elif not _supports_reasoning_effort(config, model):
+        logger.debug(
+            "Skipping reasoning effort for unsupported provider/model: %s.", model
+        )
+        reasoning_effort = None
+
+    return {"temperature": temperature, "reasoning_effort": reasoning_effort}
 
 
 async def _close_llm_client(client: AsyncOpenAI) -> None:
@@ -352,7 +407,8 @@ async def _call_with_validation(
     model: str,
     messages: List[Dict[str, str]],
     schema_cls: Type[_T],
-    temperature: float = 0.7,
+    temperature: Optional[float] = None,
+    reasoning_effort: Optional[str] = None,
     max_retries: int = 2,
 ) -> _T:
     """Call the LLM and validate the response against *schema_cls*, with retries.
@@ -377,7 +433,8 @@ async def _call_with_validation(
     :param model: Model identifier string (e.g. ``"gpt-4o-mini"``).
     :param messages: Chat messages in OpenAI format.
     :param schema_cls: Pydantic model class to validate against.
-    :param temperature: Sampling temperature.
+    :param temperature: Optional sampling temperature. ``None`` omits it.
+    :param reasoning_effort: Optional provider/model-supported reasoning effort.
     :param max_retries: Number of *additional* attempts after the first failure.
     :raises LLMValidationError: When all attempts are exhausted.
     :return: Validated Pydantic model instance.
@@ -391,8 +448,11 @@ async def _call_with_validation(
             request_kwargs: Dict[str, Any] = {
                 "model": model,
                 "messages": current_messages,
-                "temperature": temperature,
             }
+            if temperature is not None:
+                request_kwargs["temperature"] = temperature
+            if reasoning_effort:
+                request_kwargs["reasoning_effort"] = reasoning_effort
             if response_format is not None:
                 request_kwargs["response_format"] = response_format
 
@@ -498,6 +558,7 @@ async def get_recommendations_from_history(
         config = ConfigService.get_runtime_config()
         model = config.get("LLM_MODEL", "gpt-4o-mini")
         max_retries = int(config.get("LLM_MAX_RETRIES", 2))
+        generation_settings = _resolve_generation_settings(config, model, legacy_temperature=0.7)
 
         history_items = _deduplicate_history(history_items)[:MAX_HISTORY_ITEMS]
         if not history_items:
@@ -606,7 +667,7 @@ async def get_recommendations_from_history(
                 model=model,
                 messages=messages,
                 schema_cls=RecommendationList,
-                temperature=0.7,
+                **generation_settings,
                 max_retries=max_retries,
             )
         except LLMValidationError as exc:
@@ -686,6 +747,7 @@ async def interpret_search_query(
         config = ConfigService.get_runtime_config()
         model = config.get("LLM_MODEL", "gpt-4o-mini")
         max_retries = int(config.get("LLM_MAX_RETRIES", 2))
+        generation_settings = _resolve_generation_settings(config, model, legacy_temperature=0.8)
 
         list_type = "movies" if media_type == "movie" else "TV shows"
 
@@ -779,7 +841,7 @@ Example format:
             model=model,
             messages=messages,
             schema_cls=SearchQueryInterpretation,
-            temperature=0.8,
+            **generation_settings,
             max_retries=max_retries,
         )
 
@@ -822,6 +884,7 @@ async def generate_search_result_rationales(
         config = ConfigService.get_runtime_config()
         model = config.get("LLM_MODEL", "gpt-4o-mini")
         max_retries = int(config.get("LLM_MAX_RETRIES", 2))
+        generation_settings = _resolve_generation_settings(config, model, legacy_temperature=0.8)
         list_type = "movies" if media_type == "movie" else "TV shows"
 
         input_items: List[Dict[str, Any]] = []
@@ -888,7 +951,7 @@ async def generate_search_result_rationales(
             model=model,
             messages=messages,
             schema_cls=SearchResultRationaleList,
-            temperature=0.8,
+            **generation_settings,
             max_retries=max_retries,
         )
 

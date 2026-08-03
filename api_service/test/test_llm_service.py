@@ -42,7 +42,9 @@ from api_service.services.llm.llm_service import (
     _is_duplicate_of_history,
     _normalize_title,
     _repair_title_qualifiers,
+    _resolve_generation_settings,
     _strip_markdown_fences,
+    generate_search_result_rationales,
     get_recommendations_from_history,
     interpret_search_query,
 )
@@ -54,6 +56,12 @@ from api_service.services.llm.schemas import RecommendationList, SearchQueryInte
 # ---------------------------------------------------------------------------
 
 _DEFAULT_CONFIG = {"LLM_MODEL": "gpt-4o-mini", "LLM_MAX_RETRIES": 2}
+_GPT5_UNSET_TEMPERATURE_CONFIG = {
+    **_DEFAULT_CONFIG,
+    "LLM_MODEL": "gpt-5.6",
+    "LLM_TEMPERATURE": "unset",
+    "LLM_REASONING_EFFORT": "high",
+}
 
 
 def _mock_openai_response(content: str):
@@ -205,6 +213,33 @@ class TestIsDuplicateOfHistory(unittest.TestCase):
 # _call_with_validation
 # ---------------------------------------------------------------------------
 
+class TestGenerationSettings(unittest.TestCase):
+
+    def test_legacy_temperature_preserves_per_flow_default(self):
+        settings = _resolve_generation_settings({}, "gpt-4o-mini", legacy_temperature=0.7)
+
+        self.assertEqual(settings["temperature"], 0.7)
+        self.assertIsNone(settings["reasoning_effort"])
+
+    def test_unset_temperature_is_omitted_and_gpt5_gets_reasoning_effort(self):
+        settings = _resolve_generation_settings(
+            _GPT5_UNSET_TEMPERATURE_CONFIG,
+            "gpt-5.6",
+            legacy_temperature=0.8,
+        )
+
+        self.assertIsNone(settings["temperature"])
+        self.assertEqual(settings["reasoning_effort"], "high")
+
+    def test_reasoning_effort_is_omitted_for_compatible_gateway(self):
+        settings = _resolve_generation_settings(
+            {**_GPT5_UNSET_TEMPERATURE_CONFIG, "OPENAI_BASE_URL": "http://localhost:4000/v1"},
+            "gpt-5.6",
+            legacy_temperature=0.8,
+        )
+
+        self.assertIsNone(settings["reasoning_effort"])
+
 class TestCallWithValidation(unittest.IsolatedAsyncioTestCase):
 
     def _make_client(self, *responses):
@@ -240,6 +275,26 @@ class TestCallWithValidation(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.chat.completions.create.call_count, 1)
         response_format = client.chat.completions.create.call_args[1]["response_format"]
         self.assertEqual(response_format["type"], "json_schema")
+
+    async def test_omits_unset_generation_parameters(self):
+        payload = json.dumps({"recommendations": [
+            {"title": "Dune", "year": 2021, "rationale": "Epic sci-fi", "source_title": None}
+        ]})
+        client = self._make_client(_mock_openai_response(payload))
+
+        await _call_with_validation(
+            client=client,
+            model="gpt-5.6",
+            messages=[{"role": "user", "content": "recommend"}],
+            schema_cls=RecommendationList,
+            temperature=None,
+            reasoning_effort=None,
+            max_retries=0,
+        )
+
+        request_kwargs = client.chat.completions.create.call_args.kwargs
+        self.assertNotIn("temperature", request_kwargs)
+        self.assertNotIn("reasoning_effort", request_kwargs)
 
     async def test_response_format_rejection_falls_back_without_burning_retry(self):
         payload = json.dumps({"recommendations": [
@@ -478,6 +533,21 @@ class TestGetRecommendationsFromHistory(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["title"], "Interstellar")
 
+    async def test_applies_generation_settings_to_recommendations(self):
+        recs = [{"title": "Interstellar", "year": 2014, "source_title": "Inception", "rationale": "similar themes"}]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response(_wrap_recs(recs))
+        )
+
+        with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_GPT5_UNSET_TEMPERATURE_CONFIG):
+            await get_recommendations_from_history([{"title": "Inception", "year": 2010}], max_results=1)
+
+        request_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        self.assertNotIn("temperature", request_kwargs)
+        self.assertEqual(request_kwargs["reasoning_effort"], "high")
+
     async def test_filters_out_recs_that_are_in_watch_history(self):
         recs = [
             {"title": "Inception", "year": 2010, "source_title": "Inception", "rationale": "dupe"},
@@ -604,6 +674,39 @@ class TestInterpretSearchQuery(unittest.IsolatedAsyncioTestCase):
         self.assertIn("discover_params", result)
         self.assertIn("suggested_titles", result)
         self.assertEqual(result["suggested_titles"][0]["title"], "Film 0")
+
+    async def test_applies_generation_settings_to_ai_search(self):
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response(self._valid_interpretation_payload())
+        )
+        with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_GPT5_UNSET_TEMPERATURE_CONFIG):
+            await interpret_search_query("thriller", [])
+
+        request_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        self.assertNotIn("temperature", request_kwargs)
+        self.assertEqual(request_kwargs["reasoning_effort"], "high")
+
+    async def test_applies_generation_settings_to_ai_search_rationales(self):
+        payload = json.dumps({"rationales": [
+            {"title": "Dune", "year": 2021, "rationale": "Its epic science-fiction scope fits your query."}
+        ]})
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=_mock_openai_response(payload))
+        with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_GPT5_UNSET_TEMPERATURE_CONFIG):
+            result = await generate_search_result_rationales(
+                "epic science fiction",
+                "movie",
+                {},
+                [{"title": "Dune", "year": 2021}],
+            )
+
+        self.assertEqual(len(result), 1)
+        request_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        self.assertNotIn("temperature", request_kwargs)
+        self.assertEqual(request_kwargs["reasoning_effort"], "high")
 
     async def test_llm_validation_error_propagates_to_caller(self):
         """On persistent failure, LLMValidationError should propagate (interactive path)."""

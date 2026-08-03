@@ -173,6 +173,12 @@ The engine works with **any OpenAI-compatible API**, so you can use a cloud prov
 
 **Note for Ollama users:** make sure Ollama is running and the model is pulled (`ollama pull mistral`) before saving. The API Key field can be left blank — SuggestArr will use a placeholder automatically.
 
+### Generation settings
+
+The **Temperature** field defaults to `legacy`, preserving the existing values: `0.7` for scheduled recommendations and `0.8` for AI Search. Clear the field and save to omit `temperature` from LLM requests, which is useful for models that reject it; enter a value from `0` to `2` to override both flows.
+
+**Reasoning effort** is optional (`low`, `medium`, or `high`) and is sent only for direct OpenAI GPT-5 and o-series models. It is provider/model dependent, so other OpenAI-compatible endpoints leave it out.
+
 ### Docker Compose with Ollama (example)
 
 ```yaml
