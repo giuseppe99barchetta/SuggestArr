@@ -640,6 +640,28 @@ class TestGetArrServers(unittest.IsolatedAsyncioTestCase):
 
 
 # ---------------------------------------------------------------------------
+# delete_media_file_by_tmdb
+# ---------------------------------------------------------------------------
+
+class TestDeleteMediaFile(unittest.IsolatedAsyncioTestCase):
+
+    async def test_uses_api_key_not_selected_user_cookie(self):
+        client = _make_client(session_token='user-cookie')
+        response = _mock_response(204)
+        session = MagicMock()
+        session.delete = MagicMock(return_value=response)
+
+        with patch.object(client, 'lookup_seer_media_id', AsyncMock(return_value=55)) as lookup, \
+             patch.object(client, '_get_session', AsyncMock(return_value=session)):
+            result = await client.delete_media_file_by_tmdb(123, 'movie')
+
+        self.assertTrue(result)
+        lookup.assert_awaited_once_with(123, 'movie', use_cookie=False)
+        self.assertEqual(session.delete.call_args.kwargs['headers']['X-Api-Key'], 'fake_key')
+        self.assertEqual(session.delete.call_args.kwargs['cookies'], {})
+
+
+# ---------------------------------------------------------------------------
 # submit_queued_request
 # ---------------------------------------------------------------------------
 

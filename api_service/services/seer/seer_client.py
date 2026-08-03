@@ -584,10 +584,12 @@ class SeerClient(BaseHTTPClient):
         self.logger.debug("Getting metadata for media_id=%s, media_type=%s", media_id, media_type)
         return DatabaseManager().get_metadata(media_id, media_type)
 
-    async def lookup_seer_media_id(self, tmdb_id, media_type):
+    async def lookup_seer_media_id(self, tmdb_id, media_type, use_cookie=None):
         """Resolve TMDB id to Seer's internal mediaInfo.id (None if not present in Seer)."""
         endpoint = f"api/v1/{'movie' if media_type == 'movie' else 'tv'}/{int(tmdb_id)}"
-        data = await self._make_request("GET", endpoint, use_cookie=bool(self.session_token))
+        if use_cookie is None:
+            use_cookie = bool(self.session_token)
+        data = await self._make_request("GET", endpoint, use_cookie=use_cookie)
         if not data:
             return None
         media_info = data.get("mediaInfo") or {}
@@ -595,12 +597,13 @@ class SeerClient(BaseHTTPClient):
 
     async def delete_media_file_by_tmdb(self, tmdb_id, media_type):
         """Delete files (via arr) for the Seer media matching tmdb_id. Returns True on success."""
-        seer_media_id = await self.lookup_seer_media_id(tmdb_id, media_type)
+        # File deletion requires Seer ADMIN permission, so do not use a selected user's cookie.
+        seer_media_id = await self.lookup_seer_media_id(tmdb_id, media_type, use_cookie=False)
         if not seer_media_id:
-            self.logger.info("No Seer media found for tmdb_id=%s media_type=%s; nothing to delete.", tmdb_id, media_type)
+            self.logger.warning("Unable to resolve Seer media for tmdb_id=%s media_type=%s; nothing deleted.", tmdb_id, media_type)
             return False
         url = f"{self.api_url}/api/v1/media/{int(seer_media_id)}/file"
-        headers, cookies = self._get_auth_headers(bool(self.session_token))
+        headers, cookies = self._get_auth_headers(False)
         session = await self._get_session()
         try:
             async with session.delete(url, headers=headers, cookies=cookies, timeout=self.REQUEST_TIMEOUT) as response:
