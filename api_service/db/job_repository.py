@@ -357,6 +357,37 @@ class JobRepository:
             self.logger.debug(f"Created execution history record ID: {exec_id}")
             return exec_id
 
+    def create_queued_execution(self, job_id: int, trigger: str, initiated_by_user_id=None, api_key_id=None) -> int:
+        """Create the one history row owned by an asynchronously queued run."""
+        query = """INSERT INTO job_execution_history (job_id, started_at, status, trigger_source,
+                   initiated_by_user_id, api_key_id, queued_at) VALUES (?, ?, ?, ?, ?, ?, ?)"""
+        now = datetime.now().isoformat()
+        params = (job_id, now, 'queued', trigger, initiated_by_user_id, api_key_id, now)
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db.db_type in ('mysql', 'mariadb', 'postgres'):
+                query = query.replace('?', '%s')
+            if self.db.db_type == 'postgres':
+                cursor.execute(query + ' RETURNING id', params)
+                execution_id = cursor.fetchone()[0]
+            else:
+                cursor.execute(query, params)
+                execution_id = cursor.lastrowid
+            conn.commit()
+        return int(execution_id)
+
+    def mark_execution_running(self, execution_id: int) -> None:
+        query = 'UPDATE job_execution_history SET status = ?, started_at = ? WHERE id = ?'
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db.db_type in ('mysql', 'mariadb', 'postgres'):
+                query = query.replace('?', '%s')
+            cursor.execute(query, ('running', datetime.now().isoformat(), execution_id))
+            conn.commit()
+
+    def get_execution(self, execution_id: int) -> Optional[Dict[str, Any]]:
+        return next((row for row in self.get_recent_history(1000) if row['id'] == execution_id), None)
+
     def log_execution_end(
         self,
         exec_id: int,
@@ -419,7 +450,7 @@ class JobRepository:
         query = """
             SELECT h.id, h.job_id, h.started_at, h.finished_at, h.status,
                    h.results_count, h.requested_count, h.error_message,
-                   j.name as job_name
+                   j.name as job_name, h.trigger_source
             FROM job_execution_history h
             JOIN discover_jobs j ON h.job_id = j.id
             WHERE h.job_id = ?
@@ -458,7 +489,7 @@ class JobRepository:
         query = """
             SELECT h.id, h.job_id, h.started_at, h.finished_at, h.status,
                    h.results_count, h.requested_count, h.error_message,
-                   j.name as job_name
+                   j.name as job_name, h.trigger_source
             FROM job_execution_history h
             JOIN discover_jobs j ON h.job_id = j.id
             ORDER BY h.started_at DESC
@@ -685,5 +716,6 @@ class JobRepository:
                 'results_count': row[5],
                 'requested_count': row[6],
                 'error_message': row[7],
-                'job_name': row[8] if len(row) > 8 else None
+                'job_name': row[8] if len(row) > 8 else None,
+                'trigger_source': row[9] if len(row) > 9 else 'schedule',
             }
