@@ -154,46 +154,54 @@ async def ai_search_request():
             else:
                 req_payload["seasons"] = list(range(1, int(num_seasons) + 1))
 
-        # Auth: prefer session cookie, fall back to API key (mirrors SeerClient behaviour)
-        headers = {"Content-Type": "application/json", "accept": "application/json"}
-        cookies = {}
+        # A stored Seer session can be valid but belong to a user without request
+        # permission. Retry once with the configured technical API key in that case.
+        auth_attempts = []
         if seer_session:
-            cookies["connect.sid"] = seer_session
-        else:
-            headers["X-Api-Key"] = seer_token
+            auth_attempts.append(("session", {"connect.sid": seer_session}))
+        auth_attempts.append(("API key", {}))
 
-        async with aiohttp.ClientSession(headers=headers, cookies=cookies) as session:
-            url = f"{seer_url}/api/v1/request"
-            async with session.post(url, json=req_payload, timeout=10) as response:
-                if response.status in (200, 201, 202):
-                    db = DatabaseManager()
-                    # Persist metadata using data supplied by the frontend so the
-                    # title and poster are stored correctly in the local DB.
-                    media_dict = {"id": str(tmdb_id)}
-                    media_dict.update(metadata)
-                    db.save_metadata(media_dict, media_type)
-                    # Tag with 'ai_search' source to keep these requests out of the
-                    # "By Watched Content" view in the dashboard.
-                    db.save_request(
-                        media_type, str(tmdb_id), "ai_search", None, rationale=db_rationale
+        url = f"{seer_url}/api/v1/request"
+        for auth_name, cookies in auth_attempts:
+            headers = {"Content-Type": "application/json", "accept": "application/json"}
+            if auth_name == "API key":
+                headers["X-Api-Key"] = seer_token
+
+            async with aiohttp.ClientSession(headers=headers, cookies=cookies) as session:
+                async with session.post(url, json=req_payload, timeout=10) as response:
+                    if response.status == 403 and auth_name == "session":
+                        logger.warning("Seer session cannot submit requests; retrying with API key")
+                        continue
+
+                    if response.status in (200, 201, 202):
+                        db = DatabaseManager()
+                        # Persist metadata using data supplied by the frontend so the
+                        # title and poster are stored correctly in the local DB.
+                        media_dict = {"id": str(tmdb_id)}
+                        media_dict.update(metadata)
+                        db.save_metadata(media_dict, media_type)
+                        # Tag with 'ai_search' source to keep these requests out of the
+                        # "By Watched Content" view in the dashboard.
+                        db.save_request(
+                            media_type, str(tmdb_id), "ai_search", None, rationale=db_rationale
+                        )
+                        return jsonify({"status": "success", "message": "Request submitted successfully."}), 200
+
+                    if response.status == 409:
+                        return jsonify({
+                            "status": "error",
+                            "message": "Already requested or already available.",
+                        }), 409
+
+                    resp_text = await response.text()
+                    logger.error(
+                        "Seer request failed: status=%d, body=%s",
+                        response.status, resp_text[:200],
                     )
-                    return jsonify({"status": "success", "message": "Request submitted successfully."}), 200
-
-                if response.status == 409:
                     return jsonify({
                         "status": "error",
-                        "message": "Already requested or already available.",
-                    }), 409
-
-                resp_text = await response.text()
-                logger.error(
-                    "Seer request failed: status=%d, body=%s",
-                    response.status, resp_text[:200],
-                )
-                return jsonify({
-                    "status": "error",
-                    "message": f"Seer returned status {response.status}.",
-                }), 500
+                        "message": f"Seer returned status {response.status}.",
+                    }), 500
 
     except Exception as exc:
         logger.error("Error during AI search request: %s", str(exc))
