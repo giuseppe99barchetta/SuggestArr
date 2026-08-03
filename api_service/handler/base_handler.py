@@ -191,6 +191,26 @@ class BaseMediaHandler(ABC):
         media_type = str(item.get("type") or item.get("media_type") or "").strip().lower()
         return (title, media_type)
 
+    @staticmethod
+    def _llm_history_item(seed):
+        """Return the compact, preference-safe LLM context for one seed."""
+        metadata = seed.get("source_obj") if isinstance(seed.get("source_obj"), dict) else {}
+        genres = []
+        for genre in metadata.get("genres") or []:
+            name = genre.get("name") if isinstance(genre, dict) else genre
+            if isinstance(name, str) and name.strip():
+                genres.append(name.strip())
+
+        return {
+            "title": seed["title"],
+            "year": seed.get("year"),
+            "media_type": seed.get("media_type"),
+            "genres": genres[:4],
+            # A completed/recent watch is context, not proof of a preference.
+            "preference_signal": seed.get("preference_signal", "recent_watch"),
+            "source_origin": seed.get("source_origin"),
+        }
+
     @abstractmethod
     def _populate_existing_content_sets(self):
         """

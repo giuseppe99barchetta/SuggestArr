@@ -190,8 +190,15 @@ class TestFormatResult(unittest.TestCase):
         result = client._format_result(item, 'movie')
         self.assertEqual(result['id'], 1)
         self.assertEqual(result['title'], 'Dune')
+        self.assertEqual(result['genres'], [])
         self.assertIn('tmdb.org', result['poster_path'])
         self.assertIn('tmdb.org', result['backdrop_path'])
+
+    def test_preserves_detail_genre_names_for_llm_context(self):
+        client = _make_client()
+        item = {**_MOVIE_ITEM, 'genres': [{'id': 878, 'name': 'Science Fiction'}]}
+        result = client._format_result(item, 'movie')
+        self.assertEqual(result['genres'], [{'id': 878, 'name': 'Science Fiction'}])
 
     def test_formats_tv_using_name_key(self):
         client = _make_client()

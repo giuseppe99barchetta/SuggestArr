@@ -548,6 +548,28 @@ class TestGetRecommendationsFromHistory(unittest.IsolatedAsyncioTestCase):
         self.assertIn("released from year 1990 onward", user_prompt)
         self.assertIn("released up to year 1999", user_prompt)
 
+    async def test_marks_recent_watches_as_neutral_and_includes_genres(self):
+        recs = [{"title": "Tenet", "year": 2020, "source_title": "Inception", "rationale": "ok"}]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response(_wrap_recs(recs))
+        )
+        history = [{
+            "title": "Inception",
+            "year": 2010,
+            "media_type": "movie",
+            "genres": ["Science Fiction", "Thriller"],
+            "preference_signal": "recent_watch",
+        }]
+        with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_DEFAULT_CONFIG):
+            await get_recommendations_from_history(history, max_results=1)
+
+        prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        self.assertIn("recent/neutral watch", prompt)
+        self.assertIn("NOT evidence that they enjoyed it", prompt)
+        self.assertIn("genres: Science Fiction, Thriller", prompt)
+
 
 # ---------------------------------------------------------------------------
 # interpret_search_query (async)

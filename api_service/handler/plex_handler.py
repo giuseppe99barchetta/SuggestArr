@@ -78,8 +78,7 @@ class PlexHandler(BaseMediaHandler):
 
         if not isinstance(recent_items_response, list) or not recent_items_response:
             if trakt_seeds:
-                trakt_seeds = self._merge_seeds(trakt_seeds)
-                await self._process_merged_seeds(trakt_seeds)
+                await self._process_seed_groups(trakt_seeds)
             else:
                 self.logger.warning("No recent items found in Plex response")
             return
@@ -90,14 +89,9 @@ class PlexHandler(BaseMediaHandler):
         ])
         plex_seeds = [s for s in plex_seeds if s is not None]
 
-        # 3. Merge Trakt + Plex seeds, sort by date, dedup, cap.
+        # 3. Merge Trakt + Plex seeds per user, then sort, dedup, and cap.
         all_seeds = trakt_seeds + plex_seeds
-        merged = self._merge_seeds(all_seeds)
-        if not merged:
-            return
-
-        self.logger.info("Processing %d merged seeds (Trakt + Plex)", len(merged))
-        await self._process_merged_seeds(merged)
+        await self._process_seed_groups(all_seeds)
 
     async def _plex_item_to_seed(self, item):
         """Resolve a Plex response item to a normalized seed dict or None."""
@@ -170,25 +164,53 @@ class PlexHandler(BaseMediaHandler):
 
         return all_seeds
 
-    async def _process_merged_seeds(self, seeds):
+    async def _process_seed_groups(self, seeds):
+        """Keep each Plex user's history and LLM recommendations isolated."""
+        grouped = {}
+        for seed in seeds:
+            user_id = seed.get("user_id")
+            grouped.setdefault(str(user_id) if user_id else None, []).append(seed)
+
+        tasks = []
+        for user_id, user_seeds in grouped.items():
+            merged = self._merge_seeds(user_seeds)
+            if not merged:
+                continue
+            self.logger.info(
+                "Processing %d merged Plex seeds%s",
+                len(merged),
+                f" for user {user_id}" if user_id else "",
+            )
+            tasks.append(self._process_merged_seeds(merged, user_id))
+        if tasks:
+            await asyncio.gather(*tasks)
+
+    async def _process_merged_seeds(self, seeds, user_id=None):
         """Process merged seeds: dispatch to LLM or non-LLM path."""
         if not seeds:
             return
 
         if self.use_llm:
             movie_history = [
-                {"title": s["title"], "year": s.get("year"), "type": "movie", "source_origin": s.get("source_origin")}
+                self._llm_history_item(s)
                 for s in seeds if s.get("media_type") == "movie"
             ]
             tv_history = [
-                {"title": s["title"], "year": s.get("year"), "type": "tv", "source_origin": s.get("source_origin")}
+                self._llm_history_item(s)
                 for s in seeds if s.get("media_type") == "tv"
             ]
             tasks = []
+            user = {"id": user_id} if user_id else None
             if movie_history and self.max_similar_movie > 0:
-                tasks.append(self.process_llm_recommendations(movie_history, 'movie', self.max_similar_movie))
+                if user:
+                    tasks.append(self.process_llm_recommendations(user, movie_history, 'movie', self.max_similar_movie))
+                else:
+                    tasks.append(self.process_llm_recommendations(movie_history, 'movie', self.max_similar_movie))
             if tv_history and self.max_similar_tv > 0:
-                tasks.append(self.process_llm_recommendations(tv_history, 'tv', self.max_similar_tv))
+                if user:
+                    tasks.append(self.process_llm_recommendations(user, tv_history, 'tv', self.max_similar_tv))
+                else:
+                    tasks.append(self.process_llm_recommendations(tv_history, 'tv', self.max_similar_tv))
             if tasks:
                 await asyncio.gather(*tasks)
         else:
@@ -223,9 +245,10 @@ class PlexHandler(BaseMediaHandler):
             similar = await self.tmdb_client.find_similar_tvshows(tmdb_id, dry_run=self.dry_run)
             await self.request_similar_media(similar, "tv", self.max_similar_tv, source_obj, is_anime, user_id)
 
-    async def _request_llm_recommendation(self, media, item_type, source_obj):
+    async def _request_llm_recommendation(self, media, item_type, source_obj, user=None):
         """Request a single LLM recommendation via Plex."""
-        await self.request_similar_media([media], item_type, 1, source_obj)
+        user_id = user.get("id") if isinstance(user, dict) else user
+        await self.request_similar_media([media], item_type, 1, source_obj, user_id=user_id)
 
     async def process_item(self, item, title, is_anime=False):
         """Process an individual item (movie or TV show episode)."""

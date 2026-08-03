@@ -170,11 +170,11 @@ class JellyfinHandler(BaseMediaHandler):
 
         if self.use_llm:
             movie_history = [
-                {"title": s["title"], "year": s.get("year"), "type": "movie", "source_origin": s.get("source_origin")}
+                self._llm_history_item(s)
                 for s in seeds if s.get("media_type") == "movie"
             ]
             tv_history = [
-                {"title": s["title"], "year": s.get("year"), "type": "tv", "source_origin": s.get("source_origin")}
+                self._llm_history_item(s)
                 for s in seeds if s.get("media_type") == "tv"
             ]
             tasks = []

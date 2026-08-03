@@ -148,6 +148,8 @@ Cleanup is off by default and starts safely in dry-run mode. Always run dry-run 
 
 SuggestArr includes an optional AI recommendation engine that analyzes your watch history and suggests titles that match your taste, with a short explanation for each pick.
 
+Recent watches are treated as neutral viewing context, not automatic proof that a user liked them. When TMDb metadata is available, the AI also receives each item's media type and genres.
+
 The engine works with **any OpenAI-compatible API**, so you can use a cloud provider or a local model running on your own machine.
 
 ### How to enable

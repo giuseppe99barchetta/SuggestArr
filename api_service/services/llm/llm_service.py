@@ -283,6 +283,29 @@ def _deduplicate_history(history_items: List[Dict]) -> List[Dict]:
     return unique
 
 
+def _format_history_context_item(item: Dict, default_media_type: str) -> str:
+    """Format a compact history item without turning a watch into a like."""
+    title = item.get("title", item.get("name", "Unknown"))
+    year = item.get("year", "Unknown")
+    media_type = item.get("media_type") or item.get("type") or default_media_type
+    signal = str(item.get("preference_signal") or "recent_watch").lower()
+    if signal in {"positive", "strong_positive", "favorite", "liked"}:
+        signal_label = "strong positive signal"
+    elif signal in {"negative", "disliked"}:
+        signal_label = "negative signal"
+    else:
+        signal_label = "recent/neutral watch"
+
+    details = [str(media_type), signal_label]
+    raw_genres = item.get("genres") or []
+    if not isinstance(raw_genres, (list, tuple)):
+        raw_genres = []
+    genres = [genre.strip() for genre in raw_genres if isinstance(genre, str) and genre.strip()]
+    if genres:
+        details.append(f"genres: {', '.join(genres[:4])}")
+    return f"- {title} ({year}) [{'; '.join(details)}]"
+
+
 def _normalize_title(title: str) -> str:
     """Normalize a title for comparison by stripping common decorations.
 
@@ -488,8 +511,7 @@ async def get_recommendations_from_history(
 
         list_type = "movies" if item_type == "movie" else "TV shows"
         history_text = "\n".join(
-            f"- {item.get('title', item.get('name', 'Unknown'))} ({item.get('year', 'Unknown')})"
-            for item in history_items
+            _format_history_context_item(item, item_type) for item in history_items
         )
 
         constraint_lines: List[str] = []
@@ -536,12 +558,15 @@ async def get_recommendations_from_history(
 
         prompt = f"""
         You are an expert film and television recommendation system.
-        The user has recently watched and enjoyed the following {list_type}:
+        The following {list_type} are watch-history context, ordered from most recent to least recent:
 
         {history_text}
         {constraints_block}
 
-        Analyze the themes, genres, pacing, and tone of these {list_type} to build a taste profile.
+        A "recent/neutral watch" only means the user watched it; it is NOT evidence that they enjoyed it.
+        Treat only items explicitly marked "strong positive signal" as preference evidence. Do not use
+        negative signals to infer similar recommendations. Use the titles, genres, and viewing context to
+        form a cautious taste profile.
         Based on this profile, recommend exactly {max_results} similar {list_type} that the user is highly likely to enjoy.
 
         Follow these strict rules:
