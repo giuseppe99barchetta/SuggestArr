@@ -16,15 +16,11 @@ from api_service.services.llm.llm_service import (
     interpret_search_query,
 )
 from api_service.services.tmdb.tmdb_client import TMDbClient
-from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
 logger = LoggerManager.get_logger("AiSearchService")
 
 # Maximum total results returned to the caller
 _RESULTS_MAX = 12
-_DISCOVER_MIN_RATING = 6.0
-_DISCOVER_MIN_VOTES = 200
-_DISCOVER_SORT_BY = "popularity.desc"
 
 
 class AiSearchService:
@@ -172,22 +168,19 @@ class AiSearchService:
         )
         ai_reasoning = self._build_ai_reasoning(interpretation)
         discover_params = interpretation.get("discover_params", {})
-        prepared_discover_filters = self._prepare_tmdb_discover_filters(discover_params)
-        tmdb_discover_params = self._map_llm_discover_params(prepared_discover_filters)
+        tmdb_discover_params = self._map_llm_discover_params(discover_params)
         suggested_titles = interpretation.get("suggested_titles", [])
+        reference_titles = interpretation.get("reference_titles", [])
         suggestion_rationale_map = self._build_suggestion_rationale_map(suggested_titles)
 
-        logger.debug("Discover filters: %s", prepared_discover_filters)
-        logger.debug("TMDb params: %s", tmdb_discover_params)
+        logger.debug("AI search filters: %s", tmdb_discover_params)
 
         # 4. Build TMDb client from config
         tmdb_client = self._make_tmdb_client()
-        tmdb_discover = self._make_tmdb_discover(tmdb_client.omdb_client)
 
         from contextlib import AsyncExitStack
         async with AsyncExitStack() as stack:
             await stack.enter_async_context(tmdb_client)
-            await stack.enter_async_context(tmdb_discover)
             if tmdb_client.omdb_client:
                 await stack.enter_async_context(tmdb_client.omdb_client)
 
@@ -197,21 +190,51 @@ class AiSearchService:
                 for t in suggested_titles
             ]
             title_results: List[Optional[Dict]] = list(await asyncio.gather(*title_tasks))
+            reference_tasks = [
+                self._resolve_suggested_title(t, media_type, tmdb_client)
+                for t in reference_titles
+            ]
+            reference_results: List[Optional[Dict]] = list(await asyncio.gather(*reference_tasks))
 
-            discover_results: List[Dict[str, Any]] = []
-            if tmdb_discover_params:
-                logger.info("Calling TMDb discover for %s with params: %s", media_type, tmdb_discover_params)
-                if media_type == "movie":
-                    discover_results = await tmdb_discover.discover_movies(prepared_discover_filters, max_results=max_results)
-                else:
-                    discover_results = await tmdb_discover.discover_tv(prepared_discover_filters, max_results=max_results)
-                logger.info("TMDb discover returned %d %s results", len(discover_results), media_type)
+            resolved_references = [
+                (reference, result)
+                for reference, result in zip(reference_titles, reference_results)
+                if result and result.get("id")
+            ]
+            similar_tasks = [
+                tmdb_client.find_similar_movies(result["id"])
+                if media_type == "movie"
+                else tmdb_client.find_similar_tvshows(result["id"])
+                for _, result in resolved_references
+            ]
+            similar_result_groups: List[List[Dict]] = list(await asyncio.gather(*similar_tasks))
 
         # 6. Build result list: AI suggestions only, filtered & deduped
         seen_ids: set = set()
         final: List[Dict] = []
 
+        for similar_results in similar_result_groups:
+            for tmdb_item in similar_results:
+                if len(final) >= max_results:
+                    break
+                self._append_candidate_result(
+                    final=final,
+                    seen_ids=seen_ids,
+                    item=tmdb_item,
+                    media_type=media_type,
+                    tmdb_client=tmdb_client,
+                    already_requested=already_requested,
+                    watched_titles=watched_titles,
+                    exclude_watched=exclude_watched,
+                    source="tmdb_similar",
+                    rationale="",
+                    tmdb_discover_params=tmdb_discover_params,
+                    apply_discover_filters=True,
+                )
+
         for tmdb_item, suggestion in zip(title_results, suggested_titles):
+            if len(final) >= max_results:
+                break
             self._append_candidate_result(
                 final=final,
                 seen_ids=seen_ids,
@@ -227,30 +250,13 @@ class AiSearchService:
                 apply_discover_filters=True,
             )
 
-        for tmdb_item in discover_results:
-            if len(final) >= max_results:
-                break
-            self._append_candidate_result(
-                final=final,
-                seen_ids=seen_ids,
-                item=tmdb_item,
-                media_type=media_type,
-                tmdb_client=tmdb_client,
-                already_requested=already_requested,
-                watched_titles=watched_titles,
-                exclude_watched=exclude_watched,
-                source="tmdb_discover",
-                rationale="",
-                tmdb_discover_params=tmdb_discover_params,
-                apply_discover_filters=False,
-            )
-
         await self._apply_suggestion_rationales(
             final,
             suggestion_rationale_map,
             query,
             discover_params,
             media_type,
+            reference_titles=reference_titles,
         )
 
         final_slice = final[:max_results]
@@ -285,6 +291,7 @@ class AiSearchService:
             "original_language": discover_params.get("original_language"),
             "min_rating": discover_params.get("min_rating"),
             "title_suggestions": suggested_titles,
+            "reference_titles": interpretation.get("reference_titles", []) or [],
             "explanation": interpretation.get("explanation") or AiSearchService._generate_reasoning_explanation(
                 discover_params,
                 suggested_titles,
@@ -362,15 +369,6 @@ class AiSearchService:
 
         return params
 
-    @staticmethod
-    def _prepare_tmdb_discover_filters(discover_params: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply AI-search quality defaults before invoking TMDb discover."""
-        prepared = dict(discover_params or {})
-        prepared["sort_by"] = _DISCOVER_SORT_BY
-        prepared["vote_count_gte"] = max(int(prepared.get("vote_count_gte") or 0), _DISCOVER_MIN_VOTES)
-        prepared["min_rating"] = _DISCOVER_MIN_RATING
-        return prepared
-
     def _passes_tmdb_discover_params(
         self,
         item: Dict[str, Any],
@@ -401,7 +399,10 @@ class AiSearchService:
         vote_average_gte = tmdb_discover_params.get("vote_average_gte")
         if vote_average_gte is not None:
             try:
-                if float(item.get("vote_average") or 0) < float(vote_average_gte):
+                rating = item.get("vote_average")
+                if rating is None:
+                    rating = item.get("rating")
+                if float(rating or 0) < float(vote_average_gte):
                     return False
             except (TypeError, ValueError):
                 return False
@@ -409,7 +410,10 @@ class AiSearchService:
         vote_count_gte = tmdb_discover_params.get("vote_count_gte")
         if vote_count_gte is not None:
             try:
-                if int(item.get("vote_count") or 0) < int(vote_count_gte):
+                votes = item.get("vote_count")
+                if votes is None:
+                    votes = item.get("votes")
+                if int(votes or 0) < int(vote_count_gte):
                     return False
             except (TypeError, ValueError):
                 return False
@@ -436,10 +440,16 @@ class AiSearchService:
         if not title:
             return None
         try:
+            search_year = None if str(title).strip() == str(year).strip() else year
             if media_type == "movie":
-                results = await tmdb_client.search_movie(title, year)
+                results = await tmdb_client.search_movie(title, search_year)
             else:
-                results = await tmdb_client.search_tv(title, year)
+                results = await tmdb_client.search_tv(title, search_year)
+            if not results and search_year is not None:
+                if media_type == "movie":
+                    results = await tmdb_client.search_movie(title)
+                else:
+                    results = await tmdb_client.search_tv(title)
             return results[0] if results else None
         except Exception as exc:
             logger.warning("TMDB search failed for '%s': %s", title, exc)
@@ -599,13 +609,6 @@ class AiSearchService:
             omdb_client=omdb_client,
         )
 
-    def _make_tmdb_discover(self, omdb_client=None) -> TMDbDiscover:
-        """Instantiate TMDbDiscover from the current configuration."""
-        return TMDbDiscover(
-            api_key=self.config.get("TMDB_API_KEY", ""),
-            omdb_client=omdb_client,
-        )
-
     def _append_candidate_result(
         self,
         final: List[Dict[str, Any]],
@@ -676,6 +679,7 @@ class AiSearchService:
         query: str,
         discover_params: Dict[str, Any],
         media_type: str,
+        reference_titles: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         """Set per-item rationale from exact matches, then LLM-generated one-liners, then contextual fallback."""
         llm_rationale_map: Dict[str, str] = {}
@@ -710,6 +714,7 @@ class AiSearchService:
                         result=result,
                         discover_params=discover_params,
                         media_type=media_type,
+                        reference_titles=reference_titles,
                     )
 
             # Keep rationale strings distinct even if two items resolve to identical text.
@@ -742,9 +747,16 @@ class AiSearchService:
         result: Dict[str, Any],
         discover_params: Dict[str, Any],
         media_type: str,
+        reference_titles: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """Generate a per-result rationale aligned to interpreted discover filters."""
         title = str(result.get("title") or result.get("name") or "This title").strip() or "This title"
+        reference_title = next(
+            (str(item.get("title") or "").strip() for item in reference_titles or [] if item.get("title")),
+            "",
+        )
+        if reference_title:
+            return f"TMDb recommends {title} as similar to {reference_title}."
 
         genres = discover_params.get("genres") or []
         if isinstance(genres, list) and genres:

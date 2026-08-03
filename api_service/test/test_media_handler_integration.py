@@ -397,6 +397,49 @@ def test_logger(caplog):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("service", ["jellyfin", "plex"])
+async def test_dry_run_respects_similar_content_limit_per_watched_item(service, test_logger):
+    seer_client = FakeSeerClient()
+    tmdb_client = FakeTMDbClient()
+    handler_kwargs = {
+        "seer_client": seer_client,
+        "tmdb_client": tmdb_client,
+        "logger": test_logger,
+        "max_similar_movie": 1,
+        "max_similar_tv": 1,
+        "dry_run": True,
+        "max_total_requests": 20,
+    }
+    if service == "jellyfin":
+        handler = JellyfinHandler(
+            jellyfin_client=FakeJellyfinClient(),
+            selected_users=[deepcopy(USER)],
+            **handler_kwargs,
+        )
+    else:
+        handler = PlexHandler(plex_client=FakePlexClient(), **handler_kwargs)
+
+    candidates = [
+        {"id": 101, "title": "First"},
+        {"id": 102, "title": "Second"},
+        {"id": 103, "title": "Third"},
+    ]
+    source = {"id": 1, "title": "Watched movie"}
+
+    if service == "jellyfin":
+        await handler.request_similar_media(candidates, "movie", 1, source, USER)
+    else:
+        await handler.request_similar_media(candidates, "movie", 1, source)
+
+    assert [item["tmdb_id"] for item in handler.dry_run_items if item["would_request"]] == [101]
+    assert all(
+        item["filter_results"]["similar_content_limit"]["passed"] is False
+        for item in handler.dry_run_items[1:]
+    )
+    assert handler.request_count == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("item_type", "use_user"),
     [("movie", False), ("tv", False), ("movie", True), ("tv", True)],
@@ -462,6 +505,49 @@ async def test_plex_handler_process_recent_items_runs_real_llm_flow_without_type
     assert {item["title"] for item in handler.dry_run_items} == {"Tenet", "1899"}
     assert ("Dark", None) in handler.tmdb_client.tv_calls
     assert "TypeError" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_plex_handler_keeps_llm_history_and_requests_per_user(test_logger):
+    recent_items = [
+        {**PLEX_RECENT_ITEMS[0], "_user_id": "user-a"},
+        {**PLEX_RECENT_ITEMS[1], "_user_id": "user-b"},
+    ]
+    handler = PlexHandler(
+        plex_client=FakePlexClient(recent_items),
+        seer_client=FakeSeerClient(),
+        tmdb_client=FakeTMDbClient(),
+        logger=test_logger,
+        max_similar_movie=1,
+        max_similar_tv=1,
+        use_llm=True,
+    )
+    handler.process_llm_recommendations = AsyncMock()
+
+    await handler.process_recent_items()
+
+    assert handler.process_llm_recommendations.await_count == 2
+    assert {call.args[0]["id"] for call in handler.process_llm_recommendations.await_args_list} == {
+        "user-a", "user-b",
+    }
+
+
+@pytest.mark.asyncio
+async def test_plex_llm_request_preserves_the_user_id(test_logger):
+    handler = PlexHandler(
+        plex_client=FakePlexClient(),
+        seer_client=FakeSeerClient(),
+        tmdb_client=FakeTMDbClient(),
+        logger=test_logger,
+        max_similar_movie=1,
+        max_similar_tv=1,
+        use_llm=True,
+    )
+    handler.request_similar_media = AsyncMock()
+
+    await handler._request_llm_recommendation({}, "movie", {"id": 1}, {"id": "user-a"})
+
+    assert handler.request_similar_media.await_args.kwargs["user_id"] == "user-a"
 
 
 def test_plex_handler_normalizes_existing_content_tmdb_ids(test_logger):

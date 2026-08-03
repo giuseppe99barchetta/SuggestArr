@@ -157,6 +157,21 @@ class SchemaManager:
                     UNIQUE(tmdb_id, media_type)
                 )
             """,
+            'api_keys': """
+                CREATE TABLE IF NOT EXISTS api_keys (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    key_id TEXT UNIQUE NOT NULL,
+                    secret_hash TEXT UNIQUE NOT NULL,
+                    prefix TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_used_at TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    revoked_at TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
+                )
+            """,
             'suggestion_blacklist': """
                 CREATE TABLE IF NOT EXISTS suggestion_blacklist (
                     tmdb_id TEXT NOT NULL,
@@ -330,9 +345,52 @@ class SchemaManager:
 
         # Add missing columns
         self.add_missing_columns()
+        self._migrate_execution_history()
+        self._create_api_key_indexes()
 
         # Create submission lock table (separate to control column types per DB engine)
         self._create_submission_locks_table()
+
+    def _create_api_key_indexes(self):
+        """Create API-key lookup indexes after the table exists."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                if self.db_type in ('mysql', 'mariadb'):
+                    cursor.execute("SHOW INDEX FROM api_keys WHERE Key_name = 'idx_api_keys_key_id'")
+                    if not cursor.fetchall():
+                        cursor.execute("CREATE UNIQUE INDEX idx_api_keys_key_id ON api_keys(key_id)")
+                    cursor.execute("SHOW INDEX FROM api_keys WHERE Key_name = 'idx_api_keys_user_active'")
+                    if not cursor.fetchall():
+                        cursor.execute("CREATE INDEX idx_api_keys_user_active ON api_keys(user_id, revoked_at)")
+                else:
+                    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_key_id ON api_keys(key_id)")
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_api_keys_user_active ON api_keys(user_id, revoked_at)")
+                conn.commit()
+        except Exception as exc:
+            raise DatabaseError(error=f"API-key index creation failed: {exc}", db_type=self.db_type) from exc
+
+    def _migrate_execution_history(self):
+        """Add public-run metadata without replacing the existing history table."""
+        columns = {'trigger_source': 'TEXT', 'initiated_by_user_id': 'INTEGER', 'api_key_id': 'INTEGER', 'queued_at': 'TIMESTAMP'}
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                if self.db_type == 'sqlite':
+                    cursor.execute('PRAGMA table_info(job_execution_history)')
+                    existing = {row[1] for row in cursor.fetchall()}
+                elif self.db_type == 'postgres':
+                    cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'job_execution_history'")
+                    existing = {row[0] for row in cursor.fetchall()}
+                else:
+                    cursor.execute('SHOW COLUMNS FROM job_execution_history')
+                    existing = {row[0] for row in cursor.fetchall()}
+                for name, kind in columns.items():
+                    if name not in existing:
+                        cursor.execute(f'ALTER TABLE job_execution_history ADD COLUMN {name} {kind}')
+                conn.commit()
+        except Exception as exc:
+            raise DatabaseError(error=f"Execution-history migration failed: {exc}", db_type=self.db_type) from exc
 
     def _prepare_create_table_query_for_db(self, table_name: str, query: str, db_type: str) -> str:
         """Apply database-specific DDL rewrites for a table creation query."""
@@ -395,6 +453,22 @@ class SchemaManager:
                         rationale VARCHAR(512),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         PRIMARY KEY (tmdb_id, media_type)
+                    ) ENGINE=InnoDB
+                """
+            elif table_name == 'api_keys':
+                query = """
+                    CREATE TABLE IF NOT EXISTS api_keys (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NOT NULL,
+                        name VARCHAR(100) NOT NULL,
+                        key_id VARCHAR(32) UNIQUE NOT NULL,
+                        secret_hash CHAR(64) UNIQUE NOT NULL,
+                        prefix VARCHAR(32) NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_used_at TIMESTAMP NULL,
+                        expires_at TIMESTAMP NULL,
+                        revoked_at TIMESTAMP NULL,
+                        FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
                     ) ENGINE=InnoDB
                 """
 

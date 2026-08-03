@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the client build files from the previous stage
 COPY --from=client-builder /app/client/dist /app/static
+COPY --from=client-builder /app/client/node_modules/swagger-ui-dist /app/static/swagger-ui
 
 # Copy the api_service source code
 COPY api_service/ /app/api_service/

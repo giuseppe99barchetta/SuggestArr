@@ -115,6 +115,16 @@ class TestResolveSuggestedTitle(unittest.IsolatedAsyncioTestCase):
         result = await service._resolve_suggested_title(suggestion, 'movie', mock_tmdb)
         self.assertEqual(result['id'], 1)
 
+    async def test_numeric_title_does_not_use_its_title_as_release_year(self):
+        service = self._service()
+        mock_tmdb = MagicMock()
+        mock_tmdb.search_movie = AsyncMock(return_value=[_tmdb_item(99, '2012')])
+
+        result = await service._resolve_suggested_title({'title': '2012', 'year': 2012}, 'movie', mock_tmdb)
+
+        self.assertEqual(result['id'], 99)
+        mock_tmdb.search_movie.assert_awaited_once_with('2012', None)
+
     async def test_returns_first_result_for_tv(self):
         service = self._service()
         mock_tmdb = MagicMock()
@@ -189,32 +199,51 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['results'][0]['id'], 1)
         self.assertEqual(result['results'][0]['rationale'], 'great film')
 
-    async def test_maps_suggestion_rationale_onto_matching_discover_result(self):
+    async def test_does_not_substitute_generic_discover_results_for_unresolved_titles(self):
         service = _make_service()
         interpretation = {
             'discover_params': {'genres': ['Action']},
             'suggested_titles': [{'title': 'The Matrix', 'year': 1999, 'rationale': 'A groundbreaking sci-fi action film.'}],
         }
         mock_tmdb = self._make_tmdb_client()
-        mock_discover = MagicMock()
-        mock_discover.discover_movies = AsyncMock(return_value=[_tmdb_item(7, 'The Matrix')])
-        mock_discover.discover_tv = AsyncMock(return_value=[])
-        mock_discover.__aenter__ = AsyncMock(return_value=mock_discover)
-        mock_discover.__aexit__ = AsyncMock(return_value=False)
 
         with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
                    AsyncMock(return_value=interpretation)), \
              patch.object(service, '_get_history', AsyncMock(return_value=[])), \
              patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
              patch.object(service, '_resolve_suggested_title', AsyncMock(return_value=None)), \
-             patch.object(service, '_make_tmdb_discover', return_value=mock_discover), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
             MockDB.return_value.get_requested_tmdb_ids.return_value = set()
             result = await service._search_single('movies like the matrix', 'movie', None, 12)
 
-        self.assertEqual(len(result['results']), 1)
-        self.assertEqual(result['results'][0]['title'], 'The Matrix')
-        self.assertEqual(result['results'][0]['rationale'], 'A groundbreaking sci-fi action film.')
+        self.assertEqual(result['results'], [])
+
+    async def test_title_reference_uses_tmdb_similar_results_before_broad_suggestions(self):
+        service = _make_service()
+        interpretation = {
+            'discover_params': {},
+            'reference_titles': [{'title': '2012', 'year': 2009}],
+            'suggested_titles': [{'title': 'Spider-Man', 'year': 2002, 'rationale': 'An action movie.'}],
+        }
+        mock_tmdb = self._make_tmdb_client()
+        reference = _tmdb_item(99, '2012')
+        similar = _tmdb_item(7, 'San Andreas')
+        mock_tmdb.find_similar_movies = AsyncMock(return_value=[similar])
+
+        with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
+                   AsyncMock(return_value=interpretation)), \
+             patch.object(service, '_get_history', AsyncMock(return_value=[])), \
+             patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
+             patch.object(service, '_resolve_suggested_title', AsyncMock(side_effect=[_tmdb_item(8, 'Spider-Man'), reference])), \
+             patch('api_service.services.ai_search.ai_search_service.generate_search_result_rationales',
+                   AsyncMock(return_value={'san andreas|2020': 'TMDb recommends it as a disaster spectacle similar to 2012.'})), \
+             patch('api_service.db.database_manager.DatabaseManager') as MockDB:
+            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            result = await service._search_single('movies like 2012', 'movie', None, 1)
+
+        self.assertEqual(result['results'][0]['title'], 'San Andreas')
+        self.assertEqual(result['results'][0]['source'], 'tmdb_similar')
+        mock_tmdb.find_similar_movies.assert_awaited_once_with(99)
 
     async def test_excludes_already_requested_ids(self):
         service = _make_service()
@@ -278,7 +307,7 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
         # The mocked TMDB item is en/8.0/2020-01-01, so it must be excluded.
         self.assertEqual(len(result['results']), 0)
 
-    async def test_uses_tmdb_discover_when_llm_titles_do_not_resolve(self):
+    async def test_returns_no_results_when_llm_does_not_select_titles(self):
         service = _make_service()
         interpretation = {
             'discover_params': {
@@ -289,33 +318,36 @@ class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
             'explanation': 'Picked high-signal disaster titles similar to your query.',
         }
         mock_tmdb = self._make_tmdb_client()
-        mock_discover = MagicMock()
-        mock_discover.discover_movies = AsyncMock(return_value=[_tmdb_item(7, '2012')])
-        mock_discover.discover_tv = AsyncMock(return_value=[])
-        mock_discover.__aenter__ = AsyncMock(return_value=mock_discover)
-        mock_discover.__aexit__ = AsyncMock(return_value=False)
-
         with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
                    AsyncMock(return_value=interpretation)), \
              patch.object(service, '_get_history', AsyncMock(return_value=[])), \
              patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
-             patch.object(service, '_make_tmdb_discover', return_value=mock_discover), \
-             patch('api_service.services.ai_search.ai_search_service.generate_search_result_rationales',
-                 AsyncMock(return_value={'2012|2020': 'Apocalyptic action energy that directly matches your catastrophic-movie request.'})), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
             MockDB.return_value.get_requested_tmdb_ids.return_value = set()
             result = await service._search_single('catastrophic movies like 2012', 'movie', None, 12)
 
-        self.assertEqual(len(result['results']), 1)
-        self.assertEqual(result['results'][0]['id'], 7)
-        self.assertEqual(result['results'][0]['source'], 'tmdb_discover')
-        self.assertEqual(
-            result['results'][0]['rationale'],
-            'Apocalyptic action energy that directly matches your catastrophic-movie request.',
-        )
+        self.assertEqual(result['results'], [])
 
 
 class TestSuggestionRationaleAssignment(unittest.IsolatedAsyncioTestCase):
+
+    async def test_contextual_fallback_names_the_title_similarity_reference(self):
+        results = [{'id': 7, 'title': 'San Andreas', 'release_date': '2015-05-29', 'rationale': ''}]
+
+        with patch(
+            'api_service.services.ai_search.ai_search_service.generate_search_result_rationales',
+            AsyncMock(return_value={}),
+        ):
+            await AiSearchService._apply_suggestion_rationales(
+                results,
+                suggestion_rationale_map={},
+                query='movies like 2012',
+                discover_params={'genres': ['Action']},
+                media_type='movie',
+                reference_titles=[{'title': '2012'}],
+            )
+
+        self.assertEqual(results[0]['rationale'], 'TMDb recommends San Andreas as similar to 2012.')
 
     async def test_apply_suggestion_rationales_uses_map_then_llm_then_contextual(self):
         results = [
@@ -785,41 +817,43 @@ class TestMakeTmdbClient(unittest.TestCase):
 class TestDiscoverParamsMapping(unittest.TestCase):
 
     def test_maps_llm_filters_to_tmdb_discover_params(self):
-        mapped = AiSearchService._map_llm_discover_params(AiSearchService._prepare_tmdb_discover_filters({
+        mapped = AiSearchService._map_llm_discover_params({
             'genres': [28, 53],
             'original_language': 'EN',
             'min_rating': 7.5,
             'year_from': 1990,
             'year_to': 1999,
-        }))
+        })
         self.assertEqual(mapped['with_genres'], '28|53')
         self.assertEqual(mapped['with_original_language'], 'en')
-        self.assertEqual(mapped['vote_average_gte'], 6.0)
-        self.assertEqual(mapped['vote_count_gte'], 200)
-        self.assertEqual(mapped['sort_by'], 'popularity.desc')
+        self.assertEqual(mapped['vote_average_gte'], 7.5)
+        self.assertNotIn('vote_count_gte', mapped)
         self.assertEqual(mapped['primary_release_date_gte'], '1990-01-01')
         self.assertEqual(mapped['primary_release_date_lte'], '1999-12-31')
 
     def test_unknown_genres_are_ignored(self):
-        mapped = AiSearchService._map_llm_discover_params(AiSearchService._prepare_tmdb_discover_filters({
+        mapped = AiSearchService._map_llm_discover_params({
             'genres': ['Disaster'],
             'year_from': 2007,
-        }))
+        })
         self.assertNotIn('with_genres', mapped)
         self.assertEqual(mapped['primary_release_date_gte'], '2007-01-01')
-        self.assertEqual(mapped['vote_average_gte'], 6.0)
-        self.assertEqual(mapped['vote_count_gte'], 200)
 
-    def test_prepare_tmdb_discover_filters_applies_quality_defaults(self):
-        prepared = AiSearchService._prepare_tmdb_discover_filters({
-            'genres': ['Action'],
-            'min_rating': 9.5,
-            'sort_by': 'vote_average.desc',
-            'vote_count_gte': 3,
-        })
-        self.assertEqual(prepared['min_rating'], 6.0)
-        self.assertEqual(prepared['sort_by'], 'popularity.desc')
-        self.assertEqual(prepared['vote_count_gte'], 200)
+    def test_passes_filters_for_formatted_tmdb_search_result(self):
+        service = _make_service()
+        item = {
+            'rating': 7.4,
+            'votes': 1000,
+            'genre_ids': [878],
+            'original_language': 'en',
+            'release_date': '2016-11-11',
+        }
+
+        self.assertTrue(service._passes_tmdb_discover_params(item, 'movie', {
+            'vote_average_gte': 7.0,
+            'vote_count_gte': 200,
+            'with_genres': '878',
+        }))
 
 
 if __name__ == '__main__':

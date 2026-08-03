@@ -148,6 +148,8 @@ Cleanup is off by default and starts safely in dry-run mode. Always run dry-run 
 
 SuggestArr includes an optional AI recommendation engine that analyzes your watch history and suggests titles that match your taste, with a short explanation for each pick.
 
+Recent watches are treated as neutral viewing context, not automatic proof that a user liked them. When TMDb metadata is available, the AI also receives each item's media type and genres.
+
 The engine works with **any OpenAI-compatible API**, so you can use a cloud provider or a local model running on your own machine.
 
 ### How to enable
@@ -170,6 +172,12 @@ The engine works with **any OpenAI-compatible API**, so you can use a cloud prov
 | **LiteLLM Proxy** | Depends on config | `http://<your-proxy>:4000` | Depends on config |
 
 **Note for Ollama users:** make sure Ollama is running and the model is pulled (`ollama pull mistral`) before saving. The API Key field can be left blank — SuggestArr will use a placeholder automatically.
+
+### Generation settings
+
+The **Temperature** field defaults to `legacy`, preserving the existing values: `0.7` for scheduled recommendations and `0.8` for AI Search. Clear the field and save to omit `temperature` from LLM requests, which is useful for models that reject it; enter a value from `0` to `2` to override both flows.
+
+**Reasoning effort** is optional (`low`, `medium`, or `high`) and is sent only for direct OpenAI GPT-5 and o-series models. It is provider/model dependent, so other OpenAI-compatible endpoints leave it out.
 
 ### Docker Compose with Ollama (example)
 
@@ -247,6 +255,18 @@ AI Search requires an LLM to be configured (same setup as AI-Powered Recommendat
 
 ## Installation
 For Docker, Unraid, source install, reverse proxy, backup, and recommended configuration instructions, see the [Installation Guide](/docs/INSTALLATION.md).
+
+## Public API and Swagger
+
+External integrations use the stable public API at `/api/v1`; dashboard
+endpoints under `/api/*` are internal. The interactive Swagger UI is served by
+the backend at `http://localhost:5000/docs` (or
+`http://localhost:5000/<SUBPATH>/docs` when `SUBPATH` is configured). The
+OpenAPI document is also available as
+`/api/v1/openapi.json` and `/api/v1/openapi.yaml`.
+
+See the [Public API v1 guide](/docs/API.md) for authentication, addresses, and
+usage details.
 
 ## Support SuggestArr ❤️
 If you enjoy SuggestArr, consider making a donation to support its continued development and help keep the project running at its best:

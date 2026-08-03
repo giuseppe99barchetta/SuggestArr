@@ -635,6 +635,7 @@ class TMDbClient(BaseHTTPClient):
             'poster_path': f"https://image.tmdb.org/t/p/w500{item.get('poster_path', 0)}" if item.get('poster_path') else None,
             'overview': item.get('overview'),
             'genre_ids': item.get('genre_ids', []),
+            'genres': item.get('genres', []),
             'backdrop_path': f"https://image.tmdb.org/t/p/w1280/{item.get('backdrop_path', 0)}" if item.get('backdrop_path') else None
         }
 

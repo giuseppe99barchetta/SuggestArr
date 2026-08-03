@@ -85,6 +85,15 @@ class SuggestedTitle(BaseModel):
     rationale: str
 
 
+class ReferenceTitle(BaseModel):
+    """A title explicitly named as a similarity reference in an AI search query."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    year: Optional[int] = None
+
+
 class SearchQueryInterpretation(BaseModel):
     """Top-level response model for :func:`interpret_search_query`."""
 
@@ -92,6 +101,7 @@ class SearchQueryInterpretation(BaseModel):
 
     discover_params: DiscoverParams
     suggested_titles: list[SuggestedTitle]
+    reference_titles: list[ReferenceTitle] = []
 
 
 # ---------------------------------------------------------------------------
