@@ -78,7 +78,6 @@ export default {
   padding: 2rem 1rem;
   text-align: center;
   margin-top: 3rem;
-  border-top: 1px solid var(--color-border-light);
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -511,9 +511,7 @@ class _AuthBlueprintBase(unittest.TestCase):
             patch('api_service.auth.middleware.DatabaseManager', self.FakeDB),
             patch('api_service.blueprints.auth.routes.load_env_vars',
                   return_value={'SETUP_COMPLETED': False}),
-            # Disable limiter in tests to avoid rate-limit interference
-            patch('api_service.blueprints.auth.routes.limiter.limit',
-                  side_effect=lambda *a, **kw: (lambda f: f)),
+            patch.object(limiter, 'enabled', False),
         ]
         for p in self._patches:
             p.start()
