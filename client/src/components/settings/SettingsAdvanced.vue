@@ -129,21 +129,14 @@
           </div>
 
           <div class="form-group">
-            <label for="llmReasoningEffort">Reasoning effort</label>
-            <select
-              id="llmReasoningEffort"
+            <BaseDropdown
               v-model="localConfig.LLM_REASONING_EFFORT"
-              class="form-control"
+              :options="reasoningEffortOptions"
+              label="Reasoning effort"
+              help-text="Sent only to direct OpenAI GPT-5 and o-series models. Other OpenAI-compatible provider/model combinations omit it."
               :disabled="isLoading"
-            >
-              <option value="">Provider/model default</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-            <small class="form-help">
-              Sent only to direct OpenAI GPT-5 and o-series models. Other OpenAI-compatible provider/model combinations omit it.
-            </small>
+              id="llmReasoningEffort"
+            />
           </div>
 
           <div class="form-group">
@@ -701,6 +694,12 @@ export default {
         { value: 'WARNING', label: 'Warning' },
         { value: 'INFO', label: 'Info' },
         { value: 'DEBUG', label: 'Debug' }
+      ],
+      reasoningEffortOptions: [
+        { value: '', label: 'Provider/model default' },
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' },
       ],
       authModeOptions: [
         { value: 'enabled', label: 'Require Login' },
