@@ -30,9 +30,9 @@ def _audit_start():
 @public_api_v1_bp.after_request
 def _audit_response(response):
     user = getattr(g, 'current_user', {})
-    logger.info('public_api method=%s path=%s status=%s user_id=%s auth=%s api_key_id=%s duration_ms=%d',
+    logger.info('public_api method=%s path=%s status=%s user_id=%s auth=%s api_key_present=%s duration_ms=%d',
                 request.method, request.path, response.status_code, user.get('id'),
-                getattr(g, 'auth_method', None), getattr(g, 'api_key_id', None),
+                getattr(g, 'auth_method', None), bool(getattr(g, 'api_key_id', None)),
                 int((time.monotonic() - getattr(g, 'public_api_started_at', time.monotonic())) * 1000))
     return response
 
