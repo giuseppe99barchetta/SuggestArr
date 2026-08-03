@@ -688,6 +688,19 @@ class TestInterpretSearchQuery(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("temperature", request_kwargs)
         self.assertEqual(request_kwargs["reasoning_effort"], "high")
 
+    async def test_title_similarity_query_anchors_the_prompt_to_its_reference(self):
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response(self._valid_interpretation_payload())
+        )
+        with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_DEFAULT_CONFIG):
+            await interpret_search_query("movies like 2012", [])
+
+        prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        self.assertIn("primary anchor", prompt)
+        self.assertIn("name the reference title", prompt)
+
     async def test_applies_generation_settings_to_ai_search_rationales(self):
         payload = json.dumps({"rationales": [
             {"title": "Dune", "year": 2021, "rationale": "Its epic science-fiction scope fits your query."}
@@ -707,6 +720,8 @@ class TestInterpretSearchQuery(unittest.IsolatedAsyncioTestCase):
         request_kwargs = mock_client.chat.completions.create.call_args.kwargs
         self.assertNotIn("temperature", request_kwargs)
         self.assertEqual(request_kwargs["reasoning_effort"], "high")
+        prompt = request_kwargs["messages"][1]["content"]
+        self.assertIn("never merely list genres, year, or rating filters", prompt)
 
     async def test_llm_validation_error_propagates_to_caller(self):
         """On persistent failure, LLMValidationError should propagate (interactive path)."""

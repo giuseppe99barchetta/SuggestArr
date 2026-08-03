@@ -784,7 +784,8 @@ async def interpret_search_query(
 The user wants to find {list_type} that match this description:
 "{query}"
 {history_section}{liked_section}
-Return ONLY a single valid JSON object (no markdown, no explanation) with exactly these two keys:
+When the query says "like", "similar to", or otherwise names a reference title, treat that title as the primary anchor. Choose titles with comparable premise, tone, stakes, themes, or style; sharing a broad genre alone is not enough.
+Return ONLY a single valid JSON object (no markdown, no explanation) with exactly these three keys:
 
 1. "discover_params": TMDB discover filter parameters:
    - "genres": list of genre names (e.g. ["Thriller", "Crime"])
@@ -805,11 +806,18 @@ Return ONLY a single valid JSON object (no markdown, no explanation) with exactl
    - "year": integer release year
    - "rationale": 1-2 sentence explanation of why it matches the user's request
 
+3. "reference_titles": titles explicitly named as a similarity reference in the query:
+   - "title": exact title as it appears on TMDB
+   - "year": optional integer release year
+   - Return an empty list unless the user asks for titles like/similar to a specific work.
+
 Rules:
 - suggested_titles must be real {list_type} verifiable on TMDB
 - Do NOT suggest titles from the user's watch history
 - When min_rating is set, suggested_titles must also respect it (only suggest highly rated {list_type})
 - Provide sensible discover_params even if you also suggest specific titles
+- Include every named title-similarity reference in reference_titles so TMDb can retrieve its direct recommendations.
+- For a title-similarity query, every rationale must name the reference title and describe a concrete shared trait; do not merely restate genres, years, or ratings.
 - All fields must be valid JSON types (no undefined, no trailing commas)
 
 Example format:
@@ -818,7 +826,8 @@ Example format:
   "suggested_titles": [
     {{"title": "Se7en", "year": 1995, "rationale": "Dark psychological thriller with a shocking twist ending."}},
     {{"title": "The Silence of the Lambs", "year": 1991, "rationale": "Acclaimed psychological thriller with strong suspense."}}
-  ]
+  ],
+  "reference_titles": []
 }}"""
 
         messages = [
@@ -935,6 +944,7 @@ async def generate_search_result_rationales(
         - Keep each rationale natural, recommendation-like, and <= 20 words.
         - Vary wording across items; do not repeat the same sentence structure.
         - Mention concrete fit to the user's query or filters when possible.
+        - When the query names a reference title, name it and explain a specific shared trait; never merely list genres, year, or rating filters.
         - Do not include markdown or any text outside JSON.
         """
 
