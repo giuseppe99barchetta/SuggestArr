@@ -240,6 +240,20 @@ class TestFetchDiscoverPage(unittest.IsolatedAsyncioTestCase):
             result = await self.disc._fetch_discover_page('movie', {}, 1)
         self.assertIn('results', result)
 
+    async def test_tv_request_uses_only_tv_date_parameters(self):
+        resp = _mock_response(200, {'results': [], 'total_pages': 1})
+        session = _mock_session(resp)
+        with patch.object(self.disc, '_get_session', AsyncMock(return_value=session)):
+            await self.disc._fetch_discover_page('tv', {
+                'first_air_date_gte': '2026-08-01',
+                'first_air_date_lte': '2030-12-12',
+            }, 1)
+
+        url = session.get.call_args.args[0]
+        self.assertIn('first_air_date.gte=2026-08-01', url)
+        self.assertIn('first_air_date.lte=2030-12-12', url)
+        self.assertNotIn('primary_release_date', url)
+
     async def test_returns_none_on_http_error(self):
         resp = _mock_response(401)
         session = _mock_session(resp)

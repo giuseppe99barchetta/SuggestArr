@@ -197,6 +197,15 @@ class TMDbDiscover:
         merged_filters = {**(filters or {}), **normalized_filters}
 
         query_params = self._build_query_params(merged_filters)
+        # The normalized year aliases add both movie and TV date keys. TMDb's
+        # discover endpoints only accept the date keys for their own media type.
+        invalid_date_keys = (
+            ('primary_release_date.gte', 'primary_release_date.lte')
+            if media_type == 'tv'
+            else ('first_air_date.gte', 'first_air_date.lte')
+        )
+        for key in invalid_date_keys:
+            query_params.pop(key, None)
         query_params['page'] = page
         query_params['api_key'] = self.api_key
 
