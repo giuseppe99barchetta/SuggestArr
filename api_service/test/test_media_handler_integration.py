@@ -397,6 +397,49 @@ def test_logger(caplog):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("service", ["jellyfin", "plex"])
+async def test_dry_run_respects_similar_content_limit_per_watched_item(service, test_logger):
+    seer_client = FakeSeerClient()
+    tmdb_client = FakeTMDbClient()
+    handler_kwargs = {
+        "seer_client": seer_client,
+        "tmdb_client": tmdb_client,
+        "logger": test_logger,
+        "max_similar_movie": 1,
+        "max_similar_tv": 1,
+        "dry_run": True,
+        "max_total_requests": 20,
+    }
+    if service == "jellyfin":
+        handler = JellyfinHandler(
+            jellyfin_client=FakeJellyfinClient(),
+            selected_users=[deepcopy(USER)],
+            **handler_kwargs,
+        )
+    else:
+        handler = PlexHandler(plex_client=FakePlexClient(), **handler_kwargs)
+
+    candidates = [
+        {"id": 101, "title": "First"},
+        {"id": 102, "title": "Second"},
+        {"id": 103, "title": "Third"},
+    ]
+    source = {"id": 1, "title": "Watched movie"}
+
+    if service == "jellyfin":
+        await handler.request_similar_media(candidates, "movie", 1, source, USER)
+    else:
+        await handler.request_similar_media(candidates, "movie", 1, source)
+
+    assert [item["tmdb_id"] for item in handler.dry_run_items if item["would_request"]] == [101]
+    assert all(
+        item["filter_results"]["similar_content_limit"]["passed"] is False
+        for item in handler.dry_run_items[1:]
+    )
+    assert handler.request_count == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("item_type", "use_user"),
     [("movie", False), ("tv", False), ("movie", True), ("tv", True)],

@@ -304,7 +304,7 @@ class PlexHandler(BaseMediaHandler):
         if self.dry_run:
             # In dry-run mode, process all candidates so the user can see every potential
             # recommendation alongside its filter results.
-            for media in media_ids:
+            for position, media in enumerate(media_ids):
                 if not isinstance(media, dict):
                     continue
                 media_id = media.get('id')
@@ -340,8 +340,17 @@ class PlexHandler(BaseMediaHandler):
                     and not already_downloaded
                     and not excluded_by_discovery
                 )
-                would_request = base_would_request and await self._reserve_request_slot()
-                if base_would_request and not would_request:
+                over_similar_limit = position >= max_items
+                if over_similar_limit:
+                    filter_results['similar_content_limit'] = {
+                        'passed': False,
+                        'label': 'Similar content limit',
+                        'reason': f'Maximum of {max_items} similar items per watched item',
+                    }
+                    would_request = False
+                else:
+                    would_request = base_would_request and await self._reserve_request_slot()
+                if base_would_request and not would_request and not over_similar_limit:
                     filter_results['request_limit'] = {
                         'passed': False,
                         'label': 'Request limit',
