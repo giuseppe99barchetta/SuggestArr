@@ -199,15 +199,22 @@
 
 .toggle-label {
   display: flex;
+  flex: 1;
+  min-width: 0;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-2xs);
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
 }
 
-.toggle-label i {
-  display: inline;
-  margin-right: 6px;
+.toggle-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.toggle-title i {
+  flex: 0 0 auto;
   color: var(--color-text-muted);
 }
 

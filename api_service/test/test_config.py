@@ -98,6 +98,7 @@ class TestConfig(unittest.TestCase):
         "LLM_MODEL": "gpt-4-0613",
         "LLM_TEMPERATURE": "legacy",
         "LLM_REASONING_EFFORT": "",
+        "SEARXNG_BASE_URL": "http://searxng:8080",
         "TRAKT_CLIENT_ID": "trakt-client-id",
         "TRAKT_CLIENT_SECRET": "trakt-client-secret",
         "TRAKT_ACCESS_TOKEN": "trakt-access-token",
@@ -790,6 +791,7 @@ class TestConfig(unittest.TestCase):
         self.assertIn('advanced', sections)
         self.assertIn('LLM_TEMPERATURE', sections['advanced'])
         self.assertIn('LLM_REASONING_EFFORT', sections['advanced'])
+        self.assertIn('SEARXNG_BASE_URL', sections['advanced'])
 
     def test_get_config_section_returns_section_keys(self):
         # lines 261-268: valid section name → dict with section keys

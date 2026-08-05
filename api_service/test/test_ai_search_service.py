@@ -855,6 +855,19 @@ class TestDiscoverParamsMapping(unittest.TestCase):
             'with_genres': '878',
         }))
 
+    def test_excludes_formatted_tv_result_before_year_range(self):
+        service = _make_service()
+        item = {
+            'id': 1,
+            'title': 'Spooks',
+            # TMDbClient stores a TV first-air date under its normalized key.
+            'release_date': '2002-05-13',
+        }
+
+        self.assertFalse(service._passes_tmdb_discover_params(item, 'tv', {
+            'primary_release_date_gte': '2026-01-01',
+        }))
+
 
 if __name__ == '__main__':
     unittest.main()

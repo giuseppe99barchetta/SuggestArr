@@ -2,7 +2,7 @@
   <div class="form-group-modern" ref="dropdownWrapper" v-bind="$attrs">
     <label v-if="label" :for="id" class="modern-label">
       <span class="label-content">
-        <span class="label-text">{{ label }}</span>
+        <span class="modern-label-text">{{ label }}</span>
         <span v-if="required" class="required-dot"></span>
       </span>
     </label>
@@ -405,7 +405,7 @@ export default {
   color: var(--color-text-secondary);
 }
 
-.label-text {
+.modern-label-text {
   color: var(--color-text-secondary);
   background-clip: text;
 }

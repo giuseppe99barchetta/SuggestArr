@@ -640,6 +640,17 @@ class TestGetRecommendationsFromHistory(unittest.IsolatedAsyncioTestCase):
         self.assertIn("NOT evidence that they enjoyed it", prompt)
         self.assertIn("genres: Science Fiction, Thriller", prompt)
 
+    async def test_includes_configured_web_context(self):
+        recs = [{"title": "Tenet", "year": 2020, "source_title": "Inception", "rationale": "ok"}]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=_mock_openai_response(_wrap_recs(recs)))
+        with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value={**_DEFAULT_CONFIG, "SEARXNG_BASE_URL": "http://searxng:8080"}), \
+             patch("api_service.services.llm.llm_service._get_web_search_context", new=AsyncMock(return_value="\\nCurrent web-search context: result\\n")):
+            await get_recommendations_from_history([{"title": "Inception", "year": 2010}], max_results=1)
+        prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        self.assertIn("Current web-search context: result", prompt)
+
 
 # ---------------------------------------------------------------------------
 # interpret_search_query (async)
@@ -700,6 +711,18 @@ class TestInterpretSearchQuery(unittest.IsolatedAsyncioTestCase):
         prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
         self.assertIn("primary anchor", prompt)
         self.assertIn("name the reference title", prompt)
+
+    async def test_includes_configured_web_context(self):
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response(self._valid_interpretation_payload())
+        )
+        with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value={**_DEFAULT_CONFIG, "SEARXNG_BASE_URL": "http://searxng:8080"}), \
+             patch("api_service.services.llm.llm_service._get_web_search_context", new=AsyncMock(return_value="\\nCurrent web-search context: result\\n")):
+            await interpret_search_query("new sci-fi films", [])
+        prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        self.assertIn("Current web-search context: result", prompt)
 
     async def test_applies_generation_settings_to_ai_search_rationales(self):
         payload = json.dumps({"rationales": [

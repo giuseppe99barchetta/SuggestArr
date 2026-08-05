@@ -774,6 +774,10 @@ Check:
 - Container can reach provider URL.
 - API key is valid when provider requires one.
 
+### Optional SearXNG web context
+
+Set **SearXNG Base URL** in Advanced Settings to the base address of a self-hosted SearXNG instance (for example `http://searxng:8080`). SuggestArr calls its `/search?format=json` endpoint and provides at most three results as untrusted context to AI Search and AI recommendations. Leave it blank to keep the existing offline/LLM-only behavior. A failed or slow SearXNG request is ignored after five seconds.
+
 ### Need more logs
 
 Temporarily set:
