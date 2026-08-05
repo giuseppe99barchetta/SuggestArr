@@ -940,7 +940,7 @@ export default {
         ? this.localConfig.AUTH_MODE
         : 'enabled';
 
-      if (temperature && (Number.isNaN(Number(temperature)) || Number(temperature) < 0 || Number(temperature) > 2)) {
+      if (temperature && temperature !== 'legacy' && (Number.isNaN(Number(temperature)) || Number(temperature) < 0 || Number(temperature) > 2)) {
         this.$toast.error('Temperature must be legacy, blank, or a number from 0 to 2.');
         return;
       }
