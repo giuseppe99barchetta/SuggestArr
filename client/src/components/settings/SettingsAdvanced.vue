@@ -28,10 +28,8 @@
             v-model="localConfig.ENABLE_BETA_FEATURES"
             :disabled="isLoading"
             label="Enable beta features"
+            description="Enable experimental features that are still in development"
           />
-          <small class="form-help">
-            Enable experimental features that are still in development
-          </small>
         </div>
       
         <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES }">
@@ -39,10 +37,8 @@
             v-model="localConfig.ENABLE_ADVANCED_ALGORITHM"
             :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES"
             label="Use advanced suggestion algorithm"
+            description="Use an AI-powered algorithm for hyper-personalized content suggestions based on watch history."
           />
-          <small class="form-help">
-            Use an AI-powered algorithm for hyper-personalized content suggestions based on watch history.
-          </small>
         </div>
 
       </div>
@@ -151,10 +147,12 @@
                     v-model="localConfig.LLM_REASONING_EFFORT"
                     :options="reasoningEffortOptions"
                     label="Reasoning effort"
-                    help-text="Sent only to direct OpenAI GPT-5 and o-series models. Other OpenAI-compatible provider/model combinations omit it."
                     :disabled="isLoading"
                     id="llmReasoningEffort"
                   />
+                  <small class="form-help">
+                    Sent only to direct OpenAI GPT-5 and o-series models. Other OpenAI-compatible provider/model combinations omit it.
+                  </small>
                 </div>
 
                 <div class="form-group">
@@ -365,24 +363,24 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           Debug Settings
         </h3>
 
-        <BaseDropdown
-          v-model="localConfig.LOG_LEVEL"
-          :options="logLevelOptions"
-          label="Log Level"
-          help-text="Set the verbosity of application logs"
-          :disabled="isLoading"
-          id="logLevel"
-        />
+        <div class="form-group">
+          <BaseDropdown
+            v-model="localConfig.LOG_LEVEL"
+            :options="logLevelOptions"
+            label="Log Level"
+            :disabled="isLoading"
+            id="logLevel"
+          />
+          <small class="form-help">Set the verbosity of application logs</small>
+        </div>
 
         <div class="form-group">
           <BaseCheckbox
             v-model="localConfig.ENABLE_DEBUG_MODE"
             :disabled="isLoading"
             label="Enable debug mode"
+            description="Enable detailed logging and debugging information"
           />
-          <small class="form-help">
-            Enable detailed logging and debugging information
-          </small>
         </div>
 
         <div class="form-group">
@@ -390,10 +388,8 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             v-model="localConfig.ENABLE_PERFORMANCE_MONITORING"
             :disabled="isLoading"
             label="Enable performance monitoring"
+            description="Track performance metrics for optimization"
           />
-          <small class="form-help">
-            Track performance metrics for optimization
-          </small>
         </div>
 
         <div class="form-group">
@@ -402,10 +398,8 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             @update:model-value="localConfig.ENABLE_VISUAL_EFFECTS = !$event"
             :disabled="isLoading"
             label="Disable visual effects (blur)"
+            description="Check this box to improve UI performance and frame rates by turning off heavy CSS background blurs."
           />
-          <small class="form-help">
-            Check this box to improve UI performance and frame rates by turning off heavy CSS background blurs.
-          </small>
         </div>
 
         <div class="form-group">
@@ -413,10 +407,8 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             v-model="localConfig.ENABLE_STATIC_BACKGROUND"
             :disabled="isLoading"
             label="Enable static colored background"
+            description="Override the app's default rotating background pictures with a static color."
           />
-          <small class="form-help">
-            Override the app's default rotating background pictures with a static color.
-          </small>
         </div>
 
         <div class="form-group" v-if="localConfig.ENABLE_STATIC_BACKGROUND">
@@ -489,10 +481,8 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             v-model="localConfig.ENABLE_API_CACHING"
             :disabled="isLoading"
             label="Enable TMDb response caching"
+            description="Cache repeated TMDb metadata requests to reduce external API calls"
           />
-          <small class="form-help">
-            Cache repeated TMDb metadata requests to reduce external API calls
-          </small>
         </div>
 
         <div class="form-group">
@@ -1118,8 +1108,10 @@ export default {
 .form-group label:not(.base-checkbox) {
   display: block;
   margin-bottom: var(--spacing-xs);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
+  line-height: var(--line-height-normal);
 }
 
 .form-control {
@@ -1152,10 +1144,10 @@ export default {
 
 .form-help {
   display: block;
-  margin-top: 0.25rem;
-  font-size: 0.875rem;
+  margin-top: var(--spacing-2xs);
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
-  line-height: 1.4;
+  line-height: var(--line-height-normal);
 }
 
 .request-workflow-settings h3 {

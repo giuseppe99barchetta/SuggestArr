@@ -73,8 +73,7 @@
         <div v-if="showAdvanced" class="advanced-panel">
           <label class="toggle-option">
             <span class="toggle-label">
-              <i class="fas fa-history"></i>
-              Use viewing history
+              <span class="toggle-title"><i class="fas fa-history"></i>Use viewing history</span>
               <span class="toggle-hint">Let the AI personalise results based on what you've already watched</span>
             </span>
             <div class="toggle-switch" :class="{ on: useHistory }" @click="useHistory = !useHistory">
@@ -83,8 +82,7 @@
           </label>
           <label class="toggle-option">
             <span class="toggle-label">
-              <i class="fas fa-eye-slash"></i>
-              Exclude already watched
+              <span class="toggle-title"><i class="fas fa-eye-slash"></i>Exclude already watched</span>
               <span class="toggle-hint">Hide titles you've already seen from results</span>
             </span>
             <div class="toggle-switch" :class="{ on: excludeWatched }" @click="excludeWatched = !excludeWatched">
@@ -93,8 +91,7 @@
           </label>
           <label class="toggle-option">
             <span class="toggle-label">
-              <i class="fas fa-redo"></i>
-              Hide already-recommended
+              <span class="toggle-title"><i class="fas fa-redo"></i>Hide already-recommended</span>
               <span class="toggle-hint">Don't show titles that appeared in any previous AI search</span>
             </span>
             <div class="toggle-switch" :class="{ on: excludeSeen }" @click="excludeSeen = !excludeSeen">
@@ -110,8 +107,7 @@
           </div>
           <div class="number-option">
             <span class="toggle-label">
-              <i class="fas fa-list-ol"></i>
-              Max results
+              <span class="toggle-title"><i class="fas fa-list-ol"></i>Max results</span>
               <span class="toggle-hint">Number of results to return (4–24)</span>
             </span>
             <input
