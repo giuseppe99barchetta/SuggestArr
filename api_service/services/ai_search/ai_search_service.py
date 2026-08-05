@@ -418,15 +418,19 @@ class AiSearchService:
             except (TypeError, ValueError):
                 return False
 
-        item_date = item.get("release_date") if media_type == "movie" else item.get("first_air_date")
+        # TMDbClient formats both movies and TV results with ``release_date``.
+        # Keep the raw TV key as a fallback for callers that pass TMDb payloads.
+        item_date = item.get("release_date") or (
+            item.get("first_air_date") if media_type == "tv" else None
+        )
         normalized_item_date = self._normalize_date_string(item_date)
 
         gte_date = self._normalize_date_string(tmdb_discover_params.get("primary_release_date_gte"))
-        if gte_date and normalized_item_date and normalized_item_date < gte_date:
+        if gte_date and (not normalized_item_date or normalized_item_date < gte_date):
             return False
 
         lte_date = self._normalize_date_string(tmdb_discover_params.get("primary_release_date_lte"))
-        if lte_date and normalized_item_date and normalized_item_date > lte_date:
+        if lte_date and (not normalized_item_date or normalized_item_date > lte_date):
             return False
 
         return True
