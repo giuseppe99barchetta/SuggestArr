@@ -49,27 +49,44 @@ jobs:
 
           git checkout -B deploy origin/main
 
-          mapfile -t branches < <(
+          collect_branches() {
             git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
               | sed 's|^origin/||' \
-              | grep -E '^(feat|fix|ci)/' \
+              | grep -E "$1" \
               | sort -u
-          )
+          }
+
+          branches=()
+          while IFS= read -r branch; do branches+=("$branch"); done < <(collect_branches '^ci/')
+          while IFS= read -r branch; do branches+=("$branch"); done < <(collect_branches '^fix/')
+          while IFS= read -r branch; do branches+=("$branch"); done < <(collect_branches '^feat/')
 
           if [ "${#branches[@]}" -eq 0 ]; then
             echo "No topic branches to merge; deploy will match main."
           fi
 
+          merged=()
+          skipped=()
           for branch in "${branches[@]}"; do
-            echo "Merging origin/${branch}"
-            if ! git merge --no-ff --no-edit "origin/${branch}"; then
-              echo "::error::Merge conflict while merging origin/${branch} into deploy"
-              git merge --abort || true
-              exit 1
+            if git merge-base --is-ancestor "origin/${branch}" HEAD 2>/dev/null; then
+              echo "Skipping origin/${branch} (already contained in deploy)"
+              skipped+=("$branch")
+              continue
             fi
+
+            echo "Merging origin/${branch}"
+            if git merge --no-ff --no-edit "origin/${branch}"; then
+              merged+=("$branch")
+              continue
+            fi
+
+            echo "::warning::Merge conflict while merging origin/${branch}; skipping superseded branch"
+            git merge --abort || true
+            skipped+=("$branch")
           done
 
-          echo "Merged branches: ${branches[*]:-none}"
+          echo "Merged branches: ${merged[*]:-none}"
+          echo "Skipped branches: ${skipped[*]:-none}"
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           git push --force origin deploy
 
