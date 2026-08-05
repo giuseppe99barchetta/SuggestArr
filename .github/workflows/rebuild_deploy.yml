@@ -58,8 +58,8 @@ jobs:
 
           branches=()
           while IFS= read -r branch; do branches+=("$branch"); done < <(collect_branches '^ci/')
-          while IFS= read -r branch; do branches+=("$branch"); done < <(collect_branches '^fix/')
           while IFS= read -r branch; do branches+=("$branch"); done < <(collect_branches '^feat/')
+          while IFS= read -r branch; do branches+=("$branch"); done < <(collect_branches '^fix/')
 
           if [ "${#branches[@]}" -eq 0 ]; then
             echo "No topic branches to merge; deploy will match main."
@@ -80,9 +80,15 @@ jobs:
               continue
             fi
 
-            echo "::warning::Merge conflict while merging origin/${branch}; skipping superseded branch"
             git merge --abort || true
-            skipped+=("$branch")
+            if [[ "$branch" == fix/* ]]; then
+              echo "::warning::Merge conflict while merging origin/${branch}; skipping superseded fix branch"
+              skipped+=("$branch")
+              continue
+            fi
+
+            echo "::error::Merge conflict while merging origin/${branch} into deploy"
+            exit 1
           done
 
           echo "Merged branches: ${merged[*]:-none}"
