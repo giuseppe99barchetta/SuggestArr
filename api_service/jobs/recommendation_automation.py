@@ -13,6 +13,7 @@ from api_service.db.job_repository import JobRepository
 from api_service.handler.jellyfin_handler import JellyfinHandler
 from api_service.handler.plex_handler import PlexHandler
 from api_service.services.trakt.media_user_augmentor import MediaUserTraktAugmentor
+from api_service.services.simkl.media_user_augmentor import MediaUserSimklAugmentor
 from api_service.services.filter_normalization import normalize_filters
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.seer.seer_client import SeerClient
@@ -242,13 +243,17 @@ class RecommendationAutomation:
         honor_seer_discovery = _resolve_honor_seer_discovery(job_filters, self.env_vars)
         seer_discovered_ids = self._get_seer_discovered_tmdb_ids() if honor_seer_discovery else set()
 
-        # Trakt seed / exclusion flags — job overrides env, default True
+        # Watch-tracker seed / exclusion flags — job overrides env, default True.
+        # Trakt and Simkl are toggled independently so a user who links both can
+        # seed from one and exclude from the other.
         _resolve_bool = lambda key, env_key, default=True: (
             bool(job_filters[key]) if key in job_filters
             else bool(self.env_vars.get(env_key, default))
         )
         trakt_use_as_seed = _resolve_bool('use_trakt_as_seed', 'TRAKT_USE_AS_SEED')
         trakt_use_as_exclusion = _resolve_bool('use_trakt_as_exclusion', 'TRAKT_USE_AS_EXCLUSION')
+        simkl_use_as_seed = _resolve_bool('use_simkl_as_seed', 'SIMKL_USE_AS_SEED')
+        simkl_use_as_exclusion = _resolve_bool('use_simkl_as_exclusion', 'SIMKL_USE_AS_EXCLUSION')
 
         # Language filter
         filter_language = []
@@ -389,6 +394,8 @@ class RecommendationAutomation:
                 dry_run=dry_run,
                 trakt_use_as_seed=trakt_use_as_seed,
                 trakt_use_as_exclusion=trakt_use_as_exclusion,
+                simkl_use_as_seed=simkl_use_as_seed,
+                simkl_use_as_exclusion=simkl_use_as_exclusion,
             )
         elif selected_service == 'plex':
             await self._init_plex_handler(
@@ -400,6 +407,8 @@ class RecommendationAutomation:
                 dry_run=dry_run,
                 trakt_use_as_seed=trakt_use_as_seed,
                 trakt_use_as_exclusion=trakt_use_as_exclusion,
+                simkl_use_as_seed=simkl_use_as_seed,
+                simkl_use_as_exclusion=simkl_use_as_exclusion,
             )
         else:
             raise ValueError(f"Unsupported service: {selected_service}")
@@ -444,6 +453,8 @@ class RecommendationAutomation:
         dry_run=False,
         trakt_use_as_seed=True,
         trakt_use_as_exclusion=True,
+        simkl_use_as_seed=True,
+        simkl_use_as_exclusion=True,
     ):
         """Initialize Jellyfin handler."""
         self.logger.info("Initializing Jellyfin client")
@@ -478,6 +489,11 @@ class RecommendationAutomation:
                 use_as_seed=trakt_use_as_seed,
                 use_as_exclusion=trakt_use_as_exclusion,
             ),
+            simkl_augmentor=MediaUserSimklAugmentor.from_env(
+                self.env_vars, max_content,
+                use_as_seed=simkl_use_as_seed,
+                use_as_exclusion=simkl_use_as_exclusion,
+            ),
             max_content=max_content,
         )
         self.logger.info("Jellyfin handler initialized")
@@ -491,6 +507,8 @@ class RecommendationAutomation:
         dry_run=False,
         trakt_use_as_seed=True,
         trakt_use_as_exclusion=True,
+        simkl_use_as_seed=True,
+        simkl_use_as_exclusion=True,
     ):
         """Initialize Plex handler."""
         self.logger.info("Initializing Plex client")
@@ -525,6 +543,11 @@ class RecommendationAutomation:
                 self.env_vars, max_content,
                 use_as_seed=trakt_use_as_seed,
                 use_as_exclusion=trakt_use_as_exclusion,
+            ),
+            simkl_augmentor=MediaUserSimklAugmentor.from_env(
+                self.env_vars, max_content,
+                use_as_seed=simkl_use_as_seed,
+                use_as_exclusion=simkl_use_as_exclusion,
             ),
             selected_users=selected_users,
             max_content=max_content,

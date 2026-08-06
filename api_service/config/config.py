@@ -21,6 +21,9 @@ INTEGRATION_TO_FLAT: dict = {
     'omdb':     {'api_key': 'OMDB_API_KEY'},
     'openai':   {'api_key': 'OPENAI_API_KEY', 'base_url': 'OPENAI_BASE_URL', 'model': 'LLM_MODEL'},
     'trakt':    {'client_id': 'TRAKT_CLIENT_ID', 'client_secret': 'TRAKT_CLIENT_SECRET'},
+    # Simkl's PIN flow authenticates with the client id alone; there is no
+    # client secret to store.
+    'simkl':    {'client_id': 'SIMKL_CLIENT_ID'},
 }
 
 _CONFIG_CACHE_LOCK = threading.Lock()
@@ -227,6 +230,7 @@ def get_default_values():
         'TRAKT_ACCESS_TOKEN': lambda: '',
         'TRAKT_REFRESH_TOKEN': lambda: '',
         'TRAKT_EXPIRES_AT': lambda: None,
+        'SIMKL_CLIENT_ID': lambda: '',
         'CACHE_TTL': lambda: 24,
         'MAX_CACHE_SIZE': lambda: 100,
         'API_TIMEOUT': lambda: 30,
@@ -337,6 +341,7 @@ def get_config_sections():
                     'SEER_SESSION_TOKEN', 'SEER_ANIME_PROFILE_CONFIG', 'SEER_REQUEST_DELAY',
                     'TRAKT_CLIENT_ID', 'TRAKT_CLIENT_SECRET', 'TRAKT_ACCESS_TOKEN',
                     'TRAKT_REFRESH_TOKEN', 'TRAKT_EXPIRES_AT',
+                    'SIMKL_CLIENT_ID',
                     'SELECTED_USERS'],
         'database': ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
                     'DB_MIN_CONNECTIONS', 'DB_MAX_CONNECTIONS', 'DB_MAX_IDLE_TIME', 

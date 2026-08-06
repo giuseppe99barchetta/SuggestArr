@@ -35,6 +35,10 @@ from api_service.auth.auth_service import AuthService, MIN_PASSWORD_LENGTH
 from api_service.auth.middleware import require_role
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.plex.account_resolver import (
+    canonical_plex_account_id,
+    list_plex_server_users,
+)
 
 logger = LoggerManager.get_logger("UsersRoute")
 
@@ -616,6 +620,51 @@ def plex_oauth_start():
     return jsonify({"pin_id": pin_id, "auth_url": auth_url}), 200
 
 
+def _reconcile_plex_account_id(db, plex_account_id: str, plex_username: str) -> str:
+    """Map a plex.tv account id onto the id this Plex server uses.
+
+    The server owner is a local account, so their plex.tv id is absent from
+    the server's user list and a profile stored under it matches no monitored
+    user. When the ids differ, any identity already created under the plex.tv
+    id is renamed rather than abandoned, so watch-tracker links made before
+    this reconciliation keep working without re-linking.
+    """
+    resolved = canonical_plex_account_id(
+        list_plex_server_users(), plex_account_id, plex_username
+    )
+    if resolved == str(plex_account_id):
+        return resolved
+
+    # The mapping can only be a username match, which is a heuristic. Handing
+    # this caller an id another account already holds would merge two people's
+    # requests and watch history, so the unmapped id — which resolves to
+    # nothing — is the safer of the two wrong answers.
+    current_user_id = _current_user_id()
+    for profile in db.get_media_profiles_by_provider("plex"):
+        held_by_someone_else = (
+            str(profile.get("external_user_id")) == resolved
+            and profile["user_id"] != current_user_id
+        )
+        if held_by_someone_else:
+            logger.warning(
+                "Plex account %s maps to server id %s, but user id=%s is already "
+                "linked to it; storing the plex.tv id instead",
+                plex_account_id, resolved, profile["user_id"],
+            )
+            return str(plex_account_id)
+
+    logger.info(
+        "Plex account %s is %s on this server; storing the server id",
+        plex_account_id, resolved,
+    )
+    renamed = db.rename_media_user_identity("plex", plex_account_id, resolved)
+    if renamed is None:
+        logger.debug(
+            "No identity to move from plex/%s to plex/%s", plex_account_id, resolved,
+        )
+    return resolved
+
+
 # ---------------------------------------------------------------------------
 # Plex OAuth: poll
 # ---------------------------------------------------------------------------
@@ -670,15 +719,16 @@ def plex_oauth_poll():
         logger.error("Failed to fetch Plex user info: %s", exc)
         return jsonify({"error": "Could not retrieve Plex user info"}), 502
 
-    external_user_id = str(user_body.get("id", ""))
+    plex_account_id = str(user_body.get("id", ""))
     external_username = user_body.get("username") or user_body.get("email") or "unknown"
 
     db = DatabaseManager()
+    external_user_id = _reconcile_plex_account_id(db, plex_account_id, external_username)
     db.create_user_media_profile(
         _current_user_id(), "plex", external_user_id, external_username, access_token=auth_token
     )
     logger.info(
-        "User id=%d linked Plex account: %r (plex_id=%s)",
-        _current_user_id(), external_username, external_user_id,
+        "User id=%d linked Plex account: %r (plex_id=%s, stored_id=%s)",
+        _current_user_id(), external_username, plex_account_id, external_user_id,
     )
     return jsonify({"status": "linked", "external_username": external_username}), 200

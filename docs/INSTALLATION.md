@@ -14,6 +14,7 @@ Before installing, prepare:
 - Optional: OMDb API key for IMDb-based filters.
 - Optional: OpenAI-compatible LLM provider for AI recommendations and AI Search.
 - Optional: Trakt OAuth app credentials for per-user Trakt watch-history integration.
+- Optional: Simkl app Client ID for per-user Simkl watch-history integration.
 
 ## Recommended Install: Docker Compose
 
@@ -82,10 +83,11 @@ When opening SuggestArr for the first time:
 6. Enter Seer URL and API key.
 7. Select users and libraries.
 8. Optional: add Trakt Client ID and Client Secret in Services > Trakt.
-9. Save configuration.
-10. Have each user link their media-server account from Profile.
-11. Optional: have each user link their Trakt account from Profile > Trakt Account.
-12. Create or adjust jobs from the Jobs page. 
+9. Optional: add a Simkl Client ID in Services > Simkl.
+10. Save configuration.
+11. Have each user link their media-server account from Profile.
+12. Optional: have each user link their Trakt account from Profile > Trakt Account, their Simkl account from Profile > Simkl Account, or both.
+13. Create or adjust jobs from the Jobs page. 
 
 Use internal network URLs when running everything in Docker. Example:
 
@@ -109,20 +111,20 @@ The screenshots below show the main configuration areas. Values shown in the ima
 
 ### Services
 
-Use this page to configure TMDb, optional OMDb, your media server, Trakt app credentials, and Seer.
+Use this page to configure TMDb, optional OMDb, your media server, Trakt and Simkl app credentials, and Seer.
 
-For Trakt, Services stores only the shared app-level OAuth credentials. Individual Trakt accounts are linked by each user from their Profile page.
+For Trakt and Simkl, Services stores only the shared app-level credentials. Individual accounts are linked by each user from their Profile page. Simkl needs only a Client ID, because its PIN flow has no client secret.
 
 ![SuggestArr services configuration](docs/assets/suggestarr-config-services.png)
 
 ### Users and Profile
 
-Use this page to manage local accounts, assign media-server accounts, and link personal Trakt accounts.
+Use this page to manage local accounts, assign media-server accounts, and link personal Trakt and Simkl accounts.
 
 - Admins use Users to create accounts, control permissions, and assign media accounts.
 - Each user uses Profile to link their own Plex, Jellyfin, or Emby account.
-- After the media account is linked, the user can link their own Trakt account from Profile > Trakt Account.
-- Opening Recent Trakt Preview automatically fetches recent Trakt items and shows a loading icon while it loads.
+- After the media account is linked, the user can link their own Trakt account from Profile > Trakt Account and their Simkl account from Profile > Simkl Account. Both can be linked at the same time.
+- Opening Recent Trakt Preview automatically fetches recent Trakt items and shows a loading icon while it loads. Recent Simkl Preview behaves the same way, reading from the locally cached history.
 
 ### Jobs
 
@@ -367,6 +369,86 @@ Recommendation jobs can use linked Trakt accounts:
 - Exclude Trakt Watched: watched Trakt items can be skipped.
 
 If no linked Trakt accounts exist, job filters will warn that Trakt is not usable yet. Media-server history still works without Trakt.
+
+## Simkl Integration
+
+Simkl support is optional and works like Trakt: it adds each user's own watch history to recommendation jobs. A user can link Trakt and Simkl simultaneously; titles reported by both are merged rather than counted twice.
+
+### What is stored
+
+SuggestArr stores:
+
+- An app-level Simkl Client ID in Services. There is no client secret — the PIN flow does not use one.
+- Per-media-user Simkl access tokens in the database. Simkl issues no refresh tokens.
+- The linked Simkl username and status.
+- A local cache of the account's watch history (see [Why Simkl history is cached](#why-simkl-history-is-cached)).
+
+SuggestArr does not expose Simkl access tokens in API responses or frontend lists.
+
+### Create a Simkl app
+
+1. Open <https://simkl.com/settings/developer/>.
+2. Create a new application. For Redirect URI, enter `urn:ietf:wg:oauth:2.0:oob`.
+3. Copy the Client ID.
+4. In SuggestArr, open Services > Simkl.
+5. Paste the Client ID.
+6. Save.
+
+Simkl's form asks for a Redirect URI. Enter `urn:ietf:wg:oauth:2.0:oob`, which is the value Simkl's own help text gives for PIN authentication. SuggestArr never sends a redirect, because the user approves the PIN on whatever device is convenient and SuggestArr polls for the result — so no SuggestArr URL needs to be reachable from the internet.
+
+### Link media-server users first
+
+As with Trakt, Simkl links attach to a media-server profile. If a user has no linked media-server account, Profile > Simkl Account will ask them to link the media server first.
+
+### Let users link Simkl
+
+1. Log in as the user.
+2. Open Profile.
+3. Find Simkl Account.
+4. Click Link Simkl.
+5. SuggestArr shows a PIN. Enter it at <https://simkl.com/pin> and approve access.
+6. Wait for SuggestArr to show the linked Simkl username.
+
+The PIN is valid for about fifteen minutes. **Cancel** abandons the attempt and clears the pending code on the server so it cannot be used later.
+
+Admins can reach the same embedded profile area from Users.
+
+### Verify with Recent Simkl Preview
+
+1. Open Profile > Simkl Account.
+2. Expand Recent Simkl Preview.
+
+The first sync runs in the background after linking, so the panel may say it is still syncing before any titles appear. Once the sync completes, an empty panel means the account genuinely has no watch history.
+
+If no items appear after the first sync:
+
+- Confirm the Simkl account has watch history.
+- Confirm the media-server account is linked.
+- Confirm the Simkl Client ID is saved in Services.
+- Check Logs for Simkl API errors.
+
+### Use Simkl in jobs
+
+Recommendation jobs have their own Simkl filters, independent of the Trakt ones:
+
+- Use Simkl as Seed: titles marked *watching* or *completed* can seed recommendations.
+- Exclude Simkl Watched: *completed* titles can be skipped. Titles still in progress are deliberately not skipped, so a show you are midway through can still produce suggestions.
+
+Movies, TV, and anime are all read. Anime is treated as TV for recommendation purposes.
+
+### Why Simkl history is cached
+
+Simkl asks applications not to poll its history endpoints on a schedule and suspends client IDs that do, without warning. SuggestArr therefore checks a cheap activity-timestamp endpoint first and only re-reads history when that timestamp has actually moved, keeping a local cache in between. Jobs read the cache rather than the API, so total Simkl traffic is bounded by elapsed time rather than by how many jobs and users you have.
+
+### Re-link required
+
+Simkl access tokens cannot be refreshed. If Simkl rejects one — in practice because the app was removed at <https://simkl.com/settings/connected-apps/> — the account shows **Re-link required** and the user runs the PIN flow again.
+
+If the Simkl **Client ID** itself is rejected, that is an install-wide problem rather than one user's, and SuggestArr shows it as a separate banner on the Simkl panel. It means the ID is wrong, the app was suspended, or it is over its request limit.
+
+### Unlinking does not revoke access at Simkl
+
+Simkl publishes no token-revocation endpoint. Unlinking deletes SuggestArr's copy of the token and the cached history, but the authorization stays live on Simkl's side until the user removes SuggestArr at <https://simkl.com/settings/connected-apps/>. The unlink dialog says so.
 
 ## Cleanup Automation
 
@@ -645,7 +727,7 @@ In the footer of the web interface, admins can use:
 
 Use this when you want to start a new SuggestArr instance and restore the same configuration without manually entering every value again.
 
-The Dashboard uses `GET /api/config/export` and `POST /api/config/import`. This is the **canonical** backup path and restores integrations, settings, and per-user Trakt data.
+The Dashboard uses `GET /api/config/export` and `POST /api/config/import`. This is the **canonical** backup path and restores integrations, settings, and per-user Trakt and Simkl data.
 
 #### What is included
 
@@ -653,9 +735,11 @@ Each export contains:
 
 - `integrations`: service credentials from the database (URLs, API keys, tokens, and similar fields).
 - `settings`: non-integration configuration from `config.yaml` (filters, scheduling, feature flags, and similar values).
-- `media_users`: media-server user identities and per-user Trakt link metadata (username, status, source settings).
+- `media_users`: media-server user identities and per-user Trakt and Simkl link metadata (username, status, source settings).
 
-Trakt app credentials remain under `integrations.trakt`. Per-user OAuth tokens are stored under `media_users[].trakt.oauth_tokens`.
+Trakt app credentials remain under `integrations.trakt` and the Simkl Client ID under `integrations.simkl`. Per-user tokens are stored under `media_users[].trakt.oauth_tokens` and `media_users[].simkl.oauth_tokens`. A user linked to only one of the two still round-trips that link.
+
+The cached Simkl watch history is deliberately left out. It is derived data that the next sync rebuilds, and including it would bloat every snapshot for no gain.
 
 Config schema version is `2`. Older exports without `media_users` still import normally.
 
@@ -663,7 +747,7 @@ Config schema version is `2`. Older exports without `media_users` still import n
 
 By default, exports are **safe for troubleshooting**:
 
-- Secret fields are redacted as `***` (API keys, tokens, passwords, Trakt `client_secret`, and similar values).
+- Secret fields are redacted as `***` (API keys, tokens, passwords, Trakt `client_secret`, and similar values). The Simkl entry carries only `access_token`, since Simkl issues no refresh token.
 - When OAuth tokens exist, `oauth_tokens` is still present but redacted:
 
 ```json
@@ -674,7 +758,7 @@ By default, exports are **safe for troubleshooting**:
 }
 ```
 
-To download a **fully restorable backup**, check **Include all secrets (full backup)** in the export dialog. This sends `include_secrets=true` and includes live credentials plus Trakt OAuth tokens. SuggestArr shows a warning when secrets are included.
+To download a **fully restorable backup**, check **Include all secrets (full backup)** in the export dialog. This sends `include_secrets=true` and includes live credentials plus Trakt and Simkl tokens. SuggestArr shows a warning when secrets are included.
 
 Treat full backups like password files. Do not attach them to GitHub issues, Discord, or other public channels.
 
@@ -683,11 +767,11 @@ Treat full backups like password files. Do not attach them to GitHub issues, Dis
 Import merges the snapshot into the running instance:
 
 - Redacted `***` values do **not** overwrite existing secrets.
-- If you import a safe export on a fresh instance, service credentials and Trakt OAuth tokens must be re-entered or re-linked.
+- If you import a safe export on a fresh instance, service credentials and Trakt and Simkl tokens must be re-entered or re-linked.
 - If you import a safe export on an instance that already has credentials, existing secrets are preserved.
-- A full backup import restores credentials and Trakt tokens without re-linking.
+- A full backup import restores credentials and Trakt and Simkl tokens without re-linking.
 
-After importing a safe export, Trakt links may still show as connected in metadata, but Trakt features will not work until each user links Trakt again unless the import included live OAuth tokens.
+After importing a safe export, links may still show as connected in metadata, but Trakt and Simkl features will not work until each user links again unless the import included live tokens.
 
 #### Recommended flow
 
@@ -700,12 +784,12 @@ After importing a safe export, Trakt links may still show as connected in metada
 7. Click `Import` in the footer.
 8. Select the exported JSON file.
 9. Review services, database, jobs, and advanced settings.
-10. Re-link Trakt accounts if you imported a safe export without OAuth tokens.
+10. Re-link Trakt and Simkl accounts if you imported a safe export without tokens.
 11. Save or restart the container if needed.
 
 #### API note
 
-`GET /api/admin/export-config` is a separate, older endpoint. It exports integrations and settings only and does **not** include `media_users` or restore them on import. Use the Dashboard export/import flow (or `/api/config/export` directly) when Trakt user links must move with the instance.
+`GET /api/admin/export-config` is a separate, older endpoint. It exports integrations and settings only and does **not** include `media_users` or restore them on import. Use the Dashboard export/import flow (or `/api/config/export` directly) when Trakt or Simkl user links must move with the instance.
 
 ### Filesystem Backup
 

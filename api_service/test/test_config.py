@@ -104,6 +104,7 @@ class TestConfig(unittest.TestCase):
         "TRAKT_ACCESS_TOKEN": "trakt-access-token",
         "TRAKT_REFRESH_TOKEN": "trakt-refresh-token",
         "TRAKT_EXPIRES_AT": 1234567890,
+        "SIMKL_CLIENT_ID": "simkl-client-id",
         "SEER_REQUEST_DELAY": 0.5,
         "FILTER_INCLUDE_TVOD": "false",
         "ALLOW_REGISTRATION": False,

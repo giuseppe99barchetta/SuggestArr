@@ -338,6 +338,14 @@ export default {
           optional: true,
         },
         {
+          id: 'simkl',
+          label: 'Simkl',
+          description: 'Augment recommendations with your Simkl watch history.',
+          component: SettingsServices,
+          wizardSection: 'simkl',
+          optional: true,
+        },
+        {
           id: 'scheduling',
           label: 'Schedule',
           description: 'Set how often SuggestArr automatically finds and requests content for you.',
@@ -540,6 +548,7 @@ export default {
         }
       }
       if (cfg.TRAKT_CLIENT_ID && cfg.TRAKT_CLIENT_SECRET) stepValidity.value.trakt = true;
+      if (cfg.SIMKL_CLIENT_ID) stepValidity.value.simkl = true;
     }
 
     async function handleFileImport(event) {

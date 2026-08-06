@@ -7,6 +7,11 @@ from abc import ABC, abstractmethod
 from api_service.services.llm.llm_service import is_llm_configured, get_recommendations_from_history
 from api_service.config.config import load_env_vars
 
+# Seed origins that came from a linked watch-tracker account rather than from
+# the media server itself. Requests carry the origin so the UI can say where a
+# suggestion came from.
+_WATCH_TRACKER_ORIGINS = frozenset({"trakt_history", "simkl_history"})
+
 
 class BaseMediaHandler(ABC):
     """
@@ -28,7 +33,7 @@ class BaseMediaHandler(ABC):
                  max_similar_movie, max_similar_tv, library_anime_map=None,
                  use_llm=None, request_delay=0, honor_seer_discovery=False,
                  seer_discovered_ids=None, dry_run=False, max_total_requests=None,
-                 trakt_augmentor=None, max_content=10):
+                 trakt_augmentor=None, max_content=10, simkl_augmentor=None):
         """
         Initialize base media handler.
         
@@ -48,6 +53,9 @@ class BaseMediaHandler(ABC):
             trakt_augmentor: Optional MediaUserTraktAugmentor used to add Trakt
                 watch-history seeds and merge fully-watched IDs into the skip set
             max_content: Max seeds to process after merging server + Trakt sources
+            simkl_augmentor: Optional MediaUserSimklAugmentor, the Simkl
+                equivalent of ``trakt_augmentor``. Both may be active at once;
+                overlapping titles collapse during seed merging.
         """
         self.seer_client = seer_client
         self.tmdb_client = tmdb_client
@@ -74,6 +82,7 @@ class BaseMediaHandler(ABC):
         self._request_slots_reserved = 0
         self._request_limit_lock = asyncio.Lock()
         self.trakt_augmentor = trakt_augmentor
+        self.simkl_augmentor = simkl_augmentor
         
         # Determine LLM mode
         if use_llm is not None:
@@ -115,16 +124,18 @@ class BaseMediaHandler(ABC):
         async with self._request_limit_lock:
             self._request_slots_reserved = max(self._request_slots_reserved - 1, 0)
 
-    async def _augment_user_trakt(self, media_user_identity_id):
-        """Fetch a media user's Trakt watch history additively.
+    async def _augment_user_provider(self, media_user_identity_id, augmentor_attr, origin, label):
+        """Fetch one watch-tracker's history for a media user, additively.
 
-        Merges fully-watched Trakt TMDB IDs into ``existing_content_sets`` (so
-        they are skipped like already-owned content) and returns a list of
-        normalized Trakt seed dicts (each with ``tmdb_id``, ``media_type``,
-        ``title``, ``year``) for the caller to process. A missing augmentor,
-        missing link, or any Trakt failure is a silent no-op returning ``[]``.
+        Shared by the Trakt and Simkl paths, which differ only in which
+        augmentor they read and how their seeds are tagged.
+
+        Merges fully-watched TMDB IDs into ``existing_content_sets`` (so they
+        are skipped like already-owned content) and returns normalized seed
+        dicts for the caller to process. A missing augmentor, missing link, or
+        any provider failure is a silent no-op returning ``[]``.
         """
-        augmentor = getattr(self, "trakt_augmentor", None)
+        augmentor = getattr(self, augmentor_attr, None)
         if not augmentor or not media_user_identity_id:
             return []
 
@@ -134,11 +145,10 @@ class BaseMediaHandler(ABC):
 
         total_watched = sum(len(v) for v in augmentation.watched_ids.values())
         self.logger.info(
-            "Trakt: media user identity %s → %d seeds, %d watched IDs",
-            media_user_identity_id, len(augmentation.seed_items), total_watched,
+            "%s: media user identity %s → %d seeds, %d watched IDs",
+            label, media_user_identity_id, len(augmentation.seed_items), total_watched,
         )
 
-        # Skip-watched merge: Trakt fully-watched titles join existing content.
         for media_type in ("movie", "tv"):
             watched = augmentation.watched_ids.get(media_type)
             if watched:
@@ -146,12 +156,24 @@ class BaseMediaHandler(ABC):
 
         seeds = list(augmentation.seed_items)
         for seed in seeds:
-            seed['source_origin'] = 'trakt_history'
-            self._mark_source_origin(seed.get('source_obj'), 'trakt_history')
+            seed['source_origin'] = origin
+            self._mark_source_origin(seed.get('source_obj'), origin)
         return seeds
 
+    async def _augment_user_trakt(self, media_user_identity_id):
+        """Fetch a media user's Trakt watch history additively."""
+        return await self._augment_user_provider(
+            media_user_identity_id, "trakt_augmentor", "trakt_history", "Trakt",
+        )
+
+    async def _augment_user_simkl(self, media_user_identity_id):
+        """Fetch a media user's Simkl watch history additively."""
+        return await self._augment_user_provider(
+            media_user_identity_id, "simkl_augmentor", "simkl_history", "Simkl",
+        )
+
     def _merge_seeds(self, seeds):
-        """Merge server and Trakt seeds, sort by date, dedup, cap to max_content.
+        """Merge server, Trakt, and Simkl seeds; sort by date, dedup, cap to max_content.
 
         Each seed dict must have: ``tmdb_id``, ``media_type``, ``date`` (Unix
         timestamp). Seeds without ``date`` sort last.  Duplicate
@@ -286,10 +308,13 @@ class BaseMediaHandler(ABC):
         if max_results <= 0:
             return
 
-        trakt_history_keys = {
-            self._history_key(item)
+        # The LLM answers with titles, not with the seed objects it was given,
+        # so the origin has to be re-attached by matching the source title back
+        # to the history item it came from.
+        origin_by_history_key = {
+            self._history_key(item): item["source_origin"]
             for item in (history_items or [])
-            if item.get("source_origin") == "trakt_history"
+            if item.get("source_origin") in _WATCH_TRACKER_ORIGINS
         }
         
         self.logger.info(f"Delegating {max_results} {item_type} recommendations to LLM service.")
@@ -319,8 +344,9 @@ class BaseMediaHandler(ABC):
                 self._resolve_llm_source(rec.get("source_title"), item_type),
             )
             source_key = (str(rec.get("source_title") or "").strip().lower(), str(item_type).strip().lower())
-            if source_key in trakt_history_keys:
-                self._mark_source_origin(source_obj, "trakt_history")
+            origin = origin_by_history_key.get(source_key)
+            if origin:
+                self._mark_source_origin(source_obj, origin)
             return rec, rec_results, source_obj
         
         resolved = await asyncio.gather(*[resolve(rec) for rec in llm_recommendations])
