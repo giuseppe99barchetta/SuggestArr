@@ -5,6 +5,8 @@ YAML settings) into a portable snapshot and restoring it on import.  All DB
 logic lives here; the route layer only calls these two static methods.
 """
 
+from typing import Optional
+
 from api_service.config.config import (
     get_default_values,
     load_env_vars,
@@ -43,6 +45,7 @@ _DB_INTEGRATION_KEYS: frozenset = frozenset({
     'LLM_MODEL',
     'TRAKT_CLIENT_ID',
     'TRAKT_CLIENT_SECRET',
+    'SIMKL_CLIENT_ID',
 })
 
 _TRAKT_ACCOUNT_TOKEN_SETTING_KEYS: frozenset = frozenset({
@@ -72,7 +75,10 @@ def _sanitize_integration_config(service: str, config: dict) -> dict:
 
 
 def _export_media_users(db: DatabaseManager, *, include_secrets: bool = False) -> list:
-    """Serialize media-user identities and per-user Trakt data for export.
+    """Serialize media-user identities and per-user Trakt and Simkl data.
+
+    Each provider is serialized independently, so a user linked to only one of
+    them still round-trips that link.
 
     Account metadata and source settings are always included.  When OAuth tokens
     exist, ``oauth_tokens`` is always emitted; secret fields are redacted unless
@@ -85,6 +91,10 @@ def _export_media_users(db: DatabaseManager, *, include_secrets: bool = False) -
             "external_user_id": identity["external_user_id"],
             "external_username": identity.get("external_username"),
         }
+        simkl_entry = _export_simkl_link(db, identity["id"], include_secrets=include_secrets)
+        if simkl_entry:
+            entry["simkl"] = simkl_entry
+
         link = db.get_trakt_account_link(identity["id"])
         if not link:
             media_users.append(entry)
@@ -128,8 +138,91 @@ def _export_media_users(db: DatabaseManager, *, include_secrets: bool = False) -
     return media_users
 
 
+def _export_simkl_link(
+    db: DatabaseManager, identity_id: int, *, include_secrets: bool = False
+) -> Optional[dict]:
+    """Serialize one media user's Simkl link, or None when they have none.
+
+    Only ``access_token`` is emitted: Simkl issues no refresh token, so a
+    Trakt-shaped pair would describe a credential that does not exist.
+    """
+    link = db.get_simkl_account_link(identity_id)
+    if not link:
+        return None
+
+    entry = {
+        "simkl_user_id": link.get("simkl_user_id"),
+        "simkl_username": link.get("simkl_username"),
+        "token_source": link.get("token_source"),
+        "status": link.get("status"),
+    }
+    tokens = db.get_simkl_oauth_tokens(link["id"])
+    if tokens:
+        entry["oauth_tokens"] = (
+            {
+                "access_token": tokens["access_token"],
+                "expires_at": tokens.get("expires_at"),
+            }
+            if include_secrets
+            else {"access_token": REDACTED, "expires_at": None}
+        )
+    entry["sources"] = [
+        {
+            "source_type": source["source_type"],
+            "source_key": source["source_key"],
+            "enabled": source.get("enabled", True),
+            "use_as_seed": source.get("use_as_seed", True),
+            "use_as_exclusion": source.get("use_as_exclusion", True),
+        }
+        for source in db.get_simkl_sources(identity_id)
+    ]
+    return entry
+
+
+def _import_simkl_link(db: DatabaseManager, identity_id: int, simkl: dict) -> None:
+    """Restore one media user's Simkl link from a snapshot.
+
+    The cache is intentionally not exported or restored: it is derived data
+    that the next sync rebuilds, and shipping a few hundred watch rows per user
+    inside a config snapshot would bloat it for no gain.
+    """
+    link_id = db.upsert_simkl_account_link(
+        media_user_identity_id=identity_id,
+        simkl_user_id=simkl.get("simkl_user_id"),
+        simkl_username=simkl.get("simkl_username"),
+        token_source=simkl.get("token_source") or "manual_oauth",
+        status=simkl.get("status") or "connected",
+    )
+    oauth = simkl.get("oauth_tokens")
+    if isinstance(oauth, dict):
+        access_token = oauth.get("access_token")
+        # Gated on access_token alone; requiring a refresh token here, as the
+        # Trakt path does, would silently discard every restored Simkl token.
+        if access_token and not is_redacted(access_token):
+            db.upsert_simkl_oauth_tokens(
+                link_id=link_id,
+                access_token=access_token,
+                expires_at=oauth.get("expires_at"),
+            )
+    for source in simkl.get("sources") or []:
+        if not isinstance(source, dict):
+            continue
+        source_type = source.get("source_type")
+        source_key = source.get("source_key")
+        if not source_type or not source_key:
+            continue
+        db.upsert_simkl_source(
+            media_user_identity_id=identity_id,
+            source_type=source_type,
+            source_key=source_key,
+            enabled=bool(source.get("enabled", True)),
+            use_as_seed=bool(source.get("use_as_seed", True)),
+            use_as_exclusion=bool(source.get("use_as_exclusion", True)),
+        )
+
+
 def _import_media_users(db: DatabaseManager, media_users: list) -> None:
-    """Restore media-user identities and per-user Trakt data from a snapshot."""
+    """Restore media-user identities and per-user Trakt and Simkl data."""
     for entry in media_users:
         if not isinstance(entry, dict):
             continue
@@ -141,6 +234,10 @@ def _import_media_users(db: DatabaseManager, media_users: list) -> None:
         identity = db.upsert_media_user_identity(
             str(provider), str(external_user_id), entry.get("external_username"),
         )
+        simkl = entry.get("simkl")
+        if isinstance(simkl, dict):
+            _import_simkl_link(db, identity["id"], simkl)
+
         trakt = entry.get("trakt")
         if not isinstance(trakt, dict):
             continue
@@ -223,12 +320,13 @@ class ConfigService:
           table.  Secret fields are redacted unless ``include_secrets`` is True.
         - ``settings``: configuration values from config.yaml, with known
           secret keys redacted by default.
-        - ``media_users``: media-user identities with Trakt account metadata
-          and source settings.  Per-user OAuth tokens follow ``include_secrets``.
+        - ``media_users``: media-user identities with Trakt and Simkl account
+          metadata and source settings.  Per-user tokens follow
+          ``include_secrets``.
 
         Args:
-            include_secrets: When True, include raw secret values and Trakt
-                OAuth tokens.  Defaults to False.
+            include_secrets: When True, include raw secret values and per-user
+                Trakt and Simkl tokens.  Defaults to False.
 
         Returns:
             dict with keys ``version``, ``integrations``, ``settings``,

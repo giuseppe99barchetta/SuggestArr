@@ -219,6 +219,29 @@
         </div>
       </div>
 
+      <!-- Simkl -->
+      <div v-if="showSection('simkl')" :class="wizardMode ? '' : 'service-card'">
+        <ServiceCardHeader v-if="!wizardMode" icon="fas fa-check-double" title="Simkl" description="Adds Simkl watch history to recommendation jobs. Users link their own accounts from their profile." :status="getSimklStatus" :status-text="getSimklStatusText" />
+
+        <div class="form-group">
+          <label for="simklClientId">Client ID</label>
+          <input
+            id="simklClientId"
+            v-model="localConfig.SIMKL_CLIENT_ID"
+            type="text"
+            placeholder="Enter your Simkl Client ID"
+            class="form-control"
+            :disabled="isLoading"
+          />
+          <small class="form-help">
+            Create an AUTH V2 app at <a href="https://simkl.com/settings/developer/" target="_blank" rel="noopener noreferrer" class="link">Simkl Developer Settings</a> and choose <strong>TV, devices &amp; command line</strong>. The device flow needs no client secret.
+          </small>
+        </div>
+        <div class="oauth-success" v-if="isSimklAppConfigured">
+          <i class="fas fa-check-circle"></i>
+          Simkl configured. Users can link their own Simkl accounts from their profile.
+        </div>
+      </div>
       <!-- Seer  -->
       <div v-if="showSection('seer')" :class="wizardMode ? '' : 'service-card'">
         <ServiceCardHeader v-if="!wizardMode" icon="fas fa-paper-plane" title="Jellyseerr / Overseerr" description="Receives the requests. Approved titles are downloaded through Radarr and Sonarr from here." required :status="getSeerStatus" :status-text="getSeerStatusText" />
@@ -538,7 +561,8 @@ export default {
       default: false,
     },
     // When set, only the matching section is rendered (used by the wizard)
-    // Values: 'tmdb' | 'omdb' | 'media-server' | 'seer' | null (show all)
+    // Values: 'tmdb' | 'omdb' | 'media-server' | 'trakt' | 'simkl' | 'seer'
+    // | null (show all)
     wizardSection: {
       type: String,
       default: null,
@@ -626,6 +650,11 @@ export default {
     },
     isTraktAppConfigured() {
       return !!this.localConfig.TRAKT_CLIENT_ID;
+    },
+    isSimklAppConfigured() {
+      // The PIN flow authenticates with the client ID alone, so unlike Trakt
+      // there is no second credential to wait for.
+      return !!this.localConfig.SIMKL_CLIENT_ID;
     },
     // Unified accessors for current service's libraries/users
     currentLibraries() {
@@ -735,6 +764,12 @@ export default {
       if (this.localConfig.TRAKT_CLIENT_ID || this.localConfig.TRAKT_CLIENT_SECRET) return 'Incomplete';
       return 'Not set';
     },
+    getSimklStatus() {
+      return this.isSimklAppConfigured ? 'status-connected' : 'status-disconnected';
+    },
+    getSimklStatusText() {
+      return this.isSimklAppConfigured ? 'Configured' : 'Not Set';
+    },
     seerUserOptions() {
       return this.seerUsers.map(user => ({
         label: `${user.name}${user.email ? ` (${user.email})` : ''}`,
@@ -835,6 +870,11 @@ export default {
         this.wizardMode
         && this.wizardSection === 'trakt'
       ) {
+        this.$emit('validation-changed', val);
+      }
+    },
+    isSimklAppConfigured(val) {
+      if (this.wizardMode && this.wizardSection === 'simkl') {
         this.$emit('validation-changed', val);
       }
     },
@@ -1393,6 +1433,7 @@ export default {
           SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE,
           TRAKT_CLIENT_ID: this.localConfig.TRAKT_CLIENT_ID || '',
           TRAKT_CLIENT_SECRET: traktClientSecret,
+          SIMKL_CLIENT_ID: this.localConfig.SIMKL_CLIENT_ID || '',
         };
         if (this.localConfig.SELECTED_SERVICE === 'plex') {
           Object.assign(dataToSave, {
@@ -1428,7 +1469,7 @@ export default {
       const defaults = {
         TMDB_API_KEY: '', OMDB_API_KEY: '', SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
         JELLYFIN_API_URL: '', JELLYFIN_TOKEN: '', JELLYFIN_LIBRARIES: [],
-        TRAKT_CLIENT_ID: '', TRAKT_CLIENT_SECRET: '',
+        TRAKT_CLIENT_ID: '', TRAKT_CLIENT_SECRET: '', SIMKL_CLIENT_ID: '',
         SEER_API_URL: '', SEER_TOKEN: '', SEER_USER_NAME: null, SEER_USER_PSW: null,
         SEER_SESSION_TOKEN: null, SEER_ANIME_PROFILE_CONFIG: {}, SEER_REQUEST_DELAY: 2, SELECTED_USERS: [],
       };

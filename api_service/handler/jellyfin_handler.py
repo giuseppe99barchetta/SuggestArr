@@ -5,7 +5,7 @@ from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.db.database_manager import DatabaseManager
 
 class JellyfinHandler(BaseMediaHandler):
-    def __init__(self, jellyfin_client:JellyfinClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, max_content=10, feedback_repository=None, feedback_owner_id=None, feedback_media_service=None, watched_history_repository=None):
+    def __init__(self, jellyfin_client:JellyfinClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, max_content=10, feedback_repository=None, feedback_owner_id=None, feedback_media_service=None, watched_history_repository=None, simkl_augmentor=None):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client
@@ -41,6 +41,7 @@ class JellyfinHandler(BaseMediaHandler):
             feedback_owner_id=feedback_owner_id,
             feedback_media_service=feedback_media_service,
             watched_history_repository=watched_history_repository,
+            simkl_augmentor=simkl_augmentor,
         )
         self.jellyfin_client = jellyfin_client
         self.selected_users = selected_users
@@ -155,7 +156,13 @@ class JellyfinHandler(BaseMediaHandler):
         }
 
     async def _collect_trakt_seeds_for_user(self, user):
-        """Fetch Trakt seeds for a user, return list without processing."""
+        """Fetch watch-tracker seeds for a user, without processing.
+
+        Covers both Trakt and Simkl; a user linked to both contributes from
+        each, and any title they share collapses during the seed merge.
+        """
+        if not (self.trakt_augmentor or self.simkl_augmentor or self.watched_history_repository):
+            return []
         external_id = str(user.get('id'))
         identity = DatabaseManager().upsert_media_user_identity(
             provider=self.feedback_media_service or "jellyfin",
@@ -163,6 +170,7 @@ class JellyfinHandler(BaseMediaHandler):
         )
         seeds = await self._augment_user_trakt(identity["id"])
         seeds.extend(self._augment_user_managed_history(identity['id']))
+        seeds += await self._augment_user_simkl(identity["id"])
         for s in seeds:
             s.setdefault('date', s.get('watched_at', 0))
         return seeds
@@ -385,6 +393,10 @@ class JellyfinHandler(BaseMediaHandler):
                         'title': source_tmdb_obj.get('title') or source_tmdb_obj.get('name', ''),
                         'poster_path': source_tmdb_obj.get('poster_path'),
                         'media_type': media_type,
+                        # Lets a preview show which watch tracker seeded a
+                        # suggestion; otherwise the only way to tell a Simkl
+                        # or Trakt seed from a media-server one is the logs.
+                        'source_origin': source_tmdb_obj.get('_source_origin'),
                     },
                 })
                 if would_request:
