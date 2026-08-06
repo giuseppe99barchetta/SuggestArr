@@ -280,6 +280,9 @@ def get_setup_status():
             'selected_service': config.get('SELECTED_SERVICE'),
             'has_tmdb_key': bool(config.get('TMDB_API_KEY')),
             'trakt_app_configured': bool(config.get('TRAKT_CLIENT_ID') and config.get('TRAKT_CLIENT_SECRET')),
+            # Simkl's PIN flow needs no client secret, so the client id alone
+            # is the whole configuration requirement.
+            'simkl_app_configured': bool(config.get('SIMKL_CLIENT_ID')),
             'status': 'success'
         }), 200
     except Exception as e:

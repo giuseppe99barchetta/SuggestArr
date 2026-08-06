@@ -496,6 +496,10 @@
                     <i class="fas fa-history"></i>
                     Trakt History
                   </span>
+                  <span v-if="selectedSource.source_origin === 'simkl_history'" class="badge badge-date">
+                    <i class="icon-simkl"></i>
+                    Simkl History
+                  </span>
                 </div>
 
                 <!-- Source Link (for requests view) -->

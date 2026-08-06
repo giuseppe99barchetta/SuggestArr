@@ -141,6 +141,14 @@
                   class="source-poster"
                 />
                 <span class="source-title">{{ item.source.title }}</span>
+                <span
+                  v-if="sourceOriginLabel(item)"
+                  class="source-origin"
+                  :title="`Seeded from ${sourceOriginLabel(item).name} watch history`"
+                >
+                  <i :class="sourceOriginLabel(item).icon"></i>
+                  {{ sourceOriginLabel(item).name }}
+                </span>
               </div>
             </div>
           </div>
@@ -196,6 +204,18 @@ export default {
       if (!path) return null;
       if (path.startsWith('http')) return path;
       return `https://image.tmdb.org/t/p/w92${path}`;
+    },
+    /**
+     * Which watch tracker seeded this suggestion, when it was not the media
+     * server. Confirms a tracker is actually feeding a job, which is
+     * otherwise only visible in the logs.
+     */
+    sourceOriginLabel(item) {
+      const origins = {
+        trakt_history: { name: 'Trakt', icon: 'icon-trakt' },
+        simkl_history: { name: 'Simkl', icon: 'icon-simkl' },
+      };
+      return origins[item.source?.source_origin] || null;
     },
     releaseYear(item) {
       const date = item.release_date;
@@ -641,6 +661,20 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.source-origin {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-full, 999px);
+  background: var(--color-bg-overlay-light, rgba(255, 255, 255, 0.08));
+  color: var(--color-text-secondary, rgba(255, 255, 255, 0.75));
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* Footer */
