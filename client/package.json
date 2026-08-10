@@ -38,7 +38,7 @@
     "eslint-plugin-vue": "^8.0.3",
     "postcss-html": "^1.8.0",
     "stylelint": "^17.9.0",
-    "typescript": "~5.9.0",
+    "typescript": "~7.0.2",
     "vue-loader": "^17.4.2",
     "webpack": "^5.97.1"
   },
