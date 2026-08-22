@@ -146,11 +146,17 @@
           <div class="job-filters" v-if="hasFilters(job)">
             <span class="filters-label">Filters:</span>
             <div class="filter-tags">
-              <span v-if="job.filters.vote_average_gte" class="filter-tag">
-                Rating &ge; {{ job.filters.vote_average_gte }}
+              <span v-if="job.filters.rating_source !== 'imdb' && job.filters.vote_average_gte" class="filter-tag">
+                TMDB Rating &ge; {{ job.filters.vote_average_gte }}
               </span>
-              <span v-if="job.filters.vote_count_gte" class="filter-tag">
-                Votes &ge; {{ job.filters.vote_count_gte }}
+              <span v-if="job.filters.rating_source !== 'imdb' && job.filters.vote_count_gte" class="filter-tag">
+                TMDB Votes &ge; {{ job.filters.vote_count_gte }}
+              </span>
+              <span v-if="job.filters.rating_source !== 'tmdb' && job.filters.imdb_rating_gte" class="filter-tag">
+                IMDB Rating &ge; {{ job.filters.imdb_rating_gte }}
+              </span>
+              <span v-if="job.filters.rating_source !== 'tmdb' && job.filters.imdb_min_votes" class="filter-tag">
+                IMDB Votes &ge; {{ job.filters.imdb_min_votes }}
               </span>
               <span v-if="job.filters.with_original_language" class="filter-tag">
                 Lang: {{ job.filters.with_original_language }}
