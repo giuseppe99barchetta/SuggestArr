@@ -5,6 +5,7 @@ Provides functionality to discover movies and TV shows using various filter crit
 import aiohttp
 import asyncio
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote_plus
 
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.filter_normalization import build_tmdb_params, normalize_filters
@@ -424,6 +425,16 @@ class TMDbDiscover:
             else:
                 params['without_genres'] = str(genres)
 
+        if filters.get('without_keywords'):
+            keyword_ids = []
+            for keyword in filters['without_keywords']:
+                try:
+                    keyword_ids.append(str(int(keyword.get('id') if isinstance(keyword, dict) else keyword)))
+                except (TypeError, ValueError):
+                    continue
+            if keyword_ids:
+                params['without_keywords'] = ','.join(dict.fromkeys(keyword_ids))
+
         # Default sort if not specified
         if 'sort_by' not in params:
             params['sort_by'] = 'popularity.desc'
@@ -520,6 +531,23 @@ class TMDbDiscover:
         except aiohttp.ClientError as e:
             self.logger.error(f"HTTP error fetching genres: {str(e)}")
 
+        return []
+
+    async def search_keywords(self, query: str) -> List[Dict[str, Any]]:
+        """Search TMDb keywords for the job-filter picker."""
+        url = f"{self.tmdb_api_url}/search/keyword?api_key={self.api_key}&query={quote_plus(query)}"
+        try:
+            session = await self._get_session()
+            async with session.get(url, timeout=REQUEST_TIMEOUT) as response:
+                if response.status in HTTP_OK:
+                    return [
+                        {'id': keyword['id'], 'name': keyword['name']}
+                        for keyword in (await response.json()).get('results', [])
+                        if keyword.get('id') is not None and keyword.get('name')
+                    ]
+                self.logger.error("Error searching TMDb keywords: %s", response.status)
+        except aiohttp.ClientError as exc:
+            self.logger.error("HTTP error searching TMDb keywords: %s", exc)
         return []
 
     async def get_languages(self) -> List[Dict[str, Any]]:

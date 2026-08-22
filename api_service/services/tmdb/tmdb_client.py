@@ -29,7 +29,8 @@ class TMDbClient(BaseHTTPClient):
                 filter_region_provider, filter_streaming_services, filter_min_runtime=None,
                 rating_source='tmdb', imdb_threshold=None, imdb_min_votes=None,
                 omdb_client=None, include_tvod=False, filter_release_year_to=None,
-                filter_genres_include=None, only_first_movie_in_collection=False
+                filter_genres_include=None, only_first_movie_in_collection=False,
+                filter_keywords_exclude=None
                 ):
         """
         Initializes the TMDbClient with the provided API key.
@@ -53,6 +54,11 @@ class TMDbClient(BaseHTTPClient):
         self.release_year_filter_to = int(filter_release_year_to) if filter_release_year_to is not None else None
         self.genre_filter = filter_genre
         self.included_genres = filter_genres_include or []
+        self.excluded_keyword_ids = {
+            int(keyword.get('id') if isinstance(keyword, dict) else keyword)
+            for keyword in (filter_keywords_exclude or [])
+            if str(keyword.get('id') if isinstance(keyword, dict) else keyword).isdigit()
+        }
         self.pages = (self.search_size + CONTENT_PER_PAGE - 1) // CONTENT_PER_PAGE
         self.region_provider = filter_region_provider
         self.excluded_streaming_services = filter_streaming_services
@@ -90,6 +96,7 @@ class TMDbClient(BaseHTTPClient):
                 self.filter_min_runtime
                 or self.rating_source in ('imdb', 'both')
                 or (content_type == 'movie' and self.only_first_movie_in_collection)
+                or self.excluded_keyword_ids
             )
             runtime = None
             imdb_id = None
@@ -135,6 +142,21 @@ class TMDbClient(BaseHTTPClient):
                         return None
                 elif dry_run and core_passed:
                     filter_result['runtime'] = {'passed': None, 'label': 'Runtime', 'reason': 'Unknown runtime'}
+
+            if self.excluded_keyword_ids:
+                excluded_keywords = self._get_excluded_keywords(details)
+                if excluded_keywords:
+                    names = ', '.join(keyword.get('name', str(keyword['id'])) for keyword in excluded_keywords)
+                    if dry_run:
+                        filter_result['keywords'] = {
+                            'passed': False, 'label': 'TMDb keywords', 'reason': f'Excluded: {names}',
+                        }
+                        filter_result['passed'] = False
+                    else:
+                        self._log_exclusion_reason(item, f"excluded TMDb keywords: {names}", content_type)
+                        return None
+                elif dry_run and core_passed:
+                    filter_result['keywords'] = {'passed': True, 'label': 'TMDb keywords'}
 
             # IMDB rating check
             if self.rating_source in ('imdb', 'both') and self.omdb_client:
@@ -431,7 +453,8 @@ class TMDbClient(BaseHTTPClient):
         :param content_type: Either 'movie' or 'tv'.
         :return: dict with 'runtime' (int|None) and 'imdb_id' (str|None), or empty dict on error.
         """
-        url = f"{self.tmdb_api_url}/{content_type}/{content_id}?api_key={self.api_key}"
+        append_keywords = '&append_to_response=keywords' if self.excluded_keyword_ids else ''
+        url = f"{self.tmdb_api_url}/{content_type}/{content_id}?api_key={self.api_key}{append_keywords}"
         self.logger.debug("Fetching details for %s ID %s", content_type, content_id)
         try:
             session = await self._get_session()
@@ -443,13 +466,18 @@ class TMDbClient(BaseHTTPClient):
                             'runtime': data.get('runtime'),
                             'imdb_id': data.get('imdb_id'),
                             'belongs_to_collection': data.get('belongs_to_collection'),
+                            'keywords': data.get('keywords', {}).get('keywords', []),
                         }
                     else:
                         run_times = data.get('episode_run_time', [])
                         runtime = run_times[0] if run_times else None
                         # TV details don't include imdb_id; fetch from external_ids
                         imdb_id = await self._get_tv_imdb_id(content_id)
-                        return {'runtime': runtime, 'imdb_id': imdb_id}
+                        return {
+                            'runtime': runtime,
+                            'imdb_id': imdb_id,
+                            'keywords': data.get('keywords', {}).get('results', []),
+                        }
                 else:
                     self.logger.warning("Failed to fetch details for %s ID %s: HTTP %d",
                                         content_type, content_id, response.status)
@@ -457,6 +485,11 @@ class TMDbClient(BaseHTTPClient):
             self.logger.warning("Error fetching details for %s ID %s: %s",
                                 content_type, content_id, str(e).replace(self.api_key, "***"))
         return {}
+
+    def _get_excluded_keywords(self, details):
+        """Return selected TMDb keywords present in a details response."""
+        keywords = details.get('keywords', []) if details else []
+        return [keyword for keyword in keywords if keyword.get('id') in self.excluded_keyword_ids]
 
     async def is_first_movie_in_collection(self, movie_id, details=None):
         """Return True for standalone movies or the earliest released collection entry."""

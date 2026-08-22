@@ -167,6 +167,9 @@
               <span v-if="job.filters.with_genres && job.filters.with_genres.length" class="filter-tag">
                 +{{ job.filters.with_genres.length }} genres included
               </span>
+              <span v-if="job.filters.without_keywords && job.filters.without_keywords.length" class="filter-tag exclude">
+                -{{ job.filters.without_keywords.length }} TMDb keywords
+              </span>
             </div>
           </div>
 
