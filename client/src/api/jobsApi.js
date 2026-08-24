@@ -110,6 +110,16 @@ export const jobsApi = {
   },
 
   /**
+   * Search TMDb keywords for job filters.
+   * @param {string} query - Keyword search term.
+   * @returns {Promise<Object>} Response with keyword matches.
+   */
+  async searchKeywords(query) {
+    const response = await axios.get('/api/jobs/keywords', { params: { query } });
+    return response.data;
+  },
+
+  /**
    * Get available languages.
    * @returns {Promise<Object>} Response with languages array.
    */

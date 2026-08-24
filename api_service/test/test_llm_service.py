@@ -390,7 +390,7 @@ class TestCallWithValidation(unittest.IsolatedAsyncioTestCase):
         state = {"callback_ran": False}
 
         class FakeClient:
-            async def aclose(self):
+            async def close(self):
                 loop = asyncio.get_running_loop()
                 loop.call_soon(lambda: state.__setitem__("callback_ran", True))
 

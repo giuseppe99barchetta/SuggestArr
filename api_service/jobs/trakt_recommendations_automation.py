@@ -222,6 +222,7 @@ class TraktRecommendationsAutomation:
             include_tvod=filter_include_tvod,
             filter_release_year_to=filter_release_year_to,
             filter_genres_include=normalized_filters.get("genres"),
+            filter_keywords_exclude=job_filters.get("without_keywords"),
         )
 
     def _get_seer_discovered_tmdb_ids(self) -> set[str]:
@@ -465,11 +466,22 @@ class TraktRecommendationsAutomation:
         needs_detail_call = (
             self.tmdb_client.filter_min_runtime
             or self.tmdb_client.rating_source in ("imdb", "both")
+            or (
+                isinstance(getattr(self.tmdb_client, "excluded_keyword_ids", None), set)
+                and self.tmdb_client.excluded_keyword_ids
+            )
         )
         if needs_detail_call:
             extra = await self.tmdb_client._get_item_details(tmdb_id, media_type)
             runtime = extra.get("runtime") if extra else None
             imdb_id = extra.get("imdb_id") if extra else None
+
+            if (
+                isinstance(getattr(self.tmdb_client, "excluded_keyword_ids", None), set)
+                and self.tmdb_client.excluded_keyword_ids
+                and self.tmdb_client._get_excluded_keywords(extra)
+            ):
+                return None
 
             if self.tmdb_client.filter_min_runtime:
                 if runtime is None or runtime < self.tmdb_client.filter_min_runtime:

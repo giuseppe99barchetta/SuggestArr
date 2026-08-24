@@ -185,7 +185,7 @@ For streaming availability filters:
 Best practice:
 
 - Create one focused movie job and one focused TV job instead of one broad job.
-- Use filters per job: genre, language, rating, runtime, provider exclusions.
+- Use filters per job: genre, TMDb keyword, language, rating, runtime, provider exclusions. TMDb keywords apply to Discover and recommendation jobs, letting you exclude a theme such as `Bollywood` without excluding all content in its language.
 - Run a dry run first.
 - Check results in Seer before enabling full automation.
 - Enable Pause while Seer requests are pending if Seer approvals are part of your flow.
