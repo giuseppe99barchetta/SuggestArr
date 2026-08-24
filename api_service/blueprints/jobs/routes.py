@@ -964,6 +964,27 @@ def get_languages():
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
+@jobs_bp.route('/keywords', methods=['GET'])
+def search_keywords():
+    """Search TMDb keywords for job filters."""
+    query = request.args.get('query', '').strip()
+    if len(query) < 2 or len(query) > 100:
+        return jsonify({'status': 'error', 'message': 'query must be 2 to 100 characters'}), 400
+
+    try:
+        from api_service.config.config import load_env_vars
+        from api_service.services.tmdb.tmdb_discover import TMDbDiscover
+
+        async def fetch_keywords():
+            async with TMDbDiscover(load_env_vars()['TMDB_API_KEY']) as tmdb:
+                return await tmdb.search_keywords(query)
+
+        return jsonify({'status': 'success', 'keywords': run_async(fetch_keywords())}), 200
+    except Exception as exc:
+        logger.error("Error searching TMDb keywords: %s", exc, exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
+
+
 @jobs_bp.route('/watch-regions', methods=['GET'])
 def get_watch_regions():
     """

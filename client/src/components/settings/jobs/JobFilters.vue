@@ -268,6 +268,47 @@
       </p>
     </div>
 
+    <div class="form-group">
+      <label for="keywordSearch">TMDb Keywords to Exclude</label>
+      <div class="keyword-search">
+        <input
+          id="keywordSearch"
+          v-model.trim="keywordQuery"
+          type="search"
+          placeholder="e.g., Bollywood"
+          class="form-control"
+          @keydown.enter.prevent="searchKeywords"
+        />
+        <button type="button" class="btn btn-outline" :disabled="keywordQuery.length < 2" @click="searchKeywords">
+          Search
+        </button>
+      </div>
+      <div v-if="(localFilters.without_keywords || []).length" class="genre-grid">
+        <button
+          v-for="keyword in localFilters.without_keywords"
+          :key="keyword.id"
+          type="button"
+          class="genre-btn active"
+          @click="toggleKeyword(keyword)"
+        >
+          {{ keyword.name }} <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div v-if="keywordResults.length" class="genre-grid">
+        <button
+          v-for="keyword in keywordResults"
+          :key="keyword.id"
+          type="button"
+          class="genre-btn"
+          :class="{ active: isKeywordExcluded(keyword.id) }"
+          @click="toggleKeyword(keyword)"
+        >
+          {{ keyword.name }}
+        </button>
+      </div>
+      <small class="form-help">Exclude titles carrying any selected TMDb keyword. Search and select the exact keyword.</small>
+    </div>
+
     <!-- Sort By (discover jobs only) -->
     <div v-if="jobType === 'discover'" class="form-group dropdown-wrapper">
       <BaseDropdown
@@ -315,6 +356,8 @@ export default {
       genres: [],
       watchRegions: [],
       watchProviders: [],
+      keywordQuery: '',
+      keywordResults: [],
       isUpdating: false,
       ratingSourceOptions: [
         {
@@ -559,6 +602,33 @@ export default {
       } else {
         this.localFilters.without_genres.splice(index, 1);
       }
+    },
+
+    isKeywordExcluded(keywordId) {
+      return (this.localFilters.without_keywords || []).some(keyword => String(keyword.id) === String(keywordId));
+    },
+
+    toggleKeyword(keyword) {
+      if (!this.localFilters.without_keywords) {
+        this.localFilters.without_keywords = [];
+      }
+      const index = this.localFilters.without_keywords.findIndex(item => String(item.id) === String(keyword.id));
+      if (index === -1) {
+        this.localFilters.without_keywords.push({ id: keyword.id, name: keyword.name });
+      } else {
+        this.localFilters.without_keywords.splice(index, 1);
+      }
+    },
+
+    async searchKeywords() {
+      if (this.keywordQuery.length < 2) return;
+      try {
+        const response = await jobsApi.searchKeywords(this.keywordQuery);
+        this.keywordResults = response.status === 'success' ? response.keywords : [];
+      } catch (error) {
+        console.error('Failed to search TMDb keywords:', error);
+        this.keywordResults = [];
+      }
     }
   }
 };
@@ -700,6 +770,15 @@ export default {
 .date-range {
   display: flex;
   gap: 1rem;
+}
+
+.keyword-search {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.keyword-search .form-control {
+  flex: 1;
 }
 
 .date-field {

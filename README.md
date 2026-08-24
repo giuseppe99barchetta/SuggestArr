@@ -53,6 +53,7 @@ configured number of days. The pause behavior can be overridden per job.
 ## Docker Usage
 
 You can run the project using Docker Compose for easy setup and execution.
+Images are also available from GitHub Container Registry as `ghcr.io/giuseppe99barchetta/suggestarr:latest`.
 
 ### Docker Compose Example
 
@@ -169,6 +170,7 @@ The engine works with **any OpenAI-compatible API**, so you can use a cloud prov
 | **OpenAI** | Required (`sk-proj-...`) | *(leave blank)* | `gpt-4o-mini` |
 | **Ollama** (local) | Not required | `http://localhost:11434/v1` | `mistral`, `llama3` |
 | **OpenRouter** | Required (`sk-or-v1-...`) | `https://openrouter.ai/api/v1` | `meta-llama/llama-3-8b-instruct` |
+| **OrcaRouter** | Required (`sk-orca-...`) | `https://api.orcarouter.ai/v1` | `openai/gpt-5.5` |
 | **LiteLLM Proxy** | Depends on config | `http://<your-proxy>:4000` | Depends on config |
 
 **Note for Ollama users:** make sure Ollama is running and the model is pulled (`ollama pull mistral`) before saving. The API Key field can be left blank — SuggestArr will use a placeholder automatically.
