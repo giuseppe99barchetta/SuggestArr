@@ -4,7 +4,7 @@ Flask-Limiter==4.1.1
 PyJWT==2.13.0
 bcrypt==5.0.0
 gunicorn==26.0.0
-uvicorn==0.52.0
+uvicorn==0.52.3
 asgiref==3.12.1
 
 redis==8.1.0
@@ -30,4 +30,4 @@ xmltodict==1.0.4
 mysql-connector-python==26.7.0
 psycopg2-binary==2.9.12
 
-openai==2.51.0
+openai==2.53.0

@@ -38,6 +38,7 @@ def _make_client(
     rating_source='tmdb',
     include_tvod=False,
     only_first_movie_in_collection=False,
+    filter_keywords_exclude=None,
 ):
     return TMDbClient(
         api_key='fake_tmdb_key',
@@ -55,6 +56,7 @@ def _make_client(
         rating_source=rating_source,
         include_tvod=include_tvod,
         only_first_movie_in_collection=only_first_movie_in_collection,
+        filter_keywords_exclude=filter_keywords_exclude,
     )
 
 
@@ -170,6 +172,23 @@ class TestApplyFilters(unittest.TestCase):
         item = {**_MOVIE_ITEM, 'vote_average': 1.0, 'vote_count': 1}
         # Should pass because TMDB rating check is skipped
         self.assertTrue(client._apply_filters(item, 'movie')['passed'])
+
+    def test_finds_selected_keyword_in_details(self):
+        client = _make_client(filter_keywords_exclude=[{'id': 1253, 'name': 'bollywood'}])
+        details = {'keywords': [{'id': 1253, 'name': 'bollywood'}, {'id': 42, 'name': 'love'}]}
+        self.assertEqual(client._get_excluded_keywords(details), [{'id': 1253, 'name': 'bollywood'}])
+
+
+class TestKeywordFiltering(unittest.IsolatedAsyncioTestCase):
+
+    async def test_excludes_recommendation_with_selected_keyword(self):
+        client = _make_client(filter_keywords_exclude=[{'id': 1253, 'name': 'bollywood'}])
+        with patch.object(client, '_fetch_page_data', AsyncMock(return_value={'results': [_MOVIE_ITEM]})), \
+             patch.object(client, '_get_item_details', AsyncMock(return_value={
+                 'keywords': [{'id': 1253, 'name': 'bollywood'}]
+             })):
+            results = await client._fetch_recommendations(1, 'movie')
+        self.assertEqual(results, [])
 
 
 # ---------------------------------------------------------------------------

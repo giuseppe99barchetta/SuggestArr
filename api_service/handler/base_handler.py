@@ -344,6 +344,15 @@ class BaseMediaHandler(ABC):
                 )
                 continue
 
+            if isinstance(getattr(self.tmdb_client, 'excluded_keyword_ids', None), set) and self.tmdb_client.excluded_keyword_ids:
+                details = await self.tmdb_client._get_item_details(best_match['id'], item_type)
+                if self.tmdb_client._get_excluded_keywords(details):
+                    self.logger.info(
+                        "Skipping LLM %s recommendation '%s': excluded TMDb keyword",
+                        item_type, best_match.get('title') or best_match.get('name') or 'Unknown',
+                    )
+                    continue
+
             if (
                 item_type == 'movie'
                 and getattr(self.tmdb_client, 'only_first_movie_in_collection', False)
