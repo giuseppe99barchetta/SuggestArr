@@ -4,7 +4,7 @@ Flask-Limiter==4.1.1
 PyJWT==2.13.0
 bcrypt==5.0.0
 gunicorn==26.0.0
-uvicorn==0.52.1
+uvicorn==0.52.3
 asgiref==3.12.1
 
 redis==8.1.0
