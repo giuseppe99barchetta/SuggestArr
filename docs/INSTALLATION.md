@@ -1,5 +1,7 @@
 # SuggestArr Installation Guide
 
+Images are published to Docker Hub (`ciuse99/suggestarr`) and GitHub Container Registry (`ghcr.io/giuseppe99barchetta/suggestarr`).
+
 SuggestArr is a self-hosted web app that reads watch activity from Plex, Jellyfin, or Emby, finds recommendations through TMDb, and sends requests to Seer. The recommended installation method is Docker Compose because it keeps the Python backend, built Vue frontend, dependencies, scheduler, and persistent data in one predictable container.
 
 ## Requirements

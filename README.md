@@ -53,6 +53,7 @@ configured number of days. The pause behavior can be overridden per job.
 ## Docker Usage
 
 You can run the project using Docker Compose for easy setup and execution.
+Images are also available from GitHub Container Registry as `ghcr.io/giuseppe99barchetta/suggestarr:latest`.
 
 ### Docker Compose Example
 

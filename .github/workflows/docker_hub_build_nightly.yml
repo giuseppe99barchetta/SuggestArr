@@ -1,7 +1,8 @@
-name: Build and Publish Docker Image to Docker Hub
+name: Build and Publish Docker Images
 
 permissions:
   contents: read
+  packages: write
 
 on:
   push:
@@ -33,6 +34,13 @@ jobs:
           username: ciuse99
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Prepare platform slug
         id: prep
         run: echo "platform_slug=$(echo '${{ matrix.platform }}' | tr '/' '-')" >> $GITHUB_OUTPUT
@@ -44,7 +52,9 @@ jobs:
           file: docker/Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
-          tags: ciuse99/suggestarr:nightly-${{ steps.prep.outputs.platform_slug }}
+          tags: |
+            ciuse99/suggestarr:nightly-${{ steps.prep.outputs.platform_slug }}
+            ghcr.io/${{ github.repository_owner }}/suggestarr:nightly-${{ steps.prep.outputs.platform_slug }}
           cache-from: |
             type=gha,scope=nightly-${{ matrix.platform }}
             type=registry,ref=ciuse99/suggestarr:cache
@@ -65,6 +75,13 @@ jobs:
           username: ciuse99
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.2.0
 
@@ -74,6 +91,10 @@ jobs:
             -t ciuse99/suggestarr:nightly \
             ciuse99/suggestarr:nightly-linux-amd64 \
             ciuse99/suggestarr:nightly-linux-arm64
+          docker buildx imagetools create \
+            -t ghcr.io/${{ github.repository_owner }}/suggestarr:nightly \
+            ghcr.io/${{ github.repository_owner }}/suggestarr:nightly-linux-amd64 \
+            ghcr.io/${{ github.repository_owner }}/suggestarr:nightly-linux-arm64
 
       - name: Clean up temporary platform tags
         run: |
