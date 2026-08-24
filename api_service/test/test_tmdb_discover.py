@@ -92,6 +92,12 @@ class TestBuildQueryParams(unittest.TestCase):
         params = self.disc._build_query_params({'with_genres': '28,12'})
         self.assertEqual(params['with_genres'], '28|12')
 
+    def test_excluded_keywords_are_mapped_to_tmdb_ids(self):
+        params = self.disc._build_query_params({
+            'without_keywords': [{'id': 1253, 'name': 'bollywood'}, {'id': 1253, 'name': 'Bollywood'}]
+        })
+        self.assertEqual(params['without_keywords'], '1253')
+
     def test_default_sort_by_is_popularity_desc(self):
         params = self.disc._build_query_params({})
         self.assertEqual(params['sort_by'], 'popularity.desc')
@@ -371,6 +377,13 @@ class TestGetGenresAndLanguages(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.disc, '_get_session', AsyncMock(return_value=session)):
             result = await self.disc.get_genres('movie')
         self.assertEqual(result, [])
+
+    async def test_search_keywords_returns_id_and_name(self):
+        resp = _mock_response(200, {'results': [{'id': 1253, 'name': 'bollywood'}]})
+        session = _mock_session(resp)
+        with patch.object(self.disc, '_get_session', AsyncMock(return_value=session)):
+            result = await self.disc.search_keywords('bollywood')
+        self.assertEqual(result, [{'id': 1253, 'name': 'bollywood'}])
 
     async def test_get_languages_returns_list(self):
         payload = [{'iso_639_1': 'en', 'english_name': 'English'}]

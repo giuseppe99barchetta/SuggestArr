@@ -237,12 +237,12 @@ async def _get_web_search_context(query: str, config: Dict[str, Any]) -> str:
 async def _close_llm_client(client: AsyncOpenAI) -> None:
     """Close the LLM HTTP client and let transport callbacks finish."""
     try:
-        await client.aclose()
+        await client.close()
     except Exception as exc:
         logger.debug("Ignoring LLM client close failure: %s", exc)
         return
 
-    # httpx/anyio may schedule transport-close callbacks during aclose().
+    # httpx/anyio may schedule transport-close callbacks during close().
     # Short-lived job loops must run those callbacks before loop.close().
     await asyncio.sleep(0)
     await asyncio.sleep(0)

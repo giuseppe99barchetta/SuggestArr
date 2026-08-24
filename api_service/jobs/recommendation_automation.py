@@ -373,6 +373,7 @@ class RecommendationAutomation:
             filter_release_year_to=filter_release_year_to,
             filter_genres_include=normalized_filters.get('genres'),
             only_first_movie_in_collection=bool(job_filters.get('only_first_movie_in_collection', False)),
+            filter_keywords_exclude=job_filters.get('without_keywords'),
         )
 
         # Determine which users to process
