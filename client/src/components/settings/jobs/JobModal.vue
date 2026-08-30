@@ -206,6 +206,17 @@
                 <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days"
                   class="form-control" type="number" min="1" required />
               </div>
+              <div class="form-group">
+                <label for="maxRequestsPerUser">Automatic requests per user</label>
+                <input id="maxRequestsPerUser" v-model.number="form.max_requests_per_user"
+                  class="form-control" type="number" min="0" max="1000" required />
+                <small class="form-help">Set 0 for no extra limit. Max Results still caps each run.</small>
+              </div>
+              <div v-if="form.max_requests_per_user > 0" class="form-group">
+                <label for="requestLimitWindowHours">Rolling window (hours)</label>
+                <input id="requestLimitWindowHours" v-model.number="form.request_limit_window_hours"
+                  class="form-control" type="number" min="1" max="8760" required />
+              </div>
             </div>
           </div>
 
@@ -316,6 +327,7 @@ export default {
         pause_if_pending_requests: false,
         prevent_suggestions_if_unwatched: false,
         unwatched_suggestion_days: 7
+        , max_requests_per_user: 0, request_limit_window_hours: 24
         , delivery_mode: 'inherit', approval_pause_mode: 'inherit', seer_identity_mode: 'technical_user',
         request_profiles: { movie: {}, tv: {} }
       },
@@ -382,6 +394,9 @@ export default {
       if (this.form.prevent_suggestions_if_unwatched && this.form.unwatched_suggestion_days < 1) {
         return false;
       }
+      if (this.form.max_requests_per_user < 0 || this.form.max_requests_per_user > 1000 || this.form.request_limit_window_hours < 1 || this.form.request_limit_window_hours > 8760) {
+        return false;
+      }
       if (this.form.job_type === 'trakt_recommendations') {
         return (this.form.user_ids || []).length === 1;
       }
@@ -401,6 +416,8 @@ export default {
         pause_if_pending_requests: this.job.pause_if_pending_requests === true,
         prevent_suggestions_if_unwatched: this.job.prevent_suggestions_if_unwatched === true,
         unwatched_suggestion_days: this.job.unwatched_suggestion_days || 7
+        , max_requests_per_user: this.job.max_requests_per_user || 0,
+        request_limit_window_hours: this.job.request_limit_window_hours || 24
         , delivery_mode: this.job.delivery_mode || 'automatic',
         approval_pause_mode: this.job.approval_pause_mode || 'inherit',
         seer_identity_mode: this.job.seer_identity_mode || 'technical_user',

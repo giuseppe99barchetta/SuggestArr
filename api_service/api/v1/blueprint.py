@@ -146,8 +146,9 @@ def _job_payload(job):
     fields = ('id', 'name', 'job_type', 'enabled', 'media_type', 'filters', 'schedule_type',
               'schedule_value', 'max_results', 'user_ids', 'is_system', 'owner_id',
               'pause_if_pending_requests', 'prevent_suggestions_if_unwatched',
-              'unwatched_suggestion_days', 'delivery_mode', 'seer_identity_mode',
-              'request_profiles', 'approval_pause_mode', 'created_at', 'updated_at')
+                'unwatched_suggestion_days', 'delivery_mode', 'seer_identity_mode',
+                'request_profiles', 'approval_pause_mode', 'max_requests_per_user',
+                'request_limit_window_hours', 'created_at', 'updated_at')
     return {field: job.get(field) for field in fields}
 
 
@@ -350,7 +351,10 @@ def suggestions():
     db = DatabaseManager()
     owner_id = None if g.current_user['role'] == 'admin' else int(g.current_user['id'])
     page, per_page = pagination
-    items, total = db.list_suggestions(owner_id, status, search, page, per_page, media_type, _visible_request_user_ids(db))
+    items, total = db.list_suggestions(
+        owner_id, status, search, page, per_page, media_type, _visible_request_user_ids(db),
+        int(g.current_user['id']),
+    )
     return jsonify({'data': items, 'meta': {'page': page, 'per_page': per_page, 'total': total, 'pages': max(1, (total + per_page - 1) // per_page)}}), 200
 
 

@@ -79,3 +79,11 @@ def test_mysql_blacklist_uses_bounded_primary_key_columns():
         'suggestion_blacklist', 'CREATE TABLE suggestion_blacklist (tmdb_id TEXT)', 'mysql')
     assert 'tmdb_id VARCHAR(32)' in query
     assert 'media_type VARCHAR(16)' in query
+
+
+def test_mysql_feedback_uses_bounded_composite_primary_key_columns():
+    manager = object.__new__(SchemaManager)
+    query = manager._prepare_create_table_query_for_db(
+        'suggestion_feedback', 'CREATE TABLE suggestion_feedback (user_id INTEGER)', 'mysql')
+    assert 'media_user_id VARCHAR(191)' in query
+    assert 'tmdb_id VARCHAR(32)' in query

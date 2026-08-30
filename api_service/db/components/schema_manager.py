@@ -109,6 +109,8 @@ class SchemaManager:
                     seer_identity_mode TEXT NOT NULL DEFAULT 'technical_user',
                     request_profiles TEXT,
                     approval_pause_mode TEXT NOT NULL DEFAULT 'inherit',
+                    max_requests_per_user INTEGER NOT NULL DEFAULT 0,
+                    request_limit_window_hours INTEGER NOT NULL DEFAULT 24,
                     is_system INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -251,6 +253,21 @@ class SchemaManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(webhook_id, event_id)
+                )
+            """,
+            'suggestion_feedback': """
+                CREATE TABLE IF NOT EXISTS suggestion_feedback (
+                    user_id INTEGER NOT NULL,
+                    media_user_id TEXT NOT NULL DEFAULT '',
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    feedback TEXT NOT NULL,
+                    reason_type TEXT,
+                    reason_text TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, media_user_id, tmdb_id, media_type),
+                    FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
                 )
             """,
             'media_user_identities': """
@@ -487,6 +504,22 @@ class SchemaManager:
                         last_used_at TIMESTAMP NULL,
                         expires_at TIMESTAMP NULL,
                         revoked_at TIMESTAMP NULL,
+                        FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB
+                """
+            elif table_name == 'suggestion_feedback':
+                query = """
+                    CREATE TABLE IF NOT EXISTS suggestion_feedback (
+                        user_id INTEGER NOT NULL,
+                        media_user_id VARCHAR(191) NOT NULL DEFAULT '',
+                        tmdb_id VARCHAR(32) NOT NULL,
+                        media_type VARCHAR(16) NOT NULL,
+                        feedback VARCHAR(32) NOT NULL,
+                        reason_type VARCHAR(32),
+                        reason_text TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (user_id, media_user_id, tmdb_id, media_type),
                         FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
                     ) ENGINE=InnoDB
                 """
@@ -811,6 +844,8 @@ class SchemaManager:
                     'seer_identity_mode': ("VARCHAR(30) NOT NULL DEFAULT 'technical_user'" if self.db_type in ['mysql', 'mariadb'] else "TEXT NOT NULL DEFAULT 'technical_user'"),
                     'request_profiles': "TEXT",
                     'approval_pause_mode': ("VARCHAR(20) NOT NULL DEFAULT 'inherit'" if self.db_type in ['mysql', 'mariadb'] else "TEXT NOT NULL DEFAULT 'inherit'"),
+                    'max_requests_per_user': "INTEGER NOT NULL DEFAULT 0",
+                    'request_limit_window_hours': "INTEGER NOT NULL DEFAULT 24",
                 }
                 for column, definition in additions.items():
                     if column not in existing_columns:

@@ -110,6 +110,17 @@ def test_update_job_rejects_non_positive_unwatched_days(monkeypatch):
     repository.update_job.assert_not_called()
 
 
+def test_update_job_rejects_invalid_rolling_request_limit(monkeypatch):
+    existing = {"id": 1, "job_type": "recommendation", "owner_id": 1, "media_type": "movie", "user_ids": ["u1"]}
+    client, repository = _make_client(monkeypatch, existing_job=existing)
+
+    response = client.put("/api/jobs/1", json={"max_requests_per_user": -1})
+
+    assert response.status_code == 400
+    assert "max_requests_per_user" in response.get_json()["message"]
+    repository.update_job.assert_not_called()
+
+
 def test_dry_run_trakt_job_initializes_in_dry_run_mode(monkeypatch):
     existing = {
         "id": 2,

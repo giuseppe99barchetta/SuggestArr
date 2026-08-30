@@ -14,6 +14,8 @@ automation_bp = Blueprint('automation', __name__)
 
 _force_run_lock = threading.Lock()
 _force_run_running = False
+_FEEDBACK_VALUES = {'interested', 'not_interested', 'already_seen', 'too_similar', 'save_for_later'}
+_FEEDBACK_REASONS = {'genre', 'provider', 'content', 'title', 'other'}
 
 
 def _workflow_ids():
@@ -53,7 +55,7 @@ def request_workflow():
     db = DatabaseManager()
     items, total = db.list_suggestions(
         _workflow_owner(), status, request.args.get('search', '').strip()[:100], page, per_page, media_type,
-        _visible_request_user_ids(db))
+        _visible_request_user_ids(db), int(g.current_user['id']))
     return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
 
@@ -104,6 +106,42 @@ def request_workflow_again():
     remove_blacklist = bool((request.get_json(silent=True) or {}).get('remove_blacklist'))
     changed = DatabaseManager().request_rejected(ids, _workflow_owner(), remove_blacklist)
     return jsonify({'status': 'success', 'updated': changed}), 200
+
+
+@automation_bp.route('/requests/workflow/<int:suggestion_id>/feedback', methods=['PUT'])
+@limiter.limit('30 per minute')
+def set_request_feedback(suggestion_id):
+    """Save personal feedback without changing the shared request or blacklist."""
+    data = request.get_json(silent=True) or {}
+    feedback = data.get('feedback')
+    reason_type = data.get('reason_type')
+    reason_text = data.get('reason_text')
+    if feedback not in _FEEDBACK_VALUES:
+        return jsonify({'status': 'error', 'message': 'Invalid feedback value'}), 400
+    if reason_type is not None and reason_type not in _FEEDBACK_REASONS:
+        return jsonify({'status': 'error', 'message': 'Invalid feedback reason'}), 400
+    if reason_text is not None:
+        if not isinstance(reason_text, str) or len(reason_text.strip()) > 500:
+            return jsonify({'status': 'error', 'message': 'reason_text must be at most 500 characters'}), 400
+        reason_text = reason_text.strip() or None
+    db = DatabaseManager()
+    result = db.set_suggestion_feedback(
+        suggestion_id, _workflow_owner(), int(g.current_user['id']), feedback, reason_type, reason_text,
+        _visible_request_user_ids(db),
+    )
+    if result is None:
+        return jsonify({'status': 'error', 'message': 'Suggestion not found'}), 404
+    return jsonify({'status': 'success', 'feedback': result}), 200
+
+
+@automation_bp.route('/requests/workflow/<int:suggestion_id>/feedback', methods=['DELETE'])
+@limiter.limit('30 per minute')
+def clear_request_feedback(suggestion_id):
+    db = DatabaseManager()
+    removed = db.clear_suggestion_feedback(
+        suggestion_id, _workflow_owner(), int(g.current_user['id']), _visible_request_user_ids(db),
+    )
+    return jsonify({'status': 'success', 'removed': removed}), 200
 
 
 def _run_automation_in_background():

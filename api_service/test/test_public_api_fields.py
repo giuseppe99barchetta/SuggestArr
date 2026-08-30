@@ -49,7 +49,8 @@ def test_job_payload_includes_all_safe_job_configuration_fields():
         'owner_id': 1, 'pause_if_pending_requests': True, 'prevent_suggestions_if_unwatched': False,
         'unwatched_suggestion_days': 7, 'delivery_mode': 'inherit',
         'seer_identity_mode': 'technical_user', 'request_profiles': {'movie': {'serverId': 1}},
-        'approval_pause_mode': 'inherit', 'created_at': None, 'updated_at': None,
+        'approval_pause_mode': 'inherit', 'max_requests_per_user': 0,
+        'request_limit_window_hours': 24, 'created_at': None, 'updated_at': None,
     }
 
     class JobsRepository:
@@ -73,7 +74,7 @@ def test_openapi_documents_public_filters_and_full_resource_schemas():
         if parameter['name'] == 'status'
     )
     assert 'all' in suggestion_status['schema']['enum']
-    assert {'filters', 'request_profiles', 'approval_pause_mode'} <= set(spec['components']['schemas']['Job']['properties'])
+    assert {'filters', 'request_profiles', 'approval_pause_mode', 'max_requests_per_user', 'request_limit_window_hours'} <= set(spec['components']['schemas']['Job']['properties'])
     assert {'request_profile', 'media_user_id', 'user_name'} <= set(spec['components']['schemas']['Suggestion']['properties'])
     assert {'source_origin', 'source_media_id', 'media_user', 'metadata'} <= set(spec['components']['schemas']['Request']['properties'])
     action_request = spec['paths']['/api/v1/suggestions/actions']['post']['requestBody']

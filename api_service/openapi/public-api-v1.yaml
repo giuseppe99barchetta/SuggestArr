@@ -518,7 +518,7 @@ components:
         pages: {type: integer, minimum: 1}
     Job:
       type: object
-      required: [id, name, job_type, enabled, media_type, filters, schedule_type, schedule_value, max_results, user_ids, is_system, owner_id, pause_if_pending_requests, prevent_suggestions_if_unwatched, unwatched_suggestion_days, delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode, created_at, updated_at]
+      required: [id, name, job_type, enabled, media_type, filters, schedule_type, schedule_value, max_results, user_ids, is_system, owner_id, pause_if_pending_requests, prevent_suggestions_if_unwatched, unwatched_suggestion_days, delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode, max_requests_per_user, request_limit_window_hours, created_at, updated_at]
       properties:
         id: {type: integer}
         name: {type: string}
@@ -539,6 +539,8 @@ components:
         seer_identity_mode: {type: string, enum: [matching_user, technical_user, admin_user]}
         request_profiles: {type: object, additionalProperties: true}
         approval_pause_mode: {type: string, enum: [inherit, always, never]}
+        max_requests_per_user: {type: integer, minimum: 0, description: Maximum automated requests for one media user in the rolling window; zero disables this guardrail.}
+        request_limit_window_hours: {type: integer, minimum: 1, maximum: 8760}
         created_at: {type: [string, 'null'], format: date-time}
         updated_at: {type: [string, 'null'], format: date-time}
     Run:
