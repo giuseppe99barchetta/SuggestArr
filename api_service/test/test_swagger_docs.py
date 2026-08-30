@@ -1,4 +1,5 @@
 from api_service.app import app
+from unittest.mock import patch
 
 
 def test_docs_uses_self_hosted_swagger_assets_and_local_openapi_document():
@@ -36,3 +37,17 @@ def test_docs_custom_assets_and_openapi_document_are_available():
     assert client.get('/swagger-ui/custom/swagger-custom.css').status_code == 200
     assert client.get('/swagger-ui/logo').status_code == 200
     assert client.get('/api/v1/openapi.json').status_code == 200
+
+
+def test_docs_uses_subpath_for_swagger_urls():
+    config = {'SUBPATH': '/suggestarr'}
+    with patch('api_service.app.load_env_vars', return_value=config), \
+         patch('api_service.frontend_routes.load_env_vars', return_value=config):
+        response = app.test_client().get('/suggestarr/docs')
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert '"/suggestarr/api/v1/openapi.json"' in body
+    assert 'href="/suggestarr/swagger-ui/swagger-ui.css"' in body
+    assert 'src="/suggestarr/swagger-ui/swagger-ui-bundle.js"' in body
+    assert 'href="/suggestarr/swagger-ui/custom/swagger-custom.css"' in body

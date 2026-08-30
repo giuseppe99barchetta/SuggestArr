@@ -9,6 +9,30 @@ on:
       - nightly
 
 jobs:
+  security:
+    name: Dependency security audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Audit Python dependencies
+        uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          inputs: api_service/requirements.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: cd client && npm ci
+
+      - name: Audit production frontend dependencies
+        run: cd client && npm audit --omit=dev --audit-level=high
+
   test-backend:
     name: Backend tests (pytest)
     runs-on: ubuntu-latest
