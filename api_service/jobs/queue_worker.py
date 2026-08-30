@@ -13,6 +13,7 @@ from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.seer.seer_client import SeerClient
 from api_service.utils.asyncio_loop import close_event_loop
+from api_service.observability.metrics import INTEGRATION_ERRORS, QUEUE_RETRIES
 
 MAX_RETRIES = 5
 WORKER_BATCH = 50
@@ -95,6 +96,12 @@ async def _run_worker() -> int:
             if db.check_request_exists(media_type, tmdb_id):
                 logger.debug("Queue worker: %s tmdb:%s already in requests, marking submitted.", media_type, tmdb_id)
                 db.mark_pending_submitted(row_id, retry_count)
+                try:
+                    db.enqueue_webhook_event("request.submitted", {
+                        "tmdb_id": str(tmdb_id), "media_type": media_type, "job_id": item.get("job_id"),
+                    })
+                except Exception as exc:
+                    logger.error("Unable to queue request.submitted webhook: %s", exc)
                 continue
 
             # Mark in-flight so a concurrent worker invocation skips this row
@@ -122,8 +129,15 @@ async def _run_worker() -> int:
 
                 db.mark_pending_submitted(row_id, retry_count)
                 logger.info("Queue worker: submitted %s tmdb:%s.", media_type, tmdb_id)
+                try:
+                    db.enqueue_webhook_event("request.submitted", {
+                        "tmdb_id": str(tmdb_id), "media_type": media_type, "job_id": item.get("job_id"),
+                    })
+                except Exception as exc:
+                    logger.error("Unable to queue request.submitted webhook: %s", exc)
                 submitted += 1
             else:
+                INTEGRATION_ERRORS.labels(service="seer").inc()
                 new_retry = retry_count + 1
                 if new_retry >= MAX_RETRIES:
                     db.mark_pending_failed(row_id, new_retry, "Seer rejected the request after maximum retries")
@@ -132,6 +146,7 @@ async def _run_worker() -> int:
                         media_type, tmdb_id, new_retry,
                     )
                 else:
+                    QUEUE_RETRIES.inc()
                     next_at = _next_attempt_at(new_retry)
                     db.increment_pending_retry(row_id, new_retry, next_at)
                     logger.warning(

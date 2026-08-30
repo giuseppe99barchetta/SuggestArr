@@ -18,6 +18,10 @@ tags:
     description: Inspect SuggestArr requests and aggregate statistics.
   - name: Installation
     description: Administrator-only operational statistics for the entire SuggestArr installation.
+  - name: Observability
+    description: Administrator-only Prometheus metrics for monitoring and alerting.
+  - name: Webhooks
+    description: Administrator-managed, signed outbound event subscriptions.
 x-error-responses: &errorResponses
   '400': {$ref: '#/components/responses/BadRequest'}
   '401': {$ref: '#/components/responses/Unauthorized'}
@@ -48,6 +52,50 @@ paths:
       security: []
       responses:
         '200': {description: OpenAPI document}
+  /api/v1/metrics:
+    get:
+      operationId: publicMetrics
+      tags: [Observability]
+      summary: Prometheus metrics
+      description: Administrator-only Prometheus exposition. Use an administrator API key for scraping.
+      responses:
+        <<: *errorResponses
+        '200': {description: Prometheus text exposition}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/webhooks:
+    get:
+      operationId: publicWebhooks
+      tags: [Webhooks]
+      summary: List outbound webhooks
+      responses:
+        <<: *errorResponses
+        '200': {description: Webhooks, with secrets omitted}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      operationId: publicCreateWebhook
+      tags: [Webhooks]
+      summary: Create an outbound webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WebhookCreate'}
+      responses:
+        <<: *errorResponses
+        '201': {description: Webhook created, with secret omitted}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/webhooks/{webhook_id}:
+    delete:
+      operationId: publicDeleteWebhook
+      tags: [Webhooks]
+      summary: Delete an outbound webhook
+      parameters:
+        - {name: webhook_id, in: path, required: true, schema: {type: string}}
+      responses:
+        <<: *errorResponses
+        '204': {description: Webhook deleted}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Webhook not found}
   /api/v1/me:
     get:
       operationId: publicMe
@@ -415,6 +463,19 @@ components:
           properties:
             poster_path: {type: [string, 'null']}
             rating: {type: [number, 'null']}
+    WebhookCreate:
+      type: object
+      required: [name, url, secret, events]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        url: {type: string, format: uri, maxLength: 2048}
+        secret: {type: string, minLength: 16, writeOnly: true}
+        events:
+          type: array
+          minItems: 1
+          items: {type: string, enum: [suggestion.created, request.submitted, run.failed]}
+        enabled: {type: boolean, default: true}
+        allow_private: {type: boolean, default: false, description: Allow private-network delivery destinations.}
     Error:
       type: object
       required: [error]

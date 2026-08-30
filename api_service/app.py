@@ -270,6 +270,7 @@ try:
     from api_service.jobs.trakt_recommendations_automation import execute_trakt_recommendations_job
     from api_service.jobs.system_job_sync import sync_system_job_from_config
     from api_service.jobs.queue_worker import run_queue_worker
+    from api_service.jobs.webhook_worker import run_webhook_worker
 
     # Initialize database tables (including discover_jobs).
     # DatabaseManager.__init__ already calls initialize_db(), so no need to
@@ -302,6 +303,14 @@ try:
         'interval',
         minutes=2,
         id='seer_queue_worker',
+        max_instances=1,
+        replace_existing=True,
+    )
+    job_manager.scheduler.add_job(
+        run_webhook_worker,
+        'interval',
+        minutes=1,
+        id='webhook_delivery_worker',
         max_instances=1,
         replace_existing=True,
     )

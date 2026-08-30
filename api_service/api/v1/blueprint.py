@@ -16,6 +16,8 @@ from api_service.jobs.recommendation_automation import RecommendationAutomation
 from api_service.jobs.trakt_recommendations_automation import TraktRecommendationsAutomation
 from api_service.utils.asyncio_loop import run_coroutine_sync
 from api_service.config.logger_manager import LoggerManager
+from api_service.observability.metrics import render_metrics
+from api_service.utils.ssrf_guard import validate_url
 
 public_api_v1_bp = Blueprint('public_api_v1', __name__)
 logger = LoggerManager.get_logger('PublicApiV1')
@@ -58,6 +60,55 @@ def openapi_yaml():
 @public_api_v1_bp.route('/status', methods=['GET'])
 def status():
     return jsonify({'data': {'service': 'SuggestArr', 'api_version': 'v1', 'status': 'ok'}}), 200
+
+
+@public_api_v1_bp.route('/metrics', methods=['GET'])
+@require_role('admin')
+def metrics():
+    """Prometheus exposition endpoint for administrators and scrape API keys."""
+    body, content_type = render_metrics(DatabaseManager())
+    return Response(body, content_type=content_type)
+
+
+_WEBHOOK_EVENTS = {'suggestion.created', 'request.submitted', 'run.failed'}
+
+
+@public_api_v1_bp.route('/webhooks', methods=['GET'])
+@require_role('admin')
+def webhooks():
+    return jsonify({'data': DatabaseManager().list_webhooks()}), 200
+
+
+@public_api_v1_bp.route('/webhooks', methods=['POST'])
+@require_role('admin')
+@limiter.limit('20 per minute')
+def create_webhook():
+    data = request.get_json(silent=True) or {}
+    name, url, secret, events = data.get('name'), data.get('url'), data.get('secret'), data.get('events')
+    if not isinstance(name, str) or not name.strip() or len(name) > 100:
+        return jsonify({'error': {'code': 'validation_error', 'message': 'name must be 1 to 100 characters.'}}), 400
+    if not isinstance(url, str) or len(url) > 2048 or not isinstance(secret, str) or len(secret) < 16:
+        return jsonify({'error': {'code': 'validation_error', 'message': 'url and a secret of at least 16 characters are required.'}}), 400
+    if not isinstance(events, list) or not events or any(event not in _WEBHOOK_EVENTS for event in events):
+        return jsonify({'error': {'code': 'validation_error', 'message': 'events must contain supported webhook events.'}}), 400
+    try:
+        validate_url(url, allow_private=bool(data.get('allow_private', False)))
+    except ValueError as exc:
+        return jsonify({'error': {'code': 'validation_error', 'message': str(exc)}}), 400
+    item = DatabaseManager().create_webhook({
+        'name': name, 'url': url, 'secret': secret, 'events': events,
+        'enabled': data.get('enabled', True), 'allow_private': data.get('allow_private', False),
+    })
+    return jsonify({'data': item}), 201
+
+
+@public_api_v1_bp.route('/webhooks/<webhook_id>', methods=['DELETE'])
+@require_role('admin')
+@limiter.limit('20 per minute')
+def delete_webhook(webhook_id):
+    if not DatabaseManager().delete_webhook(webhook_id):
+        return jsonify({'error': {'code': 'not_found', 'message': 'Webhook not found.'}}), 404
+    return '', 204
 
 
 @public_api_v1_bp.route('/me', methods=['GET'])

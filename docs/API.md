@@ -49,3 +49,50 @@ endpoint under **Installation** and documents its complete response schema.
 
 The in-memory rate limiter is per worker. Treat API keys like passwords: do
 not place them in URLs, logs, browser storage, or source control.
+
+## Prometheus metrics
+
+Administrators can scrape `GET /api/v1/metrics` with an administrator JWT.
+Deployments that use API keys can instead put a reverse proxy in front of the
+endpoint and inject `X-API-Key`; Prometheus' `authorization` block is for
+Bearer tokens.
+The endpoint exposes low-cardinality job duration/status, integration errors,
+Seer queue/retry, and webhook delivery metrics. It never includes titles,
+users, credentials, or request payloads as labels.
+
+```yaml
+scrape_configs:
+  - job_name: suggestarr
+    metrics_path: /api/v1/metrics
+    authorization:
+      type: Bearer
+      credentials: <administrator-jwt>
+    static_configs:
+      - targets: [suggestarr:5000]
+```
+
+Recommended alerts are a growing `suggestarr_integration_errors_total`, a
+non-zero `suggestarr_seer_queue_items{status="failed"}`, and an elevated job
+duration. Use Alertmanager (or your existing alerting system) for routing and
+silencing rather than embedding notification policy in SuggestArr.
+
+## Outbound webhooks
+
+Administrators can create signed subscriptions at `POST /api/v1/webhooks`,
+list them with `GET /api/v1/webhooks`, and remove one with
+`DELETE /api/v1/webhooks/{webhook_id}`. Supported events are:
+
+- `suggestion.created`
+- `request.submitted`
+- `run.failed`
+
+Each delivery is queued persistently and retried with exponential backoff up to
+five attempts. The JSON body is signed with HMAC-SHA256. Verify the signature
+against the exact UTF-8 body using `"<timestamp>.<body>"` and the shared
+secret from `X-SuggestArr-Signature`; the timestamp and event identifiers are
+provided by `X-SuggestArr-Timestamp`, `X-SuggestArr-Event`, and
+`X-SuggestArr-Event-Id`.
+
+Webhook URLs are SSRF-validated. Private-network destinations are rejected by
+default; set `allow_private: true` only for trusted local automation such as
+Home Assistant or n8n.

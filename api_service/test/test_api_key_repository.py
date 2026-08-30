@@ -66,3 +66,10 @@ def test_api_key_mysql_and_postgres_ddl_use_supported_indexed_types():
     postgres = manager._prepare_create_table_query_for_db('api_keys', source, 'postgres')
     assert 'VARCHAR(32)' in mysql and 'CHAR(64)' in mysql
     assert 'SERIAL PRIMARY KEY' in postgres
+
+
+def test_webhook_delivery_mysql_ddl_keeps_long_payload_type():
+    manager = SchemaManager(None)
+    mysql = manager._prepare_create_table_query_for_db('webhook_deliveries', '', 'mysql')
+    assert 'payload LONGTEXT NOT NULL' in mysql
+    assert 'LONGVARCHAR' not in mysql

@@ -234,6 +234,25 @@ class SchemaManager:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """,
+            'webhook_deliveries': """
+                CREATE TABLE IF NOT EXISTS webhook_deliveries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id TEXT NOT NULL,
+                    webhook_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    secret TEXT NOT NULL,
+                    allow_private INTEGER NOT NULL DEFAULT 0,
+                    payload TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    retry_count INTEGER NOT NULL DEFAULT 0,
+                    next_attempt_at TIMESTAMP,
+                    last_error TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(webhook_id, event_id)
+                )
+            """,
             'media_user_identities': """
                 CREATE TABLE IF NOT EXISTS media_user_identities (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -469,6 +488,26 @@ class SchemaManager:
                         expires_at TIMESTAMP NULL,
                         revoked_at TIMESTAMP NULL,
                         FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB
+                """
+            elif table_name == 'webhook_deliveries':
+                return """
+                    CREATE TABLE IF NOT EXISTS webhook_deliveries (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        event_id VARCHAR(64) NOT NULL,
+                        webhook_id VARCHAR(64) NOT NULL,
+                        event_type VARCHAR(64) NOT NULL,
+                        url VARCHAR(2048) NOT NULL,
+                        secret VARCHAR(512) NOT NULL,
+                        allow_private TINYINT(1) NOT NULL DEFAULT 0,
+                        payload LONGTEXT NOT NULL,
+                        status VARCHAR(32) NOT NULL DEFAULT 'queued',
+                        retry_count INT NOT NULL DEFAULT 0,
+                        next_attempt_at TIMESTAMP NULL,
+                        last_error TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY uniq_webhook_delivery (webhook_id, event_id)
                     ) ENGINE=InnoDB
                 """
 

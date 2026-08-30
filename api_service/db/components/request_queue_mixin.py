@@ -140,6 +140,13 @@ class RequestQueueMixin:
                 conn.commit()
                 if inserted:
                     self.logger.debug("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)
+                    try:
+                        self.enqueue_webhook_event("suggestion.created", {
+                            "tmdb_id": str(tmdb_id), "media_type": media_type, "user_id": user_id,
+                            "job_id": job_id, "status": status,
+                        })
+                    except Exception as exc:
+                        self.logger.error("Unable to queue suggestion.created webhook: %s", exc)
                 else:
                     self.logger.info(
                         "enqueue_request: %s tmdb:%s already exists in pending queue, skipping.",

@@ -23,6 +23,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
 from api_service.config.logger_manager import LoggerManager
+from api_service.observability.metrics import integration_error
 from api_service.exceptions.api_exceptions import LLMValidationError
 from api_service.services.config_service import ConfigService
 from api_service.services.llm.schemas import (
@@ -519,6 +520,7 @@ async def _call_with_validation(
                         response_format.get("type"),
                     )
                     continue
+                integration_error("llm")
                 raise
 
         if response is None:
@@ -552,6 +554,7 @@ async def _call_with_validation(
                     *messages,
                 ]
 
+    integration_error("llm")
     raise LLMValidationError(
         f"LLM response failed Pydantic validation after {max_retries + 1} attempt(s). "
         f"Last error: {last_error}"

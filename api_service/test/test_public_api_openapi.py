@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 import yaml
 from flask import Flask
@@ -13,7 +14,7 @@ def test_openapi_documents_every_public_route_and_has_unique_operation_ids():
     app = Flask(__name__)
     app.register_blueprint(public_api_v1_bp, url_prefix='/api/v1')
     documented = {(path, method.upper()) for path, item in spec['paths'].items() for method in item if method in {'get', 'post', 'put', 'patch', 'delete'}}
-    routes = {(rule.rule.replace('<int:', '{').replace('>', '}'), method)
+    routes = {(re.sub(r'<(?:[^:>]+:)?([^>]+)>', r'{\1}', rule.rule), method)
               for rule in app.url_map.iter_rules() if rule.rule.startswith('/api/v1/')
               for method in rule.methods - {'HEAD', 'OPTIONS'}}
     assert routes == documented
