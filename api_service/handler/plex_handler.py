@@ -16,7 +16,7 @@ def to_ascii(value):
     return unicodedata.normalize('NFKD', value)
 
 class PlexHandler(BaseMediaHandler):
-    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, selected_users=None, max_content=10):
+    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, selected_users=None, max_content=10, simkl_augmentor=None):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -47,6 +47,7 @@ class PlexHandler(BaseMediaHandler):
             max_total_requests=max_total_requests,
             trakt_augmentor=trakt_augmentor,
             max_content=max_content,
+            simkl_augmentor=simkl_augmentor,
         )
         self.plex_client = plex_client
         self.selected_users = selected_users or []
@@ -141,8 +142,12 @@ class PlexHandler(BaseMediaHandler):
         }
 
     async def _collect_trakt_seeds(self):
-        """Fetch Trakt seeds for all linked users, return list without processing."""
-        if not self.trakt_augmentor or not self.selected_users:
+        """Fetch watch-tracker seeds for all linked users, without processing.
+
+        Covers both Trakt and Simkl; a user linked to both contributes from
+        each, and any title they share collapses during the seed merge.
+        """
+        if not (self.trakt_augmentor or self.simkl_augmentor) or not self.selected_users:
             return []
 
         db = DatabaseManager()
@@ -154,6 +159,7 @@ class PlexHandler(BaseMediaHandler):
                 provider="plex", external_user_id=external_id, external_username=external_username,
             )
             seeds = await self._augment_user_trakt(identity["id"])
+            seeds += await self._augment_user_simkl(identity["id"])
             if seeds:
                 for seed in seeds:
                     seed['user_id'] = external_id
@@ -402,6 +408,10 @@ class PlexHandler(BaseMediaHandler):
                         'title': source_tmdb_obj.get('title') or source_tmdb_obj.get('name', ''),
                         'poster_path': source_tmdb_obj.get('poster_path'),
                         'media_type': media_type,
+                        # Lets a preview show which watch tracker seeded a
+                        # suggestion; otherwise the only way to tell a Simkl
+                        # or Trakt seed from a media-server one is the logs.
+                        'source_origin': source_tmdb_obj.get('_source_origin'),
                     },
                 })
                 if would_request:

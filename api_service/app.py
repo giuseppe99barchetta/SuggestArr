@@ -34,6 +34,7 @@ from api_service.blueprints.admin.routes import admin_bp
 from api_service.blueprints.users.routes import users_bp
 from api_service.blueprints.cleanup.routes import cleanup_bp
 from api_service.blueprints.trakt.routes import trakt_bp
+from api_service.blueprints.simkl.routes import simkl_bp
 from api_service.api.v1 import public_api_v1_bp
 
 class SubpathMiddleware:
@@ -192,6 +193,7 @@ def create_app():
     application.register_blueprint(users_bp, url_prefix='/api/users')
     application.register_blueprint(cleanup_bp, url_prefix='/api/cleanup')
     application.register_blueprint(trakt_bp, url_prefix='/api/trakt')
+    application.register_blueprint(simkl_bp, url_prefix='/api/simkl')
     application.register_blueprint(public_api_v1_bp, url_prefix='/api/v1')
 
     def swagger_ui_directory():
@@ -279,6 +281,20 @@ try:
     # One-time migration: copy integration credentials from config.yaml into
     # the integrations table if not already present.
     db_manager.migrate_integrations_from_config()
+
+    # Plex profiles linked before account-id reconciliation existed are stored
+    # under the plex.tv id, which the server does not use for its owner. Those
+    # profiles match no monitored user, so watch-tracker links silently do
+    # nothing until the id is corrected.
+    try:
+        from api_service.services.plex.account_resolver import (
+            list_plex_server_users, reconcile_plex_profiles,
+        )
+        repaired = reconcile_plex_profiles(db_manager, list_plex_server_users)
+        if repaired:
+            logger.info("Reconciled %d Plex profile(s) with the server's account ids", repaired)
+    except Exception as exc:
+        logger.warning("Plex profile reconciliation skipped: %s", exc)
 
     # Sync system job from YAML config (backwards compatibility)
     sync_result = sync_system_job_from_config()

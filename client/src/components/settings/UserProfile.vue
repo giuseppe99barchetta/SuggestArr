@@ -229,13 +229,35 @@
           </form>
         </template>
 
-        <div class="section-divider"></div>
-        <h3><i class="fas fa-tv"></i> Trakt Account</h3>
-        <TraktMediaUsers
-          mode="self"
-          :trakt-configured="isTraktAppConfigured"
-          embedded
-        />
+        <!-- Watch trackers hang off the media profile, so they are only
+             offered once one exists. Rendering them unlinked would repeat the
+             same "link your media server first" notice once per tracker. -->
+        <template v-if="currentLink">
+          <div class="section-divider"></div>
+          <h3><i class="fas fa-tv"></i> Trakt Account</h3>
+          <TraktMediaUsers
+            mode="self"
+            :trakt-configured="isTraktAppConfigured"
+            embedded
+          />
+
+          <div class="section-divider"></div>
+          <h3><i class="fas fa-check-double"></i> Simkl Account</h3>
+          <SimklMediaUsers
+            mode="self"
+            :simkl-configured="isSimklAppConfigured"
+            embedded
+          />
+        </template>
+
+        <template v-else>
+          <div class="section-divider"></div>
+          <h3><i class="fas fa-clock-rotate-left"></i> Watch History Accounts</h3>
+          <div class="list-empty">
+            <i class="fas fa-info-circle"></i>
+            Link your {{ providerLabel }} account above to connect Trakt or Simkl.
+          </div>
+        </template>
       </div>
 
       <!-- No linkable service configured -->
@@ -269,6 +291,7 @@ import {
 } from '@/api/api';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
+import SimklMediaUsers from './SimklMediaUsers.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
 
 const PROVIDER_META = {
@@ -280,7 +303,7 @@ const PROVIDER_META = {
 export default {
   name: 'UserProfile',
 
-  components: { BaseDropdown, TraktMediaUsers, ApiKeysPanel },
+  components: { BaseDropdown, TraktMediaUsers, SimklMediaUsers, ApiKeysPanel },
 
   props: {
     config: Object,
@@ -317,6 +340,7 @@ export default {
       configStatus: {
         selected_service: '',
         trakt_app_configured: false,
+        simkl_app_configured: false,
       },
 
       // Credential-based link form
@@ -372,6 +396,11 @@ export default {
       return !!(
         this.config?.TRAKT_CLIENT_ID && this.config?.TRAKT_CLIENT_SECRET
       ) || this.configStatus?.trakt_app_configured === true;
+    },
+
+    isSimklAppConfigured() {
+      return !!this.config?.SIMKL_CLIENT_ID
+        || this.configStatus?.simkl_app_configured === true;
     },
 
     serverUserOptions() {

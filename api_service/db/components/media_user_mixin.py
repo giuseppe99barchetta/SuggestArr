@@ -80,6 +80,55 @@ class MediaUserMixin:
         return {"id": row[0], "provider": row[1], "external_user_id": row[2],
                 "external_username": row[3], "created_at": row[4]}
 
+    def rename_media_user_identity(
+        self, provider: str, old_external_user_id: str, new_external_user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Re-point an identity at a different external id.
+
+        Trakt and Simkl links reference the identity row by primary key, so
+        renaming in place carries them along; recreating the identity would
+        strand them. Used when a Plex profile turns out to be the same person
+        as an account the server reports under a different id.
+
+        Args:
+            provider: Media server provider name.
+            old_external_user_id: The id currently stored.
+            new_external_user_id: The id to move to.
+
+        Returns:
+            The updated identity, or None when there is nothing to rename or
+            the target id already exists. A pre-existing target is left alone
+            because merging two identities would have to decide which of two
+            sets of watch-tracker links wins.
+        """
+        provider = str(provider).lower()
+        old_external_user_id = str(old_external_user_id)
+        new_external_user_id = str(new_external_user_id)
+        if old_external_user_id == new_external_user_id:
+            return None
+
+        try:
+            self.get_media_user_identity(provider, new_external_user_id)
+            return None
+        except ValueError:
+            pass
+
+        try:
+            existing = self.get_media_user_identity(provider, old_external_user_id)
+        except ValueError:
+            return None
+
+        ph = self._ph()
+        query = (
+            f"UPDATE media_user_identities SET external_user_id = {ph} "
+            f"WHERE id = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (new_external_user_id, existing["id"]))
+            conn.commit()
+        return self.get_media_user_identity(provider, new_external_user_id)
+
     def get_all_media_user_identities(self) -> List[Dict[str, Any]]:
         """Return all media-user identity rows ordered by provider and external id."""
         query = (
@@ -483,6 +532,57 @@ class MediaUserMixin:
             cursor = conn.cursor()
             cursor.execute(query, (user_id, provider, external_user_id, external_username, access_token))
             conn.commit()
+
+    def get_media_profiles_by_provider(self, provider: str) -> List[Dict[str, Any]]:
+        """Return every user's media profile for one provider, without tokens.
+
+        Args:
+            provider: One of 'jellyfin', 'plex', 'emby'.
+
+        Returns:
+            List of {user_id, external_user_id, external_username}.
+        """
+        ph = self._ph()
+        query = (
+            f"SELECT user_id, external_user_id, external_username "
+            f"FROM user_media_profiles WHERE provider = {ph} ORDER BY user_id"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (str(provider).lower(),))
+            rows = cursor.fetchall()
+        return [
+            {"user_id": row[0], "external_user_id": row[1], "external_username": row[2]}
+            for row in rows
+        ]
+
+    def update_media_profile_external_id(
+        self, user_id: int, provider: str, external_user_id: str
+    ) -> bool:
+        """Change only the external id a media profile points at.
+
+        Deliberately narrower than :meth:`create_user_media_profile`, which
+        rewrites every column and would blank the stored access token when the
+        caller has no token to supply.
+
+        Args:
+            user_id: Primary key of the auth user.
+            provider: One of 'jellyfin', 'plex', 'emby'.
+            external_user_id: The id to store.
+
+        Returns:
+            True when a row was updated.
+        """
+        ph = self._ph()
+        query = (
+            f"UPDATE user_media_profiles SET external_user_id = {ph} "
+            f"WHERE user_id = {ph} AND provider = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (str(external_user_id), user_id, str(provider).lower()))
+            conn.commit()
+            return cursor.rowcount > 0
 
     def get_user_media_profiles(self, user_id: int) -> List[Dict[str, Any]]:
         """

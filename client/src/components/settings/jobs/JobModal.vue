@@ -368,7 +368,7 @@ export default {
       if (this.form.job_type === 'trakt_recommendations') {
         return 'Trakt Recommendations Jobs fetch personalized movie and show lists only from a linked Trakt account.';
       }
-      return 'Recommendation Jobs find similar content based on what your users have watched on your media server or Trakt.tv.';
+      return 'Recommendation Jobs find similar content based on what your users have watched on your media server, Trakt.tv, or Simkl.';
     },
     jobNamePlaceholder() {
       if (this.form.job_type === 'discover') return 'e.g., Popular Movies 2024';
