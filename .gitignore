@@ -376,7 +376,6 @@ config/config_files/
 
 # LLM Local Runtime files
 config/suggestarr.db
-client/package-lock.json
 static/
 
 # AI agent planning artifacts (ephemeral)

@@ -2,7 +2,7 @@
 FROM node:22 AS client-builder
 WORKDIR /app/client
 COPY client/package*.json ./ 
-RUN npm install && npm cache clean --force
+RUN npm ci && npm cache clean --force
 COPY client/ . 
 RUN npm run build
 

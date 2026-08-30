@@ -12,7 +12,7 @@ async function initApp() {
   axios.defaults.withCredentials = true;
 
   // Configure base URL for development
-  if (process.env.NODE_ENV === "development") {
+  if (import.meta.env.DEV) {
     axios.defaults.baseURL = "http://localhost:5000";
   }
 

@@ -37,8 +37,8 @@ jobs:
       - name: Run tests
         run: cd api_service && python -m pytest --tb=short -q
 
-  lint-frontend:
-    name: Frontend lint (ESLint)
+  test-frontend:
+    name: Frontend quality checks
     runs-on: ubuntu-latest
 
     steps:
@@ -54,11 +54,20 @@ jobs:
         uses: actions/cache@v6.1.0
         with:
           path: ~/.npm
-          key: npm-${{ hashFiles('client/package.json') }}
+          key: npm-${{ hashFiles('client/package-lock.json') }}
           restore-keys: npm-
 
       - name: Install dependencies
-        run: cd client && npm install
+        run: cd client && npm ci
+
+      - name: Run frontend tests
+        run: cd client && npm test
 
       - name: Run ESLint
-        run: cd client && npx eslint --ext .js,.vue src/
+        run: cd client && npm run lint
+
+      - name: Run stylelint
+        run: cd client && npm run lint:styles
+
+      - name: Build frontend
+        run: cd client && npm run build

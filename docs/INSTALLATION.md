@@ -556,7 +556,7 @@ python -m pip install --upgrade pip
 python -m pip install -r api_service\requirements.txt
 
 cd client
-npm install
+npm ci
 npm run build
 cd ..
 
@@ -584,7 +584,7 @@ python -m pip install --upgrade pip
 python -m pip install -r api_service/requirements.txt
 
 cd client
-npm install
+npm ci
 npm run build
 cd ..
 
@@ -622,7 +622,7 @@ Source install:
 git pull
 python -m pip install -r api_service/requirements.txt
 cd client
-npm install
+npm ci
 npm run build
 cd ..
 cp -R client/dist/* static/
