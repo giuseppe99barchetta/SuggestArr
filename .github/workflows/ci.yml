@@ -71,3 +71,17 @@ jobs:
 
       - name: Build frontend
         run: cd client && npm run build
+
+      - name: Install Chromium for E2E
+        run: cd client && npx playwright install --with-deps chromium
+
+      - name: Run frontend E2E
+        run: cd client && npm run test:e2e
+
+      - name: Upload E2E failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-e2e-failure-artifacts
+          path: client/test-results/
+          if-no-files-found: ignore

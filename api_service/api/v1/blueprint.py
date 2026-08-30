@@ -70,7 +70,10 @@ def metrics():
     return Response(body, content_type=content_type)
 
 
-_WEBHOOK_EVENTS = {'suggestion.created', 'request.submitted', 'run.failed'}
+_WEBHOOK_EVENTS = {
+    'suggestion.created', 'suggestion.awaiting_approval', 'suggestion.approved',
+    'suggestion.rejected', 'request.submitted', 'request.failed', 'run.failed',
+}
 
 
 @public_api_v1_bp.route('/webhooks', methods=['GET'])
@@ -109,6 +112,21 @@ def delete_webhook(webhook_id):
     if not DatabaseManager().delete_webhook(webhook_id):
         return jsonify({'error': {'code': 'not_found', 'message': 'Webhook not found.'}}), 404
     return '', 204
+
+
+@public_api_v1_bp.route('/webhooks/deliveries', methods=['GET'])
+@require_role('admin')
+def webhook_deliveries():
+    return jsonify({'data': DatabaseManager().list_webhook_deliveries()}), 200
+
+
+@public_api_v1_bp.route('/webhooks/deliveries/<int:delivery_id>/retry', methods=['POST'])
+@require_role('admin')
+@limiter.limit('20 per minute')
+def retry_webhook_delivery(delivery_id):
+    if not DatabaseManager().retry_webhook_delivery(delivery_id):
+        return jsonify({'error': {'code': 'not_found', 'message': 'Webhook delivery not found.'}}), 404
+    return jsonify({'data': {'id': delivery_id, 'status': 'queued'}}), 200
 
 
 @public_api_v1_bp.route('/me', methods=['GET'])

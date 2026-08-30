@@ -83,11 +83,16 @@ list them with `GET /api/v1/webhooks`, and remove one with
 `DELETE /api/v1/webhooks/{webhook_id}`. Supported events are:
 
 - `suggestion.created`
+- `suggestion.awaiting_approval`
+- `suggestion.approved`
+- `suggestion.rejected`
 - `request.submitted`
+- `request.failed`
 - `run.failed`
 
 Each delivery is queued persistently and retried with exponential backoff up to
-five attempts. The JSON body is signed with HMAC-SHA256. Verify the signature
+five attempts. The JSON body has the stable envelope
+`{"version":1,"event":"…","data":{…}}` and is signed with HMAC-SHA256. Verify the signature
 against the exact UTF-8 body using `"<timestamp>.<body>"` and the shared
 secret from `X-SuggestArr-Signature`; the timestamp and event identifiers are
 provided by `X-SuggestArr-Timestamp`, `X-SuggestArr-Event`, and
@@ -96,3 +101,8 @@ provided by `X-SuggestArr-Timestamp`, `X-SuggestArr-Event`, and
 Webhook URLs are SSRF-validated. Private-network destinations are rejected by
 default; set `allow_private: true` only for trusted local automation such as
 Home Assistant or n8n.
+
+Recent delivery status is available to administrators at
+`GET /api/v1/webhooks/deliveries`; it intentionally omits secrets and message
+bodies. Requeue one delivery with
+`POST /api/v1/webhooks/deliveries/{delivery_id}/retry`.

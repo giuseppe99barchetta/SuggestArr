@@ -96,6 +96,27 @@ paths:
         '204': {description: Webhook deleted}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {description: Webhook not found}
+  /api/v1/webhooks/deliveries:
+    get:
+      operationId: publicWebhookDeliveries
+      tags: [Webhooks]
+      summary: List recent outbound webhook deliveries
+      responses:
+        <<: *errorResponses
+        '200': {description: Deliveries, with secrets and bodies omitted}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/webhooks/deliveries/{delivery_id}/retry:
+    post:
+      operationId: publicRetryWebhookDelivery
+      tags: [Webhooks]
+      summary: Requeue a failed outbound webhook delivery
+      parameters:
+        - {name: delivery_id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        <<: *errorResponses
+        '200': {description: Delivery queued again}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Webhook delivery not found}
   /api/v1/me:
     get:
       operationId: publicMe
@@ -473,7 +494,7 @@ components:
         events:
           type: array
           minItems: 1
-          items: {type: string, enum: [suggestion.created, request.submitted, run.failed]}
+          items: {type: string, enum: [suggestion.created, suggestion.awaiting_approval, suggestion.approved, suggestion.rejected, request.submitted, request.failed, run.failed]}
         enabled: {type: boolean, default: true}
         allow_private: {type: boolean, default: false, description: Allow private-network delivery destinations.}
     Error:

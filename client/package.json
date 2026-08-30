@@ -6,6 +6,7 @@
     "serve": "vite",
     "build": "vite build",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.js\"",
+    "test:e2e": "playwright test",
     "lint": "eslint --ext .js,.vue src/",
     "lint:styles": "stylelint \"src/**/*.{vue,css}\" --allow-empty-input",
     "lint:styles:fix": "stylelint \"src/**/*.{vue,css}\" --fix --allow-empty-input",
@@ -29,6 +30,7 @@
   "devDependencies": {
     "@babel/core": "^7.12.16",
     "@babel/eslint-parser": "^7.12.16",
+    "@playwright/test": "^1.58.2",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/compiler-sfc": "^3.5.13",
     "@vue/tsconfig": "^0.9.0",

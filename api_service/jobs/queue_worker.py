@@ -90,6 +90,13 @@ async def _run_worker() -> int:
                     media_type, tmdb_id, row_id, exc,
                 )
                 db.mark_pending_failed(row_id, retry_count, "Corrupt queued payload")
+                try:
+                    db.enqueue_webhook_event("request.failed", {
+                        "tmdb_id": str(tmdb_id), "media_type": media_type,
+                        "job_id": item.get("job_id"), "reason": "corrupt_payload",
+                    })
+                except Exception as webhook_exc:
+                    logger.error("Unable to queue request.failed webhook: %s", webhook_exc)
                 continue
 
             # Skip if the item was submitted by another path while it sat in the queue
@@ -141,6 +148,13 @@ async def _run_worker() -> int:
                 new_retry = retry_count + 1
                 if new_retry >= MAX_RETRIES:
                     db.mark_pending_failed(row_id, new_retry, "Seer rejected the request after maximum retries")
+                    try:
+                        db.enqueue_webhook_event("request.failed", {
+                            "tmdb_id": str(tmdb_id), "media_type": media_type,
+                            "job_id": item.get("job_id"), "retry_count": new_retry,
+                        })
+                    except Exception as exc:
+                        logger.error("Unable to queue request.failed webhook: %s", exc)
                     logger.error(
                         "Queue worker: %s tmdb:%s permanently failed after %d retries.",
                         media_type, tmdb_id, new_retry,

@@ -1,11 +1,33 @@
-from unittest.mock import MagicMock, patch
 import asyncio
+import json
+import sqlite3
+from unittest.mock import MagicMock, patch
 
 from flask import Flask, g
 
 from api_service.api.v1.blueprint import public_api_v1_bp
 from api_service.jobs.webhook_worker import run_webhook_worker
 from api_service.jobs.queue_worker import _run_worker
+from api_service.db.components.webhook_mixin import WebhookMixin
+
+
+class _WebhookDb(WebhookMixin):
+    db_type = 'sqlite'
+
+    def __init__(self):
+        self.connection = sqlite3.connect(':memory:')
+        self.connection.execute('''CREATE TABLE webhook_deliveries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT, webhook_id TEXT,
+            event_type TEXT, url TEXT, secret TEXT, allow_private INTEGER, payload TEXT,
+            status TEXT DEFAULT 'queued', retry_count INTEGER DEFAULT 0,
+            next_attempt_at TIMESTAMP, last_error TEXT, created_at TIMESTAMP, updated_at TIMESTAMP)''')
+
+    def get_connection(self):
+        return self.connection
+
+    def get_integration(self, _service):
+        return {'items': [{'id': 'hook-1', 'url': 'https://hooks.example.test', 'secret': 'a' * 16,
+                           'events': ['suggestion.created']}]}
 
 
 def _client(db):
@@ -52,6 +74,19 @@ def test_webhooks_create_list_and_delete_without_returning_secret():
     assert deleted.status_code == 204
 
 
+def test_webhook_delivery_status_and_manual_retry_are_admin_only():
+    db = MagicMock()
+    db.list_webhook_deliveries.return_value = [{'id': 4, 'status': 'failed', 'event_type': 'run.failed'}]
+    db.retry_webhook_delivery.return_value = True
+    client, db_patch = _client(db)
+    with db_patch:
+        listed = client.get('/api/v1/webhooks/deliveries')
+        retried = client.post('/api/v1/webhooks/deliveries/4/retry')
+    assert listed.get_json()['data'] == db.list_webhook_deliveries.return_value
+    assert retried.get_json()['data'] == {'id': 4, 'status': 'queued'}
+    db.retry_webhook_delivery.assert_called_once_with(4)
+
+
 def test_webhook_worker_signs_and_marks_successful_delivery():
     db = MagicMock()
     db.get_due_webhook_deliveries.return_value = [{
@@ -65,6 +100,35 @@ def test_webhook_worker_signs_and_marks_successful_delivery():
         run_webhook_worker()
     assert post.call_args.kwargs['headers']['X-SuggestArr-Signature'].startswith('sha256=')
     db.update_webhook_delivery.assert_called_once_with(1, 'delivered', 0)
+
+
+def test_webhook_worker_retries_a_failed_delivery():
+    db = MagicMock()
+    db.get_due_webhook_deliveries.return_value = [{
+        'id': 1, 'event_id': 'event-1', 'event_type': 'run.failed', 'url': 'https://hooks.example.test',
+        'secret': 'a' * 16, 'allow_private': 0, 'payload': '{}', 'retry_count': 0,
+    }]
+    response = MagicMock(status_code=503)
+    with patch('api_service.jobs.webhook_worker.DatabaseManager', return_value=db), \
+            patch('api_service.jobs.webhook_worker.validate_url'), \
+            patch('api_service.jobs.webhook_worker.requests.post', return_value=response):
+        run_webhook_worker()
+    assert db.update_webhook_delivery.call_args.args[:3] == (1, 'queued', 1)
+
+
+def test_webhook_events_are_versioned_and_manual_retry_only_requeues_failures():
+    db = _WebhookDb()
+    assert db.enqueue_webhook_event('suggestion.created', {'tmdb_id': '42'}) == 1
+    row = db.connection.execute('SELECT id, payload FROM webhook_deliveries').fetchone()
+    assert json.loads(row[1]) == {'version': 1, 'event': 'suggestion.created', 'data': {'tmdb_id': '42'}}
+    assert not db.retry_webhook_delivery(row[0])
+    db.update_webhook_delivery(row[0], 'failed', retry_count=5, error='timeout')
+    assert db.retry_webhook_delivery(row[0])
+    delivery = db.list_webhook_deliveries()[0]
+    assert delivery['id'] == row[0]
+    assert delivery['status'] == 'queued'
+    assert delivery['retry_count'] == 0
+    assert 'secret' not in delivery and 'payload' not in delivery
 
 
 def test_successful_seer_submission_queues_webhook_event():

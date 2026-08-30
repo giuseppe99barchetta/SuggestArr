@@ -45,10 +45,22 @@ class WebhookMixin:
             for hook in hooks:
                 if hook.get("enabled", True) and event in hook.get("events", []):
                     cursor.execute(query, (event_id, hook["id"], event, hook["url"], hook["secret"],
-                                           int(bool(hook.get("allow_private", False))), json.dumps(payload)))
+                                           int(bool(hook.get("allow_private", False))), json.dumps({
+                                               "version": 1, "event": event, "data": payload,
+                                           })))
                     inserted += 1
             conn.commit()
         return inserted
+
+    def list_webhook_deliveries(self, max_items=100):
+        ph = "%s" if self.db_type in ("mysql", "mariadb", "postgres") else "?"
+        query = ("SELECT id,event_id,webhook_id,event_type,url,status,retry_count,next_attempt_at,last_error,created_at,updated_at "
+                 "FROM webhook_deliveries ORDER BY id DESC LIMIT " + ph)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (max_items,))
+            columns = [column[0] for column in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     def get_due_webhook_deliveries(self, max_items=50):
         ph = "%s" if self.db_type in ("mysql", "mariadb", "postgres") else "?"
@@ -74,6 +86,6 @@ class WebhookMixin:
         ph = "%s" if self.db_type in ("mysql", "mariadb", "postgres") else "?"
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(f"UPDATE webhook_deliveries SET status='queued',retry_count=0,next_attempt_at=NULL,last_error=NULL WHERE id={ph}", (delivery_id,))
+            cursor.execute(f"UPDATE webhook_deliveries SET status='queued',retry_count=0,next_attempt_at=NULL,last_error=NULL WHERE id={ph} AND status='failed'", (delivery_id,))
             conn.commit()
             return cursor.rowcount > 0

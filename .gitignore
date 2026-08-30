@@ -385,3 +385,8 @@ branch-review-findings.md
 
 # macOS
 .DS_Store
+
+# Playwright failure artifacts
+client/test-results/
+client/playwright-report/
+client/blob-report/
