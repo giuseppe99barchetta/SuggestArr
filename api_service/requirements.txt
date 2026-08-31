@@ -3,8 +3,8 @@ Flask-Cors==6.0.5
 Flask-Limiter==4.1.1
 PyJWT==2.13.0
 bcrypt==5.0.0
-gunicorn==26.0.0
-uvicorn==0.52.3
+gunicorn==26.2.0
+uvicorn==0.52.4
 asgiref==3.12.1
 
 redis==8.1.0
@@ -18,7 +18,7 @@ croniter==6.2.4
 
 concurrent-log-handler==0.9.29
 requests==2.34.2
-python-dotenv==1.2.2
+python-dotenv==1.2.3
 PyYAML==6.0.3
 pytz==2026.3.post1
 tzdata==2026.3
@@ -30,4 +30,4 @@ xmltodict==1.0.4
 mysql-connector-python==26.7.0
 psycopg2-binary==2.9.12
 
-openai==3.0.0
+openai==3.5.0
