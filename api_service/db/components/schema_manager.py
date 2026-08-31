@@ -151,6 +151,7 @@ class SchemaManager:
                     last_attempt_at TIMESTAMP,
                     next_attempt_at TIMESTAMP,
                     job_id INTEGER,
+                    execution_id INTEGER,
                     owner_id INTEGER,
                     decided_at TIMESTAMP,
                     decided_by INTEGER,
@@ -864,6 +865,7 @@ class SchemaManager:
                     pending_columns = {row[0] for row in cursor.fetchall()}
                 for column, definition in {
                     'job_id': 'INTEGER', 'owner_id': 'INTEGER',
+                    'execution_id': 'INTEGER',
                     'decided_at': 'TIMESTAMP', 'decided_by': 'INTEGER',
                     'last_error': 'TEXT',
                 }.items():

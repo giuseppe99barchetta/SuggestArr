@@ -664,20 +664,23 @@ def run_job_now(job_id: int):
                 'requested_count': 0
             }), 200
 
+        exec_id = repository.log_execution_start(job_id)
+
         # Execute job based on type (async function called synchronously)
         if job_type == 'recommendation':
-            result = run_async(execute_recommendation_job(job_id))
+            result = run_async(execute_recommendation_job(job_id, execution_id=exec_id))
         elif job_type == 'trakt_recommendations':
-            result = run_async(execute_trakt_recommendations_job(job_id))
+            result = run_async(execute_trakt_recommendations_job(job_id, execution_id=exec_id))
         else:
-            result = run_async(execute_discover_job(job_id))
+            result = run_async(execute_discover_job(job_id, execution_id=exec_id))
 
         if result.success:
             return jsonify({
                 'status': 'success',
                 'message': 'Job executed successfully',
                 'results_count': result.results_count,
-                'requested_count': result.requested_count
+                'requested_count': result.requested_count,
+                'run_id': exec_id,
             }), 200
         else:
             return jsonify({

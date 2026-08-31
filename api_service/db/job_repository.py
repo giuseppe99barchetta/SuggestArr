@@ -400,6 +400,19 @@ class JobRepository:
     def get_execution(self, execution_id: int) -> Optional[Dict[str, Any]]:
         return next((row for row in self.get_recent_history(1000) if row['id'] == execution_id), None)
 
+    def get_execution_deliveries(self, execution_id: int) -> List[Dict[str, Any]]:
+        """Return credential-free Seer queue items produced by one job run."""
+        query = ("SELECT id, execution_id, job_id, status, retry_count, last_attempt_at, "
+                 "next_attempt_at, last_error, created_at FROM pending_requests "
+                 "WHERE execution_id = ? ORDER BY id ASC")
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db.db_type in ('mysql', 'mariadb', 'postgres'):
+                query = query.replace('?', '%s')
+            cursor.execute(query, (execution_id,))
+            columns = [column[0] for column in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
     def log_execution_end(
         self,
         exec_id: int,

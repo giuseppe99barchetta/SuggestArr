@@ -266,7 +266,9 @@ def run(run_id):
     job_data = JobRepository().get_job(record['job_id'])
     if not job_data or not _visible_job(job_data):
         return jsonify({'error': {'code': 'not_found', 'message': 'Run not found.'}}), 404
-    return jsonify({'data': _run_payload(record)}), 200
+    data = _run_payload(record)
+    data['deliveries'] = JobRepository().get_execution_deliveries(run_id)
+    return jsonify({'data': data}), 200
 
 
 def _visible_request_user_ids(db):

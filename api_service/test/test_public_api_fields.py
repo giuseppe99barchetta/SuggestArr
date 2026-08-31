@@ -82,3 +82,28 @@ def test_openapi_documents_public_filters_and_full_resource_schemas():
     assert action_request['content']['application/json']['example'] == {
         'action': 'approve', 'ids': [123], 'remove_blacklist': False,
     }
+
+
+def test_run_detail_includes_credential_free_delivery_correlation():
+    run = {'id': 9, 'job_id': 1, 'job_name': 'Daily', 'status': 'completed',
+           'trigger_source': 'api', 'results_count': 1, 'requested_count': 1,
+           'error_message': None, 'started_at': None, 'finished_at': None}
+    delivery = {'id': 14, 'execution_id': 9, 'job_id': 1, 'status': 'queued',
+                'retry_count': 0, 'last_attempt_at': None, 'next_attempt_at': None,
+                'last_error': None, 'created_at': None}
+
+    class JobsRepository:
+        def get_execution(self, execution_id):
+            return run if execution_id == 9 else None
+
+        def get_job(self, job_id):
+            return {'id': job_id, 'owner_id': 1}
+
+        def get_execution_deliveries(self, execution_id):
+            return [delivery] if execution_id == 9 else []
+
+    with patch('api_service.api.v1.blueprint.JobRepository', return_value=JobsRepository()):
+        response = _client().get('/api/v1/runs/9')
+
+    assert response.status_code == 200
+    assert response.get_json()['data']['deliveries'] == [delivery]

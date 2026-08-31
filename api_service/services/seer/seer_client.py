@@ -437,7 +437,8 @@ class SeerClient(BaseHTTPClient):
             context.get('delivery_mode', 'inherit'), approval_default
         ) else 'queued'
         enqueued = db.enqueue_request(tmdb_id, media_type, user_id, payload, status=status,
-                                      job_id=context.get('job_id'), owner_id=context.get('owner_id'))
+                                      job_id=context.get('job_id'), owner_id=context.get('owner_id'),
+                                      execution_id=context.get('execution_id'))
         if enqueued:
             self.logger.info("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)
         return enqueued

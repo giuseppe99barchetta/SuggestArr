@@ -98,7 +98,8 @@ class RequestQueueMixin:
             )
 
     def enqueue_request(self, tmdb_id: str, media_type: str, user_id: Optional[str],
-                        payload: dict, status: str = 'queued', job_id=None, owner_id=None) -> bool:
+                        payload: dict, status: str = 'queued', job_id=None, owner_id=None,
+                        execution_id=None) -> bool:
         """Enqueue a Seer submission for background delivery.
 
         Idempotent: silently no-ops when an entry for (tmdb_id, media_type) already
@@ -130,10 +131,11 @@ class RequestQueueMixin:
             return False
         query = """
             INSERT OR IGNORE INTO pending_requests
-                (tmdb_id, media_type, user_id, payload, status, job_id, owner_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (tmdb_id, media_type, user_id, payload, status, job_id, owner_id, execution_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
-        params = (str(tmdb_id), media_type, user_id, json.dumps(payload), status, job_id, owner_id)
+        params = (str(tmdb_id), media_type, user_id, json.dumps(payload), status, job_id, owner_id, execution_id)
+        ph = '?' if self.db_type == 'sqlite' else '%s'
 
         if self.db_type in ['mysql', 'mariadb']:
             query = query.replace("INSERT OR IGNORE", "INSERT IGNORE").replace("?", "%s")
@@ -146,11 +148,21 @@ class RequestQueueMixin:
                 cursor = conn.cursor()
                 cursor.execute(query, params)
                 inserted = cursor.rowcount > 0
+                delivery_id = getattr(cursor, 'lastrowid', None) if inserted else None
+                if inserted and delivery_id is None:
+                    cursor.execute(
+                        f"SELECT id FROM pending_requests WHERE tmdb_id={ph} AND media_type={ph}",
+                        (str(tmdb_id), media_type),
+                    )
+                    delivery_id = cursor.fetchone()[0]
                 conn.commit()
             if inserted:
-                self.logger.debug("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)
+                self.logger.info(
+                    "Queued Seer delivery id=%s for job run id=%s.", delivery_id, execution_id,
+                )
                 event_data = {
-                    "tmdb_id": str(tmdb_id), "media_type": media_type, "job_id": job_id, "status": status,
+                    "delivery_id": delivery_id, "execution_id": execution_id, "tmdb_id": str(tmdb_id),
+                    "media_type": media_type, "job_id": job_id, "status": status,
                 }
                 try:
                     self.enqueue_webhook_event("suggestion.created", event_data)
@@ -223,7 +235,7 @@ class RequestQueueMixin:
     def list_suggestions(self, owner_id=None, status='awaiting_approval', search='', page=1, per_page=24,
                          media_type='all', media_user_ids=None, feedback_user_id=None):
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
-        query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.owner_id,
+        query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.execution_id,p.owner_id,
                           p.retry_count,p.last_attempt_at,p.last_error,p.payload,
                           m.title,m.poster_path,m.overview,m.rating,m.release_date,
                           m.logo_path,m.backdrop_path,j.name
@@ -311,7 +323,7 @@ class RequestQueueMixin:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             select_params = [*ids] + ([] if owner_id is None else [owner_id])
-            cursor.execute(f"SELECT id,tmdb_id,media_type,job_id FROM pending_requests "
+            cursor.execute(f"SELECT id,tmdb_id,media_type,job_id,execution_id FROM pending_requests "
                            f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}",
                            tuple(select_params))
             eligible = cursor.fetchall()
@@ -322,7 +334,7 @@ class RequestQueueMixin:
                 insert = "INSERT OR IGNORE" if self.db_type == 'sqlite' else "INSERT IGNORE"
                 if self.db_type == 'postgres':
                     insert = "INSERT"
-                for _, tmdb_id, media_type, _ in eligible:
+                for _, tmdb_id, media_type, _, _ in eligible:
                     sql = f"{insert} INTO suggestion_blacklist(tmdb_id,media_type,created_by) VALUES ({ph},{ph},{ph})"
                     if self.db_type == 'postgres':
                         sql += " ON CONFLICT DO NOTHING"
@@ -330,10 +342,10 @@ class RequestQueueMixin:
             conn.commit()
         event = "suggestion.approved" if approve else "suggestion.rejected"
         try:
-            for suggestion_id, tmdb_id, media_type, job_id in eligible:
+            for suggestion_id, tmdb_id, media_type, job_id, execution_id in eligible:
                 self.enqueue_webhook_event(event, {
                     "suggestion_id": suggestion_id, "tmdb_id": str(tmdb_id),
-                    "media_type": media_type, "job_id": job_id,
+                    "media_type": media_type, "job_id": job_id, "execution_id": execution_id,
                 })
         except Exception as exc:
             self.logger.error("Unable to queue %s webhook: %s", event, exc)
@@ -424,7 +436,7 @@ class RequestQueueMixin:
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
 
         query = f"""
-            SELECT id, tmdb_id, media_type, user_id, payload, retry_count, job_id
+            SELECT id, tmdb_id, media_type, user_id, payload, retry_count, job_id, execution_id
             FROM pending_requests
             WHERE status = 'queued'
               AND (next_attempt_at IS NULL OR next_attempt_at <= {placeholder})

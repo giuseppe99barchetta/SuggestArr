@@ -157,5 +157,8 @@ def test_successful_seer_submission_queues_webhook_event():
             patch('api_service.jobs.queue_worker.SeerClient', return_value=Seer()):
         assert asyncio.run(_run_worker()) == 1
     db.enqueue_webhook_event.assert_called_once_with(
-        'request.submitted', {'tmdb_id': '42', 'media_type': 'movie', 'job_id': 3}
+        'request.submitted', {
+            'tmdb_id': '42', 'media_type': 'movie', 'job_id': 3,
+            'execution_id': None, 'delivery_id': 7,
+        }
     )

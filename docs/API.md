@@ -40,6 +40,15 @@ their previews, asynchronous job runs, suggestions/actions, and requests.
 `GET /api/v1/requests/stats` returns the request counters visible to the
 authenticated user (total, today, this week, and this month).
 
+## Run and delivery correlation
+
+Every job run has a numeric `id`, returned when it is queued and readable at
+`GET /api/v1/runs/{run_id}`. Queue deliveries produced by that run retain the
+same `execution_id`; that run resource returns their delivery `id`, state,
+retry metadata and timestamps. These references are safe to use in support
+requests and logs: neither response includes Seer payloads, webhook bodies,
+tokens, passwords or API keys.
+
 For an installation-wide operational snapshot, administrators can use
 `GET /api/v1/installation/stats`. It groups counts for requests, enabled and
 disabled jobs, job executions, suggestions by status, and the Seer delivery

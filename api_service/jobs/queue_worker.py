@@ -93,7 +93,8 @@ async def _run_worker() -> int:
                 try:
                     db.enqueue_webhook_event("request.failed", {
                         "tmdb_id": str(tmdb_id), "media_type": media_type,
-                        "job_id": item.get("job_id"), "reason": "corrupt_payload",
+                        "job_id": item.get("job_id"), "execution_id": item.get("execution_id"),
+                        "delivery_id": row_id, "reason": "corrupt_payload",
                     })
                 except Exception as webhook_exc:
                     logger.error("Unable to queue request.failed webhook: %s", webhook_exc)
@@ -101,11 +102,12 @@ async def _run_worker() -> int:
 
             # Skip if the item was submitted by another path while it sat in the queue
             if db.check_request_exists(media_type, tmdb_id):
-                logger.debug("Queue worker: %s tmdb:%s already in requests, marking submitted.", media_type, tmdb_id)
+                logger.info("Queue worker: delivery id=%s from job run id=%s was already submitted.", row_id, item.get('execution_id'))
                 db.mark_pending_submitted(row_id, retry_count)
                 try:
                     db.enqueue_webhook_event("request.submitted", {
                         "tmdb_id": str(tmdb_id), "media_type": media_type, "job_id": item.get("job_id"),
+                        "execution_id": item.get("execution_id"), "delivery_id": row_id,
                     })
                 except Exception as exc:
                     logger.error("Unable to queue request.submitted webhook: %s", exc)
@@ -135,10 +137,11 @@ async def _run_worker() -> int:
                                 source_origin=source_origin)
 
                 db.mark_pending_submitted(row_id, retry_count)
-                logger.info("Queue worker: submitted %s tmdb:%s.", media_type, tmdb_id)
+                logger.info("Queue worker: delivery id=%s from job run id=%s submitted.", row_id, item.get('execution_id'))
                 try:
                     db.enqueue_webhook_event("request.submitted", {
                         "tmdb_id": str(tmdb_id), "media_type": media_type, "job_id": item.get("job_id"),
+                        "execution_id": item.get("execution_id"), "delivery_id": row_id,
                     })
                 except Exception as exc:
                     logger.error("Unable to queue request.submitted webhook: %s", exc)
@@ -151,7 +154,8 @@ async def _run_worker() -> int:
                     try:
                         db.enqueue_webhook_event("request.failed", {
                             "tmdb_id": str(tmdb_id), "media_type": media_type,
-                            "job_id": item.get("job_id"), "retry_count": new_retry,
+                            "job_id": item.get("job_id"), "execution_id": item.get("execution_id"),
+                            "delivery_id": row_id, "retry_count": new_retry,
                         })
                     except Exception as exc:
                         logger.error("Unable to queue request.failed webhook: %s", exc)

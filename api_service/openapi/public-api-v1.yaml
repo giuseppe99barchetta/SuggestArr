@@ -442,6 +442,7 @@ components:
         status: {type: string, enum: [awaiting_approval, queued, submitting, submitted, rejected, failed, blacklisted]}
         created_at: {type: [string, 'null'], format: date-time}
         job_id: {type: [integer, 'null']}
+        execution_id: {type: [integer, 'null'], description: Job run that queued this delivery.}
         owner_id: {type: [integer, 'null']}
         retry_count: {type: integer, minimum: 0}
         last_attempt_at: {type: [string, 'null'], format: date-time}
@@ -557,6 +558,22 @@ components:
         error_message: {type: [string, 'null']}
         started_at: {type: [string, 'null'], format: date-time}
         finished_at: {type: [string, 'null'], format: date-time}
+        deliveries:
+          type: array
+          description: Credential-free Seer queue deliveries created by this run. Present when fetching one run.
+          items:
+            type: object
+            required: [id, execution_id, job_id, status, retry_count]
+            properties:
+              id: {type: integer, description: Delivery ID.}
+              execution_id: {type: integer, description: Parent job run ID.}
+              job_id: {type: integer}
+              status: {type: string, enum: [awaiting_approval, queued, submitting, submitted, rejected, failed]}
+              retry_count: {type: integer, minimum: 0}
+              last_attempt_at: {type: [string, 'null'], format: date-time}
+              next_attempt_at: {type: [string, 'null'], format: date-time}
+              last_error: {type: [string, 'null']}
+              created_at: {type: [string, 'null'], format: date-time}
     SuggestionAction:
       type: object
       required: [action, ids]

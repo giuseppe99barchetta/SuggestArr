@@ -5,6 +5,7 @@ export default defineConfig({
   timeout: 30_000,
   retries: process.env.CI ? 1 : 0,
   use: {
+    channel: process.env.PLAYWRIGHT_CHANNEL || "chromium",
     baseURL: "http://127.0.0.1:5173",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",

@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from api_service.db import database_manager as dm_mod
 from api_service.db.database_manager import DatabaseManager
+from api_service.db.job_repository import JobRepository
 from api_service.services.request_sources import (
     DISCOVER_SOURCE,
     TRAKT_RECOMMENDATIONS_SOURCE,
@@ -108,6 +109,30 @@ def test_pending_requests_filter_by_requested_for_user(tmp_path):
     DatabaseManager._instance = None
     assert total == 1
     assert items[0]["media_user_id"] == "plex-1"
+
+
+def test_pending_request_keeps_its_job_run_and_delivery_id(tmp_path):
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        assert db.enqueue_request("303", "movie", None, {}, job_id=7, execution_id=12)
+        queued = db.get_due_requests()
+        deliveries = JobRepository().get_execution_deliveries(12)
+
+    DatabaseManager._instance = None
+    assert queued[0]["execution_id"] == 12
+    assert len(deliveries) == 1
+    assert deliveries[0]["id"] == queued[0]["id"]
+    assert deliveries[0]["execution_id"] == 12
+    assert deliveries[0]["job_id"] == 7
+    assert set(deliveries[0]) == {
+        "id", "execution_id", "job_id", "status", "retry_count", "last_attempt_at",
+        "next_attempt_at", "last_error", "created_at",
+    }
 
 
 def test_save_user_without_name_falls_back_to_id(tmp_path):
