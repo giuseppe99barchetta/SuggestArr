@@ -96,6 +96,28 @@ paths:
         '204': {description: Webhook deleted}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {description: Webhook not found}
+  /api/v1/webhooks/settings:
+    get:
+      operationId: publicWebhookSettings
+      tags: [Webhooks]
+      summary: Get the optional webhook destination allowlist
+      responses:
+        <<: *errorResponses
+        '200': {description: Webhook settings}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    put:
+      operationId: publicUpdateWebhookSettings
+      tags: [Webhooks]
+      summary: Replace the optional webhook destination allowlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WebhookSettings'}
+      responses:
+        <<: *errorResponses
+        '200': {description: Webhook settings updated}
+        '403': {$ref: '#/components/responses/Forbidden'}
   /api/v1/webhooks/deliveries:
     get:
       operationId: publicWebhookDeliveries
@@ -495,9 +517,17 @@ components:
         events:
           type: array
           minItems: 1
-          items: {type: string, enum: [suggestion.created, suggestion.awaiting_approval, suggestion.approved, suggestion.rejected, request.submitted, request.failed, run.failed]}
+          items: {type: string, enum: [suggestion.created, suggestion.awaiting_approval, suggestion.approved, suggestion.rejected, request.submitted, request.failed, run.failed, job.completed, job.skipped]}
         enabled: {type: boolean, default: true}
         allow_private: {type: boolean, default: false, description: Allow private-network delivery destinations.}
+    WebhookSettings:
+      type: object
+      required: [allowed_hosts]
+      properties:
+        allowed_hosts:
+          type: array
+          description: Empty permits any SSRF-safe destination; otherwise only these hostnames are permitted.
+          items: {type: string}
     Error:
       type: object
       required: [error]

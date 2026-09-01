@@ -6,8 +6,15 @@
     </div>
 
     <div class="settings-grid">
+      <SettingsPanel
+        panel-id="experimental-ai"
+        title="Experimental & AI"
+        description="Beta features, personalized suggestions, and AI provider configuration."
+        icon="fas fa-flask"
+        tone="warning"
+      >
       <!-- Experimental Features -->
-      <div class="settings-group experimental">
+      <section class="advanced-subsection experimental">
         <h3>
           <i class="fas fa-flask"></i>
           Experimental Features
@@ -40,14 +47,13 @@
             description="Use an AI-powered algorithm for hyper-personalized content suggestions based on watch history."
           />
         </div>
-
-      </div>
+      </section>
 
       <!-- AI Provider Configuration (visible only when advanced algorithm is enabled) -->
       <transition name="ai-card">
-        <div
+        <section
           v-if="localConfig.ENABLE_ADVANCED_ALGORITHM && localConfig.ENABLE_BETA_FEATURES"
-          class="settings-group ai-group"
+          class="advanced-subsection ai-group"
         >
           <h3>
             <i class="fas fa-robot"></i>
@@ -186,8 +192,9 @@
               {{ isTestingLlm ? 'Testing...' : 'Test Connection' }}
             </button>
           </div>
-        </div>
+        </section>
       </transition>
+      </SettingsPanel>
 
       <!-- AI Info Modal -->
       <teleport to="body">
@@ -356,11 +363,18 @@ LLM_MODEL=gpt-4o-mini</code></pre>
         </transition>
       </teleport>
 
+      <SettingsPanel
+        panel-id="diagnostics-performance"
+        title="Diagnostics & Performance"
+        description="Logging, visual performance, monitoring, and TMDb cache controls."
+        icon="fas fa-tachometer-alt"
+      >
+      <div class="advanced-subsection-grid">
       <!-- Debug Settings -->
-      <div class="settings-group">
+      <section class="advanced-subsection">
         <h3>
           <i class="fas fa-bug"></i>
-          Debug Settings
+          Debug & Appearance
         </h3>
 
         <div class="form-group">
@@ -413,13 +427,12 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 
         <div class="form-group" v-if="localConfig.ENABLE_STATIC_BACKGROUND">
           <label for="staticBackgroundColor">Static Background Color (Hex)</label>
-          <div style="display: flex; gap: 10px; align-items: center; margin-top: 0.5rem;">
+          <div class="color-input-row">
             <input
               id="staticBackgroundColor"
               v-model="localConfig.STATIC_BACKGROUND_COLOR"
               type="color"
-              class="form-control"
-              style="width: 50px; padding: 0.2rem; height: 38px; cursor: pointer;"
+              class="form-control color-swatch-input"
               :disabled="isLoading"
             />
             <input
@@ -433,10 +446,10 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             />
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Cache Settings -->
-      <div class="settings-group">
+      <section class="advanced-subsection">
         <h3>
           <i class="fas fa-memory"></i>
           Cache Settings
@@ -498,67 +511,105 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             Clear cached TMDb metadata and force fresh API calls
           </small>
         </div>
+      </section>
       </div>
+      </SettingsPanel>
 
       <!-- Request Workflow -->
-      <div class="settings-group request-workflow-settings">
-        <h3>
-          <i class="fas fa-user-check"></i>
-          Request Workflow
-        </h3>
+      <SettingsPanel
+        panel-id="request-workflow"
+        title="Request Workflow"
+        description="Approvals, request visibility, job pauses, and pending-suggestion retention."
+        icon="fas fa-user-check"
+      >
+      <div class="request-workflow-settings">
+        <section class="workflow-card workflow-card--approval">
+          <div class="workflow-card__header">
+            <span class="workflow-card__icon"><i class="fas fa-check-double"></i></span>
+            <span>
+              <strong>Approval flow</strong>
+              <small>Control when suggestions can leave SuggestArr and reach Seer.</small>
+            </span>
+          </div>
 
-        <div class="form-group workflow-setting">
-          <BaseCheckbox
-            v-model="localConfig.REQUIRE_REQUEST_APPROVAL"
-            :disabled="isLoading"
-            label="Approve requests before sending them to Seer"
-            description="Default for jobs using the global delivery setting. Each job can override it."
-          />
-        </div>
+          <div class="workflow-card__body">
+            <div class="workflow-option">
+              <BaseCheckbox
+                v-model="localConfig.REQUIRE_REQUEST_APPROVAL"
+                :disabled="isLoading"
+                label="Require approval before delivery"
+                description="Hold new suggestions in SuggestArr until an administrator approves them."
+              />
+            </div>
 
-        <div class="form-group workflow-setting">
-          <label class="workflow-setting__label" for="requestVisibility">Requests visible to regular users</label>
-          <BaseDropdown
-            v-model="localConfig.REQUEST_VISIBILITY"
-            :options="requestVisibilityOptions"
-            :disabled="isLoading"
-            id="requestVisibility"
-          />
-          <p class="workflow-setting__help">
-            Admins always see every request. Regular users can be limited to their linked Plex, Jellyfin, or Emby account.
-          </p>
-        </div>
+            <div class="workflow-option">
+              <BaseCheckbox
+                v-model="localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS"
+                :disabled="isLoading"
+                label="Pause jobs while approvals are pending"
+                description="Prevent automation from adding more suggestions until the current queue is reviewed."
+              />
+            </div>
+          </div>
+        </section>
 
-        <div class="form-group workflow-setting">
-          <BaseCheckbox
-            v-model="localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS"
-            :disabled="isLoading"
-            label="Pause jobs while SuggestArr approvals are pending"
-            description="Default for jobs using the global pause setting. Each job can override it."
-          />
-        </div>
+        <section class="workflow-card">
+          <div class="workflow-card__header">
+            <span class="workflow-card__icon"><i class="fas fa-users"></i></span>
+            <span>
+              <strong>Review policy</strong>
+              <small>Choose who can see requests and how long pending items remain open.</small>
+            </span>
+          </div>
 
-        <div class="form-group workflow-setting">
-          <label class="workflow-setting__label" for="autoRejectApprovalDays">Auto-reject pending suggestions after days</label>
-          <input
-            id="autoRejectApprovalDays"
-            v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS"
-            type="number"
-            min="0"
-            max="365"
-            class="form-control"
-            :disabled="isLoading"
-          />
-          <p class="workflow-setting__help">
-            Use 0 to keep pending suggestions until they are reviewed manually.
-          </p>
-        </div>
+          <div class="workflow-card__body workflow-card__body--fields">
+            <div class="workflow-setting">
+              <label class="workflow-setting__label" for="requestVisibility">Regular-user visibility</label>
+              <BaseDropdown
+                v-model="localConfig.REQUEST_VISIBILITY"
+                :options="requestVisibilityOptions"
+                :disabled="isLoading"
+                id="requestVisibility"
+              />
+              <p class="workflow-setting__help">
+                Admins always see everything. Other users can be limited to requests from their linked media account.
+              </p>
+            </div>
+
+            <div class="workflow-setting">
+              <span class="workflow-setting__label-row">
+                <label class="workflow-setting__label" for="autoRejectApprovalDays">Pending retention</label>
+                <span class="workflow-setting__range">0–365 days</span>
+              </span>
+              <input
+                id="autoRejectApprovalDays"
+                v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS"
+                type="number"
+                min="0"
+                max="365"
+                class="form-control"
+                :disabled="isLoading"
+              />
+              <p class="workflow-setting__help">
+                Automatically reject older pending suggestions. Use 0 to keep them until manual review.
+              </p>
+            </div>
+          </div>
+        </section>
       </div>
+      </SettingsPanel>
 
-      <div class="settings-group">
+      <SettingsPanel
+        panel-id="application-maintenance"
+        title="Application & Maintenance"
+        description="Authentication, reverse-proxy routing, backups, imports, and reset controls."
+        icon="fas fa-gear"
+      >
+      <div class="advanced-subsection-grid advanced-subsection-grid--application">
+      <section class="advanced-subsection">
         <h3>
-          <i class="fas fa-gear"></i>
-          Application
+          <i class="fas fa-shield-alt"></i>
+          Access & Routing
         </h3>
 
         <BaseDropdown
@@ -631,9 +682,9 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             Subpath for running SuggestArr under a subdirectory (e.g., "/suggestarr"). Leave empty for root.
           </small>
         </div>
-      </div>
+      </section>
 
-      <div class="settings-group">
+      <section class="advanced-subsection configuration-management">
         <h3>
           <i class="fas fa-file-export"></i>
           Configuration Management
@@ -642,21 +693,49 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           Back up, restore, or reset the complete SuggestArr configuration.
         </p>
         <div class="configuration-actions">
-          <button class="btn btn-outline" :disabled="isLoading" @click="$emit('export-config')">
-            <i class="fas fa-download"></i>
-            Export
-          </button>
-          <button class="btn btn-outline" :disabled="isLoading" @click="$emit('import-config')">
-            <i class="fas fa-upload"></i>
-            Import
-          </button>
-          <button class="btn btn-danger" :disabled="isLoading" @click="$emit('reset-config')">
-            <i class="fas fa-undo"></i>
-            Reset SuggestArr
-          </button>
-        </div>
-      </div>
+          <article class="configuration-action">
+            <span class="configuration-action__icon"><i class="fas fa-download"></i></span>
+            <span class="configuration-action__copy">
+              <strong>Export a backup</strong>
+              <small>Download the current SuggestArr configuration for safekeeping or migration.</small>
+            </span>
+            <button class="btn btn-outline btn-sm" :disabled="isLoading" @click="$emit('export-config')">
+              Export
+            </button>
+          </article>
 
+          <article class="configuration-action">
+            <span class="configuration-action__icon"><i class="fas fa-upload"></i></span>
+            <span class="configuration-action__copy">
+              <strong>Restore a backup</strong>
+              <small>Import a previously exported configuration into this instance.</small>
+            </span>
+            <button class="btn btn-outline btn-sm" :disabled="isLoading" @click="$emit('import-config')">
+              Import
+            </button>
+          </article>
+
+          <article class="configuration-action configuration-action--danger">
+            <span class="configuration-action__icon"><i class="fas fa-undo"></i></span>
+            <span class="configuration-action__copy">
+              <strong>Reset SuggestArr</strong>
+              <small>Discard the current configuration and return application settings to their defaults.</small>
+            </span>
+            <button class="btn btn-danger btn-sm" :disabled="isLoading" @click="$emit('reset-config')">
+              Reset
+            </button>
+          </article>
+        </div>
+
+        <div class="configuration-note">
+          <i class="fas fa-lock"></i>
+          <span>Configuration backups may contain service credentials. Store exported files securely.</span>
+        </div>
+      </section>
+      </div>
+      </SettingsPanel>
+
+      <SettingsWebhooks />
       <SettingsCleanup embedded />
     </div>
 
@@ -690,6 +769,8 @@ import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import SettingsCleanup from './SettingsCleanup.vue';
+import SettingsPanel from './SettingsPanel.vue';
+import SettingsWebhooks from './SettingsWebhooks.vue';
 
 export default {
   name: 'SettingsAdvanced',
@@ -697,6 +778,8 @@ export default {
     BaseDropdown,
     BaseCheckbox,
     SettingsCleanup,
+    SettingsPanel,
+    SettingsWebhooks,
   },
   props: {
     config: {
@@ -1071,9 +1154,36 @@ export default {
 
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 2rem;
-  margin-bottom: 2rem;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+}
+
+.advanced-subsection-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.advanced-subsection {
+  min-width: 0;
+  padding: var(--spacing-lg);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+
+.advanced-subsection + .advanced-subsection {
+  margin-top: var(--spacing-lg);
+}
+
+.advanced-subsection-grid .advanced-subsection + .advanced-subsection {
+  margin-top: 0;
+}
+
+.advanced-subsection.experimental {
+  background: var(--color-warning-alpha-10);
+  border-color: var(--color-warning);
 }
 
 .settings-group {
@@ -1081,11 +1191,6 @@ export default {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--border-radius-md);
   padding: 1.5rem;
-}
-
-.settings-group.experimental {
-  border-color: var(--color-warning);
-  background: rgba(245, 158, 11, 0.05);
 }
 
 .settings-group h3 {
@@ -1150,17 +1255,97 @@ export default {
   line-height: var(--line-height-normal);
 }
 
-.request-workflow-settings h3 {
-  margin-bottom: 0;
+.color-input-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.color-swatch-input {
+  flex: 0 0 var(--input-height-lg);
+  width: var(--input-height-lg);
+  height: var(--input-height-md);
+  padding: var(--spacing-2xs);
+  cursor: pointer;
+}
+
+.request-workflow-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.workflow-card {
+  min-width: 0;
+  padding: var(--spacing-lg);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+
+.workflow-card--approval {
+  background: var(--color-primary-alpha-10);
+  border-color: var(--color-primary);
+}
+
+.workflow-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.workflow-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--input-height-md);
+  height: var(--input-height-md);
+  color: var(--color-primary-light);
+  background: var(--surface-interactive);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+
+.workflow-card__header strong,
+.workflow-card__header small {
+  display: block;
+}
+
+.workflow-card__header strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
+}
+
+.workflow-card__header small {
+  margin-top: var(--spacing-xs);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+}
+
+.workflow-card__body {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.workflow-card__body--fields {
+  gap: var(--spacing-lg);
+}
+
+.workflow-option {
+  padding: var(--spacing-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
 }
 
 .request-workflow-settings .workflow-setting {
+  display: grid;
+  gap: var(--spacing-sm);
   margin: 0;
-  padding: var(--spacing-md) 0;
-}
-
-.request-workflow-settings .workflow-setting:last-child {
-  padding-bottom: 0;
 }
 
 .request-workflow-settings .workflow-setting__label {
@@ -1168,6 +1353,22 @@ export default {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   line-height: var(--line-height-normal);
+}
+
+.workflow-setting__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.workflow-setting__range {
+  padding: var(--spacing-2xs) var(--spacing-sm);
+  color: var(--color-text-muted);
+  background: var(--surface-interactive);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
 }
 
 .request-workflow-settings .workflow-setting__help {
@@ -1195,9 +1396,88 @@ export default {
 }
 
 .configuration-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: var(--spacing-sm);
+}
+
+.configuration-action {
+  display: grid;
+  grid-template-columns: var(--input-height-md) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.configuration-action:hover {
+  background: var(--surface-interactive);
+  border-color: var(--color-border-medium);
+}
+
+.configuration-action--danger {
+  background: var(--color-error-alpha-10);
+  border-color: var(--color-error);
+}
+
+.configuration-action--danger:hover {
+  background: var(--color-error-alpha-20);
+  border-color: var(--color-error-light);
+}
+
+.configuration-action__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--input-height-md);
+  height: var(--input-height-md);
+  color: var(--color-primary-light);
+  background: var(--surface-interactive);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+
+.configuration-action--danger .configuration-action__icon {
+  color: var(--color-error-light);
+  background: var(--color-error-alpha-10);
+  border-color: var(--color-error);
+}
+
+.configuration-action__copy strong,
+.configuration-action__copy small {
+  display: block;
+}
+
+.configuration-action__copy strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.configuration-action__copy small {
+  margin-top: var(--spacing-xs);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+}
+
+.configuration-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  color: var(--color-text-muted);
+  background: var(--surface-interactive);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+}
+
+.configuration-note i {
+  margin-top: var(--spacing-2xs);
+  color: var(--color-warning-light);
 }
 
 .warning-box {
@@ -1462,17 +1742,17 @@ export default {
 }
 
 /* AI Provider card */
-.settings-group.ai-group {
-  border-color: rgba(99, 102, 241, 0.45);
-  background: rgba(99, 102, 241, 0.07);
+.advanced-subsection.ai-group {
+  background: var(--color-primary-alpha-10);
+  border-color: var(--color-primary);
 }
 
-.settings-group.ai-group h3 {
-  color: #a5b4fc;
+.advanced-subsection.ai-group h3 {
+  color: var(--color-primary-light);
 }
 
-.settings-group.ai-group h3 i {
-  color: #818cf8;
+.advanced-subsection.ai-group h3 i {
+  color: var(--color-primary);
 }
 
 .ai-advanced-toggle {
@@ -1880,6 +2160,20 @@ export default {
   .settings-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
+  }
+
+  .advanced-subsection-grid,
+  .request-workflow-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .configuration-action {
+    grid-template-columns: var(--input-height-md) minmax(0, 1fr);
+  }
+
+  .configuration-action .btn {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .settings-group {

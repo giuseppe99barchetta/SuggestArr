@@ -98,6 +98,8 @@ list them with `GET /api/v1/webhooks`, and remove one with
 - `request.submitted`
 - `request.failed`
 - `run.failed`
+- `job.completed`
+- `job.skipped`
 
 Each delivery is queued persistently and retried with exponential backoff up to
 five attempts. The JSON body has the stable envelope
@@ -110,6 +112,12 @@ provided by `X-SuggestArr-Timestamp`, `X-SuggestArr-Event`, and
 Webhook URLs are SSRF-validated. Private-network destinations are rejected by
 default; set `allow_private: true` only for trusted local automation such as
 Home Assistant or n8n.
+
+For an additional outbound boundary, administrators may manage an optional
+hostname allowlist with `GET` and `PUT /api/v1/webhooks/settings`. An empty
+allowlist permits every SSRF-safe destination; when it contains hostnames,
+new and queued deliveries must match one of them. Hostnames do not include a
+scheme, port, or path.
 
 Recent delivery status is available to administrators at
 `GET /api/v1/webhooks/deliveries`; it intentionally omits secrets and message

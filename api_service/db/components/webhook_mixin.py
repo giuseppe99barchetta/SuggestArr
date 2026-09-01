@@ -1,10 +1,24 @@
 """Persistent outbound webhook delivery queue."""
 import json
 import uuid
+from urllib.parse import urlparse
 
 
 class WebhookMixin:
     _WEBHOOK_SERVICE = "outbound_webhooks"
+
+    def get_webhook_allowed_hosts(self):
+        config = self.get_integration(self._WEBHOOK_SERVICE) or {}
+        return config.get("allowed_hosts", [])
+
+    def set_webhook_allowed_hosts(self, hosts):
+        config = self.get_integration(self._WEBHOOK_SERVICE) or {"items": []}
+        config["allowed_hosts"] = hosts
+        self.set_integration(self._WEBHOOK_SERVICE, config)
+
+    def is_webhook_destination_allowed(self, url):
+        hosts = self.get_webhook_allowed_hosts()
+        return not hosts or urlparse(url).hostname.lower() in hosts
 
     def list_webhooks(self):
         items = (self.get_integration(self._WEBHOOK_SERVICE) or {}).get("items", [])
@@ -28,7 +42,8 @@ class WebhookMixin:
         remaining = [item for item in items if item.get("id") != webhook_id]
         if len(remaining) == len(items):
             return False
-        self.set_integration(self._WEBHOOK_SERVICE, {"items": remaining})
+        config["items"] = remaining
+        self.set_integration(self._WEBHOOK_SERVICE, config)
         return True
 
     def enqueue_webhook_event(self, event, payload):

@@ -24,6 +24,8 @@ def run_webhook_worker():
                              hashlib.sha256).hexdigest()
         try:
             validate_url(item["url"], allow_private=bool(item["allow_private"]))
+            if not db.is_webhook_destination_allowed(item["url"]):
+                raise ValueError("Webhook destination is not in the allowlist")
             response = requests.post(item["url"], data=body, timeout=10, allow_redirects=False, headers={
                 "Content-Type": "application/json", "User-Agent": "SuggestArr-Webhook/1",
                 "X-SuggestArr-Event": item["event_type"], "X-SuggestArr-Event-Id": item["event_id"],

@@ -223,6 +223,8 @@ class JobManager:
                         "Job %s paused because Seer has pending requests awaiting approval or denial.",
                         job_id,
                     )
+                    self._queue_webhook("job.skipped", job_id, job_type, execution_id,
+                                        "pending_requests_awaiting_approval")
                     outcome = 'skipped'
                     return
                 slices = None
@@ -240,6 +242,8 @@ class JobManager:
                         error_message='Paused: suggested content has remained unwatched past the configured limit.'
                     )
                     self.logger.info("Job %s paused because its suggested content remains unwatched.", job_id)
+                    self._queue_webhook("job.skipped", job_id, job_type, execution_id,
+                                        "suggested_content_unwatched")
                     outcome = 'skipped'
                     return
                 if slices is None:
@@ -251,19 +255,24 @@ class JobManager:
                 close_event_loop(loop, self.logger)
 
             self.logger.info(f"Job {job_id} execution completed")
+            self._queue_webhook("job.completed", job_id, job_type, execution_id)
         except Exception as e:
             outcome = 'failed'
             self.logger.error(f"Job {job_id} execution failed: {str(e)}")
             if execution_id is not None:
                 self.repository.log_execution_end(execution_id, 'failed', error_message='Job execution failed')
-            try:
-                self.repository.db.enqueue_webhook_event("run.failed", {
-                    "job_id": job_id, "job_type": job_type, "execution_id": execution_id,
-                })
-            except Exception as exc:
-                self.logger.error("Unable to queue run.failed webhook: %s", exc)
+            self._queue_webhook("run.failed", job_id, job_type, execution_id)
         finally:
             observe_job(job_type, outcome, time.monotonic() - started_at)
+
+    def _queue_webhook(self, event, job_id, job_type, execution_id, reason=None):
+        payload = {"job_id": job_id, "job_type": job_type, "execution_id": execution_id}
+        if reason:
+            payload["reason"] = reason
+        try:
+            self.repository.db.enqueue_webhook_event(event, payload)
+        except Exception as exc:
+            self.logger.error("Unable to queue %s webhook: %s", event, exc)
 
     async def _should_pause_for_pending_requests(self, job_data: Dict[str, Any]) -> bool:
         """Return True when this job should skip because Seer has pending requests."""

@@ -73,6 +73,7 @@ def metrics():
 _WEBHOOK_EVENTS = {
     'suggestion.created', 'suggestion.awaiting_approval', 'suggestion.approved',
     'suggestion.rejected', 'request.submitted', 'request.failed', 'run.failed',
+    'job.completed', 'job.skipped',
 }
 
 
@@ -98,11 +99,37 @@ def create_webhook():
         validate_url(url, allow_private=bool(data.get('allow_private', False)))
     except ValueError as exc:
         return jsonify({'error': {'code': 'validation_error', 'message': str(exc)}}), 400
-    item = DatabaseManager().create_webhook({
+    db = DatabaseManager()
+    if not db.is_webhook_destination_allowed(url):
+        return jsonify({'error': {'code': 'validation_error', 'message': 'Webhook destination is not in the allowlist.'}}), 400
+    item = db.create_webhook({
         'name': name, 'url': url, 'secret': secret, 'events': events,
         'enabled': data.get('enabled', True), 'allow_private': data.get('allow_private', False),
     })
     return jsonify({'data': item}), 201
+
+
+@public_api_v1_bp.route('/webhooks/settings', methods=['GET'])
+@require_role('admin')
+def webhook_settings():
+    return jsonify({'data': {'allowed_hosts': DatabaseManager().get_webhook_allowed_hosts()}}), 200
+
+
+@public_api_v1_bp.route('/webhooks/settings', methods=['PUT'])
+@require_role('admin')
+@limiter.limit('20 per minute')
+def update_webhook_settings():
+    hosts = (request.get_json(silent=True) or {}).get('allowed_hosts')
+    if not isinstance(hosts, list) or len(hosts) > 100:
+        return jsonify({'error': {'code': 'validation_error', 'message': 'allowed_hosts must contain at most 100 hostnames.'}}), 400
+    normalized = []
+    for host in hosts:
+        if not isinstance(host, str) or not host.strip() or '/' in host or ':' in host:
+            return jsonify({'error': {'code': 'validation_error', 'message': 'allowed_hosts must contain hostnames only.'}}), 400
+        normalized.append(host.strip().lower())
+    normalized = sorted(set(normalized))
+    DatabaseManager().set_webhook_allowed_hosts(normalized)
+    return jsonify({'data': {'allowed_hosts': normalized}}), 200
 
 
 @public_api_v1_bp.route('/webhooks/<webhook_id>', methods=['DELETE'])
