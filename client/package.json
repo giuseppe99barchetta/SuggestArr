@@ -1,6 +1,6 @@
 {
   "name": "suggestarr",
-  "version": "v2.13.1",
+  "version": "v2.14.0",
   "private": true,
   "scripts": {
     "serve": "vite",
