@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import quote_plus
 
 from api_service.config.logger_manager import LoggerManager
+from api_service.observability.metrics import integration_error
 from api_service.services.filter_normalization import build_tmdb_params, normalize_filters
 
 # Constants
@@ -225,12 +226,15 @@ class TMDbDiscover:
                 if response.status in HTTP_OK:
                     return await response.json()
                 else:
+                    integration_error("tmdb")
                     self.logger.error(
                         f"Error fetching discover {media_type}: {response.status}"
                     )
         except aiohttp.ClientError as e:
+            integration_error("tmdb")
             self.logger.error(f"HTTP error during discover: {str(e)}")
         except asyncio.TimeoutError:
+            integration_error("tmdb")
             self.logger.error("Timeout during discover request")
 
         return None

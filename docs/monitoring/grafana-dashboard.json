@@ -1,0 +1,56 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [{"expr": "sum(suggestarr_seer_queue_items) by (status)", "legendFormat": "{{status}}"}],
+      "title": "Seer queue by status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "id": 2,
+      "targets": [{"expr": "sum(increase(suggestarr_integration_errors_total[$__rate_interval])) by (service)", "legendFormat": "{{service}}"}],
+      "title": "Integration errors",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "id": 3,
+      "targets": [{"expr": "increase(suggestarr_seer_queue_retries_total[$__rate_interval])", "legendFormat": "retries"}],
+      "title": "Seer retries",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 4,
+      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(suggestarr_job_duration_seconds_bucket[$__rate_interval])) by (le, job_type))", "legendFormat": "{{job_type}}"}],
+      "title": "Job duration p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 5,
+      "targets": [{"expr": "sum(increase(suggestarr_webhook_deliveries_total[$__rate_interval])) by (event, status)", "legendFormat": "{{event}} {{status}}"}],
+      "title": "Webhook deliveries",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["suggestarr"],
+  "title": "SuggestArr operational overview",
+  "uid": "suggestarr-overview",
+  "version": 1
+}

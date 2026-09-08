@@ -4,6 +4,7 @@ Singleton that manages APScheduler jobs for both discover and recommendation aut
 """
 import asyncio
 import threading
+import time
 from typing import Any, Callable, Dict, Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -15,6 +16,7 @@ from api_service.db.job_repository import JobRepository
 from api_service.services.config_service import ConfigService
 from api_service.services.seer.seer_client import SeerClient
 from api_service.utils.asyncio_loop import close_event_loop
+from api_service.observability.metrics import observe_job
 
 
 class JobManager:
@@ -189,6 +191,8 @@ class JobManager:
             return
 
         job_type = job_data.get('job_type', 'discover')
+        started_at = time.monotonic()
+        outcome = 'completed'
         self.logger.info(f"Executing {job_type} job: {job_id} ({job_data['name']})")
 
         # Get the executor for this job type
@@ -219,6 +223,9 @@ class JobManager:
                         "Job %s paused because Seer has pending requests awaiting approval or denial.",
                         job_id,
                     )
+                    self._queue_webhook("job.skipped", job_id, job_type, execution_id,
+                                        "pending_requests_awaiting_approval")
+                    outcome = 'skipped'
                     return
                 slices = None
                 if (job_data.get('prevent_suggestions_if_unwatched') and
@@ -235,6 +242,9 @@ class JobManager:
                         error_message='Paused: suggested content has remained unwatched past the configured limit.'
                     )
                     self.logger.info("Job %s paused because its suggested content remains unwatched.", job_id)
+                    self._queue_webhook("job.skipped", job_id, job_type, execution_id,
+                                        "suggested_content_unwatched")
+                    outcome = 'skipped'
                     return
                 if slices is None:
                     loop.run_until_complete(executor(job_id, execution_id=execution_id) if execution_id is not None else executor(job_id))
@@ -245,10 +255,24 @@ class JobManager:
                 close_event_loop(loop, self.logger)
 
             self.logger.info(f"Job {job_id} execution completed")
+            self._queue_webhook("job.completed", job_id, job_type, execution_id)
         except Exception as e:
+            outcome = 'failed'
             self.logger.error(f"Job {job_id} execution failed: {str(e)}")
             if execution_id is not None:
                 self.repository.log_execution_end(execution_id, 'failed', error_message='Job execution failed')
+            self._queue_webhook("run.failed", job_id, job_type, execution_id)
+        finally:
+            observe_job(job_type, outcome, time.monotonic() - started_at)
+
+    def _queue_webhook(self, event, job_id, job_type, execution_id, reason=None):
+        payload = {"job_id": job_id, "job_type": job_type, "execution_id": execution_id}
+        if reason:
+            payload["reason"] = reason
+        try:
+            self.repository.db.enqueue_webhook_event(event, payload)
+        except Exception as exc:
+            self.logger.error("Unable to queue %s webhook: %s", event, exc)
 
     async def _should_pause_for_pending_requests(self, job_data: Dict[str, Any]) -> bool:
         """Return True when this job should skip because Seer has pending requests."""

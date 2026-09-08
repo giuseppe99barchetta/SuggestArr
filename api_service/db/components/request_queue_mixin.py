@@ -98,7 +98,8 @@ class RequestQueueMixin:
             )
 
     def enqueue_request(self, tmdb_id: str, media_type: str, user_id: Optional[str],
-                        payload: dict, status: str = 'queued', job_id=None, owner_id=None) -> bool:
+                        payload: dict, status: str = 'queued', job_id=None, owner_id=None,
+                        execution_id=None) -> bool:
         """Enqueue a Seer submission for background delivery.
 
         Idempotent: silently no-ops when an entry for (tmdb_id, media_type) already
@@ -119,12 +120,22 @@ class RequestQueueMixin:
 
         if self.is_suggestion_blacklisted(tmdb_id, media_type):
             return False
+        skip_reason = self._automated_submission_skip_reason(
+            job_id, owner_id, tmdb_id, media_type, user_id,
+        )
+        if skip_reason:
+            self.logger.info(
+                "Skipping automated %s tmdb:%s before Seer queue: %s",
+                media_type, tmdb_id, skip_reason,
+            )
+            return False
         query = """
             INSERT OR IGNORE INTO pending_requests
-                (tmdb_id, media_type, user_id, payload, status, job_id, owner_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (tmdb_id, media_type, user_id, payload, status, job_id, owner_id, execution_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
-        params = (str(tmdb_id), media_type, user_id, json.dumps(payload), status, job_id, owner_id)
+        params = (str(tmdb_id), media_type, user_id, json.dumps(payload), status, job_id, owner_id, execution_id)
+        ph = '?' if self.db_type == 'sqlite' else '%s'
 
         if self.db_type in ['mysql', 'mariadb']:
             query = query.replace("INSERT OR IGNORE", "INSERT IGNORE").replace("?", "%s")
@@ -137,19 +148,81 @@ class RequestQueueMixin:
                 cursor = conn.cursor()
                 cursor.execute(query, params)
                 inserted = cursor.rowcount > 0
-                conn.commit()
-                if inserted:
-                    self.logger.debug("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)
-                else:
-                    self.logger.info(
-                        "enqueue_request: %s tmdb:%s already exists in pending queue, skipping.",
-                        media_type,
-                        tmdb_id,
+                delivery_id = getattr(cursor, 'lastrowid', None) if inserted else None
+                if inserted and delivery_id is None:
+                    cursor.execute(
+                        f"SELECT id FROM pending_requests WHERE tmdb_id={ph} AND media_type={ph}",
+                        (str(tmdb_id), media_type),
                     )
-                return inserted
+                    delivery_id = cursor.fetchone()[0]
+                conn.commit()
+            if inserted:
+                self.logger.info(
+                    "Queued Seer delivery id=%s for job run id=%s.", delivery_id, execution_id,
+                )
+                event_data = {
+                    "delivery_id": delivery_id, "execution_id": execution_id, "tmdb_id": str(tmdb_id),
+                    "media_type": media_type, "job_id": job_id, "status": status,
+                }
+                try:
+                    self.enqueue_webhook_event("suggestion.created", event_data)
+                    if status == "awaiting_approval":
+                        self.enqueue_webhook_event("suggestion.awaiting_approval", event_data)
+                except Exception as exc:
+                    self.logger.error("Unable to queue suggestion webhook: %s", exc)
+            else:
+                self.logger.info(
+                    "enqueue_request: %s tmdb:%s already exists in pending queue, skipping.",
+                    media_type,
+                    tmdb_id,
+                )
+            return inserted
         except Exception as e:
             self.logger.error("Failed to enqueue %s tmdb:%s: %s", media_type, tmdb_id, e)
             return False
+
+    def _automated_submission_skip_reason(self, job_id, owner_id, tmdb_id, media_type, user_id):
+        """Return a guardrail reason for an automated queue item, if any.
+
+        Manual requests have no ``job_id`` and are deliberately unaffected.  The
+        existing ``max_results`` job setting remains the per-run cap; this adds
+        an optional per-media-user cap over a configurable rolling window.
+        """
+        if job_id is None:
+            return None
+
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT owner_id, max_requests_per_user, request_limit_window_hours "
+                f"FROM discover_jobs WHERE id={ph}",
+                (job_id,),
+            )
+            settings = cursor.fetchone()
+            if not settings:
+                return None
+            job_owner_id = settings[0] if settings[0] is not None else owner_id
+            max_requests = int(settings[1] or 0)
+            window_hours = int(settings[2] or 24)
+
+        if self.should_skip_feedback(job_owner_id, tmdb_id, media_type, user_id):
+            return 'personal feedback marked this item as not wanted'
+        if max_requests <= 0:
+            return None
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=max(1, window_hours))).replace(tzinfo=None)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT COUNT(*) FROM pending_requests WHERE job_id={ph} "
+                f"AND COALESCE(user_id, '')={ph} AND created_at >= {ph}",
+                (job_id, '' if user_id is None else str(user_id), cutoff),
+            )
+            count = cursor.fetchone()[0]
+        if count >= max_requests:
+            return f'job limit of {max_requests} request(s) per user in {max(1, window_hours)} hour(s) reached'
+        return None
 
     def is_suggestion_blacklisted(self, tmdb_id: str, media_type: str) -> bool:
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
@@ -159,9 +232,10 @@ class RequestQueueMixin:
                            (str(tmdb_id), media_type))
             return cursor.fetchone() is not None
 
-    def list_suggestions(self, owner_id=None, status='awaiting_approval', search='', page=1, per_page=24, media_type='all', media_user_ids=None):
+    def list_suggestions(self, owner_id=None, status='awaiting_approval', search='', page=1, per_page=24,
+                         media_type='all', media_user_ids=None, feedback_user_id=None):
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
-        query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.owner_id,
+        query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.execution_id,p.owner_id,
                           p.retry_count,p.last_attempt_at,p.last_error,p.payload,
                           m.title,m.poster_path,m.overview,m.rating,m.release_date,
                           m.logo_path,m.backdrop_path,j.name
@@ -228,6 +302,11 @@ class RequestQueueMixin:
                     )
                     user = cursor.fetchone()
                     item['user_name'] = user[0] if user else None
+                item['feedback'] = (
+                    self.get_suggestion_feedback(
+                        cursor, feedback_user_id, item['tmdb_id'], item['media_type'], item['media_user_id'],
+                    ) if feedback_user_id is not None else None
+                )
                 if status == 'blacklisted':
                     item['status'] = 'blacklisted'
             return items, total
@@ -243,13 +322,11 @@ class RequestQueueMixin:
             params.append(owner_id)
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            eligible = []
-            if blacklist:
-                select_params = [*ids] + ([] if owner_id is None else [owner_id])
-                cursor.execute(f"SELECT tmdb_id,media_type FROM pending_requests "
-                               f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}",
-                               tuple(select_params))
-                eligible = cursor.fetchall()
+            select_params = [*ids] + ([] if owner_id is None else [owner_id])
+            cursor.execute(f"SELECT id,tmdb_id,media_type,job_id,execution_id FROM pending_requests "
+                           f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}",
+                           tuple(select_params))
+            eligible = cursor.fetchall()
             cursor.execute(f"UPDATE pending_requests SET status={ph},decided_by={ph},decided_at=CURRENT_TIMESTAMP "
                            f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}", tuple(params))
             changed = cursor.rowcount
@@ -257,13 +334,22 @@ class RequestQueueMixin:
                 insert = "INSERT OR IGNORE" if self.db_type == 'sqlite' else "INSERT IGNORE"
                 if self.db_type == 'postgres':
                     insert = "INSERT"
-                for tmdb_id, media_type in eligible:
+                for _, tmdb_id, media_type, _, _ in eligible:
                     sql = f"{insert} INTO suggestion_blacklist(tmdb_id,media_type,created_by) VALUES ({ph},{ph},{ph})"
                     if self.db_type == 'postgres':
                         sql += " ON CONFLICT DO NOTHING"
                     cursor.execute(sql, (tmdb_id, media_type, decided_by))
             conn.commit()
-            return changed
+        event = "suggestion.approved" if approve else "suggestion.rejected"
+        try:
+            for suggestion_id, tmdb_id, media_type, job_id, execution_id in eligible:
+                self.enqueue_webhook_event(event, {
+                    "suggestion_id": suggestion_id, "tmdb_id": str(tmdb_id),
+                    "media_type": media_type, "job_id": job_id, "execution_id": execution_id,
+                })
+        except Exception as exc:
+            self.logger.error("Unable to queue %s webhook: %s", event, exc)
+        return changed
 
     def has_pending_approvals(self, job_id) -> bool:
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
@@ -350,7 +436,7 @@ class RequestQueueMixin:
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
 
         query = f"""
-            SELECT id, tmdb_id, media_type, user_id, payload, retry_count
+            SELECT id, tmdb_id, media_type, user_id, payload, retry_count, job_id, execution_id
             FROM pending_requests
             WHERE status = 'queued'
               AND (next_attempt_at IS NULL OR next_attempt_at <= {placeholder})

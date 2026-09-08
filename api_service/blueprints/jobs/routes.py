@@ -82,6 +82,24 @@ def _validate_request_profiles_with_seer(profiles):
     run_async(check())
 
 
+def _validate_request_limits(data):
+    """Normalise the optional rolling per-user automation guardrail."""
+    try:
+        if 'max_requests_per_user' in data:
+            data['max_requests_per_user'] = int(data['max_requests_per_user'])
+            if not 0 <= data['max_requests_per_user'] <= 1000:
+                raise ValueError
+        if 'request_limit_window_hours' in data:
+            data['request_limit_window_hours'] = int(data['request_limit_window_hours'])
+            if not 1 <= data['request_limit_window_hours'] <= 24 * 365:
+                raise ValueError
+    except (TypeError, ValueError):
+        raise ValueError(
+            'max_requests_per_user must be between 0 and 1000 and '
+            'request_limit_window_hours must be between 1 and 8760'
+        )
+
+
 def get_job_manager() -> JobManager:
     """
     Get the JobManager instance and ensure it's configured.
@@ -327,6 +345,10 @@ def create_job():
                 raise ValueError
         except (TypeError, ValueError):
             return jsonify({'status': 'error', 'message': 'unwatched_suggestion_days must be a positive integer'}), 400
+        try:
+            _validate_request_limits(data)
+        except ValueError as exc:
+            return jsonify({'status': 'error', 'message': str(exc)}), 400
         
         # Set owner_id from current user - never allow client to override
         current_user = getattr(g, 'current_user', None)
@@ -433,6 +455,10 @@ def update_job(job_id: int):
                     raise ValueError
             except (TypeError, ValueError):
                 return jsonify({'status': 'error', 'message': 'unwatched_suggestion_days must be a positive integer'}), 400
+        try:
+            _validate_request_limits(data)
+        except ValueError as exc:
+            return jsonify({'status': 'error', 'message': str(exc)}), 400
         if 'job_type' in data and job_type not in ['discover', 'recommendation', 'trakt_recommendations']:
             return jsonify({
                 'status': 'error',
@@ -638,20 +664,23 @@ def run_job_now(job_id: int):
                 'requested_count': 0
             }), 200
 
+        exec_id = repository.log_execution_start(job_id)
+
         # Execute job based on type (async function called synchronously)
         if job_type == 'recommendation':
-            result = run_async(execute_recommendation_job(job_id))
+            result = run_async(execute_recommendation_job(job_id, execution_id=exec_id))
         elif job_type == 'trakt_recommendations':
-            result = run_async(execute_trakt_recommendations_job(job_id))
+            result = run_async(execute_trakt_recommendations_job(job_id, execution_id=exec_id))
         else:
-            result = run_async(execute_discover_job(job_id))
+            result = run_async(execute_discover_job(job_id, execution_id=exec_id))
 
         if result.success:
             return jsonify({
                 'status': 'success',
                 'message': 'Job executed successfully',
                 'results_count': result.results_count,
-                'requested_count': result.requested_count
+                'requested_count': result.requested_count,
+                'run_id': exec_id,
             }), 200
         else:
             return jsonify({

@@ -32,7 +32,8 @@ class JobRepository:
                    schedule_value, max_results, user_ids, is_system, owner_id,
                    pause_if_pending_requests, prevent_suggestions_if_unwatched,
                    unwatched_suggestion_days, created_at, updated_at
-                   , delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode
+                   , delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode,
+                   max_requests_per_user, request_limit_window_hours
             FROM discover_jobs
             ORDER BY is_system DESC, created_at DESC
         """
@@ -66,7 +67,8 @@ class JobRepository:
                    schedule_value, max_results, user_ids, is_system, owner_id,
                    pause_if_pending_requests, prevent_suggestions_if_unwatched,
                    unwatched_suggestion_days, created_at, updated_at
-                   , delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode
+                   , delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode,
+                   max_requests_per_user, request_limit_window_hours
             FROM discover_jobs
             WHERE id = ?
         """
@@ -99,7 +101,8 @@ class JobRepository:
                    schedule_value, max_results, user_ids, is_system, owner_id,
                    pause_if_pending_requests, prevent_suggestions_if_unwatched,
                    unwatched_suggestion_days, created_at, updated_at
-                   , delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode
+                   , delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode,
+                   max_requests_per_user, request_limit_window_hours
             FROM discover_jobs
             WHERE enabled = 1
             ORDER BY is_system DESC, created_at DESC
@@ -153,6 +156,8 @@ class JobRepository:
         identity_mode = job_data.get('seer_identity_mode', 'technical_user')
         request_profiles = json.dumps(job_data.get('request_profiles') or {})
         approval_pause_mode = job_data.get('approval_pause_mode', 'inherit')
+        max_requests_per_user = int(job_data.get('max_requests_per_user', 0))
+        request_limit_window_hours = int(job_data.get('request_limit_window_hours', 24))
 
         query = """
             INSERT INTO discover_jobs (name, job_type, enabled, media_type, filters,
@@ -160,8 +165,9 @@ class JobRepository:
                                        is_system, owner_id, pause_if_pending_requests,
                                        prevent_suggestions_if_unwatched, unwatched_suggestion_days,
                                        delivery_mode, seer_identity_mode, request_profiles,
-                                       approval_pause_mode)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                       approval_pause_mode, max_requests_per_user,
+                                       request_limit_window_hours)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = (
             job_data['name'],
@@ -177,7 +183,8 @@ class JobRepository:
             owner_id,
             pause_if_pending_requests,
             prevent_unwatched,
-            unwatched_days, delivery_mode, identity_mode, request_profiles, approval_pause_mode
+            unwatched_days, delivery_mode, identity_mode, request_profiles, approval_pause_mode,
+            max_requests_per_user, request_limit_window_hours
         )
 
         with self.db.get_connection() as conn:
@@ -265,6 +272,11 @@ class JobRepository:
         if 'unwatched_suggestion_days' in job_data:
             update_fields.append("unwatched_suggestion_days = ?")
             params.append(int(job_data['unwatched_suggestion_days']))
+
+        for field in ('max_requests_per_user', 'request_limit_window_hours'):
+            if field in job_data:
+                update_fields.append(f"{field} = ?")
+                params.append(int(job_data[field]))
 
         for field in ('delivery_mode', 'seer_identity_mode', 'approval_pause_mode'):
             if field in job_data:
@@ -387,6 +399,19 @@ class JobRepository:
 
     def get_execution(self, execution_id: int) -> Optional[Dict[str, Any]]:
         return next((row for row in self.get_recent_history(1000) if row['id'] == execution_id), None)
+
+    def get_execution_deliveries(self, execution_id: int) -> List[Dict[str, Any]]:
+        """Return credential-free Seer queue items produced by one job run."""
+        query = ("SELECT id, execution_id, job_id, status, retry_count, last_attempt_at, "
+                 "next_attempt_at, last_error, created_at FROM pending_requests "
+                 "WHERE execution_id = ? ORDER BY id ASC")
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db.db_type in ('mysql', 'mariadb', 'postgres'):
+                query = query.replace('?', '%s')
+            cursor.execute(query, (execution_id,))
+            columns = [column[0] for column in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     def log_execution_end(
         self,
@@ -554,6 +579,8 @@ class JobRepository:
                 , 'seer_identity_mode': row[18] if len(row) > 18 else 'technical_user'
                 , 'request_profiles': row[19] if len(row) > 19 else None
                 , 'approval_pause_mode': row[20] if len(row) > 20 else 'inherit'
+                , 'max_requests_per_user': row[21] if len(row) > 21 else 0
+                , 'request_limit_window_hours': row[22] if len(row) > 22 else 24
             }
 
         # Parse filters JSON
@@ -584,6 +611,8 @@ class JobRepository:
         data['unwatched_suggestion_days'] = int(data.get('unwatched_suggestion_days') or 7)
         data['delivery_mode'] = data.get('delivery_mode') or 'automatic'
         data['approval_pause_mode'] = data.get('approval_pause_mode') or 'inherit'
+        data['max_requests_per_user'] = int(data.get('max_requests_per_user') or 0)
+        data['request_limit_window_hours'] = int(data.get('request_limit_window_hours') or 24)
         if isinstance(data.get('request_profiles'), str):
             try:
                 data['request_profiles'] = json.loads(data['request_profiles'])
@@ -610,7 +639,9 @@ class JobRepository:
             SELECT id, name, job_type, enabled, media_type, filters, schedule_type,
                    schedule_value, max_results, user_ids, is_system, owner_id,
                    pause_if_pending_requests, prevent_suggestions_if_unwatched,
-                   unwatched_suggestion_days, created_at, updated_at
+                   unwatched_suggestion_days, created_at, updated_at,
+                   delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode,
+                   max_requests_per_user, request_limit_window_hours
             FROM discover_jobs
             WHERE is_system = 1
             LIMIT 1
@@ -705,9 +736,9 @@ class JobRepository:
         """
         # Handle both tuple and Row objects
         if hasattr(row, 'keys'):
-            return dict(row)
+            data = dict(row)
         else:
-            return {
+            data = {
                 'id': row[0],
                 'job_id': row[1],
                 'started_at': row[2],
@@ -719,3 +750,14 @@ class JobRepository:
                 'job_name': row[8] if len(row) > 8 else None,
                 'trigger_source': row[9] if len(row) > 9 else 'schedule',
             }
+
+        # Database drivers return TIMESTAMP columns as datetime objects. Flask
+        # serializes naive datetimes as GMT HTTP dates, even though execution
+        # history is stored in the container's local time. The browser then
+        # applies its timezone offset again. Keep the stored wall-clock value
+        # explicit and database-independent by returning ISO strings instead.
+        for field in ('started_at', 'finished_at'):
+            if isinstance(data.get(field), datetime):
+                data[field] = data[field].isoformat()
+
+        return data

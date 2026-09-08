@@ -14,6 +14,24 @@ automation_bp = Blueprint('automation', __name__)
 
 _force_run_lock = threading.Lock()
 _force_run_running = False
+_FEEDBACK_VALUES = {'interested', 'not_interested', 'already_seen', 'too_similar', 'save_for_later'}
+_FEEDBACK_REASONS = {'genre', 'provider', 'content', 'title', 'other'}
+
+
+def _feedback_payload():
+    data = request.get_json(silent=True) or {}
+    feedback = data.get('feedback')
+    reason_type = data.get('reason_type')
+    reason_text = data.get('reason_text')
+    if feedback not in _FEEDBACK_VALUES:
+        return None, (jsonify({'status': 'error', 'message': 'Invalid feedback value'}), 400)
+    if reason_type is not None and reason_type not in _FEEDBACK_REASONS:
+        return None, (jsonify({'status': 'error', 'message': 'Invalid feedback reason'}), 400)
+    if reason_text is not None:
+        if not isinstance(reason_text, str) or len(reason_text.strip()) > 500:
+            return None, (jsonify({'status': 'error', 'message': 'reason_text must be at most 500 characters'}), 400)
+        reason_text = reason_text.strip() or None
+    return (feedback, reason_type, reason_text, data.get('media_user_id')), None
 
 
 def _workflow_ids():
@@ -53,7 +71,7 @@ def request_workflow():
     db = DatabaseManager()
     items, total = db.list_suggestions(
         _workflow_owner(), status, request.args.get('search', '').strip()[:100], page, per_page, media_type,
-        _visible_request_user_ids(db))
+        _visible_request_user_ids(db), int(g.current_user['id']))
     return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
 
@@ -104,6 +122,70 @@ def request_workflow_again():
     remove_blacklist = bool((request.get_json(silent=True) or {}).get('remove_blacklist'))
     changed = DatabaseManager().request_rejected(ids, _workflow_owner(), remove_blacklist)
     return jsonify({'status': 'success', 'updated': changed}), 200
+
+
+@automation_bp.route('/requests/workflow/<int:suggestion_id>/feedback', methods=['PUT'])
+@limiter.limit('30 per minute')
+def set_request_feedback(suggestion_id):
+    """Save personal feedback without changing the shared request or blacklist."""
+    parsed, error = _feedback_payload()
+    if error:
+        return error
+    feedback, reason_type, reason_text, _ = parsed
+    db = DatabaseManager()
+    result = db.set_suggestion_feedback(
+        suggestion_id, _workflow_owner(), int(g.current_user['id']), feedback, reason_type, reason_text,
+        _visible_request_user_ids(db),
+    )
+    if result is None:
+        return jsonify({'status': 'error', 'message': 'Suggestion not found'}), 404
+    return jsonify({'status': 'success', 'feedback': result}), 200
+
+
+@automation_bp.route('/requests/workflow/<int:suggestion_id>/feedback', methods=['DELETE'])
+@limiter.limit('30 per minute')
+def clear_request_feedback(suggestion_id):
+    db = DatabaseManager()
+    removed = db.clear_suggestion_feedback(
+        suggestion_id, _workflow_owner(), int(g.current_user['id']), _visible_request_user_ids(db),
+    )
+    return jsonify({'status': 'success', 'removed': removed}), 200
+
+
+@automation_bp.route('/requests/media/<media_type>/<tmdb_id>/feedback', methods=['PUT'])
+@limiter.limit('30 per minute')
+def set_sent_request_feedback(media_type, tmdb_id):
+    """Save personal feedback for a canonical request already sent to Seer."""
+    if media_type not in ('movie', 'tv'):
+        return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400
+    parsed, error = _feedback_payload()
+    if error:
+        return error
+    feedback, reason_type, reason_text, media_user_id = parsed
+    db = DatabaseManager()
+    visible_user_ids = _visible_request_user_ids(db)
+    if not db.has_visible_suggestarr_request(tmdb_id, media_type, media_user_id, visible_user_ids):
+        return jsonify({'status': 'error', 'message': 'Request not found'}), 404
+    result = db.set_media_feedback(
+        int(g.current_user['id']), media_user_id, tmdb_id, media_type,
+        feedback, reason_type, reason_text,
+    )
+    return jsonify({'status': 'success', 'feedback': result}), 200
+
+
+@automation_bp.route('/requests/media/<media_type>/<tmdb_id>/feedback', methods=['DELETE'])
+@limiter.limit('30 per minute')
+def clear_sent_request_feedback(media_type, tmdb_id):
+    if media_type not in ('movie', 'tv'):
+        return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400
+    data = request.get_json(silent=True) or {}
+    media_user_id = data.get('media_user_id')
+    db = DatabaseManager()
+    visible_user_ids = _visible_request_user_ids(db)
+    if not db.has_visible_suggestarr_request(tmdb_id, media_type, media_user_id, visible_user_ids):
+        return jsonify({'status': 'error', 'message': 'Request not found'}), 404
+    removed = db.clear_media_feedback(int(g.current_user['id']), media_user_id, tmdb_id, media_type)
+    return jsonify({'status': 'success', 'removed': removed}), 200
 
 
 def _run_automation_in_background():
@@ -160,6 +242,7 @@ def get_requests():
             per_page=per_page,
             sort_by=sort_by,
             user_ids=_visible_request_user_ids(db_manager),
+            feedback_user_id=int(g.current_user['id']),
         )
         
         return jsonify(result), 200

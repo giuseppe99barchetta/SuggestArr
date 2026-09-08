@@ -480,6 +480,8 @@ class RecommendationAutomation:
                 use_as_exclusion=trakt_use_as_exclusion,
             ),
             max_content=max_content,
+            feedback_repository=self.db_manager,
+            feedback_owner_id=self.job_data.get('owner_id'),
         )
         self.logger.info("Jellyfin handler initialized")
 
@@ -529,6 +531,8 @@ class RecommendationAutomation:
             ),
             selected_users=selected_users,
             max_content=max_content,
+            feedback_repository=self.db_manager,
+            feedback_owner_id=self.job_data.get('owner_id'),
         )
         self.logger.info("Plex handler initialized")
 
@@ -556,6 +560,9 @@ class RecommendationAutomation:
             f"{'[DRY RUN] ' if dry_run else ''}Starting recommendation job: {self.job_data['name']}"
         )
         exec_id = None if dry_run else (execution_id or self.repository.log_execution_start(self.job_id))
+        if not dry_run and getattr(self.media_handler, 'seer_client', None):
+            self.media_handler.seer_client.queue_context['execution_id'] = exec_id
+            self.logger.info("Recommendation job run id=%s started.", exec_id)
 
         try:
             # Process recent items (this is the main recommendation logic)

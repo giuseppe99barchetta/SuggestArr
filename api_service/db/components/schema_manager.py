@@ -109,6 +109,8 @@ class SchemaManager:
                     seer_identity_mode TEXT NOT NULL DEFAULT 'technical_user',
                     request_profiles TEXT,
                     approval_pause_mode TEXT NOT NULL DEFAULT 'inherit',
+                    max_requests_per_user INTEGER NOT NULL DEFAULT 0,
+                    request_limit_window_hours INTEGER NOT NULL DEFAULT 24,
                     is_system INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -149,6 +151,7 @@ class SchemaManager:
                     last_attempt_at TIMESTAMP,
                     next_attempt_at TIMESTAMP,
                     job_id INTEGER,
+                    execution_id INTEGER,
                     owner_id INTEGER,
                     decided_at TIMESTAMP,
                     decided_by INTEGER,
@@ -232,6 +235,40 @@ class SchemaManager:
                     service TEXT UNIQUE NOT NULL,
                     config_json TEXT NOT NULL,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """,
+            'webhook_deliveries': """
+                CREATE TABLE IF NOT EXISTS webhook_deliveries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_id TEXT NOT NULL,
+                    webhook_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    secret TEXT NOT NULL,
+                    allow_private INTEGER NOT NULL DEFAULT 0,
+                    payload TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    retry_count INTEGER NOT NULL DEFAULT 0,
+                    next_attempt_at TIMESTAMP,
+                    last_error TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(webhook_id, event_id)
+                )
+            """,
+            'suggestion_feedback': """
+                CREATE TABLE IF NOT EXISTS suggestion_feedback (
+                    user_id INTEGER NOT NULL,
+                    media_user_id TEXT NOT NULL DEFAULT '',
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    feedback TEXT NOT NULL,
+                    reason_type TEXT,
+                    reason_text TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, media_user_id, tmdb_id, media_type),
+                    FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
                 )
             """,
             'media_user_identities': """
@@ -471,12 +508,56 @@ class SchemaManager:
                         FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
                     ) ENGINE=InnoDB
                 """
+            elif table_name == 'suggestion_feedback':
+                query = """
+                    CREATE TABLE IF NOT EXISTS suggestion_feedback (
+                        user_id INTEGER NOT NULL,
+                        media_user_id VARCHAR(191) NOT NULL DEFAULT '',
+                        tmdb_id VARCHAR(32) NOT NULL,
+                        media_type VARCHAR(16) NOT NULL,
+                        feedback VARCHAR(32) NOT NULL,
+                        reason_type VARCHAR(32),
+                        reason_text TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (user_id, media_user_id, tmdb_id, media_type),
+                        FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB
+                """
+            elif table_name == 'webhook_deliveries':
+                return """
+                    CREATE TABLE IF NOT EXISTS webhook_deliveries (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        event_id VARCHAR(64) NOT NULL,
+                        webhook_id VARCHAR(64) NOT NULL,
+                        event_type VARCHAR(64) NOT NULL,
+                        url VARCHAR(2048) NOT NULL,
+                        secret VARCHAR(512) NOT NULL,
+                        allow_private TINYINT(1) NOT NULL DEFAULT 0,
+                        payload LONGTEXT NOT NULL,
+                        status VARCHAR(32) NOT NULL DEFAULT 'queued',
+                        retry_count INT NOT NULL DEFAULT 0,
+                        next_attempt_at TIMESTAMP NULL,
+                        last_error TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY uniq_webhook_delivery (webhook_id, event_id)
+                    ) ENGINE=InnoDB
+                """
 
             # Order matters: do specific replacements first.
             query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "INT AUTO_INCREMENT PRIMARY KEY")
             query = query.replace("INTEGER", "INT")
             query = query.replace("TEXT", "VARCHAR(512)")
             query = query.replace("REAL", "DOUBLE")
+
+            # Job filters are serialized JSON and can easily exceed the generic
+            # VARCHAR(512) compatibility mapping used for MySQL text columns.
+            if table_name == 'discover_jobs':
+                query = query.replace(
+                    "filters VARCHAR(512) NOT NULL",
+                    "filters LONGTEXT NOT NULL",
+                )
 
             # Add ENGINE=InnoDB for foreign key support.
             if not query.strip().endswith("ENGINE=InnoDB"):
@@ -676,6 +757,7 @@ class SchemaManager:
             cursor = conn.cursor()
 
             try:
+                mysql_column_types = {}
                 # Get existing columns
                 if self.db_type == 'sqlite':
                     query = "PRAGMA table_info(discover_jobs);"
@@ -691,10 +773,30 @@ class SchemaManager:
                 elif self.db_type in ['mysql', 'mariadb']:
                     query = "SHOW COLUMNS FROM discover_jobs;"
                     cursor.execute(query)
-                    existing_columns = {row[0] for row in cursor.fetchall()}
+                    column_rows = cursor.fetchall()
+                    existing_columns = {row[0] for row in column_rows}
+                    mysql_column_types = {
+                        row[0]: str(row[1]).lower() for row in column_rows
+                    }
                 else:
                     self.logger.warning(f"Unsupported DB type for column check: {self.db_type}")
                     return
+
+                # Older MySQL/MariaDB schemas mapped filters from TEXT to
+                # VARCHAR(512), which is too small for current job filter JSON.
+                if (
+                    self.db_type in ['mysql', 'mariadb']
+                    and 'filters' in existing_columns
+                    and mysql_column_types.get('filters') != 'longtext'
+                ):
+                    self.logger.info(
+                        "Expanding discover_jobs.filters to LONGTEXT..."
+                    )
+                    cursor.execute(
+                        "ALTER TABLE discover_jobs "
+                        "MODIFY COLUMN filters LONGTEXT NOT NULL;"
+                    )
+                    conn.commit()
 
                 # Add missing job_type column
                 if 'job_type' not in existing_columns:
@@ -772,6 +874,8 @@ class SchemaManager:
                     'seer_identity_mode': ("VARCHAR(30) NOT NULL DEFAULT 'technical_user'" if self.db_type in ['mysql', 'mariadb'] else "TEXT NOT NULL DEFAULT 'technical_user'"),
                     'request_profiles': "TEXT",
                     'approval_pause_mode': ("VARCHAR(20) NOT NULL DEFAULT 'inherit'" if self.db_type in ['mysql', 'mariadb'] else "TEXT NOT NULL DEFAULT 'inherit'"),
+                    'max_requests_per_user': "INTEGER NOT NULL DEFAULT 0",
+                    'request_limit_window_hours': "INTEGER NOT NULL DEFAULT 24",
                 }
                 for column, definition in additions.items():
                     if column not in existing_columns:
@@ -790,6 +894,7 @@ class SchemaManager:
                     pending_columns = {row[0] for row in cursor.fetchall()}
                 for column, definition in {
                     'job_id': 'INTEGER', 'owner_id': 'INTEGER',
+                    'execution_id': 'INTEGER',
                     'decided_at': 'TIMESTAMP', 'decided_by': 'INTEGER',
                     'last_error': 'TEXT',
                 }.items():

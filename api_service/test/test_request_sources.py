@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from api_service.db import database_manager as dm_mod
 from api_service.db.database_manager import DatabaseManager
+from api_service.db.job_repository import JobRepository
 from api_service.services.request_sources import (
     DISCOVER_SOURCE,
     TRAKT_RECOMMENDATIONS_SOURCE,
@@ -74,6 +75,33 @@ def test_grouped_requests_include_requested_for_user(tmp_path):
     assert result["request_users"] == [{"id": "plex-1", "name": "Alice"}]
 
 
+def test_grouped_sent_requests_include_personal_feedback(tmp_path):
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        with db.get_connection() as conn:
+            conn.execute(
+                "INSERT INTO auth_users(id,username,password_hash,role) VALUES (7,'owner','hash','user')"
+            )
+            conn.commit()
+        db.save_metadata({"id": "101", "title": "Request"}, "movie")
+        db.save_request("movie", "101", DISCOVER_SOURCE, user_id="plex-1")
+        db.set_media_feedback(7, "plex-1", "101", "movie", "interested", "genre")
+
+        request = db.get_all_requests_grouped_by_source(
+            feedback_user_id=7,
+        )["data"][0]["requests"][0]
+
+    DatabaseManager._instance = None
+    assert request["feedback"] == {
+        "feedback": "interested", "reason_type": "genre", "reason_text": None,
+    }
+
+
 def test_grouped_requests_resolve_name_from_media_identity(tmp_path):
     db_file = str(tmp_path / "requests.db")
     with (
@@ -108,6 +136,30 @@ def test_pending_requests_filter_by_requested_for_user(tmp_path):
     DatabaseManager._instance = None
     assert total == 1
     assert items[0]["media_user_id"] == "plex-1"
+
+
+def test_pending_request_keeps_its_job_run_and_delivery_id(tmp_path):
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        assert db.enqueue_request("303", "movie", None, {}, job_id=7, execution_id=12)
+        queued = db.get_due_requests()
+        deliveries = JobRepository().get_execution_deliveries(12)
+
+    DatabaseManager._instance = None
+    assert queued[0]["execution_id"] == 12
+    assert len(deliveries) == 1
+    assert deliveries[0]["id"] == queued[0]["id"]
+    assert deliveries[0]["execution_id"] == 12
+    assert deliveries[0]["job_id"] == 7
+    assert set(deliveries[0]) == {
+        "id", "execution_id", "job_id", "status", "retry_count", "last_attempt_at",
+        "next_attempt_at", "last_error", "created_at",
+    }
 
 
 def test_save_user_without_name_falls_back_to_id(tmp_path):

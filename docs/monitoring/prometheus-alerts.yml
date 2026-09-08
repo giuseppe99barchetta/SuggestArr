@@ -1,0 +1,29 @@
+groups:
+  - name: suggestarr
+    rules:
+      - alert: SuggestArrSeerQueueFailed
+        expr: suggestarr_seer_queue_items{status="failed"} > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: SuggestArr has failed Seer deliveries
+          description: Check the Seer service and retry the failed queue entries.
+
+      - alert: SuggestArrIntegrationErrors
+        expr: increase(suggestarr_integration_errors_total[15m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: SuggestArr integration errors are increasing
+          description: More than five TMDb, Seer, or LLM errors occurred in fifteen minutes.
+
+      - alert: SuggestArrSlowJobs
+        expr: histogram_quantile(0.95, sum(rate(suggestarr_job_duration_seconds_bucket[15m])) by (le, job_type)) > 300
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: SuggestArr job execution is slow
+          description: The 95th percentile duration has exceeded five minutes.

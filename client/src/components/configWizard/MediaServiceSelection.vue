@@ -68,6 +68,10 @@
 </template>
 
 <script>
+import jellyfinLogo from "@/assets/logos/jellyfin-logo.svg";
+import plexLogo from "@/assets/logos/plex-logo.svg";
+import embyLogo from "@/assets/logos/emby-logo.svg";
+
 export default {
     props: {
         config: { type: Object, required: true },
@@ -79,9 +83,9 @@ export default {
     data() {
         return {
             services: [
-                { name: 'Jellyfin', value: 'jellyfin', logo: require('@/assets/logos/jellyfin-logo.svg'), comingSoon: false, isNew: false },
-                { name: 'Plex', value: 'plex', logo: require('@/assets/logos/plex-logo.svg'), comingSoon: false, isNew: false },
-                { name: 'Emby', value: 'emby', logo: require('@/assets/logos/emby-logo.svg'), comingSoon: false, isNew: false },
+                { name: 'Jellyfin', value: 'jellyfin', logo: jellyfinLogo, comingSoon: false, isNew: false },
+                { name: 'Plex', value: 'plex', logo: plexLogo, comingSoon: false, isNew: false },
+                { name: 'Emby', value: 'emby', logo: embyLogo, comingSoon: false, isNew: false },
             ]
         };
     },

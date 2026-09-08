@@ -6,9 +6,7 @@ import { getLatestRelease } from "@/api/githubReleasesApi";
 
 export function useVersionCheck() {
   const toast = useToast();
-  const currentVersion = ref(
-    `${process.env.VUE_APP_VERSION || __APP_VERSION__ || "unknown"}`,
-  );
+  const currentVersion = ref(`${__APP_VERSION__ || "unknown"}`);
   const latestVersion = ref(null);
   const updateAvailable = ref(false);
   const isChecking = ref(false);

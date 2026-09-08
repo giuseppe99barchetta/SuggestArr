@@ -16,7 +16,7 @@ function readSubpathFromMeta() {
 }
 
 function configureAxiosSubpath(subpath) {
-  if (process.env.NODE_ENV === "development") {
+  if (import.meta.env.DEV) {
     axios.defaults.baseURL = "http://localhost:5000" + subpath;
   } else {
     axios.defaults.baseURL = subpath || "/";
@@ -282,7 +282,7 @@ export async function createAppRouter() {
     await waitForAuthReady();
 
     // For development, we might want to skip setup checks
-    if (process.env.NODE_ENV === "development" && to.query.skipSetup) {
+    if (import.meta.env.DEV && to.query.skipSetup) {
       return;
     }
 

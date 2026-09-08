@@ -13,6 +13,7 @@ from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.seer.seer_client import SeerClient
 from api_service.utils.asyncio_loop import close_event_loop
+from api_service.observability.metrics import INTEGRATION_ERRORS, QUEUE_RETRIES
 
 MAX_RETRIES = 5
 WORKER_BATCH = 50
@@ -89,12 +90,27 @@ async def _run_worker() -> int:
                     media_type, tmdb_id, row_id, exc,
                 )
                 db.mark_pending_failed(row_id, retry_count, "Corrupt queued payload")
+                try:
+                    db.enqueue_webhook_event("request.failed", {
+                        "tmdb_id": str(tmdb_id), "media_type": media_type,
+                        "job_id": item.get("job_id"), "execution_id": item.get("execution_id"),
+                        "delivery_id": row_id, "reason": "corrupt_payload",
+                    })
+                except Exception as webhook_exc:
+                    logger.error("Unable to queue request.failed webhook: %s", webhook_exc)
                 continue
 
             # Skip if the item was submitted by another path while it sat in the queue
             if db.check_request_exists(media_type, tmdb_id):
-                logger.debug("Queue worker: %s tmdb:%s already in requests, marking submitted.", media_type, tmdb_id)
+                logger.info("Queue worker: delivery id=%s from job run id=%s was already submitted.", row_id, item.get('execution_id'))
                 db.mark_pending_submitted(row_id, retry_count)
+                try:
+                    db.enqueue_webhook_event("request.submitted", {
+                        "tmdb_id": str(tmdb_id), "media_type": media_type, "job_id": item.get("job_id"),
+                        "execution_id": item.get("execution_id"), "delivery_id": row_id,
+                    })
+                except Exception as exc:
+                    logger.error("Unable to queue request.submitted webhook: %s", exc)
                 continue
 
             # Mark in-flight so a concurrent worker invocation skips this row
@@ -121,17 +137,34 @@ async def _run_worker() -> int:
                                 source_origin=source_origin)
 
                 db.mark_pending_submitted(row_id, retry_count)
-                logger.info("Queue worker: submitted %s tmdb:%s.", media_type, tmdb_id)
+                logger.info("Queue worker: delivery id=%s from job run id=%s submitted.", row_id, item.get('execution_id'))
+                try:
+                    db.enqueue_webhook_event("request.submitted", {
+                        "tmdb_id": str(tmdb_id), "media_type": media_type, "job_id": item.get("job_id"),
+                        "execution_id": item.get("execution_id"), "delivery_id": row_id,
+                    })
+                except Exception as exc:
+                    logger.error("Unable to queue request.submitted webhook: %s", exc)
                 submitted += 1
             else:
+                INTEGRATION_ERRORS.labels(service="seer").inc()
                 new_retry = retry_count + 1
                 if new_retry >= MAX_RETRIES:
                     db.mark_pending_failed(row_id, new_retry, "Seer rejected the request after maximum retries")
+                    try:
+                        db.enqueue_webhook_event("request.failed", {
+                            "tmdb_id": str(tmdb_id), "media_type": media_type,
+                            "job_id": item.get("job_id"), "execution_id": item.get("execution_id"),
+                            "delivery_id": row_id, "retry_count": new_retry,
+                        })
+                    except Exception as exc:
+                        logger.error("Unable to queue request.failed webhook: %s", exc)
                     logger.error(
                         "Queue worker: %s tmdb:%s permanently failed after %d retries.",
                         media_type, tmdb_id, new_retry,
                     )
                 else:
+                    QUEUE_RETRIES.inc()
                     next_at = _next_attempt_at(new_retry)
                     db.increment_pending_retry(row_id, new_retry, next_at)
                     logger.warning(

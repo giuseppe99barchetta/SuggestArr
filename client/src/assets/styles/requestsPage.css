@@ -910,6 +910,94 @@
   color: var(--color-primary);
 }
 
+.modal-feedback {
+  display: grid;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+  padding-inline: var(--spacing-xs);
+}
+
+.feedback-reactions {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-md);
+}
+
+.feedback-reaction {
+  display: grid;
+  place-items: center;
+  width: var(--btn-height-sm);
+  height: var(--btn-height-sm);
+  padding: var(--spacing-2xs);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-lg);
+  opacity: var(--alpha-60);
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.feedback-reaction:hover:not(:disabled) {
+  background: var(--surface-interactive);
+  opacity: 1;
+}
+
+.feedback-reaction.active {
+  background: var(--surface-interactive);
+  border-color: var(--color-border-light);
+  opacity: 1;
+}
+
+.feedback-reaction:focus-visible,
+.feedback-reason:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.feedback-reaction:disabled,
+.feedback-reason:disabled {
+  cursor: wait;
+  opacity: var(--alpha-60);
+}
+
+.feedback-reason-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+}
+
+.feedback-reason {
+  padding: var(--spacing-2xs) var(--spacing-xs);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.feedback-reason:hover:not(:disabled),
+.feedback-reason.active {
+  color: var(--color-text-primary);
+  background: var(--surface-interactive);
+  border-color: var(--color-border-light);
+}
+
+.modal-feedback-saving {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
 /* Filters Section */
 .btn.workflow-bulk-toggle {
   padding: 0.925rem 1.25rem;

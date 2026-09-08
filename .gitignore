@@ -376,7 +376,6 @@ config/config_files/
 
 # LLM Local Runtime files
 config/suggestarr.db
-client/package-lock.json
 static/
 
 # AI agent planning artifacts (ephemeral)
@@ -386,3 +385,8 @@ branch-review-findings.md
 
 # macOS
 .DS_Store
+
+# Playwright failure artifacts
+client/test-results/
+client/playwright-report/
+client/blob-report/

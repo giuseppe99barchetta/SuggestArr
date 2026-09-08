@@ -16,7 +16,7 @@ def to_ascii(value):
     return unicodedata.normalize('NFKD', value)
 
 class PlexHandler(BaseMediaHandler):
-    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, selected_users=None, max_content=10):
+    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, selected_users=None, max_content=10, feedback_repository=None, feedback_owner_id=None):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -47,6 +47,8 @@ class PlexHandler(BaseMediaHandler):
             max_total_requests=max_total_requests,
             trakt_augmentor=trakt_augmentor,
             max_content=max_content,
+            feedback_repository=feedback_repository,
+            feedback_owner_id=feedback_owner_id,
         )
         self.plex_client = plex_client
         self.selected_users = selected_users or []
@@ -323,6 +325,8 @@ class PlexHandler(BaseMediaHandler):
         if not isinstance(source_tmdb_obj, dict):
             self.logger.warning(f"Invalid source_tmdb_obj (type: {type(source_tmdb_obj).__name__}), skipping similar media request.")
             return
+
+        media_ids = self._apply_feedback_ranking(media_ids, media_type, user_id)
 
         if self.dry_run:
             # In dry-run mode, process all candidates so the user can see every potential
