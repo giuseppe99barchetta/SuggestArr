@@ -5,7 +5,7 @@
   "scripts": {
     "serve": "vite",
     "build": "vite build",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.js\"",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test",
     "test:e2e": "playwright test",
     "lint": "eslint --ext .js,.vue src/",
     "lint:styles": "stylelint \"src/**/*.{vue,css}\" --allow-empty-input",
