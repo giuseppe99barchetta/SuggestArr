@@ -5,7 +5,7 @@ from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.db.database_manager import DatabaseManager
 
 class JellyfinHandler(BaseMediaHandler):
-    def __init__(self, jellyfin_client:JellyfinClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, max_content=10):
+    def __init__(self, jellyfin_client:JellyfinClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, max_content=10, feedback_repository=None, feedback_owner_id=None):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client
@@ -37,6 +37,8 @@ class JellyfinHandler(BaseMediaHandler):
             max_total_requests=max_total_requests,
             trakt_augmentor=trakt_augmentor,
             max_content=max_content,
+            feedback_repository=feedback_repository,
+            feedback_owner_id=feedback_owner_id,
         )
         self.jellyfin_client = jellyfin_client
         self.selected_users = selected_users
@@ -295,6 +297,8 @@ class JellyfinHandler(BaseMediaHandler):
         if not isinstance(source_tmdb_obj, dict):
             self.logger.warning(f"Invalid source_tmdb_obj (type: {type(source_tmdb_obj).__name__}), skipping similar media request.")
             return
+
+        media_ids = self._apply_feedback_ranking(media_ids, media_type, user)
 
         if self.dry_run:
             # In dry-run mode, process all candidates (not just max_items) so the user

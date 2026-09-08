@@ -75,6 +75,33 @@ def test_grouped_requests_include_requested_for_user(tmp_path):
     assert result["request_users"] == [{"id": "plex-1", "name": "Alice"}]
 
 
+def test_grouped_sent_requests_include_personal_feedback(tmp_path):
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        with db.get_connection() as conn:
+            conn.execute(
+                "INSERT INTO auth_users(id,username,password_hash,role) VALUES (7,'owner','hash','user')"
+            )
+            conn.commit()
+        db.save_metadata({"id": "101", "title": "Request"}, "movie")
+        db.save_request("movie", "101", DISCOVER_SOURCE, user_id="plex-1")
+        db.set_media_feedback(7, "plex-1", "101", "movie", "interested", "genre")
+
+        request = db.get_all_requests_grouped_by_source(
+            feedback_user_id=7,
+        )["data"][0]["requests"][0]
+
+    DatabaseManager._instance = None
+    assert request["feedback"] == {
+        "feedback": "interested", "reason_type": "genre", "reason_text": None,
+    }
+
+
 def test_grouped_requests_resolve_name_from_media_identity(tmp_path):
     db_file = str(tmp_path / "requests.db")
     with (

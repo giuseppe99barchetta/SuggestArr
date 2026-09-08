@@ -28,7 +28,8 @@ class BaseMediaHandler(ABC):
                  max_similar_movie, max_similar_tv, library_anime_map=None,
                  use_llm=None, request_delay=0, honor_seer_discovery=False,
                  seer_discovered_ids=None, dry_run=False, max_total_requests=None,
-                 trakt_augmentor=None, max_content=10):
+                 trakt_augmentor=None, max_content=10, feedback_repository=None,
+                 feedback_owner_id=None):
         """
         Initialize base media handler.
         
@@ -74,6 +75,9 @@ class BaseMediaHandler(ABC):
         self._request_slots_reserved = 0
         self._request_limit_lock = asyncio.Lock()
         self.trakt_augmentor = trakt_augmentor
+        self.feedback_repository = feedback_repository
+        self.feedback_owner_id = feedback_owner_id
+        self._feedback_signal_cache = {}
         
         # Determine LLM mode
         if use_llm is not None:
@@ -184,6 +188,64 @@ class BaseMediaHandler(ABC):
         if isinstance(source_obj, dict) and origin:
             source_obj['_source_origin'] = origin
         return source_obj
+
+    @staticmethod
+    def _feedback_profile_id(user):
+        if isinstance(user, dict):
+            user = user.get("id") or user.get("Id")
+        return None if user is None else str(user)
+
+    def _feedback_signals(self, media_type, user):
+        """Load personal signals without sending them to TMDb or the LLM provider."""
+        profile_id = self._feedback_profile_id(user)
+        if self.feedback_owner_id is None or profile_id is None or self.feedback_repository is None:
+            return {}
+        cache_key = (profile_id, media_type)
+        if cache_key not in self._feedback_signal_cache:
+            try:
+                self._feedback_signal_cache[cache_key] = self.feedback_repository.get_suggestion_feedback_signals(
+                    self.feedback_owner_id, profile_id, media_type,
+                )
+            except Exception as exc:
+                self.logger.warning("Could not load personal recommendation feedback: %s", exc)
+                self._feedback_signal_cache[cache_key] = {}
+        return self._feedback_signal_cache[cache_key]
+
+    def _apply_feedback_ranking(self, media_items, media_type, user):
+        """Promote positive feedback and suppress negative feedback locally.
+
+        Dry-runs retain suppressed candidates so the exclusion remains observable.
+        """
+        signals = self._feedback_signals(media_type, user)
+        if not signals:
+            return list(media_items or [])
+
+        positive_weights = {'interested': 2, 'save_for_later': 1}
+        negative = {'not_interested', 'already_seen', 'too_similar'}
+        ranked = []
+        for position, item in enumerate(media_items or []):
+            if not isinstance(item, dict):
+                continue
+            feedback = signals.get(str(item.get('id')))
+            if feedback in negative:
+                if not self.dry_run:
+                    self.logger.info(
+                        "Skipping %s tmdb:%s due to personal feedback '%s'.",
+                        media_type, item.get('id'), feedback,
+                    )
+                    continue
+                filter_results = dict(item.get('filter_results') or {'passed': True})
+                filter_results['personal_feedback'] = {
+                    'passed': False,
+                    'label': 'Personal feedback',
+                    'reason': feedback.replace('_', ' '),
+                }
+                filter_results['passed'] = False
+                item = {**item, 'filter_results': filter_results}
+            ranked.append((positive_weights.get(feedback, 0), position, item))
+
+        ranked.sort(key=lambda entry: (-entry[0], entry[1]))
+        return [entry[2] for entry in ranked]
 
     @staticmethod
     def _history_key(item):
@@ -324,6 +386,15 @@ class BaseMediaHandler(ABC):
             return rec, rec_results, source_obj
         
         resolved = await asyncio.gather(*[resolve(rec) for rec in llm_recommendations])
+        feedback_signals = self._feedback_signals(item_type, user)
+        positive_weights = {'interested': 2, 'save_for_later': 1}
+        resolved = sorted(
+            resolved,
+            key=lambda entry: -positive_weights.get(
+                feedback_signals.get(str(entry[1][0].get('id'))) if entry[1] else None,
+                0,
+            ),
+        )
         
         request_tasks = []
         for rec, rec_results, source_obj in resolved:

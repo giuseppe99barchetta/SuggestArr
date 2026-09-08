@@ -40,13 +40,23 @@ class SuggestionFeedbackMixin:
     def set_suggestion_feedback(self, suggestion_id, owner_id, user_id, feedback,
                                 reason_type=None, reason_text=None, media_user_ids=None):
         """Store one user's feedback for a suggestion they are allowed to view."""
-        ph = self._feedback_placeholder()
         with self.get_connection() as conn:
             cursor = conn.cursor()
             suggestion = self._feedback_suggestion(cursor, suggestion_id, owner_id, media_user_ids)
             if not suggestion:
                 return None
             tmdb_id, media_type, media_user_id = suggestion
+        return self.set_media_feedback(
+            user_id, media_user_id, tmdb_id, media_type, feedback, reason_type, reason_text,
+        )
+
+    def set_media_feedback(self, user_id, media_user_id, tmdb_id, media_type, feedback,
+                           reason_type=None, reason_text=None):
+        """Store feedback after the caller has verified access to the media item."""
+        ph = self._feedback_placeholder()
+        media_user_id = self._feedback_media_user_id(media_user_id)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
             if self.db_type == 'sqlite':
                 query = f"""
                     INSERT INTO suggestion_feedback
@@ -84,17 +94,23 @@ class SuggestionFeedbackMixin:
 
     def clear_suggestion_feedback(self, suggestion_id, owner_id, user_id, media_user_ids=None):
         """Remove only the caller's feedback for a visible suggestion."""
-        ph = self._feedback_placeholder()
         with self.get_connection() as conn:
             cursor = conn.cursor()
             suggestion = self._feedback_suggestion(cursor, suggestion_id, owner_id, media_user_ids)
             if not suggestion:
                 return False
             tmdb_id, media_type, media_user_id = suggestion
+        return self.clear_media_feedback(user_id, media_user_id, tmdb_id, media_type)
+
+    def clear_media_feedback(self, user_id, media_user_id, tmdb_id, media_type):
+        """Delete feedback after the caller has verified access to the media item."""
+        ph = self._feedback_placeholder()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
             cursor.execute(
                 f"DELETE FROM suggestion_feedback WHERE user_id={ph} AND media_user_id={ph} "
                 f"AND tmdb_id={ph} AND media_type={ph}",
-                (user_id, media_user_id, tmdb_id, media_type),
+                (user_id, self._feedback_media_user_id(media_user_id), str(tmdb_id), media_type),
             )
             removed = cursor.rowcount > 0
             conn.commit()
@@ -110,6 +126,18 @@ class SuggestionFeedbackMixin:
         )
         row = cursor.fetchone()
         return {'feedback': row[0], 'reason_type': row[1], 'reason_text': row[2]} if row else None
+
+    def get_suggestion_feedback_signals(self, user_id, media_user_id, media_type):
+        """Return feedback values used for local ranking for one user/profile."""
+        ph = self._feedback_placeholder()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT tmdb_id, feedback FROM suggestion_feedback "
+                f"WHERE user_id={ph} AND media_user_id={ph} AND media_type={ph}",
+                (user_id, self._feedback_media_user_id(media_user_id), media_type),
+            )
+            return {str(row[0]): row[1] for row in cursor.fetchall()}
 
     def should_skip_feedback(self, job_owner_id, tmdb_id, media_type, media_user_id):
         """Whether personal negative feedback should suppress a future automated queue item."""

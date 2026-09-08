@@ -7,6 +7,7 @@ from api_service.auth.limiter import limiter
 from api_service.blueprints.automation import routes as automation_routes
 from api_service.db.components.request_queue_mixin import RequestQueueMixin
 from api_service.db.components.suggestion_feedback_mixin import SuggestionFeedbackMixin
+from api_service.handler.base_handler import BaseMediaHandler
 
 
 class Queue(RequestQueueMixin, SuggestionFeedbackMixin):
@@ -17,6 +18,14 @@ class Queue(RequestQueueMixin, SuggestionFeedbackMixin):
 
     def get_connection(self):
         return self.connection
+
+
+class FeedbackHandler(BaseMediaHandler):
+    def _populate_existing_content_sets(self):
+        pass
+
+    async def _request_llm_recommendation(self, media, item_type, source_obj, user=None):
+        pass
 
 
 def _queue():
@@ -67,6 +76,50 @@ def test_feedback_is_scoped_to_internal_user_and_media_profile():
     assert queue.get_suggestion_feedback(connection.cursor(), 7, '42', 'movie', 'plex-a')['feedback'] == 'not_interested'
     assert queue.get_suggestion_feedback(connection.cursor(), 8, '42', 'movie', 'plex-a') is None
     assert queue.get_suggestion_feedback(connection.cursor(), 7, '42', 'movie', 'plex-b') is None
+    assert queue.get_suggestion_feedback_signals(7, 'plex-a', 'movie') == {'42': 'not_interested'}
+    assert queue.get_suggestion_feedback_signals(7, 'plex-b', 'movie') == {}
+
+
+def test_feedback_ranking_is_local_per_profile_and_fails_open():
+    repository = MagicMock()
+    repository.get_suggestion_feedback_signals.return_value = {
+        '2': 'interested',
+        '3': 'already_seen',
+    }
+    handler = FeedbackHandler(
+        None, None, MagicMock(), 3, 2, use_llm=False,
+        feedback_repository=repository, feedback_owner_id=7,
+    )
+
+    ranked = handler._apply_feedback_ranking(
+        [{'id': 1}, {'id': 2}, {'id': 3}], 'movie', {'id': 'plex-a'},
+    )
+
+    assert [item['id'] for item in ranked] == [2, 1]
+    repository.get_suggestion_feedback_signals.assert_called_once_with(7, 'plex-a', 'movie')
+
+    failing_repository = MagicMock()
+    failing_repository.get_suggestion_feedback_signals.side_effect = RuntimeError('database unavailable')
+    fallback = FeedbackHandler(
+        None, None, MagicMock(), 3, 2, use_llm=False,
+        feedback_repository=failing_repository, feedback_owner_id=7,
+    )
+    assert fallback._apply_feedback_ranking([{'id': 1}], 'movie', 'plex-a') == [{'id': 1}]
+
+
+def test_dry_run_explains_feedback_exclusion():
+    repository = MagicMock()
+    repository.get_suggestion_feedback_signals.return_value = {'3': 'too_similar'}
+    handler = FeedbackHandler(
+        None, None, MagicMock(), 3, 2, use_llm=False, dry_run=True,
+        feedback_repository=repository, feedback_owner_id=7,
+    )
+
+    ranked = handler._apply_feedback_ranking([{'id': 3}], 'tv', 'jellyfin-a')
+
+    result = ranked[0]['filter_results']
+    assert result['passed'] is False
+    assert result['personal_feedback']['reason'] == 'too similar'
 
 
 def test_negative_feedback_blocks_only_matching_automated_job_owner_and_profile():
@@ -128,3 +181,23 @@ def test_feedback_route_validates_and_scopes_to_current_user(monkeypatch):
     )
     assert response.status_code == 200
     db.set_suggestion_feedback.assert_called_once_with(5, None, 7, 'too_similar', 'genre', None, None)
+
+    db.has_visible_suggestarr_request.return_value = True
+    db.set_media_feedback.return_value = {
+        'feedback': 'interested', 'reason_type': None, 'reason_text': None,
+        'media_user_id': 'plex-a',
+    }
+    sent = client.put(
+        '/api/automation/requests/media/movie/42/feedback',
+        json={'feedback': 'interested', 'media_user_id': 'plex-a'},
+    )
+    assert sent.status_code == 200
+    db.has_visible_suggestarr_request.assert_called_once_with('42', 'movie', 'plex-a', None)
+    db.set_media_feedback.assert_called_once_with(7, 'plex-a', '42', 'movie', 'interested', None, None)
+
+    db.has_visible_suggestarr_request.return_value = False
+    hidden = client.put(
+        '/api/automation/requests/media/movie/99/feedback',
+        json={'feedback': 'interested', 'media_user_id': 'plex-b'},
+    )
+    assert hidden.status_code == 404

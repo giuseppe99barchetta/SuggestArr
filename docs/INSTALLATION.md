@@ -194,6 +194,8 @@ Best practice:
 - Use lower result counts for frequent jobs.
 - Optionally set **Automatic requests per user**. It limits new automated queue entries for each linked media user in a rolling time window; `0` keeps the previous unlimited behavior. Manual requests are not affected.
 - In Requests, use **My feedback** to mark a proposal as interesting, not interesting, already seen, too similar, or save it for later. This is personal to your SuggestArr account and linked media profile; it does not blacklist the item for everyone.
+- Positive feedback moves matching candidates earlier; negative feedback excludes them from future automated recommendation jobs for that same account and media profile. Ranking happens inside SuggestArr, so feedback reasons and account/profile identifiers are not sent to TMDb or the configured LLM provider.
+- Choose **No feedback** to delete a saved signal. Feedback is otherwise retained until it is cleared or the SuggestArr account is deleted.
 
 Example schedule choices:
 

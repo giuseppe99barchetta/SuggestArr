@@ -480,6 +480,8 @@ class RecommendationAutomation:
                 use_as_exclusion=trakt_use_as_exclusion,
             ),
             max_content=max_content,
+            feedback_repository=self.db_manager,
+            feedback_owner_id=self.job_data.get('owner_id'),
         )
         self.logger.info("Jellyfin handler initialized")
 
@@ -529,6 +531,8 @@ class RecommendationAutomation:
             ),
             selected_users=selected_users,
             max_content=max_content,
+            feedback_repository=self.db_manager,
+            feedback_owner_id=self.job_data.get('owner_id'),
         )
         self.logger.info("Plex handler initialized")
 

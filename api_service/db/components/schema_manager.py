@@ -551,6 +551,14 @@ class SchemaManager:
             query = query.replace("TEXT", "VARCHAR(512)")
             query = query.replace("REAL", "DOUBLE")
 
+            # Job filters are serialized JSON and can easily exceed the generic
+            # VARCHAR(512) compatibility mapping used for MySQL text columns.
+            if table_name == 'discover_jobs':
+                query = query.replace(
+                    "filters VARCHAR(512) NOT NULL",
+                    "filters LONGTEXT NOT NULL",
+                )
+
             # Add ENGINE=InnoDB for foreign key support.
             if not query.strip().endswith("ENGINE=InnoDB"):
                 query = query.rstrip().rstrip(")").rstrip() + ") ENGINE=InnoDB"
@@ -749,6 +757,7 @@ class SchemaManager:
             cursor = conn.cursor()
 
             try:
+                mysql_column_types = {}
                 # Get existing columns
                 if self.db_type == 'sqlite':
                     query = "PRAGMA table_info(discover_jobs);"
@@ -764,10 +773,30 @@ class SchemaManager:
                 elif self.db_type in ['mysql', 'mariadb']:
                     query = "SHOW COLUMNS FROM discover_jobs;"
                     cursor.execute(query)
-                    existing_columns = {row[0] for row in cursor.fetchall()}
+                    column_rows = cursor.fetchall()
+                    existing_columns = {row[0] for row in column_rows}
+                    mysql_column_types = {
+                        row[0]: str(row[1]).lower() for row in column_rows
+                    }
                 else:
                     self.logger.warning(f"Unsupported DB type for column check: {self.db_type}")
                     return
+
+                # Older MySQL/MariaDB schemas mapped filters from TEXT to
+                # VARCHAR(512), which is too small for current job filter JSON.
+                if (
+                    self.db_type in ['mysql', 'mariadb']
+                    and 'filters' in existing_columns
+                    and mysql_column_types.get('filters') != 'longtext'
+                ):
+                    self.logger.info(
+                        "Expanding discover_jobs.filters to LONGTEXT..."
+                    )
+                    cursor.execute(
+                        "ALTER TABLE discover_jobs "
+                        "MODIFY COLUMN filters LONGTEXT NOT NULL;"
+                    )
+                    conn.commit()
 
                 # Add missing job_type column
                 if 'job_type' not in existing_columns:

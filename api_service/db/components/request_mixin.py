@@ -6,6 +6,22 @@ from typing import Any, Dict, List, Optional, Set
 from api_service.exceptions.database_exceptions import DatabaseError
 
 class RequestMixin:
+    def has_visible_suggestarr_request(self, tmdb_id: str, media_type: str,
+                                       media_user_id=None, user_ids=None) -> bool:
+        """Check that a canonical SuggestArr request is visible to the caller."""
+        profile_id = '' if media_user_id is None else str(media_user_id)
+        if user_ids is not None and profile_id not in {str(value) for value in user_ids}:
+            return False
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT 1 FROM requests WHERE tmdb_request_id={ph} AND media_type={ph} "
+                f"AND requested_by='SuggestArr' AND COALESCE(user_id, '')={ph}",
+                (str(tmdb_id), media_type, profile_id),
+            )
+            return cursor.fetchone() is not None
+
     def save_request(self, media_type: str, media_id: str, source: str, user_id: Optional[str] = None, is_anime: bool = False, rationale: Optional[str] = None, source_origin: Optional[str] = None) -> None:
         """Save a new media request to the database, ignoring duplicates."""
         self.logger.debug(f"Saving request: {media_type} {media_id} from {source} (anime={is_anime}, origin={source_origin})")
@@ -107,7 +123,7 @@ class RequestMixin:
             results = cursor.fetchall()
             return {str(row[0]) for row in results}
     
-    def get_all_requests_grouped_by_source(self, page: int = 1, per_page: int = 8, sort_by: str = 'date-desc', user_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+    def get_all_requests_grouped_by_source(self, page: int = 1, per_page: int = 8, sort_by: str = 'date-desc', user_ids: Optional[List[str]] = None, feedback_user_id: Optional[int] = None) -> Dict[str, Any]:
         """Retrieve all requests grouped by source with dynamic sorting and pagination."""
         self.logger.debug(f"Retrieving all requests grouped by source: page={page}, per_page={per_page}, sort_by={sort_by}")
     
@@ -166,6 +182,18 @@ class RequestMixin:
 
         from api_service.services.request_sources import request_source_title_sql
         source_title_expr = request_source_title_sql("r")
+        ph = '?' if self.db_type not in ['mysql', 'postgres'] else '%s'
+        feedback_columns = "NULL, NULL, NULL"
+        feedback_join = ""
+        query_params = list(params)
+        if feedback_user_id is not None:
+            feedback_columns = "f.feedback, f.reason_type, f.reason_text"
+            feedback_join = (
+                "LEFT JOIN suggestion_feedback f ON f.tmdb_id = r.tmdb_request_id "
+                "AND f.media_type = r.media_type AND f.media_user_id = COALESCE(r.user_id, '') "
+                f"AND f.user_id = {ph}"
+            )
+            query_params.insert(0, feedback_user_id)
     
         query = f"""
             SELECT
@@ -183,11 +211,13 @@ class RequestMixin:
                      WHERE mui.external_user_id = r.user_id AND mui.external_username IS NOT NULL LIMIT 1),
                     (SELECT ump.external_username FROM user_media_profiles ump
                      WHERE ump.external_user_id = r.user_id AND ump.external_username IS NOT NULL LIMIT 1)
-                ) AS user_name, r.source_origin
+                ) AS user_name, r.source_origin,
+                {feedback_columns}
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id AND r.media_type = m.media_type
             LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id
             LEFT JOIN users u ON r.user_id = u.user_id
+            {feedback_join}
             WHERE r.requested_by = 'SuggestArr'
             AND COALESCE(r.tmdb_source_id, '') != 'ai_search'
         """
@@ -201,7 +231,7 @@ class RequestMixin:
         
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query, tuple(params))
+            cursor.execute(query, tuple(query_params))
             result = cursor.fetchall()
         
         # Group and sort results (maintaining existing logic)
@@ -231,6 +261,10 @@ class RequestMixin:
                 if requested_at > source_max_dates[source_id]:
                     source_max_dates[source_id] = requested_at
 
+            feedback = (
+                {'feedback': row[23], 'reason_type': row[24], 'reason_text': row[25]}
+                if row[23] is not None else None
+            )
             sources[source_id]["requests"].append({
                 "request_id": row[6],
                 "media_type": row[7],
@@ -246,6 +280,7 @@ class RequestMixin:
                 "user_id": row[20] if len(row) > 20 else None,
                 "user_name": row[21] if len(row) > 21 else None,
                 "source_origin": row[22] if len(row) > 22 else None,
+                "feedback": feedback,
             })
     
         # Sort sources

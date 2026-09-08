@@ -435,6 +435,39 @@
                 <div v-else class="modal-poster-placeholder">
                   <i class="fas fa-image text-6xl"></i>
                 </div>
+                <section v-if="canFeedbackSelected" class="modal-feedback" aria-label="Feedback">
+                  <div class="feedback-reactions" role="group" aria-label="Choose feedback">
+                    <button
+                      v-for="option in feedbackOptions"
+                      :key="option.value"
+                      type="button"
+                      class="feedback-reaction"
+                      :class="{ active: selectedSource.feedback?.feedback === option.value }"
+                      :aria-label="option.label"
+                      :aria-pressed="(selectedSource.feedback?.feedback === option.value).toString()"
+                      :title="option.label"
+                      :disabled="isFeedbackSaving(selectedSource)"
+                      @click="toggleSelectedFeedback(option.value)">
+                      <span aria-hidden="true">{{ option.emoji }}</span>
+                    </button>
+                  </div>
+                  <div v-if="selectedSource.feedback?.feedback" class="feedback-reason-list" role="group" aria-label="Optional feedback reason">
+                    <button
+                      v-for="reason in feedbackReasons"
+                      :key="reason.value"
+                      type="button"
+                      class="feedback-reason"
+                      :class="{ active: selectedSource.feedback?.reason_type === reason.value }"
+                      :aria-pressed="(selectedSource.feedback?.reason_type === reason.value).toString()"
+                      :disabled="isFeedbackSaving(selectedSource)"
+                      @click="setSelectedFeedback(selectedSource.feedback.feedback, selectedSource.feedback.reason_type === reason.value ? null : reason.value)">
+                      {{ reason.label }}
+                    </button>
+                  </div>
+                  <div v-if="isFeedbackSaving(selectedSource)" class="modal-feedback-saving" role="status">
+                    <span class="spinner-small" aria-hidden="true"></span> Saving…
+                  </div>
+                </section>
               </div>
 
               <!-- Right: Details -->
@@ -612,6 +645,21 @@ export default {
       workflowTotal: null,
       showMobileFilters: false,
       workflowBulkMode: false,
+      feedbackSaving: {},
+      feedbackOptions: [
+        { value: 'interested', emoji: '😍', label: 'Interested' },
+        { value: 'not_interested', emoji: '👎', label: 'Not interested' },
+        { value: 'already_seen', emoji: '👀', label: 'Already seen' },
+        { value: 'too_similar', emoji: '🫠', label: 'Too similar' },
+        { value: 'save_for_later', emoji: '🔖', label: 'Save for later' },
+      ],
+      feedbackReasons: [
+        { value: 'genre', label: 'Genre' },
+        { value: 'provider', label: 'Provider' },
+        { value: 'content', label: 'Content' },
+        { value: 'title', label: 'Title' },
+        { value: 'other', label: 'Other' },
+      ],
       requestStatusOptions: [
         { value: 'all', label: 'All statuses' },
         { value: 'awaiting_approval', label: 'Waiting approval' },
@@ -624,6 +672,13 @@ export default {
     };
   },
   computed: {
+    canFeedbackSelected() {
+      return Boolean(
+        this.selectedSource
+        && !this.selectedSource._isAiRequest
+        && (this.selectedSource.request_id || this.selectedSource._workflowSuggestionId)
+      );
+    },
     activeFilterCount() {
       return Number(this.sortBy !== 'date-desc') + Number(this.mediaTypeFilter !== 'all') + Number(this.requestUserFilter !== 'all') + Number(this.requestStatusFilter !== 'all') + Number(this.workflowBulkMode);
     },
@@ -787,6 +842,80 @@ export default {
     },
 
     formatDate,
+    feedbackKey(request) {
+      return request._workflowSuggestionId
+        ? `workflow:${request._workflowSuggestionId}`
+        : `${request.media_type}:${request.request_id}:${request.user_id || ''}`;
+    },
+    isFeedbackSaving(request) {
+      return Boolean(this.feedbackSaving[this.feedbackKey(request)]);
+    },
+    syncSentFeedback(request, feedback) {
+      for (const source of this.sources) {
+        for (const item of source.requests) {
+          if (this.feedbackKey(item) === this.feedbackKey(request)) item.feedback = feedback;
+        }
+      }
+      if (this.selectedSource && this.feedbackKey(this.selectedSource) === this.feedbackKey(request)) {
+        this.selectedSource.feedback = feedback;
+      }
+    },
+    async setSentFeedback(requestItem, feedback, reasonType) {
+      const key = this.feedbackKey(requestItem);
+      this.feedbackSaving = { ...this.feedbackSaving, [key]: true };
+      try {
+        const url = `/api/automation/requests/media/${requestItem.media_type}/${encodeURIComponent(requestItem.request_id)}/feedback`;
+        if (feedback) {
+          const payload = { feedback, media_user_id: requestItem.user_id || null };
+          if (reasonType !== undefined) payload.reason_type = reasonType || null;
+          const response = await axios.put(url, payload);
+          this.syncSentFeedback(requestItem, response.data.feedback);
+        } else {
+          await axios.delete(url, { data: { media_user_id: requestItem.user_id || null } });
+          this.syncSentFeedback(requestItem, null);
+        }
+        this.$toast.open({ message: feedback ? 'Feedback saved' : 'Feedback cleared', type: 'success' });
+      } catch (error) {
+        this.$toast.open({ message: error.response?.data?.message || 'Unable to save feedback', type: 'error' });
+      } finally {
+        const saving = { ...this.feedbackSaving };
+        delete saving[key];
+        this.feedbackSaving = saving;
+      }
+    },
+    async setSelectedFeedback(feedback, reasonType) {
+      if (!this.selectedSource) return;
+      if (!this.selectedSource._workflowSuggestionId) {
+        await this.setSentFeedback(this.selectedSource, feedback, reasonType);
+        return;
+      }
+
+      const key = this.feedbackKey(this.selectedSource);
+      this.feedbackSaving = { ...this.feedbackSaving, [key]: true };
+      try {
+        const url = `/api/automation/requests/workflow/${this.selectedSource._workflowSuggestionId}/feedback`;
+        if (feedback) {
+          const payload = { feedback };
+          if (reasonType !== undefined) payload.reason_type = reasonType;
+          const response = await axios.put(url, payload);
+          this.selectedSource.feedback = response.data.feedback;
+        } else {
+          await axios.delete(url);
+          this.selectedSource.feedback = null;
+        }
+        this.$toast.open({ message: feedback ? 'Feedback saved' : 'Feedback cleared', type: 'success' });
+      } catch (error) {
+        this.$toast.open({ message: error.response?.data?.message || 'Unable to save feedback', type: 'error' });
+      } finally {
+        const saving = { ...this.feedbackSaving };
+        delete saving[key];
+        this.feedbackSaving = saving;
+      }
+    },
+    toggleSelectedFeedback(feedback) {
+      const current = this.selectedSource?.feedback?.feedback;
+      return this.setSelectedFeedback(current === feedback ? '' : feedback);
+    },
     formatRating(value) {
       if (value === null || value === undefined || value === '') return 'N/A';
       const rating = Number(value);
@@ -994,6 +1123,7 @@ export default {
             user_id: request.user_id,
             user_name: request.user_name,
             source_origin: request.source_origin,
+            feedback: request.feedback || null,
           })),
         }));
 
@@ -1032,6 +1162,8 @@ export default {
     openWorkflowModal(item) {
       this.openModal({
         ...item,
+        _workflowSuggestionId: item.id,
+        user_id: item.media_user_id,
         poster_path: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : null,
         requested_at: item.created_at,
         source_title: item.name
