@@ -5,15 +5,28 @@
       <p>Automatically delete SuggestArr requests and their files when the item has not been favorited in your media server within a grace period.</p>
     </div>
 
-    <div v-else class="embedded-header">
-      <h3>
-        <i class="fas fa-broom"></i>
-        Cleanup Automation
-      </h3>
-      <p>Remove old SuggestArr requests when media-server users never favorite them.</p>
-    </div>
+    <button
+      v-else
+      class="embedded-header"
+      type="button"
+      :aria-expanded="expanded.toString()"
+      aria-controls="cleanup-settings-content"
+      @click="expanded = !expanded"
+    >
+      <span class="embedded-header__heading">
+        <span class="embedded-header__icon"><i class="fas fa-broom"></i></span>
+        <span>
+          <span class="embedded-header__title">Cleanup Automation</span>
+          <span class="embedded-header__description">Remove old SuggestArr requests when media-server users never favorite them.</span>
+        </span>
+      </span>
+      <i class="fas fa-chevron-right embedded-header__chevron" :class="{ expanded }"></i>
+    </button>
 
-    <div class="warning-banner">
+    <Transition name="cleanup-collapse">
+      <div id="cleanup-settings-content" v-show="!embedded || expanded" class="cleanup-collapse">
+        <div class="cleanup-collapse__content">
+          <div class="warning-banner">
       <i class="fas fa-exclamation-triangle"></i>
       <div class="warning-content">
         <strong>Destructive action</strong>
@@ -87,7 +100,7 @@
       </div>
     </div>
 
-    <div class="cleanup-panel cleanup-log-panel">
+          <div class="cleanup-panel cleanup-log-panel">
       <div class="card-header-row">
         <button class="log-title-button" @click="logCollapsed = !logCollapsed">
           <i :class="logCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down'"></i>
@@ -136,7 +149,10 @@
           <i class="fas fa-chevron-right"></i>
         </button>
       </div>
-    </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -155,6 +171,7 @@ export default {
 
   data() {
     return {
+      expanded: false,
       loading: true,
       loadingLog: false,
       saving: false,
@@ -300,6 +317,100 @@ export default {
   margin: 0;
   color: var(--color-text-muted);
   font-size: 0.95rem;
+}
+
+.embedded-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 0;
+  padding: var(--spacing-sm);
+  color: var(--color-text-primary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.embedded-header:hover,
+.embedded-header:focus-visible {
+  background: var(--surface-glass-subtle);
+}
+
+.embedded-header:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.embedded-header__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.embedded-header__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--input-height-md);
+  height: var(--input-height-md);
+  color: var(--color-error-light);
+  background: var(--color-error-alpha-10);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+}
+
+.embedded-header__title,
+.embedded-header__description {
+  display: block;
+}
+
+.embedded-header__title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.embedded-header__description {
+  margin-top: var(--spacing-xs);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.embedded-header__chevron {
+  color: var(--color-text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.embedded-header__chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.cleanup-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.cleanup-collapse__content {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cleanup-collapse-enter-active,
+.cleanup-collapse-leave-active {
+  transition:
+    grid-template-rows var(--transition-slow),
+    opacity var(--transition-base);
+}
+
+.cleanup-collapse-enter-from,
+.cleanup-collapse-leave-to {
+  grid-template-rows: 0fr;
+  opacity: 0;
 }
 
 .warning-banner {

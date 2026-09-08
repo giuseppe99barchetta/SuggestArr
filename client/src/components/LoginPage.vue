@@ -9,8 +9,9 @@
       <!-- Login / Setup / Register form -->
       <form @submit.prevent="handleSubmit" class="login-form">
         <div class="form-group">
-          <label>Username</label>
+          <label for="login-username">Username</label>
           <input
+            id="login-username"
             v-model="username"
             type="text"
             class="form-input"
@@ -22,8 +23,9 @@
         </div>
 
         <div class="form-group">
-          <label>Password</label>
+          <label for="login-password">Password</label>
           <input
+            id="login-password"
             v-model="password"
             type="password"
             class="form-input"
@@ -35,8 +37,9 @@
         </div>
 
         <div v-if="isRegisterMode" class="form-group">
-          <label>Confirm Password</label>
+          <label for="login-confirm-password">Confirm Password</label>
           <input
+            id="login-confirm-password"
             v-model="confirmPassword"
             type="password"
             class="form-input"

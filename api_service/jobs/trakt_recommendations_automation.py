@@ -361,6 +361,9 @@ class TraktRecommendationsAutomation:
             self.job_data["name"],
         )
         exec_id = None if dry_run else (execution_id or self.repository.log_execution_start(self.job_id))
+        if not dry_run and self.seer_client:
+            self.seer_client.queue_context['execution_id'] = exec_id
+            self.logger.info("Trakt recommendations job run id=%s started.", exec_id)
 
         try:
             from contextlib import AsyncExitStack

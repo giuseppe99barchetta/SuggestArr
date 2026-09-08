@@ -49,7 +49,8 @@ def test_job_payload_includes_all_safe_job_configuration_fields():
         'owner_id': 1, 'pause_if_pending_requests': True, 'prevent_suggestions_if_unwatched': False,
         'unwatched_suggestion_days': 7, 'delivery_mode': 'inherit',
         'seer_identity_mode': 'technical_user', 'request_profiles': {'movie': {'serverId': 1}},
-        'approval_pause_mode': 'inherit', 'created_at': None, 'updated_at': None,
+        'approval_pause_mode': 'inherit', 'max_requests_per_user': 0,
+        'request_limit_window_hours': 24, 'created_at': None, 'updated_at': None,
     }
 
     class JobsRepository:
@@ -73,7 +74,7 @@ def test_openapi_documents_public_filters_and_full_resource_schemas():
         if parameter['name'] == 'status'
     )
     assert 'all' in suggestion_status['schema']['enum']
-    assert {'filters', 'request_profiles', 'approval_pause_mode'} <= set(spec['components']['schemas']['Job']['properties'])
+    assert {'filters', 'request_profiles', 'approval_pause_mode', 'max_requests_per_user', 'request_limit_window_hours'} <= set(spec['components']['schemas']['Job']['properties'])
     assert {'request_profile', 'media_user_id', 'user_name'} <= set(spec['components']['schemas']['Suggestion']['properties'])
     assert {'source_origin', 'source_media_id', 'media_user', 'metadata'} <= set(spec['components']['schemas']['Request']['properties'])
     action_request = spec['paths']['/api/v1/suggestions/actions']['post']['requestBody']
@@ -81,3 +82,28 @@ def test_openapi_documents_public_filters_and_full_resource_schemas():
     assert action_request['content']['application/json']['example'] == {
         'action': 'approve', 'ids': [123], 'remove_blacklist': False,
     }
+
+
+def test_run_detail_includes_credential_free_delivery_correlation():
+    run = {'id': 9, 'job_id': 1, 'job_name': 'Daily', 'status': 'completed',
+           'trigger_source': 'api', 'results_count': 1, 'requested_count': 1,
+           'error_message': None, 'started_at': None, 'finished_at': None}
+    delivery = {'id': 14, 'execution_id': 9, 'job_id': 1, 'status': 'queued',
+                'retry_count': 0, 'last_attempt_at': None, 'next_attempt_at': None,
+                'last_error': None, 'created_at': None}
+
+    class JobsRepository:
+        def get_execution(self, execution_id):
+            return run if execution_id == 9 else None
+
+        def get_job(self, job_id):
+            return {'id': job_id, 'owner_id': 1}
+
+        def get_execution_deliveries(self, execution_id):
+            return [delivery] if execution_id == 9 else []
+
+    with patch('api_service.api.v1.blueprint.JobRepository', return_value=JobsRepository()):
+        response = _client().get('/api/v1/runs/9')
+
+    assert response.status_code == 200
+    assert response.get_json()['data']['deliveries'] == [delivery]

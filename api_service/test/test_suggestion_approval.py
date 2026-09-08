@@ -10,9 +10,13 @@ class Queue(RequestQueueMixin):
 
     def __init__(self, connection):
         self.connection = connection
+        self.webhook_events = []
 
     def get_connection(self):
         return self.connection
+
+    def enqueue_webhook_event(self, event, payload):
+        self.webhook_events.append((event, payload))
 
 
 def test_job_delivery_mode_overrides_global_approval_default():
@@ -41,11 +45,11 @@ def test_owner_can_only_approve_own_suggestions():
     connection = sqlite3.connect(":memory:")
     connection.executescript("""
         CREATE TABLE pending_requests (id INTEGER PRIMARY KEY, tmdb_id TEXT, media_type TEXT,
-            status TEXT, owner_id INTEGER, decided_by INTEGER, decided_at TIMESTAMP);
+            status TEXT, owner_id INTEGER, job_id INTEGER, decided_by INTEGER, decided_at TIMESTAMP);
         CREATE TABLE suggestion_blacklist (tmdb_id TEXT, media_type TEXT, created_by INTEGER,
             PRIMARY KEY (tmdb_id, media_type));
-        INSERT INTO pending_requests VALUES (1,'10','movie','awaiting_approval',7,NULL,NULL);
-        INSERT INTO pending_requests VALUES (2,'20','movie','awaiting_approval',8,NULL,NULL);
+        INSERT INTO pending_requests VALUES (1,'10','movie','awaiting_approval',7,3,NULL,NULL);
+        INSERT INTO pending_requests VALUES (2,'20','movie','awaiting_approval',8,3,NULL,NULL);
     """)
     assert Queue(connection).decide_suggestions([1, 2], 7, 7, True) == 1
     assert connection.execute("SELECT status FROM pending_requests WHERE id=1").fetchone()[0] == "queued"
@@ -56,11 +60,11 @@ def test_reject_and_blacklist_are_separate_actions():
     connection = sqlite3.connect(":memory:")
     connection.executescript("""
         CREATE TABLE pending_requests (id INTEGER PRIMARY KEY, tmdb_id TEXT, media_type TEXT,
-            status TEXT, owner_id INTEGER, decided_by INTEGER, decided_at TIMESTAMP);
+            status TEXT, owner_id INTEGER, job_id INTEGER, decided_by INTEGER, decided_at TIMESTAMP);
         CREATE TABLE suggestion_blacklist (tmdb_id TEXT, media_type TEXT, created_by INTEGER,
             PRIMARY KEY (tmdb_id, media_type));
-        INSERT INTO pending_requests VALUES (1,'10','movie','awaiting_approval',7,NULL,NULL);
-        INSERT INTO pending_requests VALUES (2,'20','tv','awaiting_approval',7,NULL,NULL);
+        INSERT INTO pending_requests VALUES (1,'10','movie','awaiting_approval',7,3,NULL,NULL);
+        INSERT INTO pending_requests VALUES (2,'20','tv','awaiting_approval',7,3,NULL,NULL);
     """)
     queue = Queue(connection)
     assert queue.decide_suggestions([1], 7, 7, False) == 1
@@ -75,3 +79,11 @@ def test_mysql_blacklist_uses_bounded_primary_key_columns():
         'suggestion_blacklist', 'CREATE TABLE suggestion_blacklist (tmdb_id TEXT)', 'mysql')
     assert 'tmdb_id VARCHAR(32)' in query
     assert 'media_type VARCHAR(16)' in query
+
+
+def test_mysql_feedback_uses_bounded_composite_primary_key_columns():
+    manager = object.__new__(SchemaManager)
+    query = manager._prepare_create_table_query_for_db(
+        'suggestion_feedback', 'CREATE TABLE suggestion_feedback (user_id INTEGER)', 'mysql')
+    assert 'media_user_id VARCHAR(191)' in query
+    assert 'tmdb_id VARCHAR(32)' in query

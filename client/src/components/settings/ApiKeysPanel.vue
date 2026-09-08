@@ -24,7 +24,7 @@
           <tr v-for="key in keys" :key="key.id">
             <td><span class="api-keys-table__name"><i class="fas fa-key"></i>{{ key.name }}</span></td>
             <td>{{ formatDate(key.created_at) }}</td>
-            <td class="api-keys-table__action"><button class="btn btn-danger btn-sm icon-btn" title="Revoke key" @click="revoke(key)" :disabled="revoking === key.id"><i :class="revoking === key.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash'"></i><span class="sr-only">Revoke {{ key.name }}</span></button></td>
+            <td class="api-keys-table__action"><button class="btn btn-danger btn-sm icon-btn" title="Revoke key" @click="keyToRevoke = key" :disabled="revoking === key.id"><i :class="revoking === key.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash'"></i><span class="sr-only">Revoke {{ key.name }}</span></button></td>
           </tr>
         </tbody>
       </table>
@@ -35,6 +35,12 @@
           <header class="modal-header"><div class="modal-title-wrap"><h3 id="api-key-modal-title" class="modal-title">Save this API key now</h3><p class="modal-subtitle">This value cannot be shown again.</p></div><button class="modal-close" aria-label="Close" @click="closeKey"><i class="fas fa-times"></i></button></header>
           <div class="modal-body"><input class="form-control" :value="oneTimeKey" readonly aria-label="New API key"></div>
           <footer class="modal-footer"><button class="btn btn-primary" @click="copy"><i class="fas fa-copy"></i> Copy key</button><button class="btn btn-outline" @click="closeKey">Done</button></footer>
+        </section>
+      </div>
+      <div v-if="keyToRevoke" class="modal-overlay" @click.self="keyToRevoke = null">
+        <section class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="revoke-api-key-modal-title">
+          <header class="modal-header"><div class="modal-title-wrap"><h3 id="revoke-api-key-modal-title" class="modal-title">Revoke API key?</h3><p class="modal-subtitle">Revoke <strong>{{ keyToRevoke.name }}</strong>? This cannot be undone.</p></div><button class="modal-close" aria-label="Close" @click="keyToRevoke = null"><i class="fas fa-times"></i></button></header>
+          <footer class="modal-footer"><button class="btn btn-danger" :disabled="revoking === keyToRevoke.id" @click="revoke"><i :class="revoking === keyToRevoke.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash'"></i> Revoke key</button><button class="btn btn-outline" :disabled="revoking === keyToRevoke.id" @click="keyToRevoke = null">Cancel</button></footer>
         </section>
       </div>
     </Teleport>
@@ -48,12 +54,12 @@ import ApiKeyExpiryPicker from '@/components/common/ApiKeyExpiryPicker.vue';
 export default {
   name: 'ApiKeysPanel',
   components: { ApiKeyExpiryPicker },
-  data: () => ({ keys: [], activeLimit: 10, name: '', expiresAt: '', creating: false, revoking: null, oneTimeKey: '' }),
+  data: () => ({ keys: [], activeLimit: 10, name: '', expiresAt: '', creating: false, revoking: null, oneTimeKey: '', keyToRevoke: null }),
   async mounted() { await this.load(); },
   methods: {
     async load() { try { const response = await getApiKeys(); this.keys = response.data.keys || []; this.activeLimit = response.data.active_limit || 10; } catch { this.$toast.error('Failed to load API keys'); } },
     async create() { this.creating = true; try { const response = await createApiKey({ name: this.name.trim(), expires_at: this.expiresAt ? `${this.expiresAt}T23:59:59` : null }); this.oneTimeKey = response.data.key; this.name = ''; this.expiresAt = ''; await this.load(); } catch (error) { this.$toast.error(error.response?.data?.error || 'Failed to create API key'); } finally { this.creating = false; } },
-    async revoke(key) { if (!window.confirm(`Revoke ${key.name}? This cannot be undone.`)) return; this.revoking = key.id; try { await revokeApiKey(key.id); await this.load(); this.$toast.success('API key revoked'); } catch { this.$toast.error('Failed to revoke API key'); } finally { this.revoking = null; } },
+    async revoke() { const key = this.keyToRevoke; if (!key) return; this.revoking = key.id; try { await revokeApiKey(key.id); await this.load(); this.keyToRevoke = null; this.$toast.success('API key revoked'); } catch { this.$toast.error('Failed to revoke API key'); } finally { this.revoking = null; } },
     async copy() { try { await navigator.clipboard.writeText(this.oneTimeKey); this.$toast.success('API key copied'); } catch { this.$toast.error('Copy failed'); } },
     closeKey() { this.oneTimeKey = ''; },
     formatDate(value) { return value ? new Date(value).toLocaleDateString() : '—'; },

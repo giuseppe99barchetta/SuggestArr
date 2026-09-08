@@ -18,6 +18,10 @@ tags:
     description: Inspect SuggestArr requests and aggregate statistics.
   - name: Installation
     description: Administrator-only operational statistics for the entire SuggestArr installation.
+  - name: Observability
+    description: Administrator-only Prometheus metrics for monitoring and alerting.
+  - name: Webhooks
+    description: Administrator-managed, signed outbound event subscriptions.
 x-error-responses: &errorResponses
   '400': {$ref: '#/components/responses/BadRequest'}
   '401': {$ref: '#/components/responses/Unauthorized'}
@@ -48,6 +52,93 @@ paths:
       security: []
       responses:
         '200': {description: OpenAPI document}
+  /api/v1/metrics:
+    get:
+      operationId: publicMetrics
+      tags: [Observability]
+      summary: Prometheus metrics
+      description: Administrator-only Prometheus exposition. Use an administrator API key for scraping.
+      responses:
+        <<: *errorResponses
+        '200': {description: Prometheus text exposition}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/webhooks:
+    get:
+      operationId: publicWebhooks
+      tags: [Webhooks]
+      summary: List outbound webhooks
+      responses:
+        <<: *errorResponses
+        '200': {description: Webhooks, with secrets omitted}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      operationId: publicCreateWebhook
+      tags: [Webhooks]
+      summary: Create an outbound webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WebhookCreate'}
+      responses:
+        <<: *errorResponses
+        '201': {description: Webhook created, with secret omitted}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/webhooks/{webhook_id}:
+    delete:
+      operationId: publicDeleteWebhook
+      tags: [Webhooks]
+      summary: Delete an outbound webhook
+      parameters:
+        - {name: webhook_id, in: path, required: true, schema: {type: string}}
+      responses:
+        <<: *errorResponses
+        '204': {description: Webhook deleted}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Webhook not found}
+  /api/v1/webhooks/settings:
+    get:
+      operationId: publicWebhookSettings
+      tags: [Webhooks]
+      summary: Get the optional webhook destination allowlist
+      responses:
+        <<: *errorResponses
+        '200': {description: Webhook settings}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    put:
+      operationId: publicUpdateWebhookSettings
+      tags: [Webhooks]
+      summary: Replace the optional webhook destination allowlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WebhookSettings'}
+      responses:
+        <<: *errorResponses
+        '200': {description: Webhook settings updated}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/webhooks/deliveries:
+    get:
+      operationId: publicWebhookDeliveries
+      tags: [Webhooks]
+      summary: List recent outbound webhook deliveries
+      responses:
+        <<: *errorResponses
+        '200': {description: Deliveries, with secrets and bodies omitted}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/webhooks/deliveries/{delivery_id}/retry:
+    post:
+      operationId: publicRetryWebhookDelivery
+      tags: [Webhooks]
+      summary: Requeue a failed outbound webhook delivery
+      parameters:
+        - {name: delivery_id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        <<: *errorResponses
+        '200': {description: Delivery queued again}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {description: Webhook delivery not found}
   /api/v1/me:
     get:
       operationId: publicMe
@@ -373,6 +464,7 @@ components:
         status: {type: string, enum: [awaiting_approval, queued, submitting, submitted, rejected, failed, blacklisted]}
         created_at: {type: [string, 'null'], format: date-time}
         job_id: {type: [integer, 'null']}
+        execution_id: {type: [integer, 'null'], description: Job run that queued this delivery.}
         owner_id: {type: [integer, 'null']}
         retry_count: {type: integer, minimum: 0}
         last_attempt_at: {type: [string, 'null'], format: date-time}
@@ -415,6 +507,27 @@ components:
           properties:
             poster_path: {type: [string, 'null']}
             rating: {type: [number, 'null']}
+    WebhookCreate:
+      type: object
+      required: [name, url, secret, events]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        url: {type: string, format: uri, maxLength: 2048}
+        secret: {type: string, minLength: 16, writeOnly: true}
+        events:
+          type: array
+          minItems: 1
+          items: {type: string, enum: [suggestion.created, suggestion.awaiting_approval, suggestion.approved, suggestion.rejected, request.submitted, request.failed, run.failed, job.completed, job.skipped]}
+        enabled: {type: boolean, default: true}
+        allow_private: {type: boolean, default: false, description: Allow private-network delivery destinations.}
+    WebhookSettings:
+      type: object
+      required: [allowed_hosts]
+      properties:
+        allowed_hosts:
+          type: array
+          description: Empty permits any SSRF-safe destination; otherwise only these hostnames are permitted.
+          items: {type: string}
     Error:
       type: object
       required: [error]
@@ -436,7 +549,7 @@ components:
         pages: {type: integer, minimum: 1}
     Job:
       type: object
-      required: [id, name, job_type, enabled, media_type, filters, schedule_type, schedule_value, max_results, user_ids, is_system, owner_id, pause_if_pending_requests, prevent_suggestions_if_unwatched, unwatched_suggestion_days, delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode, created_at, updated_at]
+      required: [id, name, job_type, enabled, media_type, filters, schedule_type, schedule_value, max_results, user_ids, is_system, owner_id, pause_if_pending_requests, prevent_suggestions_if_unwatched, unwatched_suggestion_days, delivery_mode, seer_identity_mode, request_profiles, approval_pause_mode, max_requests_per_user, request_limit_window_hours, created_at, updated_at]
       properties:
         id: {type: integer}
         name: {type: string}
@@ -457,6 +570,8 @@ components:
         seer_identity_mode: {type: string, enum: [matching_user, technical_user, admin_user]}
         request_profiles: {type: object, additionalProperties: true}
         approval_pause_mode: {type: string, enum: [inherit, always, never]}
+        max_requests_per_user: {type: integer, minimum: 0, description: Maximum automated requests for one media user in the rolling window; zero disables this guardrail.}
+        request_limit_window_hours: {type: integer, minimum: 1, maximum: 8760}
         created_at: {type: [string, 'null'], format: date-time}
         updated_at: {type: [string, 'null'], format: date-time}
     Run:
@@ -473,6 +588,22 @@ components:
         error_message: {type: [string, 'null']}
         started_at: {type: [string, 'null'], format: date-time}
         finished_at: {type: [string, 'null'], format: date-time}
+        deliveries:
+          type: array
+          description: Credential-free Seer queue deliveries created by this run. Present when fetching one run.
+          items:
+            type: object
+            required: [id, execution_id, job_id, status, retry_count]
+            properties:
+              id: {type: integer, description: Delivery ID.}
+              execution_id: {type: integer, description: Parent job run ID.}
+              job_id: {type: integer}
+              status: {type: string, enum: [awaiting_approval, queued, submitting, submitted, rejected, failed]}
+              retry_count: {type: integer, minimum: 0}
+              last_attempt_at: {type: [string, 'null'], format: date-time}
+              next_attempt_at: {type: [string, 'null'], format: date-time}
+              last_error: {type: [string, 'null']}
+              created_at: {type: [string, 'null'], format: date-time}
     SuggestionAction:
       type: object
       required: [action, ids]

@@ -225,3 +225,12 @@ export const updateMyProfile = (data) => axios.patch('/api/auth/me', data);
 export const getApiKeys = () => axios.get('/api/auth/api-keys');
 export const createApiKey = (data) => axios.post('/api/auth/api-keys', data);
 export const revokeApiKey = (id) => axios.delete(`/api/auth/api-keys/${id}`);
+
+// Outbound webhooks (admin only)
+export const getWebhooks = () => axios.get('/api/v1/webhooks');
+export const createWebhook = (data) => axios.post('/api/v1/webhooks', data);
+export const deleteWebhook = (id) => axios.delete(`/api/v1/webhooks/${id}`);
+export const getWebhookSettings = () => axios.get('/api/v1/webhooks/settings');
+export const updateWebhookSettings = (allowed_hosts) => axios.put('/api/v1/webhooks/settings', { allowed_hosts });
+export const getWebhookDeliveries = () => axios.get('/api/v1/webhooks/deliveries');
+export const retryWebhookDelivery = (id) => axios.post(`/api/v1/webhooks/deliveries/${id}/retry`);

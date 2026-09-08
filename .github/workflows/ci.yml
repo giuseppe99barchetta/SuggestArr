@@ -9,6 +9,30 @@ on:
       - nightly
 
 jobs:
+  security:
+    name: Dependency security audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7.0.1
+
+      - name: Audit Python dependencies
+        uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          inputs: api_service/requirements.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: cd client && npm ci
+
+      - name: Audit production frontend dependencies
+        run: cd client && npm audit --omit=dev --audit-level=high
+
   test-backend:
     name: Backend tests (pytest)
     runs-on: ubuntu-latest
@@ -37,8 +61,8 @@ jobs:
       - name: Run tests
         run: cd api_service && python -m pytest --tb=short -q
 
-  lint-frontend:
-    name: Frontend lint (ESLint)
+  test-frontend:
+    name: Frontend quality checks
     runs-on: ubuntu-latest
 
     steps:
@@ -54,11 +78,34 @@ jobs:
         uses: actions/cache@v6.1.0
         with:
           path: ~/.npm
-          key: npm-${{ hashFiles('client/package.json') }}
+          key: npm-${{ hashFiles('client/package-lock.json') }}
           restore-keys: npm-
 
       - name: Install dependencies
-        run: cd client && npm install
+        run: cd client && npm ci
+
+      - name: Run frontend tests
+        run: cd client && npm test
 
       - name: Run ESLint
-        run: cd client && npx eslint --ext .js,.vue src/
+        run: cd client && npm run lint
+
+      - name: Run stylelint
+        run: cd client && npm run lint:styles
+
+      - name: Build frontend
+        run: cd client && npm run build
+
+      - name: Install Chromium for E2E
+        run: cd client && npx playwright install --with-deps chromium
+
+      - name: Run frontend E2E
+        run: cd client && npm run test:e2e
+
+      - name: Upload E2E failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-e2e-failure-artifacts
+          path: client/test-results/
+          if-no-files-found: ignore

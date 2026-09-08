@@ -16,6 +16,8 @@ from api_service.jobs.recommendation_automation import RecommendationAutomation
 from api_service.jobs.trakt_recommendations_automation import TraktRecommendationsAutomation
 from api_service.utils.asyncio_loop import run_coroutine_sync
 from api_service.config.logger_manager import LoggerManager
+from api_service.observability.metrics import render_metrics
+from api_service.utils.ssrf_guard import validate_url
 
 public_api_v1_bp = Blueprint('public_api_v1', __name__)
 logger = LoggerManager.get_logger('PublicApiV1')
@@ -60,6 +62,100 @@ def status():
     return jsonify({'data': {'service': 'SuggestArr', 'api_version': 'v1', 'status': 'ok'}}), 200
 
 
+@public_api_v1_bp.route('/metrics', methods=['GET'])
+@require_role('admin')
+def metrics():
+    """Prometheus exposition endpoint for administrators and scrape API keys."""
+    body, content_type = render_metrics(DatabaseManager())
+    return Response(body, content_type=content_type)
+
+
+_WEBHOOK_EVENTS = {
+    'suggestion.created', 'suggestion.awaiting_approval', 'suggestion.approved',
+    'suggestion.rejected', 'request.submitted', 'request.failed', 'run.failed',
+    'job.completed', 'job.skipped',
+}
+
+
+@public_api_v1_bp.route('/webhooks', methods=['GET'])
+@require_role('admin')
+def webhooks():
+    return jsonify({'data': DatabaseManager().list_webhooks()}), 200
+
+
+@public_api_v1_bp.route('/webhooks', methods=['POST'])
+@require_role('admin')
+@limiter.limit('20 per minute')
+def create_webhook():
+    data = request.get_json(silent=True) or {}
+    name, url, secret, events = data.get('name'), data.get('url'), data.get('secret'), data.get('events')
+    if not isinstance(name, str) or not name.strip() or len(name) > 100:
+        return jsonify({'error': {'code': 'validation_error', 'message': 'name must be 1 to 100 characters.'}}), 400
+    if not isinstance(url, str) or len(url) > 2048 or not isinstance(secret, str) or len(secret) < 16:
+        return jsonify({'error': {'code': 'validation_error', 'message': 'url and a secret of at least 16 characters are required.'}}), 400
+    if not isinstance(events, list) or not events or any(event not in _WEBHOOK_EVENTS for event in events):
+        return jsonify({'error': {'code': 'validation_error', 'message': 'events must contain supported webhook events.'}}), 400
+    try:
+        validate_url(url, allow_private=bool(data.get('allow_private', False)))
+    except ValueError as exc:
+        return jsonify({'error': {'code': 'validation_error', 'message': str(exc)}}), 400
+    db = DatabaseManager()
+    if not db.is_webhook_destination_allowed(url):
+        return jsonify({'error': {'code': 'validation_error', 'message': 'Webhook destination is not in the allowlist.'}}), 400
+    item = db.create_webhook({
+        'name': name, 'url': url, 'secret': secret, 'events': events,
+        'enabled': data.get('enabled', True), 'allow_private': data.get('allow_private', False),
+    })
+    return jsonify({'data': item}), 201
+
+
+@public_api_v1_bp.route('/webhooks/settings', methods=['GET'])
+@require_role('admin')
+def webhook_settings():
+    return jsonify({'data': {'allowed_hosts': DatabaseManager().get_webhook_allowed_hosts()}}), 200
+
+
+@public_api_v1_bp.route('/webhooks/settings', methods=['PUT'])
+@require_role('admin')
+@limiter.limit('20 per minute')
+def update_webhook_settings():
+    hosts = (request.get_json(silent=True) or {}).get('allowed_hosts')
+    if not isinstance(hosts, list) or len(hosts) > 100:
+        return jsonify({'error': {'code': 'validation_error', 'message': 'allowed_hosts must contain at most 100 hostnames.'}}), 400
+    normalized = []
+    for host in hosts:
+        if not isinstance(host, str) or not host.strip() or '/' in host or ':' in host:
+            return jsonify({'error': {'code': 'validation_error', 'message': 'allowed_hosts must contain hostnames only.'}}), 400
+        normalized.append(host.strip().lower())
+    normalized = sorted(set(normalized))
+    DatabaseManager().set_webhook_allowed_hosts(normalized)
+    return jsonify({'data': {'allowed_hosts': normalized}}), 200
+
+
+@public_api_v1_bp.route('/webhooks/<webhook_id>', methods=['DELETE'])
+@require_role('admin')
+@limiter.limit('20 per minute')
+def delete_webhook(webhook_id):
+    if not DatabaseManager().delete_webhook(webhook_id):
+        return jsonify({'error': {'code': 'not_found', 'message': 'Webhook not found.'}}), 404
+    return '', 204
+
+
+@public_api_v1_bp.route('/webhooks/deliveries', methods=['GET'])
+@require_role('admin')
+def webhook_deliveries():
+    return jsonify({'data': DatabaseManager().list_webhook_deliveries()}), 200
+
+
+@public_api_v1_bp.route('/webhooks/deliveries/<int:delivery_id>/retry', methods=['POST'])
+@require_role('admin')
+@limiter.limit('20 per minute')
+def retry_webhook_delivery(delivery_id):
+    if not DatabaseManager().retry_webhook_delivery(delivery_id):
+        return jsonify({'error': {'code': 'not_found', 'message': 'Webhook delivery not found.'}}), 404
+    return jsonify({'data': {'id': delivery_id, 'status': 'queued'}}), 200
+
+
 @public_api_v1_bp.route('/me', methods=['GET'])
 @limiter.limit('120 per minute')
 def me():
@@ -77,8 +173,9 @@ def _job_payload(job):
     fields = ('id', 'name', 'job_type', 'enabled', 'media_type', 'filters', 'schedule_type',
               'schedule_value', 'max_results', 'user_ids', 'is_system', 'owner_id',
               'pause_if_pending_requests', 'prevent_suggestions_if_unwatched',
-              'unwatched_suggestion_days', 'delivery_mode', 'seer_identity_mode',
-              'request_profiles', 'approval_pause_mode', 'created_at', 'updated_at')
+                'unwatched_suggestion_days', 'delivery_mode', 'seer_identity_mode',
+                'request_profiles', 'approval_pause_mode', 'max_requests_per_user',
+                'request_limit_window_hours', 'created_at', 'updated_at')
     return {field: job.get(field) for field in fields}
 
 
@@ -196,7 +293,9 @@ def run(run_id):
     job_data = JobRepository().get_job(record['job_id'])
     if not job_data or not _visible_job(job_data):
         return jsonify({'error': {'code': 'not_found', 'message': 'Run not found.'}}), 404
-    return jsonify({'data': _run_payload(record)}), 200
+    data = _run_payload(record)
+    data['deliveries'] = JobRepository().get_execution_deliveries(run_id)
+    return jsonify({'data': data}), 200
 
 
 def _visible_request_user_ids(db):
@@ -281,7 +380,10 @@ def suggestions():
     db = DatabaseManager()
     owner_id = None if g.current_user['role'] == 'admin' else int(g.current_user['id'])
     page, per_page = pagination
-    items, total = db.list_suggestions(owner_id, status, search, page, per_page, media_type, _visible_request_user_ids(db))
+    items, total = db.list_suggestions(
+        owner_id, status, search, page, per_page, media_type, _visible_request_user_ids(db),
+        int(g.current_user['id']),
+    )
     return jsonify({'data': items, 'meta': {'page': page, 'per_page': per_page, 'total': total, 'pages': max(1, (total + per_page - 1) // per_page)}}), 200
 
 
