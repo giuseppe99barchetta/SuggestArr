@@ -736,9 +736,9 @@ class JobRepository:
         """
         # Handle both tuple and Row objects
         if hasattr(row, 'keys'):
-            return dict(row)
+            data = dict(row)
         else:
-            return {
+            data = {
                 'id': row[0],
                 'job_id': row[1],
                 'started_at': row[2],
@@ -750,3 +750,14 @@ class JobRepository:
                 'job_name': row[8] if len(row) > 8 else None,
                 'trigger_source': row[9] if len(row) > 9 else 'schedule',
             }
+
+        # Database drivers return TIMESTAMP columns as datetime objects. Flask
+        # serializes naive datetimes as GMT HTTP dates, even though execution
+        # history is stored in the container's local time. The browser then
+        # applies its timezone offset again. Keep the stored wall-clock value
+        # explicit and database-independent by returning ISO strings instead.
+        for field in ('started_at', 'finished_at'):
+            if isinstance(data.get(field), datetime):
+                data[field] = data[field].isoformat()
+
+        return data
