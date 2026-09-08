@@ -10,7 +10,7 @@ async function mockApi(page, { subpath = "", setupCompleted = true } = {}) {
 
   await page.addInitScript(() => {
     localStorage.setItem("suggestarr_tour_done", "1");
-    localStorage.setItem("sj_jobs_tour_done", "1");
+    localStorage.setItem("suggestarr_jobs_tour_done", "1");
   });
 
   await page.route("http://localhost:5000/**", async (route) => {
