@@ -7,7 +7,7 @@
     "build": "vite build",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test",
     "test:e2e": "playwright test",
-    "lint": "eslint --ext .js,.vue src/",
+    "lint": "eslint src/",
     "lint:styles": "stylelint \"src/**/*.{vue,css}\" --allow-empty-input",
     "lint:styles:fix": "stylelint \"src/**/*.{vue,css}\" --fix --allow-empty-input",
     "start": "vite"
@@ -28,33 +28,19 @@
     "vue-toastification": "^2.0.0-rc.5"
   },
   "devDependencies": {
-    "@babel/core": "^7.12.16",
-    "@babel/eslint-parser": "^7.12.16",
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.2",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/compiler-sfc": "^3.5.13",
     "@vue/tsconfig": "^0.9.0",
-    "eslint": "^7.32.0",
-    "eslint-plugin-vue": "^8.0.3",
+    "eslint": "^10.10.0",
+    "eslint-plugin-vue": "~10.10.0",
+    "globals": "^17.8.0",
     "postcss-html": "^2.0.0",
     "stylelint": "^17.9.0",
     "typescript": "~7.0.2",
-    "vite": "^7.3.0"
-  },
-  "eslintConfig": {
-    "root": true,
-    "env": {
-      "node": true
-    },
-    "extends": [
-      "plugin:vue/vue3-essential",
-      "eslint:recommended"
-    ],
-    "parserOptions": {
-      "parser": "@babel/eslint-parser",
-      "requireConfigFile": false
-    },
-    "rules": {}
+    "vite": "^7.3.0",
+    "vue-eslint-parser": "^10.4.1"
   },
   "browserslist": [
     "> 1%",

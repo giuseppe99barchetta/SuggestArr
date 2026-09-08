@@ -51,7 +51,7 @@
           <router-link to="/" class="go-dashboard-link">Go to Dashboard →</router-link>
         </div>
       </div>
-      <Footer />
+      <AppFooter />
     </div>
 
     <!-- WIZARD LAYOUT: centered compact card with top stepper -->
@@ -192,7 +192,7 @@
         @go-settings="goToSettings"
         @go-requests="goToRequests"
       />
-      <Footer />
+      <AppFooter />
     </div>
 
     <!-- LOGS MODAL -->
@@ -238,7 +238,7 @@ import { useRouter } from 'vue-router';
 import { useToast } from 'vue-toastification';
 import '@/assets/styles/dashboardPage.css';
 
-import Footer from './AppFooter.vue';
+import AppFooter from './AppFooter.vue';
 import LogsComponent from './LogsComponent.vue';
 import WizardCompletion from './wizard/WizardCompletion.vue';
 
@@ -268,7 +268,7 @@ const SETUP_DEFAULTS = {
 export default {
   name: 'ConfigWizard',
   components: {
-    Footer,
+    AppFooter,
     LogsComponent,
     WizardCompletion,
     MediaServiceSelection,

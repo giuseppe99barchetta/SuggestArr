@@ -185,11 +185,9 @@ export async function createAppRouter() {
   // Set up axios interceptors before any API calls (router ref added after creation)
   auth.setupInterceptors();
 
-  let authStatus = { auth_setup_complete: false, app_setup_complete: false };
-
   try {
     // Check auth status — public endpoint, always works
-    authStatus = await auth.getAuthStatus();
+    const authStatus = await auth.getAuthStatus();
 
     // If an admin account exists, try refreshing the session from the cookie.
     const hadSessionHint = localStorage.getItem("suggestarr_had_session") === "1";

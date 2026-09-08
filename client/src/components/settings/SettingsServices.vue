@@ -1075,7 +1075,7 @@ export default {
           this.wizardTmdbConnected = true;
           if (this.$toast) this.$toast.success('TMDB API key validated!', { position: 'top-right', duration: 3000 });
           this.$emit('validation-changed', true);
-        } catch (error) {
+        } catch {
           this.wizardTmdbConnected = false;
           this._notifyError('Invalid TMDB API key. Please check and try again.');
           this.$emit('validation-changed', false);
@@ -1097,7 +1097,7 @@ export default {
         await testOmdbApi(this.localConfig.OMDB_API_KEY.trim());
         this.omdbConnected = true;
         if (!silent && this.$toast) this.$toast.success('OMDb API key validated!', { position: 'top-right', duration: 3000 });
-      } catch (error) {
+      } catch {
         this.omdbConnected = false;
         if (!silent) this._notifyError('Invalid OMDb API key. Please check and try again.');
       } finally {
@@ -1111,7 +1111,7 @@ export default {
         const url = this.localConfig.JELLYFIN_API_URL.trim();
         const testUrl = url.startsWith('http') ? url : `http://${url}`;
         new URL(testUrl);
-      } catch (e) {
+      } catch {
         this._notifyError('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
@@ -1127,7 +1127,7 @@ export default {
         const url = this.localConfig.PLEX_API_URL.trim();
         const testUrl = url.startsWith('http') ? url : `http://${url}`;
         new URL(testUrl);
-      } catch (e) {
+      } catch {
         this._notifyError('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
@@ -1142,7 +1142,7 @@ export default {
       try {
         const url = this.localConfig.JELLYFIN_API_URL.trim();
         new URL(url.startsWith('http') ? url : `http://${url}`);
-      } catch (e) {
+      } catch {
         if (!silent) this._notifyError('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
@@ -1190,7 +1190,7 @@ export default {
       try {
         const url = this.localConfig.PLEX_API_URL.trim();
         new URL(url.startsWith('http') ? url : `http://${url}`);
-      } catch (e) {
+      } catch {
         if (!silent) this._notifyError('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
@@ -1330,7 +1330,7 @@ export default {
       try {
         const url = seerUrl;
         new URL(url.startsWith('http') ? url : `http://${url}`);
-      } catch (e) {
+      } catch {
         if (!silent) this._notifyError('Invalid URL format.', { position: 'top-right', duration: 4000 });
         return;
       }
