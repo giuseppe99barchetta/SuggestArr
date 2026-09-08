@@ -3,7 +3,7 @@ Flask-Cors==6.0.5
 Flask-Limiter==4.1.1
 PyJWT==2.13.0
 bcrypt==5.0.0
-gunicorn==26.1.0
+gunicorn==26.2.0
 uvicorn==0.52.4
 asgiref==3.12.1
 
@@ -30,5 +30,5 @@ xmltodict==1.0.4
 mysql-connector-python==26.7.0
 psycopg2-binary==2.9.12
 
-openai==3.3.1
+openai==3.5.0
 prometheus-client==0.24.1
