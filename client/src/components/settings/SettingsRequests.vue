@@ -106,7 +106,7 @@
               </span>
               <div v-if="request._pending" class="pending-card-actions" @click.stop>
                 <template v-if="confirmRejectId === request.id"><button type="button" class="poster-action pending-cancel" aria-label="Cancel rejection" @click="confirmRejectId = null"><i class="fas fa-undo"></i></button><button type="button" class="poster-action pending-reject" :disabled="actionLoadingId === request.id" aria-label="Confirm rejection" @click="decidePending('reject', request.id)"><i class="fas fa-check"></i></button></template>
-                <template v-else><button type="button" class="poster-action pending-approve" :disabled="actionLoadingId === request.id" aria-label="Approve request" @click="decidePending('approve', request.id)"><i class="fas fa-check"></i></button><button type="button" class="poster-action pending-reject" :disabled="actionLoadingId === request.id" aria-label="Reject request" @click="confirmRejectId = request.id"><i class="fas fa-times"></i></button></template>
+                <template v-else><button type="button" class="poster-action pending-approve" :disabled="actionLoadingId === request.id" aria-label="Approve request" @click="requestApprove(request)"><i class="fas fa-check"></i></button><button type="button" class="poster-action pending-reject" :disabled="actionLoadingId === request.id" aria-label="Reject request" @click="confirmRejectId = request.id"><i class="fas fa-times"></i></button></template>
               </div>
             </div>
 
@@ -136,6 +136,15 @@
       </div>
     </div>
     <Teleport to="body">
+      <div v-if="approveItem" class="modal-overlay" @click.self="approveItem = null">
+        <div class="modal modal--md" role="dialog" aria-modal="true" aria-labelledby="approve-title">
+          <div class="modal-header"><div class="modal-title-wrap"><h3 id="approve-title" class="modal-title"><i class="fas fa-paper-plane"></i>Send to Seer</h3><p class="modal-subtitle">Send {{ approveItem.title || 'this item' }} to Seer?</p></div><button type="button" class="modal-close" aria-label="Close confirmation" @click="approveItem = null"><i class="fas fa-times"></i></button></div>
+          <div class="modal-body"><ApprovalProfileChoice ref="profileChoice" :servers="servers" :media-types="[approveItem.media_type]" /></div>
+          <div class="modal-footer"><BaseButton variant="secondary" @click="approveItem = null">Cancel</BaseButton><BaseButton variant="success" :disabled="actionLoadingId === approveItem.id" @click="confirmApprove">Send</BaseButton></div>
+        </div>
+      </div>
+    </Teleport>
+    <Teleport to="body">
       <div v-if="selectedRequest" class="modal-overlay" @click.self="selectedRequest = null">
         <div class="modal-content request-details-modal">
           <button type="button" class="modal-close" aria-label="Close details" @click="selectedRequest = null"><i class="fas fa-times"></i></button>
@@ -159,10 +168,14 @@
 <script>
 import axios from 'axios';
 import { formatDate } from '@/utils/dateUtils.js';
+import BaseButton from '@/components/ui/BaseButton.vue';
+import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
+import { hasServers, loadSeerServers } from '@/utils/requestProfiles.js';
 import '@/assets/styles/requestsPage.css';
 
 export default {
   name: 'SettingsRequests',
+  components: { BaseButton, ApprovalProfileChoice },
   data() {
     return {
       stats: {
@@ -175,6 +188,8 @@ export default {
       pendingRequests: [],
       pendingTotal: 0,
       confirmRejectId: null,
+      approveItem: null,
+      servers: { movie: [], tv: [] },
       actionLoadingId: null,
       approvalEnabled: false,
       selectedRequest: null,
@@ -197,10 +212,11 @@ export default {
       return requests.filter(req => req.media_type === this.activeFilter).slice(0, 20);
     }
   },
-  mounted() {
+  async mounted() {
     this.loadStats();
     this.loadRecentRequests();
     this.loadApprovalState();
+    this.servers = await loadSeerServers(axios);
   },
   methods: {
     formatDate,
@@ -270,13 +286,32 @@ export default {
       }
     },
 
-    async decidePending(action, id) {
+    // The same choice as on the Requests page: with a Radarr/Sonarr server to
+    // pick from, approving asks first; without, it stays a single click.
+    requestApprove(request) {
+      if (hasServers(this.servers)) { this.approveItem = request; return; }
+      this.decidePending('approve', request.id);
+    },
+
+    async confirmApprove() {
+      const profile = this.$refs.profileChoice?.payload() || null;
+      const ok = await this.decidePending('approve', this.approveItem.id, profile);
+      if (ok) this.approveItem = null;
+    },
+
+    async decidePending(action, id, profile = null) {
       this.actionLoadingId = id;
       try {
-        await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] });
+        await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id], ...(profile ? { profile } : {}) });
         this.confirmRejectId = null;
         await this.loadPendingRequests();
         this.$toast.open({ message: action === 'approve' ? 'Request queued for Seer' : 'Request rejected', type: 'success' });
+        return true;
+      } catch (error) {
+        // A rejected profile comes back as 400 with a reason — show it instead
+        // of leaving the dialog as if nothing had happened.
+        this.$toast.open({ message: error.response?.data?.message || 'Could not update request', type: 'error' });
+        return false;
       } finally {
         this.actionLoadingId = null;
       }

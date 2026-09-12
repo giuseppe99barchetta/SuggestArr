@@ -18,8 +18,10 @@ from api_service.jobs.trakt_recommendations_automation import (
     execute_trakt_recommendations_job,
 )
 from api_service.utils.asyncio_loop import run_coroutine_sync
-from api_service.services.config_service import ConfigService
-from api_service.services.seer.seer_client import SeerClient
+from api_service.utils.request_profiles import (
+    validate_request_profiles,
+    validate_request_profiles_with_seer,
+)
 
 logger = LoggerManager.get_logger("JobsRoute")
 jobs_bp = Blueprint('jobs', __name__)
@@ -35,51 +37,6 @@ def run_async(coro):
     Drains pending cleanup tasks before closing the per-invocation event loop.
     """
     return run_coroutine_sync(coro, logger)
-
-
-def _validate_request_profiles(value):
-    if value is None:
-        return {}
-    if not isinstance(value, dict) or any(key not in ('movie', 'tv') for key in value):
-        raise ValueError('request_profiles must contain only movie and tv')
-    for profile in value.values():
-        if not isinstance(profile, dict) or any(key not in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId') for key in profile):
-            raise ValueError('Invalid request profile')
-        if profile.get('serverId') is not None and not isinstance(profile['serverId'], int):
-            raise ValueError('serverId must be an integer')
-        if profile.get('profileId') is not None and not isinstance(profile['profileId'], int):
-            raise ValueError('profileId must be an integer')
-        if profile.get('rootFolder') is not None and not isinstance(profile['rootFolder'], str):
-            raise ValueError('rootFolder must be a string')
-        if profile.get('is4k') is not None and not isinstance(profile['is4k'], bool):
-            raise ValueError('is4k must be a boolean')
-        if profile.get('languageProfileId') is not None and not isinstance(profile['languageProfileId'], int):
-            raise ValueError('languageProfileId must be an integer')
-        present = [profile.get(key) is not None for key in ('serverId', 'profileId', 'rootFolder')]
-        if any(present) and not all(present):
-            raise ValueError('serverId, profileId and rootFolder must be selected together')
-    return value
-
-
-def _validate_request_profiles_with_seer(profiles):
-    if not any(profiles.values()):
-        return
-    env = ConfigService.get_runtime_config()
-    async def check():
-        async with SeerClient(env.get('SEER_API_URL', ''), env.get('SEER_TOKEN', ''),
-                              session_token=env.get('SEER_SESSION_TOKEN')) as seer:
-            for media_type, profile in profiles.items():
-                if not profile or profile.get('serverId') is None:
-                    continue
-                servers = await (seer.get_radarr_servers() if media_type == 'movie' else seer.get_sonarr_servers())
-                server = next((item for item in servers or [] if item.get('id') == profile['serverId']), None)
-                if not server:
-                    raise ValueError(f"Unknown {media_type} server")
-                if profile.get('profileId') not in {item.get('id') for item in server.get('profiles', [])}:
-                    raise ValueError(f"Unknown {media_type} quality profile")
-                if profile.get('rootFolder') not in {item.get('path') for item in server.get('rootFolders', [])}:
-                    raise ValueError(f"Unknown {media_type} root folder")
-    run_async(check())
 
 
 def _validate_request_limits(data):
@@ -330,8 +287,8 @@ def create_job():
             return jsonify({'status': 'error', 'message': 'approval_pause_mode must be inherit, always or never'}), 400
         data['approval_pause_mode'] = approval_pause_mode
         try:
-            data['request_profiles'] = _validate_request_profiles(data.get('request_profiles'))
-            _validate_request_profiles_with_seer(data['request_profiles'])
+            data['request_profiles'] = validate_request_profiles(data.get('request_profiles'))
+            validate_request_profiles_with_seer(data['request_profiles'])
         except ValueError as exc:
             return jsonify({'status': 'error', 'message': str(exc)}), 400
         identity_mode = data.get('seer_identity_mode', 'technical_user')
@@ -435,8 +392,8 @@ def update_job(job_id: int):
         job_type = data.get('job_type', existing.get('job_type', 'discover'))
         if 'request_profiles' in data:
             try:
-                data['request_profiles'] = _validate_request_profiles(data['request_profiles'])
-                _validate_request_profiles_with_seer(data['request_profiles'])
+                data['request_profiles'] = validate_request_profiles(data['request_profiles'])
+                validate_request_profiles_with_seer(data['request_profiles'])
             except ValueError as exc:
                 return jsonify({'status': 'error', 'message': str(exc)}), 400
         if 'delivery_mode' in data and data['delivery_mode'] not in ('inherit', 'automatic', 'manual'):

@@ -30,7 +30,7 @@
       <div v-if="confirmation" class="modal-overlay" @click.self="confirmation = null">
         <div class="modal modal--md workflow-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
           <div class="modal-header" :class="{ 'modal-header--danger': confirmation.action === 'reject' || confirmation.action === 'blacklist' }"><div class="modal-title-wrap"><h3 id="confirm-title" class="modal-title"><i :class="confirmation.icon"></i>{{ confirmation.title }}</h3><p class="modal-subtitle">{{ confirmation.message }}</p></div><button type="button" class="modal-close" aria-label="Close confirmation" @click="confirmation = null"><i class="fas fa-times"></i></button></div>
-          <div class="modal-body"><template v-if="confirmation.action === 'reject'"><p class="workflow-confirm-label">Requests to reject</p><div class="workflow-confirm-items"><div v-for="item in confirmation.items" :key="item.id" class="workflow-confirm-item"><img v-if="item.poster_path" :src="`https://image.tmdb.org/t/p/w92${item.poster_path}`" alt="" /><span v-else class="workflow-confirm-placeholder"><i class="fas fa-film"></i></span><div><strong>{{ item.title || `TMDb ${item.tmdb_id}` }}</strong><small>{{ item.media_type.toUpperCase() }}<template v-if="item.name"> · Suggested from {{ item.name }}</template></small></div></div></div><div class="workflow-confirm-note"><i class="fas fa-info-circle" aria-hidden="true"></i><p>These items will be archived, not blacklisted. You can find them later by filtering requests by <strong>Rejected</strong> and request them again.</p></div></template><div v-else class="workflow-confirm-message"><i :class="confirmation.icon" aria-hidden="true"></i><p>{{ confirmation.message }}</p></div></div>
+          <div class="modal-body"><template v-if="confirmation.action === 'reject'"><p class="workflow-confirm-label">Requests to reject</p><div class="workflow-confirm-items"><div v-for="item in confirmation.items" :key="item.id" class="workflow-confirm-item"><img v-if="item.poster_path" :src="`https://image.tmdb.org/t/p/w92${item.poster_path}`" alt="" /><span v-else class="workflow-confirm-placeholder"><i class="fas fa-film"></i></span><div><strong>{{ item.title || `TMDb ${item.tmdb_id}` }}</strong><small>{{ item.media_type.toUpperCase() }}<template v-if="item.name"> · Suggested from {{ item.name }}</template></small></div></div></div><div class="workflow-confirm-note"><i class="fas fa-info-circle" aria-hidden="true"></i><p>These items will be archived, not blacklisted. You can find them later by filtering requests by <strong>Rejected</strong> and request them again.</p></div></template><div v-else class="workflow-confirm-message"><i :class="confirmation.icon" aria-hidden="true"></i><p>{{ confirmation.message }}</p></div><ApprovalProfileChoice v-if="confirmation.action === 'approve'" ref="profileChoice" :servers="servers" :media-types="confirmationMediaTypes" /></div>
           <div class="modal-footer"><BaseButton variant="secondary" @click="confirmation = null">Cancel</BaseButton><BaseButton :variant="confirmation.action === 'approve' ? 'success' : 'danger'" @click="decide">{{ confirmation.confirmLabel }}</BaseButton></div>
         </div>
       </div>
@@ -41,17 +41,20 @@
 <script>
 import axios from 'axios';
 import BaseButton from '@/components/ui/BaseButton.vue';
+import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
+import { hasServers, loadSeerServers, mediaTypesOf } from '@/utils/requestProfiles.js';
 export default {
-  name: 'RequestWorkflowPanel', components: { BaseButton },
+  name: 'RequestWorkflowPanel', components: { BaseButton, ApprovalProfileChoice },
   emits: ['open', 'update:total'],
   props: { statusFilter: { type: String, default: 'all' }, searchQuery: { type: String, default: '' }, mediaType: { type: String, default: 'all' }, requestedFor: { type: String, default: 'all' }, showHeader: { type: Boolean, default: true }, showEmpty: { type: Boolean, default: true }, bulkMode: { type: Boolean, default: false } },
-  data() { return { items: [], selected: [], actionLoading: false, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null,
+  data() { return { items: [], selected: [], actionLoading: false, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: { movie: [], tv: [] },
     statuses: [{ value: 'awaiting_approval', label: 'Awaiting approval' }, { value: 'queued', label: 'Queued' }, { value: 'submitted', label: 'Submitted' }, { value: 'rejected', label: 'Rejected' }, { value: 'failed', label: 'Failed' }, { value: 'blacklisted', label: 'Blacklisted' }] }; },
   computed: {
     selectedItems() { return this.items.filter(item => this.selected.includes(item.id)); },
     canApprove() { return this.selectedItems.length > 0 && this.selectedItems.every(item => item.status === 'awaiting_approval'); },
     canRetry() { return this.selectedItems.length > 0 && this.selectedItems.every(item => item.status === 'failed'); },
-    canRequestAgain() { return this.selectedItems.length > 0 && this.selectedItems.every(item => ['rejected', 'blacklisted'].includes(item.status)); }
+    canRequestAgain() { return this.selectedItems.length > 0 && this.selectedItems.every(item => ['rejected', 'blacklisted'].includes(item.status)); },
+    confirmationMediaTypes() { return mediaTypesOf(this.confirmation?.items); }
   },
   watch: {
     statusFilter(value) { this.status = value; this.load(1); },
@@ -60,7 +63,7 @@ export default {
     requestedFor() { this.load(1); },
     bulkMode(value) { if (!value) this.selected = []; }
   },
-  async mounted() { const requested = this.$route.query.status; if (this.statuses.some(option => option.value === requested)) this.status = requested; const response = await axios.get('/api/jobs'); this.jobs = (response.data.jobs || []).filter(job => job.delivery_mode === 'manual'); this.load(); },
+  async mounted() { const requested = this.$route.query.status; if (this.statuses.some(option => option.value === requested)) this.status = requested; const response = await axios.get('/api/jobs'); this.jobs = (response.data.jobs || []).filter(job => job.delivery_mode === 'manual'); this.load(); this.servers = await loadSeerServers(axios); },
   beforeUnmount() { clearTimeout(this.searchTimer); this.observer?.disconnect(); },
   methods: {
     async load(page = this.page) {
@@ -95,11 +98,41 @@ export default {
       if (index === -1) this.selected.push(item.id);
       else this.selected.splice(index, 1);
     },
-    async decideOne(action, id) { this.actionLoading = true; try { await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] }); await this.load(); this.$toast.open({ message: action === 'approve' ? 'Request queued for Seer' : 'Request updated', type: 'success' }); } finally { this.actionLoading = false; } },
+    async decideOne(action, id) {
+      // Approving is the one action that spends bandwidth and disk and cannot
+      // be taken back, so when there is a profile to pick it asks first —
+      // rejecting already does. Without servers nothing changes.
+      if (action === 'approve' && hasServers(this.servers)) { this.confirmSingle('approve', id); return; }
+      this.actionLoading = true;
+      try {
+        await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] });
+        await this.load();
+        this.$toast.open({ message: action === 'approve' ? 'Request queued for Seer' : 'Request updated', type: 'success' });
+      } finally { this.actionLoading = false; }
+    },
     confirmAction(action) { const labels = { approve: ['Send to Seer', `Send ${this.selected.length} selected items using the identity and profiles shown on each card?`, 'fas fa-paper-plane', 'Send'], reject: ['Reject requests', `${this.selected.length} selected items will be removed from the approval queue.`, 'fas fa-archive', 'Reject requests'], blacklist: ['Blacklist requests', `Permanently prevent ${this.selected.length} items from being suggested again?`, 'fas fa-ban', 'Blacklist'], retry: ['Retry failed requests', `Queue ${this.selected.length} failed items for another delivery attempt?`, 'fas fa-redo', 'Retry'], 'request-again': ['Request again', `Remove any blacklist and send ${this.selected.length} selected items to Seer?`, 'fas fa-paper-plane', 'Request again'] }; this.confirmation = { action, ids: [...this.selected], items: [...this.selectedItems], removeBlacklist: action === 'request-again' && this.selectedItems.some(item => item.status === 'blacklisted'), title: labels[action][0], message: labels[action][1], icon: labels[action][2], confirmLabel: labels[action][3] }; },
-    confirmSingle(action, id) { const item = this.items.find(request => request.id === id); this.confirmation = { action, ids: [id], items: [item], title: 'Reject request', message: 'This item will be removed from the approval queue.', icon: 'fas fa-archive', confirmLabel: 'Reject request' }; },
+    confirmSingle(action, id) {
+      const item = this.items.find(request => request.id === id);
+      this.confirmation = action === 'approve'
+        ? { action, ids: [id], items: [item], title: 'Send to Seer', message: `Send ${item?.title || 'this item'} to Seer?`, icon: 'fas fa-paper-plane', confirmLabel: 'Send' }
+        : { action, ids: [id], items: [item], title: 'Reject request', message: 'This item will be removed from the approval queue.', icon: 'fas fa-archive', confirmLabel: 'Reject request' };
+    },
     confirmRequestAgain(item) { this.confirmation = { action: 'request-again', ids: [item.id], removeBlacklist: item.status === 'blacklisted', title: 'Request again', message: item.status === 'blacklisted' ? 'Remove this item from the blacklist and send it to Seer?' : 'Send this rejected item to Seer?', icon: 'fas fa-paper-plane', confirmLabel: 'Request again' }; },
-    async decide() { const { action, ids, removeBlacklist } = this.confirmation; await axios.post(`/api/automation/requests/workflow/${action}`, { ids, remove_blacklist: removeBlacklist }); this.confirmation = null; await this.load(); this.$toast.open({ message: 'Requests updated', type: 'success' }); },
+    async decide() {
+      const { action, ids, removeBlacklist } = this.confirmation;
+      const profile = action === 'approve' ? this.$refs.profileChoice?.payload() : null;
+      this.actionLoading = true;
+      try {
+        await axios.post(`/api/automation/requests/workflow/${action}`, { ids, remove_blacklist: removeBlacklist, ...(profile ? { profile } : {}) });
+        this.confirmation = null;
+        await this.load();
+        this.$toast.open({ message: 'Requests updated', type: 'success' });
+      } catch (error) {
+        // A rejected profile comes back as 400 with a reason. Swallowing it
+        // would leave the dialog looking as if nothing had happened.
+        this.$toast.open({ message: error.response?.data?.message || 'Could not update requests', type: 'error' });
+      } finally { this.actionLoading = false; }
+    },
     async runJob() { this.running = true; try { await axios.post(`/api/jobs/${this.jobId}/run`); await this.load(1); } finally { this.running = false; } }
   }
 };

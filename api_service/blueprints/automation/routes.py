@@ -8,6 +8,10 @@ from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.utils.asyncio_loop import close_event_loop
+from api_service.utils.request_profiles import (
+    validate_request_profiles,
+    validate_request_profiles_with_seer,
+)
 
 logger = LoggerManager().get_logger("AutomationRoute")
 automation_bp = Blueprint('automation', __name__)
@@ -76,11 +80,48 @@ def request_workflow():
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
 
 
+def _requested_profiles():
+    """
+    Read an optional per-media-type request profile from an approval call.
+
+    Lets the person approving decide how these items are fetched instead of
+    always taking the job's profile or Jellyseerr's default.  The shape is the
+    same one jobs use, so a caller that can fill the job dialog can fill this.
+
+    Returns:
+        dict: ``{'movie': {...}, 'tv': {...}}``, possibly empty.
+
+    Raises:
+        ValueError: On a malformed profile, or on ids Jellyseerr does not know.
+                    The caller answers 400 rather than fetching with a profile
+                    that means something else on the server it ends up on.
+    """
+    roh = (request.get_json(silent=True) or {}).get('profile')
+    profile = validate_request_profiles(roh)
+    validate_request_profiles_with_seer(profile)
+    return profile
+
+
 def _decide_workflow(approve, blacklist=False):
     ids = _workflow_ids()
     if ids is None:
         return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
-    changed = DatabaseManager().decide_suggestions(
+
+    profile = {}
+    if approve:
+        try:
+            profile = _requested_profiles()
+        except ValueError as fehler:
+            return jsonify({'status': 'error', 'message': str(fehler)}), 400
+
+    db = DatabaseManager()
+    # BEFORE the status change, and that order is the point: a row that is
+    # already 'queued' may have been picked up by the worker, and a payload
+    # written afterwards would arrive too late to matter.
+    if profile:
+        db.apply_profile_to_pending(ids, _workflow_owner(), profile)
+
+    changed = db.decide_suggestions(
         ids, _workflow_owner(), int(g.current_user['id']), approve, blacklist)
     return jsonify({'status': 'success', 'updated': changed}), 200
 

@@ -311,6 +311,63 @@ class RequestQueueMixin:
                     item['status'] = 'blacklisted'
             return items, total
 
+    def apply_profile_to_pending(self, ids, owner_id, profiles):
+        """
+        Write chosen request profiles into the stored payloads.
+
+        Called just before approval so the queue worker submits with these
+        values instead of falling back to Jellyseerr's defaults (see
+        SeerClient.submit_queued_request, which only fills in a profileId or
+        rootFolder that is absent — anything already present is passed through).
+
+        Args:
+            ids:      Pending request ids to update.
+            owner_id: Restricts to this owner, or None for an admin.
+            profiles: ``{'movie': {...}, 'tv': {...}}`` as validated by
+                      api_service.utils.request_profiles.
+
+        Returns:
+            int: Number of payloads rewritten.
+        """
+        je_typ = {}
+        for media_type, profile in (profiles or {}).items():
+            felder = {k: v for k, v in (profile or {}).items()
+                      if k in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId')
+                      and v is not None}
+            if felder:
+                je_typ[media_type] = felder
+        if not ids or not je_typ:
+            return 0
+
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        marks = ','.join([ph] * len(ids))
+        owner_clause = '' if owner_id is None else f' AND owner_id={ph}'
+        select_params = [*ids] + ([] if owner_id is None else [owner_id])
+
+        geschrieben = 0
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            # media_type per row, not per call: a bulk approval may mix films
+            # and series, and a quality profile id from Radarr means something
+            # else in Sonarr.
+            cursor.execute(f"SELECT id,media_type,payload FROM pending_requests "
+                           f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}",
+                           tuple(select_params))
+            for row_id, media_type, payload in cursor.fetchall():
+                felder = je_typ.get(media_type)
+                if not felder:
+                    continue
+                try:
+                    daten = json.loads(payload) if payload else {}
+                except (TypeError, ValueError):
+                    continue
+                daten.update(felder)
+                cursor.execute(f"UPDATE pending_requests SET payload={ph} WHERE id={ph}",
+                               (json.dumps(daten), row_id))
+                geschrieben += cursor.rowcount
+            conn.commit()
+        return geschrieben
+
     def decide_suggestions(self, ids, owner_id, decided_by, approve, blacklist=False):
         if not ids:
             return 0
