@@ -341,6 +341,206 @@ class TestMiddleware(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Middleware — trusted-header (reverse proxy / SSO) mode
+# ---------------------------------------------------------------------------
+
+class TestTrustedHeaderAuth(unittest.TestCase):
+    """
+    Test AUTH_MODE=trusted_header, where a reverse proxy has already
+    authenticated the user and passes the username in a request header.
+
+    The security-critical property is that the header is only believed when
+    the request comes from a trusted address: otherwise anyone able to reach
+    the app directly could choose an identity by setting a header.
+    """
+
+    def setUp(self):
+        from api_service.auth.secret_key import invalidate_cache
+        invalidate_cache()
+        from api_service.auth.middleware import invalidate_setup_cache
+        invalidate_setup_cache()
+        os.environ['SUGGESTARR_SECRET_KEY'] = TEST_SECRET
+        os.environ.pop('SUGGESTARR_AUTH_DISABLED', None)
+        os.environ['AUTH_MODE'] = 'trusted_header'
+        os.environ['AUTH_TRUSTED_CIDRS'] = '10.0.20.0/24'
+        os.environ.pop('AUTH_TRUSTED_HEADER', None)
+        os.environ.pop('AUTH_TRUSTED_HEADER_AUTO_CREATE', None)
+
+    def tearDown(self):
+        from api_service.auth.middleware import invalidate_setup_cache
+        invalidate_setup_cache()
+        for key in ('SUGGESTARR_AUTH_DISABLED', 'AUTH_MODE', 'AUTH_TRUSTED_CIDRS',
+                    'AUTH_TRUSTED_HEADER', 'AUTH_TRUSTED_HEADER_AUTO_CREATE'):
+            os.environ.pop(key, None)
+
+    def _call(self, headers=None, remote_addr='10.0.20.11', existing_user=None,
+              path='/api/config/fetch'):
+        """
+        Run enforce_authentication against a stubbed database.
+
+        Args:
+            headers:       Request headers to send.
+            remote_addr:   Client address the middleware sees.
+            existing_user: Record returned by get_auth_user_by_username, or
+                           None to simulate an unknown username.
+            path:          Request path.
+
+        Returns:
+            tuple: (middleware result, g.current_user or None, stub db instance)
+        """
+        from flask import Flask, g
+        from api_service.auth.middleware import enforce_authentication, invalidate_setup_cache
+
+        app = Flask(__name__)
+        stub_db = MagicMock()
+        db_instance = stub_db.return_value
+        db_instance.get_auth_user_count.return_value = 1
+
+        created = {}
+
+        def fake_get_by_username(username):
+            if existing_user is not None:
+                return existing_user
+            return created.get(username)
+
+        def fake_create(username, password_hash, role='user'):
+            created[username] = {
+                "id": 42, "username": username, "password_hash": password_hash,
+                "role": role, "is_active": True,
+            }
+            return 42
+
+        def fake_get_by_id(user_id):
+            source = existing_user if existing_user is not None else next(iter(created.values()), None)
+            if source is None:
+                return None
+            record = dict(source)
+            record.setdefault("can_manage_ai", 0)
+            record.setdefault("visible_tabs", "requests,jobs,profile")
+            return record
+
+        db_instance.get_auth_user_by_username.side_effect = fake_get_by_username
+        db_instance.create_auth_user.side_effect = fake_create
+        db_instance.get_auth_user_by_id.side_effect = fake_get_by_id
+
+        invalidate_setup_cache()
+        with patch('api_service.auth.middleware.DatabaseManager', stub_db):
+            with app.test_request_context(path, headers=headers or {},
+                                          environ_base={"REMOTE_ADDR": remote_addr}):
+                result = enforce_authentication()
+                return result, getattr(g, 'current_user', None), db_instance
+
+    # --- The security boundary ---
+
+    def test_header_from_untrusted_ip_is_rejected(self):
+        """A header from outside the trusted CIDRs must never be believed."""
+        result, current_user, _ = self._call(
+            headers={'X-Forwarded-User': 'mallory'}, remote_addr='8.8.8.8'
+        )
+        self.assertIsNotNone(result)
+        _, code = result
+        self.assertEqual(code, 401)
+        self.assertIsNone(current_user)
+
+    def test_missing_header_is_rejected(self):
+        """Trusted IP alone is not an identity — without a header: 401."""
+        result, current_user, _ = self._call(headers={})
+        self.assertIsNotNone(result)
+        _, code = result
+        self.assertEqual(code, 401)
+        self.assertIsNone(current_user)
+
+    def test_provisioned_account_is_never_admin(self):
+        """Auto-provisioned accounts get role='user', never 'admin'."""
+        _, current_user, db_instance = self._call(headers={'X-Forwarded-User': 'alice'})
+        self.assertIsNotNone(current_user)
+        self.assertEqual(current_user['role'], 'user')
+        _, kwargs = db_instance.create_auth_user.call_args
+        self.assertEqual(kwargs.get('role', 'user'), 'user')
+
+    # --- Normal operation ---
+
+    def test_known_user_is_authenticated(self):
+        existing = {"id": 7, "username": "bob", "password_hash": "x",
+                    "role": "user", "is_active": True}
+        result, current_user, db_instance = self._call(
+            headers={'X-Forwarded-User': 'bob'}, existing_user=existing
+        )
+        self.assertIsNone(result)
+        self.assertEqual(current_user['username'], 'bob')
+        db_instance.create_auth_user.assert_not_called()
+
+    def test_unknown_user_is_provisioned(self):
+        result, current_user, db_instance = self._call(
+            headers={'X-Forwarded-User': 'carol'}
+        )
+        self.assertIsNone(result)
+        self.assertEqual(current_user['username'], 'carol')
+        db_instance.create_auth_user.assert_called_once()
+
+    def test_auto_create_disabled_rejects_unknown_user(self):
+        os.environ['AUTH_TRUSTED_HEADER_AUTO_CREATE'] = 'false'
+        result, current_user, db_instance = self._call(
+            headers={'X-Forwarded-User': 'dave'}
+        )
+        self.assertIsNotNone(result)
+        _, code = result
+        self.assertEqual(code, 401)
+        self.assertIsNone(current_user)
+        db_instance.create_auth_user.assert_not_called()
+
+    def test_deactivated_account_is_rejected(self):
+        existing = {"id": 9, "username": "eve", "password_hash": "x",
+                    "role": "user", "is_active": False}
+        result, current_user, _ = self._call(
+            headers={'X-Forwarded-User': 'eve'}, existing_user=existing
+        )
+        self.assertIsNotNone(result)
+        _, code = result
+        self.assertEqual(code, 401)
+        self.assertIsNone(current_user)
+
+    def test_admin_keeps_role_and_tabs(self):
+        """An existing admin must not be downgraded by this path."""
+        existing = {"id": 1, "username": "root", "password_hash": "x",
+                    "role": "admin", "is_active": True, "can_manage_ai": 1,
+                    "visible_tabs": "requests,services,advanced"}
+        result, current_user, _ = self._call(
+            headers={'X-Forwarded-User': 'root'}, existing_user=existing
+        )
+        self.assertIsNone(result)
+        self.assertEqual(current_user['role'], 'admin')
+        self.assertEqual(current_user['visible_tabs'], 'requests,services,advanced')
+
+    def test_custom_header_name_is_honoured(self):
+        os.environ['AUTH_TRUSTED_HEADER'] = 'Remote-User'
+        result, current_user, _ = self._call(headers={'Remote-User': 'frank'})
+        self.assertIsNone(result)
+        self.assertEqual(current_user['username'], 'frank')
+
+    def test_default_header_ignored_when_custom_configured(self):
+        os.environ['AUTH_TRUSTED_HEADER'] = 'Remote-User'
+        result, current_user, _ = self._call(headers={'X-Forwarded-User': 'grace'})
+        self.assertIsNotNone(result)
+        _, code = result
+        self.assertEqual(code, 401)
+        self.assertIsNone(current_user)
+
+    def test_overlong_username_is_rejected(self):
+        result, current_user, _ = self._call(
+            headers={'X-Forwarded-User': 'h' * 65}
+        )
+        self.assertIsNotNone(result)
+        _, code = result
+        self.assertEqual(code, 401)
+        self.assertIsNone(current_user)
+
+    def test_public_route_still_public(self):
+        result, _, _ = self._call(headers={}, path='/api/health/live')
+        self.assertIsNone(result)
+
+
+# ---------------------------------------------------------------------------
 # require_role decorator
 # ---------------------------------------------------------------------------
 
