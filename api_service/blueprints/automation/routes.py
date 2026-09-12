@@ -76,11 +76,68 @@ def request_workflow():
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
 
 
+def _requested_profile():
+    """
+    Read an optional quality profile from the approval request.
+
+    Lets the person approving choose how the item is fetched instead of always
+    taking Jellyseerr's default.  Everything is optional: without it the
+    previous behaviour is unchanged.
+
+    Returns:
+        dict: Validated subset of profileId, rootFolder, is4k,
+              languageProfileId.  Empty when nothing usable was sent.
+        None: A value was present but malformed — the caller answers 400
+              rather than silently fetching with the wrong profile.
+    """
+    data = request.get_json(silent=True) or {}
+    roh = data.get('profile')
+    if roh is None:
+        return {}
+    if not isinstance(roh, dict):
+        return None
+
+    profil = {}
+    for schluessel in ('profileId', 'languageProfileId'):
+        wert = roh.get(schluessel)
+        if wert is None:
+            continue
+        try:
+            profil[schluessel] = int(wert)
+        except (TypeError, ValueError):
+            return None
+    if roh.get('rootFolder') is not None:
+        ordner = str(roh['rootFolder']).strip()
+        # A root folder Radarr does not know is accepted by Jellyseerr and then
+        # fails silently when the item is added — so refuse the obviously
+        # broken shapes here instead of passing them on.
+        if not ordner or len(ordner) > 500 or not ordner.startswith('/'):
+            return None
+        profil['rootFolder'] = ordner
+    if roh.get('is4k') is not None:
+        profil['is4k'] = bool(roh['is4k'])
+    return profil
+
+
 def _decide_workflow(approve, blacklist=False):
     ids = _workflow_ids()
     if ids is None:
         return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
-    changed = DatabaseManager().decide_suggestions(
+
+    profil = _requested_profile() if approve else {}
+    if profil is None:
+        return jsonify({'status': 'error',
+                        'message': 'profile must be an object with profileId, rootFolder, '
+                                   'is4k or languageProfileId'}), 400
+
+    db = DatabaseManager()
+    # BEFORE the status change, and that order is the point: once a row is
+    # 'queued' the worker may pick it up, and a payload written afterwards
+    # would arrive too late.
+    if profil:
+        db.apply_profile_to_pending(ids, _workflow_owner(), profil)
+
+    changed = db.decide_suggestions(
         ids, _workflow_owner(), int(g.current_user['id']), approve, blacklist)
     return jsonify({'status': 'success', 'updated': changed}), 200
 

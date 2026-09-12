@@ -374,16 +374,21 @@ class TestTrustedHeaderAuth(unittest.TestCase):
             os.environ.pop(key, None)
 
     def _call(self, headers=None, remote_addr='10.0.20.11', existing_user=None,
-              path='/api/config/fetch'):
+              path='/api/config/fetch', proxy_orig_addr=None):
         """
         Run enforce_authentication against a stubbed database.
 
         Args:
-            headers:       Request headers to send.
-            remote_addr:   Client address the middleware sees.
-            existing_user: Record returned by get_auth_user_by_username, or
-                           None to simulate an unknown username.
-            path:          Request path.
+            headers:         Request headers to send.
+            remote_addr:     Client address the middleware sees — i.e. what
+                             ProxyFix has already put there.
+            existing_user:   Record returned by get_auth_user_by_username, or
+                             None to simulate an unknown username.
+            path:            Request path.
+            proxy_orig_addr: When set, reproduce ProxyFix's environ key
+                             'werkzeug.proxy_fix.orig' with this as the REAL
+                             peer.  Needed to test that trust is decided on
+                             the peer and not on X-Forwarded-For.
 
         Returns:
             tuple: (middleware result, g.current_user or None, stub db instance)
@@ -423,10 +428,16 @@ class TestTrustedHeaderAuth(unittest.TestCase):
         db_instance.create_auth_user.side_effect = fake_create
         db_instance.get_auth_user_by_id.side_effect = fake_get_by_id
 
+        umgebung = {"REMOTE_ADDR": remote_addr}
+        if proxy_orig_addr is not None:
+            # Exactly what werkzeug's ProxyFix leaves behind: remote_addr
+            # rewritten from the header, the untouched original stashed away.
+            umgebung["werkzeug.proxy_fix.orig"] = {"REMOTE_ADDR": proxy_orig_addr}
+
         invalidate_setup_cache()
         with patch('api_service.auth.middleware.DatabaseManager', stub_db):
             with app.test_request_context(path, headers=headers or {},
-                                          environ_base={"REMOTE_ADDR": remote_addr}):
+                                          environ_base=umgebung):
                 result = enforce_authentication()
                 return result, getattr(g, 'current_user', None), db_instance
 
@@ -441,6 +452,43 @@ class TestTrustedHeaderAuth(unittest.TestCase):
         _, code = result
         self.assertEqual(code, 401)
         self.assertIsNone(current_user)
+
+    def test_spoofed_x_forwarded_for_is_rejected(self):
+        """
+        The decisive one: X-Forwarded-For must not buy trust.
+
+        app.py wraps the app in ProxyFix(x_for=1), which REPLACES remote_addr
+        with the client-supplied header and stashes the real one under
+        'werkzeug.proxy_fix.orig'.  This test reproduces that exact state:
+        remote_addr already shows the trusted proxy (as ProxyFix would leave
+        it), while the true peer is an unrelated host.
+
+        WITHOUT reproducing ProxyFix the test would be worthless — a plain
+        request context leaves remote_addr untouched, so a check against it
+        would pass and the test would go green either way.
+        """
+        result, current_user, _ = self._call(
+            headers={'X-Forwarded-User': 'achim'},
+            remote_addr='10.0.20.11',
+            proxy_orig_addr='10.0.10.10',
+        )
+        self.assertIsNotNone(result)
+        _, code = result
+        self.assertEqual(code, 401)
+        self.assertIsNone(current_user)
+
+    def test_real_proxy_behind_proxyfix_is_accepted(self):
+        """The counterpart: a genuine proxy hop must still work."""
+        existing = {"id": 7, "username": "bob", "password_hash": "x",
+                    "role": "user", "is_active": True}
+        result, current_user, _ = self._call(
+            headers={'X-Forwarded-User': 'bob'},
+            remote_addr='203.0.113.9',       # what ProxyFix derived
+            proxy_orig_addr='10.0.20.11',    # the actual peer: the proxy
+            existing_user=existing,
+        )
+        self.assertIsNone(result)
+        self.assertEqual(current_user['username'], 'bob')
 
     def test_missing_header_is_rejected(self):
         """Trusted IP alone is not an identity — without a header: 401."""
