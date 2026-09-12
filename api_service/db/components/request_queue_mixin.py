@@ -311,6 +311,53 @@ class RequestQueueMixin:
                     item['status'] = 'blacklisted'
             return items, total
 
+    def apply_profile_to_pending(self, ids, owner_id, profile):
+        """
+        Write a chosen quality profile into the stored payloads.
+
+        Called just before approval so the queue worker submits the request
+        with this profile instead of falling back to Jellyseerr's default
+        (see SeerClient.submit_queued_request, which fills in missing
+        profileId/rootFolder from the server settings).
+
+        Args:
+            ids:      Pending request ids to update.
+            owner_id: Restricts to this owner, or None for an admin.
+            profile:  Dict with any of profileId, rootFolder, is4k,
+                      languageProfileId — validated by the caller.
+
+        Returns:
+            int: Number of payloads rewritten.
+        """
+        felder = {k: v for k, v in (profile or {}).items()
+                  if k in ('profileId', 'rootFolder', 'is4k', 'languageProfileId')
+                  and v is not None}
+        if not ids or not felder:
+            return 0
+
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        marks = ','.join([ph] * len(ids))
+        owner_clause = '' if owner_id is None else f' AND owner_id={ph}'
+        select_params = [*ids] + ([] if owner_id is None else [owner_id])
+
+        geschrieben = 0
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT id,payload FROM pending_requests "
+                           f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}",
+                           tuple(select_params))
+            for row_id, payload in cursor.fetchall():
+                try:
+                    daten = json.loads(payload) if payload else {}
+                except (TypeError, ValueError):
+                    continue
+                daten.update(felder)
+                cursor.execute(f"UPDATE pending_requests SET payload={ph} WHERE id={ph}",
+                               (json.dumps(daten), row_id))
+                geschrieben += cursor.rowcount
+            conn.commit()
+        return geschrieben
+
     def decide_suggestions(self, ids, owner_id, decided_by, approve, blacklist=False):
         if not ids:
             return 0

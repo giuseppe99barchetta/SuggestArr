@@ -522,10 +522,48 @@ Important options:
 - `ALLOW_REGISTRATION=false`: default. Only admins create users.
 - `AUTH_MODE=enabled`: normal login required.
 - `AUTH_MODE=local_bypass`: trusted local networks can bypass login.
+- `AUTH_MODE=trusted_header`: a reverse proxy authenticates users and passes
+  the username in a header (see below).
 - `SUGGESTARR_AUTH_DISABLED=true`: disables auth. Use only for isolated testing.
-- `AUTH_TRUSTED_CIDRS`: trusted CIDR list for local bypass.
+- `AUTH_TRUSTED_CIDRS`: trusted CIDR list for local bypass and trusted header.
 
 Do not expose SuggestArr publicly with authentication disabled or local bypass enabled unless a separate trusted authentication layer protects it.
+
+### Trusted header (reverse proxy / SSO)
+
+If you already run single sign-on in front of SuggestArr — Authelia, Authentik,
+oauth2-proxy, Traefik forward-auth — `AUTH_MODE=trusted_header` lets those users
+in with the identity the proxy has already established, so nobody needs a second
+password. Each person still gets their own account, their own requests and their
+own role; only the password step is gone.
+
+- `AUTH_TRUSTED_HEADER`: header carrying the username. Default
+  `X-Forwarded-User`; Authelia and Authentik's proxy outpost commonly use
+  `Remote-User`.
+- `AUTH_TRUSTED_HEADER_AUTO_CREATE`: default `true`. The first request for an
+  unknown username creates a local account with `role=user`. Set it to `false`
+  to allow only accounts an admin created beforehand.
+- `AUTH_TRUSTED_CIDRS`: **set this to your proxy's address.** The header is only
+  believed when the request comes from one of these ranges.
+
+> **Set `AUTH_TRUSTED_CIDRS` as narrowly as you can.** The header is trusted
+> input: anyone who can reach SuggestArr directly from an address inside those
+> ranges can pick any identity by setting it themselves. The defaults cover
+> whole private networks, which is convenient for `local_bypass` but too wide
+> here — ideally list only the proxy, e.g. `AUTH_TRUSTED_CIDRS=10.0.20.11/32`.
+
+Accounts created this way get a random, unusable password hash: they exist to
+carry an identity, and nobody can log into them with a password. Promote a user
+to admin through the normal user-management screen.
+
+Example (Caddy in front, proxy at `10.0.20.11`, Authentik setting `Remote-User`):
+
+```yaml
+environment:
+  - AUTH_MODE=trusted_header
+  - AUTH_TRUSTED_HEADER=Remote-User
+  - AUTH_TRUSTED_CIDRS=10.0.20.11/32
+```
 
 ## Unraid
 

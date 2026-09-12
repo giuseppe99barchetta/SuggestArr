@@ -37,6 +37,7 @@ leakage to potential attackers.
 """
 import os
 import time
+import secrets
 import threading
 import ipaddress
 from functools import wraps
@@ -96,6 +97,21 @@ _SETUP_CACHE_TTL_S = 5.0
 DatabaseManager = None  # type: ignore[assignment]
 
 
+# ---------------------------------------------------------------------------
+# Trusted-header (reverse proxy / SSO) defaults
+# ---------------------------------------------------------------------------
+# In "trusted_header" mode the reverse proxy has already authenticated the
+# user and passes the resulting identity in a request header.  Common values
+# are "Remote-User" (Authelia, Authentik's proxy outpost) and
+# "X-Forwarded-User" (oauth2-proxy, Traefik forward-auth).
+_DEFAULT_AUTH_TRUSTED_HEADER = "X-Forwarded-User"
+
+# Longest username we will accept from the header.  Mirrors the limit the
+# self-registration endpoint enforces, so both paths agree on what a valid
+# username looks like.
+_MAX_TRUSTED_HEADER_USERNAME_LEN = 64
+
+
 _DEFAULT_AUTH_TRUSTED_CIDRS = [
     "127.0.0.0/8",
     "10.0.0.0/8",
@@ -124,7 +140,7 @@ def _resolve_auth_mode() -> str:
     if not mode:
         mode = str(load_env_vars().get("AUTH_MODE", "enabled")).strip().lower()
 
-    if mode not in {"enabled", "local_bypass", "disabled"}:
+    if mode not in {"enabled", "local_bypass", "disabled", "trusted_header"}:
         logger.warning("Invalid AUTH_MODE=%r, defaulting to 'enabled'", mode)
         return "enabled"
     return mode
@@ -156,6 +172,33 @@ def _load_trusted_cidrs() -> list[ipaddress._BaseNetwork]:
     return networks
 
 
+def _peer_address() -> str:
+    """
+    Return the address of the machine that actually opened this connection.
+
+    THIS IS NOT request.remote_addr.  app.py wraps the WSGI app in
+    ProxyFix(x_for=1), which REPLACES remote_addr with the first entry of
+    X-Forwarded-For — a header the client controls.  Trusting that value for
+    an authorization decision means anyone who can reach the port can claim to
+    be the proxy: send `X-Forwarded-For: <proxy>` plus the identity header and
+    the check passes.  Measured 2026-09-12 against a live instance; it
+    returned 200 on an admin-only route.
+
+    ProxyFix keeps the untouched WSGI environ under
+    'werkzeug.proxy_fix.orig', so the real peer is still available.  Both the
+    modern dict form and the older per-key form are handled; if neither is
+    present (no ProxyFix in the chain) remote_addr is the peer already.
+    """
+    orig = request.environ.get("werkzeug.proxy_fix.orig")
+    if isinstance(orig, dict) and orig.get("REMOTE_ADDR"):
+        return orig["REMOTE_ADDR"]
+    return (
+        request.environ.get("werkzeug.proxy_fix.orig_remote_addr")
+        or request.remote_addr
+        or ""
+    )
+
+
 def _is_trusted_local_ip(client_ip: str) -> bool:
     """Return True when client_ip belongs to configured trusted local CIDRs."""
     if not client_ip:
@@ -169,6 +212,95 @@ def _is_trusted_local_ip(client_ip: str) -> bool:
         if ip in network:
             return True
     return False
+
+
+def _resolve_trusted_header_name() -> str:
+    """
+    Resolve the request header that carries the proxy-authenticated username.
+
+    Returns:
+        str: Header name from the AUTH_TRUSTED_HEADER env var or config,
+             falling back to _DEFAULT_AUTH_TRUSTED_HEADER.
+    """
+    name = (os.environ.get("AUTH_TRUSTED_HEADER") or "").strip()
+    if not name:
+        name = str(
+            load_env_vars().get("AUTH_TRUSTED_HEADER", _DEFAULT_AUTH_TRUSTED_HEADER)
+        ).strip()
+    return name or _DEFAULT_AUTH_TRUSTED_HEADER
+
+
+def _trusted_header_auto_create_enabled() -> bool:
+    """
+    Report whether unknown usernames may be provisioned on first sight.
+
+    When enabled (the default), the first request carrying a username the
+    database has not seen creates a local account with role='user'.  Turn it
+    off to restrict access to accounts an admin created up front.
+
+    Returns:
+        bool: True when auto-provisioning is enabled.
+    """
+    raw = os.environ.get("AUTH_TRUSTED_HEADER_AUTO_CREATE")
+    if raw is None:
+        raw = load_env_vars().get("AUTH_TRUSTED_HEADER_AUTO_CREATE", True)
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() not in {"false", "0", "no", "off"}
+
+
+def _resolve_trusted_header_user() -> Optional[dict]:
+    """
+    Resolve the user named by the trusted proxy header into an account record.
+
+    The caller MUST have verified that the request originates from a trusted
+    proxy before calling this — the header is attacker-controlled otherwise.
+
+    Accounts provisioned here get role='user' (never 'admin') and a random,
+    unusable password hash: the account exists to carry an identity, and
+    nobody should be able to log into it with a password.  An admin can raise
+    the role afterwards through the normal user-management screens.
+
+    Returns:
+        dict | None: Full account record (id, username, role, can_manage_ai,
+                     visible_tabs, ...), or None when the header is absent,
+                     malformed, unknown with auto-create disabled, or the
+                     account is deactivated.
+    """
+    username = (request.headers.get(_resolve_trusted_header_name()) or "").strip()
+    if not username or len(username) > _MAX_TRUSTED_HEADER_USERNAME_LEN:
+        return None
+
+    db = _get_database_manager()()
+    record = db.get_auth_user_by_username(username)
+
+    if record is None:
+        if not _trusted_header_auto_create_enabled():
+            logger.warning(
+                "Trusted-header auth: unknown user %r and auto-create is disabled",
+                username,
+            )
+            return None
+        unusable_password = AuthService.hash_password(secrets.token_urlsafe(32))
+        try:
+            db.create_auth_user(username, unusable_password, role="user")
+        except Exception:
+            # Most likely a concurrent request created the same account first;
+            # re-read before giving up so the race resolves silently.
+            logger.debug("Trusted-header auth: create raced for %r, re-reading", username)
+        record = db.get_auth_user_by_username(username)
+        if record is None:
+            logger.warning("Trusted-header auth: could not provision user %r", username)
+            return None
+        logger.info("Trusted-header auth: provisioned account for %r", username)
+
+    # get_auth_user_by_username omits can_manage_ai/visible_tabs; re-read by id
+    # so this path hands _apply_auth_context the same shape the JWT path does.
+    full_record = db.get_auth_user_by_id(record["id"]) or record
+    if not full_record.get("is_active", True):
+        logger.warning("Trusted-header auth: account %r is deactivated", username)
+        return None
+    return full_record
 
 
 def _build_synthetic_bypass_user() -> dict:
@@ -341,6 +473,23 @@ def enforce_authentication() -> Optional[tuple]:
 
     # Explicit public allowlist — auth endpoints, health probe, etc.
     if _is_public_route(path) or path in PUBLIC_V1_ROUTES:
+        # Public routes never *require* credentials, but some of them REPORT
+        # them: /api/auth/status tells the SPA whether anybody is signed in,
+        # and the SPA shows its login form when the answer is "no".  Returning
+        # early without resolving the trusted header therefore hands a login
+        # form to a user the proxy has already authenticated — the one thing
+        # this mode exists to avoid.
+        #
+        # Resolving here only ADDS identity; it never rejects.  A request
+        # without the header (a health probe, for instance) is untouched.
+        if (
+            _resolve_auth_mode() == "trusted_header"
+            and getattr(g, "current_user", None) is None
+            and _is_trusted_local_ip(_peer_address())
+        ):
+            trusted_user = _resolve_trusted_header_user()
+            if trusted_user is not None:
+                _apply_auth_context(trusted_user, "trusted_header")
         return None
 
     auth_mode = _resolve_auth_mode()
@@ -382,6 +531,29 @@ def enforce_authentication() -> Optional[tuple]:
     if auth_mode == "local_bypass" and is_trusted_ip:
         if getattr(g, "current_user", None) is None:
             _apply_auth_context(_load_bypass_user_context(), "local_bypass")
+        return None
+    if auth_mode == "trusted_header":
+        # The peer check is what makes the header trustworthy: anyone who can
+        # reach the app directly could otherwise set it and pick an identity.
+        # Keep AUTH_TRUSTED_CIDRS narrow — ideally just the proxy's address.
+        #
+        # AGAINST THE REAL PEER, NOT client_ip: the latter comes from
+        # X-Forwarded-For via ProxyFix, so it is attacker-controlled.  Checking
+        # it here would let anyone who reaches the port send
+        # `X-Forwarded-For: <proxy>` and be believed — see _peer_address().
+        peer_ip = _peer_address()
+        if not _is_trusted_local_ip(peer_ip):
+            logger.warning(
+                "Trusted-header auth: rejecting request from untrusted peer=%s (claimed ip=%s)",
+                peer_ip,
+                client_ip,
+            )
+            return jsonify({"error": "Authentication required"}), 401
+        if getattr(g, "current_user", None) is None:
+            trusted_user = _resolve_trusted_header_user()
+            if trusted_user is None:
+                return jsonify({"error": "Authentication required"}), 401
+            _apply_auth_context(trusted_user, "trusted_header")
         return None
     if not path.startswith('/api/v1/') and _is_setup_mode():
         return None
