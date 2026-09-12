@@ -172,6 +172,33 @@ def _load_trusted_cidrs() -> list[ipaddress._BaseNetwork]:
     return networks
 
 
+def _peer_address() -> str:
+    """
+    Return the address of the machine that actually opened this connection.
+
+    THIS IS NOT request.remote_addr.  app.py wraps the WSGI app in
+    ProxyFix(x_for=1), which REPLACES remote_addr with the first entry of
+    X-Forwarded-For — a header the client controls.  Trusting that value for
+    an authorization decision means anyone who can reach the port can claim to
+    be the proxy: send `X-Forwarded-For: <proxy>` plus the identity header and
+    the check passes.  Measured 2026-09-12 against a live instance; it
+    returned 200 on an admin-only route.
+
+    ProxyFix keeps the untouched WSGI environ under
+    'werkzeug.proxy_fix.orig', so the real peer is still available.  Both the
+    modern dict form and the older per-key form are handled; if neither is
+    present (no ProxyFix in the chain) remote_addr is the peer already.
+    """
+    orig = request.environ.get("werkzeug.proxy_fix.orig")
+    if isinstance(orig, dict) and orig.get("REMOTE_ADDR"):
+        return orig["REMOTE_ADDR"]
+    return (
+        request.environ.get("werkzeug.proxy_fix.orig_remote_addr")
+        or request.remote_addr
+        or ""
+    )
+
+
 def _is_trusted_local_ip(client_ip: str) -> bool:
     """Return True when client_ip belongs to configured trusted local CIDRs."""
     if not client_ip:
@@ -446,6 +473,23 @@ def enforce_authentication() -> Optional[tuple]:
 
     # Explicit public allowlist — auth endpoints, health probe, etc.
     if _is_public_route(path) or path in PUBLIC_V1_ROUTES:
+        # Public routes never *require* credentials, but some of them REPORT
+        # them: /api/auth/status tells the SPA whether anybody is signed in,
+        # and the SPA shows its login form when the answer is "no".  Returning
+        # early without resolving the trusted header therefore hands a login
+        # form to a user the proxy has already authenticated — the one thing
+        # this mode exists to avoid.
+        #
+        # Resolving here only ADDS identity; it never rejects.  A request
+        # without the header (a health probe, for instance) is untouched.
+        if (
+            _resolve_auth_mode() == "trusted_header"
+            and getattr(g, "current_user", None) is None
+            and _is_trusted_local_ip(_peer_address())
+        ):
+            trusted_user = _resolve_trusted_header_user()
+            if trusted_user is not None:
+                _apply_auth_context(trusted_user, "trusted_header")
         return None
 
     auth_mode = _resolve_auth_mode()
@@ -489,12 +533,20 @@ def enforce_authentication() -> Optional[tuple]:
             _apply_auth_context(_load_bypass_user_context(), "local_bypass")
         return None
     if auth_mode == "trusted_header":
-        # The IP check is what makes the header trustworthy: anyone who can
+        # The peer check is what makes the header trustworthy: anyone who can
         # reach the app directly could otherwise set it and pick an identity.
         # Keep AUTH_TRUSTED_CIDRS narrow — ideally just the proxy's address.
-        if not is_trusted_ip:
+        #
+        # AGAINST THE REAL PEER, NOT client_ip: the latter comes from
+        # X-Forwarded-For via ProxyFix, so it is attacker-controlled.  Checking
+        # it here would let anyone who reaches the port send
+        # `X-Forwarded-For: <proxy>` and be believed — see _peer_address().
+        peer_ip = _peer_address()
+        if not _is_trusted_local_ip(peer_ip):
             logger.warning(
-                "Trusted-header auth: rejecting request from untrusted ip=%s", client_ip
+                "Trusted-header auth: rejecting request from untrusted peer=%s (claimed ip=%s)",
+                peer_ip,
+                client_ip,
             )
             return jsonify({"error": "Authentication required"}), 401
         if getattr(g, "current_user", None) is None:
