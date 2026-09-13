@@ -579,6 +579,19 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             </div>
 
             <div class="workflow-setting">
+              <label class="workflow-setting__label" for="tmdbLanguage">Default title language</label>
+              <BaseDropdown
+                v-model="localConfig.TMDB_LANGUAGE"
+                :options="titleLanguageOptions"
+                :disabled="isLoading"
+                id="tmdbLanguage"
+              />
+              <p class="workflow-setting__help">
+                Titles and descriptions for everyone who has not picked a language on their profile.
+              </p>
+            </div>
+
+            <div class="workflow-setting">
               <span class="workflow-setting__label-row">
                 <label class="workflow-setting__label" for="autoRejectApprovalDays">Pending retention</label>
                 <span class="workflow-setting__range">0–365 days</span>
@@ -773,6 +786,7 @@ import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import SettingsCleanup from './SettingsCleanup.vue';
 import SettingsPanel from './SettingsPanel.vue';
 import SettingsWebhooks from './SettingsWebhooks.vue';
+import { languageOptions } from '@/utils/titleLanguage.js';
 
 export default {
   name: 'SettingsAdvanced',
@@ -825,10 +839,17 @@ export default {
         { value: 'all', label: 'All requests' },
         { value: 'own', label: 'Own linked account only (admins see all)' },
         { value: 'own_all', label: 'Own linked account only, admins too' },
-      ]
+      ],
+      tmdbLanguages: [],
     };
   },
   computed: {
+    // Without a profile choice there is no "default of the default": English
+    // is what TMDb answers with anyway.
+    titleLanguageOptions() {
+      const options = languageOptions(this.tmdbLanguages).slice(1);
+      return options.length ? options : [{ value: 'en', label: 'English' }];
+    },
     hasChanges() {
       return JSON.stringify(this.localConfig) !== JSON.stringify(this.originalConfig);
     },
@@ -864,6 +885,7 @@ export default {
           ENABLE_API_CACHING: true,
           REQUIRE_REQUEST_APPROVAL: false,
           REQUEST_VISIBILITY: 'all',
+          TMDB_LANGUAGE: 'en',
           PAUSE_JOBS_WITH_PENDING_APPROVALS: false,
           AUTO_REJECT_APPROVAL_DAYS: 0,
           ENABLE_BETA_FEATURES: false,
@@ -897,8 +919,18 @@ export default {
   },
   mounted() {
     this.loadUsers();
+    this.loadTmdbLanguages();
   },
   methods: {
+    async loadTmdbLanguages() {
+      try {
+        const { data } = await axios.get('/api/tmdb/languages', { timeout: 10000 });
+        this.tmdbLanguages = data?.languages || [];
+      } catch {
+        this.tmdbLanguages = [];
+      }
+    },
+
     isUserSelected(userId) {
       if (!Array.isArray(this.localConfig.SELECTED_USERS)) {
         return false;
@@ -1050,6 +1082,7 @@ export default {
             ENABLE_API_CACHING: this.localConfig.ENABLE_API_CACHING !== false,
             REQUIRE_REQUEST_APPROVAL: this.localConfig.REQUIRE_REQUEST_APPROVAL !== false,
             REQUEST_VISIBILITY: ['own', 'own_all'].includes(this.localConfig.REQUEST_VISIBILITY) ? this.localConfig.REQUEST_VISIBILITY : 'all',
+            TMDB_LANGUAGE: /^[a-z]{2}(-[A-Z]{2})?$/.test(this.localConfig.TMDB_LANGUAGE || '') ? this.localConfig.TMDB_LANGUAGE : 'en',
             PAUSE_JOBS_WITH_PENDING_APPROVALS: this.localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS === true,
             AUTO_REJECT_APPROVAL_DAYS: Math.max(0, Number(this.localConfig.AUTO_REJECT_APPROVAL_DAYS) || 0),
             ENABLE_BETA_FEATURES: this.localConfig.ENABLE_BETA_FEATURES || false,

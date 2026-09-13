@@ -26,6 +26,7 @@ class SchemaManager:
                     can_manage_ai INTEGER DEFAULT 0,
                     visible_tabs TEXT DEFAULT 'requests,jobs,profile'
                     , seer_user_id INTEGER
+                    , language TEXT
                 )
             """,
             'refresh_tokens': """
@@ -255,6 +256,17 @@ class SchemaManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(webhook_id, event_id)
+                )
+            """,
+            'metadata_translations': """
+                CREATE TABLE IF NOT EXISTS metadata_translations (
+                    media_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    language TEXT NOT NULL,
+                    title TEXT,
+                    overview TEXT,
+                    fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (media_id, media_type, language)
                 )
             """,
             'suggestion_feedback': """
@@ -509,6 +521,18 @@ class SchemaManager:
                         FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
                     ) ENGINE=InnoDB
                 """
+            elif table_name == 'metadata_translations':
+                query = """
+                    CREATE TABLE IF NOT EXISTS metadata_translations (
+                        media_id VARCHAR(32) NOT NULL,
+                        media_type VARCHAR(16) NOT NULL,
+                        language VARCHAR(16) NOT NULL,
+                        title VARCHAR(512),
+                        overview TEXT,
+                        fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (media_id, media_type, language)
+                    ) ENGINE=InnoDB
+                """
             elif table_name == 'suggestion_feedback':
                 query = """
                     CREATE TABLE IF NOT EXISTS suggestion_feedback (
@@ -747,6 +771,13 @@ class SchemaManager:
                     conn.commit()
                 if 'seer_user_id' not in existing_columns:
                     cursor.execute("ALTER TABLE auth_users ADD COLUMN seer_user_id INTEGER")
+                    conn.commit()
+                # Display language for titles and overviews (NULL = the default).
+                if 'language' not in existing_columns:
+                    if self.db_type in ['mysql', 'mariadb']:
+                        cursor.execute("ALTER TABLE auth_users ADD COLUMN language VARCHAR(16)")
+                    else:
+                        cursor.execute("ALTER TABLE auth_users ADD COLUMN language TEXT")
                     conn.commit()
 
             except Exception as e:
