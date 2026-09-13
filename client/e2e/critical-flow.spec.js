@@ -104,15 +104,18 @@ for (const subpath of ["", "/suggestarr"]) {
   });
 }
 
+const twoRadarrServers = [
+  { id: 0, name: "Radarr", is4k: false, profiles: [{ id: 7, name: "HD" }, { id: 9, name: "Original language" }], rootFolders: [{ path: "/movies" }] },
+  { id: 1, name: "Radarr 4K", is4k: true, profiles: [{ id: 3, name: "UHD" }], rootFolders: [{ path: "/movies-4k" }] },
+];
+
 test("approving asks for a quality profile and sends the chosen one", async ({ page }) => {
   const api = await mockApi(page, {
-    radarrServers: [{
-      // id 0 on purpose: Jellyseerr numbers its first server 0, and a falsy
-      // check once treated that as "nothing chosen".
-      id: 0, name: "Radarr", is4k: false,
-      profiles: [{ id: 7, name: "HD" }, { id: 9, name: "Original language" }],
-      rootFolders: [{ path: "/movies" }],
-    }],
+    // Two servers, so there is something to choose (a single server is filled
+    // in by itself — see approval-dialog.spec.js). id 0 on purpose: Jellyseerr
+    // numbers its first server 0, and a falsy check once treated that as
+    // "nothing chosen".
+    radarrServers: twoRadarrServers,
   });
 
   await page.goto("/login");
@@ -127,15 +130,15 @@ test("approving asks for a quality profile and sends the chosen one", async ({ p
 
   // With a server to choose from, the click opens the dialog instead of sending.
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("Quality profile", { exact: true })).toBeVisible();
+  await expect(dialog.locator(".approval-profile-label")).toBeVisible();
   expect(api.approveCalls()).toBe(0);
 
   await dialog.getByRole("button", { name: /Use Seer default/ }).click();
-  await page.getByRole("menuitem", { name: "Radarr" }).click();
+  await page.getByRole("menuitem", { name: "Radarr", exact: true }).click();
   await dialog.getByRole("button", { name: /Select quality profile/ }).click();
   await page.getByRole("menuitem", { name: "Original language" }).click();
-  await dialog.getByRole("button", { name: /Select root folder/ }).click();
-  await page.getByRole("menuitem", { name: "/movies" }).click();
+  // The chosen server has a single root folder, so it is already there.
+  await expect(dialog.getByText("/movies")).toBeVisible();
   await dialog.getByRole("button", { name: "Send", exact: true }).click();
 
   await expect.poll(api.approveCalls).toBe(1);
@@ -168,11 +171,7 @@ test("approving from the dashboard asks for a quality profile too", async ({ pag
   // The dashboard has its own approve button (SettingsRequests). It once
   // skipped the dialog entirely and sent the request with Jellyseerr's default.
   const api = await mockApi(page, {
-    radarrServers: [{
-      id: 0, name: "Radarr", is4k: false,
-      profiles: [{ id: 7, name: "HD" }, { id: 9, name: "Original language" }],
-      rootFolders: [{ path: "/movies" }],
-    }],
+    radarrServers: twoRadarrServers,
   });
 
   await page.goto("/login");
@@ -185,15 +184,15 @@ test("approving from the dashboard asks for a quality profile too", async ({ pag
   await page.getByRole("button", { name: "Approve request" }).click();
 
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("Quality profile", { exact: true })).toBeVisible();
+  await expect(dialog.locator(".approval-profile-label")).toBeVisible();
   expect(api.approveCalls()).toBe(0);
 
   await dialog.getByRole("button", { name: /Use Seer default/ }).click();
-  await page.getByRole("menuitem", { name: "Radarr" }).click();
+  await page.getByRole("menuitem", { name: "Radarr", exact: true }).click();
   await dialog.getByRole("button", { name: /Select quality profile/ }).click();
   await page.getByRole("menuitem", { name: "Original language" }).click();
-  await dialog.getByRole("button", { name: /Select root folder/ }).click();
-  await page.getByRole("menuitem", { name: "/movies" }).click();
+  // The chosen server has a single root folder, so it is already there.
+  await expect(dialog.getByText("/movies")).toBeVisible();
   await dialog.getByRole("button", { name: "Send", exact: true }).click();
 
   await expect.poll(api.approveCalls).toBe(1);

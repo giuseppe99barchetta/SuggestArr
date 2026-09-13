@@ -42,12 +42,12 @@
 import axios from 'axios';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
-import { hasServers, loadSeerServers, mediaTypesOf } from '@/utils/requestProfiles.js';
+import { approvalNeedsDialog, loadSeerServers, mediaTypesOf } from '@/utils/requestProfiles.js';
 export default {
   name: 'RequestWorkflowPanel', components: { BaseButton, ApprovalProfileChoice },
   emits: ['open', 'update:total'],
   props: { statusFilter: { type: String, default: 'all' }, searchQuery: { type: String, default: '' }, mediaType: { type: String, default: 'all' }, requestedFor: { type: String, default: 'all' }, showHeader: { type: Boolean, default: true }, showEmpty: { type: Boolean, default: true }, bulkMode: { type: Boolean, default: false } },
-  data() { return { items: [], selected: [], actionLoading: false, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: { movie: [], tv: [] },
+  data() { return { items: [], selected: [], actionLoading: false, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,
     statuses: [{ value: 'awaiting_approval', label: 'Awaiting approval' }, { value: 'queued', label: 'Queued' }, { value: 'submitted', label: 'Submitted' }, { value: 'rejected', label: 'Rejected' }, { value: 'failed', label: 'Failed' }, { value: 'blacklisted', label: 'Blacklisted' }] }; },
   computed: {
     selectedItems() { return this.items.filter(item => this.selected.includes(item.id)); },
@@ -101,8 +101,8 @@ export default {
     async decideOne(action, id) {
       // Approving is the one action that spends bandwidth and disk and cannot
       // be taken back, so when there is a profile to pick it asks first —
-      // rejecting already does. Without servers nothing changes.
-      if (action === 'approve' && hasServers(this.servers)) { this.confirmSingle('approve', id); return; }
+      // rejecting already does. Only a loaded, empty server list skips it.
+      if (action === 'approve' && approvalNeedsDialog(this.servers)) { this.confirmSingle('approve', id); return; }
       this.actionLoading = true;
       try {
         await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] });

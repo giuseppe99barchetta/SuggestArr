@@ -170,7 +170,7 @@ import axios from 'axios';
 import { formatDate } from '@/utils/dateUtils.js';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
-import { hasServers, loadSeerServers } from '@/utils/requestProfiles.js';
+import { approvalNeedsDialog, loadSeerServers } from '@/utils/requestProfiles.js';
 import '@/assets/styles/requestsPage.css';
 
 export default {
@@ -189,7 +189,7 @@ export default {
       pendingTotal: 0,
       confirmRejectId: null,
       approveItem: null,
-      servers: { movie: [], tv: [] },
+      servers: null,
       actionLoadingId: null,
       approvalEnabled: false,
       selectedRequest: null,
@@ -286,10 +286,10 @@ export default {
       }
     },
 
-    // The same choice as on the Requests page: with a Radarr/Sonarr server to
-    // pick from, approving asks first; without, it stays a single click.
+    // The same choice as on the Requests page: approving asks first, unless
+    // the server list has loaded and is empty.
     requestApprove(request) {
-      if (hasServers(this.servers)) { this.approveItem = request; return; }
+      if (approvalNeedsDialog(this.servers)) { this.approveItem = request; return; }
       this.decidePending('approve', request.id);
     },
 
