@@ -3,6 +3,8 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
+from api_service.db.components.suggestion_ownership import ownership_clause, payload_user_expression
+
 class RequestQueueMixin:
     def try_acquire_submission_lock(self, tmdb_id: str, media_type: str, ttl_seconds: int = 60) -> bool:
         """Attempt to acquire a per-media submission lock to prevent cross-process duplicates.
@@ -233,7 +235,8 @@ class RequestQueueMixin:
             return cursor.fetchone() is not None
 
     def list_suggestions(self, owner_id=None, status='awaiting_approval', search='', page=1, per_page=24,
-                         media_type='all', media_user_ids=None, feedback_user_id=None):
+                         media_type='all', media_user_ids=None, feedback_user_id=None,
+                         include_unassigned=False):
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.execution_id,p.owner_id,
                           p.retry_count,p.last_attempt_at,p.last_error,p.payload,
@@ -251,9 +254,9 @@ class RequestQueueMixin:
         else:
             query += f" AND p.status={ph}"
             params.append(status)
-        if owner_id is not None:
-            query += f" AND p.owner_id={ph}"
-            params.append(owner_id)
+        owner_clause, owner_params = ownership_clause(self.db_type, owner_id, include_unassigned, 'p.')
+        query += owner_clause
+        params.extend(owner_params)
         if search:
             query += f" AND (LOWER(COALESCE(m.title,'')) LIKE {ph} OR p.tmdb_id LIKE {ph})"
             term = f"%{search.lower()}%"
@@ -262,12 +265,7 @@ class RequestQueueMixin:
             query += f" AND p.media_type={ph}"
             params.append(media_type)
         if media_user_ids is not None:
-            if self.db_type == 'postgres':
-                expression = "(p.payload::jsonb ->> '_user_id')"
-            elif self.db_type in ('mysql', 'mariadb'):
-                expression = "JSON_UNQUOTE(JSON_EXTRACT(p.payload, '$._user_id'))"
-            else:
-                expression = "json_extract(p.payload, '$._user_id')"
+            expression = payload_user_expression(self.db_type, 'p.payload')
             query += f" AND {expression} IN ({','.join([ph] * len(media_user_ids))})" if media_user_ids else " AND 1=0"
             params.extend(str(user_id) for user_id in media_user_ids)
         count_query = f"SELECT COUNT(*) FROM ({query}) suggestion_rows"
@@ -332,7 +330,8 @@ class RequestQueueMixin:
                 fields_by_type[media_type] = fields
         return fields_by_type
 
-    def decide_suggestions(self, ids, owner_id, decided_by, approve, blacklist=False, profiles=None):
+    def decide_suggestions(self, ids, owner_id, decided_by, approve, blacklist=False, profiles=None,
+                           include_unassigned=False):
         """
         Approve or reject suggestions that are awaiting approval.
 
@@ -351,6 +350,8 @@ class RequestQueueMixin:
             profiles:   Optional ``{'movie': {...}, 'tv': {...}}`` for an
                         approval (SeerClient.submit_queued_request passes
                         present fields through instead of Jellyseerr's defaults).
+            include_unassigned: With ``owner_id``, also decide rows without
+                        an owner (an admin under ``REQUEST_VISIBILITY=own_all``).
 
         Returns:
             int: Number of rows whose status changed.
@@ -360,13 +361,11 @@ class RequestQueueMixin:
         fields_by_type = self._profile_fields_by_media_type(profiles) if approve else {}
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         marks = ','.join([ph] * len(ids))
-        owner_clause = '' if owner_id is None else f' AND owner_id={ph}'
-        params = [('queued' if approve else 'rejected'), decided_by, *ids]
-        if owner_id is not None:
-            params.append(owner_id)
+        owner_clause, owner_params = ownership_clause(self.db_type, owner_id, include_unassigned)
+        params = [('queued' if approve else 'rejected'), decided_by, *ids, *owner_params]
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            select_params = [*ids] + ([] if owner_id is None else [owner_id])
+            select_params = [*ids, *owner_params]
             cursor.execute(f"SELECT id,tmdb_id,media_type,job_id,execution_id FROM pending_requests "
                            f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}",
                            tuple(select_params))
@@ -455,13 +454,13 @@ class RequestQueueMixin:
             conn.commit()
             return changed
 
-    def retry_suggestions(self, ids, owner_id):
+    def retry_suggestions(self, ids, owner_id, include_unassigned=False):
         if not ids:
             return 0
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         marks = ','.join([ph] * len(ids))
-        owner_clause = '' if owner_id is None else f' AND owner_id={ph}'
-        params = [*ids] + ([] if owner_id is None else [owner_id])
+        owner_clause, owner_params = ownership_clause(self.db_type, owner_id, include_unassigned)
+        params = [*ids, *owner_params]
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(f"UPDATE pending_requests SET status='queued',retry_count=0,next_attempt_at=NULL,"
@@ -470,13 +469,13 @@ class RequestQueueMixin:
             conn.commit()
             return cursor.rowcount
 
-    def request_rejected(self, ids, owner_id, remove_blacklist=False):
+    def request_rejected(self, ids, owner_id, remove_blacklist=False, include_unassigned=False):
         if not ids:
             return 0
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         marks = ','.join([ph] * len(ids))
-        owner_clause = '' if owner_id is None else f' AND owner_id={ph}'
-        params = [*ids] + ([] if owner_id is None else [owner_id])
+        owner_clause, owner_params = ownership_clause(self.db_type, owner_id, include_unassigned)
+        params = [*ids, *owner_params]
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(f"SELECT tmdb_id,media_type FROM pending_requests WHERE status='rejected' "

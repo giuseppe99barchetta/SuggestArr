@@ -429,13 +429,15 @@ class MediaUserMixin:
         external_user_id: str,
         external_username: str,
         access_token: Optional[str] = None,
+        verified: bool = False,
     ) -> None:
         """
         Insert or replace a media profile link for a SuggestArr user.
 
         The UNIQUE (user_id, provider) constraint ensures only one link per
         provider per user.  A second call for the same user+provider updates
-        the existing record in-place (preserving the row id).
+        the existing record in-place (preserving the row id), including its
+        ``verified`` flag: a link replaced by an unverified one is unverified.
 
         Args:
             user_id:           Primary key of the auth user.
@@ -443,45 +445,54 @@ class MediaUserMixin:
             external_user_id:  The user's ID on the external media server.
             external_username: Human-readable name on the external server.
             access_token:      Optional token for the external server (nullable).
+            verified:          True only when the link proves that the media
+                               account belongs to this user (an admin assigned
+                               it, or the user authenticated as that account).
+                               Only verified links make a user the owner of
+                               suggestions (see resolve_suggestion_owner).
         """
         ph = self._ph()
         if self.db_type == 'sqlite':
             query = (
                 f"INSERT INTO user_media_profiles "
-                f"(user_id, provider, external_user_id, external_username, access_token) "
-                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}) "
+                f"(user_id, provider, external_user_id, external_username, access_token, verified) "
+                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}) "
                 f"ON CONFLICT(user_id, provider) DO UPDATE SET "
                 f"external_user_id = excluded.external_user_id, "
                 f"external_username = excluded.external_username, "
                 f"access_token = excluded.access_token, "
+                f"verified = excluded.verified, "
                 f"created_at = CURRENT_TIMESTAMP"
             )
         elif self.db_type == 'postgres':
             query = (
                 f"INSERT INTO user_media_profiles "
-                f"(user_id, provider, external_user_id, external_username, access_token) "
-                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}) "
+                f"(user_id, provider, external_user_id, external_username, access_token, verified) "
+                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}) "
                 f"ON CONFLICT (user_id, provider) DO UPDATE SET "
                 f"external_user_id = EXCLUDED.external_user_id, "
                 f"external_username = EXCLUDED.external_username, "
                 f"access_token = EXCLUDED.access_token, "
+                f"verified = EXCLUDED.verified, "
                 f"created_at = CURRENT_TIMESTAMP"
             )
         else:
             # MySQL / MariaDB
             query = (
                 f"INSERT INTO user_media_profiles "
-                f"(user_id, provider, external_user_id, external_username, access_token) "
-                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}) "
+                f"(user_id, provider, external_user_id, external_username, access_token, verified) "
+                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}) "
                 f"ON DUPLICATE KEY UPDATE "
                 f"external_user_id = VALUES(external_user_id), "
                 f"external_username = VALUES(external_username), "
                 f"access_token = VALUES(access_token), "
+                f"verified = VALUES(verified), "
                 f"created_at = CURRENT_TIMESTAMP"
             )
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query, (user_id, provider, external_user_id, external_username, access_token))
+            cursor.execute(query, (user_id, provider, external_user_id, external_username,
+                                   access_token, 1 if verified else 0))
             conn.commit()
 
     def get_user_media_profiles(self, user_id: int) -> List[Dict[str, Any]]:
@@ -500,7 +511,7 @@ class MediaUserMixin:
         """
         ph = self._ph()
         query = (
-            f"SELECT id, provider, external_user_id, external_username, created_at "
+            f"SELECT id, provider, external_user_id, external_username, created_at, verified "
             f"FROM user_media_profiles WHERE user_id = {ph} ORDER BY provider"
         )
         with self.get_connection() as conn:
@@ -514,9 +525,52 @@ class MediaUserMixin:
                 "external_user_id": row[2],
                 "external_username": row[3],
                 "created_at": row[4],
+                "verified": bool(row[5]),
             }
             for row in rows
         ]
+
+    # A suggestion's media user comes from the configured media server.  Jellyfin
+    # and Emby links can both point at it (they share JELLYFIN_API_URL); a Plex
+    # id means nothing there, and the reverse holds for a Plex server.
+    _OWNER_LINK_PROVIDERS = {
+        'jellyfin': ('jellyfin', 'emby'),
+        'emby': ('jellyfin', 'emby'),
+        'plex': ('plex',),
+    }
+
+    def resolve_suggestion_owner(self, media_service: Optional[str], external_user_id) -> Optional[int]:
+        """
+        Find the SuggestArr user a suggestion from this media user belongs to.
+
+        Called once, when the suggestion is queued, so ownership does not move
+        when links change later.  Only verified links count: a link a user
+        picked from a list proves nothing about who they are.
+
+        Args:
+            media_service:    SELECTED_SERVICE ('jellyfin', 'emby' or 'plex').
+            external_user_id: The media user whose history produced the suggestion.
+
+        Returns:
+            int | None: The one active user with a verified link to this media
+                        user, or None when there is none or more than one.
+        """
+        providers = self._OWNER_LINK_PROVIDERS.get(media_service or '')
+        if not providers or external_user_id in (None, ''):
+            return None
+        ph = self._ph()
+        marks = ', '.join([ph] * len(providers))
+        query = (
+            f"SELECT DISTINCT p.user_id FROM user_media_profiles p "
+            f"JOIN auth_users u ON u.id = p.user_id "
+            f"WHERE p.verified = 1 AND u.is_active = 1 "
+            f"AND p.external_user_id = {ph} AND p.provider IN ({marks})"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (str(external_user_id), *providers))
+            rows = cursor.fetchall()
+        return int(rows[0][0]) if len(rows) == 1 else None
 
     def get_user_media_profile_token(self, user_id: int, provider: str) -> Optional[str]:
         """
