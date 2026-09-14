@@ -793,3 +793,46 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestGetArrServersEnrichment(unittest.IsolatedAsyncioTestCase):
+    """Profiles and root folders must arrive with the API key alone.
+
+    Before, enrichment only ran with a session cookie, so an API-key-only
+    setup got servers with empty profile lists and nothing to choose from.
+    """
+
+    async def _servers(self, session_token):
+        client = _make_client(session_token=session_token)
+        responses = {
+            "api/v1/service/radarr": [{"id": 0, "name": "Radarr", "is4k": False}],
+            "api/v1/service/radarr/0": {
+                "server": {"activeProfileId": 7, "apiKey": "must-not-leak"},
+                "profiles": [{"id": 7, "name": "HD"}],
+                "rootFolders": [{"id": 1, "path": "/movies"}],
+            },
+        }
+        calls = []
+
+        async def request(method, endpoint, data=None, use_cookie=False, **kwargs):
+            calls.append((endpoint, use_cookie))
+            return responses.get(endpoint)
+
+        with patch.object(client, '_make_request', side_effect=request):
+            return await client.get_radarr_servers(), calls
+
+    async def test_api_key_alone_gets_profiles_and_root_folders(self):
+        servers, calls = await self._servers(session_token=None)
+        self.assertEqual(servers[0]["profiles"], [{"id": 7, "name": "HD"}])
+        self.assertEqual(servers[0]["rootFolders"], [{"id": 1, "path": "/movies"}])
+        self.assertIn(("api/v1/service/radarr/0", False), calls)
+
+    async def test_cookie_is_used_when_there_is_one(self):
+        servers, calls = await self._servers(session_token="tok")
+        self.assertIn(("api/v1/service/radarr/0", True), calls)
+        self.assertEqual(len(servers[0]["profiles"]), 1)
+
+    async def test_server_secrets_are_not_copied(self):
+        servers, _ = await self._servers(session_token=None)
+        self.assertNotIn("apiKey", servers[0])
+        self.assertEqual(servers[0]["activeProfileId"], 7)

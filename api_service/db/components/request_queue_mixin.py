@@ -311,9 +311,53 @@ class RequestQueueMixin:
                     item['status'] = 'blacklisted'
             return items, total
 
-    def decide_suggestions(self, ids, owner_id, decided_by, approve, blacklist=False):
+    @staticmethod
+    def _profile_fields_by_media_type(profiles):
+        """
+        Reduce validated request profiles to the payload fields they set.
+
+        Args:
+            profiles: ``{'movie': {...}, 'tv': {...}}`` as validated by
+                      api_service.utils.request_profiles, or None.
+
+        Returns:
+            dict: ``{media_type: {field: value}}`` without empty entries.
+        """
+        fields_by_type = {}
+        for media_type, profile in (profiles or {}).items():
+            fields = {key: value for key, value in (profile or {}).items()
+                      if key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId')
+                      and value is not None}
+            if fields:
+                fields_by_type[media_type] = fields
+        return fields_by_type
+
+    def decide_suggestions(self, ids, owner_id, decided_by, approve, blacklist=False, profiles=None):
+        """
+        Approve or reject suggestions that are awaiting approval.
+
+        An approval may carry request profiles.  They are written into the
+        stored payloads and the rows move to ``queued`` in the same transaction,
+        so either both happen or neither does: a failed approval never leaves a
+        chosen profile behind in a row that a later request-again would reuse,
+        and the worker never sees a queued row without its profile.
+
+        Args:
+            ids:        Pending request ids to decide.
+            owner_id:   Restricts to this owner, or None for an admin.
+            decided_by: Id of the deciding user.
+            approve:    True to queue the rows, False to reject them.
+            blacklist:  Also blacklist rejected items.
+            profiles:   Optional ``{'movie': {...}, 'tv': {...}}`` for an
+                        approval (SeerClient.submit_queued_request passes
+                        present fields through instead of Jellyseerr's defaults).
+
+        Returns:
+            int: Number of rows whose status changed.
+        """
         if not ids:
             return 0
+        fields_by_type = self._profile_fields_by_media_type(profiles) if approve else {}
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         marks = ','.join([ph] * len(ids))
         owner_clause = '' if owner_id is None else f' AND owner_id={ph}'
@@ -327,6 +371,9 @@ class RequestQueueMixin:
                            f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}",
                            tuple(select_params))
             eligible = cursor.fetchall()
+            if fields_by_type:
+                self._write_profiles_to_payloads(cursor, ph, marks, owner_clause,
+                                                 select_params, fields_by_type)
             cursor.execute(f"UPDATE pending_requests SET status={ph},decided_by={ph},decided_at=CURRENT_TIMESTAMP "
                            f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}", tuple(params))
             changed = cursor.rowcount
@@ -350,6 +397,41 @@ class RequestQueueMixin:
         except Exception as exc:
             self.logger.error("Unable to queue %s webhook: %s", event, exc)
         return changed
+
+    @staticmethod
+    def _write_profiles_to_payloads(cursor, ph, marks, owner_clause, select_params, fields_by_type):
+        """
+        Merge profile fields into the payloads of rows still awaiting approval.
+
+        Runs on the caller's cursor and does not commit; decide_suggestions
+        commits it together with the status change.
+
+        Args:
+            cursor:         Cursor of the open transaction.
+            ph:             Placeholder for the database type.
+            marks:          Placeholders for the id list.
+            owner_clause:   Owner restriction, possibly empty.
+            select_params:  Ids followed by the owner, if any.
+            fields_by_type: Output of _profile_fields_by_media_type().
+        """
+        cursor.execute(f"SELECT id,media_type,payload FROM pending_requests "
+                       f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}",
+                       tuple(select_params))
+        # media_type per row, not per call: a bulk approval may mix movies and
+        # series, and a quality profile id from Radarr means something else in
+        # Sonarr.
+        for row_id, media_type, payload in cursor.fetchall():
+            fields = fields_by_type.get(media_type)
+            if not fields:
+                continue
+            try:
+                data = json.loads(payload) if payload else {}
+            except (TypeError, ValueError):
+                continue
+            data.update(fields)
+            cursor.execute(f"UPDATE pending_requests SET payload={ph} "
+                           f"WHERE id={ph} AND status='awaiting_approval'",
+                           (json.dumps(data), row_id))
 
     def has_pending_approvals(self, job_id) -> bool:
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'

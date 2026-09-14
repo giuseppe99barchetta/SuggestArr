@@ -248,15 +248,20 @@ class SeerClient(BaseHTTPClient):
         return await self._get_arr_servers('sonarr')
 
     async def _get_arr_servers(self, service):
-        """Fetch servers and enrich list-only responses when cookie auth is available."""
+        """Fetch servers and enrich list-only responses with profiles and root folders.
+
+        The list endpoint carries no profiles; the per-server endpoint does, and
+        Jellyseerr answers it with the API key as well as with a session cookie.
+        Enriching only when a cookie was present left API-key-only setups with
+        empty profile and root-folder lists — nothing to choose from.
+        """
         servers = await self._make_request("GET", f"api/v1/service/{service}") or []
-        if not self.session_token:
-            return servers
         for index, server in enumerate(servers):
             if server.get('profiles') and server.get('rootFolders'):
                 continue
             details = await self._make_request(
-                "GET", f"api/v1/service/{service}/{server['id']}", use_cookie=True
+                "GET", f"api/v1/service/{service}/{server['id']}",
+                use_cookie=bool(self.session_token),
             )
             if details:
                 detail_server = details.get('server', {})
