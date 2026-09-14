@@ -64,4 +64,4 @@ def test_setup_preview_and_approval_smoke_flow(monkeypatch):
     approval_response = client.post("/api/automation/requests/workflow/approve", json={"ids": [42]})
     assert approval_response.status_code == 200
     assert approval_response.get_json()["updated"] == 1
-    queue.decide_suggestions.assert_called_once_with([42], None, 1, True, False)
+    queue.decide_suggestions.assert_called_once_with([42], None, 1, True, False, profiles={})

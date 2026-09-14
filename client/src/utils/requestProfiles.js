@@ -68,15 +68,15 @@ export function profileTypes(mediaTypes, servers) {
 export function buildProfilePayload(types, chosen) {
   const profile = {};
   for (const type of types || []) {
-    const wahl = (chosen || {})[type] || {};
-    if (!isChosen(wahl.serverId) || !isChosen(wahl.profileId) || !wahl.rootFolder) continue;
+    const choice = (chosen || {})[type] || {};
+    if (!isChosen(choice.serverId) || !isChosen(choice.profileId) || !choice.rootFolder) continue;
     profile[type] = {
-      serverId: Number(wahl.serverId),
-      profileId: Number(wahl.profileId),
-      rootFolder: wahl.rootFolder,
-      is4k: wahl.is4k === true,
+      serverId: Number(choice.serverId),
+      profileId: Number(choice.profileId),
+      rootFolder: choice.rootFolder,
+      is4k: choice.is4k === true,
     };
-    if (isChosen(wahl.languageProfileId)) profile[type].languageProfileId = Number(wahl.languageProfileId);
+    if (isChosen(choice.languageProfileId)) profile[type].languageProfileId = Number(choice.languageProfileId);
   }
   return Object.keys(profile).length ? profile : null;
 }

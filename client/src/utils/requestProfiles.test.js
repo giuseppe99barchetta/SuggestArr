@@ -95,8 +95,8 @@ test('a single server with a single folder is filled in, only the profile stays 
 });
 
 test('with two servers nothing is guessed', () => {
-  const zwei = [servers.movie[0], { ...servers.movie[0], id: 1, name: 'Radarr 4K', is4k: true }];
-  assert.deepEqual(defaultChoice(zwei), {});
+  const twoServers = [servers.movie[0], { ...servers.movie[0], id: 1, name: 'Radarr 4K', is4k: true }];
+  assert.deepEqual(defaultChoice(twoServers), {});
   assert.deepEqual(defaultChoice([]), {});
   assert.deepEqual(defaultChoice(undefined), {});
 });

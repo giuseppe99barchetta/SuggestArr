@@ -96,8 +96,8 @@ def _requested_profiles():
                     The caller answers 400 rather than fetching with a profile
                     that means something else on the server it ends up on.
     """
-    roh = (request.get_json(silent=True) or {}).get('profile')
-    profile = validate_request_profiles(roh)
+    requested = (request.get_json(silent=True) or {}).get('profile')
+    profile = validate_request_profiles(requested)
     validate_request_profiles_with_seer(profile)
     return profile
 
@@ -111,18 +111,14 @@ def _decide_workflow(approve, blacklist=False):
     if approve:
         try:
             profile = _requested_profiles()
-        except ValueError as fehler:
-            return jsonify({'status': 'error', 'message': str(fehler)}), 400
+        except ValueError as exc:
+            return jsonify({'status': 'error', 'message': str(exc)}), 400
 
-    db = DatabaseManager()
-    # BEFORE the status change, and that order is the point: a row that is
-    # already 'queued' may have been picked up by the worker, and a payload
-    # written afterwards would arrive too late to matter.
-    if profile:
-        db.apply_profile_to_pending(ids, _workflow_owner(), profile)
-
-    changed = db.decide_suggestions(
-        ids, _workflow_owner(), int(g.current_user['id']), approve, blacklist)
+    # The profile and the status change are committed together: the worker
+    # never picks up a queued row without its profile, and a failed approval
+    # leaves no profile behind.
+    changed = DatabaseManager().decide_suggestions(
+        ids, _workflow_owner(), int(g.current_user['id']), approve, blacklist, profiles=profile)
     return jsonify({'status': 'success', 'updated': changed}), 200
 
 
