@@ -193,7 +193,7 @@ class JellyfinClient(BaseHTTPClient):
                 "IncludeItemTypes": "Movie,Episode",
                 "Limit": api_fetch_limit,
                 "ParentId": library_id,
-                "Fields": "ProviderIds,SeriesProviderIds",
+                "Fields": "ProviderIds,SeriesProviderIds,UserData",
             }
 
             self.logger.debug(
@@ -278,7 +278,7 @@ class JellyfinClient(BaseHTTPClient):
             "IncludeItemTypes": "Movie,Episode",
             "Limit": api_fetch_limit,
             "ParentId": library_id,
-            "Fields": "ProviderIds,SeriesProviderIds",
+            "Fields": "ProviderIds,SeriesProviderIds,UserData",
         }
 
         self.logger.debug(
