@@ -8,7 +8,7 @@ on:
       - .github/workflows/sync-client-lock.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   sync-lockfile:
@@ -27,13 +27,6 @@ jobs:
       - name: Regenerate package lock
         working-directory: client
         run: npm install --package-lock-only
-
-      - name: Upload synchronized lockfile
-        uses: actions/upload-artifact@v7
-        with:
-          name: client-package-lock
-          path: client/package-lock.json
-          if-no-files-found: error
 
       - name: Verify clean install
         working-directory: client
@@ -62,3 +55,16 @@ jobs:
       - name: Run frontend E2E
         working-directory: client
         run: npm run test:e2e
+
+      - name: Commit synchronized lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add client/package-lock.json
+          if git diff --cached --quiet; then
+            echo "package-lock.json is already synchronized"
+            exit 0
+          fi
+          git commit -m "chore(deps): sync client package lock"
+          git pull --rebase origin nightly
+          git push origin HEAD:nightly
