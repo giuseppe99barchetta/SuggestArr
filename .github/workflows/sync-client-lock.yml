@@ -1,0 +1,64 @@
+name: Sync client dependency lockfile
+
+on:
+  push:
+    branches:
+      - nightly
+    paths:
+      - .github/workflows/sync-client-lock.yml
+
+permissions:
+  contents: read
+
+jobs:
+  sync-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout nightly
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: nightly
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '20'
+
+      - name: Regenerate package lock
+        working-directory: client
+        run: npm install --package-lock-only
+
+      - name: Upload synchronized lockfile
+        uses: actions/upload-artifact@v7
+        with:
+          name: client-package-lock
+          path: client/package-lock.json
+          if-no-files-found: error
+
+      - name: Verify clean install
+        working-directory: client
+        run: npm ci
+
+      - name: Run frontend tests
+        working-directory: client
+        run: npm test
+
+      - name: Run ESLint
+        working-directory: client
+        run: npm run lint
+
+      - name: Run stylelint
+        working-directory: client
+        run: npm run lint:styles
+
+      - name: Build frontend
+        working-directory: client
+        run: npm run build
+
+      - name: Install Chromium for E2E
+        working-directory: client
+        run: npx playwright install --with-deps chromium
+
+      - name: Run frontend E2E
+        working-directory: client
+        run: npm run test:e2e
