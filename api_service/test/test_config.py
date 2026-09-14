@@ -110,6 +110,8 @@ class TestConfig(unittest.TestCase):
         "AUTH_MODE": "enabled",
         "AUTH_TRUSTED_CIDRS": "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7",
         "AUTH_BYPASS_USERNAME": "local_admin",
+        "AUTH_TRUSTED_HEADER": "X-Forwarded-User",
+        "AUTH_TRUSTED_HEADER_AUTO_CREATE": True,
     }
 
     def setUp(self):

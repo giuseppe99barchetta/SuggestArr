@@ -147,6 +147,14 @@ def auth_status():
         current_user = getattr(g, "current_user", None)
         bypass = False
 
+        # Trusted-header identities are "signed in without a token", exactly
+        # like the bypass modes below — the proxy did the authenticating.  The
+        # SPA gates on `authenticated && bypass` (router/index.js:
+        # isBypassAuthenticated), so reporting only `authenticated` leaves it
+        # showing a login form to a user the proxy already let in.
+        if current_user and getattr(g, "auth_method", "") == "trusted_header":
+            bypass = True
+
         # /api/auth/status is public, so middleware returns before injecting
         # bypass context. Recreate equivalent bypass checks here.
         if not current_user:
