@@ -28,7 +28,7 @@
     "vue-toastification": "^2.0.0-rc.5"
   },
   "devDependencies": {
-    "@babel/core": "^7.12.16",
+    "@babel/core": "^8.0.5",
     "@babel/eslint-parser": "^7.12.16",
     "@playwright/test": "^1.58.2",
     "@vitejs/plugin-vue": "^6.0.0",
