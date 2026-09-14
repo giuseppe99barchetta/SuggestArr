@@ -4,6 +4,7 @@ updates:
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "nightly"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -15,6 +16,7 @@ updates:
   # Python backend
   - package-ecosystem: "pip"
     directory: "/api_service"
+    target-branch: "nightly"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -27,6 +29,7 @@ updates:
   # Vue frontend
   - package-ecosystem: "npm"
     directory: "/client"
+    target-branch: "nightly"
     schedule:
       interval: "weekly"
       day: "monday"
