@@ -390,8 +390,9 @@ def admin_link_provider(user_id: int, provider: str):
     if not target:
         return jsonify({"error": "User not found"}), 404
 
+    # An admin assigning the account is what makes the link trustworthy.
     db.create_user_media_profile(
-        user_id, provider, external_user_id, external_username
+        user_id, provider, external_user_id, external_username, verified=True
     )
     logger.info("Admin %r linked %s account for user id=%d: %r", g.current_user["username"], provider, user_id, external_username)
     return jsonify({"message": f"{provider.capitalize()} account linked for user"}), 200
@@ -473,7 +474,8 @@ def _link_jellyfin_or_emby(provider: str):
     The frontend fetches available users from the media server via the
     /me/link/<provider>/users endpoint (using the admin token) and shows them
     in a dropdown.  This endpoint simply persists the user's selection —
-    no password is required or stored.
+    no password is required or stored — which is also why the link stays
+    unverified: nothing shows that the chosen account is the caller's.
 
     Args:
         provider: 'jellyfin' or 'emby'
@@ -675,7 +677,8 @@ def plex_oauth_poll():
 
     db = DatabaseManager()
     db.create_user_media_profile(
-        _current_user_id(), "plex", external_user_id, external_username, access_token=auth_token
+        _current_user_id(), "plex", external_user_id, external_username, access_token=auth_token,
+        verified=True,
     )
     logger.info(
         "User id=%d linked Plex account: %r (plex_id=%s)",

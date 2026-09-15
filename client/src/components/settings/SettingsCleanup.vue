@@ -257,7 +257,7 @@ export default {
         if (this.logPage > this.totalLogPages) {
           this.logPage = this.totalLogPages;
         }
-      } catch (err) {
+      } catch {
         // non-fatal
       } finally {
         this.loadingLog = false;

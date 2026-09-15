@@ -393,7 +393,7 @@ class AuthMixin:
 
     def update_auth_user_profile(self, user_id: int, updates: Dict[str, Any]) -> bool:
         """
-        Update a user's own profile fields: username and/or password_hash.
+        Update a user's own profile fields: username, password_hash and/or language.
 
         This is intentionally separate from update_auth_user (which handles
         admin-level role/active changes) so that the two call-sites stay
@@ -401,7 +401,8 @@ class AuthMixin:
 
         Args:
             user_id: Primary key of the user to update.
-            updates: Dict containing any subset of {'username', 'password_hash'}.
+            updates: Dict containing any subset of {'username', 'password_hash',
+                     'language'}.  All given fields are written in one statement.
 
         Returns:
             bool: True if a row was updated, False if the user was not found.
@@ -410,7 +411,7 @@ class AuthMixin:
             Exception: Propagates DB-level unique-constraint violations
                        (e.g. duplicate username) so the caller can handle them.
         """
-        allowed = {'username', 'password_hash'}
+        allowed = {'username', 'password_hash', 'language'}
         fields = {k: v for k, v in updates.items() if k in allowed}
         if not fields:
             return False

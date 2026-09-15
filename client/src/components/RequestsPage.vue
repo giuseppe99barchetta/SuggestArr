@@ -402,7 +402,7 @@
           <p>Loading your requests...</p>
         </div>
 
-        <Footer />
+        <AppFooter />
       </div>
 
       <!-- Modal -->
@@ -574,7 +574,7 @@
 import '@/assets/styles/requestsPage.css';
 import axios from "axios";
 import { useBackgroundImage } from '@/composables/useBackgroundImage';
-import Footer from './AppFooter.vue';
+import AppFooter from './AppFooter.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import { formatDate } from '@/utils/dateUtils.js';
 import { getRequestSourceVisual } from '@/utils/jobTypeVisuals.js';
@@ -584,7 +584,7 @@ import RequestWorkflowPanel from './RequestWorkflowPanel.vue';
 export default {
   name: "RequestsPage",
   components: {
-    Footer,
+    AppFooter,
     BaseDropdown,
     RequestWorkflowPanel,
   },

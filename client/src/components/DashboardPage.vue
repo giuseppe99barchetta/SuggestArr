@@ -157,7 +157,7 @@
           </div>
         </div>
 
-        <Footer />
+        <AppFooter />
       </div>
 
       <!-- Loading Overlay -->
@@ -332,7 +332,7 @@
 
 <script>
 import axios from 'axios';
-import Footer from './AppFooter.vue';
+import AppFooter from './AppFooter.vue';
 import OnboardingTour from './OnboardingTour.vue';
 import { useBackgroundImage } from '@/composables/useBackgroundImage';
 import { useVersionCheck } from '@/composables/useVersionCheck';
@@ -357,7 +357,7 @@ const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
 export default {
   name: 'SettingsPage',
   components: {
-    Footer,
+    AppFooter,
     OnboardingTour,
     SettingsServices,
     SettingsDatabase,
@@ -618,7 +618,7 @@ export default {
         });
         this.currentUser = response.data;
         return this.currentUser;
-      } catch (error) {
+      } catch {
         this.currentUser = null;
 
         // In local bypass mode there may be no JWT token; rely on public
@@ -898,7 +898,7 @@ export default {
       } catch (error) {
         console.error(`${service} connection test failed:`, error);
       
-        let errorMessage = 'Connection test failed';
+        let errorMessage;
       
         if (error.response) {
           const status = error.response.status;

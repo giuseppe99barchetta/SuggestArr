@@ -234,6 +234,7 @@ def get_default_values():
         'ENABLE_API_CACHING': lambda: True,
         'REQUIRE_REQUEST_APPROVAL': lambda: False,
         'REQUEST_VISIBILITY': lambda: 'all',
+        'TMDB_LANGUAGE': lambda: 'en',
         'PAUSE_JOBS_WITH_PENDING_APPROVALS': lambda: False,
         'AUTO_REJECT_APPROVAL_DAYS': lambda: 0,
         # Database connection pool settings
@@ -250,6 +251,8 @@ def get_default_values():
         'AUTH_MODE': lambda: 'enabled',
         'AUTH_TRUSTED_CIDRS': lambda: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7',
         'AUTH_BYPASS_USERNAME': lambda: 'local_admin',
+        'AUTH_TRUSTED_HEADER': lambda: 'X-Forwarded-User',
+        'AUTH_TRUSTED_HEADER_AUTO_CREATE': lambda: True,
     }
 
 def get_config_values():
@@ -352,12 +355,13 @@ def get_config_sections():
                      'ENABLE_DEBUG_MODE', 'ENABLE_PERFORMANCE_MONITORING', 'ENABLE_VISUAL_EFFECTS',
                      'ENABLE_STATIC_BACKGROUND', 'STATIC_BACKGROUND_COLOR',
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
-                     'ENABLE_API_CACHING', 'REQUIRE_REQUEST_APPROVAL', 'REQUEST_VISIBILITY',
+                     'ENABLE_API_CACHING', 'REQUIRE_REQUEST_APPROVAL', 'REQUEST_VISIBILITY', 'TMDB_LANGUAGE',
                      'PAUSE_JOBS_WITH_PENDING_APPROVALS', 'AUTO_REJECT_APPROVAL_DAYS',
                      'OPENAI_API_KEY', 'OPENAI_BASE_URL',
                      'LLM_MODEL', 'LLM_TEMPERATURE', 'LLM_REASONING_EFFORT', 'SEARXNG_BASE_URL',
                      'SUBPATH', 'ALLOW_REGISTRATION',
-                     'AUTH_MODE', 'AUTH_TRUSTED_CIDRS', 'AUTH_BYPASS_USERNAME']
+                     'AUTH_MODE', 'AUTH_TRUSTED_CIDRS', 'AUTH_BYPASS_USERNAME',
+                     'AUTH_TRUSTED_HEADER', 'AUTH_TRUSTED_HEADER_AUTO_CREATE']
     }
 
 def get_config_section(section_name):

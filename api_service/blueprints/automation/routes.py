@@ -8,6 +8,12 @@ from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.utils.asyncio_loop import close_event_loop
+from api_service.utils.request_profiles import (
+    validate_request_profiles,
+    validate_request_profiles_with_seer,
+)
+from api_service.utils import request_scope
+from api_service.services.tmdb.localization import display_language, localize_groups
 
 logger = LoggerManager().get_logger("AutomationRoute")
 automation_bp = Blueprint('automation', __name__)
@@ -41,18 +47,33 @@ def _workflow_ids():
     return ids
 
 
-def _workflow_owner():
-    return None if g.current_user.get('role') == 'admin' else int(g.current_user['id'])
+def _suggestion_scope(db):
+    return request_scope.suggestion_scope(
+        db, g.current_user, load_env_vars(), request.args.get('user_id', ''))
+
+
+def _localize(db, *groups):
+    """
+    Show the listed titles in the reader's language (see services/tmdb/localization.py).
+
+    Args:
+        db: Database manager.
+        groups: (items, fields) pairs, localized with one shared lookup budget.
+    """
+    env = load_env_vars()
+    try:
+        own = db.get_user_language(int(g.current_user['id']))
+    except Exception:
+        own = None
+    language = display_language(own, env)
+    integration = db.get_integration('tmdb') or {}
+    api_key = integration.get('api_key') or env.get('TMDB_API_KEY')
+    localize_groups(list(groups), language, db, api_key)
 
 
 def _visible_request_user_ids(db):
-    selected = request.args.get('user_id', '').strip()
-    if g.current_user.get('role') == 'admin':
-        return [selected] if selected else None
-    if load_env_vars().get('REQUEST_VISIBILITY', 'all') != 'own':
-        return [selected] if selected else None
-    linked = [str(profile['external_user_id']) for profile in db.get_user_media_profiles(int(g.current_user['id']))]
-    return [selected] if selected and selected in linked else linked
+    return request_scope.visible_request_user_ids(
+        db, g.current_user, load_env_vars(), request.args.get('user_id', ''))
 
 
 @automation_bp.route('/requests/workflow', methods=['GET'])
@@ -69,19 +90,58 @@ def request_workflow():
     if media_type not in ('all', 'movie', 'tv'):
         return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400
     db = DatabaseManager()
+    scope = _suggestion_scope(db)
     items, total = db.list_suggestions(
-        _workflow_owner(), status, request.args.get('search', '').strip()[:100], page, per_page, media_type,
-        _visible_request_user_ids(db), int(g.current_user['id']))
+        scope.owner_id, status, request.args.get('search', '').strip()[:100], page, per_page, media_type,
+        scope.media_user_ids, int(g.current_user['id']), scope.include_unassigned)
+    _localize(db, (items, [('tmdb_id', 'media_type', 'title', 'overview')]))
     return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
+
+
+def _requested_profiles():
+    """
+    Read an optional per-media-type request profile from an approval call.
+
+    Lets the person approving decide how these items are fetched instead of
+    always taking the job's profile or Jellyseerr's default.  The shape is the
+    same one jobs use, so a caller that can fill the job dialog can fill this.
+
+    Returns:
+        dict: ``{'movie': {...}, 'tv': {...}}``, possibly empty.
+
+    Raises:
+        ValueError: On a malformed profile, or on ids Jellyseerr does not know.
+                    The caller answers 400 rather than fetching with a profile
+                    that means something else on the server it ends up on.
+    """
+    requested = (request.get_json(silent=True) or {}).get('profile')
+    profile = validate_request_profiles(requested)
+    validate_request_profiles_with_seer(profile)
+    return profile
 
 
 def _decide_workflow(approve, blacklist=False):
     ids = _workflow_ids()
     if ids is None:
         return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
-    changed = DatabaseManager().decide_suggestions(
-        ids, _workflow_owner(), int(g.current_user['id']), approve, blacklist)
+
+    profile = {}
+    if approve:
+        try:
+            profile = _requested_profiles()
+        except ValueError:
+            logger.warning("Invalid request profile supplied in workflow decision", exc_info=True)
+            return jsonify({'status': 'error', 'message': 'Invalid profile request'}), 400
+
+    # The profile and the status change are committed together: the worker
+    # never picks up a queued row without its profile, and a failed approval
+    # leaves no profile behind.
+    db = DatabaseManager()
+    scope = _suggestion_scope(db)
+    changed = db.decide_suggestions(
+        ids, scope.owner_id, int(g.current_user['id']), approve, blacklist, profiles=profile,
+        include_unassigned=scope.include_unassigned)
     return jsonify({'status': 'success', 'updated': changed}), 200
 
 
@@ -109,7 +169,9 @@ def retry_workflow():
     ids = _workflow_ids()
     if ids is None:
         return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
-    changed = DatabaseManager().retry_suggestions(ids, _workflow_owner())
+    db = DatabaseManager()
+    scope = _suggestion_scope(db)
+    changed = db.retry_suggestions(ids, scope.owner_id, scope.include_unassigned)
     return jsonify({'status': 'success', 'updated': changed}), 200
 
 
@@ -120,7 +182,9 @@ def request_workflow_again():
     if ids is None:
         return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
     remove_blacklist = bool((request.get_json(silent=True) or {}).get('remove_blacklist'))
-    changed = DatabaseManager().request_rejected(ids, _workflow_owner(), remove_blacklist)
+    db = DatabaseManager()
+    scope = _suggestion_scope(db)
+    changed = db.request_rejected(ids, scope.owner_id, remove_blacklist, scope.include_unassigned)
     return jsonify({'status': 'success', 'updated': changed}), 200
 
 
@@ -133,9 +197,10 @@ def set_request_feedback(suggestion_id):
         return error
     feedback, reason_type, reason_text, _ = parsed
     db = DatabaseManager()
+    scope = _suggestion_scope(db)
     result = db.set_suggestion_feedback(
-        suggestion_id, _workflow_owner(), int(g.current_user['id']), feedback, reason_type, reason_text,
-        _visible_request_user_ids(db),
+        suggestion_id, scope.owner_id, int(g.current_user['id']), feedback, reason_type, reason_text,
+        scope.media_user_ids, scope.include_unassigned,
     )
     if result is None:
         return jsonify({'status': 'error', 'message': 'Suggestion not found'}), 404
@@ -146,8 +211,10 @@ def set_request_feedback(suggestion_id):
 @limiter.limit('30 per minute')
 def clear_request_feedback(suggestion_id):
     db = DatabaseManager()
+    scope = _suggestion_scope(db)
     removed = db.clear_suggestion_feedback(
-        suggestion_id, _workflow_owner(), int(g.current_user['id']), _visible_request_user_ids(db),
+        suggestion_id, scope.owner_id, int(g.current_user['id']), scope.media_user_ids,
+        scope.include_unassigned,
     )
     return jsonify({'status': 'success', 'removed': removed}), 200
 
@@ -223,12 +290,25 @@ def run_now():
     thread.start()
     return jsonify({'status': 'success', 'message': 'Task started in the background!'}), 202
 
+def _list_page(default_per_page):
+    """
+    Read page and per_page for a list route, bounded like the workflow route.
+
+    Each listed item may cost a translation lookup, so per_page is capped.
+
+    Returns:
+        tuple: (page >= 1, 1 <= per_page <= 100)
+    """
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', default_per_page, type=int)
+    return max(1, page), min(100, max(1, per_page))
+
+
 @automation_bp.route('/requests', methods=['GET'])
 def get_requests():
     """Get all automation requests grouped by source with pagination and sorting."""
     try:
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 8, type=int)
+        page, per_page = _list_page(default_per_page=8)
         sort_by = request.args.get('sort_by', 'date-desc', type=str)
         
         # Validte sort_by
@@ -244,7 +324,12 @@ def get_requests():
             user_ids=_visible_request_user_ids(db_manager),
             feedback_user_id=int(g.current_user['id']),
         )
-        
+        sources = result.get('data') or []
+        _localize(db_manager,
+                  (sources, [('source_id', 'media_type', 'source_title', 'source_overview')]),
+                  ([req for source in sources for req in source.get('requests') or []],
+                   [('request_id', 'media_type', 'title', 'overview')]))
+
         return jsonify(result), 200
     except Exception as e:
         logger.error(f"Error retrieving requests: {e}", exc_info=True)
@@ -254,8 +339,7 @@ def get_requests():
 def get_ai_requests():
     """Get requests originated from AI Search with pagination and sorting."""
     try:
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 12, type=int)
+        page, per_page = _list_page(default_per_page=12)
         sort_by = request.args.get('sort_by', 'date-desc', type=str)
 
         valid_sorts = ['date-desc', 'date-asc', 'title-asc', 'title-desc']
@@ -264,6 +348,7 @@ def get_ai_requests():
 
         db_manager = DatabaseManager()
         result = db_manager.get_ai_search_requests(page=page, per_page=per_page, sort_by=sort_by)
+        _localize(db_manager, (result.get('data') or [], [('request_id', 'media_type', 'title', 'overview')]))
         return jsonify(result), 200
     except Exception as e:
         logger.error(f"Error retrieving AI search requests: {e}", exc_info=True)

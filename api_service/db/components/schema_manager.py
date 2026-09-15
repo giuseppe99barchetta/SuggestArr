@@ -26,6 +26,7 @@ class SchemaManager:
                     can_manage_ai INTEGER DEFAULT 0,
                     visible_tabs TEXT DEFAULT 'requests,jobs,profile'
                     , seer_user_id INTEGER
+                    , language TEXT
                 )
             """,
             'refresh_tokens': """
@@ -48,6 +49,7 @@ class SchemaManager:
                     external_username TEXT NOT NULL,
                     access_token TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    verified INTEGER NOT NULL DEFAULT 0,
                     FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE,
                     UNIQUE (user_id, provider)
                 )
@@ -254,6 +256,17 @@ class SchemaManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(webhook_id, event_id)
+                )
+            """,
+            'metadata_translations': """
+                CREATE TABLE IF NOT EXISTS metadata_translations (
+                    media_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    language TEXT NOT NULL,
+                    title TEXT,
+                    overview TEXT,
+                    fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (media_id, media_type, language)
                 )
             """,
             'suggestion_feedback': """
@@ -508,6 +521,18 @@ class SchemaManager:
                         FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
                     ) ENGINE=InnoDB
                 """
+            elif table_name == 'metadata_translations':
+                query = """
+                    CREATE TABLE IF NOT EXISTS metadata_translations (
+                        media_id VARCHAR(32) NOT NULL,
+                        media_type VARCHAR(16) NOT NULL,
+                        language VARCHAR(16) NOT NULL,
+                        title VARCHAR(512),
+                        overview TEXT,
+                        fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (media_id, media_type, language)
+                    ) ENGINE=InnoDB
+                """
             elif table_name == 'suggestion_feedback':
                 query = """
                     CREATE TABLE IF NOT EXISTS suggestion_feedback (
@@ -669,6 +694,9 @@ class SchemaManager:
         # Check and add missing columns to auth_users table
         self._migrate_auth_users_table()
 
+        # Check and add missing columns to user_media_profiles table
+        self._migrate_user_media_profiles_table()
+
         # Check and add missing columns to discover_jobs table
         self._migrate_discover_jobs_table()
 
@@ -744,9 +772,46 @@ class SchemaManager:
                 if 'seer_user_id' not in existing_columns:
                     cursor.execute("ALTER TABLE auth_users ADD COLUMN seer_user_id INTEGER")
                     conn.commit()
+                # Display language for titles and overviews (NULL = the default).
+                if 'language' not in existing_columns:
+                    if self.db_type in ['mysql', 'mariadb']:
+                        cursor.execute("ALTER TABLE auth_users ADD COLUMN language VARCHAR(16)")
+                    else:
+                        cursor.execute("ALTER TABLE auth_users ADD COLUMN language TEXT")
+                    conn.commit()
 
             except Exception as e:
                 self.logger.error(f"Failed to migrate auth_users table: {e}")
+                # Don't raise - table might not exist yet
+
+    def _migrate_user_media_profiles_table(self):
+        """
+        Add the ``verified`` flag to media profile links.
+
+        Existing links start unverified: nothing recorded whether an admin
+        assigned them or a user picked them, and only a verified link may make
+        someone the owner of suggestions.  Relinking (by an admin, or with the
+        media account's credentials) verifies them.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                if self.db_type == 'sqlite':
+                    cursor.execute("PRAGMA table_info(user_media_profiles)")
+                    columns = {row[1] for row in cursor.fetchall()}
+                elif self.db_type == 'postgres':
+                    cursor.execute("SELECT column_name FROM information_schema.columns "
+                                   "WHERE table_name='user_media_profiles'")
+                    columns = {row[0] for row in cursor.fetchall()}
+                else:
+                    cursor.execute("SHOW COLUMNS FROM user_media_profiles")
+                    columns = {row[0] for row in cursor.fetchall()}
+                if 'verified' not in columns:
+                    self.logger.info("Adding column verified to user_media_profiles...")
+                    cursor.execute("ALTER TABLE user_media_profiles ADD COLUMN verified INTEGER NOT NULL DEFAULT 0")
+                    conn.commit()
+            except Exception as e:
+                self.logger.error(f"Failed to migrate user_media_profiles table: {e}")
                 # Don't raise - table might not exist yet
 
     def _migrate_discover_jobs_table(self):

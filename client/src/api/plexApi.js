@@ -127,7 +127,7 @@ export default {
         } else {
           this.$toast.error('Failed to fetch users.');
         }
-      } catch (error) {
+      } catch {
         this.$toast.error('Error fetching users.');
       }
     },
@@ -154,7 +154,7 @@ export default {
 
         window.open(auth_url, '_blank', 'width=800,height=600');
         this.startPolling(pin_id);
-      } catch (error) {
+      } catch {
         this.$toast.error('Error during Plex login.');
       }
     },
@@ -188,7 +188,7 @@ export default {
         } else {
           this.$toast.error('Failed to fetch servers.');
         }
-      } catch (error) {
+      } catch {
         this.$toast.error('Error fetching Plex servers.');
       }
     },
@@ -256,7 +256,7 @@ export default {
         } else {
           this.$toast.error('Failed to fetch libraries.');
         }
-      } catch (error) {
+      } catch {
         this.$toast.error('Error fetching libraries.');
       } finally {
         this.loadingLibraries = false;

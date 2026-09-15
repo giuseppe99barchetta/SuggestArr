@@ -27,7 +27,7 @@ class JellyfinClient(BaseHTTPClient):
         :param token: The authentication token for Jellyfin.
         """
         super().__init__()
-        self.max_content_fetch = max_content
+        self.max_content_fetch = int(max_content)
         # Strip trailing slash and whitespace so URL joins never produce double-slash paths.
         self.api_url = api_url.rstrip('/').strip() if api_url else api_url
         self.libraries = library_ids
@@ -194,6 +194,7 @@ class JellyfinClient(BaseHTTPClient):
                 "Limit": api_fetch_limit,
                 "ParentId": library_id,
                 "Fields": "ProviderIds,SeriesProviderIds",
+                "EnableUserData": "true",
             }
 
             self.logger.debug(
@@ -279,6 +280,7 @@ class JellyfinClient(BaseHTTPClient):
             "Limit": api_fetch_limit,
             "ParentId": library_id,
             "Fields": "ProviderIds,SeriesProviderIds",
+            "EnableUserData": "true",
         }
 
         self.logger.debug(

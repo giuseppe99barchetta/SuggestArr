@@ -73,6 +73,9 @@ class _MediaLinkBase(unittest.TestCase):
             def get_auth_user_count(self_inner):
                 return 1  # setup mode guard: pretend there's 1 user
 
+            def get_auth_user_by_id(self_inner, user_id):
+                return {'id': user_id, 'username': f'user{user_id}'}
+
             def get_user_media_profiles(self_inner, user_id):
                 return [
                     {k: v for k, v in p.items() if k != 'access_token'}
@@ -81,7 +84,7 @@ class _MediaLinkBase(unittest.TestCase):
 
             def create_user_media_profile(self_inner, user_id, provider,
                                           external_user_id, external_username,
-                                          access_token=None):
+                                          access_token=None, verified=False):
                 profiles.append({
                     'id': len(profiles) + 1,
                     'user_id': user_id,
@@ -89,6 +92,7 @@ class _MediaLinkBase(unittest.TestCase):
                     'external_user_id': external_user_id,
                     'external_username': external_username,
                     'access_token': access_token,
+                    'verified': verified,
                     'created_at': '2025-01-01 00:00:00',
                 })
 
@@ -217,6 +221,14 @@ class TestLinkJellyfin(_MediaLinkBase):
         self.assertEqual(len(self._profiles), 1)
         self.assertEqual(self._profiles[0]['provider'], 'jellyfin')
         self.assertEqual(self._profiles[0]['external_user_id'], 'jf-123')
+
+    def test_a_picked_account_stays_unverified(self):
+        """Choosing an account from the server's user list proves nothing about
+        who the caller is, so the link must not grant ownership."""
+        self.client.post('/api/users/me/link/jellyfin',
+                         json={"external_user_id": "jf-123",
+                               "external_username": "alice"})
+        self.assertFalse(self._profiles[0]['verified'])
 
     def test_missing_external_user_id_returns_400(self):
         resp = self.client.post('/api/users/me/link/jellyfin',
@@ -488,6 +500,7 @@ class TestPlexOAuthPoll(_MediaLinkBase):
         self.assertEqual(stored['provider'], 'plex')
         self.assertEqual(stored['access_token'], 'plex-token-abc')
         self.assertEqual(stored['external_username'], 'plexuser')
+        self.assertTrue(stored['verified'])
 
     def test_user_info_error_returns_502(self):
         poll_response = MagicMock()
@@ -519,6 +532,23 @@ class TestPlexOAuthPoll(_MediaLinkBase):
         data = resp.get_json()
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(data['external_username'], 'user@plex.tv')
+
+
+
+# ---------------------------------------------------------------------------
+# POST /api/users/<id>/link/<provider>  (admin)
+# ---------------------------------------------------------------------------
+
+class TestAdminLink(_MediaLinkBase):
+
+    def test_an_admin_assigned_link_is_verified(self):
+        resp = self.client.post('/api/users/2/link/jellyfin',
+                                json={"external_user_id": "jf-456",
+                                      "external_username": "bob"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(self._profiles), 1)
+        self.assertEqual(self._profiles[0]['user_id'], 2)
+        self.assertTrue(self._profiles[0]['verified'])
 
 
 if __name__ == '__main__':

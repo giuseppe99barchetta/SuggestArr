@@ -794,7 +794,7 @@ export default {
         this.$toast.success(
           `Self-registration ${this.localAllowRegistration ? 'enabled' : 'disabled'}`
         );
-      } catch (err) {
+      } catch {
         this.$toast.error('Failed to save registration setting');
         this.localAllowRegistration = !!this.config.ALLOW_REGISTRATION;
       } finally {

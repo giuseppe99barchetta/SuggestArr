@@ -117,6 +117,37 @@
 
       </div>
 
+      <!-- ── Title language ──────────────────────────────────────────────── -->
+      <div class="settings-group">
+        <h3>
+          <i class="fas fa-language"></i>
+          Title language
+        </h3>
+        <p class="card-desc">Show titles and descriptions of suggestions and requests in this language.</p>
+        <form class="account-form-section" @submit.prevent="saveLanguage">
+          <BaseDropdown
+            id="titleLanguage"
+            v-model="languageForm.value"
+            :options="languageChoices"
+            label="Language"
+            :disabled="isSavingLanguage"
+          />
+          <p v-if="!languageForm.value && displayLanguage" class="card-desc">Currently shown in: {{ displayLanguageLabel }}</p>
+          <div v-if="languageError" class="error-banner">
+            <i class="fas fa-exclamation-circle"></i>
+            {{ languageError }}
+          </div>
+          <div v-if="languageSuccess" class="success-banner">
+            <i class="fas fa-check-circle"></i>
+            {{ languageSuccess }}
+          </div>
+          <button type="submit" class="btn btn-outline btn-sm" :disabled="isSavingLanguage">
+            <i :class="isSavingLanguage ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
+            {{ isSavingLanguage ? 'Saving…' : 'Save Language' }}
+          </button>
+        </form>
+      </div>
+
       <ApiKeysPanel />
 
       <!-- ── Media Server Link ────────────────────────────────────────────── -->
@@ -270,6 +301,7 @@ import {
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
+import { languageOptions, languagePayload } from '@/utils/titleLanguage.js';
 
 const PROVIDER_META = {
   jellyfin: { label: 'Jellyfin', icon: 'fas fa-server' },
@@ -327,10 +359,27 @@ export default {
       isUnlinking: false,
       linkError: null,
 
+      // Title language
+      languages: [],
+      languageForm: { value: '' },
+      displayLanguage: '',
+      isSavingLanguage: false,
+      languageError: null,
+      languageSuccess: null,
+
     };
   },
 
   computed: {
+    languageChoices() {
+      return languageOptions(this.languages);
+    },
+
+    displayLanguageLabel() {
+      const match = this.languageChoices.find(option => option.value === this.displayLanguage);
+      return match ? match.label : this.displayLanguage;
+    },
+
     selectedService() {
       return (
         this.config?.SELECTED_SERVICE
@@ -403,6 +452,7 @@ export default {
   },
 
   async mounted() {
+    this.loadLanguage();
     await this.loadConfigStatus();
     await this.loadLinks();
     await this.loadServerUsers();
@@ -423,6 +473,39 @@ export default {
   },
 
   methods: {
+    // ── Title language ─────────────────────────────────────────────────────
+
+    async loadLanguage() {
+      try {
+        const [me, list] = await Promise.allSettled([
+          axios.get('/api/auth/me', { withCredentials: true, timeout: 10000 }),
+          axios.get('/api/tmdb/languages', { timeout: 10000 }),
+        ]);
+        if (me.status === 'fulfilled') {
+          this.languageForm.value = me.value.data?.language || '';
+          this.displayLanguage = me.value.data?.display_language || '';
+        }
+        if (list.status === 'fulfilled') this.languages = list.value.data?.languages || [];
+      } catch (err) {
+        console.error('Failed to load title language', err);
+      }
+    },
+
+    async saveLanguage() {
+      this.languageError = null;
+      this.languageSuccess = null;
+      this.isSavingLanguage = true;
+      try {
+        await updateMyProfile(languagePayload(this.languageForm.value));
+        this.languageSuccess = 'Language saved.';
+        await this.loadLanguage();
+      } catch (err) {
+        this.languageError = err.response?.data?.error || 'Could not save the language.';
+      } finally {
+        this.isSavingLanguage = false;
+      }
+    },
+
     // ── Links ──────────────────────────────────────────────────────────────
 
     async loadConfigStatus() {
