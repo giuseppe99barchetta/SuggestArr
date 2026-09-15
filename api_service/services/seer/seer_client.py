@@ -12,6 +12,10 @@ HTTP_OK = {200, 201, 202}  # Include 202 Accepted for async operations
 PENDING_REQUEST_STATUSES = {1, "1", "pending", "PENDING"}
 
 
+class SeerPermissionError(Exception):
+    """A Seer identity was authenticated but cannot use an endpoint."""
+
+
 def _as_bool(value):
     """Normalize bool-like config values."""
     if isinstance(value, bool):
@@ -94,7 +98,8 @@ class SeerClient(BaseHTTPClient):
 
         return headers, cookies
 
-    async def _make_request(self, method, endpoint, data=None, use_cookie=False, retries=3, delay=2):
+    async def _make_request(self, method, endpoint, data=None, use_cookie=False, retries=3, delay=2,
+                            raise_on_permission=False):
         """Unified API request handling with retry logic and error handling."""
         url = f"{self.api_url}/{endpoint}"
         for attempt in range(retries):
@@ -123,6 +128,10 @@ class SeerClient(BaseHTTPClient):
                             or 'permission' in lower_message
                             or 'not authorized' in lower_message
                         ):
+                            if raise_on_permission and (
+                                'permission' in lower_message or 'not authorized' in lower_message
+                            ):
+                                raise SeerPermissionError(message)
                             return None
                         # Otherwise treat as auth failure and retry with login
                         if attempt < retries - 1:
@@ -518,9 +527,19 @@ class SeerClient(BaseHTTPClient):
                 )
                 return False
 
-        response = await self._make_request(
-            "POST", "api/v1/request", data=data, use_cookie=bool(self.session_token)
-        )
+        try:
+            response = await self._make_request(
+                "POST", "api/v1/request", data=data, use_cookie=bool(self.session_token),
+                raise_on_permission=bool(self.session_token),
+            )
+        except SeerPermissionError as exc:
+            self.logger.warning(
+                "Configured Seer user cannot submit requests (%s); retrying with the configured API key.",
+                exc,
+            )
+            response = await self._make_request(
+                "POST", "api/v1/request", data=data, use_cookie=False, retries=1,
+            )
         if response and 'error' not in response:
             self.logger.debug("Seer submission successful: %s", response)
             return True

@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 
-from api_service.services.seer.seer_client import SeerClient
+from api_service.services.seer.seer_client import SeerClient, SeerPermissionError
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +158,16 @@ class TestMakeRequest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result)
         mock_login.assert_not_awaited()
         self.assertEqual(session.request.call_count, 1)
+
+    async def test_permission_403_can_be_reported_to_the_caller(self):
+        resp = _mock_response(403, {'message': 'You do not have permission to access this endpoint'})
+        session = _mock_session(resp)
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)), \
+             patch('asyncio.sleep', AsyncMock()):
+            with self.assertRaisesRegex(SeerPermissionError, 'permission'):
+                await self.client._make_request(
+                    'POST', 'api/v1/request', raise_on_permission=True,
+                )
 
     async def test_returns_none_on_client_error(self):
         session = MagicMock()
@@ -725,6 +735,20 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
         mock_login.assert_awaited_once()
         self.assertTrue(mock_req.call_args.kwargs['use_cookie'])
         self.assertEqual(client.session_token, 'fresh-token')
+
+    async def test_retries_with_api_key_when_configured_user_lacks_permission(self):
+        client = _make_client(session_token='user-token')
+        with patch.object(client, 'login', AsyncMock()), \
+             patch.object(
+                 client, '_make_request',
+                 AsyncMock(side_effect=[SeerPermissionError('permission denied'), {'id': 55}]),
+             ) as mock_req:
+            result = await client.submit_queued_request(self._valid_payload())
+
+        self.assertTrue(result)
+        self.assertTrue(mock_req.call_args_list[0].kwargs['use_cookie'])
+        self.assertFalse(mock_req.call_args_list[1].kwargs['use_cookie'])
+        self.assertEqual(mock_req.call_args_list[1].kwargs['retries'], 1)
 
     async def test_returns_false_when_configured_user_login_fails(self):
         client = _make_client(session_token='stale-token')
