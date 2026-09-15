@@ -351,6 +351,18 @@ class TestGetRecentItems(unittest.IsolatedAsyncioTestCase):
         self.assertIn('Movies', result)
         self.assertEqual(len(result['Movies']), 2)
 
+    async def test_normalizes_string_max_content_for_recent_items_request_limit(self):
+        client = _make_client(libraries=self.libraries, max_content='10')
+        session = _mock_session(_mock_response(200, {'Items': []}))
+
+        with patch.object(client, '_get_session', AsyncMock(return_value=session)):
+            await client.get_recent_items(self.user)
+
+        params = session.get.call_args.kwargs['params']
+        self.assertEqual(client.max_content_fetch, 10)
+        self.assertEqual(params['Limit'], 100)
+        self.assertIsInstance(params['Limit'], int)
+
     async def test_deduplicates_episodes_by_series_name(self):
         """Multiple episodes from the same series should count as one entry."""
         items_payload = {'Items': [
@@ -426,6 +438,18 @@ class TestFallbackRecentItems(unittest.IsolatedAsyncioTestCase):
             result = await self.client._fallback_recent_items('u1', 'Alice', 'lib1', 'Movies')
 
         self.assertEqual(result, items)
+
+    async def test_normalizes_string_max_content_for_fallback_request_limit(self):
+        client = _make_client(max_content='10')
+        session = _mock_session(_mock_response(200, {'Items': []}))
+
+        with patch.object(client, '_get_session', AsyncMock(return_value=session)):
+            await client._fallback_recent_items('u1', 'Alice', 'lib1', 'Movies')
+
+        params = session.get.call_args.kwargs['params']
+        self.assertEqual(client.max_content_fetch, 10)
+        self.assertEqual(params['Limit'], 100)
+        self.assertIsInstance(params['Limit'], int)
 
     async def test_returns_none_on_http_failure(self):
         resp = _mock_response(403, text_data='forbidden')
