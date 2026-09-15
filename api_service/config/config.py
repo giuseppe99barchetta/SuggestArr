@@ -234,6 +234,7 @@ def get_default_values():
         'ENABLE_API_CACHING': lambda: True,
         'REQUIRE_REQUEST_APPROVAL': lambda: False,
         'REQUEST_VISIBILITY': lambda: 'all',
+        'TMDB_LANGUAGE': lambda: 'en',
         'PAUSE_JOBS_WITH_PENDING_APPROVALS': lambda: False,
         'AUTO_REJECT_APPROVAL_DAYS': lambda: 0,
         # Database connection pool settings
@@ -354,7 +355,7 @@ def get_config_sections():
                      'ENABLE_DEBUG_MODE', 'ENABLE_PERFORMANCE_MONITORING', 'ENABLE_VISUAL_EFFECTS',
                      'ENABLE_STATIC_BACKGROUND', 'STATIC_BACKGROUND_COLOR',
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
-                     'ENABLE_API_CACHING', 'REQUIRE_REQUEST_APPROVAL', 'REQUEST_VISIBILITY',
+                     'ENABLE_API_CACHING', 'REQUIRE_REQUEST_APPROVAL', 'REQUEST_VISIBILITY', 'TMDB_LANGUAGE',
                      'PAUSE_JOBS_WITH_PENDING_APPROVALS', 'AUTO_REJECT_APPROVAL_DAYS',
                      'OPENAI_API_KEY', 'OPENAI_BASE_URL',
                      'LLM_MODEL', 'LLM_TEMPERATURE', 'LLM_REASONING_EFFORT', 'SEARXNG_BASE_URL',

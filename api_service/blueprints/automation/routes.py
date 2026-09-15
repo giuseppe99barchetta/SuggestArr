@@ -13,6 +13,7 @@ from api_service.utils.request_profiles import (
     validate_request_profiles_with_seer,
 )
 from api_service.utils import request_scope
+from api_service.services.tmdb.localization import display_language, localize_groups
 
 logger = LoggerManager().get_logger("AutomationRoute")
 automation_bp = Blueprint('automation', __name__)
@@ -51,6 +52,25 @@ def _suggestion_scope(db):
         db, g.current_user, load_env_vars(), request.args.get('user_id', ''))
 
 
+def _localize(db, *groups):
+    """
+    Show the listed titles in the reader's language (see services/tmdb/localization.py).
+
+    Args:
+        db: Database manager.
+        groups: (items, fields) pairs, localized with one shared lookup budget.
+    """
+    env = load_env_vars()
+    try:
+        own = db.get_user_language(int(g.current_user['id']))
+    except Exception:
+        own = None
+    language = display_language(own, env)
+    integration = db.get_integration('tmdb') or {}
+    api_key = integration.get('api_key') or env.get('TMDB_API_KEY')
+    localize_groups(list(groups), language, db, api_key)
+
+
 def _visible_request_user_ids(db):
     return request_scope.visible_request_user_ids(
         db, g.current_user, load_env_vars(), request.args.get('user_id', ''))
@@ -74,6 +94,7 @@ def request_workflow():
     items, total = db.list_suggestions(
         scope.owner_id, status, request.args.get('search', '').strip()[:100], page, per_page, media_type,
         scope.media_user_ids, int(g.current_user['id']), scope.include_unassigned)
+    _localize(db, (items, [('tmdb_id', 'media_type', 'title', 'overview')]))
     return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
 
@@ -268,12 +289,25 @@ def run_now():
     thread.start()
     return jsonify({'status': 'success', 'message': 'Task started in the background!'}), 202
 
+def _list_page(default_per_page):
+    """
+    Read page and per_page for a list route, bounded like the workflow route.
+
+    Each listed item may cost a translation lookup, so per_page is capped.
+
+    Returns:
+        tuple: (page >= 1, 1 <= per_page <= 100)
+    """
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', default_per_page, type=int)
+    return max(1, page), min(100, max(1, per_page))
+
+
 @automation_bp.route('/requests', methods=['GET'])
 def get_requests():
     """Get all automation requests grouped by source with pagination and sorting."""
     try:
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 8, type=int)
+        page, per_page = _list_page(default_per_page=8)
         sort_by = request.args.get('sort_by', 'date-desc', type=str)
         
         # Validte sort_by
@@ -289,7 +323,12 @@ def get_requests():
             user_ids=_visible_request_user_ids(db_manager),
             feedback_user_id=int(g.current_user['id']),
         )
-        
+        sources = result.get('data') or []
+        _localize(db_manager,
+                  (sources, [('source_id', 'media_type', 'source_title', 'source_overview')]),
+                  ([req for source in sources for req in source.get('requests') or []],
+                   [('request_id', 'media_type', 'title', 'overview')]))
+
         return jsonify(result), 200
     except Exception as e:
         logger.error(f"Error retrieving requests: {e}", exc_info=True)
@@ -299,8 +338,7 @@ def get_requests():
 def get_ai_requests():
     """Get requests originated from AI Search with pagination and sorting."""
     try:
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 12, type=int)
+        page, per_page = _list_page(default_per_page=12)
         sort_by = request.args.get('sort_by', 'date-desc', type=str)
 
         valid_sorts = ['date-desc', 'date-asc', 'title-asc', 'title-desc']
@@ -309,6 +347,7 @@ def get_ai_requests():
 
         db_manager = DatabaseManager()
         result = db_manager.get_ai_search_requests(page=page, per_page=per_page, sort_by=sort_by)
+        _localize(db_manager, (result.get('data') or [], [('request_id', 'media_type', 'title', 'overview')]))
         return jsonify(result), 200
     except Exception as e:
         logger.error(f"Error retrieving AI search requests: {e}", exc_info=True)
