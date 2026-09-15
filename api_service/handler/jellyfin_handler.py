@@ -129,8 +129,9 @@ class JellyfinHandler(BaseMediaHandler):
 
         # Parse date.
         date = 0
-        for field in ('DatePlayed', 'DateCreated', 'PremiereDate'):
-            val = item.get(field)
+        _user_data = item.get('UserData') or {}
+        for val in (_user_data.get('LastPlayedDate'), item.get('DatePlayed'),
+                    item.get('DateCreated'), item.get('PremiereDate')):
             if val:
                 try:
                     from datetime import datetime as dt

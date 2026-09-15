@@ -7,8 +7,9 @@ Covers:
 - get_all_library_items(): movie/tv buckets, missing tmdb_id, non-Movie/Series items,
   auto-fetch libraries when unconfigured, no libraries, HTTP error, network error
 - get_recent_items(): success, series deduplication, max_content_fetch cap,
+  EnableUserData param,
   404 fallback trigger, empty result, network error
-- _fallback_recent_items(): success, HTTP failure, exception
+- _fallback_recent_items(): success, HTTP failure, exception, EnableUserData param
 - init_existing_content(): delegates to get_all_library_items
 """
 
@@ -351,6 +352,22 @@ class TestGetRecentItems(unittest.IsolatedAsyncioTestCase):
         self.assertIn('Movies', result)
         self.assertEqual(len(result['Movies']), 2)
 
+    async def test_requests_user_data_via_enable_user_data(self):
+        """User data must be requested with EnableUserData, not via Fields.
+
+        UserData is not an ItemFields value, so naming it in Fields requests
+        nothing; the seed date silently falls back to PremiereDate on any
+        server that does not return user data by default.
+        """
+        resp = _mock_response(200, {'Items': []})
+        session = _mock_session(resp)
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            await self.client.get_recent_items(self.user)
+
+        params = session.get.call_args.kwargs['params']
+        self.assertEqual(params['EnableUserData'], 'true')
+        self.assertNotIn('UserData', params['Fields'])
+
     async def test_deduplicates_episodes_by_series_name(self):
         """Multiple episodes from the same series should count as one entry."""
         items_payload = {'Items': [
@@ -426,6 +443,17 @@ class TestFallbackRecentItems(unittest.IsolatedAsyncioTestCase):
             result = await self.client._fallback_recent_items('u1', 'Alice', 'lib1', 'Movies')
 
         self.assertEqual(result, items)
+
+    async def test_requests_user_data_via_enable_user_data(self):
+        """The 404 fallback must request user data the same way."""
+        resp = _mock_response(200, {'Items': []})
+        session = _mock_session(resp)
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            await self.client._fallback_recent_items('u1', 'Alice', 'lib1', 'Movies')
+
+        params = session.get.call_args.kwargs['params']
+        self.assertEqual(params['EnableUserData'], 'true')
+        self.assertNotIn('UserData', params['Fields'])
 
     async def test_returns_none_on_http_failure(self):
         resp = _mock_response(403, text_data='forbidden')

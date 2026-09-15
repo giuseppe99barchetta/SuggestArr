@@ -141,3 +141,52 @@ def test_merge_seeds_caps_to_max_content():
     # Newest first (highest date)
     assert merged[0]["date"] == 9
     assert merged[1]["date"] == 8
+
+
+def _movie_item(**overrides):
+    """A played Jellyfin movie item as returned by /Users/{id}/Items."""
+    item = {
+        "Type": "Movie",
+        "Name": "Example Movie",
+        "ProviderIds": {"Tmdb": "42"},
+        "PremiereDate": "1990-06-22T00:00:00Z",
+        "UserData": {"LastPlayedDate": "2026-09-05T19:40:46Z"},
+    }
+    item.update(overrides)
+    return item
+
+
+def _epoch(value):
+    from datetime import datetime as dt
+    return int(dt.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+
+
+def test_seed_date_prefers_last_played_date():
+    """Seed date comes from UserData.LastPlayedDate, not PremiereDate.
+
+    Jellyfin returns no top-level DatePlayed or DateCreated, so without this
+    the seed would carry the release date and _merge_seeds would rank the
+    newest *released* titles instead of the most recently *watched* ones.
+    """
+    handler = _jellyfin_handler(None)
+    user = {"id": "jf-1", "name": "alice"}
+
+    seed = asyncio.run(handler._jellyfin_item_to_seed(
+        _movie_item(), "Movies", False, user))
+
+    assert seed is not None
+    assert seed["date"] == _epoch("2026-09-05T19:40:46Z")
+    assert seed["date"] != _epoch("1990-06-22T00:00:00Z")
+
+
+def test_seed_date_falls_back_when_never_played():
+    """With no UserData the older fallback chain still applies."""
+    handler = _jellyfin_handler(None)
+    user = {"id": "jf-1", "name": "alice"}
+    item = _movie_item()
+    del item["UserData"]
+
+    seed = asyncio.run(handler._jellyfin_item_to_seed(item, "Movies", False, user))
+
+    assert seed is not None
+    assert seed["date"] == _epoch("1990-06-22T00:00:00Z")
