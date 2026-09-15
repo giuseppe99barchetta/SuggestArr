@@ -130,8 +130,9 @@ def _decide_workflow(approve, blacklist=False):
     if approve:
         try:
             profile = _requested_profiles()
-        except ValueError as exc:
-            return jsonify({'status': 'error', 'message': str(exc)}), 400
+        except ValueError:
+            logger.warning("Invalid request profile supplied in workflow decision", exc_info=True)
+            return jsonify({'status': 'error', 'message': 'Invalid profile request'}), 400
 
     # The profile and the status change are committed together: the worker
     # never picks up a queued row without its profile, and a failed approval
