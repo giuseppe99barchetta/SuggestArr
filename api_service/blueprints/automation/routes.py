@@ -12,6 +12,7 @@ from api_service.utils.request_profiles import (
     validate_request_profiles,
     validate_request_profiles_with_seer,
 )
+from api_service.utils import request_scope
 
 logger = LoggerManager().get_logger("AutomationRoute")
 automation_bp = Blueprint('automation', __name__)
@@ -45,18 +46,14 @@ def _workflow_ids():
     return ids
 
 
-def _workflow_owner():
-    return None if g.current_user.get('role') == 'admin' else int(g.current_user['id'])
+def _suggestion_scope(db):
+    return request_scope.suggestion_scope(
+        db, g.current_user, load_env_vars(), request.args.get('user_id', ''))
 
 
 def _visible_request_user_ids(db):
-    selected = request.args.get('user_id', '').strip()
-    if g.current_user.get('role') == 'admin':
-        return [selected] if selected else None
-    if load_env_vars().get('REQUEST_VISIBILITY', 'all') != 'own':
-        return [selected] if selected else None
-    linked = [str(profile['external_user_id']) for profile in db.get_user_media_profiles(int(g.current_user['id']))]
-    return [selected] if selected and selected in linked else linked
+    return request_scope.visible_request_user_ids(
+        db, g.current_user, load_env_vars(), request.args.get('user_id', ''))
 
 
 @automation_bp.route('/requests/workflow', methods=['GET'])
@@ -73,9 +70,10 @@ def request_workflow():
     if media_type not in ('all', 'movie', 'tv'):
         return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400
     db = DatabaseManager()
+    scope = _suggestion_scope(db)
     items, total = db.list_suggestions(
-        _workflow_owner(), status, request.args.get('search', '').strip()[:100], page, per_page, media_type,
-        _visible_request_user_ids(db), int(g.current_user['id']))
+        scope.owner_id, status, request.args.get('search', '').strip()[:100], page, per_page, media_type,
+        scope.media_user_ids, int(g.current_user['id']), scope.include_unassigned)
     return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
 
@@ -117,8 +115,11 @@ def _decide_workflow(approve, blacklist=False):
     # The profile and the status change are committed together: the worker
     # never picks up a queued row without its profile, and a failed approval
     # leaves no profile behind.
-    changed = DatabaseManager().decide_suggestions(
-        ids, _workflow_owner(), int(g.current_user['id']), approve, blacklist, profiles=profile)
+    db = DatabaseManager()
+    scope = _suggestion_scope(db)
+    changed = db.decide_suggestions(
+        ids, scope.owner_id, int(g.current_user['id']), approve, blacklist, profiles=profile,
+        include_unassigned=scope.include_unassigned)
     return jsonify({'status': 'success', 'updated': changed}), 200
 
 
@@ -146,7 +147,9 @@ def retry_workflow():
     ids = _workflow_ids()
     if ids is None:
         return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
-    changed = DatabaseManager().retry_suggestions(ids, _workflow_owner())
+    db = DatabaseManager()
+    scope = _suggestion_scope(db)
+    changed = db.retry_suggestions(ids, scope.owner_id, scope.include_unassigned)
     return jsonify({'status': 'success', 'updated': changed}), 200
 
 
@@ -157,7 +160,9 @@ def request_workflow_again():
     if ids is None:
         return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
     remove_blacklist = bool((request.get_json(silent=True) or {}).get('remove_blacklist'))
-    changed = DatabaseManager().request_rejected(ids, _workflow_owner(), remove_blacklist)
+    db = DatabaseManager()
+    scope = _suggestion_scope(db)
+    changed = db.request_rejected(ids, scope.owner_id, remove_blacklist, scope.include_unassigned)
     return jsonify({'status': 'success', 'updated': changed}), 200
 
 
@@ -170,9 +175,10 @@ def set_request_feedback(suggestion_id):
         return error
     feedback, reason_type, reason_text, _ = parsed
     db = DatabaseManager()
+    scope = _suggestion_scope(db)
     result = db.set_suggestion_feedback(
-        suggestion_id, _workflow_owner(), int(g.current_user['id']), feedback, reason_type, reason_text,
-        _visible_request_user_ids(db),
+        suggestion_id, scope.owner_id, int(g.current_user['id']), feedback, reason_type, reason_text,
+        scope.media_user_ids, scope.include_unassigned,
     )
     if result is None:
         return jsonify({'status': 'error', 'message': 'Suggestion not found'}), 404
@@ -183,8 +189,10 @@ def set_request_feedback(suggestion_id):
 @limiter.limit('30 per minute')
 def clear_request_feedback(suggestion_id):
     db = DatabaseManager()
+    scope = _suggestion_scope(db)
     removed = db.clear_suggestion_feedback(
-        suggestion_id, _workflow_owner(), int(g.current_user['id']), _visible_request_user_ids(db),
+        suggestion_id, scope.owner_id, int(g.current_user['id']), scope.media_user_ids,
+        scope.include_unassigned,
     )
     return jsonify({'status': 'success', 'removed': removed}), 200
 

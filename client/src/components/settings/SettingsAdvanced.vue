@@ -564,7 +564,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 
           <div class="workflow-card__body workflow-card__body--fields">
             <div class="workflow-setting">
-              <label class="workflow-setting__label" for="requestVisibility">Regular-user visibility</label>
+              <label class="workflow-setting__label" for="requestVisibility">Request visibility</label>
               <BaseDropdown
                 v-model="localConfig.REQUEST_VISIBILITY"
                 :options="requestVisibilityOptions"
@@ -572,7 +572,9 @@ LLM_MODEL=gpt-4o-mini</code></pre>
                 id="requestVisibility"
               />
               <p class="workflow-setting__help">
-                Admins always see everything. Other users can be limited to requests from their linked media account.
+                Limit users to requests from their linked media accounts — regular users only, or admins too.
+                A suggestion belongs to whoever an admin linked (or who signed in) to the media account it was made for;
+                suggestions without such an owner stay with the admins.
               </p>
             </div>
 
@@ -821,7 +823,8 @@ export default {
       ],
       requestVisibilityOptions: [
         { value: 'all', label: 'All requests' },
-        { value: 'own', label: 'Own linked account only' },
+        { value: 'own', label: 'Own linked account only (admins see all)' },
+        { value: 'own_all', label: 'Own linked account only, admins too' },
       ]
     };
   },
@@ -1046,7 +1049,7 @@ export default {
             MAX_CACHE_SIZE: this.localConfig.MAX_CACHE_SIZE || 100,
             ENABLE_API_CACHING: this.localConfig.ENABLE_API_CACHING !== false,
             REQUIRE_REQUEST_APPROVAL: this.localConfig.REQUIRE_REQUEST_APPROVAL !== false,
-            REQUEST_VISIBILITY: this.localConfig.REQUEST_VISIBILITY === 'own' ? 'own' : 'all',
+            REQUEST_VISIBILITY: ['own', 'own_all'].includes(this.localConfig.REQUEST_VISIBILITY) ? this.localConfig.REQUEST_VISIBILITY : 'all',
             PAUSE_JOBS_WITH_PENDING_APPROVALS: this.localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS === true,
             AUTO_REJECT_APPROVAL_DAYS: Math.max(0, Number(this.localConfig.AUTO_REJECT_APPROVAL_DAYS) || 0),
             ENABLE_BETA_FEATURES: this.localConfig.ENABLE_BETA_FEATURES || false,

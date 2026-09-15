@@ -10,6 +10,7 @@ from api_service.auth.middleware import require_role
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
+from api_service.utils import request_scope
 from api_service.jobs.job_manager import JobManager
 from api_service.jobs.discover_automation import DiscoverAutomation, execute_discover_job
 from api_service.jobs.recommendation_automation import RecommendationAutomation, execute_recommendation_job
@@ -116,8 +117,6 @@ def get_jobs():
 
 @jobs_bp.route('/suggestions', methods=['GET'])
 def get_suggestions():
-    user = g.current_user
-    owner_id = None if user.get('role') == 'admin' else int(user['id'])
     status = request.args.get('status', 'awaiting_approval')
     if status not in ('awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed'):
         return jsonify({'status': 'error', 'message': 'Invalid status'}), 400
@@ -126,8 +125,11 @@ def get_suggestions():
         per_page = min(100, max(1, int(request.args.get('per_page', 24))))
     except ValueError:
         return jsonify({'status': 'error', 'message': 'Invalid pagination'}), 400
-    items, total = JobRepository().db.list_suggestions(
-        owner_id, status, request.args.get('search', '').strip()[:100], page, per_page)
+    db = JobRepository().db
+    scope = request_scope.suggestion_scope(db, g.current_user, load_env_vars())
+    items, total = db.list_suggestions(
+        scope.owner_id, status, request.args.get('search', '').strip()[:100], page, per_page, 'all',
+        scope.media_user_ids, include_unassigned=scope.include_unassigned)
     return jsonify({'status': 'success', 'items': items, 'total': total,
                     'page': page, 'pages': max(1, (total + per_page - 1) // per_page)}), 200
 
@@ -157,9 +159,9 @@ def retry_suggestions():
     ids = data.get('ids')
     if not isinstance(ids, list) or not ids or len(ids) > 100 or any(not isinstance(item, int) for item in ids):
         return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
-    user = g.current_user
-    owner_id = None if user.get('role') == 'admin' else int(user['id'])
-    changed = JobRepository().db.retry_suggestions(ids, owner_id)
+    db = JobRepository().db
+    scope = request_scope.suggestion_scope(db, g.current_user, load_env_vars())
+    changed = db.retry_suggestions(ids, scope.owner_id, scope.include_unassigned)
     return jsonify({'status': 'success', 'updated': changed}), 200
 
 
@@ -183,9 +185,10 @@ def _decide_suggestions(approve, blacklist=False):
     ids = data.get('ids')
     if not isinstance(ids, list) or not ids or len(ids) > 100 or any(not isinstance(item, int) for item in ids):
         return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
-    user = g.current_user
-    owner_id = None if user.get('role') == 'admin' else int(user['id'])
-    changed = JobRepository().db.decide_suggestions(ids, owner_id, int(user['id']), approve, blacklist)
+    db = JobRepository().db
+    scope = request_scope.suggestion_scope(db, g.current_user, load_env_vars())
+    changed = db.decide_suggestions(ids, scope.owner_id, int(g.current_user['id']), approve, blacklist,
+                                    include_unassigned=scope.include_unassigned)
     return jsonify({'status': 'success', 'updated': changed}), 200
 
 

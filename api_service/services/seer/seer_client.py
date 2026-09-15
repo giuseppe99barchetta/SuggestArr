@@ -437,12 +437,20 @@ class SeerClient(BaseHTTPClient):
             owner = db.get_auth_user_by_id(context['owner_id']) or {}
             if owner.get('seer_user_id') is not None:
                 payload['userId'] = owner['seer_user_id']
-        approval_default = load_env_vars().get('REQUIRE_REQUEST_APPROVAL', False)
+        env = load_env_vars()
+        approval_default = env.get('REQUIRE_REQUEST_APPROVAL', False)
         status = 'awaiting_approval' if requires_request_approval(
             context.get('delivery_mode', 'inherit'), approval_default
         ) else 'queued'
+        # A job without an owner scans several people's histories.  Its
+        # suggestion belongs to the person it was made for — resolved now,
+        # through a verified link only, and stored, so it does not move when
+        # links change.  Unresolved ones stay unassigned.
+        owner_id = context.get('owner_id')
+        if owner_id is None and user_id is not None:
+            owner_id = db.resolve_suggestion_owner(env.get('SELECTED_SERVICE'), user_id)
         enqueued = db.enqueue_request(tmdb_id, media_type, user_id, payload, status=status,
-                                      job_id=context.get('job_id'), owner_id=context.get('owner_id'),
+                                      job_id=context.get('job_id'), owner_id=owner_id,
                                       execution_id=context.get('execution_id'))
         if enqueued:
             self.logger.info("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)

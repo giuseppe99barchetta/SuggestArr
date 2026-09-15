@@ -99,8 +99,10 @@ def _link_jellyfin_like(provider: str):
         return jsonify({"error": f"Invalid {provider.capitalize()} user response"}), 502
 
     db = DatabaseManager()
+    # Verified: the id comes from the media server after the user authenticated as it.
     db.create_user_media_profile(
-        _current_user_id(), provider, external_user_id, external_username, access_token=None
+        _current_user_id(), provider, external_user_id, external_username, access_token=None,
+        verified=True,
     )
 
     logger.info("User id=%d linked %s account: %r", _current_user_id(), provider, external_username)
@@ -170,8 +172,10 @@ def link_my_plex_account():
         return jsonify({"error": "Invalid Plex user response"}), 502
 
     db = DatabaseManager()
+    # Verified: the id comes from plex.tv after the user signed in as it.
     db.create_user_media_profile(
-        _current_user_id(), "plex", external_user_id, external_username, access_token=None
+        _current_user_id(), "plex", external_user_id, external_username, access_token=None,
+        verified=True,
     )
 
     logger.info("User id=%d linked plex account: %r", _current_user_id(), external_username)
