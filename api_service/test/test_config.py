@@ -83,6 +83,7 @@ class TestConfig(unittest.TestCase):
         "ENABLE_API_CACHING": True,
         "REQUIRE_REQUEST_APPROVAL": True,
         "REQUEST_VISIBILITY": "all",
+        "TMDB_LANGUAGE": "en",
         "PAUSE_JOBS_WITH_PENDING_APPROVALS": False,
         "AUTO_REJECT_APPROVAL_DAYS": 0,
         "FILTER_MIN_RUNTIME": 0,
@@ -110,6 +111,8 @@ class TestConfig(unittest.TestCase):
         "AUTH_MODE": "enabled",
         "AUTH_TRUSTED_CIDRS": "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7",
         "AUTH_BYPASS_USERNAME": "local_admin",
+        "AUTH_TRUSTED_HEADER": "X-Forwarded-User",
+        "AUTH_TRUSTED_HEADER_AUTO_CREATE": True,
     }
 
     def setUp(self):

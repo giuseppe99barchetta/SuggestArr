@@ -44,6 +44,7 @@ from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
+from api_service.services.tmdb.localization import display_language, normalize_language
 
 logger = LoggerManager.get_logger("AuthRoute")
 
@@ -146,6 +147,14 @@ def auth_status():
 
         current_user = getattr(g, "current_user", None)
         bypass = False
+
+        # Trusted-header identities are "signed in without a token", exactly
+        # like the bypass modes below — the proxy did the authenticating.  The
+        # SPA gates on `authenticated && bypass` (router/index.js:
+        # isBypassAuthenticated), so reporting only `authenticated` leaves it
+        # showing a login form to a user the proxy already let in.
+        if current_user and getattr(g, "auth_method", "") == "trusted_header":
+            bypass = True
 
         # /api/auth/status is public, so middleware returns before injecting
         # bypass context. Recreate equivalent bypass checks here.
@@ -471,9 +480,20 @@ def me():
     guaranteed to be set by the time this handler runs).
 
     Response (200):
-      { "id": "<user_id>", "username": "<name>", "role": "<role>" }
+      { "id": "<user_id>", "username": "<name>", "role": "<role>",
+        "language": "<code or null>", "display_language": "<code>" }
+
+    `language` is the person's own choice (null = the default);
+    `display_language` is what titles are actually shown in.
     """
-    return jsonify(g.current_user), 200
+    body = dict(g.current_user)
+    try:
+        own = DatabaseManager().get_user_language(int(g.current_user["id"]))
+    except Exception:
+        own = None
+    body["language"] = own
+    body["display_language"] = display_language(own, load_env_vars())
+    return jsonify(body), 200
 
 
 # ---------------------------------------------------------------------------
@@ -495,6 +515,8 @@ def update_me():
       - new_password must be >= MIN_PASSWORD_LENGTH characters.
 
     Request JSON (all fields optional, at least one required):
+      language          (str|null) — display language for titles, e.g. "de";
+                                     null or "" returns to the default
       username          (str) — desired new login name
       current_password  (str) — required when new_password is provided
       new_password      (str) — must be >= MIN_PASSWORD_LENGTH characters
@@ -511,9 +533,21 @@ def update_me():
     data = request.get_json(silent=True) or {}
     db = DatabaseManager()
 
+    # Everything is validated first and written together at the end, so a
+    # request that fails (a wrong password, say) changes nothing.
     updates = {}
 
-    # --- Username change ---
+    # --- Display language ---
+    # Needs no password: a language change on its own is a valid update.
+    if "language" in data:
+        requested_language = data.get("language")
+        if requested_language in (None, ""):
+            updates["language"] = None
+        else:
+            updates["language"] = normalize_language(requested_language)
+            if updates["language"] is None:
+                return jsonify({"error": "language must look like 'de' or 'pt-BR'"}), 400
+
     new_username = (data.get("username") or "").strip()
     if new_username:
         if len(new_username) > 64:

@@ -180,7 +180,7 @@ def test_feedback_route_validates_and_scopes_to_current_user(monkeypatch):
         json={'feedback': 'too_similar', 'reason_type': 'genre'},
     )
     assert response.status_code == 200
-    db.set_suggestion_feedback.assert_called_once_with(5, None, 7, 'too_similar', 'genre', None, None)
+    db.set_suggestion_feedback.assert_called_once_with(5, None, 7, 'too_similar', 'genre', None, None, False)
 
     db.has_visible_suggestarr_request.return_value = True
     db.set_media_feedback.return_value = {

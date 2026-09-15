@@ -6,6 +6,8 @@ scoped to the authenticated SuggestArr user and the linked media profile.
 
 import json
 
+from api_service.db.components.suggestion_ownership import ownership_clause
+
 
 class SuggestionFeedbackMixin:
     NEGATIVE_FEEDBACK = {'not_interested', 'already_seen', 'too_similar'}
@@ -17,13 +19,14 @@ class SuggestionFeedbackMixin:
     def _feedback_media_user_id(value):
         return '' if value is None else str(value)
 
-    def _feedback_suggestion(self, cursor, suggestion_id, owner_id, media_user_ids=None):
+    def _feedback_suggestion(self, cursor, suggestion_id, owner_id, media_user_ids=None,
+                             include_unassigned=False):
         ph = self._feedback_placeholder()
         query = f"SELECT tmdb_id, media_type, user_id, payload FROM pending_requests WHERE id={ph}"
         params = [suggestion_id]
-        if owner_id is not None:
-            query += f" AND owner_id={ph}"
-            params.append(owner_id)
+        owner_clause, owner_params = ownership_clause(self.db_type, owner_id, include_unassigned)
+        query += owner_clause
+        params.extend(owner_params)
         cursor.execute(query, tuple(params))
         row = cursor.fetchone()
         if not row:
@@ -38,11 +41,13 @@ class SuggestionFeedbackMixin:
         return str(row[0]), row[1], media_user_id
 
     def set_suggestion_feedback(self, suggestion_id, owner_id, user_id, feedback,
-                                reason_type=None, reason_text=None, media_user_ids=None):
+                                reason_type=None, reason_text=None, media_user_ids=None,
+                                include_unassigned=False):
         """Store one user's feedback for a suggestion they are allowed to view."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            suggestion = self._feedback_suggestion(cursor, suggestion_id, owner_id, media_user_ids)
+            suggestion = self._feedback_suggestion(cursor, suggestion_id, owner_id, media_user_ids,
+                                                   include_unassigned)
             if not suggestion:
                 return None
             tmdb_id, media_type, media_user_id = suggestion
@@ -92,11 +97,13 @@ class SuggestionFeedbackMixin:
             'media_user_id': media_user_id,
         }
 
-    def clear_suggestion_feedback(self, suggestion_id, owner_id, user_id, media_user_ids=None):
+    def clear_suggestion_feedback(self, suggestion_id, owner_id, user_id, media_user_ids=None,
+                                  include_unassigned=False):
         """Remove only the caller's feedback for a visible suggestion."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            suggestion = self._feedback_suggestion(cursor, suggestion_id, owner_id, media_user_ids)
+            suggestion = self._feedback_suggestion(cursor, suggestion_id, owner_id, media_user_ids,
+                                                   include_unassigned)
             if not suggestion:
                 return False
             tmdb_id, media_type, media_user_id = suggestion

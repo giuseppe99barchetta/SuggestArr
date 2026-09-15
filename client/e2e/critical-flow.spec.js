@@ -3,9 +3,10 @@ import { expect, test } from "@playwright/test";
 // Deliberately unsigned fixture token. Every API request is intercepted below.
 const token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIiwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiJ9.";
 
-async function mockApi(page, { subpath = "", setupCompleted = true } = {}) {
+async function mockApi(page, { subpath = "", setupCompleted = true, radarrServers = null } = {}) {
   let approved = false;
   let approveCalls = 0;
+  let approveBody = null;
   let runCalls = 0;
 
   await page.addInitScript(() => {
@@ -57,8 +58,11 @@ async function mockApi(page, { subpath = "", setupCompleted = true } = {}) {
     if (apiPath === "/api/automation/requests/workflow/approve" && request.method() === "POST") {
       approved = true;
       approveCalls += 1;
+      approveBody = request.postDataJSON();
       return json({ updated: 1 });
     }
+    if (radarrServers && apiPath === "/api/seer/radarr-servers") return json({ servers: radarrServers });
+    if (radarrServers && apiPath === "/api/seer/sonarr-servers") return json({ servers: [] });
     if (apiPath === "/api/automation/requests/workflow" || apiPath === "/api/automation/requests/workflow/") {
       return json({
         items: approved ? [] : [{ id: 42, tmdb_id: "42", title: "Smoke title", media_type: "movie", rating: 8.1, name: "Manual job", status: "awaiting_approval" }],
@@ -68,7 +72,7 @@ async function mockApi(page, { subpath = "", setupCompleted = true } = {}) {
     if (apiPath === "/api/automation/requests") return json({ data: [], total_pages: 1, total_sources: 0, total_requests: 0, request_users: [] });
     return json({});
   });
-  return { approveCalls: () => approveCalls, runCalls: () => runCalls };
+  return { approveCalls: () => approveCalls, approveBody: () => approveBody, runCalls: () => runCalls };
 }
 
 async function injectSubpathIndex(page, subpath) {
@@ -99,6 +103,104 @@ for (const subpath of ["", "/suggestarr"]) {
     await expect(page.getByText("Smoke title")).toHaveCount(0);
   });
 }
+
+const twoRadarrServers = [
+  { id: 0, name: "Radarr", is4k: false, profiles: [{ id: 7, name: "HD" }, { id: 9, name: "Original language" }], rootFolders: [{ path: "/movies" }] },
+  { id: 1, name: "Radarr 4K", is4k: true, profiles: [{ id: 3, name: "UHD" }], rootFolders: [{ path: "/movies-4k" }] },
+];
+
+test("approving asks for a quality profile and sends the chosen one", async ({ page }) => {
+  const api = await mockApi(page, {
+    // Two servers, so there is something to choose (a single server is filled
+    // in by itself — see approval-dialog.spec.js). id 0 on purpose: Jellyseerr
+    // numbers its first server 0, and a falsy check once treated that as
+    // "nothing chosen".
+    radarrServers: twoRadarrServers,
+  });
+
+  await page.goto("/login");
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill("correct-horse-battery-staple");
+  await page.getByRole("button", { name: "Sign In" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.goto("/requests?status=awaiting_approval");
+  await expect(page.getByText("Smoke title")).toBeVisible();
+  await page.getByRole("button", { name: "Approve request" }).click();
+
+  // With a server to choose from, the click opens the dialog instead of sending.
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator(".approval-profile-label")).toBeVisible();
+  expect(api.approveCalls()).toBe(0);
+
+  await dialog.getByRole("button", { name: /Use Seer default/ }).click();
+  await page.getByRole("menuitem", { name: "Radarr", exact: true }).click();
+  await dialog.getByRole("button", { name: /Select quality profile/ }).click();
+  await page.getByRole("menuitem", { name: "Original language" }).click();
+  // The chosen server has a single root folder, so it is already there.
+  await expect(dialog.getByText("/movies")).toBeVisible();
+  await dialog.getByRole("button", { name: "Send", exact: true }).click();
+
+  await expect.poll(api.approveCalls).toBe(1);
+  expect(api.approveBody()).toEqual({
+    ids: [42],
+    profile: { movie: { serverId: 0, profileId: 9, rootFolder: "/movies", is4k: false } },
+  });
+});
+
+test("approving without touching the profile sends none", async ({ page }) => {
+  const api = await mockApi(page, {
+    radarrServers: [{ id: 3, name: "Radarr", is4k: false, profiles: [{ id: 7, name: "HD" }], rootFolders: [{ path: "/movies" }] }],
+  });
+
+  await page.goto("/login");
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill("correct-horse-battery-staple");
+  await page.getByRole("button", { name: "Sign In" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.goto("/requests?status=awaiting_approval");
+  await page.getByRole("button", { name: "Approve request" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Send", exact: true }).click();
+
+  await expect.poll(api.approveCalls).toBe(1);
+  expect(api.approveBody()).toEqual({ ids: [42] });
+});
+
+test("approving from the dashboard asks for a quality profile too", async ({ page }) => {
+  // The dashboard has its own approve button (SettingsRequests). It once
+  // skipped the dialog entirely and sent the request with Jellyseerr's default.
+  const api = await mockApi(page, {
+    radarrServers: twoRadarrServers,
+  });
+
+  await page.goto("/login");
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill("correct-horse-battery-staple");
+  await page.getByRole("button", { name: "Sign In" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await expect(page.getByText("Smoke title")).toBeVisible();
+  await page.getByRole("button", { name: "Approve request" }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator(".approval-profile-label")).toBeVisible();
+  expect(api.approveCalls()).toBe(0);
+
+  await dialog.getByRole("button", { name: /Use Seer default/ }).click();
+  await page.getByRole("menuitem", { name: "Radarr", exact: true }).click();
+  await dialog.getByRole("button", { name: /Select quality profile/ }).click();
+  await page.getByRole("menuitem", { name: "Original language" }).click();
+  // The chosen server has a single root folder, so it is already there.
+  await expect(dialog.getByText("/movies")).toBeVisible();
+  await dialog.getByRole("button", { name: "Send", exact: true }).click();
+
+  await expect.poll(api.approveCalls).toBe(1);
+  expect(api.approveBody()).toEqual({
+    ids: [42],
+    profile: { movie: { serverId: 0, profileId: 9, rootFolder: "/movies", is4k: false } },
+  });
+});
 
 test("an authenticated administrator can start the setup wizard", async ({ page }) => {
   await mockApi(page, { setupCompleted: false });

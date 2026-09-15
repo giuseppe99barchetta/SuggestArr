@@ -248,15 +248,20 @@ class SeerClient(BaseHTTPClient):
         return await self._get_arr_servers('sonarr')
 
     async def _get_arr_servers(self, service):
-        """Fetch servers and enrich list-only responses when cookie auth is available."""
+        """Fetch servers and enrich list-only responses with profiles and root folders.
+
+        The list endpoint carries no profiles; the per-server endpoint does, and
+        Jellyseerr answers it with the API key as well as with a session cookie.
+        Enriching only when a cookie was present left API-key-only setups with
+        empty profile and root-folder lists — nothing to choose from.
+        """
         servers = await self._make_request("GET", f"api/v1/service/{service}") or []
-        if not self.session_token:
-            return servers
         for index, server in enumerate(servers):
             if server.get('profiles') and server.get('rootFolders'):
                 continue
             details = await self._make_request(
-                "GET", f"api/v1/service/{service}/{server['id']}", use_cookie=True
+                "GET", f"api/v1/service/{service}/{server['id']}",
+                use_cookie=bool(self.session_token),
             )
             if details:
                 detail_server = details.get('server', {})
@@ -432,12 +437,20 @@ class SeerClient(BaseHTTPClient):
             owner = db.get_auth_user_by_id(context['owner_id']) or {}
             if owner.get('seer_user_id') is not None:
                 payload['userId'] = owner['seer_user_id']
-        approval_default = load_env_vars().get('REQUIRE_REQUEST_APPROVAL', False)
+        env = load_env_vars()
+        approval_default = env.get('REQUIRE_REQUEST_APPROVAL', False)
         status = 'awaiting_approval' if requires_request_approval(
             context.get('delivery_mode', 'inherit'), approval_default
         ) else 'queued'
+        # A job without an owner scans several people's histories.  Its
+        # suggestion belongs to the person it was made for — resolved now,
+        # through a verified link only, and stored, so it does not move when
+        # links change.  Unresolved ones stay unassigned.
+        owner_id = context.get('owner_id')
+        if owner_id is None and user_id is not None:
+            owner_id = db.resolve_suggestion_owner(env.get('SELECTED_SERVICE'), user_id)
         enqueued = db.enqueue_request(tmdb_id, media_type, user_id, payload, status=status,
-                                      job_id=context.get('job_id'), owner_id=context.get('owner_id'),
+                                      job_id=context.get('job_id'), owner_id=owner_id,
                                       execution_id=context.get('execution_id'))
         if enqueued:
             self.logger.info("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)

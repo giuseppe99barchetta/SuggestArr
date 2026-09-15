@@ -18,6 +18,7 @@ from api_service.utils.asyncio_loop import run_coroutine_sync
 from api_service.config.logger_manager import LoggerManager
 from api_service.observability.metrics import render_metrics
 from api_service.utils.ssrf_guard import validate_url
+from api_service.utils import request_scope
 
 public_api_v1_bp = Blueprint('public_api_v1', __name__)
 logger = LoggerManager.get_logger('PublicApiV1')
@@ -299,13 +300,13 @@ def run(run_id):
 
 
 def _visible_request_user_ids(db):
-    selected = request.args.get('user_id', '').strip()
-    if g.current_user['role'] == 'admin':
-        return [selected] if selected else None
-    if load_env_vars().get('REQUEST_VISIBILITY', 'all') != 'own':
-        return [selected] if selected else None
-    linked = [str(profile['external_user_id']) for profile in db.get_user_media_profiles(int(g.current_user['id']))]
-    return [selected] if selected and selected in linked else linked
+    return request_scope.visible_request_user_ids(
+        db, g.current_user, load_env_vars(), request.args.get('user_id', ''))
+
+
+def _suggestion_scope(db):
+    return request_scope.suggestion_scope(
+        db, g.current_user, load_env_vars(), request.args.get('user_id', ''))
 
 
 def _request_statistics(db, users=None):
@@ -378,11 +379,11 @@ def suggestions():
     if len(search) > 100:
         return jsonify({'error': {'code': 'validation_error', 'message': 'Search must be at most 100 characters.'}}), 400
     db = DatabaseManager()
-    owner_id = None if g.current_user['role'] == 'admin' else int(g.current_user['id'])
+    scope = _suggestion_scope(db)
     page, per_page = pagination
     items, total = db.list_suggestions(
-        owner_id, status, search, page, per_page, media_type, _visible_request_user_ids(db),
-        int(g.current_user['id']),
+        scope.owner_id, status, search, page, per_page, media_type, scope.media_user_ids,
+        int(g.current_user['id']), scope.include_unassigned,
     )
     return jsonify({'data': items, 'meta': {'page': page, 'per_page': per_page, 'total': total, 'pages': max(1, (total + per_page - 1) // per_page)}}), 200
 
@@ -398,17 +399,21 @@ def suggestion_actions():
     if type(remove_blacklist) is not bool or (remove_blacklist and action != 'request_again'):
         return jsonify({'error': {'code': 'validation_error', 'message': 'remove_blacklist is valid only with request_again.'}}), 400
     db = DatabaseManager()
-    owner_id = None if g.current_user['role'] == 'admin' else int(g.current_user['id'])
+    scope = _suggestion_scope(db)
+    owner_id, unassigned = scope.owner_id, scope.include_unassigned
     if action == 'approve':
-        changed = db.decide_suggestions(ids, owner_id, int(g.current_user['id']), True)
+        changed = db.decide_suggestions(ids, owner_id, int(g.current_user['id']), True,
+                                        include_unassigned=unassigned)
     elif action == 'reject':
-        changed = db.decide_suggestions(ids, owner_id, int(g.current_user['id']), False)
+        changed = db.decide_suggestions(ids, owner_id, int(g.current_user['id']), False,
+                                        include_unassigned=unassigned)
     elif action == 'blacklist':
-        changed = db.decide_suggestions(ids, owner_id, int(g.current_user['id']), False, True)
+        changed = db.decide_suggestions(ids, owner_id, int(g.current_user['id']), False, True,
+                                        include_unassigned=unassigned)
     elif action == 'retry':
-        changed = db.retry_suggestions(ids, owner_id)
+        changed = db.retry_suggestions(ids, owner_id, unassigned)
     else:
-        changed = db.request_rejected(ids, owner_id, remove_blacklist)
+        changed = db.request_rejected(ids, owner_id, remove_blacklist, unassigned)
     return jsonify({'data': {'action': action, 'updated': changed}}), 200
 
 

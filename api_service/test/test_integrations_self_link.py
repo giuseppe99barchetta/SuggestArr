@@ -50,6 +50,7 @@ class _IntegrationsBase(unittest.TestCase):
                 external_user_id,
                 external_username,
                 access_token=None,
+                verified=False,
             ):
                 profiles.append(
                     {
@@ -59,6 +60,7 @@ class _IntegrationsBase(unittest.TestCase):
                         "external_user_id": external_user_id,
                         "external_username": external_username,
                         "access_token": access_token,
+                        "verified": verified,
                         "created_at": "2025-01-01 00:00:00",
                     }
                 )
@@ -154,6 +156,8 @@ class TestJellyfinSelfLink(_IntegrationsBase):
         self.assertEqual(stored["external_user_id"], "jf-1")
         self.assertEqual(stored["external_username"], "jf_user")
         self.assertIsNone(stored["access_token"])
+        # Authenticated as the account, so the link may grant ownership.
+        self.assertTrue(stored["verified"])
 
 
 class TestPlexSelfLink(_IntegrationsBase):
@@ -198,6 +202,7 @@ class TestPlexSelfLink(_IntegrationsBase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(self._profiles), 1)
+        self.assertTrue(self._profiles[0]["verified"])
         stored = self._profiles[0]
         self.assertEqual(stored["provider"], "plex")
         self.assertEqual(stored["external_user_id"], "777")

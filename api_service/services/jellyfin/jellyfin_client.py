@@ -194,6 +194,7 @@ class JellyfinClient(BaseHTTPClient):
                 "Limit": api_fetch_limit,
                 "ParentId": library_id,
                 "Fields": "ProviderIds,SeriesProviderIds",
+                "EnableUserData": "true",
             }
 
             self.logger.debug(
@@ -279,6 +280,7 @@ class JellyfinClient(BaseHTTPClient):
             "Limit": api_fetch_limit,
             "ParentId": library_id,
             "Fields": "ProviderIds,SeriesProviderIds",
+            "EnableUserData": "true",
         }
 
         self.logger.debug(
