@@ -106,7 +106,8 @@
               </span>
               <div v-if="request._pending" class="pending-card-actions" @click.stop>
                 <template v-if="confirmRejectId === request.id"><button type="button" class="poster-action pending-cancel" aria-label="Cancel rejection" @click="confirmRejectId = null"><i class="fas fa-undo"></i></button><button type="button" class="poster-action pending-reject" :disabled="actionLoadingId === request.id" aria-label="Confirm rejection" @click="decidePending('reject', request.id)"><i class="fas fa-check"></i></button></template>
-                <template v-else><button type="button" class="poster-action pending-approve" :disabled="actionLoadingId === request.id" aria-label="Approve request" @click="requestApprove(request)"><i class="fas fa-check"></i></button><button type="button" class="poster-action pending-reject" :disabled="actionLoadingId === request.id" aria-label="Reject request" @click="confirmRejectId = request.id"><i class="fas fa-times"></i></button></template>
+                <template v-else-if="seenMenuId === request.id"><button v-for="option in seenOptions" :key="option.value" type="button" class="poster-action pending-seen" :disabled="actionLoadingId === request.id" :aria-label="option.label" :title="option.label" @click="markSeen(request, option)"><i :class="option.icon"></i></button><button type="button" class="poster-action pending-cancel" aria-label="Cancel" @click="seenMenuId = null"><i class="fas fa-undo"></i></button></template>
+                <template v-else><button type="button" class="poster-action pending-approve" :disabled="actionLoadingId === request.id" aria-label="Approve request" @click="requestApprove(request)"><i class="fas fa-check"></i></button><button type="button" class="poster-action pending-seen" :disabled="actionLoadingId === request.id" aria-label="Already seen it" title="Already seen it" @click="seenMenuId = request.id"><i class="fas fa-eye"></i></button><button type="button" class="poster-action pending-reject" :disabled="actionLoadingId === request.id" aria-label="Reject request" @click="confirmRejectId = request.id"><i class="fas fa-times"></i></button></template>
               </div>
             </div>
 
@@ -188,6 +189,14 @@ export default {
       pendingRequests: [],
       pendingTotal: 0,
       confirmRejectId: null,
+      seenMenuId: null,
+      // Feedback the ranking step reads back: 'already_seen' and 'not_interested' both
+      // suppress the title, while a liked item still tells the recommender what worked.
+      seenOptions: [
+        { value: 'liked', label: 'Seen it, liked it', icon: 'fas fa-thumbs-up', feedback: 'already_seen' },
+        { value: 'disliked', label: 'Seen it, did not like it', icon: 'fas fa-thumbs-down', feedback: 'not_interested' },
+        { value: 'seen', label: 'Seen it', icon: 'fas fa-eye', feedback: 'already_seen' }
+      ],
       approveItem: null,
       servers: null,
       actionLoadingId: null,
@@ -299,6 +308,26 @@ export default {
       if (ok) this.approveItem = null;
     },
 
+    // Record that the user has already watched a suggestion, then take it out of the
+    // queue. The feedback is what stops it coming back; the reject only clears the card.
+    async markSeen(request, option) {
+      this.actionLoadingId = request.id;
+      try {
+        await axios.put(`/api/automation/requests/workflow/${request.id}/feedback`, {
+          feedback: option.feedback,
+          reason_type: 'content',
+          reason_text: option.label
+        });
+      } catch (error) {
+        this.$toast.open({ message: error.response?.data?.message || 'Could not save feedback', type: 'error' });
+        this.actionLoadingId = null;
+        return;
+      } finally {
+        this.seenMenuId = null;
+      }
+      await this.decidePending('reject', request.id);
+    },
+
     async decidePending(action, id, profile = null) {
       this.actionLoadingId = id;
       try {
@@ -355,6 +384,7 @@ export default {
 .pending-approve { color: var(--color-text-primary); background: var(--color-success); }
 .pending-reject { color: var(--color-text-primary); background: var(--color-error); }
 .pending-cancel { background: var(--surface-elevated-solid); }
+.pending-seen { color: var(--color-text-primary); background: var(--color-warning); }
 
 @media (max-width: 992px) {
   .requests-stats-header {
