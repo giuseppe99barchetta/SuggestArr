@@ -207,14 +207,20 @@ def test_feedback_route_validates_and_scopes_to_current_user(monkeypatch):
     assert hidden.status_code == 404
 
 
-def test_taste_profile_splits_likes_from_dislikes_and_skips_neutral_marks():
+def test_taste_profile_keeps_each_signal_distinct():
     queue, connection = _queue()
     rows = [
-        (7, '', '1', 'movie', 'interested', 'Arrival', 2016),
-        (7, '', '2', 'movie', 'not_interested', 'Hot Tub Time Machine', 2010),
-        (7, '', '3', 'movie', 'save_for_later', 'Dune', 2021),
+        # Watched verdicts are the strong signals.
+        (7, '', '1', 'movie', 'seen_liked', 'Arrival', 2016),
+        (7, '', '2', 'movie', 'seen_disliked', 'Cats', 2019),
+        # Intent is a weaker signal: wanting to watch is not enjoying.
+        (7, '', '3', 'movie', 'interested', 'Dune', 2021),
+        (7, '', '4', 'movie', 'save_for_later', 'Heat', 1995),
+        (7, '', '5', 'movie', 'not_interested', 'Hot Tub Time Machine', 2010),
         # Watching something is not a verdict on it, so it must not colour the profile.
-        (7, '', '4', 'movie', 'already_seen', 'Knives Out', 2019),
+        (7, '', '6', 'movie', 'already_seen', 'Knives Out', 2019),
+        # A complaint about repetition is not a complaint about the title.
+        (7, '', '7', 'movie', 'too_similar', 'Sherlock Holmes', 2009),
     ]
     connection.executemany(
         "INSERT INTO suggestion_feedback(user_id,media_user_id,tmdb_id,media_type,feedback,title,year) "
@@ -223,9 +229,14 @@ def test_taste_profile_splits_likes_from_dislikes_and_skips_neutral_marks():
     connection.commit()
 
     profile = queue.get_taste_profile(7, '', 'movie')
-    assert {entry['title'] for entry in profile['liked']} == {'Arrival', 'Dune'}
-    assert [entry['title'] for entry in profile['disliked']] == ['Hot Tub Time Machine']
-    assert profile['liked'][0]['year'] in (2016, 2021)
+    assert [entry['title'] for entry in profile['loved']] == ['Arrival']
+    assert [entry['title'] for entry in profile['disliked']] == ['Cats']
+    assert {entry['title'] for entry in profile['liked']} == {'Dune', 'Heat'}
+    assert [entry['title'] for entry in profile['uninterested']] == ['Hot Tub Time Machine']
+    everything = [e['title'] for bucket in profile.values() for e in bucket]
+    assert 'Knives Out' not in everything
+    assert 'Sherlock Holmes' not in everything
+    assert profile['loved'][0]['year'] == 2016
 
 
 def test_taste_profile_is_scoped_and_bounded():
@@ -255,12 +266,13 @@ def test_taste_profile_ignores_ratings_saved_without_a_title():
     connection.commit()
 
     # Rows predating the title column would otherwise reach the prompt as a bare id.
-    assert queue.get_taste_profile(7, '', 'movie') == {'liked': [], 'disliked': []}
+    assert queue.get_taste_profile(7, '', 'movie') == queue._empty_taste_profile()
 
 
 def test_taste_profile_is_empty_without_an_owner():
     queue, _ = _queue()
-    assert queue.get_taste_profile(None, '', 'movie') == {'liked': [], 'disliked': []}
+    assert queue.get_taste_profile(None, '', 'movie') == queue._empty_taste_profile()
+    assert all(bucket == [] for bucket in queue._empty_taste_profile().values())
 
 
 def test_saving_a_rating_keeps_a_title_a_later_rating_omits():
@@ -308,5 +320,107 @@ def test_a_watched_like_teaches_taste_while_a_bare_watch_does_not():
     connection.commit()
 
     profile = queue.get_taste_profile(7, '', 'movie')
-    assert [entry['title'] for entry in profile['liked']] == ['Knives Out']
-    assert profile['disliked'] == []
+    assert [entry['title'] for entry in profile['loved']] == ['Knives Out']
+    assert profile['liked'] == [] and profile['disliked'] == []
+
+
+def test_ownerless_job_resolves_feedback_through_a_verified_link():
+    """An ownerless job still has an owner: whoever verified the media account."""
+    repository = MagicMock()
+    repository.resolve_suggestion_owner.return_value = 7
+    repository.get_taste_profile.return_value = {
+        'loved': [{'title': 'Arrival', 'year': 2016}], 'liked': [],
+        'disliked': [], 'uninterested': [],
+    }
+    handler = FeedbackHandler(
+        None, None, MagicMock(), 3, 2, use_llm=False,
+        feedback_repository=repository, feedback_owner_id=None,
+        feedback_media_service='jellyfin',
+    )
+
+    profile = handler._taste_profile('movie', {'Id': 'jellyfin-a'})
+
+    assert [entry['title'] for entry in profile['loved']] == ['Arrival']
+    repository.resolve_suggestion_owner.assert_called_once_with('jellyfin', 'jellyfin-a')
+    repository.get_taste_profile.assert_called_once_with(7, 'jellyfin-a', 'movie')
+
+
+def test_one_media_users_feedback_never_reaches_another():
+    queue, connection = _queue()
+    connection.executemany(
+        "INSERT INTO suggestion_feedback(user_id,media_user_id,tmdb_id,media_type,feedback,title,year) "
+        "VALUES (?,?,?,?,?,?,?)",
+        [(7, 'jellyfin-a', '1', 'movie', 'seen_liked', 'Mine', 2016),
+         (8, 'jellyfin-b', '2', 'movie', 'seen_liked', 'Theirs', 2019)],
+    )
+    connection.commit()
+
+    mine = queue.get_taste_profile(7, 'jellyfin-a', 'movie')
+    assert [entry['title'] for entry in mine['loved']] == ['Mine']
+    # Neither the other SuggestArr user nor the other media profile may bleed in.
+    assert queue.get_taste_profile(7, 'jellyfin-b', 'movie') == queue._empty_taste_profile()
+    assert queue.get_taste_profile(8, 'jellyfin-a', 'movie') == queue._empty_taste_profile()
+
+
+def test_an_unlinked_media_user_steers_nothing():
+    """No verified link means no owner, so the run continues without a profile."""
+    repository = MagicMock()
+    repository.resolve_suggestion_owner.return_value = None
+    handler = FeedbackHandler(
+        None, None, MagicMock(), 3, 2, use_llm=False,
+        feedback_repository=repository, feedback_owner_id=None,
+        feedback_media_service='jellyfin',
+    )
+
+    assert handler._taste_profile('movie', {'Id': 'stranger'}) == {}
+    repository.get_taste_profile.assert_not_called()
+
+
+def test_the_resolved_owner_is_looked_up_once_per_media_user():
+    repository = MagicMock()
+    repository.resolve_suggestion_owner.return_value = 7
+    repository.get_taste_profile.return_value = {'loved': [], 'liked': [], 'disliked': [], 'uninterested': []}
+    repository.get_suggestion_feedback_signals.return_value = {}
+    handler = FeedbackHandler(
+        None, None, MagicMock(), 3, 2, use_llm=False,
+        feedback_repository=repository, feedback_owner_id=None,
+        feedback_media_service='jellyfin',
+    )
+
+    handler._taste_profile('movie', {'Id': 'jellyfin-a'})
+    handler._taste_profile('tv', {'Id': 'jellyfin-a'})
+    handler._feedback_signals('movie', {'Id': 'jellyfin-a'})
+
+    # Resolution is a database round trip; a run asks about the same user repeatedly.
+    repository.resolve_suggestion_owner.assert_called_once_with('jellyfin', 'jellyfin-a')
+
+
+def test_suppression_also_works_on_an_ownerless_job():
+    """The maintainer's fix must reach ranking too, not only the prompt."""
+    repository = MagicMock()
+    repository.resolve_suggestion_owner.return_value = 7
+    repository.get_suggestion_feedback_signals.return_value = {'3': 'seen_disliked'}
+    handler = FeedbackHandler(
+        None, None, MagicMock(), 3, 2, use_llm=False,
+        feedback_repository=repository, feedback_owner_id=None,
+        feedback_media_service='jellyfin',
+    )
+
+    ranked = handler._apply_feedback_ranking([{'id': 1}, {'id': 3}], 'movie', {'Id': 'jellyfin-a'})
+
+    assert [item['id'] for item in ranked] == [1]
+
+
+def test_a_configured_job_owner_is_never_overridden_by_a_link():
+    repository = MagicMock()
+    repository.get_taste_profile.return_value = {'loved': [], 'liked': [], 'disliked': [], 'uninterested': []}
+    handler = FeedbackHandler(
+        None, None, MagicMock(), 3, 2, use_llm=False,
+        feedback_repository=repository, feedback_owner_id=42,
+        feedback_media_service='jellyfin',
+    )
+
+    handler._taste_profile('movie', {'Id': 'jellyfin-a'})
+
+    repository.resolve_suggestion_owner.assert_not_called()
+    repository.get_taste_profile.assert_called_once_with(42, 'jellyfin-a', 'movie')

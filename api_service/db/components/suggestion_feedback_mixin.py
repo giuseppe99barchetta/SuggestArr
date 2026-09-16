@@ -10,19 +10,35 @@ from api_service.db.components.suggestion_ownership import ownership_clause
 
 
 class SuggestionFeedbackMixin:
-    # Feedback that stops a title being suggested again. 'seen_liked' belongs here even
-    # though it is positive: the user has already watched it, so re-suggesting it is
-    # exactly the annoyance the rating was meant to end.
-    NEGATIVE_FEEDBACK = {'not_interested', 'already_seen', 'seen_liked', 'too_similar'}
+    # Feedback that stops a title being suggested again. The two "seen" verdicts belong
+    # here even though one is positive: the user has already watched the title, so
+    # re-suggesting it is exactly the annoyance the rating was meant to end.
+    NEGATIVE_FEEDBACK = {'not_interested', 'already_seen', 'seen_liked', 'seen_disliked',
+                         'too_similar'}
 
-    # Feedback that says something about taste. 'already_seen' deliberately is not here:
-    # having watched a title is not a verdict on it, so it suppresses the title without
-    # claiming the user liked or disliked it.
+    # What each rating says about taste, and how loudly. These are deliberately not one
+    # signed scale: "I want to watch this" and "I watched it and loved it" are different
+    # claims, and the weaker one should not be described to the model as enjoyment.
+    # 'already_seen' is absent on purpose. Having watched a title is not a verdict on it,
+    # so it suppresses the title while teaching nothing. 'too_similar' is absent too: it
+    # is a complaint about repetition in the list, not about the title itself.
     TASTE_FEEDBACK = {
-        'interested': 'liked',
-        'seen_liked': 'liked',
-        'save_for_later': 'liked',
-        'not_interested': 'disliked',
+        'seen_liked': ('liked', 'strong'),
+        'interested': ('liked', 'weak'),
+        'save_for_later': ('liked', 'weak'),
+        'seen_disliked': ('disliked', 'strong'),
+        'not_interested': ('disliked', 'weak'),
+    }
+
+    # How strongly each rating promotes a surviving candidate during local ranking. This
+    # is deliberately separate from TASTE_FEEDBACK: "watched and loved" and "want to
+    # watch" are equally strong reasons to rank something up, but only the first is
+    # evidence of enjoyment, so the prompt must keep them apart even though ranking
+    # need not. These weights are unchanged from before the prompt work.
+    POSITIVE_WEIGHTS = {
+        'seen_liked': 2,
+        'interested': 2,
+        'save_for_later': 1,
     }
 
     # Titles carried into the recommendation prompt, newest first. The cap is what keeps
@@ -184,19 +200,37 @@ class SuggestionFeedbackMixin:
             )
             return {str(row[0]): row[1] for row in cursor.fetchall()}
 
+    @staticmethod
+    def _empty_taste_profile():
+        return {'loved': [], 'liked': [], 'disliked': [], 'uninterested': []}
+
+    # Where each (kind, strength) pair lands in the profile the prompt reads. Keeping the
+    # four buckets separate is what lets the prompt say "watched and enjoyed" about one
+    # group and only "wanted to watch" about the other.
+    _TASTE_BUCKETS = {
+        ('liked', 'strong'): 'loved',
+        ('liked', 'weak'): 'liked',
+        ('disliked', 'strong'): 'disliked',
+        ('disliked', 'weak'): 'uninterested',
+    }
+
     def get_taste_profile(self, user_id, media_user_id, media_type, limit=None):
-        """Return the recent liked/disliked titles that shape the recommendation prompt.
+        """Return the recent ratings that shape the recommendation prompt.
 
         Only rows that carry a title are usable, so feedback saved before the title
         column existed is skipped rather than sent to the model as a bare id.
 
-        :return: Dict with 'liked' and 'disliked' lists of {'title', 'year'}, newest first.
+        :return: Dict of {'title', 'year'} lists, newest first, in four buckets:
+            'loved'        — watched and explicitly liked
+            'liked'        — wanted to watch, but enjoyment is unconfirmed
+            'disliked'     — watched and explicitly disliked
+            'uninterested' — did not appeal, not necessarily watched
         """
         if user_id is None:
-            return {'liked': [], 'disliked': []}
+            return self._empty_taste_profile()
         limit = self.TASTE_PROFILE_LIMIT if limit is None else limit
         if limit <= 0:
-            return {'liked': [], 'disliked': []}
+            return self._empty_taste_profile()
         ph = self._feedback_placeholder()
         marks = ','.join([ph] * len(self.TASTE_FEEDBACK))
         with self.get_connection() as conn:
@@ -209,11 +243,11 @@ class SuggestionFeedbackMixin:
                 (user_id, self._feedback_media_user_id(media_user_id), media_type,
                  *sorted(self.TASTE_FEEDBACK), limit),
             )
-            profile = {'liked': [], 'disliked': []}
+            profile = self._empty_taste_profile()
             for title, year, feedback in cursor.fetchall():
-                bucket = self.TASTE_FEEDBACK.get(feedback)
-                if bucket:
-                    profile[bucket].append({'title': title, 'year': year})
+                signal = self.TASTE_FEEDBACK.get(feedback)
+                if signal:
+                    profile[self._TASTE_BUCKETS[signal]].append({'title': title, 'year': year})
             return profile
 
     def should_skip_feedback(self, job_owner_id, tmdb_id, media_type, media_user_id):

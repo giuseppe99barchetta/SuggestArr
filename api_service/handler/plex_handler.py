@@ -16,7 +16,7 @@ def to_ascii(value):
     return unicodedata.normalize('NFKD', value)
 
 class PlexHandler(BaseMediaHandler):
-    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, selected_users=None, max_content=10, feedback_repository=None, feedback_owner_id=None):
+    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, selected_users=None, max_content=10, feedback_repository=None, feedback_owner_id=None, feedback_media_service=None):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -49,6 +49,7 @@ class PlexHandler(BaseMediaHandler):
             max_content=max_content,
             feedback_repository=feedback_repository,
             feedback_owner_id=feedback_owner_id,
+            feedback_media_service=feedback_media_service,
         )
         self.plex_client = plex_client
         self.selected_users = selected_users or []

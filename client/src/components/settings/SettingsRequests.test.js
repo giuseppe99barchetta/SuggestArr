@@ -9,15 +9,15 @@ test('pending cards offer an already-seen action beside approve and reject', () 
   assert.match(source, /@click="seenMenuId = request\.id"/);
 });
 
-test('the seen menu offers liked, disliked and plain seen', () => {
-  assert.match(source, /label: 'Seen it, liked it', icon: 'fas fa-thumbs-up', feedback: 'seen_liked'/);
-  assert.match(source, /label: 'Seen it, did not like it', icon: 'fas fa-thumbs-down', feedback: 'not_interested'/);
-  assert.match(source, /label: 'Seen it', icon: 'fas fa-eye', feedback: 'already_seen'/);
+test('the rating options come from the shared module, not a local copy', () => {
+  // Both pending UIs must offer the same actions; duplicating the list is how they drift.
+  assert.match(source, /import \{ SEEN_OPTIONS, saveSeenFeedback \} from '@\/utils\/suggestionFeedback\.js'/);
+  assert.match(source, /seenOptions: SEEN_OPTIONS/);
 });
 
 test('marking a suggestion seen saves feedback before clearing the card', () => {
   const method = source.slice(source.indexOf('async markSeen('), source.indexOf('async decidePending('));
-  const feedbackCall = method.indexOf('/feedback');
+  const feedbackCall = method.indexOf('saveSeenFeedback(');
   const rejectCall = method.indexOf("this.decidePending('reject'");
   assert.ok(feedbackCall > -1, 'markSeen should save feedback');
   assert.ok(rejectCall > -1, 'markSeen should clear the pending card');
@@ -27,16 +27,4 @@ test('marking a suggestion seen saves feedback before clearing the card', () => 
 test('a failed feedback save leaves the suggestion in the queue', () => {
   const method = source.slice(source.indexOf('async markSeen('), source.indexOf('async decidePending('));
   assert.match(method, /catch \(error\)[\s\S]*?return;/);
-});
-
-test('a liked rating is stored as a positive signal, not a neutral one', () => {
-  // 'seen_liked' both suppresses and teaches; 'already_seen' only suppresses.
-  assert.match(source, /label: 'Seen it, liked it',[^}]*feedback: 'seen_liked'/);
-});
-
-test('the rating carries the title and year the recommender needs', () => {
-  const method = source.slice(source.indexOf('async markSeen('), source.indexOf('async decidePending('));
-  assert.match(method, /title: request\.title \|\| null/);
-  assert.match(method, /request\.release_date \|\| request\.first_air_date/);
-  assert.match(method, /year: Number\.isFinite\(year\) \? year : null/);
 });

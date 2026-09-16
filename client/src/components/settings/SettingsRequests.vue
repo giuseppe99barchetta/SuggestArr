@@ -172,6 +172,7 @@ import { formatDate } from '@/utils/dateUtils.js';
 import BaseButton from '@/components/ui/BaseButton.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
 import { approvalNeedsDialog, loadSeerServers } from '@/utils/requestProfiles.js';
+import { SEEN_OPTIONS, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
 import '@/assets/styles/requestsPage.css';
 
 export default {
@@ -190,14 +191,7 @@ export default {
       pendingTotal: 0,
       confirmRejectId: null,
       seenMenuId: null,
-      // All three stop the title being suggested again. They differ in what the
-      // recommender learns: 'seen_liked' and 'not_interested' shape the taste profile,
-      // 'already_seen' records no verdict because watching is not the same as enjoying.
-      seenOptions: [
-        { value: 'liked', label: 'Seen it, liked it', icon: 'fas fa-thumbs-up', feedback: 'seen_liked' },
-        { value: 'disliked', label: 'Seen it, did not like it', icon: 'fas fa-thumbs-down', feedback: 'not_interested' },
-        { value: 'seen', label: 'Seen it', icon: 'fas fa-eye', feedback: 'already_seen' }
-      ],
+      seenOptions: SEEN_OPTIONS,
       approveItem: null,
       servers: null,
       actionLoadingId: null,
@@ -315,16 +309,8 @@ export default {
     // name what the user liked or disliked instead of only suppressing an id.
     async markSeen(request, option) {
       this.actionLoadingId = request.id;
-      const released = request.release_date || request.first_air_date;
-      const year = released ? Number(String(released).slice(0, 4)) : null;
       try {
-        await axios.put(`/api/automation/requests/workflow/${request.id}/feedback`, {
-          feedback: option.feedback,
-          reason_type: 'content',
-          reason_text: option.label,
-          title: request.title || null,
-          year: Number.isFinite(year) ? year : null
-        });
+        await saveSeenFeedback(axios, request.id, option, request);
       } catch (error) {
         this.$toast.open({ message: error.response?.data?.message || 'Could not save feedback', type: 'error' });
         this.actionLoadingId = null;

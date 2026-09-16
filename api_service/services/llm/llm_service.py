@@ -414,27 +414,44 @@ def _format_taste_profile(taste_profile: Optional[Dict], list_type: str) -> str:
             lines.append(f"- {title} ({year})" if year else f"- {title}")
         return "\n".join(lines)
 
-    liked_text = _render(taste_profile.get("liked") or [])
-    disliked_text = _render(taste_profile.get("disliked") or [])
-    if not liked_text and not disliked_text:
+    # Each rating says something different, and saying it precisely matters more than
+    # brevity here: describing "wanted to watch" as enjoyment would teach the model a
+    # preference the user never expressed.
+    blocks = [
+        ("loved",
+         "WATCHED AND ENJOYED — the strongest evidence of taste",
+         f"Lean toward {list_type} that share their tone, themes, mood or craft."),
+        ("liked",
+         "WANTED TO WATCH — interest only; the user has NOT said they enjoyed these",
+         "Treat these as a hint about what draws their attention, weaker than the list above."),
+        ("disliked",
+         "WATCHED AND DID NOT ENJOY — the strongest evidence against",
+         "Infer what specifically did not land and steer away from those qualities."),
+        ("uninterested",
+         "DID NOT APPEAL — passed over without necessarily watching",
+         "Treat these as mild disinterest, not a verdict on quality."),
+    ]
+
+    rendered = [(heading, _render(taste_profile.get(key) or []), note)
+                for key, heading, note in blocks]
+    rendered = [entry for entry in rendered if entry[1]]
+    if not rendered:
         return ""
 
     sections = ["\nThe user has explicitly rated these suggestions:"]
-    if liked_text:
-        sections.append(
-            f"\nENJOYED — strong evidence of taste:\n{liked_text}\n"
-            f"Lean toward {list_type} that share their tone, themes, mood or craft."
-        )
-    if disliked_text:
-        sections.append(
-            f"\nDID NOT ENJOY:\n{disliked_text}\n"
-            "Infer what specifically did not land and steer away from those qualities. Do NOT "
-            "rule out an entire genre, era or country because of these entries; the user may "
-            "well love other titles that share their genre."
+    for heading, text, note in rendered:
+        sections.append(f"\n{heading}:\n{text}\n{note}")
+
+    closing = ""
+    if any(taste_profile.get(key) for key in ("disliked", "uninterested")):
+        # Only worth saying when there is a negative entry to over-generalise from.
+        closing = (
+            "Do NOT rule out an entire genre, era or country because of the negative "
+            "entries; the user may well love other titles that share their genre. "
         )
     sections.append(
-        "\nDo not recommend any title listed above. Prefer suggestions that are not obvious "
-        "near-duplicates of each other, so the list keeps some range.\n"
+        f"\n{closing}Do not recommend any title listed above. Prefer suggestions that are "
+        "not obvious near-duplicates of each other, so the list keeps some range.\n"
     )
     return "\n".join(sections)
 
