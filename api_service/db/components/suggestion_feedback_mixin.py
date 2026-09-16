@@ -22,11 +22,14 @@ class SuggestionFeedbackMixin:
     # 'already_seen' is absent on purpose. Having watched a title is not a verdict on it,
     # so it suppresses the title while teaching nothing. 'too_similar' is absent too: it
     # is a complaint about repetition in the list, not about the title itself.
+    # The strength mirrors the ranking weights below: a watched verdict and active
+    # interest both weigh 2, bookmarking weighs 1. What differs is what they are
+    # evidence of, which is why the prompt keeps all three apart.
     TASTE_FEEDBACK = {
-        'seen_liked': ('liked', 'strong'),
-        'interested': ('liked', 'weak'),
+        'seen_liked': ('liked', 'watched'),
+        'interested': ('liked', 'strong'),
         'save_for_later': ('liked', 'weak'),
-        'seen_disliked': ('disliked', 'strong'),
+        'seen_disliked': ('disliked', 'watched'),
         'not_interested': ('disliked', 'weak'),
     }
 
@@ -90,13 +93,37 @@ class SuggestionFeedbackMixin:
             title, year,
         )
 
+    def _stored_media_title(self, cursor, tmdb_id, media_type):
+        """Look up a title and year already held for this item, or (None, None).
+
+        Read from the metadata cached when the item was first suggested, rather than
+        taken from the caller. That keeps every path consistent without any client
+        needing to know that the recommendation prompt wants names, and avoids trusting
+        a title supplied by the browser.
+        """
+        ph = self._feedback_placeholder()
+        try:
+            cursor.execute(
+                f"SELECT title, release_date FROM metadata WHERE media_id={ph} AND media_type={ph}",
+                (str(tmdb_id), media_type),
+            )
+            row = cursor.fetchone()
+        except Exception:
+            return None, None
+        if not row:
+            return None, None
+        released = str(row[1] or '')[:4]
+        return row[0], (int(released) if released.isdigit() else None)
+
     def set_media_feedback(self, user_id, media_user_id, tmdb_id, media_type, feedback,
                            reason_type=None, reason_text=None, title=None, year=None):
         """Store feedback after the caller has verified access to the media item.
 
         The title and year are denormalised on purpose: the recommendation prompt needs
         names, and resolving hundreds of TMDb ids back to titles on every scheduled run
-        would be both slow and an avoidable third-party call.
+        would be both slow and an avoidable third-party call. A caller that does not
+        supply them has them filled in from stored metadata, so feedback saved anywhere
+        still reaches the taste profile.
         """
         ph = self._feedback_placeholder()
         media_user_id = self._feedback_media_user_id(media_user_id)
@@ -107,6 +134,10 @@ class SuggestionFeedbackMixin:
             year = None
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            if title is None:
+                title, stored_year = self._stored_media_title(cursor, tmdb_id, media_type)
+                if year is None:
+                    year = stored_year
             if self.db_type == 'sqlite':
                 query = f"""
                     INSERT INTO suggestion_feedback
@@ -202,15 +233,16 @@ class SuggestionFeedbackMixin:
 
     @staticmethod
     def _empty_taste_profile():
-        return {'loved': [], 'liked': [], 'disliked': [], 'uninterested': []}
+        return {'loved': [], 'interested': [], 'saved': [], 'disliked': [], 'uninterested': []}
 
     # Where each (kind, strength) pair lands in the profile the prompt reads. Keeping the
-    # four buckets separate is what lets the prompt say "watched and enjoyed" about one
-    # group and only "wanted to watch" about the other.
+    # buckets separate is what lets the prompt say "watched and enjoyed" about one group,
+    # "wants to watch" about another, and "bookmarked" about the weakest.
     _TASTE_BUCKETS = {
-        ('liked', 'strong'): 'loved',
-        ('liked', 'weak'): 'liked',
-        ('disliked', 'strong'): 'disliked',
+        ('liked', 'watched'): 'loved',
+        ('liked', 'strong'): 'interested',
+        ('liked', 'weak'): 'saved',
+        ('disliked', 'watched'): 'disliked',
         ('disliked', 'weak'): 'uninterested',
     }
 

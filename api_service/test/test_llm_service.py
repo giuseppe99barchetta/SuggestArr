@@ -805,7 +805,9 @@ class TestFormatTasteProfile(unittest.TestCase):
         self.assertEqual(_format_taste_profile(None, "movies"), "")
         self.assertEqual(_format_taste_profile({}, "movies"), "")
         self.assertEqual(
-            _format_taste_profile({"loved": [], "liked": [], "disliked": [], "uninterested": []}, "movies"), "")
+            _format_taste_profile(
+                {"loved": [], "interested": [], "saved": [], "disliked": [], "uninterested": []},
+                "movies"), "")
 
     def test_lists_loved_and_disliked_titles_separately(self):
         block = _format_taste_profile(
@@ -823,10 +825,22 @@ class TestFormatTasteProfile(unittest.TestCase):
     def test_interest_is_never_described_as_enjoyment(self):
         # The whole point of the separate bucket: wanting to watch something is not
         # evidence of having enjoyed it, and the model must not be told otherwise.
-        block = _format_taste_profile({"liked": [{"title": "Dune", "year": 2021}]}, "movies")
-        self.assertIn("WANTED TO WATCH", block)
+        block = _format_taste_profile({"interested": [{"title": "Dune", "year": 2021}]}, "movies")
+        self.assertIn("WANTS TO WATCH", block)
         self.assertIn("has NOT said they enjoyed", block)
         self.assertNotIn("WATCHED AND ENJOYED", block)
+
+    def test_active_interest_outranks_a_bookmark(self):
+        # These carry different ranking weights upstream, so the prompt keeps them apart.
+        block = _format_taste_profile(
+            {"interested": [{"title": "Dune", "year": 2021}],
+             "saved": [{"title": "Tenet", "year": 2020}]},
+            "movies",
+        )
+        self.assertIn("WANTS TO WATCH", block)
+        self.assertIn("SAVED FOR LATER", block)
+        self.assertIn("weakest positive signal", block)
+        self.assertLess(block.index("Dune"), block.index("Tenet"))
 
     def test_weak_and_strong_negatives_are_distinguished(self):
         block = _format_taste_profile(
@@ -859,7 +873,8 @@ class TestFormatTasteProfile(unittest.TestCase):
         loved_only = _format_taste_profile({"loved": [{"title": "Heat", "year": 1995}]}, "movies")
         self.assertIn("WATCHED AND ENJOYED", loved_only)
         self.assertNotIn("DID NOT ENJOY", loved_only)
-        self.assertNotIn("WANTED TO WATCH", loved_only)
+        self.assertNotIn("WANTS TO WATCH", loved_only)
+        self.assertNotIn("SAVED FOR LATER", loved_only)
 
 
 class TestTasteProfileReachesThePrompt(unittest.IsolatedAsyncioTestCase):
@@ -889,4 +904,4 @@ class TestTasteProfileReachesThePrompt(unittest.IsolatedAsyncioTestCase):
     async def test_prompt_is_unchanged_when_nothing_is_rated(self):
         without = await self._prompt_for(None)
         self.assertNotIn("ENJOYED", without)
-        self.assertNotIn("WANTED TO WATCH", without)
+        self.assertNotIn("WANTS TO WATCH", without)

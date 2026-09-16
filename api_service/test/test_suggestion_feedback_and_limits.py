@@ -47,6 +47,13 @@ def _queue():
             job_id INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE metadata (
+            media_id TEXT NOT NULL,
+            media_type TEXT NOT NULL,
+            title TEXT,
+            release_date TEXT,
+            UNIQUE(media_id, media_type)
+        );
         CREATE TABLE suggestion_feedback (
             user_id INTEGER NOT NULL,
             media_user_id TEXT NOT NULL DEFAULT '',
@@ -231,7 +238,8 @@ def test_taste_profile_keeps_each_signal_distinct():
     profile = queue.get_taste_profile(7, '', 'movie')
     assert [entry['title'] for entry in profile['loved']] == ['Arrival']
     assert [entry['title'] for entry in profile['disliked']] == ['Cats']
-    assert {entry['title'] for entry in profile['liked']} == {'Dune', 'Heat'}
+    assert [entry['title'] for entry in profile['interested']] == ['Dune']
+    assert [entry['title'] for entry in profile['saved']] == ['Heat']
     assert [entry['title'] for entry in profile['uninterested']] == ['Hot Tub Time Machine']
     everything = [e['title'] for bucket in profile.values() for e in bucket]
     assert 'Knives Out' not in everything
@@ -251,7 +259,7 @@ def test_taste_profile_is_scoped_and_bounded():
     connection.commit()
 
     profile = queue.get_taste_profile(7, '', 'movie')
-    titles = [entry['title'] for entry in profile['liked']]
+    titles = [entry['title'] for entry in profile['interested']]
     assert len(titles) <= queue.TASTE_PROFILE_LIMIT
     assert 'Other Media Type' not in titles
     assert "Another User's Film" not in titles
@@ -321,7 +329,7 @@ def test_a_watched_like_teaches_taste_while_a_bare_watch_does_not():
 
     profile = queue.get_taste_profile(7, '', 'movie')
     assert [entry['title'] for entry in profile['loved']] == ['Knives Out']
-    assert profile['liked'] == [] and profile['disliked'] == []
+    assert profile['interested'] == [] and profile['saved'] == [] and profile['disliked'] == []
 
 
 def test_ownerless_job_resolves_feedback_through_a_verified_link():
@@ -329,7 +337,7 @@ def test_ownerless_job_resolves_feedback_through_a_verified_link():
     repository = MagicMock()
     repository.resolve_suggestion_owner.return_value = 7
     repository.get_taste_profile.return_value = {
-        'loved': [{'title': 'Arrival', 'year': 2016}], 'liked': [],
+        'loved': [{'title': 'Arrival', 'year': 2016}], 'interested': [], 'saved': [],
         'disliked': [], 'uninterested': [],
     }
     handler = FeedbackHandler(
@@ -379,7 +387,8 @@ def test_an_unlinked_media_user_steers_nothing():
 def test_the_resolved_owner_is_looked_up_once_per_media_user():
     repository = MagicMock()
     repository.resolve_suggestion_owner.return_value = 7
-    repository.get_taste_profile.return_value = {'loved': [], 'liked': [], 'disliked': [], 'uninterested': []}
+    repository.get_taste_profile.return_value = {
+        'loved': [], 'interested': [], 'saved': [], 'disliked': [], 'uninterested': []}
     repository.get_suggestion_feedback_signals.return_value = {}
     handler = FeedbackHandler(
         None, None, MagicMock(), 3, 2, use_llm=False,
@@ -413,7 +422,8 @@ def test_suppression_also_works_on_an_ownerless_job():
 
 def test_a_configured_job_owner_is_never_overridden_by_a_link():
     repository = MagicMock()
-    repository.get_taste_profile.return_value = {'loved': [], 'liked': [], 'disliked': [], 'uninterested': []}
+    repository.get_taste_profile.return_value = {
+        'loved': [], 'interested': [], 'saved': [], 'disliked': [], 'uninterested': []}
     handler = FeedbackHandler(
         None, None, MagicMock(), 3, 2, use_llm=False,
         feedback_repository=repository, feedback_owner_id=42,
@@ -424,3 +434,81 @@ def test_a_configured_job_owner_is_never_overridden_by_a_link():
 
     repository.resolve_suggestion_owner.assert_not_called()
     repository.get_taste_profile.assert_called_once_with(42, 'jellyfin-a', 'movie')
+
+
+def test_feedback_without_a_title_is_filled_in_from_stored_metadata():
+    """The sent-request UI saves only a rating, so the title has to come from the server.
+
+    Without this, feedback entered anywhere except the pending flow would store a NULL
+    title and be skipped by the taste profile, ranking correctly but steering nothing.
+    """
+    queue, connection = _queue()
+    connection.execute(
+        "INSERT INTO metadata(media_id,media_type,title,release_date) "
+        "VALUES ('42','movie','Arrival','2016-11-11')"
+    )
+    connection.commit()
+
+    queue.set_media_feedback(7, 'plex-a', '42', 'movie', 'seen_liked')
+
+    stored = connection.execute(
+        "SELECT title, year FROM suggestion_feedback WHERE tmdb_id='42'").fetchone()
+    assert stored == ('Arrival', 2016)
+    profile = queue.get_taste_profile(7, 'plex-a', 'movie')
+    assert [entry['title'] for entry in profile['loved']] == ['Arrival']
+
+
+def test_each_sent_request_rating_reaches_its_own_bucket():
+    queue, connection = _queue()
+    connection.executemany(
+        "INSERT INTO metadata(media_id,media_type,title,release_date) VALUES (?,?,?,?)",
+        [('1', 'movie', 'Arrival', '2016-11-11'),
+         ('2', 'movie', 'Dune', '2021-09-15'),
+         ('3', 'movie', 'Tenet', '2020-08-26'),
+         ('4', 'movie', 'Cats', '2019-12-20'),
+         ('5', 'movie', 'Emily in Paris', '2020-10-02'),
+         ('6', 'movie', 'Knives Out', '2019-11-27')],
+    )
+    connection.commit()
+
+    # Exactly what the sent-request endpoint passes: a rating and nothing else.
+    for tmdb_id, feedback in (('1', 'seen_liked'), ('2', 'interested'), ('3', 'save_for_later'),
+                              ('4', 'seen_disliked'), ('5', 'not_interested'), ('6', 'already_seen')):
+        queue.set_media_feedback(7, 'plex-a', tmdb_id, 'movie', feedback)
+
+    profile = queue.get_taste_profile(7, 'plex-a', 'movie')
+    assert [entry['title'] for entry in profile['loved']] == ['Arrival']
+    assert [entry['title'] for entry in profile['interested']] == ['Dune']
+    assert [entry['title'] for entry in profile['saved']] == ['Tenet']
+    assert [entry['title'] for entry in profile['disliked']] == ['Cats']
+    assert [entry['title'] for entry in profile['uninterested']] == ['Emily in Paris']
+    # Having watched something is still not a verdict on it.
+    assert 'Knives Out' not in [e['title'] for bucket in profile.values() for e in bucket]
+
+
+def test_a_supplied_title_is_preferred_over_stored_metadata():
+    queue, connection = _queue()
+    connection.execute(
+        "INSERT INTO metadata(media_id,media_type,title,release_date) "
+        "VALUES ('42','movie','Stale Title','2001-01-01')"
+    )
+    connection.commit()
+
+    queue.set_media_feedback(7, 'plex-a', '42', 'movie', 'seen_liked', title='Arrival', year=2016)
+
+    stored = connection.execute(
+        "SELECT title, year FROM suggestion_feedback WHERE tmdb_id='42'").fetchone()
+    assert stored == ('Arrival', 2016)
+
+
+def test_feedback_still_saves_when_no_metadata_exists():
+    """An unknown title must not stop the rating being recorded."""
+    queue, connection = _queue()
+
+    queue.set_media_feedback(7, 'plex-a', '999', 'movie', 'not_interested')
+
+    stored = connection.execute(
+        "SELECT feedback, title FROM suggestion_feedback WHERE tmdb_id='999'").fetchone()
+    assert stored == ('not_interested', None)
+    # It suppresses as always; it simply cannot steer without a name.
+    assert queue.get_taste_profile(7, 'plex-a', 'movie') == queue._empty_taste_profile()
