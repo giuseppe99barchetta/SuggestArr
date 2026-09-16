@@ -20,7 +20,8 @@ automation_bp = Blueprint('automation', __name__)
 
 _force_run_lock = threading.Lock()
 _force_run_running = False
-_FEEDBACK_VALUES = {'interested', 'not_interested', 'already_seen', 'too_similar', 'save_for_later'}
+_FEEDBACK_VALUES = {'interested', 'not_interested', 'already_seen', 'seen_liked',
+                    'seen_disliked', 'too_similar', 'save_for_later'}
 _FEEDBACK_REASONS = {'genre', 'provider', 'content', 'title', 'other'}
 
 
@@ -37,7 +38,18 @@ def _feedback_payload():
         if not isinstance(reason_text, str) or len(reason_text.strip()) > 500:
             return None, (jsonify({'status': 'error', 'message': 'reason_text must be at most 500 characters'}), 400)
         reason_text = reason_text.strip() or None
-    return (feedback, reason_type, reason_text, data.get('media_user_id')), None
+    # The title is what the recommendation prompt can actually use, so it is stored with
+    # the rating. It stays optional: an older client simply keeps the previous behaviour.
+    title = data.get('title')
+    if title is not None and not isinstance(title, str):
+        return None, (jsonify({'status': 'error', 'message': 'title must be a string'}), 400)
+    year = data.get('year')
+    if year is not None:
+        try:
+            year = int(year)
+        except (TypeError, ValueError):
+            return None, (jsonify({'status': 'error', 'message': 'year must be an integer'}), 400)
+    return (feedback, reason_type, reason_text, data.get('media_user_id'), title, year), None
 
 
 def _workflow_ids():
@@ -195,12 +207,12 @@ def set_request_feedback(suggestion_id):
     parsed, error = _feedback_payload()
     if error:
         return error
-    feedback, reason_type, reason_text, _ = parsed
+    feedback, reason_type, reason_text, _, title, year = parsed
     db = DatabaseManager()
     scope = _suggestion_scope(db)
     result = db.set_suggestion_feedback(
         suggestion_id, scope.owner_id, int(g.current_user['id']), feedback, reason_type, reason_text,
-        scope.media_user_ids, scope.include_unassigned,
+        scope.media_user_ids, scope.include_unassigned, title, year,
     )
     if result is None:
         return jsonify({'status': 'error', 'message': 'Suggestion not found'}), 404
@@ -228,14 +240,14 @@ def set_sent_request_feedback(media_type, tmdb_id):
     parsed, error = _feedback_payload()
     if error:
         return error
-    feedback, reason_type, reason_text, media_user_id = parsed
+    feedback, reason_type, reason_text, media_user_id, title, year = parsed
     db = DatabaseManager()
     visible_user_ids = _visible_request_user_ids(db)
     if not db.has_visible_suggestarr_request(tmdb_id, media_type, media_user_id, visible_user_ids):
         return jsonify({'status': 'error', 'message': 'Request not found'}), 404
     result = db.set_media_feedback(
         int(g.current_user['id']), media_user_id, tmdb_id, media_type,
-        feedback, reason_type, reason_text,
+        feedback, reason_type, reason_text, title, year,
     )
     return jsonify({'status': 'success', 'feedback': result}), 200
 

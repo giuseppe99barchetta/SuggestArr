@@ -39,6 +39,7 @@ from api_service.services.llm.llm_service import (
     _close_llm_client,
     _deduplicate_history,
     _extract_json_object,
+    _format_taste_profile,
     _is_duplicate_of_history,
     _normalize_title,
     _repair_title_qualifiers,
@@ -792,3 +793,115 @@ class TestInterpretSearchQuery(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# _format_taste_profile
+# ---------------------------------------------------------------------------
+
+class TestFormatTasteProfile(unittest.TestCase):
+
+    def test_returns_empty_string_without_ratings(self):
+        self.assertEqual(_format_taste_profile(None, "movies"), "")
+        self.assertEqual(_format_taste_profile({}, "movies"), "")
+        self.assertEqual(
+            _format_taste_profile(
+                {"loved": [], "interested": [], "saved": [], "disliked": [], "uninterested": []},
+                "movies"), "")
+
+    def test_lists_loved_and_disliked_titles_separately(self):
+        block = _format_taste_profile(
+            {"loved": [{"title": "Arrival", "year": 2016}],
+             "disliked": [{"title": "Cats", "year": 2019}]},
+            "movies",
+        )
+        self.assertIn("WATCHED AND ENJOYED", block)
+        self.assertIn("- Arrival (2016)", block)
+        self.assertIn("WATCHED AND DID NOT ENJOY", block)
+        self.assertIn("- Cats (2019)", block)
+        # The two lists must stay distinct: a dislike is not a negated like.
+        self.assertLess(block.index("Arrival"), block.index("Cats"))
+
+    def test_interest_is_never_described_as_enjoyment(self):
+        # The whole point of the separate bucket: wanting to watch something is not
+        # evidence of having enjoyed it, and the model must not be told otherwise.
+        block = _format_taste_profile({"interested": [{"title": "Dune", "year": 2021}]}, "movies")
+        self.assertIn("WANTS TO WATCH", block)
+        self.assertIn("has NOT said they enjoyed", block)
+        self.assertNotIn("WATCHED AND ENJOYED", block)
+
+    def test_active_interest_outranks_a_bookmark(self):
+        # These carry different ranking weights upstream, so the prompt keeps them apart.
+        block = _format_taste_profile(
+            {"interested": [{"title": "Dune", "year": 2021}],
+             "saved": [{"title": "Tenet", "year": 2020}]},
+            "movies",
+        )
+        self.assertIn("WANTS TO WATCH", block)
+        self.assertIn("SAVED FOR LATER", block)
+        self.assertIn("weakest positive signal", block)
+        self.assertLess(block.index("Dune"), block.index("Tenet"))
+
+    def test_weak_and_strong_negatives_are_distinguished(self):
+        block = _format_taste_profile(
+            {"disliked": [{"title": "Cats", "year": 2019}],
+             "uninterested": [{"title": "Emily in Paris", "year": 2020}]},
+            "movies",
+        )
+        self.assertIn("WATCHED AND DID NOT ENJOY", block)
+        self.assertIn("DID NOT APPEAL", block)
+        self.assertIn("without necessarily watching", block)
+
+    def test_genre_guardrail_only_appears_with_negative_entries(self):
+        positive_only = _format_taste_profile({"loved": [{"title": "Heat", "year": 1995}]}, "movies")
+        self.assertNotIn("rule out an entire genre", positive_only)
+        with_negative = _format_taste_profile({"disliked": [{"title": "Cats", "year": 2019}]}, "movies")
+        self.assertIn("rule out an entire genre", with_negative)
+
+    def test_warns_against_banning_a_whole_genre(self):
+        block = _format_taste_profile({"disliked": [{"title": "Cats", "year": 2019}]}, "movies")
+        self.assertIn("Do NOT rule out an entire genre", block.replace("\n", " "))
+
+    def test_tolerates_missing_years_and_titles(self):
+        block = _format_taste_profile(
+            {"loved": [{"title": "Heat"}, {"year": 1999}, None]}, "movies",
+        )
+        self.assertIn("- Heat", block)
+        self.assertNotIn("None", block)
+
+    def test_omits_a_section_that_has_no_entries(self):
+        loved_only = _format_taste_profile({"loved": [{"title": "Heat", "year": 1995}]}, "movies")
+        self.assertIn("WATCHED AND ENJOYED", loved_only)
+        self.assertNotIn("DID NOT ENJOY", loved_only)
+        self.assertNotIn("WANTS TO WATCH", loved_only)
+        self.assertNotIn("SAVED FOR LATER", loved_only)
+
+
+class TestTasteProfileReachesThePrompt(unittest.IsolatedAsyncioTestCase):
+
+    async def _prompt_for(self, taste_profile):
+        recs = [{"title": "Tenet", "year": 2020, "source_title": "Inception", "rationale": "same director"}]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response(_wrap_recs(recs))
+        )
+        with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_DEFAULT_CONFIG):
+            await get_recommendations_from_history(
+                [{"title": "Inception", "year": 2010}], max_results=3, taste_profile=taste_profile,
+            )
+        messages = mock_client.chat.completions.create.await_args.kwargs["messages"]
+        return " ".join(message["content"] for message in messages)
+
+    async def test_rated_titles_are_sent_to_the_model(self):
+        prompt = await self._prompt_for({
+            "loved": [{"title": "Arrival", "year": 2016}],
+            "disliked": [{"title": "Cats", "year": 2019}],
+        })
+        self.assertIn("Arrival", prompt)
+        self.assertIn("Cats", prompt)
+
+    async def test_prompt_is_unchanged_when_nothing_is_rated(self):
+        without = await self._prompt_for(None)
+        self.assertNotIn("ENJOYED", without)
+        self.assertNotIn("WANTS TO WATCH", without)

@@ -5,7 +5,7 @@ from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.db.database_manager import DatabaseManager
 
 class JellyfinHandler(BaseMediaHandler):
-    def __init__(self, jellyfin_client:JellyfinClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, max_content=10, feedback_repository=None, feedback_owner_id=None):
+    def __init__(self, jellyfin_client:JellyfinClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, max_content=10, feedback_repository=None, feedback_owner_id=None, feedback_media_service=None):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client
@@ -39,6 +39,7 @@ class JellyfinHandler(BaseMediaHandler):
             max_content=max_content,
             feedback_repository=feedback_repository,
             feedback_owner_id=feedback_owner_id,
+            feedback_media_service=feedback_media_service,
         )
         self.jellyfin_client = jellyfin_client
         self.selected_users = selected_users
