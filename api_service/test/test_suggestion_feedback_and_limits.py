@@ -278,3 +278,35 @@ def test_saving_a_rating_keeps_a_title_a_later_rating_omits():
         "SELECT feedback, title, year FROM suggestion_feedback WHERE tmdb_id='42'"
     ).fetchone()
     assert stored == ('not_interested', 'Arrival', 2016)
+
+
+def test_every_rating_offered_on_a_card_stops_the_title_returning():
+    queue, connection = _queue()
+    connection.execute("INSERT INTO discover_jobs VALUES (1, 7, 0, 24)")
+    connection.commit()
+
+    # Liking something you have already watched must still suppress it: re-suggesting it
+    # is the annoyance the rating was meant to end.
+    for feedback in ('seen_liked', 'not_interested', 'already_seen'):
+        connection.execute("DELETE FROM suggestion_feedback")
+        connection.execute(
+            "INSERT INTO suggestion_feedback(user_id,media_user_id,tmdb_id,media_type,feedback,title) "
+            "VALUES (7,'plex-a','42','movie',?,'Knives Out')", (feedback,),
+        )
+        connection.commit()
+        assert queue._automated_submission_skip_reason(1, 7, '42', 'movie', 'plex-a'), feedback
+
+
+def test_a_watched_like_teaches_taste_while_a_bare_watch_does_not():
+    queue, connection = _queue()
+    connection.executemany(
+        "INSERT INTO suggestion_feedback(user_id,media_user_id,tmdb_id,media_type,feedback,title,year) "
+        "VALUES (?,?,?,?,?,?,?)",
+        [(7, '', '1', 'movie', 'seen_liked', 'Knives Out', 2019),
+         (7, '', '2', 'movie', 'already_seen', 'Cats', 2019)],
+    )
+    connection.commit()
+
+    profile = queue.get_taste_profile(7, '', 'movie')
+    assert [entry['title'] for entry in profile['liked']] == ['Knives Out']
+    assert profile['disliked'] == []

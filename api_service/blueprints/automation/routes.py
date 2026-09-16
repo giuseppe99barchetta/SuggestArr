@@ -20,7 +20,8 @@ automation_bp = Blueprint('automation', __name__)
 
 _force_run_lock = threading.Lock()
 _force_run_running = False
-_FEEDBACK_VALUES = {'interested', 'not_interested', 'already_seen', 'too_similar', 'save_for_later'}
+_FEEDBACK_VALUES = {'interested', 'not_interested', 'already_seen', 'seen_liked', 'too_similar',
+                    'save_for_later'}
 _FEEDBACK_REASONS = {'genre', 'provider', 'content', 'title', 'other'}
 
 

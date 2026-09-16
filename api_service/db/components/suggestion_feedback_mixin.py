@@ -10,12 +10,20 @@ from api_service.db.components.suggestion_ownership import ownership_clause
 
 
 class SuggestionFeedbackMixin:
-    NEGATIVE_FEEDBACK = {'not_interested', 'already_seen', 'too_similar'}
+    # Feedback that stops a title being suggested again. 'seen_liked' belongs here even
+    # though it is positive: the user has already watched it, so re-suggesting it is
+    # exactly the annoyance the rating was meant to end.
+    NEGATIVE_FEEDBACK = {'not_interested', 'already_seen', 'seen_liked', 'too_similar'}
 
     # Feedback that says something about taste. 'already_seen' deliberately is not here:
     # having watched a title is not a verdict on it, so it suppresses the title without
     # claiming the user liked or disliked it.
-    TASTE_FEEDBACK = {'interested': 'liked', 'save_for_later': 'liked', 'not_interested': 'disliked'}
+    TASTE_FEEDBACK = {
+        'interested': 'liked',
+        'seen_liked': 'liked',
+        'save_for_later': 'liked',
+        'not_interested': 'disliked',
+    }
 
     # Titles carried into the recommendation prompt, newest first. The cap is what keeps
     # prompt cost flat as the feedback table grows; suppression stays with the existing

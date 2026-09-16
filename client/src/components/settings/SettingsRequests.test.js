@@ -10,7 +10,7 @@ test('pending cards offer an already-seen action beside approve and reject', () 
 });
 
 test('the seen menu offers liked, disliked and plain seen', () => {
-  assert.match(source, /label: 'Seen it, liked it', icon: 'fas fa-thumbs-up', feedback: 'interested'/);
+  assert.match(source, /label: 'Seen it, liked it', icon: 'fas fa-thumbs-up', feedback: 'seen_liked'/);
   assert.match(source, /label: 'Seen it, did not like it', icon: 'fas fa-thumbs-down', feedback: 'not_interested'/);
   assert.match(source, /label: 'Seen it', icon: 'fas fa-eye', feedback: 'already_seen'/);
 });
@@ -30,8 +30,8 @@ test('a failed feedback save leaves the suggestion in the queue', () => {
 });
 
 test('a liked rating is stored as a positive signal, not a neutral one', () => {
-  // 'already_seen' only suppresses; 'interested' is what the recommender can learn from.
-  assert.match(source, /label: 'Seen it, liked it',[^}]*feedback: 'interested'/);
+  // 'seen_liked' both suppresses and teaches; 'already_seen' only suppresses.
+  assert.match(source, /label: 'Seen it, liked it',[^}]*feedback: 'seen_liked'/);
 });
 
 test('the rating carries the title and year the recommender needs', () => {

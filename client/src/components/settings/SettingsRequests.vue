@@ -190,10 +190,11 @@ export default {
       pendingTotal: 0,
       confirmRejectId: null,
       seenMenuId: null,
-      // Feedback the ranking step reads back: 'already_seen' and 'not_interested' both
-      // suppress the title, while a liked item still tells the recommender what worked.
+      // All three stop the title being suggested again. They differ in what the
+      // recommender learns: 'seen_liked' and 'not_interested' shape the taste profile,
+      // 'already_seen' records no verdict because watching is not the same as enjoying.
       seenOptions: [
-        { value: 'liked', label: 'Seen it, liked it', icon: 'fas fa-thumbs-up', feedback: 'interested' },
+        { value: 'liked', label: 'Seen it, liked it', icon: 'fas fa-thumbs-up', feedback: 'seen_liked' },
         { value: 'disliked', label: 'Seen it, did not like it', icon: 'fas fa-thumbs-down', feedback: 'not_interested' },
         { value: 'seen', label: 'Seen it', icon: 'fas fa-eye', feedback: 'already_seen' }
       ],
