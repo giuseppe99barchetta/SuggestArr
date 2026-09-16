@@ -362,11 +362,13 @@ def build_job_data(name):
 
 
 def make_llm_side_effect():
-    async def _side_effect(history_items, max_results, item_type, filters=None):
+    async def _side_effect(history_items, max_results, item_type, filters=None, taste_profile=None):
         assert isinstance(history_items, list)
         assert max_results > 0
         assert item_type in {"movie", "tv"}
         assert isinstance(filters, dict)
+        # Handlers without a linked media profile steer on history alone.
+        assert taste_profile is None or isinstance(taste_profile, dict)
         assert all("title" in item for item in history_items)
         assert all(item.get("year") is None or isinstance(item.get("year"), int) for item in history_items)
         watched_titles = {item["title"] for item in history_items}

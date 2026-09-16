@@ -392,6 +392,53 @@ def _deduplicate_history(history_items: List[Dict]) -> List[Dict]:
     return unique
 
 
+def _format_taste_profile(taste_profile: Optional[Dict], list_type: str) -> str:
+    """Render recent explicit ratings as a bounded prompt section.
+
+    Likes and dislikes are kept as separate statements rather than one signed scale,
+    because what makes a title unappealing is not simply the inverse of what makes
+    another appealing. The model is told to avoid the *qualities* behind a dislike, not
+    to ban the genre: a single thumbs-down should not delete a whole category, and
+    suppressing the disliked titles themselves is the filter's job, not the prompt's.
+    """
+    if not taste_profile:
+        return ""
+
+    def _render(entries):
+        lines = []
+        for entry in entries:
+            title = (entry or {}).get("title")
+            if not title:
+                continue
+            year = entry.get("year")
+            lines.append(f"- {title} ({year})" if year else f"- {title}")
+        return "\n".join(lines)
+
+    liked_text = _render(taste_profile.get("liked") or [])
+    disliked_text = _render(taste_profile.get("disliked") or [])
+    if not liked_text and not disliked_text:
+        return ""
+
+    sections = ["\nThe user has explicitly rated these suggestions:"]
+    if liked_text:
+        sections.append(
+            f"\nENJOYED — strong evidence of taste:\n{liked_text}\n"
+            f"Lean toward {list_type} that share their tone, themes, mood or craft."
+        )
+    if disliked_text:
+        sections.append(
+            f"\nDID NOT ENJOY:\n{disliked_text}\n"
+            "Infer what specifically did not land and steer away from those qualities. Do NOT "
+            "rule out an entire genre, era or country because of these entries; the user may "
+            "well love other titles that share their genre."
+        )
+    sections.append(
+        "\nDo not recommend any title listed above. Prefer suggestions that are not obvious "
+        "near-duplicates of each other, so the list keeps some range.\n"
+    )
+    return "\n".join(sections)
+
+
 def _format_history_context_item(item: Dict, default_media_type: str) -> str:
     """Format a compact history item without turning a watch into a like."""
     title = item.get("title", item.get("name", "Unknown"))
@@ -570,6 +617,7 @@ async def get_recommendations_from_history(
     max_results: int = 5,
     item_type: str = "movie",
     filters: Optional[Dict[str, Any]] = None,
+    taste_profile: Optional[Dict[str, List[Dict]]] = None,
 ) -> List[Dict]:
     """Generate recommendations based on a user's watch history using an LLM.
 
@@ -577,6 +625,9 @@ async def get_recommendations_from_history(
     :param max_results: Number of recommendations to generate.
     :param item_type: 'movie' or 'tv'.
     :param filters: Optional recommendation constraints (e.g. language/year/rating).
+    :param taste_profile: Optional {'liked': [...], 'disliked': [...]} of recently rated
+        titles. Steers generation; suppression of rated titles remains the caller's
+        post-generation filter, which stays authoritative.
     :raises LLMValidationError: When the LLM persistently returns invalid JSON.
     :return: List of recommendation dicts with 'title', 'year', 'rationale',
         and 'source_title'.
@@ -679,12 +730,15 @@ async def get_recommendations_from_history(
         if constraint_lines:
             constraints_block = "\nApply these hard constraints:\n" + "\n".join(constraint_lines) + "\n"
 
+        taste_block = _format_taste_profile(taste_profile, list_type)
+
         prompt = f"""
         You are an expert film and television recommendation system.
         The following {list_type} are watch-history context, ordered from most recent to least recent:
 
         {history_text}
         {constraints_block}
+        {taste_block}
         {web_context}
 
         A "recent/neutral watch" only means the user watched it; it is NOT evidence that they enjoyed it.

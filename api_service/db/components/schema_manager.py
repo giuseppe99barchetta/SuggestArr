@@ -278,6 +278,8 @@ class SchemaManager:
                     feedback TEXT NOT NULL,
                     reason_type TEXT,
                     reason_text TEXT,
+                    title TEXT,
+                    year INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (user_id, media_user_id, tmdb_id, media_type),
@@ -396,6 +398,7 @@ class SchemaManager:
         # Add missing columns
         self.add_missing_columns()
         self._migrate_execution_history()
+        self._migrate_suggestion_feedback()
         self._create_api_key_indexes()
 
         # Create submission lock table (separate to control column types per DB engine)
@@ -441,6 +444,34 @@ class SchemaManager:
                 conn.commit()
         except Exception as exc:
             raise DatabaseError(error=f"Execution-history migration failed: {exc}", db_type=self.db_type) from exc
+
+    def _migrate_suggestion_feedback(self):
+        """Add the title/year columns feedback needs to reach the recommendation prompt.
+
+        Older rows keep a NULL title and are simply left out of the prompt, so an
+        existing install degrades to the previous filter-only behaviour rather than
+        failing.
+        """
+        columns = {'title': 'TEXT', 'year': 'INTEGER'}
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                if self.db_type == 'sqlite':
+                    cursor.execute('PRAGMA table_info(suggestion_feedback)')
+                    existing = {row[1] for row in cursor.fetchall()}
+                elif self.db_type == 'postgres':
+                    cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'suggestion_feedback'")
+                    existing = {row[0] for row in cursor.fetchall()}
+                else:
+                    cursor.execute('SHOW COLUMNS FROM suggestion_feedback')
+                    existing = {row[0] for row in cursor.fetchall()}
+                for name, kind in columns.items():
+                    if name not in existing:
+                        column_type = 'VARCHAR(512)' if name == 'title' and self.db_type in ('mysql', 'mariadb') else kind
+                        cursor.execute(f'ALTER TABLE suggestion_feedback ADD COLUMN {name} {column_type}')
+                conn.commit()
+        except Exception as exc:
+            raise DatabaseError(error=f"Suggestion-feedback migration failed: {exc}", db_type=self.db_type) from exc
 
     def _prepare_create_table_query_for_db(self, table_name: str, query: str, db_type: str) -> str:
         """Apply database-specific DDL rewrites for a table creation query."""
@@ -543,6 +574,8 @@ class SchemaManager:
                         feedback VARCHAR(32) NOT NULL,
                         reason_type VARCHAR(32),
                         reason_text TEXT,
+                        title VARCHAR(512),
+                        year INTEGER,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         PRIMARY KEY (user_id, media_user_id, tmdb_id, media_type),

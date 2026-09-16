@@ -193,7 +193,7 @@ export default {
       // Feedback the ranking step reads back: 'already_seen' and 'not_interested' both
       // suppress the title, while a liked item still tells the recommender what worked.
       seenOptions: [
-        { value: 'liked', label: 'Seen it, liked it', icon: 'fas fa-thumbs-up', feedback: 'already_seen' },
+        { value: 'liked', label: 'Seen it, liked it', icon: 'fas fa-thumbs-up', feedback: 'interested' },
         { value: 'disliked', label: 'Seen it, did not like it', icon: 'fas fa-thumbs-down', feedback: 'not_interested' },
         { value: 'seen', label: 'Seen it', icon: 'fas fa-eye', feedback: 'already_seen' }
       ],
@@ -310,13 +310,19 @@ export default {
 
     // Record that the user has already watched a suggestion, then take it out of the
     // queue. The feedback is what stops it coming back; the reject only clears the card.
+    // The title and year travel with the rating so the next recommendation prompt can
+    // name what the user liked or disliked instead of only suppressing an id.
     async markSeen(request, option) {
       this.actionLoadingId = request.id;
+      const released = request.release_date || request.first_air_date;
+      const year = released ? Number(String(released).slice(0, 4)) : null;
       try {
         await axios.put(`/api/automation/requests/workflow/${request.id}/feedback`, {
           feedback: option.feedback,
           reason_type: 'content',
-          reason_text: option.label
+          reason_text: option.label,
+          title: request.title || null,
+          year: Number.isFinite(year) ? year : null
         });
       } catch (error) {
         this.$toast.open({ message: error.response?.data?.message || 'Could not save feedback', type: 'error' });

@@ -211,6 +211,23 @@ class BaseMediaHandler(ABC):
                 self._feedback_signal_cache[cache_key] = {}
         return self._feedback_signal_cache[cache_key]
 
+    def _taste_profile(self, media_type, user):
+        """Load the recent ratings that steer generation, or {} when unavailable.
+
+        Steering is an improvement, not a guarantee: if this cannot be read the run
+        continues unsteered and _apply_feedback_ranking still removes rated titles.
+        """
+        profile_id = self._feedback_profile_id(user)
+        if self.feedback_owner_id is None or profile_id is None or self.feedback_repository is None:
+            return {}
+        try:
+            return self.feedback_repository.get_taste_profile(
+                self.feedback_owner_id, profile_id, media_type,
+            )
+        except Exception as exc:
+            self.logger.warning("Could not load the personal taste profile: %s", exc)
+            return {}
+
     def _apply_feedback_ranking(self, media_items, media_type, user):
         """Promote positive feedback and suppress negative feedback locally.
 
@@ -360,6 +377,7 @@ class BaseMediaHandler(ABC):
             history_items,
             max_results,
             item_type,
+            taste_profile=self._taste_profile(item_type, user),
             filters={
                 "with_original_language": self.tmdb_client.language_filter,
                 "release_year_gte": self.tmdb_client.release_year_filter,
