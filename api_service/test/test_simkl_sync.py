@@ -131,6 +131,49 @@ def test_outside_the_cooldown_activities_is_checked(monkeypatch):
     assert client.calls[0][0] == "activities"
 
 
+def test_another_sync_holding_the_shared_lock_does_not_call_simkl(monkeypatch):
+    client = FakeClient(activities())
+    sync, db = make_sync(monkeypatch, client)
+    db.get_simkl_sync_state.return_value = {
+        "activities": {}, "last_full_sync_at": None, "last_activities_check_at": 0,
+    }
+    db.try_acquire_submission_lock.return_value = False
+
+    assert asyncio.run(sync.ensure_synced(LINK, "tok")) is True
+    assert client.calls == []
+    db.release_submission_lock.assert_not_called()
+
+
+def test_sync_releases_the_shared_lock_after_the_request(monkeypatch):
+    client = FakeClient(activities())
+    sync, db = make_sync(monkeypatch, client)
+    db.get_simkl_sync_state.return_value = {
+        "activities": {}, "last_full_sync_at": None, "last_activities_check_at": 0,
+    }
+
+    asyncio.run(sync.ensure_synced(LINK, "tok"))
+
+    db.try_acquire_submission_lock.assert_called_once_with(
+        "simkl:7", SimklWatchHistorySync.SYNC_LOCK_MEDIA_TYPE,
+        SimklWatchHistorySync.SYNC_LOCK_TTL_SECONDS,
+    )
+    db.release_submission_lock.assert_called_once_with(
+        "simkl:7", SimklWatchHistorySync.SYNC_LOCK_MEDIA_TYPE,
+    )
+
+
+def test_waiting_for_the_lock_rechecks_the_cooldown(monkeypatch):
+    client = FakeClient(activities())
+    sync, db = make_sync(monkeypatch, client)
+    expired = {"activities": {}, "last_full_sync_at": None, "last_activities_check_at": 0}
+    current = {"activities": {}, "last_full_sync_at": None, "last_activities_check_at": int(time.time())}
+    db.get_simkl_sync_state.side_effect = [expired, current]
+
+    assert asyncio.run(sync.ensure_synced(LINK, "tok")) is True
+    assert client.calls == []
+    db.release_submission_lock.assert_called_once()
+
+
 def test_a_never_synced_link_is_not_blocked_by_the_cooldown(monkeypatch):
     client = FakeClient(activities())
     sync, db = make_sync(monkeypatch, client)

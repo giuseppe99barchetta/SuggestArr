@@ -215,6 +215,16 @@ def test_sync_state_for_a_missing_link_is_empty(db):
     }
 
 
+def test_shared_sync_lock_is_atomic_and_reusable(db, link):
+    lock_key = f"simkl:{link['link_id']}"
+
+    assert db.try_acquire_submission_lock(lock_key, "simkl_sync", 3600) is True
+    assert db.try_acquire_submission_lock(lock_key, "simkl_sync", 3600) is False
+
+    db.release_submission_lock(lock_key, "simkl_sync")
+    assert db.try_acquire_submission_lock(lock_key, "simkl_sync", 3600) is True
+
+
 # ---- Unlink ------------------------------------------------------------------
 
 def test_unlink_removes_the_link_tokens_and_cached_history(db, link):

@@ -44,6 +44,10 @@ class SimklWatchHistorySync:
     # gate) and cron accepts schedules as tight as */10, so the bound has to be
     # wall-clock rather than per-call.
     ACTIVITIES_COOLDOWN_SECONDS = 900
+    # Shared DB locks cover overlapping workers and preview requests; the TTL
+    # only exists to recover a lock left behind by a crashed worker.
+    SYNC_LOCK_TTL_SECONDS = 3600
+    SYNC_LOCK_MEDIA_TYPE = "simkl_sync"
 
     # TMDb tolerates parallelism, but the fallback is a best-effort enrichment
     # of someone else's sync, so it stays well under any rate limit.
@@ -88,7 +92,25 @@ class SimklWatchHistorySync:
             )
             return True
 
+        lock_key = f"simkl:{link_id}"
+        if not self.db.try_acquire_submission_lock(
+            lock_key, self.SYNC_LOCK_MEDIA_TYPE, self.SYNC_LOCK_TTL_SECONDS
+        ):
+            self.logger.debug("Simkl link %s is already being synchronized", link_id)
+            return True
+
         try:
+            # The first state read can race with a sync that acquired and
+            # released the shared lock while this caller was waiting for it.
+            state = self.db.get_simkl_sync_state(link_id)
+            last_check = state.get("last_activities_check_at") or 0
+            if last_check and (int(time.time()) - int(last_check)) < self.ACTIVITIES_COOLDOWN_SECONDS:
+                self.logger.debug(
+                    "Simkl link %s was synchronized while waiting for the lock; serving cache",
+                    link_id,
+                )
+                return True
+
             async with SimklClient(
                 self.client_id, access_token=access_token, link_id=link_id
             ) as client:
@@ -100,6 +122,8 @@ class SimklWatchHistorySync:
             # Stale data still beats no data; the cache is only unusable when
             # it is also empty.
             return bool(self.db.get_simkl_watched_cache(link_id))
+        finally:
+            self.db.release_submission_lock(lock_key, self.SYNC_LOCK_MEDIA_TYPE)
 
     async def _sync_with_client(
         self, client: SimklClient, link_id: int, state: dict
