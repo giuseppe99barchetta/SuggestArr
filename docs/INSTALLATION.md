@@ -89,7 +89,7 @@ When opening SuggestArr for the first time:
 10. Save configuration.
 11. Have each user link their media-server account from Profile.
 12. Optional: have each user link their Trakt account from Profile > Trakt Account, their Simkl account from Profile > Simkl Account, or both.
-13. Create or adjust jobs from the Jobs page. 
+13. Create or adjust jobs from the Jobs page.
 
 Use internal network URLs when running everything in Docker. Example:
 
