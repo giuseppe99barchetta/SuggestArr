@@ -8,6 +8,7 @@ from api_service.services.omdb.omdb_client import OmdbClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 from api_service.services.trakt.media_user_augmentor import MediaUserTraktAugmentor
+from api_service.services.simkl.media_user_augmentor import MediaUserSimklAugmentor
 
 
 class ContentAutomation:
@@ -150,8 +151,9 @@ class ContentAutomation:
         )
         instance.logger.info("TMDb client initialized successfully")
 
-        # Build Trakt augmentor (no-op if app credentials are not configured)
+        # Build watch-tracker augmentors (each a no-op if not configured)
         trakt_augmentor = MediaUserTraktAugmentor.from_env(env_vars, instance.max_content)
+        simkl_augmentor = MediaUserSimklAugmentor.from_env(env_vars, instance.max_content)
 
         # Initialize media service handler (Jellyfin or Plex)
         if instance.selected_service in ('jellyfin', 'emby'):
@@ -183,6 +185,7 @@ class ContentAutomation:
                 instance.selected_users, jellyfin_anime_map,
                 request_delay=request_delay,
                 trakt_augmentor=trakt_augmentor,
+                simkl_augmentor=simkl_augmentor,
                 max_content=instance.max_content,
             )
             instance.logger.info(f"{instance.selected_service.upper()} client initialized successfully")
@@ -216,6 +219,7 @@ class ContentAutomation:
                 instance.max_similar_movie, instance.max_similar_tv,
                 plex_anime_map, request_delay=request_delay,
                 trakt_augmentor=trakt_augmentor,
+                simkl_augmentor=simkl_augmentor,
                 selected_users=instance.selected_users,
                 max_content=instance.max_content,
             )

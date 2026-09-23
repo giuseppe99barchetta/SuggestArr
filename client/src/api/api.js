@@ -177,6 +177,51 @@ export const previewMyTraktRecent = (limit = 10) =>
     axios.get('/api/trakt/me/recent', { params: { limit } });
 
 
+// Simkl PIN flow (admin, media-user scoped). Simkl authenticates with the app's
+// client ID alone, so — unlike Trakt — no credentials are ever sent from the
+// browser: the server reads the client ID from config. The PIN itself is not
+// sent back either; the server holds it against the identity that asked for
+// it, so the poll body is empty and a caller cannot complete a code it did not
+// request.
+export const listSimklMediaUsers = () => axios.get('/api/simkl/media-users');
+
+export const startMediaUserSimklPinCode = (provider, externalUserId) =>
+    axios.post(`/api/simkl/media-users/${provider}/${encodeURIComponent(externalUserId)}/pin/code`);
+
+export const pollMediaUserSimklPinToken = (provider, externalUserId) =>
+    axios.post(`/api/simkl/media-users/${provider}/${encodeURIComponent(externalUserId)}/pin/token`);
+
+export const cancelMediaUserSimklPin = (provider, externalUserId) =>
+    axios.delete(`/api/simkl/media-users/${provider}/${encodeURIComponent(externalUserId)}/pin`);
+
+export const unlinkMediaUserSimkl = (provider, externalUserId) =>
+    axios.delete(`/api/simkl/media-users/${provider}/${encodeURIComponent(externalUserId)}`);
+
+export const previewMediaUserSimklRecent = (provider, externalUserId, limit = 10) =>
+    axios.get(`/api/simkl/media-users/${provider}/${encodeURIComponent(externalUserId)}/recent`, { params: { limit } });
+
+export const updateSimklSource = (provider, externalUserId, payload) =>
+    axios.put(`/api/simkl/sources/${provider}/${encodeURIComponent(externalUserId)}`, payload);
+
+export const getMySimklStatus = () => axios.get('/api/simkl/me');
+
+export const listSimklJobUsers = async (role) => {
+    const response = role === 'user' ? await getMySimklStatus() : await listSimklMediaUsers();
+    return response.data?.media_users || (response.data?.media_user ? [response.data.media_user] : []);
+};
+
+export const startMySimklPinCode = () => axios.post('/api/simkl/me/pin/code');
+
+export const pollMySimklPinToken = () => axios.post('/api/simkl/me/pin/token');
+
+export const cancelMySimklPin = () => axios.delete('/api/simkl/me/pin');
+
+export const unlinkMySimkl = () => axios.delete('/api/simkl/me');
+
+export const previewMySimklRecent = (limit = 10) =>
+    axios.get('/api/simkl/me/recent', { params: { limit } });
+
+
 // Cleanup automation
 export const getCleanupSettings = () => axios.get('/api/cleanup/settings');
 export const setCleanupSettings = (payload) => axios.post('/api/cleanup/settings', payload);
