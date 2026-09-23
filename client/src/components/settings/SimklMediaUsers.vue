@@ -534,7 +534,7 @@ export default {
 <style scoped>
 /* Shared with UserManagement / SettingsServices */
 .settings-section {
-  padding-bottom: 1.5rem;
+  padding-bottom: var(--spacing-lg);
 }
 
 .settings-section--embedded {
@@ -542,10 +542,10 @@ export default {
 }
 
 .settings-group {
-  padding: 1.5rem 2rem;
-  margin-bottom: 1.5rem;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  margin-bottom: var(--spacing-lg);
   border: 1px solid var(--surface-glass-light);
-  border-radius: var(--border-radius);
+  border-radius: var(--radius-lg);
   background: var(--surface-glass-subtle);
 }
 
@@ -557,13 +557,13 @@ export default {
 }
 
 .settings-group-title {
-  font-size: 1.2rem;
+  font-size: var(--font-size-lg);
   font-weight: 700;
   color: var(--color-text-primary);
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 var(--spacing-sm);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .settings-group-title i {
@@ -571,31 +571,31 @@ export default {
 }
 
 .settings-group-subtitle {
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
-  margin: 0 0 1.25rem 0;
-  line-height: 1.5;
+  margin: 0 0 var(--spacing-md);
+  line-height: var(--line-height-normal);
 }
 
 .list-empty {
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   margin: 0;
-  padding: 0.75rem;
+  padding: var(--spacing-sm);
   background: var(--surface-glass-subtle);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .user-list {
   list-style: none;
   padding: 0;
-  margin: 0 0 1rem 0;
+  margin: 0 0 var(--spacing-md);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .user-row {
@@ -603,12 +603,12 @@ export default {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
   background: var(--surface-glass-subtle);
   border: 1px solid var(--surface-glass-light);
-  border-radius: var(--border-radius-sm);
-  transition: border-color 0.15s ease;
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition-fast);
 }
 
 .user-row:hover {
@@ -618,7 +618,7 @@ export default {
 .user-info {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--spacing-sm);
   min-width: 0;
   flex: 1;
 }
@@ -626,7 +626,7 @@ export default {
 .user-info > i {
   opacity: 0.6;
   color: var(--color-text-secondary);
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
 }
 
 .user-text {
@@ -638,18 +638,18 @@ export default {
 .user-name {
   font-weight: 600;
   color: var(--color-text-primary);
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .user-meta {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--spacing-xs);
 }
 
 .user-meta--warn {
@@ -659,7 +659,7 @@ export default {
 .user-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
   flex-shrink: 0;
 }
 
@@ -760,51 +760,51 @@ export default {
   background: var(--color-error-alpha-10);
   border: 1px solid var(--color-error-alpha-20);
   color: var(--color-error);
-  padding: 0.75rem 1rem;
-  border-radius: var(--border-radius-sm);
-  margin-bottom: 1rem;
-  font-size: 0.85rem;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-md);
+  font-size: var(--font-size-sm);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .oauth-success {
-  padding: 0.75rem 1rem;
+  padding: var(--spacing-sm) var(--spacing-md);
   background: var(--color-success-alpha-10);
   border: 1px solid var(--color-success-alpha-20);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-sm);
   color: var(--color-success);
-  font-size: 0.9rem;
-  margin-bottom: 1rem;
-  line-height: 1.6;
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-md);
+  line-height: var(--line-height-normal);
 }
 
 .pin-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .pin-row + .pin-row {
-  margin-top: 0.6rem;
+  margin-top: var(--spacing-sm);
 }
 
 .pin-code {
   font-family: var(--font-mono, monospace);
-  font-size: 1.35rem;
+  font-size: var(--font-size-xl);
   font-weight: 700;
   letter-spacing: 0.2em;
-  padding: 0.35rem 0.75rem;
-  border-radius: var(--border-radius-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
   background: var(--surface-glass-light);
   color: var(--color-text-primary);
 }
 
 .pin-hint {
-  margin: 0.6rem 0 0 0;
-  font-size: 0.8rem;
+  margin: var(--spacing-sm) 0 0;
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }
 
@@ -824,49 +824,49 @@ export default {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--surface-base);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: var(--z-modal-backdrop);
 }
 
 .modal-box {
   background: var(--surface-primary);
   border: 1px solid var(--surface-glass-light);
-  border-radius: var(--border-radius);
-  padding: 1.5rem;
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
   max-width: 420px;
   width: 90%;
 }
 
 .modal-box h3 {
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 var(--spacing-sm);
   color: var(--color-text-primary);
-  font-size: 1.05rem;
+  font-size: var(--font-size-base);
 }
 
 .modal-box p {
-  margin: 0 0 1.25rem 0;
+  margin: 0 0 var(--spacing-md);
   color: var(--color-text-secondary);
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
 }
 
 .modal-note {
-  font-size: 0.82rem;
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 @media (max-width: 768px) {
   .settings-group {
-    padding: 1rem;
+    padding: var(--spacing-md);
   }
   .user-row {
     flex-direction: column;

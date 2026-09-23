@@ -85,13 +85,11 @@ When opening SuggestArr for the first time:
 6. Enter Seer URL and API key.
 7. Select users and libraries.
 8. Optional: add the Trakt Client ID in Services > Trakt. If your app has a Client Secret, you may keep it configured.
-9. Save configuration.
-10. Have each user link their media-server account from Profile.
-11. Optional: have each user link their Trakt account from Profile > Trakt Account.
-12. Create or adjust jobs from the Jobs page. 
-13. Optional: add a Simkl Client ID in Services > Simkl.
-14. Optional: have each user link their Simkl account from Profile > Simkl Account.
-15. Create or adjust jobs from the Jobs page.
+9. Optional: add a Simkl Client ID in Services > Simkl.
+10. Save configuration.
+11. Have each user link their media-server account from Profile.
+12. Optional: have each user link their Trakt account from Profile > Trakt Account, their Simkl account from Profile > Simkl Account, or both.
+13. Create or adjust jobs from the Jobs page.
 
 Use internal network URLs when running everything in Docker. Example:
 
