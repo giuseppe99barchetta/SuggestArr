@@ -2,6 +2,8 @@
 
 In **Profile → Recommendation history**, a user can add titles that are no longer available from their media server. These titles are kept only against that user's linked media-server profile.
 
+Use the separate **Recommendation history** card to import a CSV or add a title manually. Administrators can find their profile cards in **Users**, above account management and self-registration.
+
 Use a UTF-8 CSV with this fixed header order:
 
 ```csv

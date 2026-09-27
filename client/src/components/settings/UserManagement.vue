@@ -846,15 +846,16 @@ export default {
 /* ── Settings grid ─────────────────────────────────────────────────────── */
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: var(--spacing-xl);
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  align-items: stretch;
+  gap: var(--spacing-lg);
   margin-bottom: var(--spacing-xl);
 }
 
 /* ── Settings group card ───────────────────────────────────────────────── */
 .settings-group {
-  background: var(--surface-interactive);
-  border: 1px solid var(--color-border-medium);
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
   padding: var(--spacing-lg);
 }
@@ -1389,12 +1390,21 @@ export default {
 }
 
 /* ── Responsive ────────────────────────────────────────────────────────── */
-@media (max-width: 600px) {
+@media (max-width: 1000px) {
+  .settings-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 700px) {
   .user-row {
-    flex-wrap: wrap;
-    gap: calc(var(--spacing-sm) * 1.2);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-sm);
   }
   .user-identity {
+    grid-column: 1 / -1;
+  }
+  .role-dropdown-wrap {
+    grid-column: 2 / -1;
     width: 100%;
   }
   .settings-grid {

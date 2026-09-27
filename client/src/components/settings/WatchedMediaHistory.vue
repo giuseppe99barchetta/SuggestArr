@@ -1,23 +1,25 @@
 <template>
-  <section class="watched-media-history">
-    <header class="history-header">
-      <span class="history-header__icon"><i class="fas fa-book-open"></i></span>
-      <div>
-        <h3>Recommendation history</h3>
-        <p>Add titles you have watched but that are no longer in your media server. They are excluded from future suggestions and used to personalise recommendations.</p>
-      </div>
-    </header>
-
+  <section id="profile-history-content" class="watched-media-history">
+    <h3><i class="fas fa-book-open" aria-hidden="true"></i> Recommendation history</h3>
+    <p class="card-desc">Add watched titles no longer in your media server to personalise recommendations and exclude them from future suggestions.</p>
+    <div class="history-content">
+    <div class="history-tools">
     <div class="history-section">
       <div class="history-section__heading">
         <h4>Import CSV</h4>
         <p>Use UTF-8 CSV with <code>tmdb_id,media_type,title,year,rating</code>. Rating is optional and ranges from 0 to 10.</p>
       </div>
       <div class="history-import-controls">
-        <label class="history-file-control">
-          <span class="sr-only">CSV file</span>
-          <input ref="file" type="file" accept=".csv,text/csv" :disabled="isImporting" @change="onFileChange">
-        </label>
+        <div class="history-file-field">
+        <span id="history-file-label" class="history-field-label">CSV file</span>
+        <div class="history-file-control">
+          <input ref="file" type="file" hidden accept=".csv,text/csv" :disabled="isImporting" @change="onFileChange">
+          <button type="button" class="btn btn-secondary btn-sm" aria-describedby="history-file-label" :disabled="isImporting" @click="$refs.file.click()">
+            <i class="fas fa-folder-open" aria-hidden="true"></i> Choose CSV
+          </button>
+          <span class="history-filename" aria-live="polite" :title="importFile?.name">{{ importFile?.name || 'No file selected' }}</span>
+        </div>
+        </div>
         <button type="button" class="btn btn-outline btn-sm" :disabled="!importFile || isImporting" @click="importCsv">
           <i :class="isImporting ? 'fas fa-spinner fa-spin' : 'fas fa-file-import'"></i>
           {{ isImporting ? 'Importing…' : 'Import CSV' }}
@@ -25,23 +27,20 @@
       </div>
     </div>
 
-    <div class="history-divider"></div>
-
     <div class="history-section">
       <div class="history-section__heading">
         <h4>Add a title</h4>
         <p>Search TMDb, then optionally add a personal rating.</p>
       </div>
       <div class="history-search">
-        <label for="watchedSearch">Search TMDb</label>
+        <BaseInput v-model.trim="query" label="Search TMDb" type="search" placeholder="Movie or series title" icon="search" size="lg" @keyup.enter="search" />
         <div class="history-search__controls">
-          <input id="watchedSearch" v-model.trim="query" class="form-control" type="search" placeholder="Movie or series title" @keyup.enter="search">
           <BaseDropdown
             id="watchedSearchType"
             v-model="searchType"
             class="history-dropdown"
             :options="searchTypeOptions"
-            aria-label="Media type"
+            label="Media type"
           />
           <button type="button" class="btn btn-outline btn-sm" :disabled="query.length < 2 || isSearching" @click="search">
             <i :class="isSearching ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i> Search
@@ -61,6 +60,7 @@
       </div>
     </div>
 
+    </div>
     <div class="history-divider"></div>
 
     <div class="history-section">
@@ -69,7 +69,7 @@
         <p>These titles are private to your linked media-server account.</p>
       </div>
       <p v-if="isLoading" class="history-empty">Loading watched titles…</p>
-      <p v-else-if="!items.length" class="history-empty">No CSV or manual titles yet.</p>
+      <p v-else-if="!items.length" class="history-empty"><i class="fas fa-film" aria-hidden="true"></i> No CSV or manual titles yet.</p>
       <div v-else class="history-table-wrap">
         <table class="history-table">
           <thead><tr><th>Title</th><th>Type</th><th>Rating</th><th>Source</th><th></th></tr></thead>
@@ -85,6 +85,7 @@
         </table>
       </div>
     </div>
+    </div>
   </section>
 </template>
 
@@ -97,10 +98,11 @@ import {
   searchMyWatchedMedia,
 } from '@/api/api';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import BaseInput from '@/components/ui/BaseInput.vue';
 
 export default {
   name: 'WatchedMediaHistory',
-  components: { BaseDropdown },
+  components: { BaseDropdown, BaseInput },
   data() {
     return {
       items: [], importFile: null, query: '', searchType: 'both', searchResults: [], ratings: {},
@@ -162,26 +164,30 @@ export default {
 </script>
 
 <style scoped>
-.watched-media-history { display: flex; flex-direction: column; gap: var(--spacing-lg); }
-.history-header { display: flex; align-items: flex-start; gap: var(--spacing-md); }
-.history-header__icon { display: inline-flex; align-items: center; justify-content: center; width: var(--spacing-xl); height: var(--spacing-xl); color: var(--color-text-secondary); background: var(--surface-glass-subtle); border: 1px solid var(--color-border-light); border-radius: var(--radius-full); flex: 0 0 auto; }
-.history-header h3, .history-section h4 { margin: 0; color: var(--color-text-primary); }
-.history-header h3 { font-size: var(--font-size-xl); font-weight: var(--font-weight-semibold); line-height: var(--line-height-tight); }
-.history-header p, .history-section__heading p, .history-empty { margin: var(--spacing-xs) 0 0; color: var(--color-text-muted); font-size: var(--font-size-sm); line-height: var(--line-height-normal); }
+.history-content { display: flex; flex-direction: column; gap: var(--spacing-lg); }
+.history-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--spacing-xl); row-gap: var(--spacing-sm); }
+.history-tools > .history-section { display: grid; grid-template-rows: subgrid; grid-row: span 3; }
+.history-tools > .history-section + .history-section { border-left: 1px solid var(--color-border-light); padding-left: var(--spacing-xl); }
+.history-tools > * { min-width: 0; }
+.history-section h4 { margin: 0; color: var(--color-text-secondary); }
+.history-section__heading p, .history-empty { margin: var(--spacing-xs) 0 0; color: var(--color-text-muted); font-size: var(--font-size-sm); line-height: var(--line-height-normal); }
+.history-section__heading code { overflow-wrap: anywhere; }
 .history-section { display: flex; flex-direction: column; gap: var(--spacing-sm); }
 .history-section h4 { font-size: var(--font-size-base); font-weight: var(--font-weight-semibold); }
 .history-divider { height: 1px; background: var(--surface-glass-light); }
 .history-import-controls, .history-search__controls, .history-result__actions { display: grid; align-items: center; gap: var(--spacing-sm); }
-.history-import-controls { grid-template-columns: minmax(0, 1fr) auto; }
-.history-file-control { display: block; min-width: 0; }
-.history-file-control input { width: 100%; min-height: var(--input-height-lg); padding: var(--spacing-xs); color: var(--color-text-secondary); background: var(--surface-interactive); border: 1px solid var(--color-border-light); border-radius: var(--radius-sm); font: inherit; }
-.history-file-control input::file-selector-button { margin-right: var(--spacing-sm); padding: var(--spacing-xs) var(--spacing-sm); color: var(--color-text-primary); background: var(--surface-glass-light); border: 1px solid var(--color-border-light); border-radius: var(--radius-sm); font: inherit; cursor: pointer; }
-.history-search { display: flex; flex-direction: column; gap: var(--spacing-xs); }
-.history-search label { color: var(--color-text-secondary); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); }
-.history-search__controls { grid-template-columns: minmax(0, 1fr) minmax(calc(var(--spacing-3xl) * 2), 1fr) auto; }
+.history-import-controls { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: var(--spacing-md); }
+.history-import-controls > .btn { min-height: var(--input-height-lg); }
+.history-file-field { width: 100%; min-width: 0; }
+.history-field-label { display: block; margin-bottom: var(--spacing-xs); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text-secondary); }
+.history-file-control { display: flex; align-items: center; gap: var(--spacing-md); width: 100%; min-width: 0; min-height: var(--input-height-lg); padding: var(--spacing-xs); background: var(--surface-glass-subtle); border: 1px solid var(--color-border-light); border-radius: var(--radius-sm); }
+.history-file-control .btn { flex-shrink: 0; min-height: var(--input-height-sm); padding-block: var(--spacing-xs); }
+.history-filename { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted); font-size: var(--font-size-sm); }
+.history-search { display: flex; flex-direction: column; gap: var(--spacing-md); }
+.history-search__controls { grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--spacing-md); }
+.history-search__controls > .btn { min-height: var(--input-height-lg); }
 .history-dropdown { min-width: 0; }
-.history-dropdown :deep(.dropdown-trigger) { min-height: var(--input-height-lg); }
-.history-dropdown :deep(.selected-value) { padding-block: var(--spacing-md); }
+.history-empty { display: flex; align-items: center; justify-content: center; gap: var(--spacing-sm); padding: var(--spacing-xl) var(--spacing-md); border: 1px dashed var(--color-border-light); border-radius: var(--radius-sm); }
 .history-search .form-control, .history-result__actions .form-control { min-width: 0; min-height: var(--input-height-lg); }
 .history-search-results { display: flex; flex-direction: column; gap: var(--spacing-sm); }
 .history-result { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--spacing-md); padding: var(--spacing-sm) var(--spacing-md); background: var(--surface-glass-subtle); border: 1px solid var(--color-border-light); border-radius: var(--radius-sm); }
@@ -194,5 +200,11 @@ export default {
 .history-table th { color: var(--color-text-muted); font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); text-transform: uppercase; }
 .history-table tbody tr:last-child td { border-bottom: 0; }
 .history-table td:last-child { width: 1%; }
-@media (max-width: 700px) { .history-import-controls, .history-search__controls, .history-result { grid-template-columns: 1fr; } .history-result__actions { grid-template-columns: minmax(0, 1fr) auto; } }
+@media (max-width: 700px) {
+  .history-tools { row-gap: var(--spacing-lg); }
+  .history-tools > .history-section { display: flex; grid-row: auto; }
+  .history-tools, .history-import-controls, .history-search__controls, .history-result { grid-template-columns: minmax(0, 1fr); }
+  .history-tools > .history-section + .history-section { border-left: 0; padding-left: 0; border-top: 1px solid var(--color-border-light); padding-top: var(--spacing-lg); }
+  .history-result__actions { grid-template-columns: minmax(0, 1fr) auto; }
+}
 </style>

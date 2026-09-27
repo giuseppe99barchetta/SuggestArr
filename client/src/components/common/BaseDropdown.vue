@@ -289,6 +289,7 @@ export default {
       this.isOpen = true;
       this._addPositionListeners();
       this.$nextTick(() => {
+        this._updateMenuPosition();
         this.scrollToSelected();
         // Focus the first enabled item or the selected item
         const selectedIndex = this.options.findIndex(opt => this.isSelected(opt) && !opt.disabled);
@@ -368,9 +369,12 @@ export default {
       const trigger = this.$refs.dropdownTrigger;
       if (!trigger) return;
       const rect = trigger.getBoundingClientRect();
+      const menuHeight = this.$refs.dropdownMenu?.offsetHeight || 0;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const openAbove = menuHeight > spaceBelow && rect.top > spaceBelow;
       this.menuStyle = {
         position: 'fixed',
-        top: `${rect.bottom + 4}px`,
+        top: `${openAbove ? Math.max(4, rect.top - menuHeight - 4) : rect.bottom + 4}px`,
         left: `${rect.left}px`,
         width: `${rect.width}px`,
         zIndex: '9999',
