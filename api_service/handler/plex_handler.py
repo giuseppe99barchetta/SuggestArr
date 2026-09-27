@@ -16,7 +16,7 @@ def to_ascii(value):
     return unicodedata.normalize('NFKD', value)
 
 class PlexHandler(BaseMediaHandler):
-    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, selected_users=None, max_content=10, feedback_repository=None, feedback_owner_id=None, feedback_media_service=None):
+    def __init__(self, plex_client: PlexClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, selected_users=None, max_content=10, feedback_repository=None, feedback_owner_id=None, feedback_media_service=None, watched_history_repository=None):
         """
         Initialize PlexHandler with clients and parameters.
         :param plex_client: Plex API client
@@ -50,6 +50,7 @@ class PlexHandler(BaseMediaHandler):
             feedback_repository=feedback_repository,
             feedback_owner_id=feedback_owner_id,
             feedback_media_service=feedback_media_service,
+            watched_history_repository=watched_history_repository,
         )
         self.plex_client = plex_client
         self.selected_users = selected_users or []
@@ -145,7 +146,7 @@ class PlexHandler(BaseMediaHandler):
 
     async def _collect_trakt_seeds(self):
         """Fetch Trakt seeds for all linked users, return list without processing."""
-        if not self.trakt_augmentor or not self.selected_users:
+        if not self.selected_users:
             return []
 
         db = DatabaseManager()
@@ -154,9 +155,11 @@ class PlexHandler(BaseMediaHandler):
             external_id = str(media_user.get('id')) if isinstance(media_user, dict) else str(media_user)
             external_username = media_user.get('name') if isinstance(media_user, dict) else None
             identity = db.upsert_media_user_identity(
-                provider="plex", external_user_id=external_id, external_username=external_username,
+                provider=self.feedback_media_service or "plex",
+                external_user_id=external_id, external_username=external_username,
             )
             seeds = await self._augment_user_trakt(identity["id"])
+            seeds.extend(self._augment_user_managed_history(identity['id']))
             if seeds:
                 for seed in seeds:
                     seed['user_id'] = external_id
@@ -223,6 +226,8 @@ class PlexHandler(BaseMediaHandler):
 
     async def _process_seed(self, seed):
         """Find similar media for one TMDB-resolved seed and request via Seer."""
+        if seed.get('preference_signal') in {'negative', 'disliked'}:
+            return
         tmdb_id = seed.get("tmdb_id")
         media_type = seed.get("media_type")
         if not tmdb_id:

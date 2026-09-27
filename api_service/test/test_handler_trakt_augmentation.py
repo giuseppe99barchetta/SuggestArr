@@ -190,3 +190,28 @@ def test_seed_date_falls_back_when_never_played():
 
     assert seed is not None
     assert seed["date"] == _epoch("1990-06-22T00:00:00Z")
+
+
+def test_managed_history_seeds_are_added_to_skip_set_and_keep_rating():
+    handler = _jellyfin_handler(None)
+    repository = MagicMock()
+    repository.get_watched_media_seeds.return_value = [{
+        'tmdb_id': '44', 'media_type': 'movie', 'title': 'Imported',
+        'rating': 9, 'source_origin': 'csv_import',
+    }]
+    handler.watched_history_repository = repository
+
+    seeds = handler._augment_user_managed_history(12)
+
+    assert seeds[0]['rating'] == 9
+    assert seeds[0]['source_origin'] == 'csv_import'
+    assert '44' in handler.existing_content_sets['movie']
+
+
+def test_merge_seeds_prioritizes_explicit_user_rating():
+    handler = _jellyfin_handler(None)
+    merged = handler._merge_seeds([
+        {'tmdb_id': '1', 'media_type': 'movie', 'date': 100, 'title': 'Recent'},
+        {'tmdb_id': '2', 'media_type': 'movie', 'date': 1, 'title': 'Loved', 'rating': 10},
+    ])
+    assert [seed['title'] for seed in merged] == ['Loved', 'Recent']

@@ -269,6 +269,8 @@
         />
       </div>
 
+      <WatchedMediaHistory v-if="isLinkableService" class="settings-group" />
+
       <!-- No linkable service configured -->
       <div v-if="!isLinkableService && hasProviderContext" class="settings-group">
         <h3>
@@ -300,6 +302,7 @@ import {
 } from '@/api/api';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
+import WatchedMediaHistory from './WatchedMediaHistory.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
 import { languageOptions, languagePayload } from '@/utils/titleLanguage.js';
 
@@ -312,7 +315,7 @@ const PROVIDER_META = {
 export default {
   name: 'UserProfile',
 
-  components: { BaseDropdown, TraktMediaUsers, ApiKeysPanel },
+  components: { BaseDropdown, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel },
 
   props: {
     config: Object,

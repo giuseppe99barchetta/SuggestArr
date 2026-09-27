@@ -5,7 +5,7 @@ from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.db.database_manager import DatabaseManager
 
 class JellyfinHandler(BaseMediaHandler):
-    def __init__(self, jellyfin_client:JellyfinClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, max_content=10, feedback_repository=None, feedback_owner_id=None, feedback_media_service=None):
+    def __init__(self, jellyfin_client:JellyfinClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, max_content=10, feedback_repository=None, feedback_owner_id=None, feedback_media_service=None, watched_history_repository=None):
         """
         Initialize JellyfinHandler with clients and parameters.
         :param jellyfin_client: Jellyfin API client
@@ -40,6 +40,7 @@ class JellyfinHandler(BaseMediaHandler):
             feedback_repository=feedback_repository,
             feedback_owner_id=feedback_owner_id,
             feedback_media_service=feedback_media_service,
+            watched_history_repository=watched_history_repository,
         )
         self.jellyfin_client = jellyfin_client
         self.selected_users = selected_users
@@ -155,14 +156,13 @@ class JellyfinHandler(BaseMediaHandler):
 
     async def _collect_trakt_seeds_for_user(self, user):
         """Fetch Trakt seeds for a user, return list without processing."""
-        if not self.trakt_augmentor:
-            return []
-
         external_id = str(user.get('id'))
         identity = DatabaseManager().upsert_media_user_identity(
-            provider="jellyfin", external_user_id=external_id, external_username=user.get('name'),
+            provider=self.feedback_media_service or "jellyfin",
+            external_user_id=external_id, external_username=user.get('name'),
         )
         seeds = await self._augment_user_trakt(identity["id"])
+        seeds.extend(self._augment_user_managed_history(identity['id']))
         for s in seeds:
             s.setdefault('date', s.get('watched_at', 0))
         return seeds
@@ -195,6 +195,8 @@ class JellyfinHandler(BaseMediaHandler):
 
     async def _process_seed(self, user, seed):
         """Find similar media for one TMDB-resolved seed and request via Seer."""
+        if seed.get('preference_signal') in {'negative', 'disliked'}:
+            return
         tmdb_id = seed.get("tmdb_id")
         media_type = seed.get("media_type")
         if not tmdb_id:
