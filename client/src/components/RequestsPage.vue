@@ -647,8 +647,10 @@ export default {
       workflowBulkMode: false,
       feedbackSaving: {},
       feedbackOptions: [
+        { value: 'seen_liked', emoji: '👍', label: 'Seen it, liked it' },
+        { value: 'seen_disliked', emoji: '👎', label: 'Seen it, did not like it' },
         { value: 'interested', emoji: '😍', label: 'Interested' },
-        { value: 'not_interested', emoji: '👎', label: 'Not interested' },
+        { value: 'not_interested', emoji: '🙅', label: 'Not interested' },
         { value: 'already_seen', emoji: '👀', label: 'Already seen' },
         { value: 'too_similar', emoji: '🫠', label: 'Too similar' },
         { value: 'save_for_later', emoji: '🔖', label: 'Save for later' },

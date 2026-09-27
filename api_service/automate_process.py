@@ -1,5 +1,6 @@
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
+from api_service.db.database_manager import DatabaseManager
 from api_service.handler.jellyfin_handler import JellyfinHandler
 from api_service.handler.plex_handler import PlexHandler
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
@@ -184,6 +185,8 @@ class ContentAutomation:
                 request_delay=request_delay,
                 trakt_augmentor=trakt_augmentor,
                 max_content=instance.max_content,
+                feedback_repository=DatabaseManager(),
+                feedback_media_service=instance.selected_service,
             )
             instance.logger.info(f"{instance.selected_service.upper()} client initialized successfully")
 
@@ -218,6 +221,8 @@ class ContentAutomation:
                 trakt_augmentor=trakt_augmentor,
                 selected_users=instance.selected_users,
                 max_content=instance.max_content,
+                feedback_repository=DatabaseManager(),
+                feedback_media_service=instance.selected_service,
             )
             instance.logger.info("Plex client initialized successfully")
 

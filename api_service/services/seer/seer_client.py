@@ -40,6 +40,9 @@ class SeerClient(BaseHTTPClient):
     
     # Override HTTP_OK to include 202 Accepted for async operations
     HTTP_OK = {200, 201, 202}
+    # Seconds to wait before retrying a request that Seer answered 403 for the
+    # configured user, before falling back to the API key.
+    PERMISSION_RETRY_DELAY = 1
 
     def __init__(self, api_url, api_key, seer_user_name=None, seer_password=None, session_token=None,
                 number_of_seasons="all", exclude_downloaded=True, exclude_watched=True,
@@ -168,6 +171,12 @@ class SeerClient(BaseHTTPClient):
         try:
             async with session.post(login_url, json={"email": self.username, "password": self.password}, timeout=self.REQUEST_TIMEOUT) as response:
                 self.logger.debug("Login response status: %d", response.status)
+                # Seer writes the session to its store while streaming the login
+                # body and only completes the response afterwards. Consume the
+                # body so the session exists before the next request is sent;
+                # otherwise the first request after login can be rejected with a
+                # 403 that looks like a permission error.
+                await response.read()
                 if response.status in self.HTTP_OK and 'connect.sid' in response.cookies:
                     self.session_token = response.cookies['connect.sid'].value
                     self.is_logged_in = True
@@ -528,10 +537,7 @@ class SeerClient(BaseHTTPClient):
                 return False
 
         try:
-            response = await self._make_request(
-                "POST", "api/v1/request", data=data, use_cookie=bool(self.session_token),
-                raise_on_permission=bool(self.session_token),
-            )
+            response = await self._post_request_as_configured_user(data)
         except SeerPermissionError as exc:
             self.logger.error(
                 "Configured Seer user cannot submit requests (%s).",
@@ -549,6 +555,31 @@ class SeerClient(BaseHTTPClient):
         )
         return False
             
+    async def _post_request_as_configured_user(self, data: dict):
+        """POST a request to Seer as the configured user, retrying once on a 403.
+
+        A 403 right after login can be transient (the session was not stored
+        yet), so one retry after ``PERMISSION_RETRY_DELAY`` keeps the request
+        owned by the configured user instead of falling back to the API key.
+        Without a session token the request goes out with the API key directly.
+
+        :param data: The Seer request body.
+        :return: The decoded response, or None on failure.
+        :raises SeerPermissionError: When the configured user is still denied
+            after the retry.
+        """
+        use_cookie = bool(self.session_token)
+        kwargs = dict(data=data, use_cookie=use_cookie, raise_on_permission=use_cookie)
+        try:
+            return await self._make_request("POST", "api/v1/request", **kwargs)
+        except SeerPermissionError as exc:
+            self.logger.debug(
+                "Seer denied the request for the configured user (%s); retrying once in %ss.",
+                exc, self.PERMISSION_RETRY_DELAY,
+            )
+            await asyncio.sleep(self.PERMISSION_RETRY_DELAY)
+            return await self._make_request("POST", "api/v1/request", **kwargs)
+
     async def check_already_requested(self, tmdb_id, media_type):
         """Check if a media request is cached in the current cycle."""
         if self.exclude_requested:
