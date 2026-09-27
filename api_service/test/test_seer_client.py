@@ -736,19 +736,18 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(mock_req.call_args.kwargs['use_cookie'])
         self.assertEqual(client.session_token, 'fresh-token')
 
-    async def test_retries_with_api_key_when_configured_user_lacks_permission(self):
+    async def test_does_not_fallback_to_api_key_when_configured_user_lacks_permission(self):
         client = _make_client(session_token='user-token')
         with patch.object(client, 'login', AsyncMock()), \
-             patch.object(
-                 client, '_make_request',
-                 AsyncMock(side_effect=[SeerPermissionError('permission denied'), {'id': 55}]),
-             ) as mock_req:
+            patch.object(
+                client, '_make_request',
+                AsyncMock(side_effect=SeerPermissionError('permission denied')),
+            ) as mock_req:
             result = await client.submit_queued_request(self._valid_payload())
 
-        self.assertTrue(result)
+        self.assertFalse(result)
+        mock_req.assert_awaited_once()
         self.assertTrue(mock_req.call_args_list[0].kwargs['use_cookie'])
-        self.assertFalse(mock_req.call_args_list[1].kwargs['use_cookie'])
-        self.assertEqual(mock_req.call_args_list[1].kwargs['retries'], 1)
 
     async def test_returns_false_when_configured_user_login_fails(self):
         client = _make_client(session_token='stale-token')

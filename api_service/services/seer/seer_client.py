@@ -533,13 +533,11 @@ class SeerClient(BaseHTTPClient):
                 raise_on_permission=bool(self.session_token),
             )
         except SeerPermissionError as exc:
-            self.logger.warning(
-                "Configured Seer user cannot submit requests (%s); retrying with the configured API key.",
+            self.logger.error(
+                "Configured Seer user cannot submit requests (%s).",
                 exc,
             )
-            response = await self._make_request(
-                "POST", "api/v1/request", data=data, use_cookie=False, retries=1,
-            )
+            return False
         if response and 'error' not in response:
             self.logger.debug("Seer submission successful: %s", response)
             return True
