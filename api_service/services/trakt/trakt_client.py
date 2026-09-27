@@ -30,6 +30,7 @@ class TraktClient(BaseHTTPClient):
 
     BASE_URL = "https://api.trakt.tv"
     REFRESH_WINDOW_SECONDS = 300
+    WATCHED_PAGE_SIZE = 250
 
     def __init__(
         self,
@@ -165,8 +166,8 @@ class TraktClient(BaseHTTPClient):
         return self._normalize_user_settings(payload)
 
     async def init_existing_content(self) -> None:
-        movies = await self._request("GET", "/sync/watched/movies", authenticated=True)
-        shows = await self._request("GET", "/sync/watched/shows", authenticated=True)
+        movies = await self._get_all_watched_items("/sync/watched/movies")
+        shows = await self._get_all_watched_items("/sync/watched/shows")
         self.existing_content = {
             "movie": self._normalize_watched_items(movies, "movie"),
             "tv": self._normalize_watched_items(shows, "show"),
@@ -215,8 +216,33 @@ class TraktClient(BaseHTTPClient):
     async def _get_watched_tmdb_ids(self, media_type: str) -> set[str]:
         item_key = "movie" if media_type == "movie" else "show"
         path = "/sync/watched/movies" if media_type == "movie" else "/sync/watched/shows"
-        payload = await self._request("GET", path, authenticated=True)
+        payload = await self._get_all_watched_items(path)
         return {item["tmdb_id"] for item in self._normalize_watched_items(payload, item_key)}
+
+    async def _get_all_watched_items(self, path: str) -> list[dict[str, Any]]:
+        """Retrieve every page from a paginated Trakt watched endpoint."""
+        items: list[dict[str, Any]] = []
+        page = 1
+        page_count = 1
+
+        while page <= page_count:
+            payload, headers = await self._request(
+                "GET",
+                path,
+                params={"page": page, "limit": self.WATCHED_PAGE_SIZE},
+                authenticated=True,
+                return_headers=True,
+            )
+            if isinstance(payload, list):
+                items.extend(payload)
+
+            try:
+                page_count = max(1, int(headers.get("X-Pagination-Page-Count", page)))
+            except (TypeError, ValueError):
+                page_count = page
+            page += 1
+
+        return items
 
     async def _request(
         self,
@@ -228,6 +254,7 @@ class TraktClient(BaseHTTPClient):
         authenticated: bool = True,
         retry_auth: bool = True,
         retry_rate_limit: bool = True,
+        return_headers: bool = False,
     ) -> Any:
         if authenticated:
             await self._refresh_if_needed()
@@ -244,7 +271,10 @@ class TraktClient(BaseHTTPClient):
         try:
             async with request_method(url, **kwargs) as response:
                 if response.status in self.HTTP_OK:
-                    return await response.json()
+                    payload = await response.json()
+                    if return_headers:
+                        return payload, response.headers
+                    return payload
 
                 if response.status == 429 and retry_rate_limit:
                     retry_after = self._parse_retry_after(response.headers.get("Retry-After"))
@@ -258,6 +288,7 @@ class TraktClient(BaseHTTPClient):
                         authenticated=authenticated,
                         retry_auth=retry_auth,
                         retry_rate_limit=False,
+                        return_headers=return_headers,
                     )
 
                 if response.status == 401 and authenticated and retry_auth:
@@ -270,6 +301,7 @@ class TraktClient(BaseHTTPClient):
                         authenticated=authenticated,
                         retry_auth=False,
                         retry_rate_limit=retry_rate_limit,
+                        return_headers=return_headers,
                     )
 
                 body = await response.text()
