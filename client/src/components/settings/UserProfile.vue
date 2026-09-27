@@ -267,6 +267,9 @@
           :trakt-configured="isTraktAppConfigured"
           embedded
         />
+
+        <div class="section-divider"></div>
+        <WatchedMediaHistory />
       </div>
 
       <!-- No linkable service configured -->
@@ -300,6 +303,7 @@ import {
 } from '@/api/api';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
+import WatchedMediaHistory from './WatchedMediaHistory.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
 import { languageOptions, languagePayload } from '@/utils/titleLanguage.js';
 
@@ -312,7 +316,7 @@ const PROVIDER_META = {
 export default {
   name: 'UserProfile',
 
-  components: { BaseDropdown, TraktMediaUsers, ApiKeysPanel },
+  components: { BaseDropdown, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel },
 
   props: {
     config: Object,

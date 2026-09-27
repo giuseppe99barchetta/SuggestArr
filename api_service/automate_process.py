@@ -187,6 +187,7 @@ class ContentAutomation:
                 max_content=instance.max_content,
                 feedback_repository=DatabaseManager(),
                 feedback_media_service=instance.selected_service,
+                watched_history_repository=DatabaseManager(),
             )
             instance.logger.info(f"{instance.selected_service.upper()} client initialized successfully")
 
@@ -223,6 +224,7 @@ class ContentAutomation:
                 max_content=instance.max_content,
                 feedback_repository=DatabaseManager(),
                 feedback_media_service=instance.selected_service,
+                watched_history_repository=DatabaseManager(),
             )
             instance.logger.info("Plex client initialized successfully")
 

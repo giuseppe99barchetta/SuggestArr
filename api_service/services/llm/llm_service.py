@@ -473,6 +473,12 @@ def _format_history_context_item(item: Dict, default_media_type: str) -> str:
         signal_label = "recent/neutral watch"
 
     details = [str(media_type), signal_label]
+    rating = item.get("rating")
+    if rating is not None:
+        try:
+            details.append(f"user rating: {float(rating):g}/10")
+        except (TypeError, ValueError):
+            pass
     raw_genres = item.get("genres") or []
     if not isinstance(raw_genres, (list, tuple)):
         raw_genres = []

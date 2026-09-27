@@ -340,6 +340,22 @@ class SchemaManager:
                     FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
                     UNIQUE (media_user_identity_id, source_type, source_key)
                 )
+            """,
+            'watched_media': """
+                CREATE TABLE IF NOT EXISTS watched_media (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    media_user_identity_id INTEGER NOT NULL,
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    year INTEGER,
+                    rating REAL,
+                    source TEXT NOT NULL DEFAULT 'manual',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
+                    UNIQUE (media_user_identity_id, tmdb_id, media_type)
+                )
             """
         }
         
