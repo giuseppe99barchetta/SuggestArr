@@ -532,8 +532,11 @@
   overflow-y: auto;
 }
 
-.modal-content {
+/* dashboardPage.css styles .modal-content as well, and whichever of the two
+   sheets was loaded last would win; the details modal is told apart by class. */
+.modal-content.request-details-modal {
   position: relative;
+  padding: 0;
   background-color: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(15px);
   border-radius: var(--radius-xl);
@@ -631,7 +634,7 @@
   min-width: 0;
 }
 
-.modal-title {
+.request-details-modal .modal-title {
   font-size: 2rem;
   font-weight: bold;
   color: var(--color-text-primary);
@@ -649,7 +652,7 @@
   margin-bottom: 2rem;
 }
 
-.modal-section-title {
+.request-details-modal .modal-section-title {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1544,7 +1547,7 @@
     grid-template-columns: 1fr;
   }
 
-  .modal-title {
+  .request-details-modal .modal-title {
     font-size: 1.5rem;
   }
 
