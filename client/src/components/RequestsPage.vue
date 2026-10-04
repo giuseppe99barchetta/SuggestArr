@@ -496,6 +496,15 @@
                     <i class="fas fa-history"></i>
                     Trakt History
                   </span>
+                  <a
+                    v-if="trailerUrl"
+                    :href="trailerUrl"
+                    class="badge badge-trailer"
+                    target="_blank"
+                    rel="noopener noreferrer">
+                    <i class="fab fa-youtube"></i>
+                    Watch Trailer
+                  </a>
                 </div>
 
                 <!-- Source Link (for requests view) -->
@@ -580,6 +589,7 @@ import { formatDate } from '@/utils/dateUtils.js';
 import { getRequestSourceVisual } from '@/utils/jobTypeVisuals.js';
 import { getAiSearchRequests } from '@/api/api.js';
 import RequestWorkflowPanel from './RequestWorkflowPanel.vue';
+import { loadTrailerUrl } from '@/utils/trailer.js';
 
 export default {
   name: "RequestsPage",
@@ -614,6 +624,7 @@ export default {
       requestUsers: [],
       showModal: false,
       selectedSource: null,
+      trailerUrl: null,
       loading: false,
       currentPage: 1,
       totalPages: 1,
@@ -1160,6 +1171,14 @@ export default {
       this.selectedSource = { ...source, _isAiRequest: isAiRequest };
       this.showModal = true;
       document.body.style.overflow = 'hidden';
+      this.loadTrailer();
+    },
+    async loadTrailer() {
+      this.trailerUrl = null;
+      const shown = this.selectedSource;
+      const url = await loadTrailerUrl(axios, shown);
+      // The modal may show another title by the time the answer arrives.
+      if (this.selectedSource === shown) this.trailerUrl = url;
     },
     openWorkflowModal(item) {
       this.openModal({
@@ -1175,6 +1194,7 @@ export default {
     closeModal() {
       this.showModal = false;
       this.selectedSource = null;
+      this.trailerUrl = null;
       document.body.style.overflow = 'auto';
     },
   },

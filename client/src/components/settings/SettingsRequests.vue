@@ -153,7 +153,7 @@
             <div class="modal-poster-section"><img v-if="selectedRequest.poster_path" :src="selectedRequest.poster_path" :alt="selectedRequest.title" class="modal-poster" /><div v-else class="modal-poster-placeholder"><i class="fas fa-image"></i></div></div>
             <div class="modal-details-section">
               <h2 class="modal-title">{{ selectedRequest.title }}</h2>
-              <div class="badge-container"><span class="badge badge-media"><i :class="selectedRequest.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i> {{ selectedRequest.media_type?.toUpperCase() }}</span><span class="badge badge-rating"><i class="fas fa-star"></i> {{ selectedRequest.rating || 'N/A' }}</span><span v-if="selectedRequest.release_date" class="badge badge-date"><i class="fas fa-calendar"></i> {{ selectedRequest.release_date }}</span></div>
+              <div class="badge-container"><span class="badge badge-media"><i :class="selectedRequest.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i> {{ selectedRequest.media_type?.toUpperCase() }}</span><span class="badge badge-rating"><i class="fas fa-star"></i> {{ selectedRequest.rating || 'N/A' }}</span><span v-if="selectedRequest.release_date" class="badge badge-date"><i class="fas fa-calendar"></i> {{ selectedRequest.release_date }}</span><a v-if="trailerUrl" :href="trailerUrl" class="badge badge-trailer" target="_blank" rel="noopener noreferrer"><i class="fab fa-youtube"></i> Watch Trailer</a></div>
               <div v-if="selectedRequest.source_title" class="source-link-modal"><i class="fas fa-link"></i><span>Requested from: <strong>{{ selectedRequest.source_title }}</strong></span></div>
               <div v-if="selectedRequest.user_name || selectedRequest.user_id" class="source-link-modal"><i class="fas fa-user"></i><span>Requested for: <strong>{{ selectedRequest.user_name || selectedRequest.user_id }}</strong></span></div>
               <div class="modal-separator"></div>
@@ -173,6 +173,7 @@ import BaseButton from '@/components/ui/BaseButton.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
 import { approvalNeedsDialog, loadSeerServers } from '@/utils/requestProfiles.js';
 import { SEEN_OPTIONS, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
+import { loadTrailerUrl } from '@/utils/trailer.js';
 import '@/assets/styles/requestsPage.css';
 
 export default {
@@ -197,6 +198,7 @@ export default {
       actionLoadingId: null,
       approvalEnabled: false,
       selectedRequest: null,
+      trailerUrl: null,
       totalRequests: 0,
       loading: false,
       activeFilter: 'all',
@@ -349,8 +351,12 @@ export default {
       this.$router.push('/requests');
     },
 
-    openDetails(request) {
+    async openDetails(request) {
       this.selectedRequest = request;
+      this.trailerUrl = null;
+      const url = await loadTrailerUrl(axios, request);
+      // The modal may show another title by the time the answer arrives.
+      if (this.selectedRequest === request) this.trailerUrl = url;
     }
   }
 };
