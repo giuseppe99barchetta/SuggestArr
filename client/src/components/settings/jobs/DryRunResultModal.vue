@@ -97,6 +97,15 @@
                   <i class="fas fa-star"></i>
                   {{ Number(item.vote_average).toFixed(1) }}
                 </span>
+                <button
+                  v-if="hasTrailerTarget(item)"
+                  type="button"
+                  class="item-trailer"
+                  :disabled="withoutTrailer.includes(trailerKey(item))"
+                  @click.stop="watchTrailer(item)">
+                  <i class="fab fa-youtube"></i>
+                  {{ withoutTrailer.includes(trailerKey(item)) ? 'No trailer' : 'Trailer' }}
+                </button>
               </div>
 
               <!-- Filter badges -->
@@ -161,6 +170,9 @@
 </template>
 
 <script>
+import axios from 'axios';
+import { openTrailer, trailerTarget } from '@/utils/trailer.js';
+
 export default {
   name: 'DryRunResultModal',
   props: {
@@ -170,7 +182,7 @@ export default {
   },
   emits: ['close', 'run'],
   data() {
-    return { showAll: true };
+    return { showAll: true, withoutTrailer: [] };
   },
   computed: {
     hasFilterData() {
@@ -191,6 +203,15 @@ export default {
     itemWouldRequest(item) {
       if (item.would_request !== undefined) return item.would_request;
       return true;
+    },
+    hasTrailerTarget(item) {
+      return Boolean(trailerTarget(item));
+    },
+    trailerKey(item) {
+      return `${item.media_type}:${item.tmdb_id}`;
+    },
+    async watchTrailer(item) {
+      if (!await openTrailer(axios, item)) this.withoutTrailer.push(this.trailerKey(item));
     },
     posterUrl(path) {
       if (!path) return null;
@@ -531,6 +552,32 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+.item-trailer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 0 var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-error-light);
+  background-color: var(--color-error-alpha-20);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.item-trailer:hover:not(:disabled),
+.item-trailer:focus-visible {
+  background-color: var(--color-error);
+  color: var(--color-text-primary);
+}
+
+.item-trailer:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* Filter badges */

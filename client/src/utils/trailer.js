@@ -36,3 +36,27 @@ export async function loadTrailerUrl(http, item) {
     return null;
   }
 }
+
+/**
+ * Look a trailer up only once it is asked for, and open it in a new tab.
+ * For lists too long to look every title up in advance.
+ *
+ * @param {{ get: Function }} http - axios, or anything with the same `get`.
+ * @param {object|null} item - The listed title.
+ * @param {Function} [openTab] - Opens a blank tab and returns its window.
+ * @returns {Promise<boolean>} false when the title has no trailer to open.
+ */
+export async function openTrailer(http, item, openTab = () => window.open('', '_blank')) {
+  // Opened before the lookup: a tab opened after waiting is blocked as a popup.
+  const tab = openTab();
+  const url = await loadTrailerUrl(http, item);
+  if (!url) {
+    tab?.close();
+    return false;
+  }
+  if (tab) {
+    tab.opener = null;
+    tab.location.replace(url);
+  }
+  return true;
+}

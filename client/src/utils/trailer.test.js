@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { loadTrailerUrl, trailerEndpoint, trailerTarget } from './trailer.js';
+import { loadTrailerUrl, openTrailer, trailerEndpoint, trailerTarget } from './trailer.js';
 
 test('a sent request is looked up by its TMDb id', () => {
   const target = trailerTarget({ request_id: '10950', media_type: 'movie' });
@@ -34,4 +34,20 @@ test('the trailer URL comes from the API, and is null when missing, failing or n
   assert.equal(await loadTrailerUrl(http(() => { throw new Error('offline'); }), movie), null);
   assert.equal(await loadTrailerUrl(http(() => ({ data: { url: 'x' } })), { media_type: 'movie' }), null);
   assert.deepEqual(asked, Array(3).fill('/api/tmdb/trailer/movie/10950'));
+});
+
+test('a trailer asked for from a list opens in the tab prepared for it, which is closed when there is none', async () => {
+  const movie = { tmdb_id: 603, media_type: 'movie' };
+  const newTab = () => ({ opener: {}, closed: false, went: null, close() { this.closed = true; }, location: { replace(url) { tab.went = url; } } });
+
+  let tab = newTab();
+  assert.equal(await openTrailer({ get: async () => ({ data: { url: 'https://www.youtube.com/watch?v=abc' } }) }, movie, () => tab), true);
+  assert.equal(tab.went, 'https://www.youtube.com/watch?v=abc');
+  assert.equal(tab.opener, null);
+  assert.equal(tab.closed, false);
+
+  tab = newTab();
+  assert.equal(await openTrailer({ get: async () => ({ data: { url: null } }) }, movie, () => tab), false);
+  assert.equal(tab.closed, true);
+  assert.equal(tab.went, null);
 });
