@@ -293,6 +293,7 @@
         </template>
         </section>
       </div>
+      </div>
 
       <WatchedMediaHistory v-if="isLinkableService" class="settings-group history-group" />
 

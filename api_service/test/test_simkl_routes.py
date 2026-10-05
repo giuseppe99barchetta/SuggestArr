@@ -21,10 +21,16 @@ SELECTED = {"SELECTED_SERVICE": "jellyfin", "SELECTED_USERS": [{"id": "jf-1", "n
 PIN = {
     "user_code": "8CCE9",
     "verification_uri": "https://simkl.com/pin",
+    "verification_uri_complete": "https://simkl.com/pin?user_code=8CCE9",
+    "device_code": "device-code",
     "expires_in": 900,
     "interval": 5,
 }
 SETTINGS = {"simkl_user_id": "8307044", "simkl_username": "Wire"}
+TOKENS = {
+    "access_token": "tok-123", "refresh_token": "refresh-123",
+    "expires_at": 123456,
+}
 
 
 class FakeClient:
@@ -47,10 +53,10 @@ class FakeClient:
             raise FakeClient.pin_error
         return dict(PIN)
 
-    async def poll_for_token(self, user_code):
+    async def poll_for_token(self, device_code):
         if FakeClient.pin_error:
             raise FakeClient.pin_error
-        return "tok-123"
+        return dict(TOKENS)
 
     async def get_user_settings(self):
         return dict(SETTINGS)
@@ -88,7 +94,7 @@ def make_db(**overrides):
     }
     db.upsert_simkl_account_link.return_value = 5
     db.get_simkl_account_link.return_value = None
-    db.get_simkl_pending_user_code.return_value = "8CCE9"
+    db.get_simkl_pending_device_code.return_value = "device-code"
     db.get_simkl_watched_cache.return_value = []
     db.get_enabled_simkl_sources.return_value = []
     for key, value in overrides.items():
@@ -127,7 +133,7 @@ def test_a_client_id_in_the_request_body_is_ignored():
     assert FakeClient.instances[0].client_id == "cid"
 
 
-# ---- PIN flow ----------------------------------------------------------------
+# ---- Device flow -------------------------------------------------------------
 
 def test_requesting_a_pin_returns_the_code_and_binds_it_to_the_identity():
     db = make_db()
@@ -137,7 +143,8 @@ def test_requesting_a_pin_returns_the_code_and_binds_it_to_the_identity():
     body = resp.get_json()
     assert body["user_code"] == "8CCE9"
     assert body["verification_uri"] == "https://simkl.com/pin"
-    db.set_simkl_pending_user_code.assert_called_once_with(1, "8CCE9")
+    assert body["verification_uri_complete"].endswith("8CCE9")
+    db.set_simkl_pending_device_code.assert_called_once_with(1, "device-code")
 
 
 def test_the_poll_uses_the_stored_code_not_one_supplied_by_the_caller():
@@ -147,9 +154,9 @@ def test_the_poll_uses_the_stored_code_not_one_supplied_by_the_caller():
     polled = {}
 
     class Recording(FakeClient):
-        async def poll_for_token(self, user_code):
-            polled["code"] = user_code
-            return "tok-123"
+        async def poll_for_token(self, device_code):
+            polled["code"] = device_code
+            return dict(TOKENS)
 
     app = make_app()
     with patch("api_service.blueprints.simkl.routes.DatabaseManager", return_value=db), \
@@ -162,11 +169,11 @@ def test_the_poll_uses_the_stored_code_not_one_supplied_by_the_caller():
         )
 
     assert resp.status_code == 200
-    assert polled["code"] == "8CCE9"
+    assert polled["code"] == "device-code"
 
 
 def test_polling_before_requesting_a_pin_is_rejected():
-    db = make_db(get_simkl_pending_user_code=None)
+    db = make_db(get_simkl_pending_device_code=None)
     resp = run(db, "post", "/api/simkl/media-users/jellyfin/jf-1/pin/token")
     assert resp.status_code == 400
 
@@ -185,7 +192,7 @@ def test_an_expired_pin_clears_the_stored_code():
     resp = run(db, "post", "/api/simkl/media-users/jellyfin/jf-1/pin/token")
 
     assert resp.status_code == 400
-    db.set_simkl_pending_user_code.assert_called_with(1, None)
+    db.set_simkl_pending_device_code.assert_called_with(1, None)
 
 
 def test_a_rejected_client_id_surfaces_as_a_400_not_a_500():
@@ -217,7 +224,7 @@ def test_cancelling_clears_the_pending_code():
     resp = run(db, "delete", "/api/simkl/media-users/jellyfin/jf-1/pin")
 
     assert resp.status_code == 200
-    db.set_simkl_pending_user_code.assert_called_once_with(1, None)
+    db.set_simkl_pending_device_code.assert_called_once_with(1, None)
 
 
 def test_cancelling_does_not_unlink_the_account():
@@ -232,7 +239,7 @@ def test_cancelling_for_an_identity_that_was_never_created_still_succeeds():
     resp = run(db, "delete", "/api/simkl/media-users/jellyfin/jf-1/pin")
 
     assert resp.status_code == 200
-    db.set_simkl_pending_user_code.assert_not_called()
+    db.set_simkl_pending_device_code.assert_not_called()
 
 
 def test_cancelling_for_an_unknown_media_user_is_rejected():
@@ -247,9 +254,11 @@ def test_a_completed_pin_persists_the_link_token_and_default_source():
     assert resp.status_code == 200
     assert resp.get_json()["simkl_username"] == "Wire"
     db.upsert_simkl_account_link.assert_called_once()
-    db.upsert_simkl_oauth_tokens.assert_called_once_with(link_id=5, access_token="tok-123")
+    db.upsert_simkl_oauth_tokens.assert_called_once_with(
+        link_id=5, access_token="tok-123", refresh_token="refresh-123", expires_at=123456,
+    )
     db.upsert_simkl_source.assert_called_once()
-    db.set_simkl_pending_user_code.assert_called_with(1, None)
+    db.set_simkl_pending_device_code.assert_called_with(1, None)
 
 
 def test_relinking_a_different_simkl_account_clears_the_cache():
@@ -259,6 +268,7 @@ def test_relinking_a_different_simkl_account_clears_the_cache():
     })
     run(db, "post", "/api/simkl/media-users/jellyfin/jf-1/pin/token")
     db.clear_simkl_watched_cache.assert_called_once_with(5)
+    db.reset_simkl_sync_state.assert_called_once_with(5)
 
 
 def test_relinking_the_same_simkl_account_keeps_the_cache():
@@ -279,12 +289,12 @@ def test_an_unknown_media_user_is_rejected():
 def test_link_status_never_exposes_the_pending_pin_or_the_activities_blob():
     db = make_db(get_simkl_account_link={
         "id": 5, "connected": True, "status": "connected", "simkl_username": "Wire",
-        "pending_user_code": "8CCE9", "activities_json": "{}", "last_full_sync_at": 123,
+        "pending_device_code": "device-code", "activities_json": "{}", "last_full_sync_at": 123,
     })
     resp = run(db, "get", "/api/simkl/media-users")
 
     link = resp.get_json()["media_users"][0]["simkl"]
-    assert "pending_user_code" not in link
+    assert "pending_device_code" not in link
     assert "activities_json" not in link
     assert link["connected"] is True
 
@@ -306,7 +316,7 @@ def test_an_unlinked_user_reports_disconnected():
 # ---- Unlink ------------------------------------------------------------------
 
 def test_unlink_states_plainly_that_it_could_not_revoke_upstream():
-    """Simkl exposes no revocation endpoint, so claiming otherwise would lie."""
+    """A legacy or unavailable token cannot be claimed to have been revoked."""
     db = make_db()
     resp = run(db, "delete", "/api/simkl/media-users/jellyfin/jf-1")
 

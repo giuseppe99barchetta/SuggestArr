@@ -83,7 +83,16 @@ def test_a_generic_error_still_applies_to_a_healthy_link(db, link):
 def test_tokens_round_trip_without_a_refresh_token(db, link):
     db.upsert_simkl_oauth_tokens(link["link_id"], "tok-abc")
     assert db.get_simkl_oauth_tokens(link["link_id"]) == {
-        "access_token": "tok-abc", "expires_at": None,
+        "access_token": "tok-abc", "refresh_token": None, "expires_at": None,
+    }
+
+
+def test_v2_tokens_round_trip_with_refresh_token(db, link):
+    db.upsert_simkl_oauth_tokens(
+        link["link_id"], "access", expires_at=123, refresh_token="refresh",
+    )
+    assert db.get_simkl_oauth_tokens(link["link_id"]) == {
+        "access_token": "access", "refresh_token": "refresh", "expires_at": 123,
     }
 
 
@@ -98,16 +107,16 @@ def test_upserting_tokens_twice_replaces_rather_than_duplicates(db, link):
 def test_a_pending_code_can_be_stored_before_any_link_exists(db):
     """The first link has no row yet, so setting a code must create one."""
     identity = db.upsert_media_user_identity("plex", "fresh", "New")
-    db.set_simkl_pending_user_code(identity["id"], "8CCE9")
+    db.set_simkl_pending_device_code(identity["id"], "device-code")
 
-    assert db.get_simkl_pending_user_code(identity["id"]) == "8CCE9"
+    assert db.get_simkl_pending_device_code(identity["id"]) == "device-code"
     assert db.get_simkl_account_link(identity["id"])["status"] == "pending"
 
 
 def test_completing_a_link_clears_the_pending_code(db, link):
-    db.set_simkl_pending_user_code(link["identity_id"], "8CCE9")
+    db.set_simkl_pending_device_code(link["identity_id"], "device-code")
     db.upsert_simkl_account_link(link["identity_id"], "8307044", "Wire")
-    assert db.get_simkl_pending_user_code(link["identity_id"]) is None
+    assert db.get_simkl_pending_device_code(link["identity_id"]) is None
 
 
 # ---- Cache -------------------------------------------------------------------
@@ -195,6 +204,19 @@ def test_sync_clocks_are_only_set_when_asked_for(db, link):
 
     assert state["last_activities_check_at"]
     assert state["last_full_sync_at"] is None
+
+
+def test_reset_sync_state_clears_cache_payload_and_all_clocks(db, link):
+    db.update_simkl_sync_state(
+        link["link_id"], activities={"all": "now"}, mark_full_sync=True,
+        mark_activities_check=True,
+    )
+    db.reset_simkl_sync_state(link["link_id"])
+
+    assert db.get_simkl_sync_state(link["link_id"]) == {
+        "activities": {}, "last_full_sync_at": None, "last_activities_check_at": None,
+    }
+    assert db.get_simkl_account_link_by_id(link["link_id"])["last_synced_at"] is None
 
 
 def test_corrupt_stored_activities_degrade_to_empty_rather_than_raising(db, link):

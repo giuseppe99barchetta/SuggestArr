@@ -134,11 +134,11 @@ SuggestArr can also read each user's Simkl watch history. Simkl is optional and 
 
 ### How to enable
 
-1. Create a Simkl app at <https://simkl.com/settings/developer/>, using `urn:ietf:wg:oauth:2.0:oob` as the Redirect URI.
+1. Create a Simkl AUTH V2 app at <https://simkl.com/settings/developer/>.
 2. In SuggestArr, go to **Services -> Simkl**.
 3. Enter the Simkl **Client ID** and save. Simkl links with a PIN, so there is no client secret.
 4. Each user goes to **Profile -> Simkl Account** and clicks **Link Simkl**.
-5. Enter the PIN shown by SuggestArr at <https://simkl.com/pin>.
+5. Open the displayed device URL or enter the displayed code at <https://simkl.com/pin>.
 6. Open **Recent Simkl Preview** to verify the latest Simkl history is being read.
 
 As with Trakt, Simkl links are tied to the user's linked media profile, and **Use Simkl as Seed** and **Exclude Simkl Watched** are set per job under advanced settings. See the [Installation Guide](/docs/INSTALLATION.md#simkl-integration) for re-linking and unlinking details.

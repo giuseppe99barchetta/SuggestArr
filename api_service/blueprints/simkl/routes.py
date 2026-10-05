@@ -109,9 +109,9 @@ def _link_status_for_identity(db: DatabaseManager, identity_id: int) -> dict:
     if not link:
         return {"connected": False}
 
-    # pending_user_code is an in-flight authorization secret, and status/error
+    # pending_device_code is an in-flight authorization secret, and status/error
     # payloads are the easiest place for it to leak into a log or a browser.
-    link.pop("pending_user_code", None)
+    link.pop("pending_device_code", None)
     link.pop("activities_json", None)
 
     if link.get("connected"):
@@ -141,12 +141,12 @@ async def _request_pin(client_id: str) -> dict[str, Any]:
         return await client.request_pin_code()
 
 
-async def _exchange_pin(client_id: str, user_code: str) -> tuple[str, dict[str, Any]]:
-    """Exchange an authorized PIN for a token and the account identity."""
+async def _exchange_pin(client_id: str, device_code: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Exchange an authorized device code for tokens and the account identity."""
     async with SimklClient(client_id) as client:
-        access_token = await client.poll_for_token(user_code)
+        token_payload = await client.poll_for_token(device_code)
         settings = await client.get_user_settings()
-    return access_token, settings
+    return token_payload, settings
 
 
 async def _preview_items(
@@ -171,7 +171,7 @@ async def _preview_items(
 
 
 def _link_and_persist(
-    db: DatabaseManager, identity: dict, access_token: str, settings: dict
+    db: DatabaseManager, identity: dict, token_payload: dict, settings: dict
 ) -> dict:
     """Persist a completed link, its token, and the default source."""
     # Captured before the upsert overwrites it. A re-link may point at a
@@ -188,7 +188,12 @@ def _link_and_persist(
         token_source="manual_oauth",
         status="connected",
     )
-    db.upsert_simkl_oauth_tokens(link_id=link_id, access_token=access_token)
+    db.upsert_simkl_oauth_tokens(
+        link_id=link_id,
+        access_token=token_payload.get("access_token") or "",
+        refresh_token=token_payload.get("refresh_token"),
+        expires_at=token_payload.get("expires_at"),
+    )
     db.upsert_simkl_source(
         media_user_identity_id=identity["id"],
         source_type="watched_history",
@@ -202,9 +207,9 @@ def _link_and_persist(
             "Simkl link now points at a different account; clearing %d cached rows",
             db.clear_simkl_watched_cache(link_id),
         )
-        # Force a full rebuild rather than a delta against the old account's
-        # activity timestamps.
-        db.update_simkl_sync_state(link_id, activities={})
+        # Force a full rebuild rather than a delta or cooldown against the old
+        # account's activity timestamps.
+        db.reset_simkl_sync_state(link_id)
     return {
         "connected": True,
         "status": "connected",
@@ -221,6 +226,8 @@ def _resolve_token(db: DatabaseManager, identity_id: int) -> tuple[Optional[dict
     tokens = db.get_simkl_oauth_tokens(link["id"])
     if not tokens or not tokens.get("access_token"):
         return None, None
+    link = dict(link)
+    link.update(tokens)
     return link, tokens["access_token"]
 
 
@@ -264,10 +271,10 @@ def get_my_simkl_status():
     return jsonify({"media_user": _media_user_payload(profile, link)}), 200
 
 
-# ---- PIN flow ----------------------------------------------------------------
+# ---- Device flow -------------------------------------------------------------
 
 def _start_pin(db: DatabaseManager, identity: dict, label: str):
-    """Request a PIN and bind it to an identity for the later exchange."""
+    """Request a device code and bind its private handle to an identity."""
     client_id = _simkl_client_id()
     if not client_id:
         return jsonify({"message": _NOT_CONFIGURED, "status": "error"}), 400
@@ -278,51 +285,56 @@ def _start_pin(db: DatabaseManager, identity: dict, label: str):
         logger.warning("Simkl rejected the client ID while starting a PIN: %s", exc)
         return jsonify(_CLIENT_ID_FAILED(exc)), 400
     except Exception as exc:
-        logger.error("Simkl PIN request failed for %s: %s", label, exc, exc_info=True)
-        return jsonify({"message": "Error requesting a Simkl PIN", "status": "error"}), 500
+        logger.error("Simkl device request failed for %s: %s", label, exc, exc_info=True)
+        return jsonify({"message": "Error requesting Simkl authorization", "status": "error"}), 500
 
     user_code = activation.get("user_code")
-    if not user_code:
-        return jsonify({"message": "Simkl returned no PIN", "status": "error"}), 502
+    device_code = activation.get("device_code")
+    if not user_code or not device_code:
+        return jsonify({"message": "Simkl returned an invalid device code", "status": "error"}), 502
 
-    db.set_simkl_pending_user_code(identity["id"], user_code)
-    # The code is returned to the caller who requested it but never logged:
-    # anyone holding it can complete the authorization.
+    db.set_simkl_pending_device_code(identity["id"], device_code)
+    # The private device code is returned by the API client only to this server;
+    # the browser receives the public user code and verification URL.
     return jsonify({
         "user_code": user_code,
         "verification_uri": activation.get("verification_uri"),
+        "verification_uri_complete": activation.get("verification_uri_complete"),
         "expires_in": activation.get("expires_in"),
         "interval": activation.get("interval"),
     }), 200
 
 
 def _finish_pin(db: DatabaseManager, identity: dict, label: str):
-    """Exchange the identity's pending PIN for a token, if the user authorized it."""
+    """Exchange the identity's pending device code, if the user authorized it."""
     client_id = _simkl_client_id()
     if not client_id:
         return jsonify({"message": _NOT_CONFIGURED, "status": "error"}), 400
 
-    # Read the code from server-side state rather than the request body.
-    user_code = db.get_simkl_pending_user_code(identity["id"])
-    if not user_code:
-        return jsonify({"message": "Request a Simkl PIN first", "status": "error"}), 400
+    # Read the private code from server-side state rather than the request body.
+    device_code = db.get_simkl_pending_device_code(identity["id"])
+    if not device_code:
+        return jsonify({"message": "Request Simkl authorization first", "status": "error"}), 400
 
     try:
-        access_token, settings = async_to_sync(_exchange_pin)(client_id, user_code)
-    except SimklPinPending:
-        return jsonify({"connected": False, "status": "pending"}), 202
+        token_payload, settings = async_to_sync(_exchange_pin)(client_id, device_code)
+    except SimklPinPending as exc:
+        body = {"connected": False, "status": "pending"}
+        if exc.interval:
+            body["interval"] = exc.interval
+        return jsonify(body), 202
     except SimklPinExpired:
-        db.set_simkl_pending_user_code(identity["id"], None)
-        return jsonify({"message": "The Simkl PIN expired. Request a new one.", "status": "error"}), 400
+        db.set_simkl_pending_device_code(identity["id"], None)
+        return jsonify({"message": "Simkl authorization expired. Request a new one.", "status": "error"}), 400
     except SimklClientIdError as exc:
         return jsonify(_CLIENT_ID_FAILED(exc)), 400
     except Exception as exc:
-        logger.error("Simkl PIN exchange failed for %s: %s", label, exc, exc_info=True)
+        logger.error("Simkl device exchange failed for %s: %s", label, exc, exc_info=True)
         db.mark_simkl_account_link_error(identity["id"], "error", "Simkl connection failed")
         return jsonify({"message": "Error connecting Simkl", "status": "error"}), 500
 
-    result = _link_and_persist(db, identity, access_token, settings)
-    db.set_simkl_pending_user_code(identity["id"], None)
+    result = _link_and_persist(db, identity, token_payload, settings)
+    db.set_simkl_pending_device_code(identity["id"], None)
     return jsonify(result), 200
 
 
@@ -392,7 +404,7 @@ def _cancel_pin(db: DatabaseManager, provider: str, external_user_id: str):
     """
     try:
         identity = db.get_media_user_identity(provider.lower(), str(external_user_id))
-        db.set_simkl_pending_user_code(identity["id"], None)
+        db.set_simkl_pending_device_code(identity["id"], None)
     except (ValueError, KeyError):
         pass
     return jsonify({"status": "cancelled"}), 200
@@ -420,21 +432,44 @@ def cancel_media_user_pin(provider: str, external_user_id: str):
 
 # ---- Unlink ------------------------------------------------------------------
 
-def _unlink_response() -> tuple:
-    """Simkl exposes no token revocation endpoint.
+async def _revoke_simkl_token(client_id: str, token: str) -> None:
+    async with SimklClient(client_id) as client:
+        await client.revoke_token(token)
 
-    The local link and cached history are deleted, but the authorization
-    itself stays live on Simkl's side until the user removes the app, so the
-    response says so rather than implying a revocation that did not happen.
-    """
+
+def _unlink_simkl_identity(db: DatabaseManager, identity_id: int) -> bool:
+    """Revoke a V2 grant when possible, then always remove local state."""
+    revoked_upstream = False
+    link = db.get_simkl_account_link(identity_id)
+    tokens = db.get_simkl_oauth_tokens(link["id"]) if link else None
+    token = None
+    if isinstance(tokens, dict):
+        token = tokens.get("refresh_token") or tokens.get("access_token")
+    if token and token.startswith(("simkl_at_", "simkl_rt_")) and _simkl_client_id():
+        try:
+            async_to_sync(_revoke_simkl_token)(_simkl_client_id(), token)
+            revoked_upstream = True
+        except Exception as exc:
+            logger.warning("Could not revoke Simkl access during unlink: %s", exc)
+    db.unlink_simkl_account(identity_id)
+    return revoked_upstream
+
+
+def _unlink_response(revoked_upstream: bool = False) -> tuple:
+    """Return the local unlink result and whether V2 revocation completed."""
+    message = "Simkl access was removed locally."
+    if revoked_upstream:
+        message += " The Simkl authorization was revoked."
+    else:
+        message += (
+            " To revoke it at Simkl, remove SuggestArr at "
+            "simkl.com/settings/connected-apps."
+        )
     return jsonify({
         "connected": False,
         "status": "deleted",
-        "revoked_upstream": False,
-        "message": (
-            "Simkl access was removed locally. To revoke it at Simkl, remove "
-            "SuggestArr at simkl.com/settings/connected-apps."
-        ),
+        "revoked_upstream": revoked_upstream,
+        "message": message,
     }), 200
 
 
@@ -447,10 +482,10 @@ def delete_media_user_simkl_account(provider: str, external_user_id: str):
         return jsonify({"message": "Media user not found", "status": "error"}), 404
     try:
         identity = db.get_media_user_identity(provider.lower(), str(external_user_id))
-        db.unlink_simkl_account(identity["id"])
+        revoked_upstream = _unlink_simkl_identity(db, identity["id"])
     except (ValueError, KeyError):
-        pass
-    return _unlink_response()
+        revoked_upstream = False
+    return _unlink_response(revoked_upstream)
 
 
 @simkl_bp.route("/me", methods=["DELETE"])
@@ -462,10 +497,10 @@ def delete_my_simkl_account():
         return jsonify({"message": "Link your media server account first", "status": "error"}), 404
     try:
         identity = db.get_media_user_identity(profile["provider"], str(profile["external_user_id"]))
-        db.unlink_simkl_account(identity["id"])
+        revoked_upstream = _unlink_simkl_identity(db, identity["id"])
     except (ValueError, KeyError):
-        pass
-    return _unlink_response()
+        revoked_upstream = False
+    return _unlink_response(revoked_upstream)
 
 
 # ---- Preview -----------------------------------------------------------------

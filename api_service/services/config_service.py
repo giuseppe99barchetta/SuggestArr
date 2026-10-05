@@ -143,8 +143,8 @@ def _export_simkl_link(
 ) -> Optional[dict]:
     """Serialize one media user's Simkl link, or None when they have none.
 
-    Only ``access_token`` is emitted: Simkl issues no refresh token, so a
-    Trakt-shaped pair would describe a credential that does not exist.
+    AUTH V2 supplies an access/refresh pair; both are redacted unless a full
+    secret-bearing backup was explicitly requested.
     """
     link = db.get_simkl_account_link(identity_id)
     if not link:
@@ -161,10 +161,11 @@ def _export_simkl_link(
         entry["oauth_tokens"] = (
             {
                 "access_token": tokens["access_token"],
+                "refresh_token": tokens.get("refresh_token"),
                 "expires_at": tokens.get("expires_at"),
             }
             if include_secrets
-            else {"access_token": REDACTED, "expires_at": None}
+            else {"access_token": REDACTED, "refresh_token": REDACTED, "expires_at": None}
         )
     entry["sources"] = [
         {
@@ -196,12 +197,14 @@ def _import_simkl_link(db: DatabaseManager, identity_id: int, simkl: dict) -> No
     oauth = simkl.get("oauth_tokens")
     if isinstance(oauth, dict):
         access_token = oauth.get("access_token")
-        # Gated on access_token alone; requiring a refresh token here, as the
-        # Trakt path does, would silently discard every restored Simkl token.
+        refresh_token = oauth.get("refresh_token")
         if access_token and not is_redacted(access_token):
             db.upsert_simkl_oauth_tokens(
                 link_id=link_id,
                 access_token=access_token,
+                refresh_token=(
+                    refresh_token if refresh_token and not is_redacted(refresh_token) else None
+                ),
                 expires_at=oauth.get("expires_at"),
             )
     for source in simkl.get("sources") or []:

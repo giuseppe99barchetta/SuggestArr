@@ -370,7 +370,7 @@ class SchemaManager:
                     activities_json TEXT,
                     last_full_sync_at BIGINT,
                     last_activities_check_at BIGINT,
-                    pending_user_code TEXT,
+                    pending_device_code TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
@@ -382,6 +382,7 @@ class SchemaManager:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     link_id INTEGER NOT NULL UNIQUE,
                     access_token TEXT NOT NULL,
+                    refresh_token TEXT,
                     expires_at BIGINT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (link_id) REFERENCES simkl_account_links(id) ON DELETE CASCADE
@@ -860,8 +861,51 @@ class SchemaManager:
         # Check and add missing columns to discover_jobs table
         self._migrate_discover_jobs_table()
 
+        # Add the AUTH V2 device-code and refresh-token fields to installations
+        # created by an earlier Simkl build.
+        self._migrate_simkl_auth_tables()
+
         # Migrate 'viewer' role to 'user' for all existing accounts
         self._migrate_viewer_role_to_user()
+
+    def _migrate_simkl_auth_tables(self):
+        """Add the persisted fields required by Simkl AUTH V2."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                if self.db_type == 'sqlite':
+                    cursor.execute("PRAGMA table_info(simkl_account_links)")
+                    link_columns = {row[1] for row in cursor.fetchall()}
+                    cursor.execute("PRAGMA table_info(simkl_oauth_tokens)")
+                    token_columns = {row[1] for row in cursor.fetchall()}
+                elif self.db_type == 'postgres':
+                    cursor.execute(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name = 'simkl_account_links'"
+                    )
+                    link_columns = {row[0] for row in cursor.fetchall()}
+                    cursor.execute(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name = 'simkl_oauth_tokens'"
+                    )
+                    token_columns = {row[0] for row in cursor.fetchall()}
+                else:
+                    cursor.execute("SHOW COLUMNS FROM simkl_account_links")
+                    link_columns = {row[0] for row in cursor.fetchall()}
+                    cursor.execute("SHOW COLUMNS FROM simkl_oauth_tokens")
+                    token_columns = {row[0] for row in cursor.fetchall()}
+
+                if 'pending_device_code' not in link_columns:
+                    cursor.execute(
+                        "ALTER TABLE simkl_account_links ADD COLUMN pending_device_code TEXT"
+                    )
+                if 'refresh_token' not in token_columns:
+                    cursor.execute(
+                        "ALTER TABLE simkl_oauth_tokens ADD COLUMN refresh_token TEXT"
+                    )
+                conn.commit()
+        except Exception as exc:
+            self.logger.warning("Could not migrate Simkl AUTH V2 columns: %s", exc)
 
     def _migrate_viewer_role_to_user(self):
         """Migrate any existing auth_users with role='viewer' to role='user'."""

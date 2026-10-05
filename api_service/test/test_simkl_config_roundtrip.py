@@ -26,7 +26,9 @@ def db(tmp_path):
 def link_simkl(db, external_id="jf-1", username="Wire", account_id="8307044"):
     identity = db.upsert_media_user_identity("jellyfin", external_id, username)
     link_id = db.upsert_simkl_account_link(identity["id"], account_id, username)
-    db.upsert_simkl_oauth_tokens(link_id, "access-token")
+    db.upsert_simkl_oauth_tokens(
+        link_id, "access-token", refresh_token="refresh-token", expires_at=123,
+    )
     db.upsert_simkl_source(identity["id"], "watched_history", "watched_history")
     return identity, link_id
 
@@ -34,7 +36,7 @@ def link_simkl(db, external_id="jf-1", username="Wire", account_id="8307044"):
 # ---- Sanitizer ---------------------------------------------------------------
 
 def test_a_client_secret_is_stripped_from_simkl_config():
-    """The PIN flow never uses one, so a secret here is a mistake at best."""
+    """The AUTH V2 device flow never uses one, so it is not persisted."""
     result = sanitize_integration_config("simkl", {
         "client_id": "cid", "client_secret": "should-not-persist", "access_token": "nope",
     })
@@ -79,9 +81,8 @@ def test_export_emits_the_real_token_when_secrets_are_requested(db):
     tokens = exported[0]["simkl"]["oauth_tokens"]
 
     assert tokens["access_token"] == "access-token"
-    # Simkl issues no refresh token, so exporting a Trakt-shaped pair would
-    # describe a credential that does not exist.
-    assert "refresh_token" not in tokens
+    assert tokens["refresh_token"] == "refresh-token"
+    assert tokens["expires_at"] == 123
 
 
 def test_export_carries_the_source_flags(db):
@@ -125,7 +126,10 @@ def test_a_simkl_only_snapshot_restores_the_link_token_and_source(db):
         "simkl": {
             "simkl_user_id": "111", "simkl_username": "carol",
             "token_source": "manual_oauth", "status": "connected",
-            "oauth_tokens": {"access_token": "restored-token", "expires_at": None},
+            "oauth_tokens": {
+                "access_token": "restored-token", "refresh_token": "restored-refresh",
+                "expires_at": 123,
+            },
             "sources": [{
                 "source_type": "watched_history", "source_key": "watched_history",
                 "enabled": True, "use_as_seed": False, "use_as_exclusion": True,
@@ -137,12 +141,12 @@ def test_a_simkl_only_snapshot_restores_the_link_token_and_source(db):
     link = db.get_simkl_account_link(identity["id"])
     assert link["simkl_username"] == "carol"
     assert db.get_simkl_oauth_tokens(link["id"])["access_token"] == "restored-token"
+    assert db.get_simkl_oauth_tokens(link["id"])["refresh_token"] == "restored-refresh"
     assert db.get_simkl_sources(identity["id"])[0]["use_as_seed"] is False
 
 
-def test_import_gates_the_token_on_access_token_alone(db):
-    """Requiring a refresh token, as the Trakt path does, would silently
-    discard every restored Simkl token."""
+def test_import_accepts_a_legacy_access_token_without_a_refresh_token(db):
+    """Old V1 snapshots can still be restored and will re-authorize on 401."""
     config_service._import_media_users(db, [{
         "provider": "jellyfin", "external_user_id": "jf-10",
         "simkl": {

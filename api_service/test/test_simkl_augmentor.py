@@ -65,7 +65,7 @@ def test_resolver_returns_the_link_with_its_token():
     assert resolved["id"] == 5
 
 
-@pytest.mark.parametrize("status", ["revoked", "error", "needs_reauth", "pending"])
+@pytest.mark.parametrize("status", ["revoked", "needs_reauth", "pending"])
 def test_resolver_skips_links_that_cannot_currently_work(status):
     """needs_reauth is skipped for the same reason as revoked: retrying burns
     quota against a token Simkl has already rejected."""
@@ -179,7 +179,7 @@ def test_augment_returns_none_when_there_is_nothing_to_contribute():
 
 
 def test_an_auth_failure_marks_the_link_needs_reauth():
-    """There is no refresh grant, so the UI has to prompt for a new PIN."""
+    """A rejected access/refresh grant requires a new device authorization."""
     db = make_db()
     aug = MediaUserSimklAugmentor("cid", db=db)
 
@@ -207,7 +207,7 @@ def test_a_client_id_failure_does_not_blame_the_users_link():
     db.mark_simkl_account_link_error.assert_not_called()
 
 
-def test_an_unexpected_failure_marks_a_generic_error():
+def test_an_unexpected_failure_keeps_the_link_connected_for_retry():
     db = make_db()
     aug = MediaUserSimklAugmentor("cid", db=db)
 
@@ -217,7 +217,7 @@ def test_an_unexpected_failure_marks_a_generic_error():
     with patch_sync(boom):
         assert asyncio.run(aug.augment(1)) is None
 
-    assert db.mark_simkl_account_link_error.call_args[0][1] == "error"
+    assert db.mark_simkl_account_link_error.call_args[0][1] == "connected"
 
 
 def test_the_stored_error_does_not_echo_the_exception_text():

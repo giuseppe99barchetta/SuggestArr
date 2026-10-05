@@ -31,6 +31,7 @@ def app_context():
 def make_db(plex_profiles=()):
     db = MagicMock()
     db.get_media_profiles_by_provider.return_value = list(plex_profiles)
+    db.get_media_user_identity.side_effect = ValueError("not found")
     db.rename_media_user_identity.return_value = None
     return db
 
@@ -39,7 +40,7 @@ def make_db(plex_profiles=()):
 def test_the_owners_plex_tv_id_is_mapped_to_the_server_id(_users, app_context):
     db = make_db()
     assert _reconcile_plex_account_id(db, "14621895", "Wirewraith") == "1"
-    db.rename_media_user_identity.assert_called_once_with("plex", "14621895", "1")
+    db.rename_media_user_identity.assert_not_called()
 
 
 @patch("api_service.blueprints.users.routes.list_plex_server_users", return_value=SERVER_USERS)
@@ -70,8 +71,26 @@ def test_an_id_another_account_already_holds_is_refused(_users, app_context):
 
 
 @patch("api_service.blueprints.users.routes.list_plex_server_users", return_value=SERVER_USERS)
-def test_relinking_your_own_profile_is_not_treated_as_a_collision(_users, app_context):
-    """The current user re-running OAuth must still get the mapped id."""
+def test_a_new_oauth_link_without_an_old_identity_uses_the_server_id(_users, app_context):
+    """A new OAuth link has no old tracker identity to strand."""
     db = make_db([{"user_id": 7, "external_user_id": "1", "external_username": "Wirewraith"}])
 
     assert _reconcile_plex_account_id(db, "14621895", "Wirewraith") == "1"
+
+
+@patch("api_service.blueprints.users.routes.list_plex_server_users", return_value=SERVER_USERS)
+def test_an_existing_destination_identity_aborts_the_profile_move(_users, app_context):
+    """Existing identities may own links even when no media profile claims them."""
+    db = make_db()
+
+    def identity(provider, external_user_id):
+        if str(external_user_id) == "1":
+            return {"id": 2, "provider": provider, "external_user_id": "1"}
+        if str(external_user_id) == "14621895":
+            return {"id": 1, "provider": provider, "external_user_id": "14621895"}
+        raise ValueError("not found")
+
+    db.get_media_user_identity.side_effect = identity
+
+    assert _reconcile_plex_account_id(db, "14621895", "Wirewraith") == "14621895"
+    db.rename_media_user_identity.assert_not_called()

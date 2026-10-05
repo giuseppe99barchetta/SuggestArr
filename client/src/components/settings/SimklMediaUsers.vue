@@ -149,8 +149,8 @@
           </div>
         </div>
 
-        <!-- Active PIN prompt. Simkl's destination is fixed, so the code is
-             shown to copy rather than handed to a popup. -->
+         <!-- Active device prompt. Simkl's destination is fixed, so the public
+              code is shown to copy rather than handing the private code out. -->
         <div v-if="simklUserCode" class="oauth-success">
           <div class="pin-row">
             <i class="fas fa-key"></i>
@@ -190,14 +190,14 @@
             <strong>{{ unlinkTargetLabel }}</strong>? This removes their seed and
             watched-history data from recommendation runs.
           </p>
-          <!-- Simkl publishes no revocation endpoint, so promising otherwise
-               would be a claim the API cannot back. -->
-          <p class="modal-note">
-            <i class="fas fa-circle-info"></i>
-            This removes SuggestArr's copy of the token. To revoke access at Simkl
-            itself, remove SuggestArr at
-            <a href="https://simkl.com/settings/connected-apps/" target="_blank" rel="noopener noreferrer" class="link">simkl.com/settings/connected-apps</a>.
-          </p>
+           <!-- AUTH V2 links are revoked by the backend when a refresh token is
+                available; access-only legacy links still need manual removal. -->
+           <p class="modal-note">
+             <i class="fas fa-circle-info"></i>
+             This removes SuggestArr's copy of the token. Legacy links can be
+             revoked at
+             <a href="https://simkl.com/settings/connected-apps/" target="_blank" rel="noopener noreferrer" class="link">simkl.com/settings/connected-apps</a>.
+           </p>
           <div class="modal-actions">
             <button class="btn btn-outline" @click="cancelUnlink">Cancel</button>
             <button class="btn btn-danger" @click="confirmUnlink" :disabled="isUnlinking[unlinkTargetKey]">
@@ -231,7 +231,7 @@ import { formatWatchedDate } from './simklPreview.js';
 
 // Statuses that mean the stored token can no longer be used and only a fresh
 // PIN flow will fix it.
-const REAUTH_STATUSES = ['needs_reauth', 'expired', 'error', 'revoked'];
+const REAUTH_STATUSES = ['needs_reauth', 'expired', 'revoked'];
 
 export default {
   name: 'SimklMediaUsers',

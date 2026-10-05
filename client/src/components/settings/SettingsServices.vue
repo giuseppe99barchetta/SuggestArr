@@ -419,7 +419,7 @@
           />
           <small class="form-help">
             Create an app at <a href="https://simkl.com/settings/developer/" target="_blank" rel="noopener noreferrer" class="link">Simkl Developer Settings</a>.
-            Simkl links accounts with a PIN, so there is no client secret to enter.
+            Use an AUTH V2 app. Simkl's device flow needs no client secret.
           </small>
         </div>
         <div class="oauth-success" v-if="isSimklAppConfigured">
@@ -739,8 +739,7 @@ export default {
       return !!(this.localConfig.TRAKT_CLIENT_ID && this.localConfig.TRAKT_CLIENT_SECRET);
     },
     isSimklAppConfigured() {
-      // The PIN flow authenticates with the client ID alone, so unlike Trakt
-      // there is no second credential to wait for.
+      // AUTH V2 device authorization uses only the public client ID.
       return !!this.localConfig.SIMKL_CLIENT_ID;
     },
     // Unified accessors for current service's libraries/users

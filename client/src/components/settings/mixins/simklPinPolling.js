@@ -5,14 +5,12 @@
  * It is the Simkl counterpart of traktDevicePolling, and differs in three ways
  * that are not cosmetic:
  *
- *  - The poll identifier is the `user_code`, not Trakt's `device_code`. The
- *    server holds the code against the requesting identity, so the browser
- *    keeps it only to know a flow is in flight.
- *  - Simkl signals an expired or already-consumed code by *restarting* the
- *    flow: the response carries a `device_code` key. The backend raises on
- *    that, so an expired code arrives here as a thrown error, but the deadline
- *    below is the local safeguard for a poll loop that would otherwise run
- *    forever if the tab is left open.
+ *  - The private `device_code` never reaches the browser. The server holds it
+ *    against the requesting identity, while the browser keeps the public code
+ *    only to show the user that a flow is in flight.
+ *  - Simkl signals an expired device code as an OAuth error. The backend raises
+ *    on that, while the deadline below is the local safeguard for a poll loop
+ *    that would otherwise run forever if the tab is left open.
  *  - The PIN window is up to fifteen minutes, against Trakt's much shorter
  *    one, which is long enough that stranding the user without an exit is a
  *    real cost. Hence `cancelSimklPolling`, which also clears the pending code
@@ -102,6 +100,12 @@ export default {
         if (poll.data?.connected) {
           this.stopSimklPolling();
           await onConnected(poll.data);
+        } else if (poll.data?.interval) {
+          clearInterval(this.simklPollTimer);
+          this.simklPollTimer = setInterval(
+            () => this.pollSimklPinToken(),
+            Math.max(Number(poll.data.interval), 5) * 1000,
+          );
         }
       } catch (err) {
         const message = err.response?.data?.message || '';

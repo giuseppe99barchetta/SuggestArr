@@ -4,7 +4,8 @@ Response shapes here were captured from the live Simkl API rather than written
 from the docs, because several of them contradict what the docs imply.
 """
 import asyncio
-from unittest.mock import patch
+import time
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -46,8 +47,11 @@ class FakeSession:
         self.calls = []
         self.closed = False
 
-    def _respond(self, method, url, headers=None, params=None):
-        self.calls.append({"method": method, "url": url, "headers": headers or {}, "params": params or {}})
+    def _respond(self, method, url, headers=None, params=None, data=None):
+        self.calls.append({
+            "method": method, "url": url, "headers": headers or {},
+            "params": params or {}, "data": data,
+        })
         response = self._responses.pop(0)
         if isinstance(response, Exception):
             raise response
@@ -99,15 +103,14 @@ def test_authenticated_requests_send_the_bearer_token_and_anonymous_ones_do_not(
     assert "Authorization" not in session.calls[1]["headers"]
 
 
-# ---- PIN flow ----------------------------------------------------------------
+# ---- Device flow -------------------------------------------------------------
 
 def test_request_pin_code_normalizes_the_live_payload():
     client, _ = make_client([FakeResponse(payload={
-        "result": "OK",
         "device_code": "DEVICE_CODE",
         "user_code": "8CCE9",
-        "verification_url": "https://simkl.com/pin",
         "verification_uri": "https://simkl.com/pin",
+        "verification_uri_complete": "https://simkl.com/pin?user_code=8CCE9",
         "expires_in": 900,
         "interval": 5,
     })])
@@ -116,57 +119,77 @@ def test_request_pin_code_normalizes_the_live_payload():
     assert result == {
         "user_code": "8CCE9",
         "verification_uri": "https://simkl.com/pin",
+        "verification_uri_complete": "https://simkl.com/pin?user_code=8CCE9",
+        "device_code": "DEVICE_CODE",
         "expires_in": 900,
         "interval": 5,
     }
 
 
 def test_pending_pin_raises_pending():
-    client, _ = make_client([FakeResponse(payload={"result": "KO", "message": "Authorization pending"})])
+    client, _ = make_client([
+        FakeResponse(status=400, payload={"error": "authorization_pending"}),
+    ])
     with pytest.raises(SimklPinPending):
         asyncio.run(client.poll_for_token("8CCE9"))
 
 
-def test_pin_is_expired_when_the_response_offers_a_new_device_code():
-    """Simkl answers a dead PIN by handing back a fresh code payload.
-
-    The signal is the presence of device_code, not its value: Simkl sends the
-    literal placeholder string "DEVICE_CODE" there.
-    """
-    client, _ = make_client([FakeResponse(payload={
-        "result": "OK", "device_code": "DEVICE_CODE", "user_code": "NEW11",
-    })])
+def test_device_code_expiry_raises_expired():
+    client, _ = make_client([
+        FakeResponse(status=400, payload={"error": "expired_token"}),
+    ])
     with pytest.raises(SimklPinExpired):
         asyncio.run(client.poll_for_token("DEAD1"))
 
 
 def test_authorized_pin_returns_and_stores_the_token():
-    client, _ = make_client([FakeResponse(payload={"result": "OK", "access_token": "tok-123"})])
+    client, _ = make_client([FakeResponse(payload={
+        "access_token": "tok-123", "refresh_token": "refresh-123", "expires_in": 604800,
+    })])
     token = asyncio.run(client.poll_for_token("8CCE9"))
 
-    assert token == "tok-123"
+    assert token["access_token"] == "tok-123"
+    assert token["refresh_token"] == "refresh-123"
     assert client.access_token == "tok-123"
+    assert client.refresh_token == "refresh-123"
+
+
+def test_an_expiring_token_refreshes_before_an_authenticated_request():
+    db = MagicMock()
+    client, session = make_client([
+        FakeResponse(payload={
+            "access_token": "new-access", "refresh_token": "refresh-123",
+            "expires_in": 604800,
+        }),
+        FakeResponse(payload={"all": "2026-01-01T00:00:00Z"}),
+    ], refresh_token="refresh-123", expires_at=int(time.time()) - 1, db=db, link_id=7)
+
+    assert asyncio.run(client.get_activities()) == {"all": "2026-01-01T00:00:00Z"}
+    assert [call["url"].rsplit("/", 1)[-1] for call in session.calls] == [
+        "token", "activities",
+    ]
+    db.upsert_simkl_oauth_tokens.assert_called_once()
 
 
 def test_unrecognized_pin_response_raises_rather_than_looping():
-    client, _ = make_client([FakeResponse(payload={"something": "else"})])
+    client, _ = make_client([FakeResponse(status=400, payload={"error": "unknown"})])
     with pytest.raises(SimklPinFlowError):
         asyncio.run(client.poll_for_token("8CCE9"))
 
 
-def test_polling_without_a_code_never_reaches_the_network():
+def test_polling_without_a_device_code_never_reaches_the_network():
     client, session = make_client([])
     with pytest.raises(SimklPinFlowError):
         asyncio.run(client.poll_for_token("  "))
     assert session.calls == []
 
 
-def test_user_code_is_url_encoded_into_the_path():
-    """A code is interpolated into the URL, so it must not be able to escape it."""
+def test_device_code_is_sent_in_the_private_form_body():
     client, session = make_client([FakeResponse(payload={"access_token": "t"})])
-    asyncio.run(client.poll_for_token("../../sync/activities"))
+    asyncio.run(client.poll_for_token("device-code"))
 
-    assert "/oauth/pin/..%2F..%2Fsync%2Factivities" in session.calls[0]["url"]
+    assert session.calls[0]["url"].endswith("/oauth2/token")
+    assert session.calls[0]["data"]["device_code"] == "device-code"
 
 
 # ---- Error mapping -----------------------------------------------------------

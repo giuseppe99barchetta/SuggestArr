@@ -384,8 +384,8 @@ Simkl support is optional and works like Trakt: it adds each user's own watch hi
 
 SuggestArr stores:
 
-- An app-level Simkl Client ID in Services. There is no client secret — the PIN flow does not use one.
-- Per-media-user Simkl access tokens in the database. Simkl issues no refresh tokens.
+- An app-level Simkl AUTH V2 Client ID in Services. There is no client secret — the device flow does not use one.
+- Per-media-user Simkl access and refresh tokens in the database.
 - The linked Simkl username and status.
 - A local cache of the account's watch history (see [Why Simkl history is cached](#why-simkl-history-is-cached)).
 
@@ -394,13 +394,13 @@ SuggestArr does not expose Simkl access tokens in API responses or frontend list
 ### Create a Simkl app
 
 1. Open <https://simkl.com/settings/developer/>.
-2. Create a new application. For Redirect URI, enter `urn:ietf:wg:oauth:2.0:oob`.
+2. Create a new **AUTH V2** application and choose the device flow client type.
 3. Copy the Client ID.
 4. In SuggestArr, open Services > Simkl.
 5. Paste the Client ID.
 6. Save.
 
-Simkl's form asks for a Redirect URI. Enter `urn:ietf:wg:oauth:2.0:oob`, which is the value Simkl's own help text gives for PIN authentication. SuggestArr never sends a redirect, because the user approves the PIN on whatever device is convenient and SuggestArr polls for the result — so no SuggestArr URL needs to be reachable from the internet.
+SuggestArr uses Simkl's RFC 8628 device flow, so it never needs a redirect URI or client secret. The private device code stays on the server; users only see the public code and approval URL.
 
 ### Link media-server users first
 
@@ -412,7 +412,7 @@ As with Trakt, Simkl links attach to a media-server profile. If a user has no li
 2. Open Profile.
 3. Find Simkl Account.
 4. Click Link Simkl.
-5. SuggestArr shows a PIN. Enter it at <https://simkl.com/pin> and approve access.
+5. SuggestArr shows a device code. Open its approval URL or enter the code at <https://simkl.com/pin> and approve access.
 6. Wait for SuggestArr to show the linked Simkl username.
 
 The PIN is valid for about fifteen minutes. **Cancel** abandons the attempt and clears the pending code on the server so it cannot be used later.
@@ -448,13 +448,13 @@ Simkl asks applications not to poll its history endpoints on a schedule and susp
 
 ### Re-link required
 
-Simkl access tokens cannot be refreshed. If Simkl rejects one — in practice because the app was removed at <https://simkl.com/settings/connected-apps/> — the account shows **Re-link required** and the user runs the PIN flow again.
+Simkl access tokens are refreshed automatically from the stored AUTH V2 refresh token. If both tokens are rejected — for example because the app was removed at <https://simkl.com/settings/connected-apps/> — the account shows **Re-link required** and the user runs the device flow again.
 
 If the Simkl **Client ID** itself is rejected, that is an install-wide problem rather than one user's, and SuggestArr shows it as a separate banner on the Simkl panel. It means the ID is wrong, the app was suspended, or it is over its request limit.
 
-### Unlinking does not revoke access at Simkl
+### Unlinking revokes access at Simkl
 
-Simkl publishes no token-revocation endpoint. Unlinking deletes SuggestArr's copy of the token and the cached history, but the authorization stays live on Simkl's side until the user removes SuggestArr at <https://simkl.com/settings/connected-apps/>. The unlink dialog says so.
+SuggestArr revokes AUTH V2 access when the refresh token is available, then deletes its local token and cached history. Legacy access-only links are removed locally and can be revoked manually at <https://simkl.com/settings/connected-apps/>.
 
 ## Cleanup Automation
 
@@ -791,7 +791,7 @@ Config schema version is `2`. Older exports without `media_users` still import n
 
 By default, exports are **safe for troubleshooting**:
 
-- Secret fields are redacted as `***` (API keys, tokens, passwords, Trakt `client_secret`, and similar values). The Simkl entry carries only `access_token`, since Simkl issues no refresh token.
+- Secret fields are redacted as `***` (API keys, tokens, passwords, Trakt `client_secret`, and similar values). Simkl access and refresh tokens are both redacted.
 - When OAuth tokens exist, `oauth_tokens` is still present but redacted:
 
 ```json

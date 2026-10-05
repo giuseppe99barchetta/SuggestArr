@@ -18,6 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the client build files from the previous stage
 COPY --from=client-builder /app/client/dist /app/static
+RUN mkdir -p /app/static/img
+COPY client/src/assets/logo.png /app/static/img/logo.png
 COPY --from=client-builder /app/client/node_modules/swagger-ui-dist /app/static/swagger-ui
 
 # Single source of truth for the app version (read by api_service/version.py)
