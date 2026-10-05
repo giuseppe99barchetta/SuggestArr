@@ -1,20 +1,20 @@
-"""Async client for the Simkl PIN auth and library-sync APIs.
+"""Async client for the Simkl device auth and library-sync APIs.
 
 Mirrors :mod:`api_service.services.trakt.trakt_client` in shape, but differs in
 three ways that are forced by the Simkl API rather than by preference:
 
-* Auth is the PIN flow, which needs no ``client_secret`` and no redirect URI,
-  and which signals state in the JSON body instead of the HTTP status.
-* Tokens last about five years and there is no refresh grant, so a 401 is
-  terminal for that link rather than something to recover from.
+* Auth is the RFC 8628 device flow, which needs no ``client_secret`` or redirect
+  URI and returns refreshable OAuth V2 tokens.
+* Access tokens expire after seven days, so the client refreshes them before
+  use and persists the replacement with the link.
 * Reads are metered and ungated polling of ``/sync/all-items`` gets the
   ``client_id`` suspended, so requests are serialized and deterministic errors
   are never retried.
 """
 import asyncio
 import random
+import time
 from typing import Any, Optional
-from urllib.parse import quote
 
 import aiohttp
 
@@ -33,6 +33,10 @@ class SimklPinFlowError(SimklError):
 class SimklPinPending(SimklPinFlowError):
     """The user has not entered the PIN yet; keep polling."""
 
+    def __init__(self, message: str = "Simkl device authorization pending", interval: Optional[int] = None):
+        super().__init__(message)
+        self.interval = interval
+
 
 class SimklPinExpired(SimklPinFlowError):
     """The PIN was consumed or expired; a new one must be requested."""
@@ -41,8 +45,8 @@ class SimklPinExpired(SimklPinFlowError):
 class SimklAuthError(SimklError):
     """HTTP 401 ``user_token_failed``.
 
-    Terminal for a single user's link: there is no refresh grant, so the only
-    recovery is re-running the PIN flow.
+    The caller can retry once after a refresh; if the refresh is also rejected,
+    the link needs a new device authorization.
     """
 
 
@@ -89,14 +93,20 @@ class SimklClient(BaseHTTPClient):
         self,
         client_id: str,
         access_token: str = "",
+        refresh_token: str = "",
+        expires_at: Optional[int] = None,
         session=None,
+        db=None,
         link_id: Optional[int] = None,
     ):
         super().__init__()
         self.client_id = (client_id or "").strip()
         self.access_token = access_token or ""
+        self.refresh_token = refresh_token or ""
+        self.expires_at = int(expires_at or 0)
         self.session = session
         self._owns_session = session is None
+        self.db = db
         self.link_id = link_id
         # Simkl allows parallelism only on edge-cached endpoints; sync and
         # user-state calls must stay sequential. Enforced here rather than
@@ -112,9 +122,9 @@ class SimklClient(BaseHTTPClient):
         if self._owns_session:
             await super().close()
 
-    def _headers(self, authenticated: bool = True) -> dict[str, str]:
+    def _headers(self, authenticated: bool = True, form: bool = False) -> dict[str, str]:
         headers = {
-            "Content-Type": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded" if form else "application/json",
             "User-Agent": USER_AGENT,
         }
         if authenticated and self.access_token:
@@ -129,64 +139,105 @@ class SimklClient(BaseHTTPClient):
             "app-version": APP_VERSION,
         }
 
-    # ---- PIN flow -------------------------------------------------------------
+    # ---- Device flow ----------------------------------------------------------
 
     async def request_pin_code(self) -> dict[str, Any]:
-        """Request a new PIN, returning the payload the user acts on.
+        """Request a new device code, returning only user-facing fields.
 
         Returns:
-            dict[str, Any]: ``user_code`` (shown to the user), ``verification_uri``
-            (currently simkl.com/pin), ``expires_in`` (900s), and ``interval``
-            (the polling cadence in seconds, currently 5).
+            dict[str, Any]: The public code and verification URLs. The private
+            ``device_code`` is retained only in the server-side pending state.
         """
-        payload = await self._request("GET", "/oauth/pin", authenticated=False)
+        payload = await self._request(
+            "POST",
+            "/oauth2/device",
+            data={"client_id": self.client_id, "scope": "media:read"},
+            authenticated=False,
+        )
         return {
             "user_code": payload.get("user_code") or "",
-            # RFC 8628 spelling; verification_url is an alias Simkl also sends.
-            "verification_uri": payload.get("verification_uri") or payload.get("verification_url") or "",
+            "verification_uri": payload.get("verification_uri") or "https://simkl.com/pin",
+            "verification_uri_complete": payload.get("verification_uri_complete") or "",
+            "device_code": payload.get("device_code") or "",
             "expires_in": int(payload.get("expires_in") or 900),
             "interval": int(payload.get("interval") or 5),
         }
 
-    async def poll_for_token(self, user_code: str) -> str:
-        """Poll a pending PIN once and return the access token when granted.
+    async def poll_for_token(self, device_code: str) -> dict[str, Any]:
+        """Poll a pending device authorization once.
 
         Simkl answers with HTTP 200 in every case and puts the state in the
         body, so this maps body shape to flow state.
 
         Args:
-            user_code: The code returned by :meth:`request_pin_code`.
+            device_code: The private code returned by :meth:`request_pin_code`.
 
         Returns:
-            str: The access token, once the user has authorized.
+            dict[str, Any]: The V2 token response, once the user has authorized.
 
         Raises:
             SimklPinPending: The user has not entered the code yet.
             SimklPinExpired: The code was consumed or expired.
             SimklPinFlowError: The response matched no known shape.
         """
-        safe_code = quote(str(user_code or "").strip(), safe="")
-        if not safe_code:
-            raise SimklPinFlowError("Cannot poll Simkl without a user code")
+        device_code = str(device_code or "").strip()
+        if not device_code:
+            raise SimklPinFlowError("Cannot poll Simkl without a device code")
 
-        payload = await self._request("GET", f"/oauth/pin/{safe_code}", authenticated=False)
+        status, payload = await self._post_oauth_form(
+            "/oauth2/token",
+            {
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                "client_id": self.client_id,
+                "device_code": device_code,
+            },
+        )
+        if status in self.HTTP_OK:
+            if not isinstance(payload, dict) or not payload.get("access_token"):
+                raise SimklPinFlowError("Simkl returned no access token")
+            return self._apply_and_persist_tokens(payload)
 
-        access_token = payload.get("access_token")
-        if access_token:
-            self.access_token = access_token
-            return access_token
+        error = payload.get("error") if isinstance(payload, dict) else None
+        if error == "authorization_pending":
+            raise SimklPinPending()
+        if error == "slow_down":
+            raise SimklPinPending("Simkl asked the client to slow down", interval=10)
+        if error == "expired_token":
+            raise SimklPinExpired("Simkl device code expired")
+        if error == "invalid_client":
+            raise SimklClientIdError("Simkl rejected the client ID for OAuth V2")
+        raise SimklPinFlowError(
+            str((payload or {}).get("error_description") or "Simkl device authorization failed")
+        )
 
-        # Polling an unknown or already-consumed code falls through to the
-        # create-a-new-code branch, whose payload carries a device_code key.
-        # The test is the key's presence: Simkl sends the literal placeholder
-        # string "DEVICE_CODE", kept only for RFC 8628 shape compatibility.
-        if "device_code" in payload:
-            raise SimklPinExpired("Simkl PIN expired or already used")
+    async def refresh_access_token(self) -> dict[str, Any]:
+        """Refresh the access token and persist the new expiry and token pair."""
+        if not self.refresh_token:
+            raise SimklAuthError("Simkl access token expired; re-authorization required")
+        payload = await self._request(
+            "POST",
+            "/oauth2/token",
+            data={
+                "grant_type": "refresh_token",
+                "client_id": self.client_id,
+                "refresh_token": self.refresh_token,
+            },
+            authenticated=False,
+        )
+        return self._apply_and_persist_tokens(payload)
 
-        if str(payload.get("result") or "").upper() == "KO":
-            raise SimklPinPending("Simkl PIN authorization pending")
-
-        raise SimklPinFlowError("Unrecognized Simkl PIN response")
+    async def revoke_token(self, token: str) -> None:
+        """Revoke one V2 grant; Simkl invalidates its access and refresh pair."""
+        if not token:
+            return
+        status, _ = await self._post_oauth_form(
+            "/oauth2/revoke", {"client_id": self.client_id, "token": token},
+        )
+        if status not in self.HTTP_OK:
+            self._raise_for_deterministic_status(
+                status, "POST", f"{self.BASE_URL}/oauth2/revoke", False,
+            )
+            raise SimklError(f"Simkl token revocation failed with status {status}")
 
     # ---- User + sync ----------------------------------------------------------
 
@@ -265,31 +316,63 @@ class SimklClient(BaseHTTPClient):
         path: str,
         *,
         params: Optional[dict[str, Any]] = None,
+        data: Optional[dict[str, Any]] = None,
         authenticated: bool = True,
     ) -> Any:
+        if authenticated:
+            await self._refresh_if_needed()
         url = f"{self.BASE_URL}{path}"
         query = self._app_params()
         if params:
             query.update({k: v for k, v in params.items() if v is not None})
 
         async with self._request_lock:
-            return await self._request_with_retries(method, url, query, authenticated)
+            return await self._request_with_retries(method, url, query, data, authenticated)
+
+    async def _post_oauth_form(self, path: str, data: dict[str, Any]) -> tuple[int, Any]:
+        """Post an OAuth form without applying API retry or error mapping."""
+        url = f"{self.BASE_URL}{path}"
+        async with self._request_lock:
+            session = await self._get_session()
+            try:
+                async with session.post(
+                    url,
+                    headers=self._headers(authenticated=False, form=True),
+                    params=self._app_params(),
+                    data=data,
+                ) as response:
+                    try:
+                        payload = await response.json(content_type=None)
+                    except (aiohttp.ContentTypeError, ValueError):
+                        payload = {}
+                    return response.status, payload
+            except aiohttp.ClientError as exc:
+                raise SimklError(f"Simkl OAuth request failed: POST {url}: {exc}") from exc
 
     async def _request_with_retries(
-        self, method: str, url: str, query: dict[str, Any], authenticated: bool
+        self,
+        method: str,
+        url: str,
+        query: dict[str, Any],
+        data: Optional[dict[str, Any]],
+        authenticated: bool,
     ) -> Any:
         last_status = None
         for attempt in range(self.MAX_RETRIES):
             session = await self._get_session()
             request_method = getattr(session, method.lower())
             try:
-                async with request_method(
-                    url, headers=self._headers(authenticated), params=query
-                ) as response:
+                kwargs = {"headers": self._headers(authenticated), "params": query}
+                if data is not None:
+                    kwargs["data"] = data
+                    kwargs["headers"] = self._headers(authenticated, form=True)
+                async with request_method(url, **kwargs) as response:
                     if response.status in self.HTTP_OK:
                         return await response.json(content_type=None)
 
-                    self._raise_for_deterministic_status(response.status, method, url)
+                    self._raise_for_deterministic_status(
+                        response.status, method, url, authenticated,
+                    )
 
                     last_status = response.status
                     if response.status not in self.RETRY_STATUSES:
@@ -312,20 +395,47 @@ class SimklClient(BaseHTTPClient):
         )
 
     @staticmethod
-    def _raise_for_deterministic_status(status: int, method: str, url: str) -> None:
+    def _raise_for_deterministic_status(
+        status: int, method: str, url: str, authenticated: bool = True
+    ) -> None:
         """Translate non-retryable statuses into typed errors.
 
         Simkl is explicit that retrying 4xx wastes quota and induces a 429, so
         these terminate the request immediately.
         """
         if status == 401:
-            raise SimklAuthError("Simkl access token rejected; re-authorization required")
+            if authenticated:
+                raise SimklAuthError("Simkl access token rejected; re-authorization required")
+            raise SimklClientIdError("Simkl rejected the client ID for OAuth V2")
         if status == 412:
             raise SimklClientIdError(
                 "Simkl rejected the client ID: wrong, suspended, or over its request limit"
             )
         if status in (400, 403, 404, 409):
             raise SimklError(f"Simkl API request failed: {method} {url} returned {status}")
+
+    async def _refresh_if_needed(self) -> None:
+        if self.refresh_token and self.expires_at and self.expires_at <= int(time.time()) + 300:
+            await self.refresh_access_token()
+
+    def _apply_and_persist_tokens(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.access_token = payload.get("access_token", self.access_token)
+        self.refresh_token = payload.get("refresh_token", self.refresh_token)
+        expires_in = int(payload.get("expires_in") or 0)
+        if expires_in:
+            self.expires_at = int(time.time()) + expires_in
+
+        if self.db is not None and self.link_id:
+            self.db.upsert_simkl_oauth_tokens(
+                link_id=self.link_id,
+                access_token=self.access_token,
+                refresh_token=self.refresh_token,
+                expires_at=self.expires_at or None,
+            )
+
+        result = dict(payload)
+        result["expires_at"] = self.expires_at or None
+        return result
 
     # ---- Normalization --------------------------------------------------------
 

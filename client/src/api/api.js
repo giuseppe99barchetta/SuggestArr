@@ -189,12 +189,10 @@ export const addMyWatchedMedia = (item) => axios.post('/api/watched-history/me',
 export const deleteMyWatchedMedia = (itemId) => axios.delete(`/api/watched-history/me/${itemId}`);
 
 
-// Simkl PIN flow (admin, media-user scoped). Simkl authenticates with the app's
-// client ID alone, so — unlike Trakt — no credentials are ever sent from the
-// browser: the server reads the client ID from config. The PIN itself is not
-// sent back either; the server holds it against the identity that asked for
-// it, so the poll body is empty and a caller cannot complete a code it did not
-// request.
+// Simkl AUTH V2 device flow (admin, media-user scoped). No credentials are sent
+// from the browser: the server reads the client ID from config and holds the
+// private device code against the requesting identity, so the poll body is
+// empty and a caller cannot complete a code it did not request.
 export const listSimklMediaUsers = () => axios.get('/api/simkl/media-users');
 
 export const startMediaUserSimklPinCode = (provider, externalUserId) =>

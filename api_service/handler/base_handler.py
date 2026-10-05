@@ -8,12 +8,6 @@ from api_service.services.llm.llm_service import is_llm_configured, get_recommen
 from api_service.config.config import load_env_vars
 from api_service.services.library_content import load_library_content, merge_content_sets
 
-# Seed origins that came from a linked watch-tracker account rather than from
-# the media server itself. Requests carry the origin so the UI can say where a
-# suggestion came from.
-_WATCH_TRACKER_ORIGINS = frozenset({"trakt_history", "simkl_history"})
-
-
 class BaseMediaHandler(ABC):
     """
     Abstract base class for media handlers (Plex, Jellyfin).

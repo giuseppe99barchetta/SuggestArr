@@ -21,9 +21,9 @@ from api_service.services.simkl.watch_history_sync import (
 )
 
 # needs_reauth belongs here for the same reason revoked does: the link cannot
-# work again until the user re-runs the PIN flow, and retrying only burns quota
+# work again until the user re-runs the device flow, and retrying only burns quota
 # against a token Simkl has already rejected.
-_SKIP_STATUSES = {"revoked", "error", "needs_reauth", "pending"}
+_SKIP_STATUSES = {"revoked", "needs_reauth", "pending"}
 
 
 @dataclass
@@ -52,6 +52,8 @@ class SimklAccountResolver:
             tokens = self.db.get_simkl_oauth_tokens(link["id"])
             if tokens:
                 result["access_token"] = tokens["access_token"]
+                result["refresh_token"] = tokens.get("refresh_token") or ""
+                result["expires_at"] = tokens.get("expires_at")
         return result if result.get("access_token") else None
 
 
@@ -211,12 +213,13 @@ class MediaUserSimklAugmentor:
             augmentation = await self.source.load(media_user_identity_id)
             if augmentation is None:
                 return None
+            self._mark_link(media_user_identity_id, "connected", None)
             if not augmentation.seed_items and not any(augmentation.watched_ids.values()):
                 return None
             return augmentation
         except SimklAuthError as exc:
-            # Terminal: no refresh grant exists, so the UI has to ask for a new
-            # PIN. Recorded distinctly from a generic error so it can say so.
+            # A failed refresh or revoked grant needs a new device authorization.
+            # Record it distinctly from a generic error so the UI can say so.
             self.logger.warning(
                 "Simkl re-authorization required for media user %s", media_user_identity_id
             )
@@ -236,8 +239,10 @@ class MediaUserSimklAugmentor:
             # this branch catches everything — including failures from layers
             # whose messages carry connection strings or file paths. The detail
             # goes to the log; the card gets a message safe to show.
+            # Keep the token usable: the next run can retry after a transient
+            # database, network, or parsing failure.
             self._mark_link(
-                media_user_identity_id, "error", "Could not read Simkl watch history",
+                media_user_identity_id, "connected", "Could not read Simkl watch history",
             )
             return None
 

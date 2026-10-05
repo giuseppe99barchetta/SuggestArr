@@ -242,6 +242,22 @@ class TestReconcilePlexProfiles(_DBBase):
         reconcile_plex_profiles(self.db, lambda: SERVER_USERS)
         self.assertEqual(self.db.get_user_media_profile_token(uid, 'plex'), 'tok')
 
+    def test_an_unclaimed_existing_target_does_not_strand_tracker_links(self):
+        uid, old_identity = self._stranded_profile()
+        target = self.db.upsert_media_user_identity('plex', '1', 'Wirewraith')
+
+        self.assertEqual(reconcile_plex_profiles(self.db, lambda: SERVER_USERS), 0)
+        self.assertEqual(
+            self.db.get_user_media_profiles(uid)[0]['external_user_id'], '14621895',
+        )
+        self.assertEqual(
+            self.db.get_media_user_identity('plex', '14621895')['id'], old_identity['id'],
+        )
+        self.assertEqual(
+            self.db.get_media_user_identity('plex', '1')['id'], target['id'],
+        )
+        self.assertTrue(self.db.get_simkl_account_link(old_identity['id'])['connected'])
+
     def test_an_already_correct_profile_is_left_alone(self):
         uid = self._user()
         self.db.create_user_media_profile(uid, 'plex', '3502706', 'somepotato')

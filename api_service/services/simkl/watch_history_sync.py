@@ -112,7 +112,12 @@ class SimklWatchHistorySync:
                 return True
 
             async with SimklClient(
-                self.client_id, access_token=access_token, link_id=link_id
+                self.client_id,
+                access_token=access_token,
+                refresh_token=link.get("refresh_token", ""),
+                expires_at=link.get("expires_at"),
+                db=self.db,
+                link_id=link_id,
             ) as client:
                 return await self._sync_with_client(client, link_id, state)
         except (SimklAuthError, SimklClientIdError):

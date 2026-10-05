@@ -652,8 +652,7 @@ export default {
       return !!this.localConfig.TRAKT_CLIENT_ID;
     },
     isSimklAppConfigured() {
-      // The PIN flow authenticates with the client ID alone, so unlike Trakt
-      // there is no second credential to wait for.
+      // AUTH V2 device authorization uses only the public client ID.
       return !!this.localConfig.SIMKL_CLIENT_ID;
     },
     // Unified accessors for current service's libraries/users

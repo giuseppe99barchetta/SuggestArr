@@ -1,10 +1,9 @@
 """Database access for Simkl account links, tokens, sources, and the watch cache.
 
 Mirrors :class:`~api_service.db.components.media_user_mixin.MediaUserMixin`'s
-Trakt half, hanging off the same ``media_user_identities`` anchor, with two
-structural differences: there is no refresh token to store, and a local cache
-of the user's Simkl library backs every read so that jobs never poll Simkl's
-library endpoints directly.
+Trakt half, hanging off the same ``media_user_identities`` anchor. A local
+cache of the user's Simkl library backs every read so that jobs never poll
+Simkl's library endpoints directly.
 """
 import json
 import time
@@ -37,7 +36,7 @@ class SimklMixin:
                 f"token_source = excluded.token_source, "
                 f"status = excluded.status, "
                 f"last_error = NULL, "
-                f"pending_user_code = NULL, "
+                f"pending_device_code = NULL, "
                 f"updated_at = CURRENT_TIMESTAMP"
             )
         elif self.db_type == 'postgres':
@@ -49,7 +48,7 @@ class SimklMixin:
                 f"token_source = EXCLUDED.token_source, "
                 f"status = EXCLUDED.status, "
                 f"last_error = NULL, "
-                f"pending_user_code = NULL, "
+                f"pending_device_code = NULL, "
                 f"updated_at = CURRENT_TIMESTAMP"
             )
         else:
@@ -61,7 +60,7 @@ class SimklMixin:
                 f"token_source = VALUES(token_source), "
                 f"status = VALUES(status), "
                 f"last_error = NULL, "
-                f"pending_user_code = NULL, "
+                f"pending_device_code = NULL, "
                 f"updated_at = CURRENT_TIMESTAMP"
             )
         with self.get_connection() as conn:
@@ -82,7 +81,7 @@ class SimklMixin:
     _SIMKL_LINK_COLUMNS = (
         "id, media_user_identity_id, simkl_user_id, simkl_username, token_source, "
         "status, last_synced_at, last_error, activities_json, last_full_sync_at, "
-        "last_activities_check_at, pending_user_code, created_at, updated_at"
+        "last_activities_check_at, pending_device_code, created_at, updated_at"
     )
 
     def _row_to_simkl_link(self, row) -> Dict[str, Any]:
@@ -93,7 +92,7 @@ class SimklMixin:
             "last_synced_at": row[6], "last_error": row[7],
             "activities_json": row[8],
             "last_full_sync_at": row[9], "last_activities_check_at": row[10],
-            "pending_user_code": row[11],
+            "pending_device_code": row[11],
             "created_at": row[12], "updated_at": row[13],
             "connected": status == "connected",
         }
@@ -182,12 +181,12 @@ class SimklMixin:
             rows = cursor.fetchall()
         return [self._row_to_simkl_link(row) for row in rows]
 
-    # ---- pending PIN ----------------------------------------------------------
+    # ---- pending device authorization ----------------------------------------
 
-    def set_simkl_pending_user_code(
-        self, media_user_identity_id: int, user_code: Optional[str]
+    def set_simkl_pending_device_code(
+        self, media_user_identity_id: int, device_code: Optional[str]
     ) -> None:
-        """Bind an in-flight PIN to the identity that requested it.
+        """Bind an in-flight device code to the identity that requested it.
 
         The poll endpoint reads the code from here rather than from the request
         body, so a caller cannot submit an arbitrary code and bind whichever
@@ -202,32 +201,37 @@ class SimklMixin:
                 media_user_identity_id, None, None, status="pending",
             )
         query = (
-            f"UPDATE simkl_account_links SET pending_user_code = {ph}, "
+            f"UPDATE simkl_account_links SET pending_device_code = {ph}, "
             f"updated_at = CURRENT_TIMESTAMP WHERE media_user_identity_id = {ph}"
         )
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query, (user_code, media_user_identity_id))
+            cursor.execute(query, (device_code, media_user_identity_id))
             conn.commit()
 
-    def get_simkl_pending_user_code(self, media_user_identity_id: int) -> Optional[str]:
+    def get_simkl_pending_device_code(self, media_user_identity_id: int) -> Optional[str]:
         link = self.get_simkl_account_link(media_user_identity_id)
-        return (link or {}).get("pending_user_code") or None
+        return (link or {}).get("pending_device_code") or None
 
     # ---- simkl_oauth_tokens ---------------------------------------------------
 
     def upsert_simkl_oauth_tokens(
-        self, link_id: int, access_token: str, expires_at: Any = None
+        self,
+        link_id: int,
+        access_token: str,
+        expires_at: Any = None,
+        refresh_token: Optional[str] = None,
     ) -> None:
         ph = self._ph()
         expires_at = self._coerce_trakt_expires_at(expires_at)
-        columns = "(link_id, access_token, expires_at, updated_at)"
-        values = f"({ph}, {ph}, {ph}, CURRENT_TIMESTAMP)"
+        columns = "(link_id, access_token, refresh_token, expires_at, updated_at)"
+        values = f"({ph}, {ph}, {ph}, {ph}, CURRENT_TIMESTAMP)"
         if self.db_type == 'sqlite':
             query = (
                 f"INSERT INTO simkl_oauth_tokens {columns} VALUES {values} "
                 f"ON CONFLICT(link_id) DO UPDATE SET "
                 f"access_token = excluded.access_token, "
+                f"refresh_token = excluded.refresh_token, "
                 f"expires_at = excluded.expires_at, "
                 f"updated_at = CURRENT_TIMESTAMP"
             )
@@ -236,6 +240,7 @@ class SimklMixin:
                 f"INSERT INTO simkl_oauth_tokens {columns} VALUES {values} "
                 f"ON CONFLICT (link_id) DO UPDATE SET "
                 f"access_token = EXCLUDED.access_token, "
+                f"refresh_token = EXCLUDED.refresh_token, "
                 f"expires_at = EXCLUDED.expires_at, "
                 f"updated_at = CURRENT_TIMESTAMP"
             )
@@ -244,24 +249,30 @@ class SimklMixin:
                 f"INSERT INTO simkl_oauth_tokens {columns} VALUES {values} "
                 f"ON DUPLICATE KEY UPDATE "
                 f"access_token = VALUES(access_token), "
+                f"refresh_token = VALUES(refresh_token), "
                 f"expires_at = VALUES(expires_at), "
                 f"updated_at = CURRENT_TIMESTAMP"
             )
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query, (link_id, access_token, expires_at))
+            cursor.execute(query, (link_id, access_token, refresh_token, expires_at))
             conn.commit()
 
     def get_simkl_oauth_tokens(self, link_id: int) -> Optional[Dict[str, Any]]:
         ph = self._ph()
-        query = f"SELECT access_token, expires_at FROM simkl_oauth_tokens WHERE link_id = {ph}"
+        query = (
+            f"SELECT access_token, refresh_token, expires_at FROM simkl_oauth_tokens "
+            f"WHERE link_id = {ph}"
+        )
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, (link_id,))
             row = cursor.fetchone()
         if row is None:
             return None
-        return {"access_token": row[0], "expires_at": row[1]}
+        return {
+            "access_token": row[0], "refresh_token": row[1], "expires_at": row[2],
+        }
 
     def delete_simkl_oauth_tokens(self, link_id: int) -> bool:
         ph = self._ph()
@@ -505,6 +516,20 @@ class SimklMixin:
         return len(stale)
 
     # ---- sync state -----------------------------------------------------------
+
+    def reset_simkl_sync_state(self, link_id: int) -> None:
+        """Clear all derived sync state before a different account is linked."""
+        ph = self._ph()
+        query = (
+            f"UPDATE simkl_account_links SET activities_json = {ph}, "
+            f"last_synced_at = {ph}, last_full_sync_at = {ph}, "
+            f"last_activities_check_at = {ph}, updated_at = CURRENT_TIMESTAMP "
+            f"WHERE id = {ph}"
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (None, None, None, None, link_id))
+            conn.commit()
 
     def get_simkl_sync_state(self, link_id: int) -> Dict[str, Any]:
         """Return the stored activities payload and sync clocks for a link."""
