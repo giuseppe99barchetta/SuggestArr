@@ -14,7 +14,6 @@ from api_service.handler.jellyfin_handler import JellyfinHandler
 from api_service.handler.plex_handler import PlexHandler
 from api_service.services.trakt.media_user_augmentor import MediaUserTraktAugmentor
 from api_service.services.filter_normalization import normalize_filters
-from api_service.services.library_content import merge_content_sets
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.seer.seer_client import SeerClient
 from api_service.services.plex.plex_client import PlexClient
@@ -537,21 +536,6 @@ class RecommendationAutomation:
         )
         self.logger.info("Plex handler initialized")
 
-    async def _add_seer_available_content(self) -> None:
-        """Treat titles Seer reports as available as already in the library.
-
-        The media-server scan only sees items that carry a TMDB ID; Seer's
-        availability also covers items matched through TVDB or IMDb. Skipped
-        when "Exclude Downloaded Content" is off for this job.
-        """
-        seer_client = getattr(self.media_handler, 'seer_client', None)
-        if seer_client is None or not seer_client.exclude_downloaded:
-            return
-        merge_content_sets(
-            self.media_handler.existing_content_sets,
-            await seer_client.get_available_tmdb_ids(),
-        )
-
     async def run(self, dry_run: bool = False, execution_id=None) -> ExecutionResult:
         """
         Execute the recommendation job.
@@ -597,7 +581,7 @@ class RecommendationAutomation:
                 elif hasattr(self.media_handler, 'plex_client'):
                     await stack.enter_async_context(self.media_handler.plex_client)
 
-                await self._add_seer_available_content()
+                await self.media_handler.add_seer_available_content()
                 await self.media_handler.process_recent_items()
 
             requested_count = getattr(self.media_handler, 'request_count', 0)
