@@ -9,6 +9,7 @@ Covers:
 - get_total_request(): success, None data
 - check_already_requested(): exclude_requested=True/False, found/not-found, exception
 - check_already_downloaded(): found, not found, None local_content, exclude=False
+- get_available_tmdb_ids(): status filtering, pagination, Seer failures
 - _apply_profile_config(): applies all keys, tv languageProfileId, empty profile
 - _build_seer_payload(): movie / tv (all/numbered seasons), anime key, private meta-keys present
 - request_media(): duplicate pending, already in DB, new enqueue
@@ -404,6 +405,75 @@ class TestCheckAlreadyRequested(unittest.IsolatedAsyncioTestCase):
             result = await client.check_already_requested('12345', 'movie')
         MockDB.return_value.check_request_exists.assert_not_called()
         self.assertFalse(result)
+
+
+# ---------------------------------------------------------------------------
+# get_available_tmdb_ids
+# ---------------------------------------------------------------------------
+
+def _media_page(results, total=None):
+    return {
+        'pageInfo': {'results': len(results) if total is None else total},
+        'results': results,
+    }
+
+
+class TestGetAvailableTmdbIds(unittest.IsolatedAsyncioTestCase):
+
+    async def test_keeps_only_available_and_partially_available_titles(self):
+        client = _make_client()
+        page = _media_page([
+            {'mediaType': 'movie', 'tmdbId': 603, 'status': 5},
+            {'mediaType': 'tv', 'tmdbId': 1399, 'status': 4},
+            {'mediaType': 'movie', 'tmdbId': 155, 'status': 3},   # processing
+            {'mediaType': 'tv', 'tmdbId': 1396, 'status': 2},     # pending
+            {'mediaType': 'movie', 'tmdbId': None, 'status': 5},  # no TMDB id
+            {'mediaType': 'music', 'tmdbId': 42, 'status': 5},    # unknown type
+        ])
+        with patch.object(client, '_make_request', AsyncMock(return_value=page)) as mock_req:
+            result = await client.get_available_tmdb_ids()
+
+        self.assertEqual(result, {'movie': {'603'}, 'tv': {'1399'}})
+        mock_req.assert_awaited_once_with(
+            'GET', 'api/v1/media?filter=allavailable&take=100&skip=0'
+        )
+
+    async def test_fetches_every_page(self):
+        client = _make_client()
+        pages = {
+            0: _media_page([{'mediaType': 'movie', 'tmdbId': 1, 'status': 5}], total=250),
+            100: _media_page([{'mediaType': 'movie', 'tmdbId': 2, 'status': 5}], total=250),
+            200: _media_page([{'mediaType': 'tv', 'tmdbId': 3, 'status': 5}], total=250),
+        }
+
+        async def fake_request(method, endpoint):
+            skip = int(endpoint.rsplit('skip=', 1)[1])
+            return pages[skip]
+
+        with patch.object(client, '_make_request', AsyncMock(side_effect=fake_request)) as mock_req:
+            result = await client.get_available_tmdb_ids()
+
+        self.assertEqual(result, {'movie': {'1', '2'}, 'tv': {'3'}})
+        self.assertEqual(mock_req.await_count, 3)
+
+    async def test_returns_empty_sets_when_seer_is_unreachable(self):
+        client = _make_client()
+        with patch.object(client, '_make_request', AsyncMock(return_value=None)):
+            result = await client.get_available_tmdb_ids()
+        self.assertEqual(result, {'movie': set(), 'tv': set()})
+
+    async def test_timeout_is_treated_as_unreachable(self):
+        client = _make_client()
+        with patch.object(client, '_make_request', AsyncMock(side_effect=asyncio.TimeoutError())):
+            result = await client.get_available_tmdb_ids()
+        self.assertEqual(result, {'movie': set(), 'tv': set()})
+
+    async def test_keeps_loaded_pages_when_a_later_page_fails(self):
+        client = _make_client()
+        first = _media_page([{'mediaType': 'movie', 'tmdbId': 1, 'status': 5}], total=150)
+        with patch.object(client, '_make_request', AsyncMock(side_effect=[first, None])):
+            result = await client.get_available_tmdb_ids()
+        self.assertEqual(result, {'movie': {'1'}, 'tv': set()})
 
 
 # ---------------------------------------------------------------------------

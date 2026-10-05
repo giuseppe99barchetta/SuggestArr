@@ -1,8 +1,12 @@
-"""Tests for recommendation year-range normalization in recommendation jobs."""
+"""Tests for recommendation jobs: year-range normalization, Seer discovery, library exclusion."""
 
+import logging
 import unittest
+from unittest.mock import AsyncMock, MagicMock
 
+from api_service.handler.jellyfin_handler import JellyfinHandler
 from api_service.jobs.recommendation_automation import (
+    RecommendationAutomation,
     _extract_year_from_filter_value,
     _resolve_honor_seer_discovery,
     _resolve_year_range_filters,
@@ -64,3 +68,62 @@ class TestHonorSeerDiscoveryResolution(unittest.TestCase):
             {"HONOR_JELLYSEER_DISCOVERY": True},
         )
         self.assertTrue(value)
+
+
+class TestSeerAvailabilityExclusion(unittest.IsolatedAsyncioTestCase):
+    """Titles Seer reports as available are skipped even without a TMDB ID in Jellyfin."""
+
+    USER = {"id": "user-1", "name": "Alice"}
+
+    def _automation(self, exclude_downloaded=True):
+        jellyfin_client = MagicMock()
+        # The library holds Game of Thrones (1399), but Jellyfin only has a TVDB ID for it.
+        jellyfin_client.existing_content = {"movie": [{"tmdb_id": "11"}], "tv": []}
+
+        seer_client = MagicMock()
+        seer_client.exclude_downloaded = exclude_downloaded
+        seer_client.queue_context = {}
+        seer_client.get_available_tmdb_ids = AsyncMock(return_value={"movie": set(), "tv": {"1399"}})
+        seer_client.check_requests_exist_batch = AsyncMock(return_value=set())
+        seer_client.request_media = AsyncMock(return_value=True)
+
+        tmdb_client = MagicMock()
+        tmdb_client.get_watch_providers = AsyncMock(return_value=(False, None))
+
+        handler = JellyfinHandler(
+            jellyfin_client, seer_client, tmdb_client, logging.getLogger("test"),
+            max_similar_movie=2, max_similar_tv=2,
+            selected_users=[self.USER], use_llm=False,
+        )
+
+        async def process_recent_items():
+            await handler.request_similar_media(
+                [{"id": 1399, "name": "Game of Thrones"}, {"id": 1396, "name": "Breaking Bad"}],
+                "tv", 2, {"id": 22, "name": "Severance"}, self.USER,
+            )
+
+        handler.process_recent_items = process_recent_items
+
+        automation = RecommendationAutomation()
+        automation.job_id = 1
+        automation.job_data = {"id": 1, "name": "Recommendations"}
+        automation.repository = MagicMock()
+        automation.media_handler = handler
+        return automation, seer_client
+
+    async def test_seer_available_titles_are_not_requested(self):
+        automation, seer_client = self._automation()
+
+        result = await automation.run()
+
+        self.assertTrue(result.success)
+        requested_ids = [call.kwargs["media"]["id"] for call in seer_client.request_media.await_args_list]
+        self.assertEqual(requested_ids, [1396])
+        seer_client.get_available_tmdb_ids.assert_awaited_once()
+
+    async def test_seer_is_not_queried_when_exclude_downloaded_is_off(self):
+        automation, seer_client = self._automation(exclude_downloaded=False)
+
+        await automation.run()
+
+        seer_client.get_available_tmdb_ids.assert_not_awaited()
