@@ -411,7 +411,7 @@
           v-if="showModal" 
           class="modal-overlay" 
           @click.self="closeModal">
-          <div class="modal-content">
+          <div class="modal-content request-details-modal">
             <!-- Close Button -->
             <button @click="closeModal" class="modal-close">
               <i class="fas fa-times"></i>
