@@ -186,6 +186,8 @@ class FakeSeerClient(AsyncContextClient):
         self.check_already_requested = AsyncMock(return_value=False)
         self.check_already_downloaded = AsyncMock(return_value=False)
         self.check_requests_exist_batch = AsyncMock(return_value=set())
+        self.exclude_downloaded = True
+        self.get_available_tmdb_ids = AsyncMock(return_value={"movie": set(), "tv": set()})
 
 
 class FakeTMDbClient(AsyncContextClient):
