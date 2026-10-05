@@ -9,6 +9,7 @@ Covers:
 - create(): list field normalization (JELLYFIN_LIBRARIES, PLEX_LIBRARIES, FILTER_LANGUAGE, etc.)
 - create(): numeric caps (MAX_SIMILAR_MOVIE ≤ 20, MAX_SIMILAR_TV ≤ 20, SEARCH_SIZE ≤ 100)
 - run(): calls media_handler.process_recent_items()
+- run(): adds Seer-available titles to the library before processing
 - run(): enters correct async context managers (seer, tmdb, media client, omdb)
 - run(): enters seer_client async context when present
 - run(): re-raises exceptions
@@ -419,11 +420,13 @@ class TestContentAutomationCreateListNormalization(_BaseCreateTest):
 def _make_handler(**attrs):
     """
     Build a SimpleNamespace media handler.
-    process_recent_items defaults to an AsyncMock if not provided.
+    process_recent_items and add_seer_available_content default to AsyncMocks if not provided.
     """
     ns = SimpleNamespace(**attrs)
     if not hasattr(ns, 'process_recent_items'):
         ns.process_recent_items = AsyncMock()
+    if not hasattr(ns, 'add_seer_available_content'):
+        ns.add_seer_available_content = AsyncMock()
     return ns
 
 
@@ -446,6 +449,20 @@ class TestContentAutomationRun(unittest.IsolatedAsyncioTestCase):
         await self._make_instance(handler).run()
 
         handler.process_recent_items.assert_awaited_once()
+
+    async def test_seer_available_content_is_added_before_processing(self):
+        calls = []
+        handler = _make_handler(
+            seer_client=_make_async_cm(),
+            tmdb_client=_mock_tmdb(),
+            jellyfin_client=_make_async_cm(),
+            add_seer_available_content=AsyncMock(side_effect=lambda: calls.append('seer')),
+            process_recent_items=AsyncMock(side_effect=lambda: calls.append('process')),
+        )
+
+        await self._make_instance(handler).run()
+
+        self.assertEqual(calls, ['seer', 'process'])
 
     # -- context managers ----------------------------------------------------
 
