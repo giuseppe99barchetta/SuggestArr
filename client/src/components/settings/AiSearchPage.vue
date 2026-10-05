@@ -298,6 +298,15 @@
                     <i class="fas fa-globe"></i>
                     {{ selectedItem.original_language.toUpperCase() }}
                   </span>
+                  <a
+                    v-if="trailerUrl"
+                    :href="trailerUrl"
+                    class="ai-badge ai-badge-trailer"
+                    target="_blank"
+                    rel="noopener noreferrer">
+                    <i class="fab fa-youtube"></i>
+                    Watch Trailer
+                  </a>
                 </div>
 
                 <div class="ai-modal-sep"></div>
@@ -338,7 +347,9 @@
 </template>
 
 <script>
+import axios from 'axios';
 import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear } from '@/api/api.js';
+import { loadTrailerUrl } from '@/utils/trailer.js';
 import '@/assets/styles/aiSearchPage.css';
 
 export default {
@@ -358,6 +369,7 @@ export default {
       requestingIds: new Set(),
       // Item detail modal
       selectedItem: null,
+      trailerUrl: null,
       // Advanced options
       showAdvanced: false,
       useHistory: true,
@@ -566,13 +578,18 @@ export default {
       this.recentSearches = [];
     },
 
-    openModal(item) {
+    async openModal(item) {
       this.selectedItem = item;
+      this.trailerUrl = null;
       document.body.style.overflow = 'hidden';
+      const url = await loadTrailerUrl(axios, item);
+      // The modal may show another title by the time the answer arrives.
+      if (this.selectedItem === item) this.trailerUrl = url;
     },
 
     closeModal() {
       this.selectedItem = null;
+      this.trailerUrl = null;
       document.body.style.overflow = '';
     },
 
