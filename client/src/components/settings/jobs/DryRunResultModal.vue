@@ -101,9 +101,9 @@
                   v-if="hasTrailerTarget(item)"
                   type="button"
                   class="item-trailer"
-                  :disabled="withoutTrailer.includes(trailerKey(item))"
+                  :disabled="trailerUnavailable(item)"
                   @click.stop="watchTrailer(item)">
-                  <i class="fab fa-youtube"></i>
+                  <i :class="openingTrailer.includes(trailerKey(item)) ? 'fas fa-spinner fa-spin' : 'fab fa-youtube'"></i>
                   {{ withoutTrailer.includes(trailerKey(item)) ? 'No trailer' : 'Trailer' }}
                 </button>
               </div>
@@ -182,7 +182,7 @@ export default {
   },
   emits: ['close', 'run'],
   data() {
-    return { showAll: true, withoutTrailer: [] };
+    return { showAll: true, withoutTrailer: [], openingTrailer: [] };
   },
   computed: {
     hasFilterData() {
@@ -210,8 +210,28 @@ export default {
     trailerKey(item) {
       return `${item.media_type}:${item.tmdb_id}`;
     },
+    trailerUnavailable(item) {
+      const key = this.trailerKey(item);
+      return this.withoutTrailer.includes(key) || this.openingTrailer.includes(key);
+    },
     async watchTrailer(item) {
-      if (!await openTrailer(axios, item)) this.withoutTrailer.push(this.trailerKey(item));
+      const key = this.trailerKey(item);
+      // A second click while the lookup is running would open a second blank tab.
+      if (this.openingTrailer.includes(key)) return;
+      this.openingTrailer = [...this.openingTrailer, key];
+      try {
+        const outcome = await openTrailer(axios, item);
+        if (outcome === 'none') {
+          this.withoutTrailer = [...this.withoutTrailer, key];
+        } else if (outcome === 'blocked') {
+          this.$toast?.open({
+            message: 'Your browser blocked the trailer tab. Allow pop-ups for this site and try again.',
+            type: 'warning',
+          });
+        }
+      } finally {
+        this.openingTrailer = this.openingTrailer.filter(k => k !== key);
+      }
     },
     posterUrl(path) {
       if (!path) return null;

@@ -41,13 +41,20 @@ test('a trailer asked for from a list opens in the tab prepared for it, which is
   const newTab = () => ({ opener: {}, closed: false, went: null, close() { this.closed = true; }, location: { replace(url) { tab.went = url; } } });
 
   let tab = newTab();
-  assert.equal(await openTrailer({ get: async () => ({ data: { url: 'https://www.youtube.com/watch?v=abc' } }) }, movie, () => tab), true);
+  assert.equal(await openTrailer({ get: async () => ({ data: { url: 'https://www.youtube.com/watch?v=abc' } }) }, movie, () => tab), 'opened');
   assert.equal(tab.went, 'https://www.youtube.com/watch?v=abc');
   assert.equal(tab.opener, null);
   assert.equal(tab.closed, false);
 
   tab = newTab();
-  assert.equal(await openTrailer({ get: async () => ({ data: { url: null } }) }, movie, () => tab), false);
+  assert.equal(await openTrailer({ get: async () => ({ data: { url: null } }) }, movie, () => tab), 'none');
   assert.equal(tab.closed, true);
   assert.equal(tab.went, null);
+});
+
+test('a trailer the browser refuses to open a tab for is reported as blocked, not as missing', async () => {
+  const movie = { tmdb_id: 603, media_type: 'movie' };
+
+  assert.equal(await openTrailer({ get: async () => ({ data: { url: 'https://www.youtube.com/watch?v=abc' } }) }, movie, () => null), 'blocked');
+  assert.equal(await openTrailer({ get: async () => ({ data: { url: null } }) }, movie, () => null), 'none');
 });

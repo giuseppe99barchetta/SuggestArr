@@ -44,7 +44,8 @@ export async function loadTrailerUrl(http, item) {
  * @param {{ get: Function }} http - axios, or anything with the same `get`.
  * @param {object|null} item - The listed title.
  * @param {Function} [openTab] - Opens a blank tab and returns its window.
- * @returns {Promise<boolean>} false when the title has no trailer to open.
+ * @returns {Promise<'opened'|'blocked'|'none'>} 'none' when the title has no trailer,
+ *   'blocked' when it has one but the browser refused to open a tab for it.
  */
 export async function openTrailer(http, item, openTab = () => window.open('', '_blank')) {
   // Opened before the lookup: a tab opened after waiting is blocked as a popup.
@@ -52,11 +53,10 @@ export async function openTrailer(http, item, openTab = () => window.open('', '_
   const url = await loadTrailerUrl(http, item);
   if (!url) {
     tab?.close();
-    return false;
+    return 'none';
   }
-  if (tab) {
-    tab.opener = null;
-    tab.location.replace(url);
-  }
-  return true;
+  if (!tab) return 'blocked';
+  tab.opener = null;
+  tab.location.replace(url);
+  return 'opened';
 }
