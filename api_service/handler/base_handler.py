@@ -6,6 +6,7 @@ import re
 from abc import ABC, abstractmethod
 from api_service.services.llm.llm_service import is_llm_configured, get_recommendations_from_history
 from api_service.config.config import load_env_vars
+from api_service.services.library_content import merge_content_sets
 
 
 class BaseMediaHandler(ABC):
@@ -153,6 +154,20 @@ class BaseMediaHandler(ABC):
             seed['source_origin'] = 'trakt_history'
             self._mark_source_origin(seed.get('source_obj'), 'trakt_history')
         return seeds
+
+    async def add_seer_available_content(self):
+        """Treat titles Seer reports as available as already in the library.
+
+        The media-server scan only sees items that carry a TMDB ID; Seer's
+        availability also covers items matched through TVDB or IMDb. Skipped
+        when "Exclude Downloaded Content" is off for this run.
+        """
+        if self.seer_client is None or not self.seer_client.exclude_downloaded:
+            return
+        merge_content_sets(
+            self.existing_content_sets,
+            await self.seer_client.get_available_tmdb_ids(),
+        )
 
     def _merge_seeds(self, seeds):
         """Merge server and Trakt seeds, sort by date, dedup, cap to max_content.

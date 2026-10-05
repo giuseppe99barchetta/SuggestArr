@@ -11,6 +11,7 @@ from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.db.job_repository import JobRepository
 from api_service.services.filter_normalization import normalize_filters
+from api_service.services.library_content import load_library_content
 from api_service.services.seer.seer_client import SeerClient
 from api_service.services.request_sources import DISCOVER_SOURCE
 from api_service.services.tmdb.tmdb_discover import TMDbDiscover
@@ -41,6 +42,8 @@ class DiscoverAutomation:
         self.tmdb_discover: Optional[TMDbDiscover] = None
         self.repository: Optional[JobRepository] = None
         self.db_manager: Optional[DatabaseManager] = None
+        self.env_vars: Dict[str, Any] = {}
+        self.local_content: Dict[str, set[str]] = {}
 
     @classmethod
     async def create(cls, job_id: int) -> 'DiscoverAutomation':
@@ -70,6 +73,7 @@ class DiscoverAutomation:
 
         # Load environment variables (merges DB integration keys on top of YAML)
         env_vars = ConfigService.get_runtime_config()
+        instance.env_vars = env_vars
 
         # Initialize Seer client
         number_of_seasons = env_vars.get('FILTER_NUM_SEASONS') or "all"
@@ -150,6 +154,9 @@ class DiscoverAutomation:
 
                 # Fetch discover results
                 results = await self.fetch_discover_results()
+
+                # Load what is already in the library so owned titles are skipped
+                self.local_content = await load_library_content(self.env_vars, self.seer_client)
             results_count = len(results)
 
             self.logger.info(f"Discovered {results_count} items")
@@ -256,9 +263,9 @@ class DiscoverAutomation:
                     self.logger.debug(f"Skipping {title}: already requested")
                     continue
 
-                # Check if already downloaded via Seer
+                # Check if already in the library (media server or Seer availability)
                 is_downloaded = await self.seer_client.check_already_downloaded(
-                    tmdb_id, media_type
+                    tmdb_id, media_type, self.local_content
                 )
                 if is_downloaded:
                     self.logger.debug(f"Skipping {title}: already downloaded")
