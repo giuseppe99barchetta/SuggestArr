@@ -1,6 +1,6 @@
 import aiohttp
 import asyncio
-from typing import List, Set
+from typing import Dict, List, Set
 from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.config.config import load_env_vars
@@ -10,6 +10,10 @@ from api_service.services.request_sources import is_tmdb_metadata_source_id
 BATCH_SIZE = 20  # Number of requests fetched per batch
 HTTP_OK = {200, 201, 202}  # Include 202 Accepted for async operations
 PENDING_REQUEST_STATUSES = {1, "1", "pending", "PENDING"}
+MEDIA_PAGE_SIZE = 100  # Number of media items fetched per page when loading availability
+# Seer MediaStatus values that mean the title is already in the library:
+# 4 = PARTIALLY_AVAILABLE, 5 = AVAILABLE (same values in Overseerr and Jellyseerr).
+AVAILABLE_MEDIA_STATUSES = {4, 5}
 
 
 class SeerPermissionError(Exception):
@@ -581,6 +585,67 @@ class SeerClient(BaseHTTPClient):
         except Exception as e:
             self.logger.error("Error in bulk check requests: %s", e)
             return set()
+
+    async def get_available_tmdb_ids(self) -> Dict[str, Set[str]]:
+        """Fetch the TMDB IDs that Seer reports as available or partially available.
+
+        Seer tracks availability by scanning the media server and matches items by
+        TMDB, TVDB or IMDb ID, so this also covers library items whose media-server
+        metadata has no TMDB ID (for example shows matched only through TVDB).
+
+        Best-effort: when Seer cannot be reached the returned sets are empty and the
+        caller falls back to the media-server library alone.
+
+        :return: Dict with 'movie' and 'tv' keys mapping to sets of TMDB ID strings.
+        """
+        available = {'movie': set(), 'tv': set()}
+
+        first_page = await self._fetch_available_media_page(0)
+        if first_page is None:
+            self.logger.warning(
+                "Could not load available media from Seer; "
+                "already-in-library checks will use the media server library only."
+            )
+            return available
+
+        total = (first_page.get('pageInfo') or {}).get('results') or 0
+        pages = [first_page]
+        if total > MEDIA_PAGE_SIZE:
+            pages.extend(await asyncio.gather(*[
+                self._fetch_available_media_page(skip)
+                for skip in range(MEDIA_PAGE_SIZE, total, MEDIA_PAGE_SIZE)
+            ]))
+
+        for page in pages:
+            if page is None:
+                self.logger.warning("A page of available media from Seer failed to load; results may be incomplete.")
+                continue
+            for media in page.get('results') or []:
+                media_type = media.get('mediaType')
+                tmdb_id = media.get('tmdbId')
+                if media_type in available and tmdb_id and media.get('status') in AVAILABLE_MEDIA_STATUSES:
+                    available[media_type].add(str(tmdb_id))
+
+        self.logger.info(
+            "Seer reports %d movies and %d TV shows as available.",
+            len(available['movie']), len(available['tv']),
+        )
+        return available
+
+    async def _fetch_available_media_page(self, skip):
+        """Fetch one page of available media from Seer.
+
+        :param skip: Number of items to skip (page offset).
+        :return: Decoded JSON page, or None when the request failed.
+        """
+        self.logger.debug("Fetching available media from Seer starting at skip=%d", skip)
+        try:
+            return await self._make_request(
+                "GET", f"api/v1/media?filter=allavailable&take={MEDIA_PAGE_SIZE}&skip={skip}"
+            )
+        except Exception as e:  # timeouts are not aiohttp.ClientError, so _make_request lets them through
+            self.logger.error("Failed to fetch available media from Seer at skip %d: %s", skip, e)
+            return None
 
     async def check_already_downloaded(self, tmdb_id, media_type, local_content=None):
         """Check if a media item has already been downloaded based on local content."""
