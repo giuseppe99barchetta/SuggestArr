@@ -253,6 +253,7 @@ class ContentAutomation:
                 elif hasattr(self.media_handler, 'plex_client'):
                     await stack.enter_async_context(self.media_handler.plex_client)
 
+                await self.media_handler.add_seer_available_content()
                 await self.media_handler.process_recent_items()
             self.logger.info("Content automation process completed successfully")
         except Exception as e:
