@@ -101,15 +101,51 @@ class UnwatchedSuggestionGate:
                             watched[user][media_type].add(str(tmdb_id))
 
         from api_service.services.trakt.media_user_augmentor import TraktWatchHistorySource
-        source = TraktWatchHistorySource(
+        from api_service.services.simkl.media_user_augmentor import SimklWatchHistorySource
+        trakt_source = TraktWatchHistorySource(
             config.get("TRAKT_CLIENT_ID", ""), config.get("TRAKT_CLIENT_SECRET", ""), self.db
+        )
+        # use_as_seed is forced off: this gate only decides whether a
+        # suggestion has already been watched, so building seed rows would be
+        # a query per user for a list nobody reads. The exclusion flag is left
+        # to the user's own source setting.
+        simkl_source = SimklWatchHistorySource(
+            config.get("SIMKL_CLIENT_ID", ""), db=self.db,
+            tmdb_api_key=config.get("TMDB_API_KEY", ""),
+            use_as_seed=False,
         )
         for user in user_ids:
             try:
                 identity = self.db.get_media_user_identity(service, user)
             except ValueError:
                 continue
-            trakt = await source.get_watched_ids(identity["id"])
+            trakt = await trakt_source.get_watched_ids(identity["id"])
             for media_type in ("movie", "tv"):
                 watched[user][media_type].update(trakt.get(media_type, set()))
+
+            simkl = await self._simkl_watched_ids(simkl_source, identity["id"])
+            for media_type in ("movie", "tv"):
+                watched[user][media_type].update(simkl.get(media_type, set()))
         return watched
+
+    async def _simkl_watched_ids(self, source, media_user_identity_id):
+        """Return one user's Simkl exclusions, or empty sets on any failure.
+
+        Unlike the Trakt source, ``SimklWatchHistorySource.load`` lets provider
+        errors escape. Left uncaught they unwind past every user, and the
+        fail-open handler in :meth:`allowed_slices` then disables the gate for
+        the whole job — so one revoked token would stop suppressing already
+        watched suggestions for everybody.
+        """
+        empty = {"movie": set(), "tv": set()}
+        if not source.enabled:
+            return empty
+        try:
+            augmentation = await source.load(media_user_identity_id)
+        except Exception as exc:
+            self.logger.warning(
+                "Skipping Simkl exclusions for media user %s: %s",
+                media_user_identity_id, exc,
+            )
+            return empty
+        return augmentation.watched_ids if augmentation else empty

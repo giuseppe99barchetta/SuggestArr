@@ -505,6 +505,10 @@
                     <i class="fab fa-youtube"></i>
                     Watch Trailer
                   </a>
+                  <span v-if="selectedSource.source_origin === 'simkl_history'" class="badge badge-date">
+                    <i class="icon-simkl"></i>
+                    Simkl History
+                  </span>
                 </div>
 
                 <!-- Source Link (for requests view) -->

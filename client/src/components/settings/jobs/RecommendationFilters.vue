@@ -220,13 +220,9 @@
               </span>
             </BaseCheckbox>
           </div>
-          <small v-if="!traktConfigured" class="toggle-help toggle-help--warn">
+          <small v-if="traktWarning" class="toggle-help toggle-help--warn">
             <i class="fas fa-exclamation-triangle"></i>
-            Trakt not configured — set Client ID / Secret in Services
-          </small>
-          <small v-else-if="!traktUsable" class="toggle-help toggle-help--warn">
-            <i class="fas fa-exclamation-triangle"></i>
-            No linked Trakt accounts — link accounts in Services &gt; Trakt
+            {{ traktWarning }}
           </small>
           <small v-else class="toggle-help">Use linked Trakt watch history to find similar content</small>
 
@@ -238,15 +234,39 @@
               </span>
             </BaseCheckbox>
           </div>
-          <small v-if="!traktConfigured" class="toggle-help toggle-help--warn">
+          <small v-if="traktWarning" class="toggle-help toggle-help--warn">
             <i class="fas fa-exclamation-triangle"></i>
-            Trakt not configured — set Client ID / Secret in Services
-          </small>
-          <small v-else-if="!traktUsable" class="toggle-help toggle-help--warn">
-            <i class="fas fa-exclamation-triangle"></i>
-            No linked Trakt accounts — link accounts in Services &gt; Trakt
+            {{ traktWarning }}
           </small>
           <small v-else class="toggle-help">Skip content already watched on Trakt</small>
+
+          <div class="toggle-item">
+            <BaseCheckbox v-model="localFilters.use_simkl_as_seed" :disabled="!simklUsable">
+              <span class="toggle-label-modal" :class="{ 'toggle-disabled': !simklUsable }">
+                <i class="fas fa-seedling"></i>
+                Use Simkl as Seed
+              </span>
+            </BaseCheckbox>
+          </div>
+          <small v-if="simklWarning" class="toggle-help toggle-help--warn">
+            <i class="fas fa-exclamation-triangle"></i>
+            {{ simklWarning }}
+          </small>
+          <small v-else class="toggle-help">Use linked Simkl watch history to find similar content</small>
+
+          <div class="toggle-item">
+            <BaseCheckbox v-model="localFilters.use_simkl_as_exclusion" :disabled="!simklUsable">
+              <span class="toggle-label-modal" :class="{ 'toggle-disabled': !simklUsable }">
+                <i class="fas fa-ban"></i>
+                Exclude Simkl Watched
+              </span>
+            </BaseCheckbox>
+          </div>
+          <small v-if="simklWarning" class="toggle-help toggle-help--warn">
+            <i class="fas fa-exclamation-triangle"></i>
+            {{ simklWarning }}
+          </small>
+          <small v-else class="toggle-help">Skip content already completed on Simkl</small>
         </div>
       </div>
     </template>
@@ -256,8 +276,12 @@
 <script>
 import axios from 'axios';
 import { waitForAuthReady } from '@/composables/useAuth';
-import { listTraktMediaUsers } from '@/api/api';
+import {
+  listTraktMediaUsers, listSimklMediaUsers,
+  getMyTraktStatus, getMySimklStatus,
+} from '@/api/api';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
+import { trackerState, trackerWarning } from './trackerState.js';
 
 export default {
   name: 'RecommendationFilters',
@@ -293,13 +317,19 @@ export default {
         honor_seer_discovery: false,
         only_first_movie_in_collection: false,
         use_trakt_as_seed: true,
-        use_trakt_as_exclusion: true
+        use_trakt_as_exclusion: true,
+        use_simkl_as_seed: true,
+        use_simkl_as_exclusion: true
       },
       isUpdatingFromParent: false,
       localUserMode: 'all',
       selectedService: '',
       traktConfigured: false,
       traktMediaUsers: [],
+      traktSelfConnected: false,
+      simklConfigured: false,
+      simklMediaUsers: [],
+      simklSelfConnected: false,
     };
   },
   computed: {
@@ -312,16 +342,27 @@ export default {
     maxResults() {
       return this.modelValue.max_results || 20;
     },
-    traktUsable() {
-      if (!this.traktConfigured || !this.traktMediaUsers.length) return false;
-      if (this.userMode === 'all') {
-        return this.traktMediaUsers.some(u => u.trakt?.connected);
-      }
-      const selectedIds = this.modelValue.user_ids || [];
-      if (!selectedIds.length) return false;
-      return this.traktMediaUsers.some(
-        u => selectedIds.includes(u.external_user_id) && u.trakt?.connected
+    traktState() {
+      return this.trackerState(
+        this.traktConfigured, this.traktMediaUsers, this.traktSelfConnected, 'trakt',
       );
+    },
+    simklState() {
+      return this.trackerState(
+        this.simklConfigured, this.simklMediaUsers, this.simklSelfConnected, 'simkl',
+      );
+    },
+    traktUsable() {
+      return this.traktState === 'usable';
+    },
+    simklUsable() {
+      return this.simklState === 'usable';
+    },
+    traktWarning() {
+      return trackerWarning(this.traktState, 'Trakt', 'Client ID / Secret');
+    },
+    simklWarning() {
+      return trackerWarning(this.simklState, 'Simkl', 'Client ID');
     },
   },
   watch: {
@@ -340,7 +381,9 @@ export default {
             honor_seer_discovery: newVal.filters.honor_seer_discovery ?? false,
             only_first_movie_in_collection: newVal.filters.only_first_movie_in_collection ?? false,
             use_trakt_as_seed: newVal.filters.use_trakt_as_seed ?? true,
-            use_trakt_as_exclusion: newVal.filters.use_trakt_as_exclusion ?? true
+            use_trakt_as_exclusion: newVal.filters.use_trakt_as_exclusion ?? true,
+            use_simkl_as_seed: newVal.filters.use_simkl_as_seed ?? true,
+            use_simkl_as_exclusion: newVal.filters.use_simkl_as_exclusion ?? true
           };
           this.$nextTick(() => {
             this.isUpdatingFromParent = false;
@@ -368,6 +411,41 @@ export default {
     await this.loadUsers();
   },
   methods: {
+    trackerState(configured, users, selfConnected, key) {
+      return trackerState({
+        configured, users, selfConnected, key,
+        userMode: this.userMode,
+        selectedIds: this.modelValue.user_ids || [],
+      });
+    },
+    /** Fetch linked accounts for one tracker, tolerating a failed lookup. */
+    async loadTrackerUsers(configured, list) {
+      if (!configured) return [];
+      try {
+        const res = await list();
+        return res.data?.media_users || [];
+      } catch {
+        return [];
+      }
+    },
+    /**
+     * Whether the current user's own media profile has the tracker linked.
+     *
+     * The admin list only covers users chosen in Services, so a link made
+     * from Profile against a media account that was never selected is
+     * invisible there. Reading it separately lets the warning say the account
+     * is linked-but-unmonitored instead of claiming nothing is linked at all.
+     * A caller with no media profile gets a 404, which is not an error here.
+     */
+    async loadSelfConnected(configured, fetchStatus, key) {
+      if (!configured) return false;
+      try {
+        const res = await fetchStatus();
+        return res.data?.media_user?.[key]?.connected === true;
+      } catch {
+        return false;
+      }
+    },
     async loadUsers() {
       this.isLoading = true;
       try {
@@ -376,16 +454,16 @@ export default {
         const statusResponse = await axios.get('/api/config/status');
         this.selectedService = String(statusResponse.data?.selected_service || '').toLowerCase();
         this.traktConfigured = statusResponse.data?.trakt_app_configured === true;
-        if (this.traktConfigured) {
-          try {
-            const traktRes = await listTraktMediaUsers();
-            this.traktMediaUsers = traktRes.data?.media_users || [];
-          } catch {
-            this.traktMediaUsers = [];
-          }
-        } else {
-          this.traktMediaUsers = [];
-        }
+        this.simklConfigured = statusResponse.data?.simkl_app_configured === true;
+        [
+          this.traktMediaUsers, this.simklMediaUsers,
+          this.traktSelfConnected, this.simklSelfConnected,
+        ] = await Promise.all([
+          this.loadTrackerUsers(this.traktConfigured, listTraktMediaUsers),
+          this.loadTrackerUsers(this.simklConfigured, listSimklMediaUsers),
+          this.loadSelfConnected(this.traktConfigured, getMyTraktStatus, 'trakt'),
+          this.loadSelfConnected(this.simklConfigured, getMySimklStatus, 'simkl'),
+        ]);
         if (this.isTraktSource && this.modelValue.user_ids?.length) {
           this.$emit('update:modelValue', {
             ...this.modelValue,

@@ -1,9 +1,12 @@
+import logging
 from unittest.mock import AsyncMock, MagicMock
 import sqlite3
 
 import pytest
 
 from api_service.jobs.unwatched_suggestion_gate import UnwatchedSuggestionGate
+from api_service.services.simkl.media_user_augmentor import SimklAugmentation
+from api_service.services.simkl.simkl_client import SimklAuthError
 
 
 class _Db:
@@ -62,3 +65,69 @@ def test_old_unwatched_request_blocks_and_watched_request_resets_cycle():
     assert gate._is_allowed(job, "u1", "movie", set()) is False
     assert gate._is_allowed(job, "u1", "movie", {"42"}) is True
     assert gate._is_allowed(job, "u1", "movie", set()) is True
+
+
+# ---- Simkl exclusions --------------------------------------------------------
+#
+# The Trakt source swallows its own provider errors; the Simkl one does not.
+# Anything that escapes here unwinds past every remaining user and trips the
+# fail-open handler in allowed_slices, which switches the gate off for the
+# whole job — so one user's dead token would stop suppressing already watched
+# suggestions for everybody.
+
+def _gate():
+    gate = UnwatchedSuggestionGate.__new__(UnwatchedSuggestionGate)
+    gate.logger = logging.getLogger("test-gate")
+    return gate
+
+
+@pytest.mark.asyncio
+async def test_simkl_exclusions_are_merged_when_the_link_works():
+    source = MagicMock(enabled=True)
+    source.load = AsyncMock(return_value=SimklAugmentation(
+        seed_items=[], watched_ids={"movie": {"1"}, "tv": {"2"}},
+    ))
+
+    assert await _gate()._simkl_watched_ids(source, 5) == {"movie": {"1"}, "tv": {"2"}}
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_simkl_token_does_not_disable_the_gate():
+    source = MagicMock(enabled=True)
+    source.load = AsyncMock(side_effect=SimklAuthError("401"))
+
+    assert await _gate()._simkl_watched_ids(source, 5) == {"movie": set(), "tv": set()}
+
+
+@pytest.mark.asyncio
+async def test_an_unconfigured_simkl_is_not_consulted():
+    source = MagicMock(enabled=False)
+    source.load = AsyncMock()
+
+    assert await _gate()._simkl_watched_ids(source, 5) == {"movie": set(), "tv": set()}
+    source.load.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_user_with_no_simkl_link_contributes_nothing():
+    source = MagicMock(enabled=True)
+    source.load = AsyncMock(return_value=None)
+
+    assert await _gate()._simkl_watched_ids(source, 5) == {"movie": set(), "tv": set()}
+
+
+@pytest.mark.asyncio
+async def test_one_broken_link_leaves_the_other_users_exclusions_intact():
+    """The failure has to stay inside the loop, not unwind past it."""
+    source = MagicMock(enabled=True)
+    source.load = AsyncMock(side_effect=[
+        SimklAuthError("401"),
+        SimklAugmentation(seed_items=[], watched_ids={"movie": {"9"}, "tv": set()}),
+    ])
+    gate = _gate()
+
+    first = await gate._simkl_watched_ids(source, 1)
+    second = await gate._simkl_watched_ids(source, 2)
+
+    assert first == {"movie": set(), "tv": set()}
+    assert second["movie"] == {"9"}

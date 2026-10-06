@@ -7,7 +7,6 @@ from abc import ABC, abstractmethod
 from api_service.services.llm.llm_service import is_llm_configured, get_recommendations_from_history
 from api_service.config.config import load_env_vars
 
-
 class BaseMediaHandler(ABC):
     """
     Abstract base class for media handlers (Plex, Jellyfin).
@@ -30,7 +29,7 @@ class BaseMediaHandler(ABC):
                  seer_discovered_ids=None, dry_run=False, max_total_requests=None,
                  trakt_augmentor=None, max_content=10, feedback_repository=None,
                  feedback_owner_id=None, feedback_media_service=None,
-                 watched_history_repository=None):
+                 watched_history_repository=None, simkl_augmentor=None):
         """
         Initialize base media handler.
         
@@ -50,7 +49,10 @@ class BaseMediaHandler(ABC):
             trakt_augmentor: Optional MediaUserTraktAugmentor used to add Trakt
                 watch-history seeds and merge fully-watched IDs into the skip set
             max_content: Max seeds to process after merging server + Trakt sources
-            watched_history_repository: Repository for CSV and manually-added seeds
+             watched_history_repository: Repository for CSV and manually-added seeds
+             simkl_augmentor: Optional MediaUserSimklAugmentor, the Simkl
+                 equivalent of ``trakt_augmentor``. Both may be active at once;
+                 overlapping titles collapse during seed merging.
         """
         self.seer_client = seer_client
         self.tmdb_client = tmdb_client
@@ -85,6 +87,7 @@ class BaseMediaHandler(ABC):
         self.watched_history_repository = watched_history_repository
         self._feedback_signal_cache = {}
         self._feedback_owner_cache = {}
+        self.simkl_augmentor = simkl_augmentor
         
         # Determine LLM mode
         if use_llm is not None:
@@ -126,16 +129,18 @@ class BaseMediaHandler(ABC):
         async with self._request_limit_lock:
             self._request_slots_reserved = max(self._request_slots_reserved - 1, 0)
 
-    async def _augment_user_trakt(self, media_user_identity_id):
-        """Fetch a media user's Trakt watch history additively.
+    async def _augment_user_provider(self, media_user_identity_id, augmentor_attr, origin, label):
+        """Fetch one watch-tracker's history for a media user, additively.
 
-        Merges fully-watched Trakt TMDB IDs into ``existing_content_sets`` (so
-        they are skipped like already-owned content) and returns a list of
-        normalized Trakt seed dicts (each with ``tmdb_id``, ``media_type``,
-        ``title``, ``year``) for the caller to process. A missing augmentor,
-        missing link, or any Trakt failure is a silent no-op returning ``[]``.
+        Shared by the Trakt and Simkl paths, which differ only in which
+        augmentor they read and how their seeds are tagged.
+
+        Merges fully-watched TMDB IDs into ``existing_content_sets`` (so they
+        are skipped like already-owned content) and returns normalized seed
+        dicts for the caller to process. A missing augmentor, missing link, or
+        any provider failure is a silent no-op returning ``[]``.
         """
-        augmentor = getattr(self, "trakt_augmentor", None)
+        augmentor = getattr(self, augmentor_attr, None)
         if not augmentor or not media_user_identity_id:
             return []
 
@@ -145,11 +150,10 @@ class BaseMediaHandler(ABC):
 
         total_watched = sum(len(v) for v in augmentation.watched_ids.values())
         self.logger.info(
-            "Trakt: media user identity %s → %d seeds, %d watched IDs",
-            media_user_identity_id, len(augmentation.seed_items), total_watched,
+            "%s: media user identity %s → %d seeds, %d watched IDs",
+            label, media_user_identity_id, len(augmentation.seed_items), total_watched,
         )
 
-        # Skip-watched merge: Trakt fully-watched titles join existing content.
         for media_type in ("movie", "tv"):
             watched = augmentation.watched_ids.get(media_type)
             if watched:
@@ -157,8 +161,8 @@ class BaseMediaHandler(ABC):
 
         seeds = list(augmentation.seed_items)
         for seed in seeds:
-            seed['source_origin'] = 'trakt_history'
-            self._mark_source_origin(seed.get('source_obj'), 'trakt_history')
+            seed['source_origin'] = origin
+            self._mark_source_origin(seed.get('source_obj'), origin)
         return seeds
 
     def _augment_user_managed_history(self, media_user_identity_id):
@@ -180,8 +184,20 @@ class BaseMediaHandler(ABC):
                              media_user_identity_id, len(seeds))
         return seeds
 
+    async def _augment_user_trakt(self, media_user_identity_id):
+        """Fetch a media user's Trakt watch history additively."""
+        return await self._augment_user_provider(
+            media_user_identity_id, "trakt_augmentor", "trakt_history", "Trakt",
+        )
+
+    async def _augment_user_simkl(self, media_user_identity_id):
+        """Fetch a media user's Simkl watch history additively."""
+        return await self._augment_user_provider(
+            media_user_identity_id, "simkl_augmentor", "simkl_history", "Simkl",
+        )
+
     def _merge_seeds(self, seeds):
-        """Merge server and Trakt seeds, sort by date, dedup, cap to max_content.
+        """Merge server, Trakt, and Simkl seeds; sort by date, dedup, cap to max_content.
 
         Each seed dict must have: ``tmdb_id``, ``media_type``, ``date`` (Unix
         timestamp). Seeds without ``date`` sort last.  Duplicate

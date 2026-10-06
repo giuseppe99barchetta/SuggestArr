@@ -356,6 +356,69 @@ class SchemaManager:
                     FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
                     UNIQUE (media_user_identity_id, tmdb_id, media_type)
                 )
+            """,
+            'simkl_account_links': """
+                CREATE TABLE IF NOT EXISTS simkl_account_links (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    media_user_identity_id INTEGER NOT NULL,
+                    simkl_user_id TEXT,
+                    simkl_username TEXT,
+                    token_source TEXT NOT NULL DEFAULT 'manual_oauth',
+                    status TEXT NOT NULL DEFAULT 'connected',
+                    last_synced_at TIMESTAMP,
+                    last_error TEXT,
+                    activities_json TEXT,
+                    last_full_sync_at BIGINT,
+                    last_activities_check_at BIGINT,
+                    pending_device_code TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
+                    UNIQUE (media_user_identity_id)
+                )
+            """,
+            'simkl_oauth_tokens': """
+                CREATE TABLE IF NOT EXISTS simkl_oauth_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    link_id INTEGER NOT NULL UNIQUE,
+                    access_token TEXT NOT NULL,
+                    refresh_token TEXT,
+                    expires_at BIGINT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (link_id) REFERENCES simkl_account_links(id) ON DELETE CASCADE
+                )
+            """,
+            'simkl_sources': """
+                CREATE TABLE IF NOT EXISTS simkl_sources (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    media_user_identity_id INTEGER NOT NULL,
+                    source_type TEXT NOT NULL,
+                    source_key TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    use_as_seed INTEGER NOT NULL DEFAULT 1,
+                    use_as_exclusion INTEGER NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
+                    UNIQUE (media_user_identity_id, source_type, source_key)
+                )
+            """,
+            'simkl_watched_cache': """
+                CREATE TABLE IF NOT EXISTS simkl_watched_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    link_id INTEGER NOT NULL,
+                    simkl_id TEXT NOT NULL,
+                    simkl_type TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    tmdb_id TEXT,
+                    title TEXT,
+                    year INTEGER,
+                    last_watched_at BIGINT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (link_id) REFERENCES simkl_account_links(id) ON DELETE CASCADE,
+                    UNIQUE (link_id, simkl_type, simkl_id)
+                )
             """
         }
         
@@ -397,6 +460,16 @@ class SchemaManager:
                     ("ALTER TABLE trakt_oauth_tokens MODIFY access_token TEXT NOT NULL", ()),
                     ("ALTER TABLE trakt_oauth_tokens MODIFY refresh_token TEXT NOT NULL", ()),
                     ("ALTER TABLE trakt_sources MODIFY media_user_identity_id INTEGER NOT NULL", ()),
+                    # Restore real TEXT storage on columns the blanket
+                    # TEXT -> VARCHAR(512) rewrite above would truncate.
+                    # activities_json is the critical one: it holds the whole
+                    # /sync/activities payload, and a silent truncation there
+                    # yields unparseable JSON and breaks the sync gate.
+                    ("ALTER TABLE simkl_account_links MODIFY media_user_identity_id INTEGER NOT NULL", ()),
+                    ("ALTER TABLE simkl_account_links MODIFY token_source TEXT NOT NULL", ()),
+                    ("ALTER TABLE simkl_account_links MODIFY last_error TEXT", ()),
+                    ("ALTER TABLE simkl_account_links MODIFY activities_json TEXT", ()),
+                    ("ALTER TABLE simkl_oauth_tokens MODIFY access_token TEXT NOT NULL", ()),
                 ]
                 with self.get_connection() as conn:
                     cursor = conn.cursor()
@@ -550,6 +623,45 @@ class SchemaManager:
                         rationale VARCHAR(512),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         PRIMARY KEY (tmdb_id, media_type)
+                    ) ENGINE=InnoDB
+                """
+            elif table_name == 'simkl_sources':
+                # Sized explicitly: the generic TEXT -> VARCHAR(512) rewrite
+                # would push this three-column unique key past InnoDB's
+                # 3072-byte index limit under utf8mb4 and fail the CREATE.
+                query = """
+                    CREATE TABLE IF NOT EXISTS simkl_sources (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        media_user_identity_id INT NOT NULL,
+                        source_type VARCHAR(64) NOT NULL,
+                        source_key VARCHAR(191) NOT NULL,
+                        enabled INT NOT NULL DEFAULT 1,
+                        use_as_seed INT NOT NULL DEFAULT 1,
+                        use_as_exclusion INT NOT NULL DEFAULT 1,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
+                        UNIQUE KEY uniq_simkl_sources (media_user_identity_id, source_type, source_key)
+                    ) ENGINE=InnoDB
+                """
+            elif table_name == 'simkl_watched_cache':
+                # Same key-length constraint as simkl_sources. title stays
+                # generous because show titles are long; it is not indexed.
+                query = """
+                    CREATE TABLE IF NOT EXISTS simkl_watched_cache (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        link_id INT NOT NULL,
+                        simkl_id VARCHAR(64) NOT NULL,
+                        simkl_type VARCHAR(16) NOT NULL,
+                        media_type VARCHAR(16) NOT NULL,
+                        status VARCHAR(16) NOT NULL,
+                        tmdb_id VARCHAR(64),
+                        title VARCHAR(512),
+                        year INT,
+                        last_watched_at BIGINT,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (link_id) REFERENCES simkl_account_links(id) ON DELETE CASCADE,
+                        UNIQUE KEY uniq_simkl_cache_item (link_id, simkl_type, simkl_id)
                     ) ENGINE=InnoDB
                 """
             elif table_name == 'api_keys':
@@ -749,8 +861,51 @@ class SchemaManager:
         # Check and add missing columns to discover_jobs table
         self._migrate_discover_jobs_table()
 
+        # Add the AUTH V2 device-code and refresh-token fields to installations
+        # created by an earlier Simkl build.
+        self._migrate_simkl_auth_tables()
+
         # Migrate 'viewer' role to 'user' for all existing accounts
         self._migrate_viewer_role_to_user()
+
+    def _migrate_simkl_auth_tables(self):
+        """Add the persisted fields required by Simkl AUTH V2."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                if self.db_type == 'sqlite':
+                    cursor.execute("PRAGMA table_info(simkl_account_links)")
+                    link_columns = {row[1] for row in cursor.fetchall()}
+                    cursor.execute("PRAGMA table_info(simkl_oauth_tokens)")
+                    token_columns = {row[1] for row in cursor.fetchall()}
+                elif self.db_type == 'postgres':
+                    cursor.execute(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name = 'simkl_account_links'"
+                    )
+                    link_columns = {row[0] for row in cursor.fetchall()}
+                    cursor.execute(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name = 'simkl_oauth_tokens'"
+                    )
+                    token_columns = {row[0] for row in cursor.fetchall()}
+                else:
+                    cursor.execute("SHOW COLUMNS FROM simkl_account_links")
+                    link_columns = {row[0] for row in cursor.fetchall()}
+                    cursor.execute("SHOW COLUMNS FROM simkl_oauth_tokens")
+                    token_columns = {row[0] for row in cursor.fetchall()}
+
+                if 'pending_device_code' not in link_columns:
+                    cursor.execute(
+                        "ALTER TABLE simkl_account_links ADD COLUMN pending_device_code TEXT"
+                    )
+                if 'refresh_token' not in token_columns:
+                    cursor.execute(
+                        "ALTER TABLE simkl_oauth_tokens ADD COLUMN refresh_token TEXT"
+                    )
+                conn.commit()
+        except Exception as exc:
+            self.logger.warning("Could not migrate Simkl AUTH V2 columns: %s", exc)
 
     def _migrate_viewer_role_to_user(self):
         """Migrate any existing auth_users with role='viewer' to role='user'."""
@@ -1023,4 +1178,3 @@ class SchemaManager:
     # ------------------------------------------------------------------
     # Integrations helpers
     # ------------------------------------------------------------------
-

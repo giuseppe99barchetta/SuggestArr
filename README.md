@@ -30,6 +30,7 @@ configured number of days. The pause behavior can be overridden per job.
 - **AI Search** *(beta)*: Describe in natural language what you want to watch and let the AI find matching titles, personalised to your viewing history, with one-click request to Seer.
 - **Trakt Watch History**: Let each user link their own Trakt account. SuggestArr can use Trakt recent watches as recommendation seeds and skip content already watched on Trakt.
 - **Imported Watch History**: Add CSV or manually searched TMDb titles with optional 0–10 ratings to personalise recommendations even after media has been removed from a server. See [the import format](docs/WATCH_HISTORY_IMPORT.md).
+- **Simkl Watch History**: The same for Simkl, covering movies, shows, and anime. Users can link Trakt and Simkl at the same time.
 - **Automated Requests**: Sends download requests for recommended content to Seer.
 - **Pending-Request Job Pause**: Skip scheduled or manual jobs while Seer still has requests waiting for approval or denial.
 - **Unwatched-Suggestion Pause**: Optionally pause scheduled recommendation jobs when a user has not watched a SuggestArr request within a configurable number of days; manual runs remain available.
@@ -50,6 +51,7 @@ configured number of days. The pause behavior can be overridden per job.
 - Configured **[Seer](https://github.com/seerr-team/seerr)**
 - (Optional) External database (PostgreSQL or MySQL) for improved performance
 - (Optional) **[Trakt OAuth application](https://trakt.tv/oauth/applications)** for per-user Trakt watch-history integration
+- (Optional) **[Simkl application](https://simkl.com/settings/developer/)** for per-user Simkl watch-history integration
 
 ## Docker Usage
 
@@ -118,6 +120,28 @@ SuggestArr can enrich recommendations with each user's own Trakt watch history. 
 6. Open **Recent Trakt Preview** to verify the latest Trakt history is being read.
 
 For admins, the same profile panel is available under **Users**. Trakt links are tied to the user's linked Plex, Jellyfin, or Emby media profile, so users should link their media-server account first.
+
+## Simkl Watch History Integration
+
+SuggestArr can also read each user's Simkl watch history. Simkl is optional and can be used alongside Trakt.
+
+### What Simkl adds
+
+- Titles marked *watching* or *completed* on Simkl can be used as recommendation seeds.
+- *Completed* titles can be added to the skip-watched set.
+- Movies, TV, and anime are all read; anime is folded in as TV.
+- A collapsible **Recent Simkl Preview** panel shows the most recent titles fetched from Simkl.
+
+### How to enable
+
+1. Create a Simkl AUTH V2 app at <https://simkl.com/settings/developer/> and choose **TV, devices & command line** as the client type.
+2. In SuggestArr, go to **Services -> Simkl**.
+3. Enter the Simkl **Client ID** and save. The device flow needs no client secret.
+4. Each user goes to **Profile -> Simkl Account** and clicks **Link Simkl**.
+5. Open the displayed device URL or enter the displayed code at <https://simkl.com/pin>.
+6. Open **Recent Simkl Preview** to verify the latest Simkl history is being read.
+
+As with Trakt, Simkl links are tied to the user's linked media profile, and **Use Simkl as Seed** and **Exclude Simkl Watched** are set per job under advanced settings. See the [Installation Guide](/docs/INSTALLATION.md#simkl-integration) for re-linking and unlinking details.
 
 ## Job Pause and Cleanup Automation
 
@@ -287,4 +311,3 @@ Contributions are highly welcome! Feel free to open issues, submit pull requests
 
 ## License
 This project is licensed under the MIT License.
-
