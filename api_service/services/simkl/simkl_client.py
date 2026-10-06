@@ -244,11 +244,10 @@ class SimklClient(BaseHTTPClient):
     async def get_user_settings(self) -> dict[str, Any]:
         """Fetch and normalize the authenticated user's Simkl identity.
 
-        ``POST`` for historical reasons; the endpoint takes no body. The raw
-        payload carries profile PII (age, gender, bio, location) that we
+        The raw payload carries profile PII (age, gender, bio, location) that we
         deliberately do not read or persist.
         """
-        payload = await self._request("POST", "/users/settings", authenticated=True)
+        payload = await self._request("GET", "/users/settings", authenticated=True)
         return self._normalize_user_settings(payload)
 
     async def get_activities(self) -> dict[str, Any]:
