@@ -134,9 +134,9 @@ SuggestArr can also read each user's Simkl watch history. Simkl is optional and 
 
 ### How to enable
 
-1. Create a Simkl AUTH V2 app at <https://simkl.com/settings/developer/>.
+1. Create a Simkl AUTH V2 app at <https://simkl.com/settings/developer/> and choose **TV, devices & command line** as the client type.
 2. In SuggestArr, go to **Services -> Simkl**.
-3. Enter the Simkl **Client ID** and save. Simkl links with a PIN, so there is no client secret.
+3. Enter the Simkl **Client ID** and save. The device flow needs no client secret.
 4. Each user goes to **Profile -> Simkl Account** and clicks **Link Simkl**.
 5. Open the displayed device URL or enter the displayed code at <https://simkl.com/pin>.
 6. Open **Recent Simkl Preview** to verify the latest Simkl history is being read.

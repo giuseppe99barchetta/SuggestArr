@@ -394,7 +394,7 @@ SuggestArr does not expose Simkl access tokens in API responses or frontend list
 ### Create a Simkl app
 
 1. Open <https://simkl.com/settings/developer/>.
-2. Create a new **AUTH V2** application and choose the device flow client type.
+2. Create a new **AUTH V2** application and choose **TV, devices & command line** as the client type.
 3. Copy the Client ID.
 4. In SuggestArr, open Services > Simkl.
 5. Paste the Client ID.
