@@ -304,7 +304,7 @@ def test_activities_key_for_tv_differs_from_its_url_path_segment():
 # ---- Settings normalization --------------------------------------------------
 
 def test_user_settings_keeps_only_the_identity_fields_and_drops_pii():
-    client, _ = make_client([FakeResponse(payload={
+    client, session = make_client([FakeResponse(payload={
         "user": {
             "name": "Wire", "age": "35", "gender": "male",
             "bio": "private", "loc": "somewhere", "avatar": "http://x",
@@ -314,6 +314,8 @@ def test_user_settings_keeps_only_the_identity_fields_and_drops_pii():
     result = asyncio.run(client.get_user_settings())
 
     assert result == {"simkl_user_id": "8307044", "simkl_username": "Wire"}
+    assert session.calls[0]["method"] == "GET"
+    assert session.calls[0]["url"].endswith("/users/settings")
     for leaked in ("age", "gender", "bio", "loc", "avatar"):
         assert leaked not in result
 
