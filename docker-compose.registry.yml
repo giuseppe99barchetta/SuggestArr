@@ -1,0 +1,12 @@
+services:
+  registry:
+    image: registry:2
+    container_name: suggestarr-registry
+    restart: unless-stopped
+    ports:
+      - "5001:5000"
+    volumes:
+      - registry_data:/var/lib/registry
+
+volumes:
+  registry_data:
