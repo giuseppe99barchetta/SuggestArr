@@ -121,6 +121,16 @@ class TestSeerAvailabilityExclusion(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(requested_ids, [1396])
         seer_client.get_available_tmdb_ids.assert_awaited_once()
 
+    async def test_seer_failure_does_not_fail_the_job(self):
+        automation, seer_client = self._automation()
+        seer_client.get_available_tmdb_ids = AsyncMock(side_effect=RuntimeError("unexpected"))
+
+        result = await automation.run()
+
+        self.assertTrue(result.success)
+        requested_ids = [call.kwargs["media"]["id"] for call in seer_client.request_media.await_args_list]
+        self.assertEqual(requested_ids, [1399, 1396])  # media-server library only
+
     async def test_seer_is_not_queried_when_exclude_downloaded_is_off(self):
         automation, seer_client = self._automation(exclude_downloaded=False)
 

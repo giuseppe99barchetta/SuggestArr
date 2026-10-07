@@ -1,8 +1,10 @@
 """
 Helpers that work out which titles are already in the user's library.
 
-Two sources are combined so "Exclude Downloaded Content" covers as much of the
-library as possible:
+This module is the single definition of "already owned" used by recommendation
+jobs, Force Run, Trakt and Discover jobs, and AI Search. Two sources are
+combined so "Exclude Downloaded Content" covers as much of the library as
+possible:
 
 - The configured media server (Jellyfin, Emby or Plex), read through each
   item's TMDB provider ID.
@@ -63,7 +65,7 @@ async def load_media_server_content(env_vars: Dict[str, Any]) -> Dict[str, Set[s
         no supported media server is configured.
     """
     provider = str(env_vars.get("SELECTED_SERVICE") or "").lower()
-    max_content = int(env_vars.get("MAX_CONTENT_CHECK") or env_vars.get("MAX_CONTENT") or 10)
+    max_content = int(env_vars.get("MAX_CONTENT_CHECKS") or 10)
 
     if provider in ("jellyfin", "emby"):
         from api_service.services.jellyfin.jellyfin_client import JellyfinClient
@@ -109,25 +111,45 @@ async def load_media_server_content(env_vars: Dict[str, Any]) -> Dict[str, Set[s
     return {}
 
 
-async def load_library_content(env_vars: Dict[str, Any], seer_client) -> Dict[str, Set[str]]:
+async def load_library_content(
+    env_vars: Dict[str, Any],
+    seer_client=None,
+    media_server_content: Optional[Dict[str, Set[str]]] = None,
+) -> Dict[str, Set[str]]:
     """Return the TMDB IDs already in the library, from the media server and Seer.
 
-    Makes no request when "Exclude Downloaded Content" is off for this run,
-    because nothing would be checked against the result. Each source is
-    best-effort: if one fails, the other is still used.
+    Makes no request when "Exclude Downloaded Content" is off, because nothing
+    would be checked against the result. Each source is best-effort: if one
+    fails, the other is still used, and this function never raises.
 
     :param env_vars: Runtime configuration (see :func:`load_media_server_content`).
+        Its ``EXCLUDE_DOWNLOADED`` value applies when there is no Seer client.
     :param seer_client: SeerClient for this run; its ``exclude_downloaded`` flag
-        decides whether the library is loaded at all.
+        decides whether anything is loaded. ``None`` when Seer is not configured,
+        in which case only the media server is used.
+    :param media_server_content: Media-type keyed TMDB ID sets the caller already
+        loaded from the media server. When given, the library is not scanned again.
     :return: Dict mapping 'movie' / 'tv' to sets of TMDB ID strings.
     """
-    if not seer_client.exclude_downloaded:
+    if seer_client is not None:
+        exclude_downloaded = seer_client.exclude_downloaded
+    else:
+        exclude_downloaded = env_vars.get("EXCLUDE_DOWNLOADED", True)
+    if not exclude_downloaded:
         logger.info("Exclude Downloaded Content is off; skipping library load.")
         return {}
 
-    try:
-        content = await load_media_server_content(env_vars)
-    except Exception as exc:
-        logger.warning("Could not load the media server library; using Seer availability only: %s", exc)
-        content = {}
-    return merge_content_sets(content, await seer_client.get_available_tmdb_ids())
+    if media_server_content is None:
+        try:
+            media_server_content = await load_media_server_content(env_vars)
+        except Exception as exc:
+            logger.warning("Could not load the media server library; using Seer availability only: %s", exc)
+            media_server_content = {}
+    content = merge_content_sets({}, media_server_content)
+
+    if seer_client is not None:
+        try:
+            merge_content_sets(content, await seer_client.get_available_tmdb_ids())
+        except Exception as exc:
+            logger.warning("Could not load available titles from Seer; using the media server library only: %s", exc)
+    return content

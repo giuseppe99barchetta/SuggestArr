@@ -9,6 +9,7 @@ Covers:
 - _get_owned_tmdb_ids() / owned_ids: titles Seer reports as available are excluded
 """
 
+import asyncio
 import unittest
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -883,36 +884,45 @@ def _make_service_with_seer(**overrides):
 
 class TestGetOwnedTmdbIds(unittest.IsolatedAsyncioTestCase):
 
-    async def test_skipped_when_seer_is_not_configured(self):
+    async def test_uses_media_server_only_when_seer_is_not_configured(self):
         service = _make_service()
-        with patch('api_service.services.seer.seer_client.SeerClient') as MockSeer:
-            self.assertEqual(await service._get_owned_tmdb_ids(), {})
+        with patch('api_service.services.ai_search.ai_search_service.load_library_content',
+                   AsyncMock(return_value={'movie': {'603'}})) as load, \
+             patch('api_service.services.seer.seer_client.SeerClient') as MockSeer:
+            result = await service._get_owned_tmdb_ids()
+
+        self.assertEqual(result, {'movie': {'603'}})
+        load.assert_awaited_once_with(service.config)
         MockSeer.assert_not_called()
 
     async def test_skipped_when_exclude_downloaded_is_off(self):
         service = _make_service_with_seer(EXCLUDE_DOWNLOADED=False)
-        with patch('api_service.services.seer.seer_client.SeerClient') as MockSeer:
+        with patch('api_service.services.ai_search.ai_search_service.load_library_content', AsyncMock()) as load, \
+             patch('api_service.services.seer.seer_client.SeerClient') as MockSeer:
             self.assertEqual(await service._get_owned_tmdb_ids(), {})
+        load.assert_not_awaited()
         MockSeer.assert_not_called()
 
-    async def test_returns_seer_available_ids(self):
+    async def test_uses_the_shared_policy_with_seer(self):
         service = _make_service_with_seer()
         seer = MagicMock()
-        seer.get_available_tmdb_ids = AsyncMock(return_value={'movie': {'603'}, 'tv': set()})
-        with patch('api_service.services.seer.seer_client.SeerClient') as MockSeer:
+        with patch('api_service.services.ai_search.ai_search_service.load_library_content',
+                   AsyncMock(return_value={'movie': {'603'}, 'tv': {'1399'}})) as load, \
+             patch('api_service.services.seer.seer_client.SeerClient') as MockSeer:
             MockSeer.return_value.__aenter__ = AsyncMock(return_value=seer)
             MockSeer.return_value.__aexit__ = AsyncMock(return_value=False)
             result = await service._get_owned_tmdb_ids()
 
-        self.assertEqual(result, {'movie': {'603'}, 'tv': set()})
+        self.assertEqual(result, {'movie': {'603'}, 'tv': {'1399'}})
         MockSeer.assert_called_once_with('http://seer', 'key')
+        load.assert_awaited_once_with(service.config, seer)
 
-    async def test_seer_errors_do_not_break_search(self):
+    async def test_errors_do_not_break_search(self):
         service = _make_service_with_seer()
         with patch('api_service.services.seer.seer_client.SeerClient', side_effect=RuntimeError('boom')):
             self.assertEqual(await service._get_owned_tmdb_ids(), {})
 
-    async def test_search_fetches_owned_ids_once_and_passes_them_down(self):
+    async def test_search_loads_owned_ids_once_and_shares_them(self):
         service = _make_service()
         owned = {'movie': {'1'}, 'tv': {'2'}}
         empty = {'results': [], 'ai_reasoning': {}, 'total': 0}
@@ -921,9 +931,37 @@ class TestGetOwnedTmdbIds(unittest.IsolatedAsyncioTestCase):
              patch.object(service, '_record_seen_items'):
             await service.search('thriller', media_type='both')
 
-        mock_owned.assert_awaited_once()
-        for call in mock_ss.await_args_list:
-            self.assertIs(call.kwargs['owned_ids'], owned)
+        mock_owned.assert_called_once()
+        passed = [call.kwargs['owned_ids'] for call in mock_ss.await_args_list]
+        self.assertEqual(len(passed), 2)
+        self.assertIs(passed[0], passed[1])
+
+    async def test_search_single_awaits_a_background_library_load(self):
+        service = _make_service()
+        interpretation = {'discover_params': {}, 'suggested_titles': [{'title': 'Se7en', 'year': 1995}]}
+        mock_tmdb = MagicMock()
+        mock_tmdb.search_movie = AsyncMock(return_value=[_tmdb_item(1, 'Se7en')])
+        mock_tmdb._apply_filters = MagicMock(return_value={'passed': True})
+        mock_tmdb.omdb_client = None
+        mock_tmdb.__aenter__ = AsyncMock(return_value=mock_tmdb)
+        mock_tmdb.__aexit__ = AsyncMock(return_value=False)
+
+        async def load_owned():
+            return {'movie': {'1'}}
+
+        with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
+                   AsyncMock(return_value=interpretation)), \
+             patch.object(service, '_get_history', AsyncMock(return_value=[])), \
+             patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
+             patch('api_service.db.database_manager.DatabaseManager') as MockDB:
+            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
+            MockDB.return_value.get_ai_dislike_ids.return_value = []
+            MockDB.return_value.get_ai_likes.return_value = []
+            result = await service._search_single(
+                'dark thriller', 'movie', None, 12, owned_ids=asyncio.ensure_future(load_owned()),
+            )
+
+        self.assertEqual(result['results'], [])
 
 
 class TestSearchSingleOwnedExclusion(unittest.IsolatedAsyncioTestCase):
