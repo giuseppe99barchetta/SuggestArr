@@ -126,10 +126,14 @@ class RequestMixin:
     def get_all_requests_grouped_by_source(self, page: int = 1, per_page: int = 8, sort_by: str = 'date-desc', user_ids: Optional[List[str]] = None, feedback_user_id: Optional[int] = None) -> Dict[str, Any]:
         """Retrieve all requests grouped by source with dynamic sorting and pagination."""
         self.logger.debug(f"Retrieving all requests grouped by source: page={page}, per_page={per_page}, sort_by={sort_by}")
+
+        from api_service.services.request_sources import request_source_id_sql, request_source_title_sql
+        source_id_expr = request_source_id_sql("r", "s")
+        source_title_expr = request_source_title_sql("r")
     
-        count_query = """
+        count_query = f"""
             SELECT 
-                COUNT(DISTINCT COALESCE(s.media_id, r.tmdb_source_id, '0')) as total_sources,
+                COUNT(DISTINCT {source_id_expr}) as total_sources,
                 COUNT(r.tmdb_request_id) as total_requests
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id AND r.media_type = m.media_type
@@ -180,8 +184,6 @@ class RequestMixin:
 
         order_by_clause = sort_mapping.get(sort_by, sort_mapping['date-desc'])
 
-        from api_service.services.request_sources import request_source_title_sql
-        source_title_expr = request_source_title_sql("r")
         ph = '?' if self.db_type not in ['mysql', 'postgres'] else '%s'
         feedback_columns = "NULL, NULL, NULL"
         feedback_join = ""
@@ -197,7 +199,7 @@ class RequestMixin:
     
         query = f"""
             SELECT
-                COALESCE(s.media_id, r.tmdb_source_id, '0') AS source_id,
+                {source_id_expr} AS source_id,
                 {source_title_expr} AS source_title,
                 s.overview AS source_overview,
                 s.release_date AS source_release_date, s.poster_path AS source_poster_path, s.rating as rating,

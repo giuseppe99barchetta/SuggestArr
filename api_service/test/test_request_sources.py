@@ -8,6 +8,7 @@ from api_service.services.request_sources import (
     DISCOVER_SOURCE,
     TRAKT_RECOMMENDATIONS_SOURCE,
     is_tmdb_metadata_source_id,
+    request_source_id_sql,
     request_source_title_sql,
 )
 
@@ -25,6 +26,14 @@ def test_request_source_title_sql_includes_trakt_label():
     assert "Trakt Recommendations" in sql
     assert "discover" in sql
     assert "Discover" in sql
+    assert "Unknown Source" in sql
+    assert "tmdb_source_id = '0'" in sql
+
+
+def test_request_source_id_sql_recovers_legacy_discover_source():
+    sql = request_source_id_sql("r", "s")
+    assert "NULLIF(r.tmdb_source_id, '')" in sql
+    assert DISCOVER_SOURCE in sql
 
 
 def test_grouped_requests_labels_synthetic_sources(tmp_path):
@@ -48,6 +57,31 @@ def test_grouped_requests_labels_synthetic_sources(tmp_path):
     assert result["total_sources"] == 2
     assert sources[DISCOVER_SOURCE]["source_title"] == "Discover"
     assert sources[TRAKT_RECOMMENDATIONS_SOURCE]["source_title"] == "Trakt Recommendations"
+
+
+def test_grouped_requests_recover_legacy_discover_without_labeling_unknown_as_llm(tmp_path):
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        db.save_metadata({"id": "101", "title": "Source-less Request"}, "movie")
+        db.save_metadata({"id": "102", "title": "Missing Metadata Request"}, "movie")
+        db.save_metadata({"id": "103", "title": "Legacy LLM Request"}, "movie")
+        db.save_request("movie", "101", None)
+        db.save_request("movie", "102", "999999")
+        db.save_request("movie", "103", "0")
+
+        result = db.get_all_requests_grouped_by_source(page=1, per_page=10)
+
+    DatabaseManager._instance = None
+
+    sources = {item["source_id"]: item for item in result["data"]}
+    assert sources[DISCOVER_SOURCE]["source_title"] == "Discover"
+    assert sources["999999"]["source_title"] == "Unknown Source"
+    assert sources["0"]["source_title"] == "LLM Recommendation"
 
 
 def test_grouped_requests_include_requested_for_user(tmp_path):

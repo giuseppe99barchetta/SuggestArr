@@ -68,6 +68,7 @@ export default {
 </script>
 
 <style scoped>
+.settings-group form { display: flex; flex-direction: column; gap: var(--spacing-sm); }
 .api-keys-table-wrap { overflow-x: auto; margin-top: var(--spacing-lg); border: 1px solid var(--color-border-light); border-radius: var(--radius-md); }
 .api-keys-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
 .api-keys-table th { padding: var(--spacing-sm) var(--spacing-md); color: var(--color-text-muted); font-weight: var(--font-weight-semibold); text-align: left; background: var(--surface-glass-subtle); }
@@ -77,7 +78,7 @@ export default {
 .api-keys-table__name { display: inline-flex; align-items: center; gap: var(--spacing-sm); color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
 .api-keys-table__name i { color: var(--color-text-muted); }
 .api-keys-table__action { width: 1%; text-align: right; white-space: nowrap; }
-.api-keys-create { width: 100%; }
+.api-keys-create { align-self: flex-start; }
 .card-desc { margin: 0 0 var(--spacing-lg); color: var(--color-text-muted); font-size: var(--font-size-sm); line-height: var(--line-height-normal); }
 @media (max-width: 700px) { .api-keys-table th, .api-keys-table td { padding: var(--spacing-sm); } }
 </style>

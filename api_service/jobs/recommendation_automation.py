@@ -482,6 +482,8 @@ class RecommendationAutomation:
             max_content=max_content,
             feedback_repository=self.db_manager,
             feedback_owner_id=self.job_data.get('owner_id'),
+            feedback_media_service=self.env_vars.get('SELECTED_SERVICE'),
+            watched_history_repository=self.db_manager,
         )
         self.logger.info("Jellyfin handler initialized")
 
@@ -533,6 +535,8 @@ class RecommendationAutomation:
             max_content=max_content,
             feedback_repository=self.db_manager,
             feedback_owner_id=self.job_data.get('owner_id'),
+            feedback_media_service=self.env_vars.get('SELECTED_SERVICE'),
+            watched_history_repository=self.db_manager,
         )
         self.logger.info("Plex handler initialized")
 

@@ -29,7 +29,8 @@ class BaseMediaHandler(ABC):
                  use_llm=None, request_delay=0, honor_seer_discovery=False,
                  seer_discovered_ids=None, dry_run=False, max_total_requests=None,
                  trakt_augmentor=None, max_content=10, feedback_repository=None,
-                 feedback_owner_id=None):
+                 feedback_owner_id=None, feedback_media_service=None,
+                 watched_history_repository=None):
         """
         Initialize base media handler.
         
@@ -49,6 +50,7 @@ class BaseMediaHandler(ABC):
             trakt_augmentor: Optional MediaUserTraktAugmentor used to add Trakt
                 watch-history seeds and merge fully-watched IDs into the skip set
             max_content: Max seeds to process after merging server + Trakt sources
+            watched_history_repository: Repository for CSV and manually-added seeds
         """
         self.seer_client = seer_client
         self.tmdb_client = tmdb_client
@@ -77,7 +79,12 @@ class BaseMediaHandler(ABC):
         self.trakt_augmentor = trakt_augmentor
         self.feedback_repository = feedback_repository
         self.feedback_owner_id = feedback_owner_id
+        # Which media backend the ids belong to, so an ownerless job can resolve them
+        # through a verified account link ('jellyfin', 'emby' or 'plex').
+        self.feedback_media_service = feedback_media_service
+        self.watched_history_repository = watched_history_repository
         self._feedback_signal_cache = {}
+        self._feedback_owner_cache = {}
         
         # Determine LLM mode
         if use_llm is not None:
@@ -154,6 +161,25 @@ class BaseMediaHandler(ABC):
             self._mark_source_origin(seed.get('source_obj'), 'trakt_history')
         return seeds
 
+    def _augment_user_managed_history(self, media_user_identity_id):
+        """Load CSV/manual seeds and exclude them from future suggestions."""
+        repository = self.watched_history_repository
+        if repository is None or not media_user_identity_id:
+            return []
+        try:
+            seeds = repository.get_watched_media_seeds(media_user_identity_id)
+        except Exception as exc:
+            self.logger.warning('Could not load imported watch history: %s', exc)
+            return []
+        for seed in seeds:
+            media_type, tmdb_id = seed.get('media_type'), seed.get('tmdb_id')
+            if media_type in {'movie', 'tv'} and tmdb_id:
+                self.existing_content_sets.setdefault(media_type, set()).add(str(tmdb_id))
+        if seeds:
+            self.logger.info('Managed watch history: media user identity %s → %d seed(s)',
+                             media_user_identity_id, len(seeds))
+        return seeds
+
     def _merge_seeds(self, seeds):
         """Merge server and Trakt seeds, sort by date, dedup, cap to max_content.
 
@@ -169,7 +195,16 @@ class BaseMediaHandler(ABC):
 
         seen = set()
         deduped = []
-        for s in sorted(seeds, key=lambda x: x.get("date", 0), reverse=True):
+        def seed_sort_key(seed):
+            rating = seed.get('rating')
+            try:
+                rating = float(rating) if rating is not None else -1
+            except (TypeError, ValueError):
+                rating = -1
+            # Explicit scores are stronger taste signals than an implicit recent watch.
+            return (rating >= 0, rating, seed.get('date', 0) or 0)
+
+        for s in sorted(seeds, key=seed_sort_key, reverse=True):
             key = (s.get("media_type"), str(s.get("tmdb_id", "")))
             if key in seen or not s.get("tmdb_id"):
                 continue
@@ -195,21 +230,93 @@ class BaseMediaHandler(ABC):
             user = user.get("id") or user.get("Id")
         return None if user is None else str(user)
 
+    # Fallbacks used when no repository is attached, so ranking keeps the behaviour it
+    # had before the vocabulary moved onto the mixin.
+    _DEFAULT_POSITIVE_WEIGHTS = {'seen_liked': 2, 'interested': 2, 'save_for_later': 1}
+    _DEFAULT_NEGATIVE_FEEDBACK = {'not_interested', 'already_seen', 'seen_liked',
+                                  'seen_disliked', 'too_similar'}
+
+    def _positive_weights(self):
+        """How strongly each rating promotes a candidate that survives suppression.
+
+        Read from the repository so a new rating cannot be registered in one place and
+        silently ignored here.
+        """
+        weights = getattr(self.feedback_repository, 'POSITIVE_WEIGHTS', None)
+        if not isinstance(weights, dict):
+            return dict(self._DEFAULT_POSITIVE_WEIGHTS)
+        return dict(weights)
+
+    def _negative_feedback(self):
+        """Ratings that remove a candidate outright."""
+        negative = getattr(self.feedback_repository, 'NEGATIVE_FEEDBACK', None)
+        if not isinstance(negative, (set, frozenset)):
+            return set(self._DEFAULT_NEGATIVE_FEEDBACK)
+        return set(negative)
+
+    def _feedback_owner_for(self, profile_id):
+        """Resolve whose feedback applies to this media user, or None.
+
+        A job carries an owner only when one was configured. For an ownerless job the
+        feedback still belongs to somebody: the SuggestArr user who has verified that
+        this media account is theirs. Falling back to that link is what lets personal
+        ratings work on the default automation, which has no owner.
+
+        Resolution is per media user, so one viewer's ratings can never widen into
+        another's. It is cached per run because it is a database round trip and a
+        recommendation run asks repeatedly for the same handful of users.
+        """
+        if self.feedback_repository is None or profile_id is None:
+            return None
+        if self.feedback_owner_id is not None:
+            return self.feedback_owner_id
+        if profile_id in self._feedback_owner_cache:
+            return self._feedback_owner_cache[profile_id]
+        owner = None
+        resolve = getattr(self.feedback_repository, 'resolve_suggestion_owner', None)
+        if callable(resolve) and self.feedback_media_service:
+            try:
+                owner = resolve(self.feedback_media_service, profile_id)
+            except Exception as exc:
+                self.logger.warning("Could not resolve the feedback owner for this media user: %s", exc)
+                owner = None
+        self._feedback_owner_cache[profile_id] = owner
+        return owner
+
     def _feedback_signals(self, media_type, user):
         """Load personal signals without sending them to TMDb or the LLM provider."""
         profile_id = self._feedback_profile_id(user)
-        if self.feedback_owner_id is None or profile_id is None or self.feedback_repository is None:
+        owner_id = self._feedback_owner_for(profile_id)
+        if owner_id is None or profile_id is None or self.feedback_repository is None:
             return {}
         cache_key = (profile_id, media_type)
         if cache_key not in self._feedback_signal_cache:
             try:
                 self._feedback_signal_cache[cache_key] = self.feedback_repository.get_suggestion_feedback_signals(
-                    self.feedback_owner_id, profile_id, media_type,
+                    owner_id, profile_id, media_type,
                 )
             except Exception as exc:
                 self.logger.warning("Could not load personal recommendation feedback: %s", exc)
                 self._feedback_signal_cache[cache_key] = {}
         return self._feedback_signal_cache[cache_key]
+
+    def _taste_profile(self, media_type, user):
+        """Load the recent ratings that steer generation, or {} when unavailable.
+
+        Steering is an improvement, not a guarantee: if this cannot be read the run
+        continues unsteered and _apply_feedback_ranking still removes rated titles.
+        """
+        profile_id = self._feedback_profile_id(user)
+        owner_id = self._feedback_owner_for(profile_id)
+        if owner_id is None or profile_id is None or self.feedback_repository is None:
+            return {}
+        try:
+            return self.feedback_repository.get_taste_profile(
+                owner_id, profile_id, media_type,
+            )
+        except Exception as exc:
+            self.logger.warning("Could not load the personal taste profile: %s", exc)
+            return {}
 
     def _apply_feedback_ranking(self, media_items, media_type, user):
         """Promote positive feedback and suppress negative feedback locally.
@@ -220,8 +327,8 @@ class BaseMediaHandler(ABC):
         if not signals:
             return list(media_items or [])
 
-        positive_weights = {'interested': 2, 'save_for_later': 1}
-        negative = {'not_interested', 'already_seen', 'too_similar'}
+        positive_weights = self._positive_weights()
+        negative = self._negative_feedback()
         ranked = []
         for position, item in enumerate(media_items or []):
             if not isinstance(item, dict):
@@ -270,6 +377,7 @@ class BaseMediaHandler(ABC):
             "genres": genres[:4],
             # A completed/recent watch is context, not proof of a preference.
             "preference_signal": seed.get("preference_signal", "recent_watch"),
+            "rating": seed.get("rating"),
             "source_origin": seed.get("source_origin"),
         }
 
@@ -348,10 +456,10 @@ class BaseMediaHandler(ABC):
         if max_results <= 0:
             return
 
-        trakt_history_keys = {
-            self._history_key(item)
+        history_origins = {
+            self._history_key(item): item.get("source_origin")
             for item in (history_items or [])
-            if item.get("source_origin") == "trakt_history"
+            if item.get("source_origin")
         }
         
         self.logger.info(f"Delegating {max_results} {item_type} recommendations to LLM service.")
@@ -360,6 +468,7 @@ class BaseMediaHandler(ABC):
             history_items,
             max_results,
             item_type,
+            taste_profile=self._taste_profile(item_type, user),
             filters={
                 "with_original_language": self.tmdb_client.language_filter,
                 "release_year_gte": self.tmdb_client.release_year_filter,
@@ -381,13 +490,12 @@ class BaseMediaHandler(ABC):
                 self._resolve_llm_source(rec.get("source_title"), item_type),
             )
             source_key = (str(rec.get("source_title") or "").strip().lower(), str(item_type).strip().lower())
-            if source_key in trakt_history_keys:
-                self._mark_source_origin(source_obj, "trakt_history")
+            self._mark_source_origin(source_obj, history_origins.get(source_key))
             return rec, rec_results, source_obj
         
         resolved = await asyncio.gather(*[resolve(rec) for rec in llm_recommendations])
         feedback_signals = self._feedback_signals(item_type, user)
-        positive_weights = {'interested': 2, 'save_for_later': 1}
+        positive_weights = self._positive_weights()
         resolved = sorted(
             resolved,
             key=lambda entry: -positive_weights.get(

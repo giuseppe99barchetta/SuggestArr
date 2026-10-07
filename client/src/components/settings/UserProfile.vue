@@ -17,6 +17,7 @@
         </div>
         <p class="card-desc">Manage your username and password.</p>
 
+        <div class="account-fields">
         <!-- Username -->
         <form class="account-form-section" @submit.prevent="saveUsername">
           <div class="account-section-heading">
@@ -52,8 +53,6 @@
             {{ isSavingUsername ? 'Saving…' : 'Save Username' }}
           </button>
         </form>
-
-        <div class="section-divider"></div>
 
         <!-- Password -->
         <form class="account-form-section" @submit.prevent="savePassword">
@@ -115,10 +114,11 @@
           </button>
         </form>
 
+        </div>
       </div>
 
       <!-- ── Title language ──────────────────────────────────────────────── -->
-      <div class="settings-group">
+      <div class="settings-group language-group">
         <h3>
           <i class="fas fa-language"></i>
           Title language
@@ -148,10 +148,12 @@
         </form>
       </div>
 
-      <ApiKeysPanel />
+      <ApiKeysPanel class="api-keys-group" />
 
       <!-- ── Media Server Link ────────────────────────────────────────────── -->
-      <div v-if="isLinkableService" class="settings-group">
+      <div v-if="isLinkableService" class="settings-group connections-group">
+        <div class="connection-columns">
+        <section>
         <h3>
           <i :class="providerIcon"></i>
           {{ providerLabel }} Account
@@ -260,17 +262,22 @@
           </form>
         </template>
 
-        <div class="section-divider"></div>
+        </section>
+        <section>
         <h3><i class="fas fa-tv"></i> Trakt Account</h3>
         <TraktMediaUsers
           mode="self"
           :trakt-configured="isTraktAppConfigured"
           embedded
         />
+        </section>
+        </div>
       </div>
 
+      <WatchedMediaHistory v-if="isLinkableService" class="settings-group history-group" />
+
       <!-- No linkable service configured -->
-      <div v-if="!isLinkableService && hasProviderContext" class="settings-group">
+      <div v-if="!isLinkableService && hasProviderContext" class="settings-group connections-group">
         <h3>
           <i class="fas fa-plug"></i>
           Media Server
@@ -300,6 +307,7 @@ import {
 } from '@/api/api';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
+import WatchedMediaHistory from './WatchedMediaHistory.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
 import { languageOptions, languagePayload } from '@/utils/titleLanguage.js';
 
@@ -312,7 +320,7 @@ const PROVIDER_META = {
 export default {
   name: 'UserProfile',
 
-  components: { BaseDropdown, TraktMediaUsers, ApiKeysPanel },
+  components: { BaseDropdown, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel },
 
   props: {
     config: Object,
@@ -418,9 +426,7 @@ export default {
     },
 
     isTraktAppConfigured() {
-      return !!(
-        this.config?.TRAKT_CLIENT_ID && this.config?.TRAKT_CLIENT_SECRET
-      ) || this.configStatus?.trakt_app_configured === true;
+      return !!this.config?.TRAKT_CLIENT_ID || this.configStatus?.trakt_app_configured === true;
     },
 
     serverUserOptions() {
@@ -703,32 +709,46 @@ export default {
 /* ── Settings grid ─────────────────────────────────────────────────────── */
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 2rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
 }
 
 /* ── Settings group card ───────────────────────────────────────────────── */
 .settings-group {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--border-radius-md);
-  padding: 1.5rem;
+  min-width: 0;
+  background: var(--surface-glass-subtle);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
 }
 
-.settings-group h3 {
-  font-size: 1.2rem;
-  margin-bottom: 1rem;
+.settings-group h3,
+:deep(.settings-group > h3) {
+  font-size: var(--font-size-xl);
+  margin-bottom: var(--spacing-md);
   color: var(--color-text-primary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .accounts-group {
-  grid-column: 1 / 1;
+  grid-column: 1;
+  grid-row: 1 / 3;
 }
 
+.language-group { grid-column: 2; grid-row: 1; }
+.api-keys-group { grid-column: 2; grid-row: 2; }
+.connections-group, .history-group { grid-column: 1 / -1; }
+.connection-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-xl); }
+.connection-columns > section { min-width: 0; }
+.connection-columns > section + section { border-left: 1px solid var(--color-border-light); padding-left: var(--spacing-xl); }
+.account-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--spacing-lg); }
+.account-fields > form + form { border-top: 1px solid var(--color-border-light); padding-top: var(--spacing-lg); }
+.account-fields > * { min-width: 0; }
+.account-form-section > .btn { align-self: flex-start; }
 .accounts-group__heading {
   margin-bottom: var(--spacing-md);
 }
@@ -826,11 +846,12 @@ export default {
   margin: 0;
 }
 
-.card-desc {
+.card-desc,
+:deep(.settings-group > .card-desc) {
   color: var(--color-text-muted);
-  font-size: 0.9rem;
-  margin-bottom: 1.25rem;
-  line-height: 1.5;
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-lg);
+  line-height: var(--line-height-normal);
 }
 
 /* ── Form sub-sections ─────────────────────────────────────────────────── */
@@ -951,9 +972,12 @@ export default {
 }
 
 /* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 1000px) {
+  .settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .accounts-group, .language-group, .api-keys-group { grid-column: auto; grid-row: auto; }
+}
 @media (max-width: 700px) {
-  .settings-grid {
-    grid-template-columns: 1fr;
-  }
+  .connection-columns { grid-template-columns: minmax(0, 1fr); }
+  .connection-columns > section + section { border-left: 0; padding-left: 0; border-top: 1px solid var(--color-border-light); padding-top: var(--spacing-lg); }
 }
 </style>

@@ -373,13 +373,13 @@
           />
         </div>
         <div class="form-group">
-          <label for="traktClientSecret">Client Secret</label>
+          <label for="traktClientSecret">Client Secret (optional)</label>
           <div class="input-group">
             <input
               id="traktClientSecret"
               v-model="localConfig.TRAKT_CLIENT_SECRET"
               :type="showTraktClientSecret ? 'text' : 'password'"
-              placeholder="Enter your Trakt Client Secret"
+              placeholder="Optional for legacy Trakt apps"
               class="form-control"
               :disabled="isLoading"
             />
@@ -388,7 +388,7 @@
             </button>
           </div>
           <small class="form-help">
-            Create an app at <a href="https://trakt.tv/oauth/applications" target="_blank" rel="noopener noreferrer" class="link">Trakt OAuth Applications</a>.
+            Create an app at <a href="https://app.trakt.tv/settings/apps" target="_blank" rel="noopener noreferrer" class="link">Trakt Apps</a>. New Trakt apps use the Client ID without issuing a Client Secret.
           </small>
         </div>
         <div class="oauth-success" v-if="isTraktAppConfigured">
@@ -704,7 +704,7 @@ export default {
       return this.plexConnected || this.jellyfinConnected;
     },
     isTraktAppConfigured() {
-      return !!(this.localConfig.TRAKT_CLIENT_ID && this.localConfig.TRAKT_CLIENT_SECRET);
+      return !!this.localConfig.TRAKT_CLIENT_ID;
     },
     // Unified accessors for current service's libraries/users
     currentLibraries() {
@@ -1452,12 +1452,17 @@ export default {
 
     async saveSettings() {
       try {
+        const traktClientIdChanged = this.localConfig.TRAKT_CLIENT_ID !== this.originalConfig.TRAKT_CLIENT_ID;
+        const traktSecretUnchanged = this.localConfig.TRAKT_CLIENT_SECRET === this.originalConfig.TRAKT_CLIENT_SECRET;
+        const traktClientSecret = traktClientIdChanged && traktSecretUnchanged
+          ? ''
+          : (this._secretValue('TRAKT_CLIENT_SECRET') || '');
         const dataToSave = {
           TMDB_API_KEY: this._secretValue('TMDB_API_KEY'),
           OMDB_API_KEY: this._secretValue('OMDB_API_KEY') || '',
           SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE,
           TRAKT_CLIENT_ID: this.localConfig.TRAKT_CLIENT_ID || '',
-          TRAKT_CLIENT_SECRET: this._secretValue('TRAKT_CLIENT_SECRET') || '',
+          TRAKT_CLIENT_SECRET: traktClientSecret,
         };
         if (this.localConfig.SELECTED_SERVICE === 'plex') {
           Object.assign(dataToSave, {

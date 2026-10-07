@@ -71,7 +71,7 @@ class TraktWatchHistorySource:
 
     @property
     def enabled(self) -> bool:
-        return bool(self.client_id and self.client_secret)
+        return bool(self.client_id)
 
     async def get_recent_items(self, media_user_identity_id: int) -> list:
         """Return normalized recent-watched items for a profile."""
@@ -164,9 +164,9 @@ class MediaUserTraktAugmentor:
                  use_as_exclusion: Optional[bool] = None):
         """Build an augmentor from app-level Trakt credentials.
 
-        Reads ``TRAKT_CLIENT_ID``/``TRAKT_CLIENT_SECRET`` (falling back to the
-        ``integrations.trakt`` config block). Returns ``None`` when no usable
-        credentials are configured.
+        Reads ``TRAKT_CLIENT_ID`` and the optional ``TRAKT_CLIENT_SECRET``
+        (falling back to the ``integrations.trakt`` config block). Returns
+        ``None`` when no client ID is configured.
 
         ``use_as_seed``/``use_as_exclusion`` override the per-user Trakt
         source settings when set (e.g. from a job filter). When ``None`` the

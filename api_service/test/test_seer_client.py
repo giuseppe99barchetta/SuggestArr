@@ -4,7 +4,7 @@ Tests for SeerClient.
 Covers:
 - _get_auth_headers(): api-key vs cookie mode
 - _make_request(): success, 403 quota, 403 login-retry, 404 retry, client error
-- login(): success with cookie, non-200 failure
+- login(): success with cookie, body consumed before return, non-200 failure
 - get_all_users(): success, None data
 - get_total_request(): success, None data
 - check_already_requested(): exclude_requested=True/False, found/not-found, exception
@@ -12,7 +12,7 @@ Covers:
 - _apply_profile_config(): applies all keys, tv languageProfileId, empty profile
 - _build_seer_payload(): movie / tv (all/numbered seasons), anime key, private meta-keys present
 - request_media(): duplicate pending, already in DB, new enqueue
-- submit_queued_request(): success (strips private keys), failure
+- submit_queued_request(): success (strips private keys), transient 403 retry as user, api-key fallback, failure
 """
 
 import asyncio
@@ -248,6 +248,29 @@ class TestLogin(unittest.IsolatedAsyncioTestCase):
         with patch.object(client, '_get_session', AsyncMock(return_value=session)):
             await client.login()
 
+        self.assertEqual(client.session_token, 'session_xyz')
+        self.assertTrue(client.is_logged_in)
+
+    async def test_consumes_response_body_before_returning(self):
+        """Seer finishes writing the session only once the login body has been
+        fully sent; returning early lets the next request race that write."""
+        cookie_mock = MagicMock()
+        cookie_mock.value = 'session_xyz'
+
+        resp = AsyncMock()
+        resp.status = 200
+        resp.cookies = {'connect.sid': cookie_mock}
+        resp.__aenter__ = AsyncMock(return_value=resp)
+        resp.__aexit__ = AsyncMock(return_value=False)
+
+        session = MagicMock()
+        session.post = MagicMock(return_value=resp)
+        client = _make_client()
+
+        with patch.object(client, '_get_session', AsyncMock(return_value=session)):
+            await client.login()
+
+        resp.read.assert_awaited_once()
         self.assertEqual(client.session_token, 'session_xyz')
         self.assertTrue(client.is_logged_in)
 
@@ -736,9 +759,10 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(mock_req.call_args.kwargs['use_cookie'])
         self.assertEqual(client.session_token, 'fresh-token')
 
-    async def test_retries_with_api_key_when_configured_user_lacks_permission(self):
+    async def test_retries_once_as_configured_user_on_transient_permission_error(self):
         client = _make_client(session_token='user-token')
         with patch.object(client, 'login', AsyncMock()), \
+             patch('api_service.services.seer.seer_client.asyncio.sleep', AsyncMock()) as mock_sleep, \
              patch.object(
                  client, '_make_request',
                  AsyncMock(side_effect=[SeerPermissionError('permission denied'), {'id': 55}]),
@@ -746,9 +770,28 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
             result = await client.submit_queued_request(self._valid_payload())
 
         self.assertTrue(result)
+        self.assertEqual(mock_req.await_count, 2)
+        for call in mock_req.call_args_list:
+            self.assertTrue(call.kwargs['use_cookie'], "request must stay on the configured user")
+        mock_sleep.assert_awaited_once_with(client.PERMISSION_RETRY_DELAY)
+
+    async def test_does_not_fallback_to_api_key_when_configured_user_lacks_permission(self):
+        client = _make_client(session_token='user-token')
+        with patch.object(client, 'login', AsyncMock()), \
+             patch('api_service.services.seer.seer_client.asyncio.sleep', AsyncMock()), \
+             patch.object(
+                 client, '_make_request',
+                 AsyncMock(side_effect=[
+                     SeerPermissionError('permission denied'),
+                      SeerPermissionError('permission denied'),
+                 ]),
+             ) as mock_req:
+            result = await client.submit_queued_request(self._valid_payload())
+
+        self.assertFalse(result)
+        self.assertEqual(mock_req.await_count, 2)
         self.assertTrue(mock_req.call_args_list[0].kwargs['use_cookie'])
-        self.assertFalse(mock_req.call_args_list[1].kwargs['use_cookie'])
-        self.assertEqual(mock_req.call_args_list[1].kwargs['retries'], 1)
+        self.assertTrue(mock_req.call_args_list[1].kwargs['use_cookie'])
 
     async def test_returns_false_when_configured_user_login_fails(self):
         client = _make_client(session_token='stale-token')

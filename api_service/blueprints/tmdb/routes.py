@@ -2,12 +2,14 @@ from collections import OrderedDict
 import json
 import threading
 import time
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, g, request, jsonify
 import aiohttp
 from api_service.auth.middleware import require_role
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.tmdb.localization import display_language
+from api_service.utils.tmdb_trailers import youtube_trailer_url
 
 tmdb_bp = Blueprint('tmdb', __name__)
 logger = LoggerManager.get_logger("TMDBRoute")
@@ -445,3 +447,59 @@ def get_movie_providers():
     except Exception as exc:
         logger.error("Error fetching movie providers: %s", exc, exc_info=True)
         return jsonify({'message': 'Error fetching movie providers', 'status': 'error'}), 500
+
+
+@tmdb_bp.route('/trailer/<media_type>/<int:tmdb_id>', methods=['GET'])
+def get_trailer(media_type, tmdb_id):
+    """
+    Find the YouTube trailer of a movie or TV show, in the reader's language
+    when TMDb lists one.
+
+    API key is loaded from the database. Cached for the configured TTL per
+    (media_type, tmdb_id, language).
+
+    Path params:
+        media_type (str) — 'movie' or 'tv'.
+        tmdb_id    (int) — TMDb id of the title.
+
+    Returns:
+        200 with { status, url } — url is None when the title has no trailer.
+        400 if media_type is invalid or TMDB is not configured.
+        502 if TMDB upstream returns an error.
+    """
+    if media_type not in ('movie', 'tv'):
+        return jsonify({'message': "media_type must be 'movie' or 'tv'", 'status': 'error'}), 400
+
+    db = DatabaseManager()
+    try:
+        own = db.get_user_language(int(g.current_user['id']))
+    except Exception:
+        own = None
+    language = display_language(own, load_env_vars())
+
+    cache_key = f'trailer:{media_type}:{tmdb_id}:{language}'
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached), 200
+
+    api_key = _get_api_key()
+    if not api_key:
+        return _not_configured()
+
+    try:
+        spoken = language.split('-')[0]
+        video_languages = ','.join(dict.fromkeys([spoken, 'en', 'null']))
+        data, status = _run(_fetch_tmdb(
+            f'/{media_type}/{tmdb_id}/videos', api_key,
+            {'language': language, 'include_video_language': video_languages},
+        ))
+        if status != 200:
+            return jsonify({'message': f'TMDB returned {status}', 'status': 'error'}), 502
+
+        payload = {'status': 'success', 'url': youtube_trailer_url(data.get('results'), language)}
+        _cache_set(cache_key, payload)
+        return jsonify(payload), 200
+
+    except Exception as exc:
+        logger.error("Error fetching trailer: %s", exc, exc_info=True)
+        return jsonify({'message': 'Error fetching trailer', 'status': 'error'}), 500

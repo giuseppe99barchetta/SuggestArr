@@ -763,6 +763,21 @@
   border: 1px solid rgba(168, 85, 247, 0.3);
 }
 
+.ai-badge-trailer {
+  background-color: var(--color-error-alpha-20);
+  color: var(--color-error-light);
+  border: 1px solid var(--color-error);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.ai-badge-trailer:hover,
+.ai-badge-trailer:focus-visible {
+  background-color: var(--color-error);
+  color: var(--color-text-primary);
+}
+
 .ai-modal-sep {
   border-top: 1px solid var(--color-border-light);
   margin: 1rem 0;

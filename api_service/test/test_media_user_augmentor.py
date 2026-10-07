@@ -111,6 +111,13 @@ def test_from_env_builds_enabled_augmentor(_db):
 
 
 @patch("api_service.services.trakt.media_user_augmentor.DatabaseManager")
+def test_from_env_builds_enabled_augmentor_without_client_secret(_db):
+    aug = MediaUserTraktAugmentor.from_env({"TRAKT_CLIENT_ID": "cid", "TRAKT_CLIENT_SECRET": ""})
+    assert aug is not None
+    assert aug.enabled is True
+
+
+@patch("api_service.services.trakt.media_user_augmentor.DatabaseManager")
 def test_from_env_falls_back_to_integrations_block(_db):
     env = {"integrations": {"trakt": {"client_id": "cid", "client_secret": "secret"}}}
     aug = MediaUserTraktAugmentor.from_env(env)

@@ -15,7 +15,7 @@ Before installing, prepare:
 - Network access from SuggestArr to TMDb, your media server, and Seer.
 - Optional: OMDb API key for IMDb-based filters.
 - Optional: OpenAI-compatible LLM provider for AI recommendations and AI Search.
-- Optional: Trakt OAuth app credentials for per-user Trakt watch-history integration.
+- Optional: a Trakt app Client ID for per-user Trakt watch-history integration. Client Secret is optional; older apps may still have one.
 
 ## Recommended Install: Docker Compose
 
@@ -83,7 +83,7 @@ When opening SuggestArr for the first time:
 5. Enter media server URL and token.
 6. Enter Seer URL and API key.
 7. Select users and libraries.
-8. Optional: add Trakt Client ID and Client Secret in Services > Trakt.
+8. Optional: add the Trakt Client ID in Services > Trakt. If your app has a Client Secret, you may keep it configured.
 9. Save configuration.
 10. Have each user link their media-server account from Profile.
 11. Optional: have each user link their Trakt account from Profile > Trakt Account.
@@ -305,7 +305,7 @@ Trakt support is optional. It adds extra watch-history context to recommendation
 
 SuggestArr stores:
 
-- App-level Trakt Client ID and Client Secret in Services.
+- App-level Trakt Client ID in Services, plus an optional Client Secret for older apps.
 - Per-media-user Trakt OAuth tokens in the database.
 - The linked Trakt username and status.
 
@@ -315,14 +315,16 @@ Configuration export (Dashboard **Export**) can include Trakt link metadata and 
 
 ### Create a Trakt OAuth app
 
-1. Open <https://trakt.tv/oauth/applications>.
+1. Open <https://app.trakt.tv/settings/apps>.
 2. Create a new application.
-3. Copy the Client ID and Client Secret.
+3. Copy the Client ID. New Trakt apps created after the PKCE change do not receive a Client Secret; older apps can continue using theirs.
 4. In SuggestArr, open Services > Trakt.
-5. Paste Client ID and Client Secret.
+5. Paste the Client ID and, if your app has one, the optional Client Secret.
 6. Save.
 
 Device-code OAuth is used for user linking, so users do not need to paste Trakt passwords or tokens into SuggestArr.
+
+Add `urn:ietf:wg:oauth:2.0:oob` to the Trakt app's redirect URIs because SuggestArr uses that URI when refreshing tokens. Trakt may show a warning because it is not HTTPS, but the app form still permits saving it.
 
 ### Link media-server users first
 
@@ -362,7 +364,7 @@ If no items appear:
 
 - Confirm the Trakt account has watched history.
 - Confirm the media-server account is linked.
-- Confirm Trakt Client ID and Secret are saved in Services.
+- Confirm the Trakt Client ID is saved in Services. A Client Secret is optional for new Trakt apps.
 - Check Logs for Trakt API errors.
 
 ### Use Trakt in jobs

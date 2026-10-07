@@ -60,6 +60,31 @@ async def test_build_trakt_client_requires_single_linked_user():
         automation._build_trakt_client()
 
 
+def test_build_trakt_client_accepts_client_id_without_secret():
+    automation = TraktRecommendationsAutomation()
+    automation.job_data = {"user_ids": ["jf-1"]}
+    automation.env_vars = {
+        "SELECTED_SERVICE": "jellyfin",
+        "TRAKT_CLIENT_ID": "cid",
+        "TRAKT_CLIENT_SECRET": "",
+    }
+    automation.db_manager = MagicMock()
+    automation.db_manager.get_media_user_identity.return_value = {"id": 1}
+
+    with patch("api_service.jobs.trakt_recommendations_automation.TraktAccountResolver") as resolver_cls:
+        resolver_cls.return_value.resolve.return_value = {
+            "id": 5,
+            "access_token": "access",
+            "refresh_token": "refresh",
+            "expires_at": 12345,
+            "token_source": "manual_oauth",
+        }
+        client = automation._build_trakt_client()
+
+    assert client.client_id == "cid"
+    assert client.client_secret == ""
+
+
 @pytest.mark.asyncio
 async def test_fetch_tmdb_details_builds_full_image_urls():
     automation = TraktRecommendationsAutomation()

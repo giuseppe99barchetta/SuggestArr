@@ -132,7 +132,8 @@ def translations_for(db, api_key, pairs, language, run):
     Args:
         run: Runs a coroutine synchronously.
     """
-    # Only real TMDb ids: requests without a source carry '0', AI search 'ai_search'.
+    # Only real TMDb ids: synthetic request sources are non-numeric tags;
+    # legacy unresolved LLM sources may still carry '0'.
     pairs = list(dict.fromkeys((str(media_id), media_type) for media_id, media_type in pairs
                                if str(media_id or '').isdigit() and int(media_id) > 0
                                and media_type in ('movie', 'tv')))

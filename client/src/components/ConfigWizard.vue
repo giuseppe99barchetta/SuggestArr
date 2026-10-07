@@ -539,7 +539,7 @@ export default {
           stepValidity.value['media-server'] = true;
         }
       }
-      if (cfg.TRAKT_CLIENT_ID && cfg.TRAKT_CLIENT_SECRET) stepValidity.value.trakt = true;
+      if (cfg.TRAKT_CLIENT_ID) stepValidity.value.trakt = true;
     }
 
     async function handleFileImport(event) {

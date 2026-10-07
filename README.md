@@ -29,6 +29,7 @@ configured number of days. The pause behavior can be overridden per job.
 - **AI-Powered Recommendations** *(beta)*: Uses any OpenAI-compatible LLM (OpenAI, Ollama, Gemini, LiteLLM…) to generate hyper-personalized suggestions based on watch history, complete with AI reasoning for each pick.
 - **AI Search** *(beta)*: Describe in natural language what you want to watch and let the AI find matching titles, personalised to your viewing history, with one-click request to Seer.
 - **Trakt Watch History**: Let each user link their own Trakt account. SuggestArr can use Trakt recent watches as recommendation seeds and skip content already watched on Trakt.
+- **Imported Watch History**: Add CSV or manually searched TMDb titles with optional 0–10 ratings to personalise recommendations even after media has been removed from a server. See [the import format](docs/WATCH_HISTORY_IMPORT.md).
 - **Automated Requests**: Sends download requests for recommended content to Seer.
 - **Pending-Request Job Pause**: Skip scheduled or manual jobs while Seer still has requests waiting for approval or denial.
 - **Unwatched-Suggestion Pause**: Optionally pause scheduled recommendation jobs when a user has not watched a SuggestArr request within a configurable number of days; manual runs remain available.
@@ -48,7 +49,7 @@ configured number of days. The pause behavior can be overridden per job.
 - Configured **[Jellyfin](https://jellyfin.org/)**, **[Plex](https://www.plex.tv/)**, or **[Emby](https://emby.media/)**
 - Configured **[Seer](https://github.com/seerr-team/seerr)**
 - (Optional) External database (PostgreSQL or MySQL) for improved performance
-- (Optional) **[Trakt OAuth application](https://trakt.tv/oauth/applications)** for per-user Trakt watch-history integration
+- (Optional) **[Trakt application](https://app.trakt.tv/settings/apps)** for per-user Trakt watch-history integration
 
 ## Docker Usage
 
@@ -109,14 +110,16 @@ SuggestArr can enrich recommendations with each user's own Trakt watch history. 
 
 ### How to enable
 
-1. Create a Trakt OAuth app at <https://trakt.tv/oauth/applications>.
+1. Create a Trakt app at <https://app.trakt.tv/settings/apps>.
 2. In SuggestArr, go to **Services -> Trakt**.
-3. Enter the Trakt **Client ID** and **Client Secret**, then save.
+3. Enter the Trakt **Client ID**, then save. New Trakt apps no longer receive a Client Secret; existing apps may keep their secret configured.
 4. Each user goes to **Profile -> Trakt Account** and clicks **Link Trakt**.
 5. Enter the Trakt device code shown by SuggestArr at the Trakt activation URL.
 6. Open **Recent Trakt Preview** to verify the latest Trakt history is being read.
 
 For admins, the same profile panel is available under **Users**. Trakt links are tied to the user's linked Plex, Jellyfin, or Emby media profile, so users should link their media-server account first.
+
+SuggestArr uses Trakt's device-code flow. For token refresh, add `urn:ietf:wg:oauth:2.0:oob` as a redirect URI in the Trakt app. Trakt may warn that it is not HTTPS, but it still allows the URI to be saved.
 
 ## Job Pause and Cleanup Automation
 

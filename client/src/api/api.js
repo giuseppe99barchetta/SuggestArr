@@ -176,6 +176,18 @@ export const unlinkMyTrakt = () => axios.delete('/api/trakt/me');
 export const previewMyTraktRecent = (limit = 10) =>
     axios.get('/api/trakt/me/recent', { params: { limit } });
 
+// Persistent watch-history seeds imported from CSV or added manually.
+export const listMyWatchedMedia = () => axios.get('/api/watched-history/me');
+export const importMyWatchedMedia = (file) => {
+    const data = new FormData();
+    data.append('file', file);
+    return axios.post('/api/watched-history/me/import', data);
+};
+export const searchMyWatchedMedia = (query, mediaType = 'both') =>
+    axios.get('/api/watched-history/me/search', { params: { query, media_type: mediaType } });
+export const addMyWatchedMedia = (item) => axios.post('/api/watched-history/me', item);
+export const deleteMyWatchedMedia = (itemId) => axios.delete(`/api/watched-history/me/${itemId}`);
+
 
 // Cleanup automation
 export const getCleanupSettings = () => axios.get('/api/cleanup/settings');

@@ -379,6 +379,7 @@ config/suggestarr.db
 static/
 
 # AI agent planning artifacts (ephemeral)
+docs/IMPROVEMENT_ROADMAP.md
 docs/superpowers/plans/
 branch-review-findings.md
 .github/skills/

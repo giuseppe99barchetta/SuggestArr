@@ -121,6 +121,15 @@ class TestAuthService(unittest.TestCase):
         from api_service.auth.auth_service import AuthService
         self.assertIsNone(AuthService.verify_access_token("not.a.jwt.at.all"))
 
+    def test_deeply_nested_payload_returns_none(self):
+        import jwt as pyjwt
+        from api_service.auth.auth_service import AuthService
+
+        depth = 20_000
+        payload = b'{"nested":' + b'[' * depth + b']' * depth + b'}'
+        token = pyjwt.api_jws.encode(payload, TEST_SECRET, algorithm="HS256")
+        self.assertIsNone(AuthService.verify_access_token(token))
+
     def test_each_token_has_unique_jti(self):
         from api_service.auth.auth_service import AuthService
         p1 = AuthService.verify_access_token(AuthService.create_access_token(1, "a", "admin"))

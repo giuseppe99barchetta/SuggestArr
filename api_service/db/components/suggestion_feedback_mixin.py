@@ -10,7 +10,44 @@ from api_service.db.components.suggestion_ownership import ownership_clause
 
 
 class SuggestionFeedbackMixin:
-    NEGATIVE_FEEDBACK = {'not_interested', 'already_seen', 'too_similar'}
+    # Feedback that stops a title being suggested again. The two "seen" verdicts belong
+    # here even though one is positive: the user has already watched the title, so
+    # re-suggesting it is exactly the annoyance the rating was meant to end.
+    NEGATIVE_FEEDBACK = {'not_interested', 'already_seen', 'seen_liked', 'seen_disliked',
+                         'too_similar'}
+
+    # What each rating says about taste, and how loudly. These are deliberately not one
+    # signed scale: "I want to watch this" and "I watched it and loved it" are different
+    # claims, and the weaker one should not be described to the model as enjoyment.
+    # 'already_seen' is absent on purpose. Having watched a title is not a verdict on it,
+    # so it suppresses the title while teaching nothing. 'too_similar' is absent too: it
+    # is a complaint about repetition in the list, not about the title itself.
+    # The strength mirrors the ranking weights below: a watched verdict and active
+    # interest both weigh 2, bookmarking weighs 1. What differs is what they are
+    # evidence of, which is why the prompt keeps all three apart.
+    TASTE_FEEDBACK = {
+        'seen_liked': ('liked', 'watched'),
+        'interested': ('liked', 'strong'),
+        'save_for_later': ('liked', 'weak'),
+        'seen_disliked': ('disliked', 'watched'),
+        'not_interested': ('disliked', 'weak'),
+    }
+
+    # How strongly each rating promotes a surviving candidate during local ranking. This
+    # is deliberately separate from TASTE_FEEDBACK: "watched and loved" and "want to
+    # watch" are equally strong reasons to rank something up, but only the first is
+    # evidence of enjoyment, so the prompt must keep them apart even though ranking
+    # need not. These weights are unchanged from before the prompt work.
+    POSITIVE_WEIGHTS = {
+        'seen_liked': 2,
+        'interested': 2,
+        'save_for_later': 1,
+    }
+
+    # Titles carried into the recommendation prompt, newest first. The cap is what keeps
+    # prompt cost flat as the feedback table grows; suppression stays with the existing
+    # post-generation filter, which is not bounded by this number.
+    TASTE_PROFILE_LIMIT = 15
 
     def _feedback_placeholder(self):
         return '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
@@ -42,7 +79,7 @@ class SuggestionFeedbackMixin:
 
     def set_suggestion_feedback(self, suggestion_id, owner_id, user_id, feedback,
                                 reason_type=None, reason_text=None, media_user_ids=None,
-                                include_unassigned=False):
+                                include_unassigned=False, title=None, year=None):
         """Store one user's feedback for a suggestion they are allowed to view."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -53,42 +90,90 @@ class SuggestionFeedbackMixin:
             tmdb_id, media_type, media_user_id = suggestion
         return self.set_media_feedback(
             user_id, media_user_id, tmdb_id, media_type, feedback, reason_type, reason_text,
+            title, year,
         )
 
+    def _stored_media_title(self, cursor, tmdb_id, media_type):
+        """Look up a title and year already held for this item, or (None, None).
+
+        Read from the metadata cached when the item was first suggested, rather than
+        taken from the caller. That keeps every path consistent without any client
+        needing to know that the recommendation prompt wants names, and avoids trusting
+        a title supplied by the browser.
+        """
+        ph = self._feedback_placeholder()
+        try:
+            cursor.execute(
+                f"SELECT title, release_date FROM metadata WHERE media_id={ph} AND media_type={ph}",
+                (str(tmdb_id), media_type),
+            )
+            row = cursor.fetchone()
+        except Exception:
+            return None, None
+        if not row:
+            return None, None
+        released = str(row[1] or '')[:4]
+        return row[0], (int(released) if released.isdigit() else None)
+
     def set_media_feedback(self, user_id, media_user_id, tmdb_id, media_type, feedback,
-                           reason_type=None, reason_text=None):
-        """Store feedback after the caller has verified access to the media item."""
+                           reason_type=None, reason_text=None, title=None, year=None):
+        """Store feedback after the caller has verified access to the media item.
+
+        The title and year are denormalised on purpose: the recommendation prompt needs
+        names, and resolving hundreds of TMDb ids back to titles on every scheduled run
+        would be both slow and an avoidable third-party call. A caller that does not
+        supply them has them filled in from stored metadata, so feedback saved anywhere
+        still reaches the taste profile.
+        """
         ph = self._feedback_placeholder()
         media_user_id = self._feedback_media_user_id(media_user_id)
+        title = title.strip()[:500] if isinstance(title, str) and title.strip() else None
+        try:
+            year = int(year) if year is not None else None
+        except (TypeError, ValueError):
+            year = None
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            if title is None:
+                title, stored_year = self._stored_media_title(cursor, tmdb_id, media_type)
+                if year is None:
+                    year = stored_year
             if self.db_type == 'sqlite':
                 query = f"""
                     INSERT INTO suggestion_feedback
-                        (user_id, media_user_id, tmdb_id, media_type, feedback, reason_type, reason_text)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                        (user_id, media_user_id, tmdb_id, media_type, feedback, reason_type, reason_text, title, year)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT(user_id, media_user_id, tmdb_id, media_type) DO UPDATE SET
                         feedback=excluded.feedback, reason_type=excluded.reason_type,
-                        reason_text=excluded.reason_text, updated_at=CURRENT_TIMESTAMP
+                        reason_text=excluded.reason_text,
+                        title=COALESCE(excluded.title, suggestion_feedback.title),
+                        year=COALESCE(excluded.year, suggestion_feedback.year),
+                        updated_at=CURRENT_TIMESTAMP
                 """
             elif self.db_type == 'postgres':
                 query = f"""
                     INSERT INTO suggestion_feedback
-                        (user_id, media_user_id, tmdb_id, media_type, feedback, reason_type, reason_text)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                        (user_id, media_user_id, tmdb_id, media_type, feedback, reason_type, reason_text, title, year)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT(user_id, media_user_id, tmdb_id, media_type) DO UPDATE SET
                         feedback=EXCLUDED.feedback, reason_type=EXCLUDED.reason_type,
-                        reason_text=EXCLUDED.reason_text, updated_at=CURRENT_TIMESTAMP
+                        reason_text=EXCLUDED.reason_text,
+                        title=COALESCE(EXCLUDED.title, suggestion_feedback.title),
+                        year=COALESCE(EXCLUDED.year, suggestion_feedback.year),
+                        updated_at=CURRENT_TIMESTAMP
                 """
             else:
                 query = f"""
                     INSERT INTO suggestion_feedback
-                        (user_id, media_user_id, tmdb_id, media_type, feedback, reason_type, reason_text)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                        (user_id, media_user_id, tmdb_id, media_type, feedback, reason_type, reason_text, title, year)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON DUPLICATE KEY UPDATE feedback=VALUES(feedback), reason_type=VALUES(reason_type),
-                        reason_text=VALUES(reason_text), updated_at=CURRENT_TIMESTAMP
+                        reason_text=VALUES(reason_text),
+                        title=COALESCE(VALUES(title), title), year=COALESCE(VALUES(year), year),
+                        updated_at=CURRENT_TIMESTAMP
                 """
-            cursor.execute(query, (user_id, media_user_id, tmdb_id, media_type, feedback, reason_type, reason_text))
+            cursor.execute(query, (user_id, media_user_id, tmdb_id, media_type, feedback, reason_type,
+                                   reason_text, title, year))
             conn.commit()
         return {
             'feedback': feedback,
@@ -145,6 +230,57 @@ class SuggestionFeedbackMixin:
                 (user_id, self._feedback_media_user_id(media_user_id), media_type),
             )
             return {str(row[0]): row[1] for row in cursor.fetchall()}
+
+    @staticmethod
+    def _empty_taste_profile():
+        return {'loved': [], 'interested': [], 'saved': [], 'disliked': [], 'uninterested': []}
+
+    # Where each (kind, strength) pair lands in the profile the prompt reads. Keeping the
+    # buckets separate is what lets the prompt say "watched and enjoyed" about one group,
+    # "wants to watch" about another, and "bookmarked" about the weakest.
+    _TASTE_BUCKETS = {
+        ('liked', 'watched'): 'loved',
+        ('liked', 'strong'): 'interested',
+        ('liked', 'weak'): 'saved',
+        ('disliked', 'watched'): 'disliked',
+        ('disliked', 'weak'): 'uninterested',
+    }
+
+    def get_taste_profile(self, user_id, media_user_id, media_type, limit=None):
+        """Return the recent ratings that shape the recommendation prompt.
+
+        Only rows that carry a title are usable, so feedback saved before the title
+        column existed is skipped rather than sent to the model as a bare id.
+
+        :return: Dict of {'title', 'year'} lists, newest first, in four buckets:
+            'loved'        — watched and explicitly liked
+            'liked'        — wanted to watch, but enjoyment is unconfirmed
+            'disliked'     — watched and explicitly disliked
+            'uninterested' — did not appeal, not necessarily watched
+        """
+        if user_id is None:
+            return self._empty_taste_profile()
+        limit = self.TASTE_PROFILE_LIMIT if limit is None else limit
+        if limit <= 0:
+            return self._empty_taste_profile()
+        ph = self._feedback_placeholder()
+        marks = ','.join([ph] * len(self.TASTE_FEEDBACK))
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT title, year, feedback FROM suggestion_feedback "
+                f"WHERE user_id={ph} AND media_user_id={ph} AND media_type={ph} "
+                f"AND feedback IN ({marks}) AND title IS NOT NULL "
+                f"ORDER BY updated_at DESC LIMIT {ph}",
+                (user_id, self._feedback_media_user_id(media_user_id), media_type,
+                 *sorted(self.TASTE_FEEDBACK), limit),
+            )
+            profile = self._empty_taste_profile()
+            for title, year, feedback in cursor.fetchall():
+                signal = self.TASTE_FEEDBACK.get(feedback)
+                if signal:
+                    profile[self._TASTE_BUCKETS[signal]].append({'title': title, 'year': year})
+            return profile
 
     def should_skip_feedback(self, job_owner_id, tmdb_id, media_type, media_user_id):
         """Whether personal negative feedback should suppress a future automated queue item."""
