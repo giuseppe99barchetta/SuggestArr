@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 from flask import Flask, g
 
-from api_service.blueprints.trakt.routes import trakt_bp
+from api_service.blueprints.trakt.routes import _resolve_trakt_credentials, trakt_bp
 from api_service.services.trakt.trakt_client import (
     TraktDeviceDenied,
     TraktDevicePending,
@@ -163,6 +163,31 @@ def test_unknown_media_user_returns_404():
             "/api/trakt/media-users/jellyfin/ghost/device/code", json={}
         )
     assert resp.status_code == 404
+
+
+def test_resolve_credentials_accepts_payload_client_id_without_secret():
+    with patch(
+        "api_service.blueprints.trakt.routes.ConfigService.get_runtime_config",
+        return_value={"TRAKT_CLIENT_ID": "stored-id", "TRAKT_CLIENT_SECRET": "stored-secret"},
+    ):
+        assert _resolve_trakt_credentials({"client_id": "new-id"}) == ("new-id", "", True)
+
+
+def test_device_code_accepts_client_id_without_secret():
+    app, _ = make_app()
+    db = MagicMock()
+    p1, p2, p3, _ = _patches(db)
+    with p1, p2, p3, patch(
+        "api_service.blueprints.trakt.routes._resolve_trakt_credentials",
+        return_value=("cid", "", False),
+    ):
+        resp = app.test_client().post(
+            "/api/trakt/media-users/jellyfin/jf-1/device/code",
+            json={},
+        )
+
+    assert resp.status_code == 200
+    assert FakeTraktClient.instances[-1].client_secret == ""
 
 
 def test_wrong_provider_returns_404():

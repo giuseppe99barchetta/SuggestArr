@@ -45,10 +45,10 @@ def _resolve_trakt_credentials(payload: dict) -> tuple[str, str, bool]:
     """Resolve app-level Trakt OAuth credentials.
 
     Returns:
-        tuple: client_id, client_secret, whether both values came from payload.
+        tuple: client_id, client_secret, whether the client ID came from payload.
     """
     payload_client_id, payload_client_secret = _trakt_credentials_from_payload(payload)
-    if payload_client_id and payload_client_secret:
+    if payload_client_id:
         return payload_client_id, payload_client_secret, True
 
     config_client_id, config_client_secret = _trakt_credentials_from_config()
@@ -239,8 +239,8 @@ def request_my_device_code():
         return jsonify({"message": "Link your media server account first", "status": "error"}), 404
 
     client_id, client_secret, _ = _resolve_trakt_credentials({})
-    if not client_id or not client_secret:
-        return jsonify({"message": "Configure Trakt app credentials first", "status": "error"}), 400
+    if not client_id:
+        return jsonify({"message": "Configure the Trakt Client ID first", "status": "error"}), 400
 
     try:
         activation = async_to_sync(_request_device_code)(client_id, client_secret, db)
@@ -267,8 +267,8 @@ def poll_my_device_token():
         return jsonify({"message": "device_code is required", "status": "error"}), 400
 
     client_id, client_secret, _ = _resolve_trakt_credentials(payload)
-    if not client_id or not client_secret:
-        return jsonify({"message": "Configure Trakt app credentials first", "status": "error"}), 400
+    if not client_id:
+        return jsonify({"message": "Configure the Trakt Client ID first", "status": "error"}), 400
 
     provider = profile["provider"]
     external_user_id = str(profile["external_user_id"])
@@ -331,8 +331,8 @@ def request_media_user_device_code(provider: str, external_user_id: str):
 
     payload = _get_json()
     client_id, client_secret, from_payload = _resolve_trakt_credentials(payload)
-    if not client_id or not client_secret:
-        return jsonify({"message": "Configure Trakt app credentials first", "status": "error"}), 400
+    if not client_id:
+        return jsonify({"message": "Configure the Trakt Client ID first", "status": "error"}), 400
 
     _save_app_credentials_if_supplied(db, client_id, client_secret, from_payload)
 
@@ -362,8 +362,8 @@ def poll_media_user_device_token(provider: str, external_user_id: str):
         return jsonify({"message": "device_code is required", "status": "error"}), 400
 
     client_id, client_secret, _ = _resolve_trakt_credentials(payload)
-    if not client_id or not client_secret:
-        return jsonify({"message": "Configure Trakt app credentials first", "status": "error"}), 400
+    if not client_id:
+        return jsonify({"message": "Configure the Trakt Client ID first", "status": "error"}), 400
 
     provider = provider.lower()
     external_user_id = str(external_user_id)
@@ -466,8 +466,8 @@ def preview_media_user_recent_items(provider: str, external_user_id: str):
         return jsonify({"message": "Media user not found", "status": "error"}), 404
 
     client_id, client_secret, _ = _resolve_trakt_credentials({})
-    if not client_id or not client_secret:
-        return jsonify({"message": "Configure Trakt app credentials first", "status": "error"}), 400
+    if not client_id:
+        return jsonify({"message": "Configure the Trakt Client ID first", "status": "error"}), 400
 
     try:
         limit = max(1, min(int(request.args.get("limit", 10)), 50))
@@ -510,8 +510,8 @@ def preview_my_recent_items():
         return jsonify({"message": "Link your media server account first", "status": "error"}), 404
 
     client_id, client_secret, _ = _resolve_trakt_credentials({})
-    if not client_id or not client_secret:
-        return jsonify({"message": "Configure Trakt app credentials first", "status": "error"}), 400
+    if not client_id:
+        return jsonify({"message": "Configure the Trakt Client ID first", "status": "error"}), 400
 
     try:
         limit = max(1, min(int(request.args.get("limit", 10)), 50))

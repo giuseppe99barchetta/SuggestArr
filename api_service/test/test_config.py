@@ -219,17 +219,34 @@ class TestConfig(unittest.TestCase):
             'client_secret': 'TRAKT_CLIENT_SECRET',
         })
 
-    def test_trakt_is_valid_when_client_credentials_are_present(self):
+    def test_trakt_is_valid_when_client_id_is_present(self):
         self.assertTrue(DatabaseManager._is_integration_valid(
             'trakt',
             {'client_id': 'cid', 'client_secret': 'secret'},
         ))
-        self.assertFalse(DatabaseManager._is_integration_valid(
+        self.assertTrue(DatabaseManager._is_integration_valid(
             'trakt',
             {'client_id': 'cid', 'client_secret': ''},
         ))
+        self.assertFalse(DatabaseManager._is_integration_valid(
+            'trakt',
+            {'client_id': '', 'client_secret': 'secret'},
+        ))
 
-    def test_migrate_integrations_from_config_includes_only_trakt_app_credentials(self):
+    def test_sync_integrations_can_clear_optional_trakt_secret(self):
+        from api_service.blueprints.config.routes import _sync_integrations_from_flat
+
+        db = MagicMock()
+        db.get_integration.return_value = {'client_id': 'cid', 'client_secret': 'old-secret'}
+
+        _sync_integrations_from_flat(db, {'TRAKT_CLIENT_SECRET': ''})
+
+        db.set_integration.assert_called_once_with('trakt', {
+            'client_id': 'cid',
+            'client_secret': '',
+        })
+
+    def test_migrate_integrations_from_config_accepts_trakt_client_id_only(self):
         manager = object.__new__(DatabaseManager)
         manager.logger = unittest.mock.MagicMock()
         manager.get_integration = unittest.mock.MagicMock(return_value=None)
@@ -237,7 +254,7 @@ class TestConfig(unittest.TestCase):
 
         with patch('api_service.db.database_manager.load_env_vars', return_value={
             'TRAKT_CLIENT_ID': 'cid',
-            'TRAKT_CLIENT_SECRET': 'secret',
+            'TRAKT_CLIENT_SECRET': '',
             'TRAKT_ACCESS_TOKEN': 'access',
             'TRAKT_REFRESH_TOKEN': 'refresh',
             'TRAKT_EXPIRES_AT': 12345,
@@ -246,7 +263,7 @@ class TestConfig(unittest.TestCase):
 
         manager.set_integration.assert_called_once_with('trakt', {
             'client_id': 'cid',
-            'client_secret': 'secret',
+            'client_secret': '',
         })
 
     def test_migrate_integrations_from_config_purges_stored_legacy_trakt_tokens(self):
@@ -685,7 +702,7 @@ class TestConfig(unittest.TestCase):
         app.register_blueprint(config_bp, url_prefix='/api/config')
         db = MagicMock()
         db.get_all_integrations.return_value = {
-            'trakt': {'client_id': 'cid', 'client_secret': 'secret'},
+            'trakt': {'client_id': 'cid'},
         }
 
         with patch('api_service.blueprints.config.routes.load_env_vars', return_value={

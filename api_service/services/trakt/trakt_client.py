@@ -35,7 +35,7 @@ class TraktClient(BaseHTTPClient):
     def __init__(
         self,
         client_id: str,
-        client_secret: str,
+        client_secret: str = "",
         access_token: str = "",
         refresh_token: str = "",
         expires_at: Optional[int] = None,
@@ -56,6 +56,13 @@ class TraktClient(BaseHTTPClient):
         self.link_id = link_id
         self.token_source = token_source
         self.existing_content = {"movie": [], "tv": []}
+
+    def _with_client_secret(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Add the deprecated Trakt client secret only when one is configured."""
+        payload = dict(body)
+        if self.client_secret:
+            payload["client_secret"] = self.client_secret
+        return payload
 
     async def _get_session(self):
         if self.session is not None and not getattr(self.session, "closed", False):
@@ -107,11 +114,10 @@ class TraktClient(BaseHTTPClient):
         """
         url = f"{self.BASE_URL}/oauth/device/token"
         session = await self._get_session()
-        body = {
+        body = self._with_client_secret({
             "code": device_code,
             "client_id": self.client_id,
-            "client_secret": self.client_secret,
-        }
+        })
 
         try:
             async with session.post(
@@ -140,13 +146,12 @@ class TraktClient(BaseHTTPClient):
         payload = await self._request(
             "POST",
             "/oauth/token",
-            json={
+            json=self._with_client_secret({
                 "refresh_token": self.refresh_token,
                 "client_id": self.client_id,
-                "client_secret": self.client_secret,
                 "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
                 "grant_type": "refresh_token",
-            },
+            }),
             authenticated=False,
         )
         return self._apply_and_persist_tokens(payload)

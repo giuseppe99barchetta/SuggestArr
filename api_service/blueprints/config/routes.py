@@ -59,7 +59,9 @@ def _sync_integrations_from_flat(db, flat: dict) -> None:
     """Upsert DB integration rows from a flat config dict.
 
     Only keys present in *flat* with a non-empty, non-redacted value are written.
-    Missing keys leave the existing DB row untouched (merge, not replace).
+    The optional Trakt client secret is the exception: an explicitly empty value
+    clears a previously stored secret so an ID-only Trakt app cannot inherit a
+    stale secret. Missing keys still leave the existing DB row untouched.
 
     Args:
         db: ``DatabaseManager`` instance.
@@ -67,8 +69,12 @@ def _sync_integrations_from_flat(db, flat: dict) -> None:
     """
     service_updates: dict = {}
     for flat_key, (service, db_field) in _FLAT_TO_INTEGRATION.items():
+        if flat_key not in flat:
+            continue
         val = flat.get(flat_key)
-        if val and val != _REDACTED:
+        if val == _REDACTED:
+            continue
+        if val or (service == 'trakt' and db_field == 'client_secret'):
             service_updates.setdefault(service, {})[db_field] = val
 
     for service, changes in service_updates.items():
@@ -279,7 +285,7 @@ def get_setup_status():
             'is_complete': is_complete,
             'selected_service': config.get('SELECTED_SERVICE'),
             'has_tmdb_key': bool(config.get('TMDB_API_KEY')),
-            'trakt_app_configured': bool(config.get('TRAKT_CLIENT_ID') and config.get('TRAKT_CLIENT_SECRET')),
+            'trakt_app_configured': bool(config.get('TRAKT_CLIENT_ID')),
             'status': 'success'
         }), 200
     except Exception as e:

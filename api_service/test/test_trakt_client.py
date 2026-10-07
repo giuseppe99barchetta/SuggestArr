@@ -103,6 +103,26 @@ async def test_poll_for_token_returns_tokens_on_success():
 
     assert result["access_token"] == "access"
     assert client.access_token == "access"
+    assert session.calls[0][2]["json"]["client_secret"] == "secret"
+
+
+@pytest.mark.asyncio
+async def test_poll_for_token_omits_client_secret_when_not_configured():
+    session = FakeSession([
+        FakeResponse(200, {
+            "access_token": "access",
+            "refresh_token": "refresh",
+            "expires_in": 7200,
+        })
+    ])
+    client = TraktClient("cid", session=session)
+
+    await client.poll_for_token("device-code")
+
+    assert session.calls[0][2]["json"] == {
+        "code": "device-code",
+        "client_id": "cid",
+    }
 
 
 @pytest.mark.asyncio
@@ -163,6 +183,35 @@ async def test_refresh_persists_tokens_via_update_trakt_oauth_tokens():
     assert db.update_trakt_oauth_tokens.call_args.args[:3] == (1, "new-access", "new-refresh")
     assert db.update_trakt_oauth_tokens.call_args.args[3] > int(time.time())
     db.set_integration.assert_not_called()
+    assert session.calls[0][2]["json"]["client_secret"] == "secret"
+
+
+@pytest.mark.asyncio
+async def test_refresh_omits_client_secret_when_not_configured():
+    session = FakeSession([
+        FakeResponse(200, {
+            "access_token": "new-access",
+            "refresh_token": "new-refresh",
+            "expires_in": 7200,
+        })
+    ])
+    client = TraktClient(
+        "cid",
+        access_token="old-access",
+        refresh_token="old-refresh",
+        expires_at=int(time.time()) - 10,
+        session=session,
+    )
+
+    result = await client.refresh_access_token()
+
+    assert result["refresh_token"] == "new-refresh"
+    assert session.calls[0][2]["json"] == {
+        "refresh_token": "old-refresh",
+        "client_id": "cid",
+        "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
+        "grant_type": "refresh_token",
+    }
 
 
 @pytest.mark.asyncio

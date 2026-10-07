@@ -426,9 +426,7 @@ export default {
     },
 
     isTraktAppConfigured() {
-      return !!(
-        this.config?.TRAKT_CLIENT_ID && this.config?.TRAKT_CLIENT_SECRET
-      ) || this.configStatus?.trakt_app_configured === true;
+      return !!this.config?.TRAKT_CLIENT_ID || this.configStatus?.trakt_app_configured === true;
     },
 
     serverUserOptions() {

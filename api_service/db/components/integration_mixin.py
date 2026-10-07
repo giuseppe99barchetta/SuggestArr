@@ -10,7 +10,7 @@ _INTEGRATION_REQUIRED_FIELDS = {
     'seer': ['api_url', 'api_key'],
     'tmdb': ['api_key'],
     'omdb': ['api_key'],
-    'trakt': ['client_id', 'client_secret'],
+    'trakt': ['client_id'],
     'openai': [],
 }
 class IntegrationMixin:

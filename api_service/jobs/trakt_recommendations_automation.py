@@ -324,8 +324,8 @@ class TraktRecommendationsAutomation:
         client_secret = str(
             self.env_vars.get("TRAKT_CLIENT_SECRET") or trakt_cfg.get("client_secret") or ""
         ).strip()
-        if not client_id or not client_secret:
-            raise ValueError("Trakt app credentials are not configured")
+        if not client_id:
+            raise ValueError("Trakt Client ID is not configured")
 
         return TraktClient(
             client_id,
