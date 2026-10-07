@@ -28,5 +28,15 @@ def request_source_title_sql(source_alias: str = "r") -> str:
     return f"""CASE
                 WHEN s.title IS NOT NULL THEN s.title
                 {when_clauses}
-                ELSE 'LLM Recommendation'
+                WHEN {source_alias}.tmdb_source_id = '0' THEN 'LLM Recommendation'
+                WHEN {source_alias}.tmdb_source_id IS NULL OR {source_alias}.tmdb_source_id = '' THEN 'Discover'
+                ELSE 'Unknown Source'
             END"""
+
+
+def request_source_id_sql(source_alias: str = "r", metadata_alias: str = "s") -> str:
+    """Build a stable source id, mapping legacy source-less Discover rows correctly."""
+    return (
+        f"COALESCE({metadata_alias}.media_id, "
+        f"NULLIF({source_alias}.tmdb_source_id, ''), '{DISCOVER_SOURCE}')"
+    )
