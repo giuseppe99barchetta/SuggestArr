@@ -4,13 +4,15 @@ rating filtering, and history-based deduplication to power the AI Search tab.
 """
 
 import asyncio
+import inspect
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Dict, List, Optional, Union
 
 
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
 from api_service.services.filter_normalization import build_tmdb_params, normalize_filters
+from api_service.services.library_content import load_library_content
 from api_service.services.llm.llm_service import (
     generate_search_result_rationales,
     interpret_search_query,
@@ -68,71 +70,79 @@ class AiSearchService:
         :param exclude_watched: Whether to exclude already-watched titles from results.
         :return: Dict with 'results', 'ai_reasoning', and 'total'.
         """
-        owned_ids = await self._get_owned_tmdb_ids()
+        # Load the library in the background while the LLM interprets the query;
+        # each media type awaits it only when filtering results.
+        owned_ids = asyncio.ensure_future(self._get_owned_tmdb_ids())
+        try:
+            if media_type == "both":
+                movie_task = self._search_single(
+                    query, "movie", user_ids, max_results, use_history, exclude_watched, exclude_seen,
+                    record_seen=False, owned_ids=owned_ids,
+                )
+                tv_task = self._search_single(
+                    query, "tv", user_ids, max_results, use_history, exclude_watched, exclude_seen,
+                    record_seen=False, owned_ids=owned_ids,
+                )
+                movie_res, tv_res = await asyncio.gather(movie_task, tv_task)
 
-        if media_type == "both":
-            movie_task = self._search_single(
-                query, "movie", user_ids, max_results, use_history, exclude_watched, exclude_seen,
-                record_seen=False, owned_ids=owned_ids,
+                # Interleave: AI movie, AI tv, …
+                ai_movies = movie_res["results"]
+                ai_tv = tv_res["results"]
+
+                merged: List[Dict] = []
+                for pair in zip(ai_movies, ai_tv):
+                    merged.extend(pair)
+
+                # Append leftovers (when one list is longer than the other)
+                for lst in (ai_movies, ai_tv):
+                    for item in lst:
+                        if item not in merged:
+                            merged.append(item)
+
+                ai_reasoning = {
+                    "movie": movie_res.get("ai_reasoning", {}),
+                    "tv": tv_res.get("ai_reasoning", {}),
+                }
+                final_results = merged[:max_results]
+                self._record_seen_items(final_results, media_type)
+
+                return {
+                    "results": final_results,
+                    "ai_reasoning": ai_reasoning,
+                    "total": len(final_results),
+                }
+
+            return await self._search_single(
+                query, media_type, user_ids, max_results, use_history, exclude_watched, exclude_seen,
+                owned_ids=owned_ids,
             )
-            tv_task = self._search_single(
-                query, "tv", user_ids, max_results, use_history, exclude_watched, exclude_seen,
-                record_seen=False, owned_ids=owned_ids,
-            )
-            movie_res, tv_res = await asyncio.gather(movie_task, tv_task)
-
-            # Interleave: AI movie, AI tv, …
-            ai_movies = movie_res["results"]
-            ai_tv = tv_res["results"]
-
-            merged: List[Dict] = []
-            for pair in zip(ai_movies, ai_tv):
-                merged.extend(pair)
-
-            # Append leftovers (when one list is longer than the other)
-            for lst in (ai_movies, ai_tv):
-                for item in lst:
-                    if item not in merged:
-                        merged.append(item)
-
-            ai_reasoning = {
-                "movie": movie_res.get("ai_reasoning", {}),
-                "tv": tv_res.get("ai_reasoning", {}),
-            }
-            final_results = merged[:max_results]
-            self._record_seen_items(final_results, media_type)
-
-            return {
-                "results": final_results,
-                "ai_reasoning": ai_reasoning,
-                "total": len(final_results),
-            }
-
-        return await self._search_single(
-            query, media_type, user_ids, max_results, use_history, exclude_watched, exclude_seen,
-            owned_ids=owned_ids,
-        )
+        finally:
+            owned_ids.cancel()  # no-op once the library has loaded
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     async def _get_owned_tmdb_ids(self) -> Dict[str, set]:
-        """Return the TMDB IDs Seer reports as available, keyed by media type.
+        """Return the TMDB IDs already in the library, keyed by media type.
 
-        Best-effort and skipped when "Exclude Downloaded Content" is off or Seer
-        is not configured, so a Seer outage never breaks a search.
+        Uses the shared owned-content policy (media server plus Seer availability,
+        see :func:`load_library_content`), so AI Search and the jobs agree on what
+        counts as owned. Without Seer configured only the media server is used.
+        Best-effort: a failure never breaks a search.
 
         :return: Dict mapping 'movie' / 'tv' to sets of TMDB ID strings (may be empty).
         """
-        if not self.config.get("EXCLUDE_DOWNLOADED", True) or not self.config.get("SEER_API_URL"):
+        if not self.config.get("EXCLUDE_DOWNLOADED", True):
             return {}
         try:
+            if not self.config.get("SEER_API_URL"):
+                return await load_library_content(self.config)
             from api_service.services.seer.seer_client import SeerClient  # local import avoids circular deps
             async with SeerClient(self.config["SEER_API_URL"], self.config.get("SEER_TOKEN")) as seer_client:
-                return await seer_client.get_available_tmdb_ids()
+                return await load_library_content(self.config, seer_client)
         except Exception as exc:
-            logger.warning("Could not fetch library availability from Seer: %s", exc)
+            logger.warning("Could not load the library for AI Search: %s", exc)
             return {}
 
     async def _search_single(
@@ -145,12 +155,13 @@ class AiSearchService:
         exclude_watched: bool = True,
         exclude_seen: bool = False,
         record_seen: bool = True,
-        owned_ids: Optional[Dict[str, set]] = None,
+        owned_ids: Optional[Union[Dict[str, set], Awaitable[Dict[str, set]]]] = None,
     ) -> Dict[str, Any]:
         """Run the full search pipeline for a single media type.
 
-        :param owned_ids: TMDB IDs already in the library, keyed by media type;
-            matching results are excluded like already-requested ones.
+        :param owned_ids: TMDB IDs already in the library, keyed by media type, or
+            a task resolving to them; matching results are excluded like
+            already-requested ones.
         """
         # 1. Fetch history (best-effort — never crash the search if unavailable)
         history: List[Dict] = []
@@ -172,9 +183,6 @@ class AiSearchService:
             already_requested = DatabaseManager().get_requested_tmdb_ids()
         except Exception as exc:
             logger.warning("Could not fetch already-requested IDs: %s", exc)
-
-        # Titles already in the library are excluded the same way.
-        already_requested = already_requested | (owned_ids or {}).get(media_type, set())
 
         # 2b. Fetch user feedback (likes positively bias the prompt; dislikes are excluded from results).
         liked_titles: list = []
@@ -240,7 +248,12 @@ class AiSearchService:
             ]
             similar_result_groups: List[List[Dict]] = list(await asyncio.gather(*similar_tasks))
 
-        # 6. Build result list: AI suggestions only, filtered & deduped
+        # 6. Build result list: AI suggestions only, filtered & deduped.
+        # Titles already in the library are excluded like already-requested ones.
+        if inspect.isawaitable(owned_ids):
+            owned_ids = await owned_ids
+        already_requested = already_requested | (owned_ids or {}).get(media_type, set())
+
         seen_ids: set = set()
         final: List[Dict] = []
 

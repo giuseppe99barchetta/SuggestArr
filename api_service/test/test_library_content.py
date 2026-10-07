@@ -5,7 +5,8 @@ Covers:
 - existing_content_to_sets(): item dicts, raw IDs, empty input
 - merge_content_sets(): adds IDs per media type, ignores empty input
 - load_media_server_content(): Jellyfin/Emby and Plex clients, unknown service
-- load_library_content(): media server + Seer merge, skipped when exclude_downloaded is off
+- load_library_content(): media server + Seer merge, each source fails open, snapshot reuse,
+  no Seer client, skipped when exclude_downloaded is off
 """
 
 import unittest
@@ -80,6 +81,18 @@ class TestLoadMediaServerContent(unittest.IsolatedAsyncioTestCase):
         cls.assert_called_once_with('http://jf', 'token', 10, [{'id': 'lib1', 'name': 'Movies'}])
         client.close.assert_awaited_once()
 
+    async def test_uses_the_max_content_checks_setting(self):
+        client = _media_client({'movie': []})
+        with patch('api_service.services.jellyfin.jellyfin_client.JellyfinClient', return_value=client) as cls:
+            await load_media_server_content({
+                'SELECTED_SERVICE': 'jellyfin',
+                'JELLYFIN_API_URL': 'http://jf',
+                'JELLYFIN_TOKEN': 'token',
+                'MAX_CONTENT_CHECKS': '25',
+            })
+
+        cls.assert_called_once_with('http://jf', 'token', 25, [])
+
     async def test_emby_uses_the_jellyfin_client(self):
         client = _media_client({'movie': [{'tmdb_id': '603'}]})
         with patch('api_service.services.jellyfin.jellyfin_client.JellyfinClient', return_value=client):
@@ -114,6 +127,39 @@ class TestLoadLibraryContent(unittest.IsolatedAsyncioTestCase):
             result = await load_library_content({'SELECTED_SERVICE': 'jellyfin'}, seer_client)
 
         self.assertEqual(result, {'movie': {'155'}})
+
+    async def test_seer_failure_falls_back_to_media_server(self):
+        seer_client = _seer_client()
+        seer_client.get_available_tmdb_ids = AsyncMock(side_effect=RuntimeError('unexpected'))
+        with patch('api_service.services.library_content.load_media_server_content',
+                   AsyncMock(return_value={'movie': {'603'}})):
+            result = await load_library_content({'SELECTED_SERVICE': 'jellyfin'}, seer_client)
+
+        self.assertEqual(result, {'movie': {'603'}})
+
+    async def test_existing_snapshot_is_used_instead_of_scanning(self):
+        seer_client = _seer_client(available={'movie': {'155'}, 'tv': set()})
+        snapshot = {'movie': {'603'}}
+        with patch('api_service.services.library_content.load_media_server_content', AsyncMock()) as media_load:
+            result = await load_library_content({}, seer_client, media_server_content=snapshot)
+
+        media_load.assert_not_awaited()
+        self.assertEqual(result, {'movie': {'603', '155'}})
+        self.assertEqual(snapshot, {'movie': {'603'}})  # the caller's snapshot is not modified
+
+    async def test_without_seer_client_uses_media_server_only(self):
+        with patch('api_service.services.library_content.load_media_server_content',
+                   AsyncMock(return_value={'movie': {'603'}})):
+            result = await load_library_content({'SELECTED_SERVICE': 'jellyfin'})
+
+        self.assertEqual(result, {'movie': {'603'}})
+
+    async def test_without_seer_client_honours_exclude_downloaded_setting(self):
+        with patch('api_service.services.library_content.load_media_server_content', AsyncMock()) as media_load:
+            result = await load_library_content({'SELECTED_SERVICE': 'jellyfin', 'EXCLUDE_DOWNLOADED': False})
+
+        self.assertEqual(result, {})
+        media_load.assert_not_awaited()
 
     async def test_skipped_when_exclude_downloaded_is_off(self):
         seer_client = _seer_client(exclude_downloaded=False)

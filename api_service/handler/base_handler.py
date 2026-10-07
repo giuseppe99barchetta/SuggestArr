@@ -6,7 +6,7 @@ import re
 from abc import ABC, abstractmethod
 from api_service.services.llm.llm_service import is_llm_configured, get_recommendations_from_history
 from api_service.config.config import load_env_vars
-from api_service.services.library_content import merge_content_sets
+from api_service.services.library_content import load_library_content, merge_content_sets
 
 
 class BaseMediaHandler(ABC):
@@ -185,14 +185,18 @@ class BaseMediaHandler(ABC):
         """Treat titles Seer reports as available as already in the library.
 
         The media-server scan only sees items that carry a TMDB ID; Seer's
-        availability also covers items matched through TVDB or IMDb. Skipped
-        when "Exclude Downloaded Content" is off for this run.
+        availability also covers items matched through TVDB or IMDb. Goes through
+        the shared owned-content policy with the library this handler already
+        loaded, so the media server is not scanned twice. Skipped when "Exclude
+        Downloaded Content" is off for this run, and never raises.
         """
-        if self.seer_client is None or not self.seer_client.exclude_downloaded:
+        if self.seer_client is None:
             return
         merge_content_sets(
             self.existing_content_sets,
-            await self.seer_client.get_available_tmdb_ids(),
+            await load_library_content(
+                {}, self.seer_client, media_server_content=self.existing_content_sets,
+            ),
         )
 
     def _merge_seeds(self, seeds):
