@@ -200,11 +200,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Recreate nightly branch
         run: |
           git fetch origin
-          git branch -D nightly || true
-          git push origin --delete nightly || true
-          git checkout -b nightly
-          git push origin nightly
+          git push --force-with-lease origin origin/main:refs/heads/nightly
