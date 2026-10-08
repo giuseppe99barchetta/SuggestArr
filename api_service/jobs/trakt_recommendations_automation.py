@@ -15,6 +15,7 @@ from api_service.jobs.recommendation_automation import (
 )
 from api_service.services.config_service import ConfigService
 from api_service.services.filter_normalization import normalize_filters
+from api_service.services.library_content import load_library_content
 from api_service.services.request_sources import TRAKT_RECOMMENDATIONS_SOURCE
 from api_service.services.seer.seer_client import SeerClient
 from api_service.services.trakt.media_user_augmentor import TraktAccountResolver
@@ -238,70 +239,8 @@ class TraktRecommendationsAutomation:
             return set()
 
     async def _load_existing_content(self) -> Dict[str, set[str]]:
-        """Load existing Plex/Jellyfin TMDB IDs for downloaded-content checks."""
-        provider = str(self.env_vars.get("SELECTED_SERVICE") or "").lower()
-        max_content = int(self.env_vars.get("MAX_CONTENT_CHECK") or self.env_vars.get("MAX_CONTENT") or 10)
-
-        if provider == "jellyfin":
-            from api_service.services.jellyfin.jellyfin_client import JellyfinClient
-
-            jellyfin_libraries_raw = self.env_vars.get("JELLYFIN_LIBRARIES")
-            jellyfin_libraries = jellyfin_libraries_raw if isinstance(jellyfin_libraries_raw, list) else []
-            client = JellyfinClient(
-                self.env_vars.get("JELLYFIN_API_URL"),
-                self.env_vars.get("JELLYFIN_TOKEN"),
-                max_content,
-                jellyfin_libraries,
-            )
-            try:
-                await client.init_existing_content()
-                return self._existing_content_to_sets(client.existing_content)
-            finally:
-                await client.close()
-
-        if provider == "plex":
-            from api_service.services.plex.plex_client import PlexClient, normalize_guid_provider_id
-
-            plex_libraries_raw = self.env_vars.get("PLEX_LIBRARIES")
-            plex_libraries = plex_libraries_raw if isinstance(plex_libraries_raw, list) else []
-            client = PlexClient(
-                api_url=self.env_vars.get("PLEX_API_URL"),
-                token=self.env_vars.get("PLEX_TOKEN"),
-                max_content=max_content,
-                library_ids=plex_libraries,
-            )
-            try:
-                await client.init_existing_content()
-                existing = self._existing_content_to_sets(client.existing_content)
-                return {
-                    media_type: {
-                        normalize_guid_provider_id(f"tmdb://{tmdb_id}", "tmdb") or str(tmdb_id)
-                        for tmdb_id in ids
-                    }
-                    for media_type, ids in existing.items()
-                }
-            finally:
-                await client.close()
-
-        return {}
-
-    @staticmethod
-    def _existing_content_to_sets(existing_content: Optional[Dict[str, Any]]) -> Dict[str, set[str]]:
-        """Normalize client existing-content maps into media-type keyed TMDB ID sets."""
-        content_sets: Dict[str, set[str]] = {}
-        if not existing_content:
-            return content_sets
-
-        for media_type, items in existing_content.items():
-            ids = set()
-            for item in items or []:
-                if isinstance(item, dict) and item.get("tmdb_id"):
-                    ids.add(str(item["tmdb_id"]))
-                elif item:
-                    ids.add(str(item))
-            if ids:
-                content_sets[media_type] = ids
-        return content_sets
+        """Load TMDB IDs already in the library (media server plus Seer availability)."""
+        return await load_library_content(self.env_vars, self.seer_client)
 
     def _build_trakt_client(self) -> TraktClient:
         """Resolve the linked Trakt account for the configured media user."""
