@@ -13,6 +13,7 @@ PENDING_REQUEST_STATUSES = {1, "1", "pending", "PENDING"}
 MEDIA_PAGE_SIZE = 100  # Number of media items fetched per page when loading availability
 # Seer MediaStatus values that mean the title is already in the library:
 # 4 = PARTIALLY_AVAILABLE, 5 = AVAILABLE (same values in Overseerr and Jellyseerr).
+# Seer tracks regular and 4K availability separately (status / status4k).
 AVAILABLE_MEDIA_STATUSES = {4, 5}
 
 
@@ -621,6 +622,9 @@ class SeerClient(BaseHTTPClient):
         Seer tracks availability by scanning the media server and matches items by
         TMDB, TVDB or IMDb ID, so this also covers library items whose media-server
         metadata has no TMDB ID (for example shows matched only through TVDB).
+        A title counts when either its regular or its 4K copy is available. Seer's
+        ``filter=allavailable`` only checks the regular status, so the media list is
+        read unfiltered and both statuses are checked here.
 
         Best-effort: when Seer cannot be reached the returned sets are empty and the
         caller falls back to the media-server library alone.
@@ -652,7 +656,11 @@ class SeerClient(BaseHTTPClient):
             for media in page.get('results') or []:
                 media_type = media.get('mediaType')
                 tmdb_id = media.get('tmdbId')
-                if media_type in available and tmdb_id and media.get('status') in AVAILABLE_MEDIA_STATUSES:
+                is_available = (
+                    media.get('status') in AVAILABLE_MEDIA_STATUSES
+                    or media.get('status4k') in AVAILABLE_MEDIA_STATUSES
+                )
+                if media_type in available and tmdb_id and is_available:
                     available[media_type].add(str(tmdb_id))
 
         self.logger.info(
@@ -662,7 +670,7 @@ class SeerClient(BaseHTTPClient):
         return available
 
     async def _fetch_available_media_page(self, skip):
-        """Fetch one page of available media from Seer.
+        """Fetch one page of Seer's media list (all statuses; filtered by the caller).
 
         :param skip: Number of items to skip (page offset).
         :return: Decoded JSON page, or None when the request failed.
@@ -670,7 +678,7 @@ class SeerClient(BaseHTTPClient):
         self.logger.debug("Fetching available media from Seer starting at skip=%d", skip)
         try:
             return await self._make_request(
-                "GET", f"api/v1/media?filter=allavailable&take={MEDIA_PAGE_SIZE}&skip={skip}"
+                "GET", f"api/v1/media?take={MEDIA_PAGE_SIZE}&skip={skip}"
             )
         except Exception as e:  # timeouts are not aiohttp.ClientError, so _make_request lets them through
             self.logger.error("Failed to fetch available media from Seer at skip %d: %s", skip, e)

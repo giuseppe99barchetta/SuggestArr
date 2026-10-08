@@ -9,7 +9,7 @@ Covers:
 - get_total_request(): success, None data
 - check_already_requested(): exclude_requested=True/False, found/not-found, exception
 - check_already_downloaded(): found, not found, None local_content, exclude=False
-- get_available_tmdb_ids(): status filtering, pagination, Seer failures
+- get_available_tmdb_ids(): regular and 4K status filtering, pagination, Seer failures
 - _apply_profile_config(): applies all keys, tv languageProfileId, empty profile
 - _build_seer_payload(): movie / tv (all/numbered seasons), anime key, private meta-keys present
 - request_media(): duplicate pending, already in DB, new enqueue
@@ -434,9 +434,20 @@ class TestGetAvailableTmdbIds(unittest.IsolatedAsyncioTestCase):
             result = await client.get_available_tmdb_ids()
 
         self.assertEqual(result, {'movie': {'603'}, 'tv': {'1399'}})
-        mock_req.assert_awaited_once_with(
-            'GET', 'api/v1/media?filter=allavailable&take=100&skip=0'
-        )
+        # Unfiltered: Seer's filter=allavailable ignores status4k.
+        mock_req.assert_awaited_once_with('GET', 'api/v1/media?take=100&skip=0')
+
+    async def test_title_available_only_in_4k_counts_as_owned(self):
+        client = _make_client()
+        page = _media_page([
+            {'mediaType': 'movie', 'tmdbId': 27205, 'status': 1, 'status4k': 5},  # 4K only
+            {'mediaType': 'tv', 'tmdbId': 1399, 'status': 2, 'status4k': 4},      # 4K partially
+            {'mediaType': 'movie', 'tmdbId': 155, 'status': 2, 'status4k': 3},    # neither
+        ])
+        with patch.object(client, '_make_request', AsyncMock(return_value=page)):
+            result = await client.get_available_tmdb_ids()
+
+        self.assertEqual(result, {'movie': {'27205'}, 'tv': {'1399'}})
 
     async def test_fetches_every_page(self):
         client = _make_client()
