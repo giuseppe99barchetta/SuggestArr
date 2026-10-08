@@ -94,7 +94,11 @@ If you'd like to use a specific Seer user to make media requests, follow these s
 3. Enter the password for the selected user.
 4. The system will now use this user to make media requests, rather than using the admin or default profile.
 
-Note: Currently, only local Seer users are supported.
+Password-based selection supports local Seer users. For Jellyfin/Emby recommendation jobs,
+**Mapped Seer user (fallback to technical)** matches the user whose watch history is being
+processed to Seerr's `jellyfinUserId`, then submits with the configured API key and that
+user's Seerr ID. This also supports Jellyfin-authenticated Seerr accounts without a local
+password. If no match can be resolved, the configured technical Seer identity is used.
 
 ## Trakt Watch History Integration
 
