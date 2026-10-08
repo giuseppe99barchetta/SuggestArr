@@ -126,6 +126,8 @@ Use this page to manage local accounts, assign media-server accounts, and link p
 - After the media account is linked, the user can link their own Trakt account from Profile > Trakt Account.
 - Opening Recent Trakt Preview automatically fetches recent Trakt items and shows a loading icon while it loads.
 
+Jellyfin account linking uses the modern `Authorization: MediaBrowser ...` header, so Jellyfin 12 does not require enabling legacy authorization. The legacy header is also sent for compatibility with Emby and older servers.
+
 ### Jobs
 
 Use this page to create, preview, run, enable, or disable automated recommendation and discovery jobs.

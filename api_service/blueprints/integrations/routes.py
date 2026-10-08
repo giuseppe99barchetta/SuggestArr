@@ -31,13 +31,15 @@ def _read_credentials() -> tuple[str, str]:
 
 def _jellyfin_auth_headers() -> dict[str, str]:
     """Build authentication headers used by Jellyfin/Emby auth endpoint."""
+    client_auth = (
+        'MediaBrowser Client="SuggestArr", Device="SuggestArr", '
+        'DeviceId="suggestarr", Version="1.0.0"'
+    )
     return {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "X-Emby-Authorization": (
-            'MediaBrowser Client="SuggestArr", Device="SuggestArr", '
-            'DeviceId="suggestarr", Version="1.0.0"'
-        ),
+        "Authorization": client_auth,
+        "X-Emby-Authorization": client_auth,
     }
 
 
