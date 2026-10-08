@@ -68,6 +68,7 @@ class SeerClient(BaseHTTPClient):
         self.exclude_requested = exclude_watched
         self.anime_profile_config = anime_profile_config or {}
         self.queue_context = queue_context or {}
+        self._jellyfin_seer_user_ids = {}
         self.logger.debug("SeerClient initialized with API URL: %s", api_url)
 
     def _resolve_tv_seasons(self):
@@ -136,15 +137,17 @@ class SeerClient(BaseHTTPClient):
                             ):
                                 raise SeerPermissionError(message)
                             return None
-                        # Otherwise treat as auth failure and retry with login
+                        # Local login only refreshes cookie authentication, never an API key.
                         if attempt < retries - 1:
-                            self.logger.debug("Retrying login due to 403")
-                            await self.login()
+                            if use_cookie:
+                                self.logger.debug("Retrying login due to 403")
+                                await self.login()
                         else:
                             return None
                     elif response.status == 404 and attempt < retries - 1:
-                        self.logger.debug("Retrying login due to status 404")
-                        await self.login()
+                        if use_cookie:
+                            self.logger.debug("Retrying login due to status 404")
+                            await self.login()
                     else:
                         resp = await response.json()
                         self.logger.error(
@@ -206,7 +209,35 @@ class SeerClient(BaseHTTPClient):
                 for user in data.get('results', [])
             ]
         return []
-    
+
+    async def _resolve_jellyfin_seer_user_id(self, user_id):
+        """Map a media-server UUID to Seer, caching results for this job run."""
+        user_id = str(user_id).replace('-', '').lower()
+        if user_id in self._jellyfin_seer_user_ids:
+            return self._jellyfin_seer_user_ids[user_id]
+
+        skip = 0
+        page_size = 100
+        while True:
+            try:
+                data = await self._make_request(
+                    'GET', f'api/v1/user?take={page_size}&skip={skip}', use_cookie=False)
+            except (aiohttp.ClientError, asyncio.TimeoutError):
+                self.logger.warning('Unable to resolve the media user in Seer; using the technical identity.')
+                return None
+            if not data:
+                return None
+            users = data.get('results', [])
+            for seer_user in users:
+                media_user_id = str(seer_user.get('jellyfinUserId') or '').replace('-', '').lower()
+                if media_user_id == user_id and seer_user.get('id') is not None:
+                    self._jellyfin_seer_user_ids[user_id] = seer_user['id']
+                    return seer_user['id']
+            if len(users) < page_size:
+                self._jellyfin_seer_user_ids[user_id] = None
+                return None
+            skip += len(users)
+
     async def fetch_all_requests(self):
         """Fetch all requests made in the Seer service and save them to the database."""
         self.logger.debug("Fetching all requests...")
@@ -451,11 +482,17 @@ class SeerClient(BaseHTTPClient):
             if profile.get(key) is not None:
                 payload[key] = profile[key]
         payload['_seer_identity_mode'] = context.get('seer_identity_mode', 'technical_user')
-        if context.get('seer_identity_mode') in ('matching_user', 'admin_user') and context.get('owner_id'):
+        env = load_env_vars()
+        if (context.get('seer_identity_mode') == 'matching_user'
+                and context.get('job_type') == 'recommendation'
+                and env.get('SELECTED_SERVICE') in ('jellyfin', 'emby')):
+            seer_user_id = await self._resolve_jellyfin_seer_user_id(user_id) if user_id else None
+            if seer_user_id is not None:
+                payload['userId'] = seer_user_id
+        elif context.get('seer_identity_mode') in ('matching_user', 'admin_user') and context.get('owner_id'):
             owner = db.get_auth_user_by_id(context['owner_id']) or {}
             if owner.get('seer_user_id') is not None:
                 payload['userId'] = owner['seer_user_id']
-        env = load_env_vars()
         approval_default = env.get('REQUIRE_REQUEST_APPROVAL', False)
         status = 'awaiting_approval' if requires_request_approval(
             context.get('delivery_mode', 'inherit'), approval_default
@@ -526,7 +563,7 @@ class SeerClient(BaseHTTPClient):
         # Saved cookies can expire or belong to a previously selected user.
         # Refresh when credentials exist so queued jobs run as the configured
         # Jellyseerr user instead of silently falling back to a stale session.
-        if self.username and self.password:
+        if data.get('userId') is None and self.username and self.password:
             await self.login()
             if not self.session_token:
                 self.logger.error(
@@ -537,7 +574,11 @@ class SeerClient(BaseHTTPClient):
                 return False
 
         try:
-            response = await self._post_request_as_configured_user(data)
+            # Explicit Seer ownership requires the API key, including Jellyfin-authenticated users.
+            if data.get('userId') is not None:
+                response = await self._make_request('POST', 'api/v1/request', data=data, use_cookie=False)
+            else:
+                response = await self._post_request_as_configured_user(data)
         except SeerPermissionError as exc:
             self.logger.error(
                 "Configured Seer user cannot submit requests (%s).",

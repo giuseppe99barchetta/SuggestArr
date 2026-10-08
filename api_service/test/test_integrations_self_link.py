@@ -98,6 +98,39 @@ class _IntegrationsBase(unittest.TestCase):
 
 
 class TestJellyfinSelfLink(_IntegrationsBase):
+    def test_auth_headers_support_modern_and_legacy_servers_on_retry(self):
+        expected_auth = (
+            'MediaBrowser Client="SuggestArr", Device="SuggestArr", '
+            'DeviceId="suggestarr", Version="1.0.0"'
+        )
+        for provider in ("jellyfin", "emby"):
+            with self.subTest(provider=provider):
+                rejected = MagicMock(status_code=400)
+                accepted = MagicMock(status_code=200)
+                accepted.json.return_value = {"User": {"Id": "media-1", "Name": "media_user"}}
+
+                with patch(
+                    "api_service.blueprints.integrations.routes.ConfigService.get_runtime_config",
+                    return_value={"JELLYFIN_API_URL": "http://media.local"},
+                ), patch(
+                    "api_service.blueprints.integrations.routes.http_requests.post",
+                    side_effect=[rejected, accepted],
+                ) as mock_post:
+                    resp = self.client.post(
+                        f"/api/integrations/{provider}/link",
+                        json={"username": "media_user", "password": "secret"},
+                    )
+
+                self.assertEqual(resp.status_code, 200)
+                self.assertEqual(self._profiles[-1]["provider"], provider)
+                self.assertTrue(self._profiles[-1]["verified"])
+                self.assertEqual(mock_post.call_count, 2)
+                for call in mock_post.call_args_list:
+                    self.assertEqual(call.args[0], "http://media.local/Users/AuthenticateByName")
+                    headers = call.kwargs["headers"]
+                    self.assertEqual(headers["Authorization"], expected_auth)
+                    self.assertEqual(headers["X-Emby-Authorization"], expected_auth)
+
     def test_missing_credentials_returns_400(self):
         resp = self.client.post("/api/integrations/jellyfin/link", json={})
         self.assertEqual(resp.status_code, 400)

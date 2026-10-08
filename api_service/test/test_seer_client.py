@@ -159,6 +159,28 @@ class TestMakeRequest(unittest.IsolatedAsyncioTestCase):
         mock_login.assert_not_awaited()
         self.assertEqual(session.request.call_count, 1)
 
+    async def test_api_key_retries_do_not_attempt_local_login(self):
+        self.client.session_token = 'technical-cookie'
+        for status in (403, 404):
+            with self.subTest(status=status):
+                session = MagicMock()
+                session.request = MagicMock(side_effect=[
+                    _mock_response(status, {'message': 'Forbidden'}),
+                    _mock_response(201, {'id': 42}),
+                ])
+                with patch.object(self.client, '_get_session', AsyncMock(return_value=session)), \
+                     patch.object(self.client, 'login', AsyncMock()) as login, \
+                     patch('asyncio.sleep', AsyncMock()):
+                    result = await self.client._make_request(
+                        'POST', 'api/v1/request', data={'userId': 5}, use_cookie=False, retries=2)
+
+                self.assertEqual(result, {'id': 42})
+                login.assert_not_awaited()
+                for call in session.request.call_args_list:
+                    self.assertEqual(call.kwargs['headers']['X-Api-Key'], 'fake_key')
+                    self.assertEqual(call.kwargs['cookies'], {})
+                    self.assertEqual(call.kwargs['json']['userId'], 5)
+
     async def test_permission_403_can_be_reported_to_the_caller(self):
         resp = _mock_response(403, {'message': 'You do not have permission to access this endpoint'})
         session = _mock_session(resp)
@@ -554,6 +576,87 @@ class TestBuildSeerPayload(unittest.TestCase):
 
 class TestRequestMedia(unittest.IsolatedAsyncioTestCase):
 
+    async def _enqueue_with_identity(self, context, user, service='jellyfin', response=None):
+        client = _make_client(queue_context=context, session_token='technical-cookie')
+        with patch('api_service.services.seer.seer_client.DatabaseManager') as manager, \
+             patch('api_service.services.seer.seer_client.load_env_vars',
+                   return_value={'SELECTED_SERVICE': service}), \
+             patch.object(client, '_make_request', AsyncMock(return_value=response)) as request:
+            db = manager.return_value
+            db.check_request_exists.return_value = False
+            db.enqueue_request.return_value = True
+            db.get_auth_user_by_id.return_value = {'seer_user_id': 1}
+            await client.request_media('movie', {'id': 789}, user=user)
+        return db, request
+
+    async def test_matching_user_uses_recommendation_target_not_job_owner(self):
+        for service in ('jellyfin', 'emby'):
+            with self.subTest(service=service):
+                db, request = await self._enqueue_with_identity(
+                    {'job_type': 'recommendation', 'seer_identity_mode': 'matching_user', 'owner_id': 1},
+                    {'id': 'target-uuid', 'name': 'Dave'}, service=service,
+                    response={'results': [
+                        {'id': 1, 'jellyfinUserId': 'owner-uuid'},
+                        {'id': 5, 'jellyfinUserId': 'target-uuid'},
+                    ]},
+                )
+                args = db.enqueue_request.call_args
+                self.assertEqual(args.args[2], 'target-uuid')
+                self.assertEqual(args.args[3]['_user_id'], 'target-uuid')
+                self.assertEqual(args.args[3]['userId'], 5)
+                self.assertEqual(args.kwargs['owner_id'], 1)
+                db.get_auth_user_by_id.assert_not_called()
+                request.assert_awaited_once()
+                self.assertFalse(request.call_args.kwargs['use_cookie'])
+
+    async def test_unmapped_recommendation_target_falls_back_to_technical_user(self):
+        for response in (None, {'results': []}, {'results': [
+            {'id': 1, 'jellyfinUserId': 'owner-uuid'},
+            {'id': 5, 'displayName': 'Dave'},
+        ]}):
+            with self.subTest(response=response):
+                db, _ = await self._enqueue_with_identity(
+                    {'job_type': 'recommendation', 'seer_identity_mode': 'matching_user', 'owner_id': 1},
+                    {'id': 'target-uuid', 'name': 'Dave'}, response=response,
+                )
+                self.assertNotIn('userId', db.enqueue_request.call_args.args[3])
+                db.get_auth_user_by_id.assert_not_called()
+
+    async def test_other_identity_paths_keep_their_configured_mapping(self):
+        cases = [
+            ('recommendation', 'admin_user', 'jellyfin', {'id': 'target-uuid'}, 1),
+            ('recommendation', 'technical_user', 'jellyfin', {'id': 'target-uuid'}, None),
+            ('recommendation', 'matching_user', 'plex', {'id': 'plex-id'}, 1),
+            ('discover', 'matching_user', 'jellyfin', None, 1),
+            ('trakt_recommendations', 'matching_user', 'jellyfin', {'id': '1'}, 1),
+        ]
+        for job_type, mode, service, user, expected_id in cases:
+            with self.subTest(job_type=job_type, mode=mode, service=service):
+                db, request = await self._enqueue_with_identity(
+                    {'job_type': job_type, 'seer_identity_mode': mode, 'owner_id': 1},
+                    user, service=service,
+                )
+                self.assertEqual(db.enqueue_request.call_args.args[3].get('userId'), expected_id)
+                request.assert_not_awaited()
+
+    async def test_ownerless_job_still_maps_the_recommendation_target(self):
+        db, _ = await self._enqueue_with_identity(
+            {'job_type': 'recommendation', 'seer_identity_mode': 'matching_user'},
+            {'id': 'target-uuid'}, response={'results': [
+                {'id': 5, 'jellyfinUserId': 'target-uuid'},
+            ]},
+        )
+        self.assertEqual(db.enqueue_request.call_args.args[3]['userId'], 5)
+
+    async def test_missing_recommendation_target_uses_technical_identity(self):
+        db, request = await self._enqueue_with_identity(
+            {'job_type': 'recommendation', 'seer_identity_mode': 'matching_user', 'owner_id': 1},
+            None,
+        )
+        self.assertNotIn('userId', db.enqueue_request.call_args.args[3])
+        db.get_auth_user_by_id.assert_not_called()
+        request.assert_not_awaited()
+
     async def test_returns_false_when_already_in_pending(self):
         client = _make_client()
         client.pending_requests.add(('movie', '123'))
@@ -576,6 +679,48 @@ class TestRequestMedia(unittest.IsolatedAsyncioTestCase):
             result = await client.request_media('movie', {'id': 789}, user=user)
         self.assertTrue(result)
         self.assertIn(('movie', '789'), client.pending_requests)
+
+
+class TestResolveJellyfinSeerUser(unittest.IsolatedAsyncioTestCase):
+
+    async def test_paginates_and_normalizes_uuid_format(self):
+        client = _make_client(session_token='technical-cookie')
+        uuid = '01234567-89AB-CDEF-0123-456789ABCDEF'
+        pages = [
+            {'results': [{'id': index, 'jellyfinUserId': f'other-{index}'} for index in range(100)]},
+            {'results': [{'id': 105, 'jellyfinUserId': uuid}]},
+        ]
+        with patch.object(client, '_make_request', AsyncMock(side_effect=pages)) as request:
+            result = await client._resolve_jellyfin_seer_user_id(uuid.replace('-', '').lower())
+            cached = await client._resolve_jellyfin_seer_user_id(uuid)
+
+        self.assertEqual(result, 105)
+        self.assertEqual(cached, 105)
+        self.assertEqual(request.await_count, 2)
+        self.assertEqual(request.call_args_list[0].args, ('GET', 'api/v1/user?take=100&skip=0'))
+        self.assertEqual(request.call_args_list[1].args, ('GET', 'api/v1/user?take=100&skip=100'))
+        for call in request.call_args_list:
+            self.assertFalse(call.kwargs['use_cookie'])
+
+    async def test_caches_matches_and_missing_users_separately(self):
+        client = _make_client()
+        users = {'results': [
+            {'id': 5, 'jellyfinUserId': 'dave-uuid'},
+            {'id': 7, 'jellyfinUserId': 'alice-uuid'},
+        ]}
+        with patch.object(client, '_make_request', AsyncMock(return_value=users)) as request:
+            for user, expected in [('dave-uuid', 5), ('alice-uuid', 7), ('missing-uuid', None)] * 2:
+                self.assertEqual(await client._resolve_jellyfin_seer_user_id(user), expected)
+        self.assertEqual(request.await_count, 3)
+
+    async def test_lookup_failure_falls_back_without_caching_failure(self):
+        client = _make_client()
+        with patch.object(client, '_make_request', AsyncMock(side_effect=[
+            asyncio.TimeoutError(),
+            {'results': [{'id': 5, 'jellyfinUserId': 'target-uuid'}]},
+        ])):
+            self.assertIsNone(await client._resolve_jellyfin_seer_user_id('target-uuid'))
+            self.assertEqual(await client._resolve_jellyfin_seer_user_id('target-uuid'), 5)
 
 
 # ---------------------------------------------------------------------------
@@ -714,6 +859,30 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
         }
         base.update(extra)
         return base
+
+    async def test_explicit_mapped_user_uses_api_key_without_local_login(self):
+        client = _make_client(session_token='technical-cookie')
+        payload = self._valid_payload(userId=5, _seer_identity_mode='matching_user')
+        with patch.object(client, 'login', AsyncMock()) as login, \
+             patch.object(client, '_make_request', AsyncMock(return_value={'id': 55})) as request:
+            result = await client.submit_queued_request(payload)
+
+        self.assertTrue(result)
+        login.assert_not_awaited()
+        self.assertEqual(request.call_args.args, ('POST', 'api/v1/request'))
+        self.assertEqual(request.call_args.kwargs['data']['userId'], 5)
+        self.assertFalse(request.call_args.kwargs['use_cookie'])
+
+    async def test_unmapped_user_keeps_technical_user_authentication(self):
+        client = _make_client(session_token='technical-cookie')
+        with patch.object(client, 'login', AsyncMock()) as login, \
+             patch.object(client, '_make_request', AsyncMock(return_value={'id': 55})) as request:
+            result = await client.submit_queued_request(
+                self._valid_payload(_seer_identity_mode='matching_user'))
+
+        self.assertTrue(result)
+        login.assert_awaited_once()
+        self.assertTrue(request.call_args.kwargs['use_cookie'])
 
     async def test_strips_private_keys_and_returns_true_on_success(self):
         client = _make_client(session_token='tok')
