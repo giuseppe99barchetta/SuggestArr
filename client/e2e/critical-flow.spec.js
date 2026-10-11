@@ -223,10 +223,10 @@ test("a job preview and simulated request run without external providers", async
   await page.getByRole("link", { name: "Jobs", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Manual job" })).toBeVisible();
   await page.getByRole("button", { name: "Preview" }).click();
-  await expect(page.getByRole("heading", { name: "Dry Run Preview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dry run preview" })).toBeVisible();
   await expect(page.getByText("Preview title")).toBeVisible();
-  await expect(page.getByText("No actual requests were made")).toBeVisible();
+  await expect(page.getByText(/nothing was requested/)).toBeVisible();
 
-  await page.getByRole("button", { name: "Run Job Now" }).click();
+  await page.getByRole("button", { name: "Run job now" }).click();
   await expect.poll(api.runCalls).toBe(1);
 });

@@ -73,6 +73,7 @@
 import PageHeader from '@/components/ui/PageHeader.vue';
 import axios from 'axios';
 import { parseLogs } from '@/utils/logs.js';
+import { copyText } from '@/utils/clipboard.js';
 
 const BATCH_SIZE = 100;
 
@@ -177,22 +178,8 @@ export default {
     },
     async copyLog(log) {
       const text = `${log.dateTime} - ${log.tag} - ${log.severity} - ${log.message}`;
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch {
-        // The clipboard API needs HTTPS or localhost; plain-HTTP LAN installs fall back to execCommand.
-        const textarea = Object.assign(document.createElement('textarea'), { value: text });
-        textarea.style.cssText = 'position:fixed;opacity:0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        const copied = document.execCommand('copy');
-        textarea.remove();
-        if (!copied) {
-          this.$toast.error('Failed to copy log to clipboard.');
-          return;
-        }
-      }
-      this.$toast.success('Log line copied.');
+      if (await copyText(text)) this.$toast.success('Log line copied.');
+      else this.$toast.error('Failed to copy log to clipboard.');
     },
     startAutoUpdate() {
       this.fetchLogs();

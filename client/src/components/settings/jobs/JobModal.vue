@@ -1,20 +1,24 @@
 <template>
+  <!-- Not AppDialog: a native modal <dialog> would make the jobs tour, which highlights fields in here, inert. -->
   <Teleport to="body">
-    <div class="modal-overlay" @click.self="$emit('close')">
-      <div class="modal">
-      <!-- Minimal Header -->
-      <div class="modal-header">
-        <h3 class="modal-title">{{ isEditing ? 'Edit Job' : 'Create New Job' }}</h3>
-        <button @click="$emit('close')" class="modal-close" aria-label="Close">
-          <i class="fas fa-times"></i>
+    <div class="fixed inset-0 z-[1050] flex bg-black/70 p-4 backdrop-blur-sm max-sm:p-2" @click.self="$emit('close')">
+      <div role="dialog" aria-modal="true" aria-labelledby="job-modal-title" class="m-auto flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-card border border-edge bg-panel text-ink shadow-2xl">
+      <header class="flex shrink-0 items-start gap-3 border-b border-edge px-6 py-4 max-sm:px-4">
+        <span aria-hidden="true" class="grid h-9 w-9 shrink-0 place-items-center rounded-ctl bg-brand-soft text-sm text-brand-ink"><i :class="jobTypeInfoIcon"></i></span>
+        <div class="min-w-0 flex-1 self-center">
+          <h2 id="job-modal-title" class="m-0 text-base font-bold text-ink">{{ isEditing ? 'Edit job' : 'New job' }}</h2>
+          <p class="m-0 mt-0.5 text-[13px] text-ink-3">{{ isEditing ? form.name : 'Pick what to look for, when, and how it reaches Seer.' }}</p>
+        </div>
+        <button type="button" class="-mr-2 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" aria-label="Close" @click="$emit('close')">
+          <i aria-hidden="true" class="fas fa-times"></i>
         </button>
-      </div>
+      </header>
 
-      <form @submit.prevent="handleSubmit" class="modal-form">
-        <div class="modal-body">
+      <form @submit.prevent="handleSubmit" class="flex min-h-0 flex-1 flex-col">
+        <div class="min-h-0 flex-1 overflow-y-auto p-6 max-sm:p-4">
           <!-- Job Type Selector -->
           <div class="settings-group" data-tour-id="job-modal-type-selector">
-            <h4>Job Type</h4>
+            <h4>Job type</h4>
             <div class="job-type-selector">
               <button
                 type="button"
@@ -72,16 +76,16 @@
 
           <!-- Basic Info -->
           <div class="settings-group" data-tour-id="job-modal-basic-info">
-            <h4>Basic Information</h4>
+            <h4>Basics</h4>
 
             <div class="form-group">
-              <label for="jobName">Job Name</label>
+              <label for="jobName">Name</label>
               <input
                 id="jobName"
                 v-model="form.name"
                 type="text"
                 :placeholder="jobNamePlaceholder"
-                class="form-control"
+                class="ui-input"
                 required
               />
             </div>
@@ -105,7 +109,7 @@
                   @click="form.media_type = 'tv'"
                 >
                   <i class="fas fa-tv"></i>
-                  TV Shows
+                  TV shows
                 </button>
                 <button
                   v-if="form.job_type !== 'discover'"
@@ -123,12 +127,12 @@
 
           <!-- User Selection (only for recommendation jobs) -->
           <div v-if="form.job_type === 'recommendation'" class="settings-group">
-            <h4>Users to Monitor</h4>
+            <h4>Users to monitor</h4>
             <RecommendationFilters v-model="form" :show-advanced="showAdvanced" :llm-configured="llmConfigured" />
           </div>
 
           <div v-if="form.job_type === 'trakt_recommendations'" class="settings-group">
-            <h4>Trakt User</h4>
+            <h4>Trakt user</h4>
             <TraktRecommendationFilters
               v-model="form"
               :show-advanced="showAdvanced"
@@ -204,18 +208,18 @@
               <div v-if="form.job_type !== 'discover' && form.prevent_suggestions_if_unwatched" class="form-group">
                 <label for="unwatchedDays">Days before pausing</label>
                 <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days"
-                  class="form-control" type="number" min="1" required />
+                  class="ui-input" type="number" min="1" required />
               </div>
               <div class="form-group">
                 <label for="maxRequestsPerUser">Automatic requests per user</label>
                 <input id="maxRequestsPerUser" v-model.number="form.max_requests_per_user"
-                  class="form-control" type="number" min="0" max="1000" required />
+                  class="ui-input" type="number" min="0" max="1000" required />
                 <small class="form-help">Set 0 for no extra limit. Max Results still caps each run.</small>
               </div>
               <div v-if="form.max_requests_per_user > 0" class="form-group">
                 <label for="requestLimitWindowHours">Rolling window (hours)</label>
                 <input id="requestLimitWindowHours" v-model.number="form.request_limit_window_hours"
-                  class="form-control" type="number" min="1" max="8760" required />
+                  class="ui-input" type="number" min="1" max="8760" required />
               </div>
             </div>
           </div>
@@ -223,7 +227,7 @@
           <!-- Advanced Settings Toggle -->
           <button type="button" class="advanced-toggle" data-tour-id="job-modal-advanced-toggle" @click="showAdvanced = !showAdvanced">
             <i :class="showAdvanced ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
-            {{ showAdvanced ? 'Hide Advanced Settings' : 'Show Advanced Settings' }}
+            {{ showAdvanced ? 'Hide advanced settings' : 'Show advanced settings' }}
           </button>
 
           <!-- Advanced Settings (collapsible) -->
@@ -233,7 +237,7 @@
               <div v-if="form.job_type !== 'recommendation'" class="settings-group" data-tour-id="job-modal-max-results">
                 <h4>Results</h4>
                 <div class="form-group">
-                  <label for="maxResults">Max Results: {{ form.max_results }}</label>
+                  <label for="maxResults">Max results: {{ form.max_results }}</label>
                   <input
                     id="maxResults"
                     v-model.number="form.max_results"
@@ -251,7 +255,7 @@
 
               <!-- Filters -->
               <div class="settings-group filters-section" data-tour-id="job-modal-filters">
-                <h4>{{ form.job_type === 'discover' ? 'Discovery Filters' : 'Quality Filters' }}</h4>
+                <h4>{{ form.job_type === 'discover' ? 'Discovery filters' : 'Quality filters' }}</h4>
                 <JobFilters
                   v-model="form.filters"
                   :media-type="form.media_type"
@@ -265,17 +269,13 @@
           </transition>
         </div>
 
-        <!-- Footer outside scrollable area -->
-        <div class="modal-footer">
-          <button type="button" @click="$emit('close')" class="btn btn-secondary">
-            Cancel
+        <footer class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-edge bg-panel-2/50 px-6 py-3 max-sm:px-4">
+          <button type="button" class="ui-btn" @click="$emit('close')">Cancel</button>
+          <button type="submit" class="ui-btn-primary" :disabled="!isValid || isSaving">
+            <i v-if="isSaving" aria-hidden="true" class="fas fa-spinner fa-spin"></i>
+            {{ isEditing ? 'Save job' : 'Create job' }}
           </button>
-          <button type="submit" class="btn btn-primary" :disabled="!isValid || isSaving">
-            <i v-if="isSaving" class="fas fa-spinner fa-spin"></i>
-            <i v-else class="fas fa-check"></i>
-            {{ isEditing ? 'Update Job' : 'Create Job' }}
-          </button>
-        </div>
+        </footer>
       </form>
       </div>
     </div>
@@ -543,98 +543,70 @@ export default {
 </script>
 
 <style scoped>
-/* Component-specific styles only */
-
-.modal {
-  position: relative;
-  z-index: 2001;
-}
-
-/* Job Type Selector */
+/* Job type selector */
 .job-type-selector {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
 }
 
-.job-type-btn {
-  flex: 1;
+.job-type-btn,
+.media-type-btn {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.875rem 1rem;
-  background: transparent;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
+  padding: 0.75rem 0.875rem;
+  background: var(--color-panel-2);
+  border: 1px solid var(--color-edge-strong);
+  border-radius: var(--radius-ctl);
+  color: var(--color-ink-2);
   cursor: pointer;
-  transition: var(--transition-base);
   text-align: left;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: border-color 0.15s, background-color 0.15s;
 }
 
-.job-type-btn:hover {
-  background: var(--color-bg-overlay-light);
-  color: var(--color-text-primary);
+.job-type-btn:hover:not(:disabled),
+.media-type-btn:hover {
+  border-color: var(--color-ink-4);
+  color: var(--color-ink);
 }
 
-.job-type-btn.active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
+.job-type-btn.active,
+.media-type-btn.active {
+  background: var(--color-brand-soft);
+  border-color: var(--color-brand);
+  color: var(--color-ink);
 }
 
 .job-type-btn i {
-  font-size: 1rem;
-  width: 1.5rem;
+  width: 1.25rem;
   text-align: center;
+  color: var(--color-ink-4);
 }
 
-.job-type-btn.discover > i {
-  color: var(--color-primary-light);
-}
-
-.job-type-btn.recommendation > i {
-  color: var(--color-warning-light);
-}
-
-.job-type-btn.trakt_recommendations > i {
-  color: var(--color-error-light);
-}
-
-.job-type-btn.active i {
-  color: white;
+.job-type-btn.active i,
+.media-type-btn.active > i {
+  color: var(--color-brand-ink);
 }
 
 .job-type-info {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
-}
-
-.job-type-name {
-  font-weight: var(--font-weight-medium);
-  font-size: 0.85rem;
+  min-width: 0;
 }
 
 .job-type-desc {
-  font-size: 0.7rem;
-  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--color-ink-3);
 }
 
-.job-type-btn.active .job-type-desc {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.job-type-btn.disabled,
 .job-type-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-}
-
-.job-type-btn.disabled:hover,
-.job-type-btn:disabled:hover {
-  background: transparent;
-  color: var(--color-text-secondary);
-  border-color: var(--color-border-light);
 }
 
 .trakt-setup-alert {
@@ -643,55 +615,39 @@ export default {
   gap: 0.5rem;
   margin-top: 0.75rem;
   padding: 0.75rem;
-  border: 1px dashed var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
+  border: 1px dashed var(--color-edge-strong);
+  border-radius: var(--radius-ctl);
+  color: var(--color-ink-3);
   font-size: 0.8rem;
 }
 
 .trakt-setup-alert i {
-  color: var(--color-primary);
+  color: var(--color-brand-ink);
   margin-top: 0.1rem;
 }
 
-/* Info Note */
 .info-note {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
-  background: var(--color-bg-overlay-light);
-  border-radius: var(--radius-sm);
+  background: var(--color-panel-2);
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-ctl);
   margin-bottom: 1.5rem;
   font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.info-note.recommendation {
-  background: var(--color-bg-overlay-light);
-}
-
-.info-note.discover i {
-  color: var(--color-primary-light);
-}
-
-.info-note.recommendation i {
-  color: var(--color-warning-light);
-}
-
-.info-note.trakt_recommendations i {
-  color: var(--color-error-light);
+  line-height: 1.5;
+  color: var(--color-ink-3);
 }
 
 .info-note i {
-  font-size: 0.9rem;
   flex-shrink: 0;
-  margin-top: 0.1rem;
+  margin-top: 0.15rem;
+  color: var(--color-brand-ink);
 }
 
 .settings-group {
-  margin-bottom: 1.5rem;
-  overflow: visible;
+  margin-bottom: 1.75rem;
 }
 
 .settings-group:last-of-type {
@@ -700,85 +656,75 @@ export default {
 
 /* Filters section needs room for dropdowns */
 .settings-group.filters-section {
-  overflow: visible;
   position: relative;
   z-index: 50;
 }
 
-/* Small spacer for visual breathing room */
 .dropdown-spacer {
   height: 1rem;
-  flex-shrink: 0;
 }
 
 .settings-group h4 {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-ink-4);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 0 0 1rem 0;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.75rem;
 }
 
 .delivery-mode-selector {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .delivery-mode-selector .media-type-btn span {
   display: grid;
   flex: 1;
-  gap: var(--spacing-xs);
-  text-align: left;
-}
-
-.delivery-mode-selector .media-type-btn {
-  justify-content: flex-start;
-  gap: var(--spacing-md);
+  gap: 0.15rem;
 }
 
 .delivery-mode-selector .media-type-btn > i {
-  flex: 0 0 var(--spacing-md);
+  flex: 0 0 1rem;
   text-align: center;
+  color: var(--color-ink-4);
 }
 
 .delivery-mode-selector small {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-normal);
+  color: var(--color-ink-3);
+  font-size: 0.72rem;
+  font-weight: 400;
 }
 
 .request-profiles-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  gap: var(--spacing-md);
-  margin-top: var(--spacing-md);
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
 
 .request-profile-card {
   display: grid;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--surface-glass-light);
-  border-radius: var(--radius-md);
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--color-panel-2);
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-ctl);
 }
 
 .request-profile-heading {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  color: var(--color-text-primary);
-  font-weight: var(--font-weight-semibold);
+  gap: 0.5rem;
+  color: var(--color-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
-@media (max-width: 768px) {
-  .delivery-mode-selector,
-  .request-profiles-grid {
-    grid-template-columns: 1fr;
-  }
+.request-profile-heading i {
+  color: var(--color-ink-4);
 }
 
 .form-group {
@@ -791,50 +737,26 @@ export default {
 
 .form-group label {
   display: block;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--spacing-sm);
-}
-
-.form-control {
-  width: 100%;
-  padding: 0.65rem 0.875rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  font-size: 0.9rem;
-  transition: var(--transition-base);
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-glow);
-}
-
-.form-control::placeholder {
-  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  margin-bottom: 0.4rem;
 }
 
 .form-help {
   display: block;
   font-size: 0.75rem;
-  color: var(--color-text-muted);
+  color: var(--color-ink-4);
   margin-top: 0.35rem;
 }
 
 .schedule-options {
   display: grid;
-  gap: var(--spacing-md);
-  margin-top: var(--spacing-md);
+  gap: 1rem;
+  margin-top: 1rem;
 }
 
-.schedule-options > .form-group {
-  margin-bottom: 0;
-}
-
+.schedule-options > .form-group,
 .schedule-options .delivery-mode-selector {
   margin-bottom: 0;
 }
@@ -844,105 +766,48 @@ export default {
   gap: 0.5rem;
 }
 
-.media-type-btn {
+.media-type-selector .media-type-btn {
   flex: 1;
-  display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 0.65rem 0.75rem;
-  background: transparent;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: var(--transition-base);
-  font-size: 0.85rem;
-  font-weight: var(--font-weight-medium);
-}
-
-.media-type-btn:hover {
-  background: var(--color-bg-overlay-light);
-  color: var(--color-text-primary);
-}
-
-.media-type-btn.active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
 }
 
 .form-range {
   width: 100%;
-  height: 6px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--color-border-light);
-  border-radius: var(--radius-full);
-  outline: none;
   margin-top: 0.5rem;
+  accent-color: var(--color-brand);
 }
 
-.form-range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  background: var(--color-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.form-range::-webkit-slider-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: var(--shadow-glow);
-}
-
-.form-range::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  background: var(--color-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-}
-
-/* Advanced Toggle */
 .advanced-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   width: 100%;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1rem;
+  margin: 1.75rem 0 1rem;
+  padding: 0.7rem 1rem;
   background: transparent;
-  border: 1px dashed var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
+  border: 1px dashed var(--color-edge-strong);
+  border-radius: var(--radius-ctl);
+  color: var(--color-ink-3);
   font-size: 0.85rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: var(--transition-base);
 }
 
 .advanced-toggle:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  background: var(--color-primary-alpha-10);
+  border-color: var(--color-brand-ink);
+  color: var(--color-brand-ink);
 }
 
 .advanced-toggle i {
   font-size: 0.75rem;
-  transition: transform 0.2s ease;
 }
 
 .advanced-section {
-  border-top: 1px solid var(--color-border-light);
-  padding-top: 1rem;
+  border-top: 1px solid var(--color-edge);
+  padding-top: 1.25rem;
 }
 
-/* Slide Transition */
 .slide-enter-active,
 .slide-leave-active {
   transition: all 0.3s ease;
@@ -962,20 +827,17 @@ export default {
   max-height: 2000px;
 }
 
-
+@media (max-width: 768px) {
+  .job-type-selector,
+  .delivery-mode-selector,
+  .request-profiles-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 @media (max-width: 600px) {
   .media-type-selector {
     flex-direction: column;
-  }
-
-  .job-type-selector {
-    flex-direction: column;
-  }
-
-  .settings-group {
-    padding: 1.25rem;
-    margin-bottom: 1.25rem;
   }
 }
 </style>

@@ -63,6 +63,9 @@
   .ui-btn-primary {
     @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border-0 bg-brand px-4 text-sm font-bold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
   }
+  .ui-btn-danger {
+    @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border-0 bg-bad px-4 text-sm font-bold text-[#2a0c0b] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
+  }
   .ui-btn-icon-danger {
     @apply inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-bad/15 hover:text-bad disabled:opacity-50;
   }

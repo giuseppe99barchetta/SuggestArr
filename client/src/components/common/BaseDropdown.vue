@@ -60,7 +60,7 @@
     </transition>
   </div>
 
-  <Teleport to="body">
+  <Teleport :to="menuTarget">
     <Transition name="dropdown-slide">
       <div
         v-if="isOpen"
@@ -171,7 +171,9 @@ export default {
       isOpen: false,
       highlightedIndex: -1,
       menuItemRefs: [],
-      menuStyle: null
+      menuStyle: null,
+      // A modal <dialog> makes the rest of the page inert, so menus opened inside one must render in it.
+      menuTarget: 'body'
     };
   },
   computed: {
@@ -186,6 +188,7 @@ export default {
     }
   },
   mounted() {
+    this.menuTarget = this.$refs.dropdownWrapper.closest('dialog') || 'body';
     this._onDocumentClick = (event) => {
       const wrapper = this.$refs.dropdownWrapper;
       const menu = this.$refs.dropdownMenu;
@@ -444,7 +447,7 @@ export default {
 /* Dropdown Trigger */
 .dropdown-trigger {
   position: relative;
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--radius-ctl);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
 }
@@ -452,9 +455,9 @@ export default {
 .select-background {
   position: absolute;
   inset: 0;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-medium);
-  border-radius: var(--border-radius-sm);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-edge-strong);
+  border-radius: var(--radius-ctl);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1;
 }
@@ -476,10 +479,7 @@ export default {
 
 .custom-dropdown.is-open .select-background,
 .dropdown-trigger:hover .select-background {
-  border-color: rgba(229, 231, 235, 0.25);
-  box-shadow: 
-    0 0 0 3px rgba(229, 231, 235, 0.05),
-    0 8px 24px -4px rgba(0, 0, 0, 0.4);
+  border-color: var(--color-brand-ink);
 }
 
 .custom-dropdown.has-error .select-background {
@@ -490,7 +490,7 @@ export default {
 /* Selected Value */
 .selected-value {
   position: relative;
-  padding: 0.875rem 3rem 0.875rem 1.125rem;
+  padding: 0.6875rem 2.75rem 0.6875rem 0.75rem;
   z-index: 2;
   min-width: 0;
 }
@@ -504,14 +504,14 @@ export default {
 }
 
 .value-text {
-  color: #f3f4f6;
-  font-size: 0.9375rem;
-  font-weight: 500;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  font-weight: 400;
 }
 
 .placeholder-text {
-  color: #9ca3af;
-  font-size: 0.9375rem;
+  color: var(--color-ink-4);
+  font-size: 0.875rem;
   font-weight: 400;
 }
 
@@ -567,18 +567,10 @@ export default {
 }
 
 .dropdown-menu-inner {
-  background: linear-gradient(
-    135deg,
-    rgba(28, 28, 29, 0.98) 0%,
-    rgba(30, 30, 31, 0.99) 100%
-  );
-  backdrop-filter: blur(24px) saturate(120%);
-  border: 1px solid rgba(148, 163, 184, 0.2); 
-  border-radius: 12px;
-  box-shadow: 
-    0 0 0 1px rgba(148, 163, 184, 0.1),
-    0 20px 40px -12px rgba(0, 0, 0, 0.7),
-    0 0 60px -20px rgba(148, 163, 184, 0.15);
+  background: var(--color-panel-2);
+  border: 1px solid var(--color-edge-strong);
+  border-radius: var(--radius-ctl);
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
   overflow: hidden;
 }
 
@@ -586,7 +578,7 @@ export default {
 .dropdown-scroll {
   max-height: 320px;
   overflow-y: auto;
-  padding: 0.5rem;
+  padding: 0.25rem;
 }
 
 /* Custom Scrollbar - Grigio */
@@ -613,8 +605,8 @@ export default {
 /* Dropdown Item */
 .dropdown-item {
   position: relative;
-  padding: 0.875rem 1rem;
-  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 7px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
@@ -622,7 +614,7 @@ export default {
 }
 
 .dropdown-item:not(:last-child) {
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.125rem;
 }
 
 .item-content {
@@ -634,15 +626,15 @@ export default {
 }
 
 .item-label {
-  color: #e5e7eb;
-  font-size: 0.9375rem;
-  font-weight: 500;
+  color: var(--color-ink-2);
+  font-size: 0.875rem;
+  font-weight: 400;
   transition: all 0.2s ease;
 }
 
 .item-check {
   font-size: 0.875rem;
-  color: #f3f4f6;
+  color: var(--color-brand-ink);
   animation: check-bounce 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
@@ -654,24 +646,15 @@ export default {
 
 /* Item States - Grigio */
 .dropdown-item.is-highlighted {
-  background: linear-gradient(
-    135deg,
-    rgba(75, 85, 99, 0.25) 0%,
-    rgba(55, 65, 81, 0.2) 100%
-  );
+  background: var(--color-raised);
 }
 
 .dropdown-item.is-selected {
-  background: linear-gradient(
-    135deg,
-    rgba(107, 114, 128, 0.35) 0%,
-    rgba(75, 85, 99, 0.25) 100%
-  );
-  border: 1px solid rgba(229, 231, 235, 0.1);
+  background: var(--color-brand-soft);
 }
 
 .dropdown-item.is-selected .item-label {
-  color: #ffffff;
+  color: var(--color-ink);
   font-weight: 600;
 }
 
@@ -682,11 +665,7 @@ export default {
 }
 
 .dropdown-item:not(.is-disabled):hover {
-  background: linear-gradient(
-    135deg,
-    rgba(107, 114, 128, 0.4) 0%,
-    rgba(75, 85, 99, 0.3) 100%
-  );
+  background: var(--color-raised);
 }
 
 .dropdown-item:not(.is-disabled):active {

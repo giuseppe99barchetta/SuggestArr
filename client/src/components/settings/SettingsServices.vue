@@ -89,12 +89,10 @@
             <!-- Multiple servers: dropdown -->
             <div v-if="plexOAuthConnectionOptions.length > 1" class="form-group">
               <label>Server connection</label>
-              <BaseDropdown
-                v-model="plexOAuthSelectedConnIdx"
-                :options="plexOAuthConnectionOptions"
-                placeholder="Choose a server connection…"
-                @update:modelValue="onPlexOAuthServerSelect"
-              />
+              <select v-model="plexOAuthSelectedConnIdx" class="ui-input" @change="onPlexOAuthServerSelect(plexOAuthSelectedConnIdx)">
+                <option :value="null" disabled>Choose a server connection…</option>
+                <option v-for="option in plexOAuthConnectionOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
             </div>
             <div class="form-group">
               <label>Or enter URL manually</label>
@@ -148,66 +146,75 @@
           </button>
         </template>
 
-        <!-- Libraries & Users (collapsible advanced section) -->
-        <div v-if="mediaServerConnected" class="collapsible-section">
-          <button class="collapsible-toggle" @click="mediaServerAdvancedExpanded = !mediaServerAdvancedExpanded">
-            <i class="fas fa-chevron-right toggle-arrow" :class="{ expanded: mediaServerAdvancedExpanded }"></i>
-            <span>Advanced options</span>
-            <span class="toggle-summary" v-if="!mediaServerAdvancedExpanded">
-              {{ currentSelectedLibraries.length }} libraries, {{ currentSelectedUsers.length }} users
+        <!-- Libraries & users -->
+        <div v-if="mediaServerConnected" class="disclosure">
+          <button type="button" class="disclosure-toggle" :aria-expanded="String(mediaServerAdvancedExpanded)" @click="mediaServerAdvancedExpanded = !mediaServerAdvancedExpanded">
+            <span class="disclosure-icon"><i aria-hidden="true" class="fas fa-photo-video"></i></span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-semibold text-ink">Libraries and users</span>
+              <span class="block text-xs text-ink-4">{{ currentSelectedLibraries.length }} libraries · {{ currentSelectedUsers.length }} users selected</span>
             </span>
+            <i aria-hidden="true" class="fas fa-chevron-down text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': mediaServerAdvancedExpanded }"></i>
           </button>
-          <div class="collapsible-content" v-show="mediaServerAdvancedExpanded">
-            <!-- Libraries -->
-            <div class="advanced-block">
-              <div class="advanced-block-header">
-                <span class="advanced-block-title"><i class="fas fa-photo-video"></i> Libraries</span>
-                <button v-if="currentSelectedLibraries.length > 0" @click="clearCurrentLibraries" class="text-btn">Clear all</button>
+          <div v-show="mediaServerAdvancedExpanded" class="disclosure-body">
+            <section class="disclosure-section">
+              <div class="flex items-baseline justify-between gap-3">
+                <h4 class="disclosure-title">Libraries</h4>
+                <button v-if="currentSelectedLibraries.length > 0" type="button" class="text-btn" @click="clearCurrentLibraries">Clear</button>
               </div>
-              <p class="advanced-block-desc">Select libraries to monitor. Click <span class="inline-badge">A</span> to mark as anime.</p>
+              <p class="disclosure-desc">Libraries to monitor. Mark anime libraries with <span class="inline-badge">Anime</span> to send them to the anime profiles.</p>
               <div v-if="currentLibraries.length > 0" class="chip-list">
                 <div
                   v-for="lib in currentLibraries"
                   :key="lib._id"
+                  role="checkbox"
+                  tabindex="0"
+                  :aria-checked="String(isLibSelected(lib._id))"
                   class="chip"
                   :class="{ active: isLibSelected(lib._id) }"
                   @click="toggleLibrary(lib)"
+                  @keydown.space.prevent="toggleLibrary(lib)"
                 >
-                  <i :class="getLibraryIcon(lib._type)"></i>
+                  <i aria-hidden="true" :class="isLibSelected(lib._id) ? 'fas fa-check' : getLibraryIcon(lib._type)"></i>
                   <span>{{ lib._name }}</span>
                   <button
                     v-if="isLibSelected(lib._id)"
+                    type="button"
                     class="chip-badge"
                     :class="{ 'badge-active': isAnimeLibrary(localConfig.SELECTED_SERVICE, lib._id) }"
+                    :aria-pressed="String(isAnimeLibrary(localConfig.SELECTED_SERVICE, lib._id))"
+                    title="Mark as anime"
                     @click.stop="toggleAnimeFlag(localConfig.SELECTED_SERVICE, lib._id)"
-                    title="Toggle anime"
-                  >A</button>
+                  >Anime</button>
                 </div>
               </div>
-              <p v-else class="no-items">No libraries found</p>
-            </div>
+              <p v-else class="no-items">No libraries found.</p>
+            </section>
 
-            <!-- Users -->
-            <div class="advanced-block">
-              <div class="advanced-block-header">
-                <span class="advanced-block-title"><i class="fas fa-users"></i> Users</span>
-                <button v-if="currentSelectedUsers.length > 0" @click="clearCurrentUsers" class="text-btn">Clear all</button>
+            <section class="disclosure-section">
+              <div class="flex items-baseline justify-between gap-3">
+                <h4 class="disclosure-title">Users</h4>
+                <button v-if="currentSelectedUsers.length > 0" type="button" class="text-btn" @click="clearCurrentUsers">Clear</button>
               </div>
-              <p class="advanced-block-desc">Select users whose watch history will drive recommendations.</p>
+              <p class="disclosure-desc">Users whose watch history drives suggestions.</p>
               <div v-if="currentUsers.length > 0" class="chip-list">
                 <div
                   v-for="user in currentUsers"
                   :key="user.id"
+                  role="checkbox"
+                  tabindex="0"
+                  :aria-checked="String(isUserSelected(user.id))"
                   class="chip"
                   :class="{ active: isUserSelected(user.id) }"
                   @click="toggleUser(user)"
+                  @keydown.space.prevent="toggleUser(user)"
                 >
                   <span class="chip-avatar">{{ (user.name || 'U').charAt(0).toUpperCase() }}</span>
                   <span>{{ user.name }}</span>
                 </div>
               </div>
-              <p v-else class="no-items">No users found</p>
-            </div>
+              <p v-else class="no-items">No users found.</p>
+            </section>
           </div>
         </div>
       </div>
@@ -250,122 +257,84 @@
           {{ seerTesting ? 'Testing…' : (seerConnected ? 'Connected' : 'Test connection') }}
         </button>
 
-        <!-- User Auth & Download Profiles (collapsible advanced section) -->
-        <div v-if="seerConnected" class="collapsible-section">
-          <button class="collapsible-toggle" @click="seerAdvancedExpanded = !seerAdvancedExpanded">
-            <i class="fas fa-chevron-right toggle-arrow" :class="{ expanded: seerAdvancedExpanded }"></i>
-            <span>Advanced options</span>
-            <span class="toggle-summary" v-if="!seerAdvancedExpanded">
-              {{ seerAuthenticated ? 'User authenticated' : 'Using admin account' }}
+        <!-- Request settings -->
+        <div v-if="seerConnected" class="disclosure">
+          <button type="button" class="disclosure-toggle" :aria-expanded="String(seerAdvancedExpanded)" @click="seerAdvancedExpanded = !seerAdvancedExpanded">
+            <span class="disclosure-icon"><i aria-hidden="true" class="fas fa-sliders-h"></i></span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-semibold text-ink">Request settings</span>
+              <span class="block text-xs text-ink-4">{{ seerAuthenticated ? `As ${selectedSeerUser}` : 'As the admin account' }} · {{ localConfig.SEER_REQUEST_DELAY ?? 2 }}s between requests</span>
             </span>
+            <i aria-hidden="true" class="fas fa-chevron-down text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': seerAdvancedExpanded }"></i>
           </button>
-          <div class="collapsible-content" v-show="seerAdvancedExpanded">
-            <!-- Request delay -->
-            <div class="advanced-block">
-              <div class="advanced-block-header">
-                <span class="advanced-block-title"><i class="fas fa-user-shield"></i> Request delay</span>
+          <div v-show="seerAdvancedExpanded" class="disclosure-body">
+            <section class="disclosure-section">
+              <h4 class="disclosure-title"><label for="seerRequestDelay">Delay between requests</label></h4>
+              <p class="disclosure-desc">Raise it if Seer's notifications hit rate limits. 0 sends everything at once.</p>
+              <div class="flex max-w-[180px] items-center gap-2">
+                <input id="seerRequestDelay" v-model.number="localConfig.SEER_REQUEST_DELAY" type="number" min="0" max="60" class="ui-input" :disabled="isLoading" />
+                <span class="text-sm text-ink-3">seconds</span>
               </div>
-              <p class="advanced-block-desc">Wait time between consecutive Seer requests. Increase if you receive notification rate-limit errors (0 = send all requests simultaneously)</p>
-              <div class="form-group" >
-                <input
-                  id="seerRequestDelay"
-                  v-model.number="localConfig.SEER_REQUEST_DELAY"
-                  type="number"
-                  min="0"
-                  max="60"
-                  class="ui-input"
-                  :disabled="isLoading"
-                />
-              </div>
-            </div>
-            <!-- User Authentication -->
-            <div class="advanced-block">
-              <div class="advanced-block-header">
-                <span class="advanced-block-title"><i class="fas fa-user-shield"></i> User authentication</span>
-              </div>
-              <p class="advanced-block-desc">Authenticate as a local user to make requests on their behalf.</p>
+            </section>
 
-              <template v-if="seerUsers.length > 0">
-                <div class="inline-form">
-                  <BaseDropdown
-                    v-model="selectedSeerUser"
-                    :options="seerUserOptions"
-                    placeholder="Select user..."
-                    id="seerLocalUser"
-                    :disabled="isLoading"
-                    @change="onSeerUserChange"
-                    class="flex-1"
-                  />
-                  <input
-                    v-model="seerUserPassword"
-                    type="password"
-                    placeholder="Password"
-                    class="ui-input flex-1"
-                    :disabled="isLoading"
-                    autocomplete="new-password"
-                  />
-                  <button
-                    @click="authenticateSeerUser"
-                    :class="seerAuthenticated ? 'ui-btn w-[42px] shrink-0 px-0 text-good' : 'ui-btn-primary w-[42px] shrink-0 px-0'"
-                    :aria-label="seerAuthenticated ? 'Authenticated' : 'Authenticate user'"
-                    :disabled="isLoading || seerAuthenticating || !selectedSeerUser || !seerUserPassword"
-                  >
-                    <i v-if="seerAuthenticating" class="fas fa-spinner fa-spin"></i>
-                    <i v-else-if="seerAuthenticated" class="fas fa-check"></i>
-                    <i v-else class="fas fa-sign-in-alt"></i>
-                  </button>
-                </div>
-              </template>
-              <p v-else class="no-items"><i class="fas fa-info-circle"></i> No local users found. Admin account will be used.</p>
-            </div>
-
-            <!-- Download Profiles -->
-            <div class="advanced-block">
-              <div class="advanced-block-header">
-                <span class="advanced-block-title"><i class="fas fa-download"></i> Download profiles</span>
-                <button @click="fetchArrServers" class="text-btn" :disabled="loadingServers">
-                  <i :class="loadingServers ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
-                  {{ loadingServers ? 'Loading…' : 'Load servers' }}
+            <section class="disclosure-section">
+              <h4 class="disclosure-title">Request as a local user</h4>
+              <p class="disclosure-desc">Sign in as a Seer local user so requests are made on their behalf instead of the admin account.</p>
+              <div v-if="seerUsers.length > 0" class="inline-form">
+                <select v-model="selectedSeerUser" class="ui-input flex-1" aria-label="Seer user" :disabled="isLoading" @change="onSeerUserChange(selectedSeerUser)">
+                  <option :value="null" disabled>Select user…</option>
+                  <option v-for="option in seerUserOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+                <input v-model="seerUserPassword" type="password" placeholder="Password" aria-label="Seer user password" class="ui-input flex-1" :disabled="isLoading" autocomplete="new-password" />
+                <button
+                  type="button"
+                  :class="seerAuthenticated ? 'ui-btn shrink-0 text-good' : 'ui-btn-primary shrink-0'"
+                  :disabled="isLoading || seerAuthenticating || !selectedSeerUser || !seerUserPassword"
+                  @click="authenticateSeerUser"
+                >
+                  <i v-if="seerAuthenticating" aria-hidden="true" class="fas fa-spinner fa-spin"></i>
+                  <i v-else-if="seerAuthenticated" aria-hidden="true" class="fas fa-check"></i>
+                  {{ seerAuthenticated ? 'Signed in' : 'Sign in' }}
                 </button>
               </div>
-              <p class="advanced-block-desc">Configure Radarr/Sonarr servers, quality profiles, and root folders.</p>
+              <p v-else class="no-items">No local users found. Requests use the admin account.</p>
+            </section>
 
-              <div v-if="radarrServers.length > 0 || sonarrServers.length > 0" class="profiles-grid">
-                <!-- Movie (Radarr) -->
-                <div v-if="radarrServers.length > 0" class="profile-card">
-                  <div class="profile-card-header"><i class="fas fa-film"></i> Movies</div>
-                  <BaseDropdown v-model="defaultMovieServerId" :options="radarrServerOptions" placeholder="Server" :disabled="isLoading" @change="onDefaultMovieServerChange" />
-                  <BaseDropdown v-if="defaultMovieProfiles.length > 0" v-model="defaultMovieProfileId" :options="defaultMovieProfiles" placeholder="Quality" :disabled="isLoading" @change="updateProfileConfig" />
-                  <BaseDropdown v-if="defaultMovieRootFolders.length > 0" v-model="defaultMovieRootFolder" :options="defaultMovieRootFolders" placeholder="Root folder" :disabled="isLoading" @change="updateProfileConfig" />
-                </div>
-
-                <!-- TV (Sonarr) -->
-                <div v-if="sonarrServers.length > 0" class="profile-card">
-                  <div class="profile-card-header"><i class="fas fa-tv"></i> TV Shows</div>
-                  <BaseDropdown v-model="defaultTvServerId" :options="sonarrServerOptions" placeholder="Server" :disabled="isLoading" @change="onDefaultTvServerChange" />
-                  <BaseDropdown v-if="defaultTvProfiles.length > 0" v-model="defaultTvProfileId" :options="defaultTvProfiles" placeholder="Quality" :disabled="isLoading" @change="updateProfileConfig" />
-                  <BaseDropdown v-if="defaultTvRootFolders.length > 0" v-model="defaultTvRootFolder" :options="defaultTvRootFolders" placeholder="Root folder" :disabled="isLoading" @change="updateProfileConfig" />
-                </div>
-
-                <!-- Anime Movie (Radarr) -->
-                <div v-if="radarrServers.length > 0 && hasAnimeLibraries" class="profile-card anime">
-                  <div class="profile-card-header"><i class="fas fa-torii-gate"></i> Anime Movies</div>
-                  <BaseDropdown v-model="animeMovieServerId" :options="radarrServerOptions" placeholder="Server" :disabled="isLoading" @change="onAnimeMovieServerChange" />
-                  <BaseDropdown v-if="animeMovieProfiles.length > 0" v-model="animeMovieProfileId" :options="animeMovieProfiles" placeholder="Quality" :disabled="isLoading" @change="updateProfileConfig" />
-                  <BaseDropdown v-if="animeMovieRootFolders.length > 0" v-model="animeMovieRootFolder" :options="animeMovieRootFolders" placeholder="Root folder" :disabled="isLoading" @change="updateProfileConfig" />
-                </div>
-
-                <!-- Anime TV (Sonarr) -->
-                <div v-if="sonarrServers.length > 0 && hasAnimeLibraries" class="profile-card anime">
-                  <div class="profile-card-header"><i class="fas fa-torii-gate"></i> Anime TV</div>
-                  <BaseDropdown v-model="animeTvServerId" :options="sonarrServerOptions" placeholder="Server" :disabled="isLoading" @change="onAnimeTvServerChange" />
-                  <BaseDropdown v-if="animeTvProfiles.length > 0" v-model="animeTvProfileId" :options="animeTvProfiles" placeholder="Quality" :disabled="isLoading" @change="updateProfileConfig" />
-                  <BaseDropdown v-if="animeTvRootFolders.length > 0" v-model="animeTvRootFolder" :options="animeTvRootFolders" placeholder="Root folder" :disabled="isLoading" @change="updateProfileConfig" />
-                </div>
+            <section class="disclosure-section">
+              <div class="flex items-baseline justify-between gap-3">
+                <h4 class="disclosure-title">Download profiles</h4>
+                <button type="button" class="text-btn" :disabled="loadingServers" @click="fetchArrServers">
+                  <i aria-hidden="true" :class="loadingServers ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+                  {{ loadingServers ? 'Loading…' : (serversLoaded ? 'Reload' : 'Load servers') }}
+                </button>
               </div>
+              <p class="disclosure-desc">Default Radarr and Sonarr server, quality profile and root folder for automatic requests. Jobs can override them.</p>
 
-              <p v-else-if="serversLoaded" class="no-items"><i class="fas fa-exclamation-triangle"></i> No Radarr/Sonarr servers found in Seer.</p>
-            </div>
+              <div v-if="profileCards.length > 0" class="profiles-grid">
+                <fieldset v-for="card in profileCards" :key="card.key" class="profile-card" :class="{ anime: card.anime }">
+                  <legend class="profile-card-header"><i aria-hidden="true" :class="card.icon"></i>{{ card.title }}</legend>
+                  <label class="ui-label">Server
+                    <select :value="$data[card.key + 'ServerId'] ?? ''" class="ui-input" :disabled="isLoading" @change="card.onServer($event.target.value || null)">
+                      <option value="">Seer default</option>
+                      <option v-for="option in card.servers" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                  </label>
+                  <label v-if="card.profiles.length > 0" class="ui-label">Quality profile
+                    <select v-model="$data[card.key + 'ProfileId']" class="ui-input" :disabled="isLoading" @change="updateProfileConfig">
+                      <option :value="null">Server default</option>
+                      <option v-for="option in card.profiles" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                  </label>
+                  <label v-if="card.folders.length > 0" class="ui-label">Root folder
+                    <select v-model="$data[card.key + 'RootFolder']" class="ui-input" :disabled="isLoading" @change="updateProfileConfig">
+                      <option :value="null">Server default</option>
+                      <option v-for="option in card.folders" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                  </label>
+                </fieldset>
+              </div>
+              <p v-else-if="serversLoaded" class="no-items"><i aria-hidden="true" class="fas fa-exclamation-triangle text-caution"></i>No Radarr or Sonarr servers found in Seer.</p>
+            </section>
           </div>
         </div>
       </div>
@@ -446,13 +415,14 @@
           </button>
 
           <!-- About IMDB Filtering -->
-          <div class="omdb-info-section">
-            <button class="collapsible-toggle" @click="omdbInfoExpanded = !omdbInfoExpanded">
-              <i class="fas fa-chevron-right toggle-arrow" :class="{ expanded: omdbInfoExpanded }"></i>
-              <span>What is IMDB filtering?</span>
+          <div class="disclosure">
+            <button type="button" class="disclosure-toggle" :aria-expanded="String(omdbInfoExpanded)" @click="omdbInfoExpanded = !omdbInfoExpanded">
+              <span class="disclosure-icon"><i aria-hidden="true" class="fas fa-question"></i></span>
+              <span class="min-w-0 flex-1 text-sm font-semibold text-ink">What is IMDb filtering?</span>
+              <i aria-hidden="true" class="fas fa-chevron-down text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': omdbInfoExpanded }"></i>
             </button>
-            <div class="collapsible-content" v-show="omdbInfoExpanded">
-              <div class="omdb-info-body">
+            <div v-show="omdbInfoExpanded" class="disclosure-body">
+              <div class="omdb-info-body disclosure-section">
                 <p class="omdb-info-lead">
                   IMDB filtering uses the <a href="https://www.omdbapi.com/" target="_blank" class="link">OMDb API</a>
                   to fetch IMDB community ratings for each recommendation candidate, letting you reject content
@@ -478,8 +448,7 @@
                 </div>
                 <p class="omdb-info-footer">
                   <i class="fas fa-cog"></i>
-                  Configure the rating source and thresholds in
-                  <strong>Content Filters → Rating & Popularity</strong>.
+                  <span>Configure the rating source and thresholds in <strong>Content Filters → Rating & Popularity</strong>.</span>
                 </p>
               </div>
             </div>
@@ -541,7 +510,6 @@
 import PageHeader from '@/components/ui/PageHeader.vue';
 import ServiceCardHeader from './ServiceCardHeader.vue';
 import axios from 'axios';
-import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import {
   testSeerApi, authenticateUser, fetchRadarrServers, fetchSonarrServers,
   fetchJellyfinLibraries, fetchJellyfinUsers, fetchPlexLibraries, fetchPlexUsers,
@@ -550,9 +518,7 @@ import {
 
 export default {
   name: 'SettingsServices',
-  components: { PageHeader, ServiceCardHeader,
-    BaseDropdown
-  },
+  components: { PageHeader, ServiceCardHeader },
   props: {
     config: {
       type: Object,
@@ -781,6 +747,15 @@ export default {
       return [...jellyfinLibs, ...plexLibs].some(lib =>
         typeof lib === 'object' && lib.is_anime
       );
+    },
+    // One card per Seer default profile; `key` prefixes the matching *ServerId/*ProfileId/*RootFolder data fields.
+    profileCards() {
+      const cards = [];
+      if (this.radarrServers.length) cards.push({ key: 'defaultMovie', title: 'Movies', icon: 'fas fa-film', servers: this.radarrServerOptions, profiles: this.defaultMovieProfiles, folders: this.defaultMovieRootFolders, onServer: this.onDefaultMovieServerChange });
+      if (this.sonarrServers.length) cards.push({ key: 'defaultTv', title: 'TV shows', icon: 'fas fa-tv', servers: this.sonarrServerOptions, profiles: this.defaultTvProfiles, folders: this.defaultTvRootFolders, onServer: this.onDefaultTvServerChange });
+      if (this.radarrServers.length && this.hasAnimeLibraries) cards.push({ key: 'animeMovie', title: 'Anime movies', icon: 'fas fa-torii-gate', anime: true, servers: this.radarrServerOptions, profiles: this.animeMovieProfiles, folders: this.animeMovieRootFolders, onServer: this.onAnimeMovieServerChange });
+      if (this.sonarrServers.length && this.hasAnimeLibraries) cards.push({ key: 'animeTv', title: 'Anime TV', icon: 'fas fa-torii-gate', anime: true, servers: this.sonarrServerOptions, profiles: this.animeTvProfiles, folders: this.animeTvRootFolders, onServer: this.onAnimeTvServerChange });
+      return cards;
     },
     radarrServerOptions() {
       return this.radarrServers.map(server => ({
@@ -1516,68 +1491,56 @@ export default {
 .link { color: var(--color-brand-ink); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 
-/* Collapsible "Advanced options" */
-.collapsible-section,
-.omdb-info-section {
+/* Disclosure under a service ("Libraries and users", "Request settings") */
+.disclosure {
   margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--color-edge);
-}
-.collapsible-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  width: 100%;
-  padding: 0;
-  background: none;
-  border: 0;
-  color: var(--color-ink-2);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.collapsible-toggle:hover { color: var(--color-ink); }
-.toggle-arrow {
-  font-size: 10px;
-  color: var(--color-ink-4);
-  transition: transform 0.15s ease;
-}
-.toggle-arrow.expanded { transform: rotate(90deg); }
-.toggle-summary {
-  margin-left: auto;
-  font-weight: 400;
-  color: var(--color-ink-4);
-}
-.collapsible-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding-top: 1rem;
-}
-
-.advanced-block {
-  padding: 1rem;
-  background: var(--color-panel-2);
   border: 1px solid var(--color-edge);
   border-radius: var(--radius-ctl);
+  background: var(--color-panel-2);
+  overflow: hidden;
 }
-.advanced-block-header {
+.disclosure-toggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.25rem;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.advanced-block-title {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 14px;
+.disclosure-toggle:hover { background: var(--color-raised); }
+.disclosure-icon {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--color-raised);
+  color: var(--color-ink-3);
+  font-size: 13px;
+}
+.disclosure-body {
+  border-top: 1px solid var(--color-edge);
+  background: var(--color-panel);
+}
+.disclosure-section {
+  padding: 1rem;
+}
+.disclosure-section + .disclosure-section {
+  border-top: 1px solid var(--color-edge);
+}
+.disclosure-title {
+  margin: 0;
+  font-size: 13px;
   font-weight: 700;
   color: var(--color-ink);
 }
-.advanced-block-title i { color: var(--color-ink-4); }
-.advanced-block-desc {
-  margin: 0 0 0.875rem;
+.disclosure-desc {
+  margin: 0.25rem 0 0.875rem;
   font-size: 12px;
   line-height: 1.5;
   color: var(--color-ink-4);
@@ -1671,8 +1634,10 @@ export default {
 .profile-card {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
+  gap: 0.75rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.875rem;
   background: var(--color-canvas);
   border: 1px solid var(--color-edge);
   border-radius: var(--radius-ctl);
@@ -1680,6 +1645,7 @@ export default {
 .profile-card.anime { border-color: color-mix(in srgb, #e74c9c 30%, transparent); }
 .profile-card-header {
   display: flex;
+  padding: 0;
   align-items: center;
   gap: 0.375rem;
   font-size: 13px;
@@ -1692,7 +1658,6 @@ export default {
 
 /* OMDb explainer */
 .omdb-info-body {
-  padding-top: 0.75rem;
   font-size: 13px;
   color: var(--color-ink-3);
 }

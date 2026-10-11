@@ -141,26 +141,17 @@
       </div>
     </div>
 
-    <!-- Confirm unlink dialog -->
-    <teleport to="body">
-      <div v-if="showUnlinkConfirm" class="modal-overlay" @click.self="cancelUnlink">
-        <div class="modal-box">
-          <h3>Unlink Trakt Account</h3>
-          <p>
-            Are you sure you want to unlink the Trakt account for
-            <strong>{{ unlinkTargetLabel }}</strong>? This will remove their seed
-            and watched-history data from recommendation runs.
-          </p>
-          <div class="modal-actions">
-            <button class="btn btn-outline" @click="cancelUnlink">Cancel</button>
-            <button class="btn btn-danger" @click="confirmUnlink" :disabled="isUnlinking[unlinkTargetKey]">
-              <i v-if="isUnlinking[unlinkTargetKey]" class="fas fa-spinner fa-spin"></i>
-              Unlink
-            </button>
-          </div>
-        </div>
-      </div>
-    </teleport>
+    <AppDialog v-if="showUnlinkConfirm" title="Unlink Trakt account" icon="icon-trakt" tone="danger" @close="cancelUnlink">
+      <p class="m-0 text-sm leading-relaxed text-ink-2">
+        Unlink the Trakt account for <strong class="text-ink">{{ unlinkTargetLabel }}</strong>? Its seeds and watch history stop feeding recommendation runs.
+      </p>
+      <template #footer>
+        <button type="button" class="ui-btn" @click="cancelUnlink">Cancel</button>
+        <button type="button" class="ui-btn-danger" :disabled="isUnlinking[unlinkTargetKey]" @click="confirmUnlink">
+          <i v-if="isUnlinking[unlinkTargetKey]" aria-hidden="true" class="fas fa-spinner fa-spin"></i>Unlink
+        </button>
+      </template>
+    </AppDialog>
   </div>
 </template>
 
@@ -178,9 +169,11 @@ import {
   previewMyTraktRecent,
 } from '@/api/api';
 import traktDevicePolling from './mixins/traktDevicePolling';
+import AppDialog from '@/components/ui/AppDialog.vue';
 
 export default {
   name: 'TraktMediaUsers',
+  components: { AppDialog },
   mixins: [traktDevicePolling],
   props: {
     config: Object,
@@ -671,48 +664,6 @@ export default {
 
 .link:hover {
   text-decoration: underline;
-}
-
-/* Confirm dialog */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-}
-
-.modal-box {
-  background: var(--surface-primary);
-  border: 1px solid var(--surface-glass-light);
-  border-radius: var(--border-radius);
-  padding: 1.5rem;
-  max-width: 420px;
-  width: 90%;
-}
-
-.modal-box h3 {
-  margin: 0 0 0.75rem 0;
-  color: var(--color-text-primary);
-  font-size: 1.05rem;
-}
-
-.modal-box p {
-  margin: 0 0 1.25rem 0;
-  color: var(--color-text-secondary);
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
 }
 
 .popup-blocked-hint {
