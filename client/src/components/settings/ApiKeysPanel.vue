@@ -57,6 +57,7 @@
 import { createApiKey, getApiKeys, revokeApiKey } from '@/api/api';
 import AppDialog from '@/components/ui/AppDialog.vue';
 import SectionCard from '@/components/ui/SectionCard.vue';
+import { copyText } from '@/utils/clipboard.js';
 
 export default {
   name: 'ApiKeysPanel',
@@ -67,7 +68,7 @@ export default {
     async load() { try { const response = await getApiKeys(); this.keys = response.data.keys || []; this.activeLimit = response.data.active_limit || 10; } catch { this.$toast.error('Failed to load API keys'); } },
     async create() { this.creating = true; try { const response = await createApiKey({ name: this.name.trim(), expires_at: this.expiresAt ? `${this.expiresAt}T23:59:59` : null }); this.oneTimeKey = response.data.key; this.name = ''; this.expiresAt = ''; await this.load(); } catch (error) { this.$toast.error(error.response?.data?.error || 'Failed to create API key'); } finally { this.creating = false; } },
     async revoke() { const key = this.keyToRevoke; if (!key) return; this.revoking = key.id; try { await revokeApiKey(key.id); await this.load(); this.keyToRevoke = null; this.$toast.success('API key revoked'); } catch { this.$toast.error('Failed to revoke API key'); } finally { this.revoking = null; } },
-    async copy() { try { await navigator.clipboard.writeText(this.oneTimeKey); this.$toast.success('API key copied'); } catch { this.$toast.error('Copy failed'); } },
+    async copy() { if (await copyText(this.oneTimeKey)) this.$toast.success('API key copied'); else this.$toast.error('Copy failed'); },
     closeKey() { this.oneTimeKey = ''; },
     formatDate(value) { return value ? new Date(value).toLocaleDateString() : '—'; },
   },

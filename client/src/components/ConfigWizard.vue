@@ -197,30 +197,9 @@
       <AppFooter />
     </div>
 
-    <!-- LOGS MODAL -->
-    <transition name="fade">
-      <div v-if="showLogs" class="modal-overlay" @click.self="showLogs = false">
-        <div class="modal-content changelog-modal">
-          <div class="modal-header">
-            <div class="modal-header-left">
-              <div class="modal-icon"><i class="fas fa-file-alt"></i></div>
-              <h3 class="modal-title">System Logs</h3>
-            </div>
-            <button @click="showLogs = false" class="btn-close" aria-label="Close">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-          <div class="modal-body changelog-body">
-            <LogsComponent embedded />
-          </div>
-          <div class="modal-actions">
-            <button @click="showLogs = false" class="btn btn-primary">
-              <i class="fas fa-times"></i> Close
-            </button>
-          </div>
-        </div>
-      </div>
-    </transition>
+    <AppDialog v-if="showLogs" width="max-w-6xl" title="Logs" icon="fas fa-file-alt" @close="showLogs = false">
+      <LogsComponent embedded />
+    </AppDialog>
 
     <!-- Hidden file input for config import -->
     <input
@@ -242,6 +221,7 @@ import '@/assets/styles/dashboardPage.css';
 
 import AppFooter from './AppFooter.vue';
 import LogsComponent from './LogsComponent.vue';
+import AppDialog from './ui/AppDialog.vue';
 import WizardCompletion from './wizard/WizardCompletion.vue';
 
 import { useConfigManager } from '@/composables/useConfigManager';
@@ -270,6 +250,7 @@ const SETUP_DEFAULTS = {
 export default {
   name: 'ConfigWizard',
   components: {
+    AppDialog,
     AppFooter,
     LogsComponent,
     WizardCompletion,

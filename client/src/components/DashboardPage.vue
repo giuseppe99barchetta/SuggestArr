@@ -130,54 +130,23 @@
         </div>
       </transition>
 
-      <!-- Changelog Modal -->
-      <transition name="fade">
-        <div v-if="showChangelogModal" class="modal-overlay" @click.self="showChangelogModal = false">
-          <div class="modal-content changelog-modal">
-            <div class="modal-header">
-              <i aria-hidden="true" class="fab fa-github changelog-icon"></i>
-              <h3>Changelog - {{ currentVersion }}</h3>
-            </div>
-            
-            <div class="modal-body changelog-body">
-              <div v-if="isLoadingChangelog" class="changelog-loading">
-                <i aria-hidden="true" class="fas fa-spinner fa-spin"></i>
-                <span>Loading changelog...</span>
-              </div>
-              
-              <div v-else-if="changelogError" class="changelog-error">
-                <i aria-hidden="true" class="fas fa-exclamation-triangle"></i>
-                <span>{{ changelogError }}</span>
-                <button @click="showChangelog" class="btn btn-secondary btn-sm">Retry</button>
-              </div>
-              
-              <div v-else class="changelog-content">
-                <div v-if="changelogData" v-html="changelogData"></div>
-                <div v-else class="no-changelog">
-                  <i aria-hidden="true" class="fas fa-info-circle"></i>
-                  <span>No changelog available for this version</span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="modal-actions">
-              <a 
-                :href="`https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${currentVersion}`" 
-                target="_blank" 
-                class="btn btn-outline"
-                v-if="changelogData"
-              >
-                <i aria-hidden="true" class="fas fa-external-link-alt"></i>
-                View on GitHub
-              </a>
-              <button @click="showChangelogModal = false" class="btn btn-primary">
-                <i aria-hidden="true" class="fas fa-times"></i>
-                Close
-              </button>
-            </div>
-          </div>
+      <AppDialog v-if="showChangelogModal" width="max-w-3xl" :title="`What's new in ${currentVersion}`" icon="fab fa-github" @close="showChangelogModal = false">
+        <div v-if="isLoadingChangelog" class="flex items-center justify-center gap-2 py-10 text-sm text-ink-3">
+          <i aria-hidden="true" class="fas fa-spinner fa-spin"></i>Loading changelog…
         </div>
-      </transition>
+        <div v-else-if="changelogError" class="flex flex-col items-center gap-3 py-10 text-center">
+          <p class="ui-alert-bad">{{ changelogError }}</p>
+          <button type="button" class="ui-btn" @click="showChangelog">Retry</button>
+        </div>
+        <div v-else-if="changelogData" class="changelog-content" v-html="changelogData"></div>
+        <p v-else class="m-0 py-10 text-center text-sm text-ink-3">No changelog available for this version.</p>
+        <template #footer>
+          <a v-if="changelogData" :href="`https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${currentVersion}`" target="_blank" rel="noopener" class="ui-btn mr-auto no-underline">
+            <i aria-hidden="true" class="fas fa-external-link-alt"></i>View on GitHub
+          </a>
+          <button type="button" class="ui-btn-primary" @click="showChangelogModal = false">Close</button>
+        </template>
+      </AppDialog>
 
       <!-- Hidden file input for import -->
       <input
@@ -188,87 +157,35 @@
         style="display: none"
       />
 
-      <!-- Export Configuration Modal -->
-      <transition name="fade">
-        <div v-if="showExportModal" class="modal-overlay" @click.self="showExportModal = false">
-          <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
-            <div class="modal-header">
-              <div class="modal-title-wrap">
-                <h3 class="modal-title" id="export-modal-title">
-                  <i aria-hidden="true" class="fas fa-download"></i> Export Configuration
-                </h3>
-                <p class="modal-subtitle">Download a JSON snapshot of your settings.</p>
-              </div>
-              <button type="button" class="modal-close" aria-label="Close export modal" @click="showExportModal = false">
-                <i aria-hidden="true" class="fas fa-times"></i>
-              </button>
-            </div>
-
-            <div class="modal-body">
-              <p>Non-secret settings, media user identities, and Trakt account metadata are included by default. Live credentials are redacted unless you opt in below.</p>
-              <label class="export-sensitive-option">
-                <input v-model="exportIncludeSecrets" type="checkbox">
-                Include all secrets (full backup)
-              </label>
-              <p v-if="exportIncludeSecrets" class="export-sensitive-warning">
-                <i aria-hidden="true" class="fas fa-exclamation-triangle"></i>
-                This export will contain API keys, tokens, and passwords. Do not share it for troubleshooting or attach it to public issues.
-              </p>
-            </div>
-
-            <div class="modal-footer">
-              <button @click="showExportModal = false" class="btn btn-outline">
-                <i aria-hidden="true" class="fas fa-times"></i>
-                Cancel
-              </button>
-              <button @click="confirmExportConfig" class="btn btn-primary">
-                <i aria-hidden="true" class="fas fa-download"></i>
-                Export
-              </button>
-            </div>
-          </div>
+      <AppDialog v-if="showExportModal" title="Export configuration" subtitle="Download a JSON snapshot of your settings." icon="fas fa-download" @close="showExportModal = false">
+        <div class="flex flex-col gap-4 text-sm leading-relaxed text-ink-2">
+          <p class="m-0">Settings, media user identities and Trakt account metadata are included. Credentials are redacted unless you include them.</p>
+          <label class="flex cursor-pointer items-start gap-3 rounded-ctl border border-edge-strong bg-panel-2 p-3">
+            <input v-model="exportIncludeSecrets" type="checkbox" class="mt-1 accent-brand">
+            <span class="font-semibold text-ink">Include secrets<span class="block text-xs font-normal text-ink-3">API keys, tokens and passwords, for a full backup.</span></span>
+          </label>
+          <p v-if="exportIncludeSecrets" class="ui-alert-bad" role="alert">
+            <i aria-hidden="true" class="fas fa-exclamation-triangle mr-1 text-bad"></i>Keep this file private. Do not attach it to issues or share it for troubleshooting.
+          </p>
         </div>
-      </transition>
+        <template #footer>
+          <button type="button" class="ui-btn" @click="showExportModal = false">Cancel</button>
+          <button type="button" class="ui-btn-primary" @click="confirmExportConfig"><i aria-hidden="true" class="fas fa-download"></i>Export</button>
+        </template>
+      </AppDialog>
 
-      <!-- Reset Confirmation Modal -->
-      <transition name="fade">
-        <div v-if="showResetModal" class="modal-overlay" @click.self="showResetModal = false">
-          <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="reset-modal-title">
-            <div class="modal-header modal-header--danger">
-              <div class="modal-title-wrap">
-                <h3 class="modal-title" id="reset-modal-title">
-                  <i aria-hidden="true" class="fas fa-exclamation-triangle"></i> Confirm Reset
-                </h3>
-                <p class="modal-subtitle">This action is permanent and cannot be undone.</p>
-              </div>
-              <button type="button" class="modal-close" aria-label="Close reset modal" @click="showResetModal = false">
-                <i aria-hidden="true" class="fas fa-times"></i>
-              </button>
-            </div>
-
-            <div class="modal-body">
-              <p>Are you sure you want to reset all settings to default? This will:</p>
-              <ul class="reset-warning-list">
-                <li><i aria-hidden="true" class="fas fa-times-circle"></i> Clear all service connections</li>
-                <li><i aria-hidden="true" class="fas fa-times-circle"></i> Remove all custom filters</li>
-                <li><i aria-hidden="true" class="fas fa-times-circle"></i> Reset scheduling preferences</li>
-                <li><i aria-hidden="true" class="fas fa-times-circle"></i> Clear database configuration</li>
-              </ul>
-            </div>
-
-            <div class="modal-footer">
-              <button @click="showResetModal = false" class="btn btn-outline">
-                <i aria-hidden="true" class="fas fa-times"></i>
-                Cancel
-              </button>
-              <button @click="confirmReset" class="btn btn-danger">
-                <i aria-hidden="true" class="fas fa-exclamation-triangle"></i>
-                Yes, Reset Everything
-              </button>
-            </div>
-          </div>
-        </div>
-      </transition>
+      <AppDialog v-if="showResetModal" title="Reset all settings?" subtitle="This cannot be undone." icon="fas fa-exclamation-triangle" tone="danger" @close="showResetModal = false">
+        <p class="m-0 mb-3 text-sm text-ink-2">Everything goes back to defaults:</p>
+        <ul class="m-0 flex list-none flex-col gap-2 rounded-ctl border border-bad/30 bg-bad/5 p-4 text-sm text-ink-2">
+          <li v-for="item in ['Service connections', 'Custom filters', 'Schedules', 'Database configuration']" :key="item">
+            <i aria-hidden="true" class="fas fa-times mr-2 w-3 text-bad"></i>{{ item }}
+          </li>
+        </ul>
+        <template #footer>
+          <button type="button" class="ui-btn" @click="showResetModal = false">Cancel</button>
+          <button type="button" class="ui-btn-danger" @click="confirmReset">Reset everything</button>
+        </template>
+      </AppDialog>
 
     </div>
 
@@ -293,6 +210,7 @@
 <script>
 import axios from 'axios';
 import AppFooter from './AppFooter.vue';
+import AppDialog from './ui/AppDialog.vue';
 import OnboardingTour from './OnboardingTour.vue';
 import { useVersionCheck } from '@/composables/useVersionCheck';
 import { useAuth } from '@/composables/useAuth';
@@ -322,6 +240,7 @@ const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
 export default {
   name: 'SettingsPage',
   components: {
+    AppDialog,
     AppFooter,
     OnboardingTour,
     SettingsServices,

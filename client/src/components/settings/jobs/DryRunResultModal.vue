@@ -1,180 +1,107 @@
 <template>
-  <div class="modal-overlay" @click.self="$emit('close')">
-    <div class="modal dryrun-modal">
-      <!-- Header -->
-      <div class="modal-header">
-        <div class="header-title">
-          <i class="fas fa-eye header-icon"></i>
-          <div>
-            <h2 class="modal-title">Dry Run Preview</h2>
-            <span class="job-subtitle">
-              {{ job.name }}
-              <span v-if="cachedAt" class="cached-label">
-                &middot; from {{ formatCachedAt(cachedAt) }}
-              </span>
-            </span>
-          </div>
+  <AppDialog width="max-w-3xl" title="Dry run preview" icon="fas fa-eye" @close="$emit('close')">
+    <template #subtitle>
+      {{ job.name }}<template v-if="cachedAt"> · from {{ formatCachedAt(cachedAt) }}</template> · nothing was requested
+    </template>
+
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-ctl border border-edge bg-panel-2 px-4 py-3 text-sm">
+        <span class="text-ink-2"><strong class="text-lg text-ink">{{ wouldRequestCount }}</strong> would be requested</span>
+        <span v-if="filteredOutCount > 0" class="text-ink-3"><strong class="text-ink-2">{{ filteredOutCount }}</strong> skipped</span>
+
+        <div v-if="hasFilterData && filteredOutCount > 0" role="radiogroup" aria-label="Show" class="ml-auto flex rounded-ctl border border-edge-strong bg-canvas p-1">
+          <button
+            v-for="option in [{ all: true, label: `All ${items.length}` }, { all: false, label: `To request ${wouldRequestCount}` }]"
+            :key="option.label"
+            type="button"
+            role="radio"
+            :aria-checked="showAll === option.all ? 'true' : 'false'"
+            class="h-7 cursor-pointer rounded-[7px] border-0 px-3 text-xs font-semibold"
+            :class="showAll === option.all ? 'bg-raised text-ink' : 'bg-transparent text-ink-3 hover:text-ink'"
+            @click="showAll = option.all"
+          >{{ option.label }}</button>
         </div>
-        <button @click="$emit('close')" class="modal-close" title="Close">
-          <i class="fas fa-times"></i>
-        </button>
       </div>
 
-      <!-- Body -->
-      <div class="modal-body">
-        <!-- Summary bar -->
-        <div class="summary-bar" :class="{ empty: wouldRequestCount === 0 }">
-          <span class="summary-count">
-            <i class="fas fa-list-ul"></i>
-            <strong>{{ wouldRequestCount }}</strong> item{{ wouldRequestCount !== 1 ? 's' : '' }} would be requested
-          </span>
-          <span v-if="filteredOutCount > 0" class="summary-filtered">
-            <i class="fas fa-filter"></i>
-            {{ filteredOutCount }} filtered out
-          </span>
-          <span class="summary-note">
-            <i class="fas fa-shield-alt"></i>
-            No actual requests were made
-          </span>
-        </div>
+      <div v-if="displayedItems.length === 0" class="flex flex-col items-center gap-2 py-10 text-center">
+        <i aria-hidden="true" class="fas fa-check-circle text-3xl text-good"></i>
+        <p class="m-0 font-semibold text-ink">Nothing new to request</p>
+        <p class="m-0 max-w-sm text-[13px] text-ink-3">All matching content is already downloaded, requested, or the filters returned no results.</p>
+      </div>
 
-        <!-- View toggle (only when there are filtered items) -->
-        <div v-if="hasFilterData && filteredOutCount > 0" class="view-toggle">
-          <button :class="['toggle-btn', { active: showAll }]" @click="showAll = true">
-            <i class="fas fa-th-list"></i> All ({{ items.length }})
-          </button>
-          <button :class="['toggle-btn', { active: !showAll }]" @click="showAll = false">
-            <i class="fas fa-check-circle"></i> Would request ({{ wouldRequestCount }})
-          </button>
-        </div>
+      <ul v-else class="m-0 flex list-none flex-col gap-2 p-0">
+        <li
+          v-for="item in displayedItems"
+          :key="item.tmdb_id"
+          class="flex gap-3.5 rounded-ctl border border-edge bg-panel-2 p-3"
+          :class="{ 'opacity-60': !itemWouldRequest(item) }"
+        >
+          <div class="h-[69px] w-[46px] shrink-0 overflow-hidden rounded-[6px] bg-raised">
+            <img v-if="item.poster_path" :src="posterUrl(item.poster_path)" :alt="item.title" loading="lazy" class="h-full w-full object-cover" />
+            <div v-else class="grid h-full place-items-center text-ink-4"><i aria-hidden="true" :class="item.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"></i></div>
+          </div>
 
-        <!-- Empty state -->
-        <div v-if="displayedItems.length === 0" class="empty-state">
-          <i class="fas fa-check-circle"></i>
-          <p>Nothing new to request</p>
-          <span>All matching content is already downloaded, requested, or the filters returned no results.</span>
-        </div>
-
-        <!-- Items list -->
-        <div v-else class="items-list">
-          <div
-            v-for="item in displayedItems"
-            :key="item.tmdb_id"
-            class="item-card"
-            :class="{ 'item-filtered': !itemWouldRequest(item) }"
-          >
-            <!-- Poster -->
-            <div class="item-poster">
-              <img v-if="item.poster_path" :src="posterUrl(item.poster_path)" :alt="item.title" loading="lazy" />
-              <div v-else class="poster-placeholder">
-                <i :class="item.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"></i>
-              </div>
+          <div class="flex min-w-0 flex-1 flex-col gap-1">
+            <div class="flex min-w-0 items-center gap-2">
+              <span class="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{{ item.title }}</span>
+              <span v-if="item.already_downloaded" class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-notice/15 text-notice">In library</span>
+              <span v-else-if="item.already_requested" class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-caution/15 text-caution">Requested</span>
+              <span v-else-if="itemWouldRequest(item)" class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-good/15 text-good">Will request</span>
             </div>
 
-            <!-- Info -->
-            <div class="item-info">
-              <!-- Title row + status badge -->
-              <div class="item-header-row">
-                <div class="item-title">{{ item.title }}</div>
-                <span v-if="item.already_downloaded" class="status-badge downloaded">
-                  <i class="fas fa-check"></i> In Library
-                </span>
-                <span v-else-if="item.already_requested" class="status-badge requested">
-                  <i class="fas fa-clock"></i> Already Requested
-                </span>
-                <span v-else-if="itemWouldRequest(item)" class="status-badge will-request">
-                  <i class="fas fa-plus"></i> Will Request
-                </span>
-              </div>
-
-              <!-- Meta row -->
-              <div class="item-meta">
-                <span class="media-type-badge" :class="item.media_type">
-                  {{ item.media_type === 'tv' ? 'TV' : 'Movie' }}
-                </span>
-                <span v-if="releaseYear(item)" class="item-year">{{ releaseYear(item) }}</span>
-                <span v-if="item.vote_average" class="item-rating">
-                  <i class="fas fa-star"></i>
-                  {{ Number(item.vote_average).toFixed(1) }}
-                </span>
-                <button
-                  v-if="hasTrailerTarget(item)"
-                  type="button"
-                  class="item-trailer"
-                  :disabled="trailerUnavailable(item)"
-                  @click.stop="watchTrailer(item)">
-                  <i :class="openingTrailer.includes(trailerKey(item)) ? 'fas fa-spinner fa-spin' : 'fab fa-youtube'"></i>
-                  {{ withoutTrailer.includes(trailerKey(item)) ? 'No trailer' : 'Trailer' }}
-                </button>
-              </div>
-
-              <!-- Filter badges -->
-              <div v-if="hasFilters(item)" class="filter-badges">
-                <template v-for="(filter, key) in activeFilters(item)" :key="key">
-                  <span
-                    v-if="filter.passed !== undefined"
-                    class="filter-badge"
-                    :class="filterBadgeClass(filter)"
-                    :title="filterTitle(filter)"
-                  >
-                    <i :class="filterIcon(filter)"></i>
-                    {{ filter.label }}
-                    <span v-if="filter.value != null" class="filter-value">{{ filter.value }}</span>
-                  </span>
-                </template>
-              </div>
-
-              <!-- Skip reason (for items that won't be requested) -->
-              <div v-if="!itemWouldRequest(item)" class="skip-reason">
-                <i class="fas fa-ban"></i>
-                {{ skipReason(item) }}
-              </div>
-
-              <!-- AI rationale -->
-              <div v-if="item.rationale" class="item-rationale">
-                <i class="fas fa-magic"></i> {{ item.rationale }}
-              </div>
-
-              <!-- Overview -->
-              <div v-if="item.overview" class="item-overview">
-                {{ truncate(item.overview, 120) }}
-              </div>
-
-              <!-- Source -->
-              <div v-if="item.source && item.source.title" class="item-source">
-                <span class="source-label">Similar to</span>
-                <img
-                  v-if="item.source.poster_path"
-                  :src="posterUrl(item.source.poster_path)"
-                  :alt="item.source.title"
-                  class="source-poster"
-                />
-                <span class="source-title">{{ item.source.title }}</span>
-              </div>
+            <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-ink-3">
+              <span class="font-semibold">{{ item.media_type === 'tv' ? 'TV' : 'Movie' }}</span>
+              <span v-if="releaseYear(item)">{{ releaseYear(item) }}</span>
+              <span v-if="item.vote_average" class="text-caution"><i aria-hidden="true" class="fas fa-star mr-0.5 text-[10px]"></i>{{ Number(item.vote_average).toFixed(1) }}</span>
+              <button
+                v-if="hasTrailerTarget(item)"
+                type="button"
+                class="cursor-pointer border-0 bg-transparent p-0 text-xs font-semibold text-ink-3 hover:text-bad disabled:cursor-default disabled:opacity-50"
+                :disabled="trailerUnavailable(item)"
+                @click.stop="watchTrailer(item)">
+                <i aria-hidden="true" class="mr-1" :class="openingTrailer.includes(trailerKey(item)) ? 'fas fa-spinner fa-spin' : 'fab fa-youtube'"></i>{{ withoutTrailer.includes(trailerKey(item)) ? 'No trailer' : 'Trailer' }}
+              </button>
             </div>
-          </div>
-        </div>
-      </div>
 
-      <!-- Footer -->
-      <div class="modal-footer">
-        <button @click="$emit('close')" class="btn btn-secondary">
-          <i class="fas fa-times"></i> Close
-        </button>
-        <button @click="$emit('run')" class="btn btn-primary" v-if="wouldRequestCount > 0">
-          <i class="fas fa-bolt"></i> Run Job Now
-        </button>
-      </div>
+            <div v-if="hasFilters(item)" class="flex flex-wrap gap-1">
+              <template v-for="(filter, key) in activeFilters(item)" :key="key">
+                <span
+                  v-if="filter.passed !== undefined"
+                  class="inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-px text-[10px] font-medium"
+                  :class="filterBadgeClass(filter)"
+                  :title="filterTitle(filter)"
+                >
+                  <i aria-hidden="true" class="text-[8px]" :class="filterIcon(filter)"></i>
+                  {{ filter.label }}
+                  <span v-if="filter.value != null" class="opacity-75">{{ filter.value }}</span>
+                </span>
+              </template>
+            </div>
+
+            <p v-if="!itemWouldRequest(item)" class="m-0 text-xs text-caution"><i aria-hidden="true" class="fas fa-ban mr-1 text-[10px]"></i>{{ skipReason(item) }}</p>
+            <p v-if="item.rationale" class="m-0 text-xs italic text-brand-ink"><i aria-hidden="true" class="fas fa-magic mr-1"></i>{{ item.rationale }}</p>
+            <p v-if="item.overview" class="m-0 text-xs leading-snug text-ink-3">{{ truncate(item.overview, 120) }}</p>
+            <p v-if="item.source && item.source.title" class="m-0 truncate text-xs text-ink-4">Similar to <span class="text-ink-2">{{ item.source.title }}</span></p>
+          </div>
+        </li>
+      </ul>
     </div>
-  </div>
+
+    <template #footer>
+      <button type="button" class="ui-btn" @click="$emit('close')">Close</button>
+      <button v-if="wouldRequestCount > 0" type="button" class="ui-btn-primary" @click="$emit('run')"><i aria-hidden="true" class="fas fa-bolt"></i>Run job now</button>
+    </template>
+  </AppDialog>
 </template>
 
 <script>
 import axios from 'axios';
+import AppDialog from '@/components/ui/AppDialog.vue';
 import { openTrailer, trailerTarget } from '@/utils/trailer.js';
 
 export default {
   name: 'DryRunResultModal',
+  components: { AppDialog },
   props: {
     job: { type: Object, required: true },
     items: { type: Array, default: () => [] },
@@ -256,9 +183,9 @@ export default {
       return filters;
     },
     filterBadgeClass(filter) {
-      if (filter.passed === true) return 'badge-pass';
-      if (filter.passed === false) return 'badge-fail';
-      return 'badge-na';
+      if (filter.passed === true) return 'border-good/25 bg-good/10 text-good';
+      if (filter.passed === false) return 'border-bad/25 bg-bad/10 text-bad';
+      return 'border-edge bg-raised text-ink-3';
     },
     filterIcon(filter) {
       if (filter.passed === true) return 'fas fa-check';
@@ -293,478 +220,3 @@ export default {
   },
 };
 </script>
-
-<style scoped>
-/* Component-specific styles only */
-
-.header-title {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-}
-
-.header-icon {
-  font-size: 1.4rem;
-  color: var(--color-info-light);
-}
-
-.job-subtitle {
-  font-size: 0.8rem;
-  color: var(--color-text-muted, #888);
-}
-
-.cached-label {
-  font-size: 0.75rem;
-  color: rgba(34, 211, 238, 0.6);
-}
-
-/* Summary bar */
-.summary-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: rgba(6, 182, 212, 0.08);
-  border: 1px solid rgba(6, 182, 212, 0.2);
-  border-radius: var(--radius-sm, 6px);
-  font-size: 0.875rem;
-}
-
-.summary-bar.empty {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-.summary-count {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--color-info-light);
-  font-weight: 500;
-}
-
-.summary-count i { opacity: 0.7; }
-
-.summary-filtered {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  color: #fb923c;
-}
-
-.summary-note {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  color: var(--color-text-muted, #888);
-}
-
-/* View toggle */
-.view-toggle {
-  display: flex;
-  gap: 0.4rem;
-  flex-shrink: 0;
-}
-
-.toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.78rem;
-  border-radius: var(--radius-sm, 6px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--color-text-muted, #888);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.toggle-btn.active {
-  background: rgba(34, 211, 238, 0.12);
-  border-color: rgba(34, 211, 238, 0.35);
-  color: var(--color-info-light);
-}
-
-.toggle-btn:hover:not(.active) {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--color-text-primary, #fff);
-}
-
-/* Empty state */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2.5rem 1rem;
-  text-align: center;
-  gap: 0.5rem;
-}
-
-.empty-state i {
-  font-size: 2.5rem;
-  color: #00c896;
-  margin-bottom: 0.5rem;
-}
-
-.empty-state p {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--color-text-primary, #fff);
-  margin: 0;
-}
-
-.empty-state span {
-  font-size: 0.85rem;
-  color: var(--color-text-muted, #888);
-  max-width: 380px;
-}
-
-/* Items list */
-.items-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.item-card {
-  display: flex;
-  gap: 0.9rem;
-  padding: 0.85rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: var(--radius-sm, 6px);
-  transition: border-color 0.15s;
-}
-
-.item-card:hover { border-color: rgba(255, 255, 255, 0.14); }
-
-.item-card.item-filtered {
-  opacity: 0.6;
-  border-color: rgba(255, 255, 255, 0.04);
-}
-
-.item-card.item-filtered:hover { opacity: 0.8; }
-
-/* Poster */
-.item-poster {
-  flex-shrink: 0;
-  width: 46px;
-  height: 69px;
-  border-radius: 4px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.item-poster img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.poster-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-muted, #888);
-  font-size: 1.1rem;
-}
-
-/* Item info */
-.item-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.28rem;
-}
-
-.item-header-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.item-title {
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: var(--color-text-primary, #fff);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
-}
-
-/* Status badges */
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.62rem;
-  font-weight: 600;
-  padding: 0.12rem 0.4rem;
-  border-radius: 0.25rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  flex-shrink: 0;
-}
-
-.status-badge.will-request {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
-}
-
-.status-badge.downloaded {
-  background: rgba(99, 102, 241, 0.15);
-  color: #818cf8;
-}
-
-.status-badge.requested {
-  background: rgba(251, 191, 36, 0.15);
-  color: #fbbf24;
-}
-
-/* Meta */
-.item-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.media-type-badge {
-  font-size: 0.65rem;
-  font-weight: 600;
-  padding: 0.15rem 0.4rem;
-  border-radius: 0.25rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.media-type-badge.movie {
-  background: rgba(239, 68, 68, 0.2);
-  color: #f87171;
-}
-
-.media-type-badge.tv {
-  background: rgba(34, 197, 94, 0.2);
-  color: #4ade80;
-}
-
-.item-year {
-  font-size: 0.78rem;
-  color: var(--color-text-muted, #888);
-}
-
-.item-rating {
-  font-size: 0.78rem;
-  color: #fbbf24;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.item-trailer {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: 0 var(--spacing-sm);
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--color-error-light);
-  background-color: var(--color-error-alpha-20);
-  border: 1px solid var(--color-error);
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-.item-trailer:hover:not(:disabled),
-.item-trailer:focus-visible {
-  background-color: var(--color-error);
-  color: var(--color-text-primary);
-}
-
-.item-trailer:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* Filter badges */
-.filter-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.05rem;
-}
-
-.filter-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.62rem;
-  font-weight: 500;
-  padding: 0.15rem 0.45rem;
-  border-radius: 999px;
-  cursor: default;
-  white-space: nowrap;
-}
-
-.filter-badge i { font-size: 0.55rem; }
-.filter-value { opacity: 0.75; font-weight: 400; }
-
-.badge-pass {
-  background: rgba(34, 197, 94, 0.12);
-  color: #4ade80;
-  border: 1px solid rgba(34, 197, 94, 0.2);
-}
-
-.badge-fail {
-  background: rgba(239, 68, 68, 0.12);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
-
-.badge-na {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--color-text-muted, #888);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* Skip reason */
-.skip-reason {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.73rem;
-  color: #fb923c;
-  opacity: 0.85;
-}
-
-.skip-reason i { font-size: 0.65rem; }
-
-/* AI rationale */
-.item-rationale {
-  font-size: 0.78rem;
-  color: #c084fc;
-  font-style: italic;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.35rem;
-}
-
-.item-rationale i {
-  flex-shrink: 0;
-  margin-top: 0.1rem;
-}
-
-/* Overview */
-.item-overview {
-  font-size: 0.78rem;
-  color: var(--color-text-muted, #888);
-  line-height: 1.4;
-}
-
-/* Source */
-.item-source {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-top: 0.1rem;
-  padding-top: 0.35rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.source-label {
-  font-size: 0.65rem;
-  color: var(--color-text-muted, #888);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  flex-shrink: 0;
-}
-
-.source-poster {
-  width: 16px;
-  height: 24px;
-  border-radius: 2px;
-  object-fit: cover;
-  flex-shrink: 0;
-  opacity: 0.85;
-}
-
-.source-title {
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.6);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Footer */
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.6rem 1rem;
-  border-radius: var(--radius-sm, 6px);
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s ease;
-}
-
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.btn-primary {
-  background: var(--color-primary, #636363);
-  color: #fff;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover, #4a4a4a);
-}
-
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--color-text-primary, #fff);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-@media (max-width: 600px) {
-  .dryrun-modal {
-    max-width: 100%;
-    max-height: 100vh;
-    border-radius: 0;
-  }
-
-  .summary-bar { flex-direction: column; align-items: flex-start; }
-
-  .modal-footer { flex-direction: column-reverse; }
-
-  .modal-footer .btn { width: 100%; justify-content: center; }
-}
-</style>

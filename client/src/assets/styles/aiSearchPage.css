@@ -210,14 +210,6 @@
   margin: 0;
 }
 
-/* Modal transition */
-.modal-fade-enter-active, .modal-fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-.modal-fade-enter-from, .modal-fade-leave-to {
-  opacity: 0;
-}
-
 /* Reuse global btn classes */
 .btn {
   display: inline-flex;

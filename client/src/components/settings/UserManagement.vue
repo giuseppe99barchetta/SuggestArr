@@ -133,295 +133,124 @@
 
     </div><!-- /settings-grid -->
 
-    <!-- ── Create User Modal ── -->
-    <teleport to="body">
-      <transition name="modal-fade">
-        <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
-          <div class="modal" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
-            <div class="modal-header">
-              <div class="modal-title-wrap">
-                <h3 class="modal-title" id="create-user-title"><i class="fas fa-user-plus"></i> Create Account</h3>
-                <p class="modal-subtitle">Set secure credentials and access level for a new SuggestArr user.</p>
-              </div>
-              <button type="button" class="modal-close" aria-label="Close create account modal" @click="showCreateModal = false">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
-
-            <div class="modal-body">
-              <section class="um-section-card">
-                <div class="um-section-head">
-                  <h4><i class="fas fa-id-badge"></i> Account details</h4>
-                  <p>Username and password for first sign-in.</p>
-                </div>
-
-                <div class="um-fields-grid">
-                  <div class="form-group um-form-group">
-                    <label for="newUsername">Username</label>
-                    <input
-                      id="newUsername"
-                      v-model="newUser.username"
-                      type="text"
-                      class="form-control"
-                      placeholder="e.g. giuseppe.barchetta"
-                      maxlength="64"
-                      :disabled="isCreating"
-                      @keydown.enter="submitCreate"
-                    />
-                    <small class="form-help">Use a unique username (up to 64 characters).</small>
-                  </div>
-
-                  <div class="form-group um-form-group">
-                    <label for="newPassword">Password</label>
-                    <div class="input-group">
-                      <input
-                        id="newPassword"
-                        v-model="newUser.password"
-                        :type="showNewPassword ? 'text' : 'password'"
-                        class="form-control"
-                        placeholder="At least 8 characters"
-                        :disabled="isCreating"
-                        @keydown.enter="submitCreate"
-                      />
-                      <button
-                        type="button"
-                        class="btn btn-outline btn-sm um-input-action"
-                        :disabled="isCreating"
-                        :aria-label="showNewPassword ? 'Hide password' : 'Show password'"
-                        @click="showNewPassword = !showNewPassword"
-                      >
-                        <i :class="showNewPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-                      </button>
-                    </div>
-                    <small class="form-help" :class="{ 'form-help--warn': newUser.password && newUser.password.length < 8 }">
-                      {{ newUser.password && newUser.password.length < 8 ? 'Use at least 8 characters for better security.' : 'Use a strong password with letters, numbers, and symbols.' }}
-                    </small>
-                  </div>
-                </div>
-              </section>
-
-              <section class="um-section-card">
-                <div class="um-section-head">
-                  <h4><i class="fas fa-user-tag"></i> Access level</h4>
-                  <p>Choose what this account can manage.</p>
-                </div>
-                <div class="form-group um-form-group">
-                  <BaseDropdown
-                    v-model="newUser.role"
-                    :options="roleOptions"
-                    label="Role"
-                    placeholder="Select role"
-                    help-text="Admins have full access. Users have standard access."
-                    :disabled="isCreating"
-                  />
-                </div>
-              </section>
-
-              <div v-if="createError" class="error-banner" role="alert">
-                <i class="fas fa-exclamation-circle"></i>
-                {{ createError }}
-              </div>
-            </div>
-
-            <div class="modal-footer">
-              <button class="btn btn-outline" :disabled="isCreating" @click="showCreateModal = false">
-                Cancel
-              </button>
-              <button class="btn btn-primary um-btn-primary" :disabled="isCreating" @click="submitCreate">
-                <i :class="isCreating ? 'fas fa-spinner fa-spin' : 'fas fa-user-plus'"></i>
-                {{ isCreating ? 'Creating…' : 'Create Account' }}
-              </button>
-            </div>
+    <AppDialog v-if="showCreateModal" width="max-w-xl" title="Create account" subtitle="A new SuggestArr login. Share the password with the person securely." icon="fas fa-user-plus" @close="showCreateModal = false">
+      <form id="create-user-form" class="flex flex-col gap-4" @submit.prevent="submitCreate">
+        <label class="ui-label">Username
+          <input v-model="newUser.username" type="text" class="ui-input" placeholder="e.g. alex" maxlength="64" autocomplete="off" :disabled="isCreating" />
+        </label>
+        <div class="ui-label">
+          <label for="newPassword">Password</label>
+          <div class="flex gap-2">
+            <input id="newPassword" v-model="newUser.password" :type="showNewPassword ? 'text' : 'password'" class="ui-input" placeholder="At least 8 characters" autocomplete="new-password" :disabled="isCreating" />
+            <button type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isCreating" :aria-label="showNewPassword ? 'Hide password' : 'Show password'" @click="showNewPassword = !showNewPassword">
+              <i aria-hidden="true" :class="showNewPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+            </button>
           </div>
+          <span class="text-xs font-normal" :class="newUser.password && newUser.password.length < 8 ? 'text-caution' : 'text-ink-4'">
+            {{ newUser.password && newUser.password.length < 8 ? 'Use at least 8 characters.' : 'Mix letters, numbers and symbols.' }}
+          </span>
         </div>
-      </transition>
-    </teleport>
+        <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+          <legend class="mb-1.5 p-0 text-[13px] font-semibold text-ink-2">Role</legend>
+          <label v-for="role in roleOptions" :key="role.value" class="flex cursor-pointer items-start gap-3 rounded-ctl border p-3" :class="newUser.role === role.value ? 'border-brand bg-brand-soft' : 'border-edge-strong bg-panel-2 hover:border-ink-4'">
+            <input v-model="newUser.role" type="radio" name="new-user-role" :value="role.value" class="mt-0.5 accent-brand" :disabled="isCreating" />
+            <span class="text-sm font-semibold text-ink">{{ role.label }}<span class="block text-xs font-normal text-ink-3">{{ role.value === 'admin' ? 'Full access, including settings and other accounts.' : 'Requests and their own profile.' }}</span></span>
+          </label>
+        </fieldset>
+        <p v-if="createError" class="ui-alert-bad" role="alert">{{ createError }}</p>
+      </form>
+      <template #footer>
+        <button type="button" class="ui-btn" :disabled="isCreating" @click="showCreateModal = false">Cancel</button>
+        <button type="submit" form="create-user-form" class="ui-btn-primary" :disabled="isCreating">
+          <i v-if="isCreating" aria-hidden="true" class="fas fa-spinner fa-spin"></i>{{ isCreating ? 'Creating…' : 'Create account' }}
+        </button>
+      </template>
+    </AppDialog>
 
-    <!-- ── Delete Confirm Modal ── -->
-    <teleport to="body">
-      <transition name="modal-fade">
-        <div v-if="showDeleteModal" class="modal-overlay" @click.self="showDeleteModal = false">
-          <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="delete-user-title">
-            <div class="modal-header modal-header--danger">
-              <div class="modal-title-wrap">
-                <h3 class="modal-title" id="delete-user-title"><i class="fas fa-exclamation-triangle"></i> Delete Account</h3>
-                <p class="modal-subtitle">This action is permanent and immediately revokes user access.</p>
-              </div>
-              <button type="button" class="modal-close" aria-label="Close delete account modal" @click="showDeleteModal = false">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
+    <AppDialog v-if="showDeleteModal" title="Delete account" icon="fas fa-trash" tone="danger" @close="showDeleteModal = false">
+      <p class="m-0 text-sm leading-relaxed text-ink-2">Permanently delete <strong class="text-ink">{{ deleteTarget?.username }}</strong>? They lose access immediately. This cannot be undone.</p>
+      <template #footer>
+        <button type="button" class="ui-btn" :disabled="isDeleting" @click="showDeleteModal = false">Cancel</button>
+        <button type="button" class="ui-btn-danger" :disabled="isDeleting" @click="submitDelete">
+          <i v-if="isDeleting" aria-hidden="true" class="fas fa-spinner fa-spin"></i>{{ isDeleting ? 'Deleting…' : 'Delete account' }}
+        </button>
+      </template>
+    </AppDialog>
 
-            <div class="modal-body">
-              <section class="um-section-card um-section-card--danger">
-                <div class="um-section-head">
-                  <h4><i class="fas fa-trash"></i> Confirm deletion</h4>
-                  <p>Review the account before continuing.</p>
-                </div>
-                <p class="um-confirm-text">
-                  Permanently delete <strong>{{ deleteTarget?.username }}</strong>? This cannot be undone.
-                </p>
-              </section>
-            </div>
+    <AppDialog v-if="showPermissionsModal" width="max-w-2xl" title="Permissions" icon="fas fa-user-shield" @close="showPermissionsModal = false">
+      <template #subtitle>
+        {{ permissionsTarget?.username }} · <span class="capitalize">{{ permissionsTarget?.role }}</span>
+      </template>
+      <div class="flex flex-col gap-6">
+        <section class="flex flex-col gap-3">
+          <h3 class="m-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Features</h3>
+          <BaseCheckbox
+            v-model="editPermissions.can_manage_ai"
+            :disabled="isSavingPermissions"
+            label="Can manage AI settings"
+            description="Lets this user set their own AI provider and key."
+          />
+        </section>
 
-            <div class="modal-footer">
-              <button class="btn btn-outline" :disabled="isDeleting" @click="showDeleteModal = false">
-                Cancel
-              </button>
-              <button class="btn btn-danger um-btn-primary" :disabled="isDeleting" @click="submitDelete">
-                <i :class="isDeleting ? 'fas fa-spinner fa-spin' : 'fas fa-trash'"></i>
-                {{ isDeleting ? 'Deleting…' : 'Delete Account' }}
-              </button>
-            </div>
+        <section class="flex flex-col gap-2">
+          <h3 class="m-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Seer identity</h3>
+          <p class="m-0 text-[13px] text-ink-3">Approved requests are credited to this Seer user.</p>
+          <BaseDropdown v-model="editPermissions.seer_user_id" :options="seerUserOptions" placeholder="Use technical user fallback" :disabled="isSavingPermissions" />
+        </section>
+
+        <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+          <legend class="mb-2 p-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Visible pages</legend>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <label
+              v-for="tab in availableTabs"
+              :key="tab.value"
+              class="flex items-center gap-3 rounded-ctl border border-edge-strong bg-panel-2 px-3 py-2.5 text-sm text-ink-2"
+              :class="tab.required ? 'opacity-60' : 'cursor-pointer hover:border-ink-4'"
+            >
+              <input
+                type="checkbox"
+                class="accent-brand"
+                :value="tab.value"
+                :checked="editPermissions.visible_tabs_array.includes(tab.value)"
+                :disabled="isSavingPermissions || tab.required"
+                @change="toggleTab(tab.value)"
+              />
+              <i aria-hidden="true" class="w-4 text-center text-ink-4" :class="tab.icon"></i>
+              <span class="flex-1">{{ tab.label }}</span>
+              <span v-if="tab.required" class="text-[10px] font-bold uppercase tracking-wide text-ink-4">Always</span>
+            </label>
           </div>
-        </div>
-      </transition>
-    </teleport>
-    <!-- ── Edit Permissions Modal ── -->
-    <teleport to="body">
-      <transition name="modal-fade">
-        <div v-if="showPermissionsModal" class="modal-overlay" @click.self="showPermissionsModal = false">
-          <div class="modal" role="dialog" aria-modal="true" aria-labelledby="permissions-title">
-            <div class="modal-header">
-              <div class="modal-title-wrap">
-                <h3 class="modal-title" id="permissions-title"><i class="fas fa-user-shield"></i> Edit Permissions</h3>
-                <p class="modal-subtitle">Control feature permissions and navigation visibility for this account.</p>
-              </div>
-              <button type="button" class="modal-close" aria-label="Close permissions modal" @click="showPermissionsModal = false">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
+        </fieldset>
 
-            <div class="modal-body">
-              <section class="permissions-user-info">
-                <div class="user-avatar">
-                  <i class="fas fa-user"></i>
-                </div>
-                <div class="user-details">
-                  <div class="username">{{ permissionsTarget?.username }}</div>
-                  <div class="role-badge" :class="`role-badge--${permissionsTarget?.role}`">
-                    {{ permissionsTarget?.role }}
-                  </div>
-                </div>
-              </section>
+        <p v-if="permissionsError" class="ui-alert-bad" role="alert">{{ permissionsError }}</p>
+      </div>
+      <template #footer>
+        <button type="button" class="ui-btn" :disabled="isSavingPermissions" @click="showPermissionsModal = false">Cancel</button>
+        <button type="button" class="ui-btn-primary" :disabled="isSavingPermissions" @click="submitPermissions">
+          <i v-if="isSavingPermissions" aria-hidden="true" class="fas fa-spinner fa-spin"></i>{{ isSavingPermissions ? 'Saving…' : 'Save permissions' }}
+        </button>
+      </template>
+    </AppDialog>
 
-              <div class="um-sections-grid">
-                <section class="permissions-section um-section-card">
-                  <div class="um-section-head">
-                    <h4><i class="fas fa-robot"></i> AI Management</h4>
-                    <p>Enable or restrict personal AI configuration access.</p>
-                  </div>
-                  <BaseCheckbox
-                    v-model="editPermissions.can_manage_ai"
-                    :disabled="isSavingPermissions"
-                    label="Can manage AI settings"
-                    description="Allow user to configure their own OpenAI API key and settings."
-                  />
-                </section>
-
-                <section class="permissions-section um-section-card">
-                  <div class="um-section-head"><h4><i class="fas fa-paper-plane"></i> Seer Identity</h4><p>Attribute approved requests to this Seer user.</p></div>
-                  <BaseDropdown v-model="editPermissions.seer_user_id" :options="seerUserOptions" placeholder="Use technical user fallback" :disabled="isSavingPermissions" />
-                </section>
-
-                <section class="permissions-section um-section-card">
-                  <div class="um-section-head">
-                    <h4><i class="fas fa-th-large"></i> Visible Tabs</h4>
-                    <p>Select which tabs this account can access in the interface.</p>
-                  </div>
-                  <div class="tabs-checkboxes">
-                    <label
-                      v-for="tab in availableTabs"
-                      :key="tab.value"
-                      class="checkbox-label checkbox-label--compact"
-                      :class="{ disabled: tab.required }"
-                    >
-                      <input
-                        type="checkbox"
-                        :value="tab.value"
-                        :checked="editPermissions.visible_tabs_array.includes(tab.value)"
-                        @change="toggleTab(tab.value)"
-                        :disabled="isSavingPermissions || tab.required"
-                      />
-                      <span class="tab-checkbox-content">
-                        <i :class="tab.icon"></i>
-                        {{ tab.label }}
-                        <span v-if="tab.required" class="required-badge">Required</span>
-                      </span>
-                    </label>
-                  </div>
-                </section>
-              </div>
-
-              <div v-if="permissionsError" class="error-banner" role="alert">
-                <i class="fas fa-exclamation-circle"></i>
-                {{ permissionsError }}
-              </div>
-            </div>
-
-            <div class="modal-footer">
-              <button class="btn btn-outline" :disabled="isSavingPermissions" @click="showPermissionsModal = false">
-                Cancel
-              </button>
-              <button class="btn btn-primary um-btn-primary" :disabled="isSavingPermissions" @click="submitPermissions">
-                <i :class="isSavingPermissions ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
-                {{ isSavingPermissions ? 'Saving…' : 'Save Permissions' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </transition>
-    </teleport>
-
-    <!-- ── Assign Media Account Modal ── -->
-    <teleport to="body">
-      <transition name="modal-fade">
-        <div v-if="showMediaLinkModal" class="modal-overlay" @click.self="showMediaLinkModal = false">
-          <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="media-link-title">
-            <div class="modal-header">
-              <div class="modal-title-wrap">
-                <h3 class="modal-title" id="media-link-title"><i class="fas fa-link"></i> Assign Media Account</h3>
-                <p class="modal-subtitle">Map {{ mediaLinkTarget?.username }} to a {{ providerLabel }} user.</p>
-              </div>
-              <button type="button" class="modal-close" aria-label="Close media account modal" @click="showMediaLinkModal = false">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
-
-            <div class="modal-body">
-              <section class="um-section-card">
-                <div class="form-group um-form-group">
-                  <BaseDropdown
-                    v-model="selectedMediaUserId"
-                    :options="mediaUserOptions"
-                    label="Media account"
-                    placeholder="Select account"
-                    :disabled="isLoadingMediaUsers || isSavingMediaLink"
-                  />
-                  <small v-if="isLoadingMediaUsers" class="form-help">
-                    Loading {{ providerLabel }} users…
-                  </small>
-                </div>
-              </section>
-              <div v-if="mediaLinkError" class="error-banner" role="alert">
-                <i class="fas fa-exclamation-circle"></i>
-                {{ mediaLinkError }}
-              </div>
-            </div>
-
-            <div class="modal-footer">
-              <button class="btn btn-outline" :disabled="isSavingMediaLink" @click="showMediaLinkModal = false">
-                Cancel
-              </button>
-              <button class="btn btn-primary um-btn-primary" :disabled="isSavingMediaLink || !selectedMediaUserId" @click="submitMediaLink">
-                <i :class="isSavingMediaLink ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
-                {{ isSavingMediaLink ? 'Saving…' : 'Save Link' }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </transition>
-    </teleport>
+    <AppDialog v-if="showMediaLinkModal" title="Link media account" icon="fas fa-link" :subtitle="mediaLinkSubtitle" @close="showMediaLinkModal = false">
+      <div class="flex flex-col gap-3">
+        <BaseDropdown
+          v-model="selectedMediaUserId"
+          :options="mediaUserOptions"
+          :label="providerLabel + ' user'"
+          placeholder="Select account"
+          :disabled="isLoadingMediaUsers || isSavingMediaLink"
+        />
+        <p v-if="isLoadingMediaUsers" class="m-0 text-xs text-ink-4"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i>Loading {{ providerLabel }} users…</p>
+        <p v-if="mediaLinkError" class="ui-alert-bad" role="alert">{{ mediaLinkError }}</p>
+      </div>
+      <template #footer>
+        <button type="button" class="ui-btn" :disabled="isSavingMediaLink" @click="showMediaLinkModal = false">Cancel</button>
+        <button type="button" class="ui-btn-primary" :disabled="isSavingMediaLink || !selectedMediaUserId" @click="submitMediaLink">
+          <i v-if="isSavingMediaLink" aria-hidden="true" class="fas fa-spinner fa-spin"></i>{{ isSavingMediaLink ? 'Saving…' : 'Save link' }}
+        </button>
+      </template>
+    </AppDialog>
 
   </div>
 </template>
@@ -442,11 +271,12 @@ import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
+import AppDialog from '@/components/ui/AppDialog.vue';
 
 export default {
   name: 'UserManagement',
 
-  components: { BaseDropdown, BaseCheckbox, PageHeader, },
+  components: { AppDialog, BaseDropdown, BaseCheckbox, PageHeader },
 
   props: {
     config: Object,
@@ -526,6 +356,9 @@ export default {
     providerLabel() {
       const labels = { plex: 'Plex', jellyfin: 'Jellyfin', emby: 'Emby' };
       return labels[this.selectedService] || 'media';
+    },
+    mediaLinkSubtitle() {
+      return `Which ${this.providerLabel} user's watch history belongs to ${this.mediaLinkTarget?.username}.`;
     },
     mediaUserOptions() {
       return this.mediaUsers.map((user) => ({
@@ -917,30 +750,6 @@ export default {
   color: var(--color-text-primary);
 }
 
-.form-control {
-  width: 100%;
-  padding: 0 var(--input-padding-x-md);
-  background: var(--surface-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--input-border-radius);
-  color: var(--color-text-primary);
-  font-size: var(--input-font-size-md);
-  transition: var(--transition-base);
-  min-height: var(--input-height-md);
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  background: var(--surface-hover);
-  box-shadow: var(--shadow-focus);
-}
-
-.form-control:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .form-help {
   display: block;
   margin-top: var(--spacing-xs);
@@ -1105,299 +914,6 @@ export default {
   flex-shrink: 0;
 }
 
-/* ── Error banner ──────────────────────────────────────────────────────── */
-.error-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  color: var(--color-error);
-  font-size: var(--font-size-sm);
-  padding: calc(var(--spacing-sm) * 1.2) calc(var(--spacing-sm) + var(--spacing-xs));
-  background: var(--color-error-alpha-10);
-  border: 1px solid var(--color-error);
-  border-radius: var(--radius-sm);
-}
-
-/* ── UserManagement modal redesign ─────────────────────────────────────── */
-.um-btn-primary {
-  min-width: 150px;
-}
-
-.um-section-card {
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  background: transparent;
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--spacing-sm) + var(--spacing-xs));
-}
-
-.um-section-card + .um-section-card {
-  border-top: 1px solid var(--color-border-light);
-  padding-top: var(--spacing-md);
-}
-
-.um-section-card--danger {
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-md);
-  background: var(--surface-base);
-}
-
-.um-section-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.um-section-head h4 {
-  margin: 0;
-  font-size: calc(var(--font-size-base) * 0.92);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
-  gap: calc(var(--spacing-sm) * 0.9);
-}
-
-.um-section-head p {
-  margin: 0;
-  font-size: calc(var(--font-size-base) * 0.82);
-  color: var(--color-text-muted);
-  line-height: 1.4;
-}
-
-.um-fields-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-md);
-}
-
-.um-fields-grid .form-group:first-child {
-  grid-column: 1 / -1;
-}
-
-.um-form-group {
-  margin-bottom: 0;
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--spacing-sm) * 0.9);
-}
-
-.um-modal-body .form-group label {
-  margin-bottom: 0;
-  font-size: calc(var(--font-size-base) * 0.84);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-muted);
-}
-
-.um-modal-body .form-control {
-  min-height: var(--input-height-md);
-  height: var(--input-height-md);
-  padding: 0 var(--input-padding-x-md);
-  font-size: var(--input-font-size-md);
-  background: var(--surface-interactive);
-  border-color: var(--color-border-light);
-}
-
-.um-modal-body .form-control::placeholder {
-  color: var(--color-text-muted);
-}
-
-.um-modal-body .form-control:focus {
-  background: var(--surface-hover);
-  border-color: var(--color-border-focus);
-  box-shadow: var(--shadow-focus);
-}
-
-.um-modal-body select.form-control {
-  padding-right: var(--spacing-xl);
-}
-
-.um-modal-body .input-group {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-}
-
-.um-modal-body .input-group .form-control {
-  flex: 1;
-}
-
-.um-input-action {
-  min-height: var(--btn-height-md);
-  height: var(--btn-height-md);
-  min-width: var(--btn-height-md);
-  padding: 0 var(--btn-padding-x-sm);
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  margin-left: -1px;
-}
-
-.um-modal-body .input-group .form-control {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.um-modal-body .form-help {
-  margin-top: 0;
-  font-size: calc(var(--font-size-base) * 0.8);
-}
-
-.form-help--warn {
-  color: var(--color-warning);
-}
-
-.um-confirm-text {
-  margin: 0;
-  line-height: 1.5;
-  color: var(--color-text-primary);
-}
-
-.permissions-user-info {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md) calc(var(--spacing-md) + calc(var(--spacing-xs) * 0.4));
-  background: var(--surface-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-}
-
-.permissions-user-info .user-avatar {
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
-}
-
-.permissions-user-info .user-details {
-  flex: 1;
-}
-
-.permissions-user-info .user-details .username {
-  font-size: calc(var(--font-size-base) * 1.05);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  margin-bottom: var(--spacing-xs);
-}
-
-.permissions-user-info .user-details .role-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(var(--spacing-sm) * 0.7);
-  padding: var(--spacing-xs) calc(var(--spacing-sm) * 1.2);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  border-radius: var(--radius-full);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.role-badge--admin {
-  background: var(--color-error-alpha-20);
-  color: var(--color-error-light);
-  border: 1px solid var(--color-error);
-}
-
-.role-badge--user {
-  background: var(--color-primary-alpha-20);
-  color: var(--color-primary-light);
-  border: 1px solid var(--color-primary);
-}
-
-.um-sections-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: calc(var(--spacing-sm) + calc(var(--spacing-xs) * 1.6));
-}
-
-.permissions-section {
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--spacing-sm) + calc(var(--spacing-xs) * 1.6));
-}
-
-.tabs-checkboxes {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.tabs-checkboxes label {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--spacing-sm) + var(--spacing-xs));
-  padding: calc(var(--spacing-md) * 0.65) calc(var(--spacing-sm) + var(--spacing-xs));
-  background: var(--surface-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
-  position: relative;
-}
-
-.tabs-checkboxes label:hover:not(.disabled) {
-  background: var(--surface-hover);
-  border-color: var(--color-border-medium);
-}
-
-.tabs-checkboxes label:focus-within {
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-focus);
-}
-
-.tabs-checkboxes label.disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.tabs-checkboxes .tab-label {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--spacing-sm) * 1.2);
-  flex: 1;
-}
-
-.tab-checkbox-content {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(var(--spacing-sm) * 1.2);
-  flex: 1;
-}
-
-.tab-checkbox-content i {
-  color: var(--color-primary);
-  font-size: var(--font-size-base);
-  width: 20px;
-  text-align: center;
-}
-
-.tabs-checkboxes .tab-label i {
-  color: var(--color-primary);
-  font-size: var(--font-size-base);
-  width: 20px;
-  text-align: center;
-}
-
-.tabs-checkboxes .tab-label span {
-  font-size: calc(var(--font-size-base) * 0.95);
-  color: var(--color-text-primary);
-}
-
-.required-badge {
-  margin-left: auto;
-  padding: calc(var(--spacing-sm) * 0.4) var(--spacing-sm);
-  font-size: calc(var(--font-size-base) * 0.7);
-  font-weight: var(--font-weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  background: var(--color-info-alpha-20);
-  color: var(--color-info-light);
-  border: 1px solid var(--color-info);
-  border-radius: var(--radius-full);
-}
-
 /* ── Responsive ────────────────────────────────────────────────────────── */
 @media (max-width: 1000px) {
   .settings-grid { grid-template-columns: minmax(0, 1fr); }
@@ -1418,29 +934,6 @@ export default {
   }
   .settings-grid {
     grid-template-columns: 1fr;
-  }
-
-  .um-modal-content {
-    max-height: calc(100vh - var(--spacing-lg));
-  }
-
-  .um-fields-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .um-modal-header,
-  .um-modal-body,
-  .um-modal-footer {
-    padding-left: var(--spacing-md);
-    padding-right: var(--spacing-md);
-  }
-
-  .um-modal-footer {
-    justify-content: stretch;
-  }
-
-  .um-modal-footer .btn {
-    flex: 1;
   }
 }
 </style>

@@ -99,9 +99,9 @@ for (const width of [1280, 900, 390]) {
     }
     await expect(page.getByText("viewer", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "New User", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Create Account" })).toBeVisible();
-    await page.getByRole("button", { name: "Close create account modal" }).click();
-    await expect(page.getByRole("dialog", { name: "Create Account" })).toBeHidden();
+    await expect(page.getByRole("dialog", { name: "Create account" })).toBeVisible();
+    await page.getByRole("button", { name: "Close" }).click();
+    await expect(page.getByRole("dialog", { name: "Create account" })).toBeHidden();
     await page.screenshot({ path: testInfo.outputPath("users-cards.png"), fullPage: true, animations: "disabled" });
 
     const geometry = await cardGeometry(page);

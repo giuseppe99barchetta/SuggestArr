@@ -101,44 +101,6 @@
   }
 }
 
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background-color: var(--color-bg-overlay-heavy);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-  overflow-y: auto;
-}
-
-.modal-close {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: 50%;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: var(--transition-base);
-  z-index: 10;
-}
-
-.modal-close:hover {
-  background-color: var(--color-danger);
-  color: white;
-  border-color: var(--color-danger);
-  transform: rotate(90deg);
-}
-
 /* 👇 Desktop large: Ancora più spazio */
 @media (min-width: 1024px) {
   .modal-layout {
