@@ -91,6 +91,27 @@
   --color-bg-interactive: var(--surface-interactive);
   --color-bg-active: var(--surface-hover);
 
+  /* Names some components reference but the design system never defined; they used to
+     fall back to hard-coded greys. Kept as aliases so every screen follows the theme. */
+  --color-bg: var(--surface-base);
+  --color-bg-hover: var(--surface-hover);
+  --color-bg-secondary: var(--surface-raised);
+  --color-bg-tertiary: var(--surface-interactive);
+  --color-card: var(--surface-raised);
+  --color-border: var(--color-border-medium);
+  --color-border-soft: var(--color-border-light);
+  --color-danger: var(--color-error);
+  --color-success-rgb: 79, 201, 138;
+  --surface-active: var(--surface-hover);
+  --surface-primary: var(--surface-raised);
+  --card-bg: var(--surface-raised);
+  --card-title-color: var(--color-text-primary);
+  --card-description-color: var(--color-text-tertiary);
+  --card-divider-color: var(--color-border-light);
+  --progress-bg: var(--surface-interactive);
+  --border-radius: var(--radius-md);
+  --input-padding-x: 0.75rem;
+
   /* ────────────────────────────────────────────────────────────────────
      Text Colors
      

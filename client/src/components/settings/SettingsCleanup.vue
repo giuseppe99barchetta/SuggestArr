@@ -1,9 +1,6 @@
 <template>
   <div class="cleanup-page" :class="{ embedded }">
-    <div v-if="!embedded" class="section-header">
-      <h2><i class="fas fa-broom"></i> Cleanup Automation</h2>
-      <p>Automatically delete SuggestArr requests and their files when the item has not been favorited in your media server within a grace period.</p>
-    </div>
+    <PageHeader v-if="!embedded" title="Cleanup" subtitle="Delete SuggestArr requests and their files when nobody favorited the title in your media server within a grace period." />
 
     <button
       v-else
@@ -157,9 +154,11 @@
 </template>
 
 <script>
+import PageHeader from '@/components/ui/PageHeader.vue';
 import { getCleanupSettings, setCleanupSettings, runCleanupNow, getCleanupLog } from '@/api/api.js';
 
 export default {
+  components: { PageHeader },
   name: 'SettingsCleanup',
 
   props: {
@@ -418,7 +417,7 @@ export default {
   background: rgba(231, 138, 0, 0.1); border: 1px solid rgba(231, 138, 0, 0.4);
   padding: 12px; border-radius: 8px; margin: 16px 0;
 }
-.warning-banner i { color: #e78a00; font-size: 1.1rem; margin-top: 2px; }
+.warning-banner i { color: var(--color-warning); font-size: 1.1rem; margin-top: 2px; }
 .warning-content strong { display: block; margin-bottom: 2px; }
 
 .cleanup-panel {
@@ -467,17 +466,17 @@ export default {
 }
 .btn:hover:not(:disabled) { border-color: #888; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: #3498db; border-color: #3498db; color: white; }
-.btn-danger { background: #c0392b; border-color: #c0392b; color: white; }
-.btn-link { background: transparent; border: none; color: #3498db; padding: 4px 8px; }
+.btn-primary { background: var(--color-primary); border-color: var(--color-primary); color: white; }
+.btn-danger { background: var(--color-error); border-color: var(--color-error); color: var(--color-text-inverse); }
+.btn-link { background: transparent; border: none; color: var(--color-primary-light); padding: 4px 8px; }
 .btn-sm { padding: 6px 10px; font-size: 0.82rem; }
 
 .result-banner {
   margin-top: 12px; padding: 10px; border-radius: 6px;
   display: flex; gap: 8px; align-items: center;
 }
-.result-banner.ok { background: rgba(46, 204, 113, 0.12); border: 1px solid #2ecc71; color: #2ecc71; }
-.result-banner.err { background: rgba(231, 76, 60, 0.12); border: 1px solid #e74c3c; color: #e74c3c; }
+.result-banner.ok { background: var(--color-success-alpha-10); border: 1px solid var(--color-success); color: var(--color-success-light); }
+.result-banner.err { background: var(--color-error-alpha-10); border: 1px solid var(--color-error); color: var(--color-error-light); }
 
 .last-run-info { margin-top: 12px; font-size: 0.9rem; color: var(--color-text-muted, #aaa); }
 .last-run-summary { margin-top: 4px; font-family: monospace; font-size: 0.82rem; }
@@ -523,9 +522,9 @@ export default {
   border-bottom: 1px solid var(--color-border-soft, #333);
 }
 .log-table th { color: var(--color-text-muted, #aaa); font-weight: 600; }
-.log-table .row-delete { color: #e67e22; }
-.log-table .row-kept { color: #2ecc71; }
-.log-table .row-error { color: #e74c3c; }
+.log-table .row-delete { color: var(--color-warning); }
+.log-table .row-kept { color: var(--color-success); }
+.log-table .row-error { color: var(--color-error); }
 .pagination-row {
   display: flex;
   align-items: center;

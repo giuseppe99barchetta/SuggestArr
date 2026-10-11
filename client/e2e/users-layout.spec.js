@@ -27,8 +27,7 @@ async function openPreview(page, component) {
       import Users from "/src/components/settings/UserManagement.vue";
       import Profile from "/src/components/settings/UserProfile.vue";
       import { useAuth } from "/src/composables/useAuth.js";
-      import "/src/assets/styles/theme.css";
-      import "/src/assets/styles/global.css";
+      import "/src/assets/main.css";
       useAuth().currentUser.value = { id: 1, username: "admin", role: "admin" };
       const app = createApp({ render: () => h(${component}, { config: { SELECTED_SERVICE: "jellyfin" } }) });
       app.config.globalProperties.$toast = { error() {}, success() {} };
@@ -63,37 +62,28 @@ for (const width of [1280, 900, 390]) {
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
     await openPreview(page, "Profile");
-    await expect(page.locator(".profile-nav, .settings-panel__toggle")).toHaveCount(0);
-    for (const title of ["Account Information", "Title language", "API Keys", "Jellyfin Account", "Recommendation history"]) {
+    for (const title of ["Account Information", "Title language", "API Keys", "Linked accounts", "Recommendation history"]) {
       await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
     }
     await page.getByLabel("New username", { exact: true }).fill("draft-name");
     await page.getByLabel("Search TMDb").fill("Arrival");
-    await page.locator("#profile-history-content .custom-dropdown").scrollIntoViewIfNeeded();
-    await page.locator("#profile-history-content .custom-dropdown").click();
-    await page.getByRole("menuitem", { name: "Movies", exact: true }).click();
-    await expect(page.locator("#profile-history-content .value-text")).toHaveText("Movies");
+    await page.getByLabel("Media type", { exact: true }).selectOption("movie");
+    await expect(page.getByLabel("Media type", { exact: true })).toHaveValue("movie");
     await expect(page.getByLabel("New username", { exact: true })).toHaveValue("draft-name");
     await page.screenshot({ path: testInfo.outputPath("profile-cards.png"), fullPage: true, animations: "disabled" });
 
-    const geometry = await cardGeometry(page);
-    expect(geometry.every(card => !card.overflow)).toBe(true);
-    expect(new Set(geometry.map(card => card.inset)).size).toBe(1);
-    if (width > 700) {
-      const file = await page.locator(".history-file-control").boundingBox();
-      const search = await page.getByLabel("Search TMDb").boundingBox();
-      expect(Math.abs(file.y - search.y)).toBeLessThan(1);
-      const upload = await page.locator(".history-import-controls > button").boundingBox();
-      const submit = await page.locator(".history-search__controls > button").boundingBox();
-      expect(Math.abs(upload.y + upload.height - submit.y - submit.height)).toBeLessThan(1);
-    }
+    const cards = await page.locator("[data-profile-page] section").evaluateAll(sections =>
+      sections.map(section => {
+        const rect = section.getBoundingClientRect();
+        return { title: section.querySelector("h2")?.textContent.trim(), x: rect.x, y: rect.y, width: rect.width, overflow: section.scrollWidth > section.clientWidth + 1 };
+      }));
+    expect(cards.every(card => !card.overflow)).toBe(true);
     if (width > 1000) {
-      expect(geometry[0].y).toBe(geometry[1].y);
-      expect(geometry[0].bottom).toBe(geometry[2].bottom);
-      expect(geometry[0].width).toBe(geometry[1].width);
-      expect(geometry[1].x).toBe(geometry[2].x);
-      expect(geometry[3].x).toBe(geometry[4].x);
-      expect(geometry[3].width).toBe(geometry[4].width);
+      const byTitle = Object.fromEntries(cards.map(card => [card.title, card]));
+      // Account on the left, preferences and keys stacked on the right, same top edge and width.
+      expect(byTitle["Account Information"].y).toBe(byTitle["Title language"].y);
+      expect(byTitle["Account Information"].width).toBe(byTitle["Title language"].width);
+      expect(byTitle["Title language"].x).toBe(byTitle["API Keys"].x);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);

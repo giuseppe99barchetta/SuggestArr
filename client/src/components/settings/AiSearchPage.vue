@@ -1,363 +1,238 @@
 <template>
-  <div class="ai-search-page">
-    <!-- Header -->
-    <PageHeader title="AI Search" subtitle="Describe what you feel like watching. The AI finds matching titles, personalised to your viewing history." />
+  <div class="flex flex-col gap-6">
+    <PageHeader title="AI Search" subtitle="Describe what you feel like watching. The AI finds matching titles, personalised to your viewing history.">
+      <span class="inline-flex h-7 items-center rounded-full bg-brand-soft px-3 text-xs font-bold tracking-wider text-brand-ink">BETA</span>
+    </PageHeader>
 
-    <!-- LLM Not Configured Warning -->
-    <div v-if="!llmAvailable" class="warning-banner">
-      <i class="fas fa-exclamation-triangle"></i>
-      <div class="warning-content">
-        <strong>LLM not configured</strong>
-        <span>Complete the configuration for the AI Integration in the <strong>Advanced</strong> tab, under <strong>Experimental Features</strong> card to enable AI Search.</span>
-      </div>
+    <div v-if="!llmAvailable" role="alert" class="flex flex-wrap items-center gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
+      <i aria-hidden="true" class="fas fa-exclamation-triangle text-caution"></i>
+      <p class="m-0 flex-[1_1_280px] text-sm text-ink-2"><strong class="text-ink">No AI provider configured.</strong> Add one under Advanced → Experimental &amp; AI to use AI Search.</p>
+      <router-link :to="{ name: 'DashboardTab', params: { tab: 'advanced' } }" class="inline-flex h-9 items-center rounded-[8px] bg-caution px-3.5 text-[13px] font-bold text-[#1a1405] no-underline hover:text-[#1a1405]">Open Advanced</router-link>
     </div>
 
-    <!-- Beta Warning -->
-    <div class="beta-warning">
-      <i class="fas fa-flask"></i>
-      <span>
-        AI Search is currently in BETA. Features and results may change.
-      </span>
-    </div>
-
-    <!-- Search Form -->
-    <div class="search-form" :class="{ disabled: !llmAvailable }">
-      <div class="search-input-group">
+    <form class="flex flex-col gap-4 rounded-card border border-edge bg-panel p-4 sm:p-5" :class="{ 'opacity-60': !llmAvailable }" @submit.prevent="runSearch">
+      <label class="flex flex-col gap-1.5">
+        <span class="sr-only">What do you want to watch?</span>
         <textarea
           v-model="query"
           :disabled="!llmAvailable || isSearching"
-          class="search-textarea"
-          placeholder="Describe what you want to watch... e.g. 'A psychological thriller from the 90s with a twist ending' or 'Feel-good anime with strong friendships'"
           rows="3"
+          placeholder="A psychological thriller from the 90s with a twist ending… or feel-good anime about friendship"
+          class="w-full resize-y rounded-ctl border border-edge-strong bg-canvas px-4 py-3 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-4 focus:border-brand-ink disabled:cursor-not-allowed"
           @keydown.enter.exact.prevent="runSearch"
-          @keydown.shift.enter.exact.stop=""
         ></textarea>
-        <div class="search-hint">Enter to search · Shift + Enter for newline</div>
-      </div>
+        <span class="self-end text-xs text-ink-4">Enter to search · Shift + Enter for a new line</span>
+      </label>
 
-      <div class="search-controls">
-        <div class="media-type-selector">
-          <label class="radio-label" :class="{ active: mediaType === 'movie' }">
-            <input type="radio" v-model="mediaType" value="movie" :disabled="isSearching" />
-            <i class="fas fa-film"></i> Movies
-          </label>
-          <label class="radio-label" :class="{ active: mediaType === 'tv' }">
-            <input type="radio" v-model="mediaType" value="tv" :disabled="isSearching" />
-            <i class="fas fa-tv"></i> TV Shows
-          </label>
-          <label class="radio-label" :class="{ active: mediaType === 'both' }">
-            <input type="radio" v-model="mediaType" value="both" :disabled="isSearching" />
-            <i class="fas fa-layer-group"></i> Both
-          </label>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div role="radiogroup" aria-label="Media type" class="flex rounded-ctl border border-edge-strong bg-canvas p-1">
+          <button
+            v-for="option in mediaTypeOptions"
+            :key="option.value"
+            type="button"
+            role="radio"
+            :aria-checked="mediaType === option.value ? 'true' : 'false'"
+            :disabled="isSearching"
+            class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border-0 px-3.5 text-[13px] font-semibold"
+            :class="mediaType === option.value ? 'bg-raised text-white' : 'bg-transparent text-ink-3 hover:text-ink'"
+            @click="mediaType = option.value"
+          >
+            <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
+          </button>
         </div>
-
-        <button
-          @click="runSearch"
-          :disabled="!llmAvailable || isSearching || !query.trim()"
-          class="btn btn-primary search-btn"
-        >
-          <i :class="isSearching ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
-          {{ isSearching ? 'Searching...' : 'Search' }}
+        <button type="submit" class="inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-ctl border-0 bg-brand px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="!llmAvailable || isSearching || !query.trim()">
+          <i aria-hidden="true" :class="isSearching ? 'fas fa-spinner fa-spin' : 'fas fa-magic'"></i>{{ isSearching ? 'Searching…' : 'Search' }}
         </button>
       </div>
 
-      <!-- Advanced Options -->
-      <div class="advanced-options">
-        <button class="advanced-toggle" @click="showAdvanced = !showAdvanced" type="button">
-          <i :class="showAdvanced ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
-          Advanced Options
-        </button>
-        <div v-if="showAdvanced" class="advanced-panel">
-          <label class="toggle-option">
-            <span class="toggle-label">
-              <span class="toggle-title"><i class="fas fa-history"></i>Use viewing history</span>
-              <span class="toggle-hint">Let the AI personalise results based on what you've already watched</span>
+      <details class="group border-t border-edge pt-3">
+        <summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-ink-3 hover:text-ink">
+          <i aria-hidden="true" class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i>Search options
+        </summary>
+        <div class="mt-3 grid gap-2 sm:grid-cols-2">
+          <button
+            v-for="toggle in toggles"
+            :key="toggle.key"
+            type="button"
+            role="switch"
+            :aria-checked="$data[toggle.key] ? 'true' : 'false'"
+            class="flex cursor-pointer items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3 text-left hover:border-edge-strong"
+            @click="toggleOption(toggle.key)"
+          >
+            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span class="text-sm font-semibold text-ink">{{ toggle.title }}</span>
+              <span class="text-xs leading-snug text-ink-4">{{ toggle.hint }}</span>
             </span>
-            <div class="toggle-switch" :class="{ on: useHistory }" @click="useHistory = !useHistory">
-              <div class="toggle-knob"></div>
-            </div>
+            <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="$data[toggle.key] ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="$data[toggle.key] ? 'left-[21px]' : 'left-[3px]'"></span></span>
+          </button>
+          <label class="flex items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3">
+            <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span class="text-sm font-semibold text-ink">Max results</span>
+              <span class="text-xs leading-snug text-ink-4">Between 4 and 24</span>
+            </span>
+            <input v-model.number="maxResults" type="number" min="4" max="24" step="4" :disabled="isSearching" class="h-9 w-20 rounded-[8px] border border-edge-strong bg-canvas px-2.5 text-sm text-ink" />
           </label>
-          <label class="toggle-option">
-            <span class="toggle-label">
-              <span class="toggle-title"><i class="fas fa-eye-slash"></i>Exclude already watched</span>
-              <span class="toggle-hint">Hide titles you've already seen from results</span>
-            </span>
-            <div class="toggle-switch" :class="{ on: excludeWatched }" @click="excludeWatched = !excludeWatched">
-              <div class="toggle-knob"></div>
-            </div>
-          </label>
-          <label class="toggle-option">
-            <span class="toggle-label">
-              <span class="toggle-title"><i class="fas fa-redo"></i>Hide already-recommended</span>
-              <span class="toggle-hint">Don't show titles that appeared in any previous AI search</span>
-            </span>
-            <div class="toggle-switch" :class="{ on: excludeSeen }" @click="excludeSeen = !excludeSeen">
-              <div class="toggle-knob"></div>
-            </div>
-          </label>
-          <div class="reset-seen-row">
-            <button type="button" class="reset-seen-btn" @click="resetSeen" :disabled="isResettingSeen">
-              <i :class="isResettingSeen ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
-              {{ isResettingSeen ? 'Clearing...' : 'Clear recommendation history' }}
-            </button>
-            <span class="reset-seen-hint">Lets previously recommended titles re-appear.</span>
-          </div>
-          <div class="number-option">
-            <span class="toggle-label">
-              <span class="toggle-title"><i class="fas fa-list-ol"></i>Max results</span>
-              <span class="toggle-hint">Number of results to return (4–24)</span>
-            </span>
-            <input
-              v-model.number="maxResults"
-              type="number"
-              min="4"
-              max="24"
-              step="4"
-              class="number-input"
-              :disabled="isSearching"
-            />
-          </div>
         </div>
-      </div>
+        <div class="mt-3 flex flex-wrap items-center gap-3">
+          <button type="button" class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border border-edge-strong bg-transparent px-3 text-[13px] font-semibold text-ink-2 hover:text-bad disabled:opacity-50" :disabled="isResettingSeen" @click="resetSeen">
+            <i aria-hidden="true" :class="isResettingSeen ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>{{ isResettingSeen ? 'Clearing…' : 'Clear recommendation history' }}
+          </button>
+          <span class="text-xs text-ink-4">Lets titles from earlier AI searches show up again.</span>
+        </div>
+      </details>
+    </form>
+
+    <div v-if="recentSearches.length > 0" class="flex flex-wrap items-center gap-2">
+      <span class="text-xs font-semibold uppercase tracking-wider text-ink-4">Recent</span>
+      <button
+        v-for="(search, i) in recentSearches"
+        :key="i"
+        type="button"
+        class="h-8 max-w-[280px] cursor-pointer truncate rounded-full border border-edge-strong bg-panel px-3 text-[13px] text-ink-2 hover:border-brand-ink hover:text-ink disabled:opacity-50"
+        :disabled="isSearching"
+        :title="search"
+        @click="rerunSearch(search)"
+      >{{ search }}</button>
+      <button type="button" class="h-8 cursor-pointer rounded-full border-0 bg-transparent px-2 text-[13px] text-ink-4 hover:text-ink" @click="clearHistory">Clear</button>
     </div>
 
-    <!-- Recent Searches -->
-    <div v-if="recentSearches.length > 0" class="recent-searches">
-      <span class="recent-label"><i class="fas fa-history"></i> Recent:</span>
-      <div class="recent-chips">
-        <button
-          v-for="(search, i) in recentSearches"
-          :key="i"
-          @click="rerunSearch(search)"
-          class="recent-chip"
-          :disabled="isSearching"
-          :title="search"
-        >{{ search }}</button>
+    <div v-if="queryInterpretation && hasInterpretation" class="flex flex-wrap items-center gap-2 text-[13px]">
+      <span class="font-semibold text-ink-3"><i aria-hidden="true" class="fas fa-brain mr-1.5 text-brand-ink"></i>Understood as</span>
+      <span v-if="interpGenres" class="rounded-full bg-raised px-3 py-1 text-ink-2">{{ interpGenres }}</span>
+      <span v-if="interpYears" class="rounded-full bg-raised px-3 py-1 text-ink-2">{{ interpYears }}</span>
+      <span v-if="interpLang" class="rounded-full bg-raised px-3 py-1 text-ink-2">{{ interpLang.toUpperCase() }}</span>
+      <span v-if="interpMinRating" class="rounded-full bg-raised px-3 py-1 text-ink-2"><i aria-hidden="true" class="fas fa-star mr-1 text-caution"></i>{{ interpMinRating }}+</span>
+    </div>
+
+    <p v-if="errorMessage" role="alert" class="m-0 rounded-card border border-bad/40 bg-bad/10 px-4 py-3 text-sm text-ink-2"><i aria-hidden="true" class="fas fa-exclamation-circle mr-2 text-bad"></i>{{ errorMessage }}</p>
+
+    <div v-if="isSearching" class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
+      <div v-for="i in Math.min(maxResults, 12)" :key="i" class="aspect-[2/3] animate-pulse rounded-card bg-panel"></div>
+    </div>
+
+    <section v-else-if="results.length > 0" class="flex flex-col gap-4">
+      <h2 class="m-0 text-[19px] font-bold text-ink">{{ results.length }} {{ results.length === 1 ? 'match' : 'matches' }}</h2>
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
+        <MediaCard
+          v-for="item in results"
+          :key="item.id + '-' + item.media_type"
+          :title="item.title"
+          :poster="item.poster_path || ''"
+          :badge="item.source === 'ai_suggestion' ? 'AI pick' : (item.media_type === 'tv' ? 'TV' : 'Movie')"
+          :tone="item.source === 'ai_suggestion' ? 'brand' : 'neutral'"
+          :placeholder-icon="item.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"
+          @open="openModal(item)"
+        >
+          <span class="text-xs font-semibold text-ink-2">
+            {{ item.media_type === 'tv' ? 'TV' : 'Movie' }}<template v-if="releaseYear(item)"> · {{ releaseYear(item) }}</template><template v-if="item.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ Number(item.rating).toFixed(1) }}</template>
+          </span>
+          <template #actions>
+            <button
+              type="button"
+              class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 text-[13px] font-bold disabled:cursor-default"
+              :class="requestButtonTone(item)"
+              :disabled="isRequested(item) || isRequesting(item)"
+              @click="requestItem(item)"
+            >
+              <i aria-hidden="true" :class="requestButtonIcon(item)" class="mr-1"></i>{{ requestButtonLabel(item) }}
+            </button>
+            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border hover:text-good" :class="feedbackOf(item) === 'like' ? 'border-good bg-good/15 text-good' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(item) === 'like' ? 'true' : 'false'" aria-label="More like this" title="More like this" @click="toggleFeedback(item, 'like')"><i aria-hidden="true" class="fas fa-thumbs-up"></i></button>
+            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border hover:text-bad" :class="feedbackOf(item) === 'dislike' ? 'border-bad bg-bad/15 text-bad' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(item) === 'dislike' ? 'true' : 'false'" aria-label="Don't show this again" title="Don't show this again" @click="toggleFeedback(item, 'dislike')"><i aria-hidden="true" class="fas fa-thumbs-down"></i></button>
+          </template>
+        </MediaCard>
       </div>
-      <button class="recent-clear" @click="clearHistory" title="Clear search history">
-        <i class="fas fa-times"></i>
+    </section>
+
+    <div v-else-if="hasSearched" class="flex flex-col items-center gap-2 rounded-card border border-dashed border-edge-strong px-6 py-14 text-center">
+      <i aria-hidden="true" class="fas fa-search text-4xl text-ink-4"></i>
+      <h2 class="m-0 text-lg font-bold text-ink">No matches</h2>
+      <p class="m-0 max-w-md text-sm text-ink-3">Try describing it differently, widen the media type, or relax the search options.</p>
+    </div>
+
+    <div v-else-if="llmAvailable" class="grid gap-3 sm:grid-cols-3">
+      <button
+        v-for="example in examples"
+        :key="example"
+        type="button"
+        class="cursor-pointer rounded-card border border-edge bg-panel p-4 text-left text-sm leading-relaxed text-ink-2 hover:border-brand-ink hover:text-ink"
+        @click="rerunSearch(example)"
+      >
+        <span class="mb-2 block text-brand-ink"><i aria-hidden="true" class="fas fa-magic"></i></span>{{ example }}
       </button>
     </div>
 
-    <!-- Query Interpretation Badge -->
-    <div v-if="queryInterpretation && hasInterpretation" class="interpretation-bar">
-      <i class="fas fa-brain"></i>
-      <span class="interp-label">AI interpreted as:</span>
-      <span v-if="interpGenres" class="interp-tag">
-        <i class="fas fa-film"></i> {{ interpGenres }}
-      </span>
-      <span v-if="interpYears" class="interp-tag">
-        <i class="fas fa-calendar"></i> {{ interpYears }}
-      </span>
-      <span v-if="interpLang" class="interp-tag">
-        <i class="fas fa-globe"></i> {{ interpLang.toUpperCase() }}
-      </span>
-      <span v-if="interpMinRating" class="interp-tag interp-tag-rating">
-        <i class="fas fa-star"></i> min {{ interpMinRating }}
-      </span>
-    </div>
-
-    <!-- Error State -->
-    <div v-if="errorMessage" class="error-banner">
-      <i class="fas fa-exclamation-circle"></i>
-      <span>{{ errorMessage }}</span>
-    </div>
-
-    <!-- Results Grid -->
-    <div v-if="results.length > 0" class="results-section">
-      <div class="results-header">
-        <h3>
-          <i class="fas fa-list"></i>
-          {{ results.length }} result{{ results.length !== 1 ? 's' : '' }} found
-        </h3>
-      </div>
-
-      <div class="results-grid">
-        <div
-          v-for="item in results"
-          :key="item.id + '-' + item.media_type"
-          class="result-card"
-          :class="{ 'ai-pick': item.source === 'ai_suggestion' }"
-        >
-          <!-- Poster -->
-          <div class="card-poster" @click="openModal(item)" title="Click to expand">
-            <img
-              v-if="item.poster_path"
-              :src="item.poster_path"
-              :alt="item.title"
-              loading="lazy"
-            />
-            <div v-else class="poster-placeholder">
-              <i :class="item.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"></i>
-            </div>
-            <!-- Expand hint -->
-            <div class="poster-expand-hint"><i class="fas fa-expand-alt"></i></div>
-          </div>
-
-          <!-- Info -->
-          <div class="card-info">
-            <div class="card-title card-title-clickable" @click="openModal(item)">{{ item.title }}</div>
-            <div class="card-meta">
-              <span v-if="releaseYear(item)" class="meta-year">{{ releaseYear(item) }}</span>
-              <span v-if="item.rating" class="meta-rating">
-                <i class="fas fa-star"></i> {{ Number(item.rating).toFixed(1) }}
-                <span v-if="item.votes" class="meta-votes">({{ formatVotes(item.votes) }})</span>
-              </span>
-              <span class="meta-type">{{ item.media_type === 'tv' ? 'TV' : 'Movie' }}</span>
-            </div>
-
-            <!-- Request Button -->
-            <button
-              @click="requestItem(item)"
-              :disabled="requestedIds.has(item.id + '-' + item.media_type) || requestingIds.has(item.id + '-' + item.media_type)"
-              class="btn request-btn"
-              :class="requestButtonClass(item)"
-            >
-              <i :class="requestButtonIcon(item)"></i>
-              {{ requestButtonLabel(item) }}
-            </button>
-
-            <!-- Like/Dislike feedback -->
-            <div class="feedback-row">
-              <button
-                class="feedback-btn feedback-like"
-                :class="{ active: feedbackOf(item) === 'like' }"
-                @click.stop="toggleFeedback(item, 'like')"
-                title="More like this"
-              >
-                <i class="fas fa-thumbs-up"></i>
-              </button>
-              <button
-                class="feedback-btn feedback-dislike"
-                :class="{ active: feedbackOf(item) === 'dislike' }"
-                @click.stop="toggleFeedback(item, 'dislike')"
-                title="Don't show this again"
-              >
-                <i class="fas fa-thumbs-down"></i>
-              </button>
-            </div>
-          </div>
+    <MediaDetailsModal
+      v-if="selectedItem"
+      :item="selectedItem"
+      :trailer-url="trailerUrl"
+      :placeholder-icon="selectedItem.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"
+      @close="closeModal"
+    >
+      <template #badges>
+        <span v-if="selectedItem.votes" class="rounded-md bg-raised px-2 py-1 text-ink-2">{{ formatVotes(selectedItem.votes) }} votes</span>
+        <span v-if="selectedItem.original_language" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" class="fas fa-globe"></i> {{ selectedItem.original_language.toUpperCase() }}</span>
+      </template>
+      <template #aside>
+        <div class="flex gap-1.5">
+          <button
+            type="button"
+            class="h-10 flex-1 cursor-pointer rounded-ctl border-0 text-sm font-bold disabled:cursor-default"
+            :class="requestButtonTone(selectedItem)"
+            :disabled="isRequested(selectedItem) || isRequesting(selectedItem)"
+            @click="requestItem(selectedItem)"
+          >
+            <i aria-hidden="true" :class="requestButtonIcon(selectedItem)" class="mr-1"></i>{{ requestButtonLabel(selectedItem) }}
+          </button>
+          <button type="button" class="h-10 w-10 cursor-pointer rounded-ctl border" :class="feedbackOf(selectedItem) === 'like' ? 'border-good bg-good/15 text-good' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(selectedItem) === 'like' ? 'true' : 'false'" aria-label="More like this" @click="toggleFeedback(selectedItem, 'like')"><i aria-hidden="true" class="fas fa-thumbs-up"></i></button>
+          <button type="button" class="h-10 w-10 cursor-pointer rounded-ctl border" :class="feedbackOf(selectedItem) === 'dislike' ? 'border-bad bg-bad/15 text-bad' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(selectedItem) === 'dislike' ? 'true' : 'false'" aria-label="Don't show this again" @click="toggleFeedback(selectedItem, 'dislike')"><i aria-hidden="true" class="fas fa-thumbs-down"></i></button>
         </div>
-      </div>
-    </div>
-
-    <!-- Empty State after search -->
-    <div v-else-if="hasSearched && !isSearching" class="empty-state">
-      <i class="fas fa-search"></i>
-      <h3>No results found</h3>
-      <p>Try adjusting your description or check your content filters in the General settings.</p>
-    </div>
-
-    <!-- Item Detail Modal -->
-    <teleport to="body">
-      <transition name="modal-fade">
-        <div v-if="selectedItem" class="ai-modal-overlay" @click.self="closeModal">
-          <div class="ai-modal-content" role="dialog" aria-modal="true">
-            <!-- Close button -->
-            <button class="ai-modal-close" @click="closeModal" aria-label="Close">
-              <i class="fas fa-times"></i>
-            </button>
-
-            <div class="ai-modal-layout">
-              <!-- Left: Poster -->
-              <div class="ai-modal-poster-section">
-                <img
-                  v-if="selectedItem.poster_path"
-                  :src="selectedItem.poster_path"
-                  :alt="selectedItem.title"
-                  class="ai-modal-poster"
-                />
-                <div v-else class="ai-modal-poster-placeholder">
-                  <i :class="selectedItem.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"></i>
-                </div>
-              </div>
-
-              <!-- Right: Details -->
-              <div class="ai-modal-details">
-                <h2 class="ai-modal-title">{{ selectedItem.title }}</h2>
-
-                <!-- Badges -->
-                <div class="ai-badge-row">
-                  <span class="ai-badge ai-badge-media">
-                    <i :class="selectedItem.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
-                    {{ selectedItem.media_type === 'tv' ? 'TV SHOW' : 'MOVIE' }}
-                  </span>
-                  <span v-if="selectedItem.rating" class="ai-badge ai-badge-rating">
-                    <i class="fas fa-star"></i>
-                    {{ Number(selectedItem.rating).toFixed(1) }}
-                    <span v-if="selectedItem.votes" class="ai-badge-votes">· {{ formatVotes(selectedItem.votes) }}</span>
-                  </span>
-                  <span v-if="releaseYear(selectedItem)" class="ai-badge ai-badge-date">
-                    <i class="fas fa-calendar"></i>
-                    {{ releaseYear(selectedItem) }}
-                  </span>
-                  <span v-if="selectedItem.original_language" class="ai-badge ai-badge-lang">
-                    <i class="fas fa-globe"></i>
-                    {{ selectedItem.original_language.toUpperCase() }}
-                  </span>
-                  <a
-                    v-if="trailerUrl"
-                    :href="trailerUrl"
-                    class="ai-badge ai-badge-trailer"
-                    target="_blank"
-                    rel="noopener noreferrer">
-                    <i class="fab fa-youtube"></i>
-                    Watch Trailer
-                  </a>
-                </div>
-
-                <div class="ai-modal-sep"></div>
-
-                <!-- AI Rationale -->
-                <div v-if="selectedItem.rationale" class="ai-modal-section">
-                  <h3 class="ai-modal-section-title" style="color: var(--color-info)">
-                    <i class="fas fa-robot"></i> Why the AI picked this
-                  </h3>
-                  <p class="ai-modal-text ai-modal-rationale-text">{{ selectedItem.rationale }}</p>
-                </div>
-
-                <!-- Overview -->
-                <div class="ai-modal-section">
-                  <h3 class="ai-modal-section-title">
-                    <i class="fas fa-align-left"></i> Overview
-                  </h3>
-                  <p class="ai-modal-text">{{ selectedItem.overview || 'No overview available.' }}</p>
-                </div>
-
-                <!-- Request button -->
-                <button
-                  @click="requestItem(selectedItem)"
-                  :disabled="requestedIds.has(selectedItem.id + '-' + selectedItem.media_type) || requestingIds.has(selectedItem.id + '-' + selectedItem.media_type)"
-                  class="btn ai-modal-req-btn"
-                  :class="requestButtonClass(selectedItem)"
-                >
-                  <i :class="requestButtonIcon(selectedItem)"></i>
-                  {{ requestButtonLabel(selectedItem) }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </transition>
-    </teleport>
+      </template>
+      <section v-if="selectedItem.rationale">
+        <h3 class="m-0 mb-1.5 text-xs font-bold uppercase tracking-wider text-brand-ink">Why the AI picked this</h3>
+        <p class="m-0 border-l-2 border-brand-ink pl-3 leading-relaxed text-ink-2">{{ selectedItem.rationale }}</p>
+      </section>
+    </MediaDetailsModal>
   </div>
 </template>
 
 <script>
 import PageHeader from '@/components/ui/PageHeader.vue';
+import MediaCard from '@/components/ui/MediaCard.vue';
+import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
 import axios from 'axios';
 import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear } from '@/api/api.js';
 import { loadTrailerUrl } from '@/utils/trailer.js';
-import '@/assets/styles/aiSearchPage.css';
-import '@/assets/styles/requestsPage.css';
+
+const MEDIA_TYPE_OPTIONS = [
+  { value: 'movie', label: 'Movies', icon: 'fas fa-film' },
+  { value: 'tv', label: 'TV shows', icon: 'fas fa-tv' },
+  { value: 'both', label: 'Both', icon: 'fas fa-layer-group' },
+];
+
+const TOGGLES = [
+  { key: 'useHistory', title: 'Use viewing history', hint: "Personalise results with what you've already watched" },
+  { key: 'excludeWatched', title: 'Exclude already watched', hint: "Hide titles you've already seen" },
+  { key: 'excludeSeen', title: 'Hide earlier AI picks', hint: 'Skip titles from previous AI searches' },
+];
+
+const EXAMPLES = [
+  'A tense sci-fi thriller set in space, nothing too gory',
+  'Feel-good comedies for a lazy Sunday',
+  'Award-winning foreign films from the last ten years',
+];
 
 export default {
-  components: { PageHeader },
   name: 'AiSearchPage',
+  components: { PageHeader, MediaCard, MediaDetailsModal },
+  // The dashboard shell passes settings props to every tab; this page does not use them.
+  inheritAttrs: false,
 
   data() {
     return {
       query: '',
+      mediaTypeOptions: MEDIA_TYPE_OPTIONS,
+      toggles: TOGGLES,
+      examples: EXAMPLES,
       mediaType: 'movie',
       isSearching: false,
       hasSearched: false,
@@ -547,11 +422,10 @@ export default {
         if (res.data.status === 'success') {
           this.requestedIds = new Set([...this.requestedIds, key]);
         } else {
-          alert(res.data.message || 'Request failed.');
+          this.$toast.open({ message: res.data.message || 'Request failed.', type: 'error' });
         }
       } catch (err) {
-        const msg = err.response?.data?.message || 'Request failed.';
-        alert(msg);
+        this.$toast.open({ message: err.response?.data?.message || 'Request failed.', type: 'error' });
       } finally {
         this.requestingIds = new Set([...this.requestingIds].filter(k => k !== key));
       }
@@ -578,10 +452,13 @@ export default {
       this.recentSearches = [];
     },
 
+    toggleOption(key) {
+      this[key] = !this[key];
+    },
+
     async openModal(item) {
       this.selectedItem = item;
       this.trailerUrl = null;
-      document.body.style.overflow = 'hidden';
       const url = await loadTrailerUrl(axios, item);
       // The modal may show another title by the time the answer arrives.
       if (this.selectedItem === item) this.trailerUrl = url;
@@ -590,7 +467,6 @@ export default {
     closeModal() {
       this.selectedItem = null;
       this.trailerUrl = null;
-      document.body.style.overflow = '';
     },
 
     releaseYear(item) {
@@ -607,11 +483,18 @@ export default {
       return String(n);
     },
 
-    requestButtonClass(item) {
-      const key = item.id + '-' + item.media_type;
-      if (this.requestedIds.has(key)) return 'btn-success';
-      if (this.requestingIds.has(key)) return 'btn-outline';
-      return 'btn-primary';
+    isRequested(item) {
+      return this.requestedIds.has(item.id + '-' + item.media_type);
+    },
+
+    isRequesting(item) {
+      return this.requestingIds.has(item.id + '-' + item.media_type);
+    },
+
+    requestButtonTone(item) {
+      if (this.isRequested(item)) return 'bg-good/15 text-good';
+      if (this.isRequesting(item)) return 'bg-raised text-ink-3';
+      return 'bg-brand text-white';
     },
 
     requestButtonIcon(item) {
@@ -624,7 +507,7 @@ export default {
     requestButtonLabel(item) {
       const key = item.id + '-' + item.media_type;
       if (this.requestedIds.has(key)) return 'Requested';
-      if (this.requestingIds.has(key)) return 'Requesting...';
+      if (this.requestingIds.has(key)) return 'Requesting…';
       return 'Request';
     },
   },
@@ -632,27 +515,7 @@ export default {
   mounted() {
     this.checkLlmStatus();
     this.loadFeedback();
-    this._onKeydown = (e) => { if (e.key === 'Escape') this.closeModal(); };
-    window.addEventListener('keydown', this._onKeydown);
-  },
-
-  unmounted() {
-    window.removeEventListener('keydown', this._onKeydown);
-    document.body.style.overflow = '';
   },
 };
 </script>
 
-<style scoped>
-
-.section-header h2 {
-  font-size: 1.8rem;
-  margin-bottom: 0.5rem;
-  color: var(--color-text-primary);
-}
-
-.section-header p {
-  color: var(--color-text-muted);
-  font-size: 1rem;
-}
-</style>

@@ -85,6 +85,7 @@
               :is="activeTabComponent"
               :config="config"
               :current-user="currentUser"
+              :section="activeTabSection"
               :isLoading="isLoading"
               :testingConnections="testingConnections"
               :getServiceStatus="getServiceStatus"
@@ -296,11 +297,16 @@ import OnboardingTour from './OnboardingTour.vue';
 import { useVersionCheck } from '@/composables/useVersionCheck';
 import { useAuth } from '@/composables/useAuth';
 import '@/assets/styles/dashboardPage.css';
+// ponytail: legacy sheets still styling the job dialogs; drop once those are rebuilt.
+import '@/assets/styles/aiSearchPage.css';
+import '@/assets/styles/requestsPage.css';
 
 // Import tab components
 import SettingsServices from './settings/SettingsServices.vue';
 import SettingsDatabase from './settings/SettingsDatabase.vue';
 import SettingsAdvanced from './settings/SettingsAdvanced.vue';
+import SettingsWebhooks from './settings/SettingsWebhooks.vue';
+import SettingsCleanup from './settings/SettingsCleanup.vue';
 import HomePage from './HomePage.vue';
 import RequestsPage from './RequestsPage.vue';
 import SettingsJobs from './settings/SettingsJobs.vue';
@@ -321,6 +327,8 @@ export default {
     SettingsServices,
     SettingsDatabase,
     SettingsAdvanced,
+    SettingsWebhooks,
+    SettingsCleanup,
     HomePage,
     RequestsPage,
     SettingsJobs,
@@ -373,12 +381,16 @@ export default {
         { id: 'requests',  name: 'Requests',    icon: 'fas fa-inbox',       group: 'main',     tourId: 'tab-requests' },
         { id: 'ai_search', name: 'AI Search',   icon: 'fas fa-magic',       group: 'main',     tourId: 'tab-ai-search', isBeta: true },
         { id: 'jobs',      name: 'Jobs',        icon: 'fas fa-clock',       group: 'main',     tourId: 'tab-jobs' },
-        { id: 'services',  name: 'Connections', icon: 'fas fa-plug',        group: 'settings', tourId: 'tab-services', adminOnly: true },
-        { id: 'advanced',  name: 'Advanced',    icon: 'fas fa-sliders-h',   group: 'settings', tourId: 'tab-advanced', adminOnly: true },
-        { id: 'users',     name: 'Users',       icon: 'fas fa-users',       group: 'settings', adminOnly: true },
-        { id: 'database',  name: 'Database',    icon: 'fas fa-database',    group: 'settings', tourId: 'tab-database', adminOnly: true },
-        { id: 'logs',      name: 'Logs',        icon: 'fas fa-terminal',    group: 'settings', tourId: 'tab-logs', adminOnly: true },
-        { id: 'profile',   name: 'Profile',     icon: 'fas fa-user-circle', group: 'settings' },
+        { id: 'services',    name: 'Connections', icon: 'fas fa-plug',          group: 'settings', tourId: 'tab-services', adminOnly: true },
+        { id: 'ai_provider', name: 'AI provider', icon: 'fas fa-robot',         group: 'settings', tourId: 'tab-advanced', adminOnly: true, section: 'ai' },
+        { id: 'approvals',   name: 'Approvals',   icon: 'fas fa-user-check',    group: 'settings', adminOnly: true, section: 'workflow' },
+        { id: 'users',       name: 'Users',       icon: 'fas fa-users',         group: 'settings', adminOnly: true },
+        { id: 'profile',     name: 'Profile',     icon: 'fas fa-user-circle',   group: 'settings' },
+        { id: 'webhooks',    name: 'Webhooks',    icon: 'fas fa-link',          group: 'system',   adminOnly: true },
+        { id: 'cleanup',     name: 'Cleanup',     icon: 'fas fa-broom',         group: 'system',   adminOnly: true },
+        { id: 'database',    name: 'Database',    icon: 'fas fa-database',      group: 'system',   tourId: 'tab-database', adminOnly: true },
+        { id: 'system',      name: 'System',      icon: 'fas fa-sliders-h',     group: 'system',   adminOnly: true, section: 'system' },
+        { id: 'logs',        name: 'Logs',        icon: 'fas fa-terminal',      group: 'system',   tourId: 'tab-logs', adminOnly: true },
       ],
       tourSteps: [
         {
@@ -419,8 +431,8 @@ export default {
         },
         {
           targetId: 'tab-advanced',
-          title: 'Advanced',
-          description: 'Fine-tune behaviour: configure an LLM for AI-enhanced recommendations, adjust the recommendation algorithm, set a custom base path, and more.',
+          title: 'AI provider',
+          description: 'Connect a language model for AI Search and AI recommendations. Approvals, webhooks, cleanup and system settings each have their own page below.',
           position: 'right',
         },
         {
@@ -463,13 +475,20 @@ export default {
         services: 'SettingsServices',
         jobs: 'SettingsJobs',
         database: 'SettingsDatabase',
-        advanced: 'SettingsAdvanced',
+        ai_provider: 'SettingsAdvanced',
+        approvals: 'SettingsAdvanced',
+        system: 'SettingsAdvanced',
+        webhooks: 'SettingsWebhooks',
+        cleanup: 'SettingsCleanup',
         logs: 'LogsComponent',
         ai_search: 'AiSearchPage',
         users: 'UserManagement',
         profile: 'UserProfile',
       };
       return componentMap[this.activeTab] ?? null;
+    },
+    activeTabSection() {
+      return this.tabs.find(tab => tab.id === this.activeTab)?.section;
     },
     activeTab() {
       const requested = this.normalizeTabId(this.$route.params.tab);
@@ -480,6 +499,7 @@ export default {
       return [
         { label: '', tabs: this.visibleTabs.filter(tab => tab.group === 'main') },
         { label: 'Settings', tabs: this.visibleTabs.filter(tab => tab.group === 'settings') },
+        { label: 'System', tabs: this.visibleTabs.filter(tab => tab.group === 'system') },
       ].filter(group => group.tabs.length);
     },
     quickTabs() {
@@ -533,6 +553,8 @@ export default {
     normalizeTabId(tabId) {
       if (!tabId) return '';
       if (tabId === 'suggestions') return 'requests';
+      // The Advanced page was split into its own sections.
+      if (tabId === 'advanced') return 'ai_provider';
       if (tabId === 'ai-search') {
         return 'ai_search';
       }

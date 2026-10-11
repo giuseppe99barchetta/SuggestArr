@@ -1,26 +1,7 @@
 <template>
-  <section class="settings-group webhook-settings">
-    <button
-      class="webhook-settings__toggle"
-      type="button"
-      :aria-expanded="expanded.toString()"
-      aria-controls="webhook-settings-content"
-      @click="expanded = !expanded"
-    >
-      <span class="webhook-settings__heading">
-        <span class="webhook-settings__icon"><i class="fas fa-link"></i></span>
-        <span>
-          <span class="webhook-settings__title">Outbound Webhooks</span>
-          <span class="section-description">Signed event delivery for automations and external integrations.</span>
-        </span>
-      </span>
-      <span class="webhook-settings__meta">
-        <span v-if="webhooks.length" class="count-badge">{{ webhooks.length }} configured</span>
-        <i class="fas fa-chevron-right webhook-settings__chevron" :class="{ expanded }"></i>
-      </span>
-    </button>
-    <Transition name="webhook-collapse">
-      <div id="webhook-settings-content" v-show="expanded" class="webhook-settings__collapse">
+  <section class="webhook-settings">
+    <PageHeader title="Webhooks" subtitle="Send signed events to Home Assistant, n8n or any automation when suggestions and requests change." />
+      <div id="webhook-settings-content" class="webhook-settings__collapse">
         <div class="webhook-settings__collapse-inner">
           <div class="webhook-settings__content">
             <section class="webhook-guide">
@@ -165,11 +146,11 @@
           </div>
         </div>
       </div>
-    </Transition>
   </section>
 </template>
 
 <script>
+import PageHeader from '@/components/ui/PageHeader.vue';
 import {
   createWebhook, deleteWebhook, getWebhookDeliveries, getWebhookSettings,
   getWebhooks, retryWebhookDelivery, updateWebhookSettings,
@@ -184,10 +165,10 @@ const EVENTS = [
 
 export default {
   name: 'SettingsWebhooks',
-  components: { BaseCheckbox },
+  components: { PageHeader, BaseCheckbox },
   data() {
     return {
-      expanded: false, helpExpanded: false, loading: false, creating: false, savingAllowlist: false, webhooks: [], deliveries: [],
+      helpExpanded: false, loading: false, creating: false, savingAllowlist: false, webhooks: [], deliveries: [],
       allowedHostsText: '', eventOptions: EVENTS,
       form: { name: '', url: '', secret: '', events: [], allow_private: false },
     };
@@ -364,9 +345,6 @@ export default {
 .webhook-settings__content {
   display: grid;
   gap: var(--spacing-lg);
-  margin-top: var(--spacing-lg);
-  padding-top: var(--spacing-lg);
-  border-top: 1px solid var(--color-border-light);
 }
 
 .webhook-guide {
