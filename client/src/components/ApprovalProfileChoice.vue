@@ -6,7 +6,7 @@
       <span class="self-center rounded-md bg-raised px-2 py-1 text-xs font-bold text-ink-2">{{ type === 'movie' ? 'Movie' : 'TV' }}</span>
       <label class="flex flex-col gap-1 text-xs font-semibold text-ink-3">
         Server
-        <select :value="chosen[type].serverId ?? ''" class="h-10 rounded-ctl border border-edge-strong bg-canvas px-2.5 text-sm text-ink" @change="setServer(type, $event.target.value)">
+        <select :value="chosen[type].serverId ?? ''" aria-label="Server" class="h-10 rounded-ctl border border-edge-strong bg-canvas px-2.5 text-sm text-ink" @change="setServer(type, $event.target.value)">
           <option value="">Use Seer default</option>
           <option v-for="option in serverOptions(type)" :key="option.value" :value="option.value">{{ option.label }}</option>
         </select>
@@ -14,14 +14,14 @@
       <template v-if="isChosen(chosen[type].serverId)">
         <label class="flex flex-col gap-1 text-xs font-semibold text-ink-3">
           Quality profile
-          <select v-model="chosen[type].profileId" class="h-10 rounded-ctl border border-edge-strong bg-canvas px-2.5 text-sm text-ink">
+          <select v-model="chosen[type].profileId" aria-label="Quality profile" class="h-10 rounded-ctl border border-edge-strong bg-canvas px-2.5 text-sm text-ink">
             <option value="">Select quality profile</option>
             <option v-for="option in profileOptions(type)" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>
         </label>
         <label class="flex flex-col gap-1 text-xs font-semibold text-ink-3">
           Root folder
-          <select v-model="chosen[type].rootFolder" class="h-10 rounded-ctl border border-edge-strong bg-canvas px-2.5 text-sm text-ink">
+          <select v-model="chosen[type].rootFolder" aria-label="Root folder" class="h-10 rounded-ctl border border-edge-strong bg-canvas px-2.5 text-sm text-ink">
             <option value="">Select root folder</option>
             <option v-for="option in rootFolderOptions(type)" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>

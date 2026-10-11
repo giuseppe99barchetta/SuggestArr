@@ -9,7 +9,7 @@
     </div>
 
     <div v-if="bulkMode" class="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-card border border-brand-soft bg-[#18162b]/95 px-4 py-3 backdrop-blur lg:top-4">
-      <span class="mr-auto text-sm font-semibold text-ink"><i class="fas fa-check-double mr-1.5 text-brand-ink"></i>{{ selected.length }} selected</span>
+      <span class="mr-auto text-sm font-semibold text-ink"><i aria-hidden="true" class="fas fa-check-double mr-1.5 text-brand-ink"></i>{{ selected.length }} selected</span>
       <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[13px] font-bold text-white" @click="confirmAction('approve')">Approve</button>
       <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[13px] font-semibold text-ink-2" @click="confirmAction('reject')">Reject</button>
       <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[13px] font-semibold text-bad" @click="confirmAction('blacklist')">Blacklist</button>
@@ -18,7 +18,7 @@
       <span v-if="!selected.length" class="text-[13px] text-ink-4">Click cards to select them</span>
     </div>
 
-    <div v-if="loading && !items.length" class="py-10 text-center text-sm text-ink-3"><i class="fas fa-spinner fa-spin mr-2"></i>Loading…</div>
+    <div v-if="loading && !items.length" class="py-10 text-center text-sm text-ink-3"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Loading…</div>
     <div v-else-if="!items.length && showEmpty" class="py-10 text-center text-sm text-ink-3">No requests in this state.</div>
     <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
       <MediaCard
@@ -39,19 +39,19 @@
         </template>
         <template v-if="!bulkMode && ['awaiting_approval', 'failed', 'rejected', 'blacklisted'].includes(item.status)" #actions>
           <template v-if="seenMenuId === item.id">
-            <button v-for="option in seenOptions" :key="option.value" type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border border-edge-strong bg-panel-2 text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoading" :aria-label="option.label" :title="option.label" @click.stop="markSeen(item, option)"><i :class="option.icon"></i></button>
-            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Cancel" title="Cancel" @click.stop="seenMenuId = null"><i class="fas fa-undo"></i></button>
+            <button v-for="option in seenOptions" :key="option.value" type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border border-edge-strong bg-panel-2 text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoading" :aria-label="option.label" :title="option.label" @click.stop="markSeen(item, option)"><i aria-hidden="true" :class="option.icon"></i></button>
+            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Cancel" title="Cancel" @click.stop="seenMenuId = null"><i aria-hidden="true" class="fas fa-undo"></i></button>
           </template>
           <template v-else-if="item.status === 'awaiting_approval'">
-            <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand text-[13px] font-bold text-white disabled:opacity-50" :disabled="actionLoading" @click.stop="decideOne('approve', item.id)">Approve</button>
-            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoading" aria-label="Already seen it" title="Already seen it" @click.stop="seenMenuId = item.id"><i class="fas fa-eye"></i></button>
-            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-bad disabled:opacity-50" :disabled="actionLoading" aria-label="Reject request" title="Reject" @click.stop="confirmSingle('reject', item.id)"><i class="fas fa-times"></i></button>
+            <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand text-[13px] font-bold text-white disabled:opacity-50" :disabled="actionLoading" aria-label="Approve request" @click.stop="decideOne('approve', item.id)">Approve</button>
+            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoading" aria-label="Already seen it" title="Already seen it" @click.stop="seenMenuId = item.id"><i aria-hidden="true" class="fas fa-eye"></i></button>
+            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-bad disabled:opacity-50" :disabled="actionLoading" aria-label="Reject request" title="Reject" @click.stop="confirmSingle('reject', item.id)"><i aria-hidden="true" class="fas fa-times"></i></button>
           </template>
-          <button v-else-if="item.status === 'failed'" type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand-soft text-[13px] font-bold text-brand-ink disabled:opacity-50" :disabled="actionLoading" @click.stop="decideOne('retry', item.id)"><i class="fas fa-redo mr-1"></i>Retry</button>
+          <button v-else-if="item.status === 'failed'" type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand-soft text-[13px] font-bold text-brand-ink disabled:opacity-50" :disabled="actionLoading" @click.stop="decideOne('retry', item.id)"><i aria-hidden="true" class="fas fa-redo mr-1"></i>Retry</button>
           <button v-else type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand-soft text-[13px] font-bold text-brand-ink disabled:opacity-50" :disabled="actionLoading" @click.stop="confirmRequestAgain(item)">Request again</button>
         </template>
         <div class="media-card-body flex flex-col gap-1 text-xs">
-          <span class="font-semibold text-ink-2">{{ item.media_type === 'movie' ? 'Movie' : 'TV' }}<template v-if="item.rating"> · <i class="fas fa-star text-caution"></i> {{ formatRating(item.rating) }}</template></span>
+          <span class="font-semibold text-ink-2">{{ item.media_type === 'movie' ? 'Movie' : 'TV' }}<template v-if="item.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(item.rating) }}</template></span>
           <span v-if="item.name" class="line-clamp-2 leading-snug text-ink-3">From {{ item.name }}</span>
           <span v-if="item.user_name || item.media_user_id" class="text-ink-4">For {{ item.user_name || item.media_user_id }}</span>
           <small v-if="item.status === 'failed'" class="text-bad">{{ item.last_error || `Failed after ${item.retry_count} attempts` }}</small>
@@ -63,18 +63,18 @@
     <AppDialog v-if="confirmation" width="max-w-xl" labelledby="confirm-title" @close="confirmation = null">
       <div class="flex flex-col gap-4 p-6">
         <div class="flex flex-col gap-1">
-          <h3 id="confirm-title" class="m-0 text-lg font-bold" :class="confirmation.action === 'reject' || confirmation.action === 'blacklist' ? 'text-bad' : 'text-ink'"><i :class="confirmation.icon" class="mr-2"></i>{{ confirmation.title }}</h3>
+          <h3 id="confirm-title" class="m-0 text-lg font-bold" :class="confirmation.action === 'reject' || confirmation.action === 'blacklist' ? 'text-bad' : 'text-ink'"><i aria-hidden="true" :class="confirmation.icon" class="mr-2"></i>{{ confirmation.title }}</h3>
           <p class="m-0 text-sm text-ink-3">{{ confirmation.message }}</p>
         </div>
         <template v-if="confirmation.action === 'reject'">
           <ul class="m-0 flex max-h-72 list-none flex-col gap-2 overflow-y-auto p-0">
             <li v-for="item in confirmation.items" :key="item.id" class="flex items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-2">
               <img v-if="item.poster_path" :src="`https://image.tmdb.org/t/p/w92${item.poster_path}`" alt="" class="h-14 w-10 rounded object-cover" />
-              <span v-else class="flex h-14 w-10 items-center justify-center rounded bg-raised text-ink-4"><i class="fas fa-film"></i></span>
+              <span v-else class="flex h-14 w-10 items-center justify-center rounded bg-raised text-ink-4"><i aria-hidden="true" class="fas fa-film"></i></span>
               <span class="flex min-w-0 flex-col"><strong class="truncate text-sm text-ink">{{ item.title || `TMDb ${item.tmdb_id}` }}</strong><small class="text-ink-4">{{ item.media_type === 'movie' ? 'Movie' : 'TV' }}<template v-if="item.name"> · Suggested from {{ item.name }}</template></small></span>
             </li>
           </ul>
-          <p class="m-0 rounded-ctl bg-panel-2 p-3 text-sm leading-relaxed text-ink-3"><i class="fas fa-info-circle mr-1.5 text-brand-ink"></i>Rejected items are archived, not blacklisted. Filter requests by <strong>Rejected</strong> to find and request them again.</p>
+          <p class="m-0 rounded-ctl bg-panel-2 p-3 text-sm leading-relaxed text-ink-3"><i aria-hidden="true" class="fas fa-info-circle mr-1.5 text-brand-ink"></i>Rejected items are archived, not blacklisted. Filter requests by <strong>Rejected</strong> to find and request them again.</p>
         </template>
         <ApprovalProfileChoice v-if="confirmation.action === 'approve'" ref="profileChoice" :servers="servers" :media-types="confirmationMediaTypes" />
         <div class="mt-2 flex justify-end gap-2">

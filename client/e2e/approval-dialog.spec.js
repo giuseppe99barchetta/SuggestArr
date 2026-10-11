@@ -82,9 +82,8 @@ for (const [place, open] of Object.entries(places)) {
 
     const dialog = page.getByRole("dialog");
     // One Radarr, one folder: both are already there, nobody has to pick them.
-    await expect(dialog.getByText("/movies")).toBeVisible();
-    await dialog.locator(".form-group-modern", { hasText: "Quality profile" }).getByRole("button").click();
-    await page.getByRole("menuitem", { name: "HD" }).click();
+    await expect(dialog.getByLabel("Root folder", { exact: true })).toHaveValue("/movies");
+    await dialog.getByLabel("Quality profile", { exact: true }).selectOption({ label: "HD" });
     await dialog.getByRole("button", { name: "Send", exact: true }).click();
 
     await expect.poll(() => calls.approve.length).toBe(1);

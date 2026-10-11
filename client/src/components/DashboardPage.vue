@@ -39,7 +39,7 @@
               :class="activeTab === tab.id ? 'bg-raised text-white' : 'text-ink-3 hover:bg-panel hover:text-ink'"
               @click="showMobileNav = false"
             >
-              <i :class="tab.icon" class="w-[18px] text-center"></i>
+              <i aria-hidden="true" :class="tab.icon" class="w-[18px] text-center"></i>
               <span>{{ tab.name }}</span>
               <span v-if="tab.isBeta" class="ml-auto text-[10px] font-bold tracking-wider text-brand-ink">BETA</span>
               <span v-if="tab.id === 'requests' && requestCount > 0" class="ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
@@ -55,7 +55,7 @@
             rel="noopener noreferrer"
             class="flex items-center gap-2 px-3 py-2.5 rounded-ctl bg-brand-soft/60 border border-brand-soft text-brand-ink text-[13px] font-semibold no-underline"
           >
-            <i class="fas fa-arrow-up"></i> Update available
+            <i aria-hidden="true" class="fas fa-arrow-up"></i> Update available
           </a>
           <div class="flex items-center gap-2.5 p-2">
             <span class="w-8 h-8 shrink-0 rounded-full bg-raised flex items-center justify-center text-[13px] font-bold uppercase">{{ (currentUser.username || '?').charAt(0) }}</span>
@@ -66,10 +66,10 @@
               </button>
             </div>
             <button type="button" class="ml-auto w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="Replay the onboarding tour" title="Replay the onboarding tour" @click="restartTour">
-              <i class="fas fa-question-circle"></i>
+              <i aria-hidden="true" class="fas fa-question-circle"></i>
             </button>
             <button v-if="authSetupComplete && authBypass" type="button" class="w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="Log out" title="Log out" @click="handleLogout">
-              <i class="fas fa-sign-out-alt"></i>
+              <i aria-hidden="true" class="fas fa-sign-out-alt"></i>
             </button>
           </div>
         </div>
@@ -109,12 +109,12 @@
           class="relative flex flex-col items-center gap-1 py-2 text-[11px] font-semibold no-underline"
           :class="activeTab === tab.id ? 'text-brand-ink' : 'text-ink-3'"
         >
-          <i :class="tab.icon" class="text-lg"></i>
+          <i aria-hidden="true" :class="tab.icon" class="text-lg"></i>
           {{ tab.name }}
           <span v-if="tab.id === 'requests' && requestCount > 0" class="absolute top-0.5 left-1/2 ml-2 text-[10px] font-bold px-1.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
         </router-link>
         <button type="button" class="flex flex-col items-center gap-1 py-2 text-[11px] font-semibold text-ink-3 bg-transparent border-0 cursor-pointer" :aria-expanded="showMobileNav ? 'true' : 'false'" @click="showMobileNav = true">
-          <i class="fas fa-bars text-lg"></i>
+          <i aria-hidden="true" class="fas fa-bars text-lg"></i>
           More
         </button>
       </nav>
@@ -134,18 +134,18 @@
         <div v-if="showChangelogModal" class="modal-overlay" @click.self="showChangelogModal = false">
           <div class="modal-content changelog-modal">
             <div class="modal-header">
-              <i class="fab fa-github changelog-icon"></i>
+              <i aria-hidden="true" class="fab fa-github changelog-icon"></i>
               <h3>Changelog - {{ currentVersion }}</h3>
             </div>
             
             <div class="modal-body changelog-body">
               <div v-if="isLoadingChangelog" class="changelog-loading">
-                <i class="fas fa-spinner fa-spin"></i>
+                <i aria-hidden="true" class="fas fa-spinner fa-spin"></i>
                 <span>Loading changelog...</span>
               </div>
               
               <div v-else-if="changelogError" class="changelog-error">
-                <i class="fas fa-exclamation-triangle"></i>
+                <i aria-hidden="true" class="fas fa-exclamation-triangle"></i>
                 <span>{{ changelogError }}</span>
                 <button @click="showChangelog" class="btn btn-secondary btn-sm">Retry</button>
               </div>
@@ -153,7 +153,7 @@
               <div v-else class="changelog-content">
                 <div v-if="changelogData" v-html="changelogData"></div>
                 <div v-else class="no-changelog">
-                  <i class="fas fa-info-circle"></i>
+                  <i aria-hidden="true" class="fas fa-info-circle"></i>
                   <span>No changelog available for this version</span>
                 </div>
               </div>
@@ -166,11 +166,11 @@
                 class="btn btn-outline"
                 v-if="changelogData"
               >
-                <i class="fas fa-external-link-alt"></i>
+                <i aria-hidden="true" class="fas fa-external-link-alt"></i>
                 View on GitHub
               </a>
               <button @click="showChangelogModal = false" class="btn btn-primary">
-                <i class="fas fa-times"></i>
+                <i aria-hidden="true" class="fas fa-times"></i>
                 Close
               </button>
             </div>
@@ -194,12 +194,12 @@
             <div class="modal-header">
               <div class="modal-title-wrap">
                 <h3 class="modal-title" id="export-modal-title">
-                  <i class="fas fa-download"></i> Export Configuration
+                  <i aria-hidden="true" class="fas fa-download"></i> Export Configuration
                 </h3>
                 <p class="modal-subtitle">Download a JSON snapshot of your settings.</p>
               </div>
               <button type="button" class="modal-close" aria-label="Close export modal" @click="showExportModal = false">
-                <i class="fas fa-times"></i>
+                <i aria-hidden="true" class="fas fa-times"></i>
               </button>
             </div>
 
@@ -210,18 +210,18 @@
                 Include all secrets (full backup)
               </label>
               <p v-if="exportIncludeSecrets" class="export-sensitive-warning">
-                <i class="fas fa-exclamation-triangle"></i>
+                <i aria-hidden="true" class="fas fa-exclamation-triangle"></i>
                 This export will contain API keys, tokens, and passwords. Do not share it for troubleshooting or attach it to public issues.
               </p>
             </div>
 
             <div class="modal-footer">
               <button @click="showExportModal = false" class="btn btn-outline">
-                <i class="fas fa-times"></i>
+                <i aria-hidden="true" class="fas fa-times"></i>
                 Cancel
               </button>
               <button @click="confirmExportConfig" class="btn btn-primary">
-                <i class="fas fa-download"></i>
+                <i aria-hidden="true" class="fas fa-download"></i>
                 Export
               </button>
             </div>
@@ -236,32 +236,32 @@
             <div class="modal-header modal-header--danger">
               <div class="modal-title-wrap">
                 <h3 class="modal-title" id="reset-modal-title">
-                  <i class="fas fa-exclamation-triangle"></i> Confirm Reset
+                  <i aria-hidden="true" class="fas fa-exclamation-triangle"></i> Confirm Reset
                 </h3>
                 <p class="modal-subtitle">This action is permanent and cannot be undone.</p>
               </div>
               <button type="button" class="modal-close" aria-label="Close reset modal" @click="showResetModal = false">
-                <i class="fas fa-times"></i>
+                <i aria-hidden="true" class="fas fa-times"></i>
               </button>
             </div>
 
             <div class="modal-body">
               <p>Are you sure you want to reset all settings to default? This will:</p>
               <ul class="reset-warning-list">
-                <li><i class="fas fa-times-circle"></i> Clear all service connections</li>
-                <li><i class="fas fa-times-circle"></i> Remove all custom filters</li>
-                <li><i class="fas fa-times-circle"></i> Reset scheduling preferences</li>
-                <li><i class="fas fa-times-circle"></i> Clear database configuration</li>
+                <li><i aria-hidden="true" class="fas fa-times-circle"></i> Clear all service connections</li>
+                <li><i aria-hidden="true" class="fas fa-times-circle"></i> Remove all custom filters</li>
+                <li><i aria-hidden="true" class="fas fa-times-circle"></i> Reset scheduling preferences</li>
+                <li><i aria-hidden="true" class="fas fa-times-circle"></i> Clear database configuration</li>
               </ul>
             </div>
 
             <div class="modal-footer">
               <button @click="showResetModal = false" class="btn btn-outline">
-                <i class="fas fa-times"></i>
+                <i aria-hidden="true" class="fas fa-times"></i>
                 Cancel
               </button>
               <button @click="confirmReset" class="btn btn-danger">
-                <i class="fas fa-exclamation-triangle"></i>
+                <i aria-hidden="true" class="fas fa-exclamation-triangle"></i>
                 Yes, Reset Everything
               </button>
             </div>

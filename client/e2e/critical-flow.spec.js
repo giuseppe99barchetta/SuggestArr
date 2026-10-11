@@ -130,15 +130,13 @@ test("approving asks for a quality profile and sends the chosen one", async ({ p
 
   // With a server to choose from, the click opens the dialog instead of sending.
   const dialog = page.getByRole("dialog");
-  await expect(dialog.locator(".approval-profile-label")).toBeVisible();
+  await expect(dialog.getByText("Quality profile", { exact: true })).toBeVisible();
   expect(api.approveCalls()).toBe(0);
 
-  await dialog.getByRole("button", { name: /Use Seer default/ }).click();
-  await page.getByRole("menuitem", { name: "Radarr", exact: true }).click();
-  await dialog.getByRole("button", { name: /Select quality profile/ }).click();
-  await page.getByRole("menuitem", { name: "Original language" }).click();
+  await dialog.getByLabel("Server", { exact: true }).selectOption({ label: "Radarr" });
+  await dialog.getByLabel("Quality profile", { exact: true }).selectOption({ label: "Original language" });
   // The chosen server has a single root folder, so it is already there.
-  await expect(dialog.getByText("/movies")).toBeVisible();
+  await expect(dialog.getByLabel("Root folder", { exact: true })).toHaveValue("/movies");
   await dialog.getByRole("button", { name: "Send", exact: true }).click();
 
   await expect.poll(api.approveCalls).toBe(1);
@@ -168,7 +166,7 @@ test("approving without touching the profile sends none", async ({ page }) => {
 });
 
 test("approving from the dashboard asks for a quality profile too", async ({ page }) => {
-  // The dashboard has its own approve button (SettingsRequests). It once
+  // The dashboard has its own approve button (HomePage). It once
   // skipped the dialog entirely and sent the request with Jellyseerr's default.
   const api = await mockApi(page, {
     radarrServers: twoRadarrServers,
@@ -184,15 +182,13 @@ test("approving from the dashboard asks for a quality profile too", async ({ pag
   await page.getByRole("button", { name: "Approve request" }).click();
 
   const dialog = page.getByRole("dialog");
-  await expect(dialog.locator(".approval-profile-label")).toBeVisible();
+  await expect(dialog.getByText("Quality profile", { exact: true })).toBeVisible();
   expect(api.approveCalls()).toBe(0);
 
-  await dialog.getByRole("button", { name: /Use Seer default/ }).click();
-  await page.getByRole("menuitem", { name: "Radarr", exact: true }).click();
-  await dialog.getByRole("button", { name: /Select quality profile/ }).click();
-  await page.getByRole("menuitem", { name: "Original language" }).click();
+  await dialog.getByLabel("Server", { exact: true }).selectOption({ label: "Radarr" });
+  await dialog.getByLabel("Quality profile", { exact: true }).selectOption({ label: "Original language" });
   // The chosen server has a single root folder, so it is already there.
-  await expect(dialog.getByText("/movies")).toBeVisible();
+  await expect(dialog.getByLabel("Root folder", { exact: true })).toHaveValue("/movies");
   await dialog.getByRole("button", { name: "Send", exact: true }).click();
 
   await expect.poll(api.approveCalls).toBe(1);
@@ -224,7 +220,7 @@ test("a job preview and simulated request run without external providers", async
   await page.getByRole("button", { name: "Sign In" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
-  await page.getByRole("button", { name: "Jobs" }).click();
+  await page.getByRole("link", { name: "Jobs", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Manual job" })).toBeVisible();
   await page.getByRole("button", { name: "Preview" }).click();
   await expect(page.getByRole("heading", { name: "Dry Run Preview" })).toBeVisible();

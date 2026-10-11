@@ -14,7 +14,7 @@
         :title="bulkModeDisabledReason"
         @click="workflowBulkMode = !workflowBulkMode"
       >
-        <i class="fas fa-check-double"></i>{{ workflowBulkMode ? 'Exit bulk mode' : 'Select several' }}
+        <i aria-hidden="true" class="fas fa-check-double"></i>{{ workflowBulkMode ? 'Exit bulk mode' : 'Select several' }}
       </button>
     </header>
 
@@ -36,7 +36,7 @@
 
     <form role="search" class="flex flex-wrap items-center gap-2.5" @submit.prevent>
       <label class="flex h-[42px] min-w-0 flex-[1_1_260px] items-center gap-2.5 rounded-ctl border border-edge-strong bg-panel px-3.5 text-ink-4 focus-within:border-brand-ink">
-        <i class="fas fa-search text-sm"></i>
+        <i aria-hidden="true" class="fas fa-search text-sm"></i>
         <span class="sr-only">Search</span>
         <input v-model="searchQuery" type="search" :placeholder="viewMode === 'by-content' ? 'Search watched titles…' : 'Search by title…'" class="min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-4" />
       </label>
@@ -71,7 +71,7 @@
         <button type="button" class="relative aspect-[2/3] w-24 shrink-0 cursor-pointer overflow-hidden rounded-ctl border-0 p-0 sm:w-28" :style="source.visual ? { background: source.visual.gradient } : null" :aria-label="`Details for ${source.title}`" @click="openModal(source)">
           <img v-if="source.poster_path && !source.visual" :src="source.poster_path" alt="" class="absolute inset-0 h-full w-full object-cover" />
           <img v-else-if="source.backdrop_path && !source.visual" :src="source.backdrop_path" alt="" class="absolute inset-0 h-full w-full object-cover" />
-          <i v-else-if="source.visual" :class="source.visual.icon" class="text-2xl text-white/90"></i>
+          <i aria-hidden="true" v-else-if="source.visual" :class="source.visual.icon" class="text-2xl text-white/90"></i>
         </button>
         <div class="flex min-w-0 flex-[1_1_380px] flex-col gap-3">
           <div class="flex flex-col gap-1">
@@ -79,7 +79,7 @@
             <h2 class="m-0 text-xl font-extrabold text-ink">{{ source.title }}</h2>
             <span class="text-[13px] text-ink-4">
               {{ source.requests.length }} {{ source.requests.length === 1 ? 'suggestion' : 'suggestions' }}
-              <template v-if="!source.visual && source.rating"> · <i class="fas fa-star text-caution"></i> {{ formatRating(source.rating) }}</template>
+              <template v-if="!source.visual && source.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(source.rating) }}</template>
               <template v-if="!source.visual && source.release_date"> · {{ source.release_date }}</template>
             </span>
           </div>
@@ -137,7 +137,7 @@
         @update:total="onWorkflowTotal"
       />
       <div v-if="isApprovalTab && workflowTotal === 0" class="flex flex-col items-center gap-2 rounded-card border border-dashed border-edge-strong px-6 py-14 text-center">
-        <i class="fas fa-check-circle text-4xl text-good"></i>
+        <i aria-hidden="true" class="fas fa-check-circle text-4xl text-good"></i>
         <h2 class="m-0 text-lg font-bold text-ink">You're all caught up</h2>
         <p class="m-0 text-sm text-ink-3">New suggestions that need your approval will show up here.</p>
       </div>
@@ -152,7 +152,7 @@
           tone="notice"
           @open="openModal(request)"
         >
-          <span class="text-xs font-semibold text-ink-2">{{ request.media_type === 'movie' ? 'Movie' : 'TV' }}<template v-if="request.rating"> · <i class="fas fa-star text-caution"></i> {{ formatRating(request.rating) }}</template></span>
+          <span class="text-xs font-semibold text-ink-2">{{ request.media_type === 'movie' ? 'Movie' : 'TV' }}<template v-if="request.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(request.rating) }}</template></span>
           <span class="line-clamp-2 text-xs leading-snug text-ink-3">From {{ request.source_title }}</span>
           <span class="text-xs text-ink-4"><template v-if="request.user_name || request.user_id">For {{ request.user_name || request.user_id }} · </template>{{ formatDate(request.requested_at) }}</span>
         </MediaCard>
@@ -171,18 +171,18 @@
       v-if="viewMode !== 'ai-requests' && (viewMode !== 'all-requests' || requestStatusFilter === 'all' || requestStatusFilter === 'sent') && (viewMode === 'by-content' ? filteredAndSortedSources : filteredAndSortedRequests).length === 0 && !loading"
       class="flex flex-col items-center gap-2 rounded-card border border-dashed border-edge-strong px-6 py-14 text-center"
     >
-      <i class="fas fa-inbox text-4xl text-ink-4"></i>
+      <i aria-hidden="true" class="fas fa-inbox text-4xl text-ink-4"></i>
       <h2 class="m-0 text-lg font-bold text-ink">No {{ viewMode === 'by-content' ? 'titles' : 'requests' }} found</h2>
       <p class="m-0 text-sm text-ink-3">{{ searchQuery || mediaTypeFilter !== 'all' ? 'Try changing the filters.' : 'Requests appear here once a job has run.' }}</p>
     </div>
     <div v-if="viewMode === 'ai-requests' && aiRequests.length === 0 && !loading" class="flex flex-col items-center gap-2 rounded-card border border-dashed border-edge-strong px-6 py-14 text-center">
-      <i class="fas fa-magic text-4xl text-ink-4"></i>
+      <i aria-hidden="true" class="fas fa-magic text-4xl text-ink-4"></i>
       <h2 class="m-0 text-lg font-bold text-ink">No AI Search requests yet</h2>
       <p class="m-0 text-sm text-ink-3">Describe what you feel like watching in <router-link :to="{ name: 'DashboardTab', params: { tab: 'ai_search' } }">AI Search</router-link>.</p>
     </div>
 
     <div v-if="loading && sources.length === 0" class="py-14 text-center text-sm text-ink-3">
-      <i class="fas fa-spinner fa-spin mr-2"></i>Loading your requests…
+      <i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Loading your requests…
     </div>
 
     <MediaDetailsModal
@@ -194,8 +194,8 @@
       @close="closeModal"
     >
       <template #badges>
-        <span v-if="selectedSource.requested_at" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i class="fas fa-clock"></i> Requested {{ formatDate(selectedSource.requested_at) }}</span>
-        <span v-if="selectedSource.source_origin === 'trakt_history'" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i class="fas fa-history"></i> Trakt history</span>
+        <span v-if="selectedSource.requested_at" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" class="fas fa-clock"></i> Requested {{ formatDate(selectedSource.requested_at) }}</span>
+        <span v-if="selectedSource.source_origin === 'trakt_history'" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" class="fas fa-history"></i> Trakt history</span>
       </template>
 
       <template v-if="canFeedbackSelected" #aside>
@@ -248,7 +248,7 @@
                 <span class="truncate text-sm font-semibold text-ink">{{ request.title }}</span>
                 <span class="text-xs text-ink-4">{{ formatDate(request.requested_at) }}<template v-if="request.user_name || request.user_id"> · for {{ request.user_name || request.user_id }}</template></span>
               </span>
-              <i class="fas fa-chevron-right text-xs text-ink-4"></i>
+              <i aria-hidden="true" class="fas fa-chevron-right text-xs text-ink-4"></i>
             </button>
           </li>
         </ul>

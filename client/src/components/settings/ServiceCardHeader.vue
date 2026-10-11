@@ -1,6 +1,6 @@
 <template>
   <header class="mb-5 flex flex-wrap items-start gap-x-4 gap-y-3">
-    <span class="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-ctl bg-raised text-ink-2"><i :class="icon"></i></span>
+    <span class="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-ctl bg-raised text-ink-2"><i aria-hidden="true" :class="icon"></i></span>
     <div class="flex min-w-0 flex-[1_1_220px] flex-col gap-1">
       <div class="flex flex-wrap items-center gap-2">
         <h2 class="m-0 text-[17px] font-bold text-ink">{{ title }}</h2>

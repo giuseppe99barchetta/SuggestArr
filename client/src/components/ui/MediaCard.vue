@@ -10,7 +10,7 @@
       @click="$emit('open')"
     >
       <img v-if="poster" :src="poster" alt="" loading="lazy" class="absolute inset-0 h-full w-full object-cover" />
-      <span v-else class="absolute inset-0 flex items-center justify-center text-3xl text-ink-4"><i :class="placeholderIcon"></i></span>
+      <span v-else class="absolute inset-0 flex items-center justify-center text-3xl text-ink-4"><i aria-hidden="true" :class="placeholderIcon"></i></span>
       <span v-if="badge" class="absolute left-2.5 top-2.5 rounded-md px-2 py-0.5 text-[11px] font-bold" :class="toneClass">{{ badge }}</span>
     </button>
     <slot name="overlay" />

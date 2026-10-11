@@ -7,13 +7,13 @@
         aria-label="Close details"
         @click="$emit('close')"
       >
-        <i class="fas fa-times"></i>
+        <i aria-hidden="true" class="fas fa-times"></i>
       </button>
 
       <div class="flex flex-col gap-4">
         <img v-if="item.poster_path" :src="item.poster_path" :alt="item.title" class="mx-auto w-40 rounded-ctl sm:w-full" />
         <div v-else class="mx-auto flex aspect-[2/3] w-40 items-center justify-center rounded-ctl text-4xl text-white/90 sm:w-full" :style="{ background: placeholderBackground }">
-          <i :class="placeholderIcon"></i>
+          <i aria-hidden="true" :class="placeholderIcon"></i>
         </div>
         <slot name="aside" />
       </div>
@@ -22,11 +22,11 @@
         <div class="flex flex-col gap-3 pr-8">
           <h2 id="media-details-title" class="m-0 text-2xl font-extrabold tracking-tight">{{ item.title }}</h2>
           <div class="flex flex-wrap gap-2 text-xs font-semibold *:inline-flex *:items-center *:gap-1.5">
-            <span v-if="item.media_type" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i :class="item.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i> {{ item.media_type === 'movie' ? 'Movie' : 'TV' }}</span>
-            <span v-if="rating" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i class="fas fa-star text-caution"></i> {{ rating }}</span>
-            <span v-if="item.release_date" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i class="fas fa-calendar"></i> {{ item.release_date }}</span>
+            <span v-if="item.media_type" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" :class="item.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i> {{ item.media_type === 'movie' ? 'Movie' : 'TV' }}</span>
+            <span v-if="rating" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" class="fas fa-star text-caution"></i> {{ rating }}</span>
+            <span v-if="item.release_date" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" class="fas fa-calendar"></i> {{ item.release_date }}</span>
             <slot name="badges" />
-            <a v-if="trailerUrl" :href="trailerUrl" target="_blank" rel="noopener noreferrer" class="rounded-md bg-bad/15 px-2 py-1 text-bad"><i class="fab fa-youtube"></i> Watch trailer</a>
+            <a v-if="trailerUrl" :href="trailerUrl" target="_blank" rel="noopener noreferrer" class="rounded-md bg-bad/15 px-2 py-1 text-bad"><i aria-hidden="true" class="fab fa-youtube"></i> Watch trailer</a>
           </div>
         </div>
 

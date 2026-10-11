@@ -7,7 +7,7 @@
       </div>
       <div class="flex flex-wrap gap-2.5">
         <router-link :to="tabLink('jobs')" class="inline-flex h-[42px] items-center gap-2 rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink no-underline hover:text-white">
-          <i class="fas fa-clock"></i>Manage jobs
+          <i aria-hidden="true" class="fas fa-clock"></i>Manage jobs
         </router-link>
         <router-link :to="tabLink('requests')" class="inline-flex h-[42px] items-center rounded-ctl bg-brand px-[18px] text-sm font-bold text-white no-underline hover:text-white">
           {{ pendingTotal ? 'Review suggestions' : 'View requests' }}
@@ -40,16 +40,16 @@
           <template #actions>
             <template v-if="confirmRejectId === request.id">
               <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-bad text-[13px] font-bold text-[#2a0c0b] disabled:opacity-50" :disabled="actionLoadingId === request.id" @click="decidePending('reject', request.id)">Reject</button>
-              <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Cancel rejection" @click="confirmRejectId = null"><i class="fas fa-undo"></i></button>
+              <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Cancel rejection" @click="confirmRejectId = null"><i aria-hidden="true" class="fas fa-undo"></i></button>
             </template>
             <template v-else-if="seenMenuId === request.id">
-              <button v-for="option in seenOptions" :key="option.value" type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border border-edge-strong bg-panel-2 text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoadingId === request.id" :aria-label="option.label" :title="option.label" @click="markSeen(request, option)"><i :class="option.icon"></i></button>
-              <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Cancel" @click="seenMenuId = null"><i class="fas fa-undo"></i></button>
+              <button v-for="option in seenOptions" :key="option.value" type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border border-edge-strong bg-panel-2 text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoadingId === request.id" :aria-label="option.label" :title="option.label" @click="markSeen(request, option)"><i aria-hidden="true" :class="option.icon"></i></button>
+              <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Cancel" @click="seenMenuId = null"><i aria-hidden="true" class="fas fa-undo"></i></button>
             </template>
             <template v-else>
-              <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand text-[13px] font-bold text-white disabled:opacity-50" :disabled="actionLoadingId === request.id" @click="requestApprove(request)">Approve</button>
-              <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Already seen it" title="Already seen it" @click="seenMenuId = request.id"><i class="fas fa-eye"></i></button>
-              <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-bad disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Reject request" title="Reject" @click="confirmRejectId = request.id"><i class="fas fa-times"></i></button>
+              <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand text-[13px] font-bold text-white disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Approve request" @click="requestApprove(request)">Approve</button>
+              <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Already seen it" title="Already seen it" @click="seenMenuId = request.id"><i aria-hidden="true" class="fas fa-eye"></i></button>
+              <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-bad disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Reject request" title="Reject" @click="confirmRejectId = request.id"><i aria-hidden="true" class="fas fa-times"></i></button>
             </template>
           </template>
           <span v-if="request.source_title" class="line-clamp-2 text-xs leading-snug text-ink-3">Because you watched {{ request.source_title }}</span>
@@ -101,7 +101,7 @@
           <router-link :to="tabLink('jobs')" class="text-[13px] font-semibold no-underline">Manage →</router-link>
         </div>
         <div v-for="job in upcomingJobs" :key="job.id" class="flex items-center gap-3.5 border-t border-edge py-3">
-          <span class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-ctl bg-raised text-ink-2"><i :class="job.icon"></i></span>
+          <span class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-ctl bg-raised text-ink-2"><i aria-hidden="true" :class="job.icon"></i></span>
           <div class="flex min-w-0 flex-1 flex-col gap-0.5">
             <span class="truncate text-sm font-semibold text-ink">{{ job.name }}</span>
             <span class="text-[13px] text-ink-3">{{ job.schedule }}</span>
@@ -114,7 +114,7 @@
     <AppDialog v-if="approveItem" width="max-w-xl" labelledby="approve-title" @close="approveItem = null">
       <div class="flex flex-col gap-4 p-6">
         <div>
-          <h3 id="approve-title" class="m-0 text-lg font-bold text-ink"><i class="fas fa-paper-plane mr-2"></i>Send to Seer</h3>
+          <h3 id="approve-title" class="m-0 text-lg font-bold text-ink"><i aria-hidden="true" class="fas fa-paper-plane mr-2"></i>Send to Seer</h3>
           <p class="m-0 mt-1 text-sm text-ink-3">Send {{ approveItem.title || 'this item' }} to Seer?</p>
         </div>
         <ApprovalProfileChoice ref="profileChoice" :servers="servers" :media-types="[approveItem.media_type]" />

@@ -6,15 +6,15 @@
         <p class="m-0 mt-1.5 max-w-2xl text-[15px] text-ink-3">A job looks at what your users watch, finds similar titles and sends them as requests. Each one runs on its own schedule.</p>
       </div>
       <div class="flex gap-2">
-        <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Replay the Jobs tour" aria-label="Replay the Jobs tour" @click="restartJobsTour"><i class="fas fa-question-circle"></i></button>
-        <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink disabled:opacity-50" :disabled="isLoading" title="Refresh" aria-label="Refresh" @click="loadJobs"><i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i></button>
-        <button type="button" class="inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-ctl border-0 bg-brand px-[18px] text-sm font-bold text-white" data-tour-id="jobs-new-btn" @click="showCreateModal = true"><i class="fas fa-plus"></i>New job</button>
+        <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Replay the Jobs tour" aria-label="Replay the Jobs tour" @click="restartJobsTour"><i aria-hidden="true" class="fas fa-question-circle"></i></button>
+        <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink disabled:opacity-50" :disabled="isLoading" title="Refresh" aria-label="Refresh" @click="loadJobs"><i aria-hidden="true" :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i></button>
+        <button type="button" class="inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-ctl border-0 bg-brand px-[18px] text-sm font-bold text-white" data-tour-id="jobs-new-btn" @click="showCreateModal = true"><i aria-hidden="true" class="fas fa-plus"></i>New job</button>
       </div>
     </header>
 
     <!-- Seer delivery queue -->
     <div v-if="queueStatus.total_pending > 0 && !queueBannerDismissed" role="status" class="flex items-center gap-3 rounded-card border border-notice/40 bg-notice/10 px-4 py-3">
-      <i class="fas fa-circle-notch fa-spin text-notice"></i>
+      <i aria-hidden="true" class="fas fa-circle-notch fa-spin text-notice"></i>
       <div class="flex flex-1 flex-col text-sm">
         <strong class="text-ink">Delivering to Seer…</strong>
         <span class="text-ink-3">
@@ -23,15 +23,15 @@
           <template v-if="queueStatus.failed > 0"> · <span class="text-bad">{{ queueStatus.failed }} failed</span></template>
         </span>
       </div>
-      <button type="button" class="h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Dismiss" @click="dismissQueueBanner"><i class="fas fa-times"></i></button>
+      <button type="button" class="h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Dismiss" @click="dismissQueueBanner"><i aria-hidden="true" class="fas fa-times"></i></button>
     </div>
     <div v-else-if="queueStatus.submitted > 0 && queueStatus.total_pending === 0 && !queueBannerDismissed" role="status" class="flex items-center gap-3 rounded-card border border-good/30 bg-good/10 px-4 py-3">
-      <i class="fas fa-check-circle text-good"></i>
+      <i aria-hidden="true" class="fas fa-check-circle text-good"></i>
       <div class="flex flex-1 flex-col text-sm">
         <strong class="text-ink">All requests delivered</strong>
         <span class="text-ink-3">{{ queueStatus.submitted }} item{{ queueStatus.submitted !== 1 ? 's' : '' }} sent to Seer successfully</span>
       </div>
-      <button type="button" class="h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Dismiss" @click="dismissQueueBanner"><i class="fas fa-times"></i></button>
+      <button type="button" class="h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Dismiss" @click="dismissQueueBanner"><i aria-hidden="true" class="fas fa-times"></i></button>
     </div>
 
     <!-- Job types explained -->
@@ -39,17 +39,17 @@
       <h2 class="m-0 mb-3 text-sm font-bold uppercase tracking-wider text-ink-4">Job types</h2>
       <dl class="m-0 grid gap-3 sm:grid-cols-3">
         <div v-for="type in jobTypes" :key="type.id" class="flex flex-col gap-1.5">
-          <dt class="flex items-center gap-2 text-sm font-bold" :class="type.text"><span class="flex h-7 w-7 items-center justify-center rounded-[8px]" :class="type.bg"><i :class="type.icon"></i></span>{{ type.label }}</dt>
+          <dt class="flex items-center gap-2 text-sm font-bold" :class="type.text"><span class="flex h-7 w-7 items-center justify-center rounded-[8px]" :class="type.bg"><i aria-hidden="true" :class="type.icon"></i></span>{{ type.label }}</dt>
           <dd class="m-0 text-[13px] leading-relaxed text-ink-3">{{ type.description }}</dd>
         </div>
       </dl>
-      <button type="button" class="absolute right-3 top-3 h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Hide job types" @click="dismissInfoBox"><i class="fas fa-times"></i></button>
+      <button type="button" class="absolute right-3 top-3 h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Hide job types" @click="dismissInfoBox"><i aria-hidden="true" class="fas fa-times"></i></button>
     </aside>
 
-    <div v-if="isLoading && jobs.length === 0" class="py-14 text-center text-sm text-ink-3"><i class="fas fa-spinner fa-spin mr-2"></i>Loading jobs…</div>
+    <div v-if="isLoading && jobs.length === 0" class="py-14 text-center text-sm text-ink-3"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Loading jobs…</div>
 
     <div v-else-if="jobs.length === 0" class="flex flex-col items-center gap-3 rounded-card border border-dashed border-edge-strong px-6 py-14 text-center">
-      <i class="fas fa-clock text-4xl text-ink-4"></i>
+      <i aria-hidden="true" class="fas fa-clock text-4xl text-ink-4"></i>
       <h2 class="m-0 text-lg font-bold text-ink">No jobs yet</h2>
       <p class="m-0 text-sm text-ink-3">Create your first job to start getting suggestions.</p>
       <button type="button" class="mt-2 h-10 cursor-pointer rounded-ctl border-0 bg-brand px-4 text-sm font-bold text-white" @click="showCreateModal = true">Create a job</button>
@@ -64,12 +64,12 @@
         :data-tour-id="index === 0 ? 'jobs-first-card' : null"
       >
         <div class="flex min-w-0 flex-[1_1_260px] items-start gap-3.5">
-          <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" :class="[jobTypeStyle(job.job_type).bg, jobTypeStyle(job.job_type).text]"><i :class="getJobTypeIcon(job.job_type)"></i></span>
+          <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" :class="[jobTypeStyle(job.job_type).bg, jobTypeStyle(job.job_type).text]"><i aria-hidden="true" :class="getJobTypeIcon(job.job_type)"></i></span>
           <div class="flex min-w-0 flex-col gap-1.5">
             <div class="flex flex-wrap items-center gap-2">
               <h2 class="m-0 text-base font-bold text-ink">{{ job.name }}</h2>
               <span class="rounded-md bg-raised px-2 py-0.5 text-[11px] font-bold text-ink-2">{{ getJobTypeLabel(job.job_type) }}</span>
-              <span class="rounded-md bg-raised px-2 py-0.5 text-[11px] font-bold text-ink-2"><i :class="getMediaTypeIcon(job.media_type)" class="mr-1"></i>{{ getMediaTypeLabel(job.media_type) }}</span>
+              <span class="rounded-md bg-raised px-2 py-0.5 text-[11px] font-bold text-ink-2"><i aria-hidden="true" :class="getMediaTypeIcon(job.media_type)" class="mr-1"></i>{{ getMediaTypeLabel(job.media_type) }}</span>
             </div>
             <div v-if="hasFilters(job)" class="flex flex-wrap gap-1.5 text-xs text-ink-3">
               <span>Up to {{ job.max_results }} per run</span>
@@ -115,14 +115,14 @@
             {{ job.enabled ? 'On' : 'Paused' }}
           </button>
           <button type="button" class="h-[38px] cursor-pointer rounded-[8px] border border-edge-strong bg-panel-2 px-3.5 text-[13px] font-semibold text-ink disabled:opacity-50" :disabled="isDryRunning[job.id] || isRunning[job.id]" title="Preview what this job would request" @click="dryRunJob(job)">
-            <i v-if="isDryRunning[job.id]" class="fas fa-spinner fa-spin mr-1"></i>Preview
+            <i aria-hidden="true" v-if="isDryRunning[job.id]" class="fas fa-spinner fa-spin mr-1"></i>Preview
           </button>
-          <button v-if="lastDryRunCache[job.id]" type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Re-open last preview" aria-label="Re-open last preview" @click="reopenDryRun(job)"><i class="fas fa-history"></i></button>
+          <button v-if="lastDryRunCache[job.id]" type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Re-open last preview" aria-label="Re-open last preview" @click="reopenDryRun(job)"><i aria-hidden="true" class="fas fa-history"></i></button>
           <button type="button" class="h-[38px] cursor-pointer rounded-[8px] border-0 bg-brand-soft px-3.5 text-[13px] font-bold text-brand-ink disabled:opacity-50" :disabled="isRunning[job.id] || isDryRunning[job.id]" @click="runJob(job)">
-            <i v-if="isRunning[job.id]" class="fas fa-spinner fa-spin mr-1"></i>Run now
+            <i aria-hidden="true" v-if="isRunning[job.id]" class="fas fa-spinner fa-spin mr-1"></i>Run now
           </button>
-          <button type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" :aria-label="`Edit ${job.name}`" title="Edit" @click="editJob(job)"><i class="fas fa-pen"></i></button>
-          <button type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-bad/15 hover:text-bad" :aria-label="`Delete ${job.name}`" title="Delete" @click="confirmDeleteJob(job)"><i class="fas fa-trash"></i></button>
+          <button type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" :aria-label="`Edit ${job.name}`" title="Edit" @click="editJob(job)"><i aria-hidden="true" class="fas fa-pen"></i></button>
+          <button type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-bad/15 hover:text-bad" :aria-label="`Delete ${job.name}`" title="Delete" @click="confirmDeleteJob(job)"><i aria-hidden="true" class="fas fa-trash"></i></button>
         </div>
       </article>
     </div>
@@ -165,11 +165,11 @@
 
     <AppDialog v-if="jobToDelete" labelledby="delete-job-title" @close="jobToDelete = null">
       <div class="flex flex-col gap-4 p-6">
-        <h3 id="delete-job-title" class="m-0 text-lg font-bold text-bad"><i class="fas fa-trash mr-2"></i>Delete job</h3>
+        <h3 id="delete-job-title" class="m-0 text-lg font-bold text-bad"><i aria-hidden="true" class="fas fa-trash mr-2"></i>Delete job</h3>
         <p class="m-0 text-sm leading-relaxed text-ink-2">Delete <strong class="text-ink">{{ jobToDelete.name }}</strong>? Its execution history is deleted too.</p>
         <div class="flex justify-end gap-2">
           <button type="button" class="h-10 cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink" @click="jobToDelete = null">Cancel</button>
-          <button type="button" class="h-10 cursor-pointer rounded-ctl border-0 bg-bad px-4 text-sm font-bold text-[#2a0c0b] disabled:opacity-50" :disabled="isDeleting" @click="deleteJob"><i v-if="isDeleting" class="fas fa-spinner fa-spin mr-1"></i>Delete</button>
+          <button type="button" class="h-10 cursor-pointer rounded-ctl border-0 bg-bad px-4 text-sm font-bold text-[#2a0c0b] disabled:opacity-50" :disabled="isDeleting" @click="deleteJob"><i aria-hidden="true" v-if="isDeleting" class="fas fa-spinner fa-spin mr-1"></i>Delete</button>
         </div>
       </div>
     </AppDialog>
