@@ -9,7 +9,7 @@
  * ⚠️  DO NOT use hardcoded values (colors, spacing, sizes) in components
  * ⚠️  Always reference these CSS variables
  * 
- * Last Updated: 2026-03-04
+ * Last Updated: 2026-10-09 (colors aligned with the Tailwind theme in assets/main.css)
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
@@ -21,33 +21,33 @@
   /* ────────────────────────────────────────────────────────────────────
      Brand Colors
      ──────────────────────────────────────────────────────────────────── */
-  --color-primary: #636363;
-  --color-primary-hover: #55575a;
-  --color-primary-light: #60a5fa;
-  --color-primary-dark: #1e40af;
+  --color-primary: #6a5ae0;
+  --color-primary-hover: #7b6cf0;
+  --color-primary-light: #b3a9ff;
+  --color-primary-dark: #4a3fb0;
 
   /* ────────────────────────────────────────────────────────────────────
      Semantic Colors
      ──────────────────────────────────────────────────────────────────── */
   /* Success */
-  --color-success: #10b981;
-  --color-success-hover: #059669;
-  --color-success-light: #34d399;
+  --color-success: #4fc98a;
+  --color-success-hover: #3fb57a;
+  --color-success-light: #7ad9a8;
 
   /* Warning */
-  --color-warning: #f59e0b;
-  --color-warning-hover: #d97706;
-  --color-warning-light: #fbbf24;
+  --color-warning: #f2b84b;
+  --color-warning-hover: #dba23a;
+  --color-warning-light: #f6cd7d;
 
   /* Error / Danger */
-  --color-error: #ef4444;
-  --color-error-hover: #dc2626;
-  --color-error-light: #f87171;
+  --color-error: #f07067;
+  --color-error-hover: #d95d55;
+  --color-error-light: #f59a93;
 
   /* Info */
-  --color-info: #616161;
-  --color-info-hover: #424242;
-  --color-info-light: #90a4ae;
+  --color-info: #5aa9f0;
+  --color-info-hover: #4a95d8;
+  --color-info-light: #8cc4f5;
 
   /* ────────────────────────────────────────────────────────────────────
      Surface Hierarchy (Background Layers)
@@ -67,14 +67,14 @@
        - surface-glass-strong: Strong highlight (focus, selection)
      ──────────────────────────────────────────────────────────────────── */
   /* Dark surface layers */
-  --surface-base: rgba(0, 0, 0, 0.6);
-  --surface-raised: rgba(34, 34, 36, 0.9);
-  --surface-elevated: rgba(0, 0, 0, 0.8);
-  --surface-elevated-solid: rgba(37, 37, 37);
-  --surface-overlay: rgba(0, 0, 0, 0.85);
-  --surface-interactive: rgba(255, 255, 255, 0.1);
-  --surface-hover: rgba(255, 255, 255, 0.15);
-  --surface-hover-solid: rgba(37, 37, 37);
+  --surface-base: #0b0d12;
+  --surface-raised: #141822;
+  --surface-elevated: #141822;
+  --surface-elevated-solid: #1b2030;
+  --surface-overlay: rgba(11, 13, 18, 0.92);
+  --surface-interactive: #1b2030;
+  --surface-hover: #1d2130;
+  --surface-hover-solid: #1d2130;
 
   /* Glass morphism white overlays */
   --surface-glass-subtle: rgba(255, 255, 255, 0.05);
@@ -85,7 +85,7 @@
   /* Legacy aliases (deprecated - use surface-* instead) */
   --color-bg-primary: var(--surface-base);
   --color-bg-content: var(--surface-raised);
-  --color-bg-content-secondary: rgba(45, 55, 72, 0.8);
+  --color-bg-content-secondary: #1b2030;
   --color-bg-overlay-light: rgba(0, 0, 0, 0.6);
   --color-bg-overlay-heavy: var(--surface-overlay);
   --color-bg-interactive: var(--surface-interactive);
@@ -98,19 +98,19 @@
      All text colors verified for 4.5:1 minimum contrast ratio on dark surfaces.
      Calculations based on relative luminance per WCAG 2.1 Level AA standards.
      ──────────────────────────────────────────────────────────────────── */
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #f4f4f4;  /* was #cbd5e1 | CR 4.5:1 min on all surfaces */
-  --color-text-tertiary: #94a3b8;
-  --color-text-muted: #a1a1a1;      /* was #777879 | CR 4.5:1 min on all surfaces */
-  --color-text-disabled: #878787;   /* was #475569 | CR 4.5:1 min on all surfaces */
-  --color-text-inverse: #0f172a;
+  --color-text-primary: #e8eaf0;
+  --color-text-secondary: #c5cbd8;  /* was #cbd5e1 | CR 4.5:1 min on all surfaces */
+  --color-text-tertiary: #9aa3b5;
+  --color-text-muted: #9aa3b5;      /* was #777879 | CR 4.5:1 min on all surfaces */
+  --color-text-disabled: #8790a3;   /* was #475569 | CR 4.5:1 min on all surfaces */
+  --color-text-inverse: #0b0d12;
 
   /* ────────────────────────────────────────────────────────────────────
      Border Colors
      ──────────────────────────────────────────────────────────────────── */
-  --color-border-light: #444444;
-  --color-border-medium: #444444;
-  --color-border-heavy: #64748b;
+  --color-border-light: #232838;
+  --color-border-medium: #2a3042;
+  --color-border-heavy: #3a4258;
   --color-border-focus: var(--color-primary);
 
   /* ────────────────────────────────────────────────────────────────────
@@ -131,16 +131,16 @@
   --alpha-90: 0.9;
 
   /* Pre-mixed alpha colors (common combinations) */
-  --color-primary-alpha-10: rgba(59, 130, 246, 0.1);
-  --color-primary-alpha-20: rgba(59, 130, 246, 0.2);
-  --color-success-alpha-10: rgba(16, 185, 129, 0.1);
-  --color-success-alpha-20: rgba(16, 185, 129, 0.2);
-  --color-warning-alpha-10: rgba(245, 158, 11, 0.1);
-  --color-warning-alpha-20: rgba(245, 158, 11, 0.2);
-  --color-error-alpha-10: rgba(239, 68, 68, 0.1);
-  --color-error-alpha-20: rgba(239, 68, 68, 0.2);
-  --color-info-alpha-10: rgba(6, 182, 212, 0.1);
-  --color-info-alpha-20: rgba(6, 182, 212, 0.2);
+  --color-primary-alpha-10: rgba(106, 90, 224, 0.1);
+  --color-primary-alpha-20: rgba(106, 90, 224, 0.2);
+  --color-success-alpha-10: rgba(79, 201, 138, 0.1);
+  --color-success-alpha-20: rgba(79, 201, 138, 0.2);
+  --color-warning-alpha-10: rgba(242, 184, 75, 0.1);
+  --color-warning-alpha-20: rgba(242, 184, 75, 0.2);
+  --color-error-alpha-10: rgba(240, 112, 103, 0.1);
+  --color-error-alpha-20: rgba(240, 112, 103, 0.2);
+  --color-info-alpha-10: rgba(90, 169, 240, 0.1);
+  --color-info-alpha-20: rgba(90, 169, 240, 0.2);
 
   /* ═══════════════════════════════════════════════════════════════════════
      SPACING SCALE
@@ -174,8 +174,8 @@
   /* ────────────────────────────────────────────────────────────────────
      Font Families
      ──────────────────────────────────────────────────────────────────── */
-  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  --font-family-mono: 'Monaco', 'Courier New', monospace;
+  --font-family-base: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-family-mono: "JetBrains Mono", ui-monospace, monospace;
 
   /* ────────────────────────────────────────────────────────────────────
      Font Sizes
@@ -268,8 +268,8 @@
      ─────────────────────────────────────────────────────────────────────── */
   --radius-sm: 6px;
   --radius-md: 8px;
-  --radius-lg: 20px;
-  --radius-xl: 25px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
   --radius-full: 9999px;
 
   /* Legacy aliases for backward compatibility (DEPRECATED - use --radius-* instead) */

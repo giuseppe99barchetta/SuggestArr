@@ -1,42 +1,4 @@
-/* ═══════════════════════════════════════════════════════════════════════════
- * Theme Component Styles
- * 
- * ⚠️  All CSS variables are now imported from variables.css
- * ⚠️  DO NOT define duplicate :root variables here
- * ⚠️  Use canonical design tokens from variables.css
- * 
- * Last Updated: 2026-03-04 (Phase 2 Migration)
- * ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Base Container Styles */
-.app-container {
-  background-color: var(--surface-base);
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  min-height: 100vh;
-  position: relative;
-}
-
-.app-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--color-bg-overlay-light);
-  z-index: -1;
-}
-
-.content-container {
-  background-color: var(--surface-raised);
-  backdrop-filter: blur(10px);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border-light);
-  box-shadow: var(--shadow-md);
-  padding: 2rem;
-}
 
 .card {
   background-color: var(--color-bg-content-secondary);
@@ -44,54 +6,6 @@
   border: 1px solid var(--color-border-light);
   padding: 1.5rem;
   color: var(--color-text-primary);
-}
-
-/* Shared page background and overlay patterns */
-.page-bg-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  z-index: 0;
-}
-
-.page-bg-layer.fade-transition {
-  transition: opacity 0.8s ease-in-out;
-}
-
-.page-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(15px);
-  z-index: 1;
-}
-
-.page-overlay.hidden {
-  display: none;
-}
-
-.page-content {
-  position: relative;
-  z-index: 2;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(15px);
-  border: 1px solid var(--color-border-light);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-
-.page-content.static-bg-active {
-  background: transparent;
-  backdrop-filter: none;
-  border-color: transparent;
-  box-shadow: none;
 }
 
 /* Forms and Layout */
@@ -179,59 +93,6 @@ select option {
   border-bottom: 1px solid var(--color-border-light);
 }
 
-
-/* Help Section */
-
-.help-link {
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  font-size: 0.8rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: var(--transition-base);
-  padding: 0.25rem 0;
-  margin-bottom: 1rem;
-}
-
-.help-link:hover {
-  color: var(--color-primary-hover);
-}
-
-.help-content {
-  margin-top: 0.75rem;
-  padding: 1rem;
-  background: var(--surface-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-}
-
-.help-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.help-list li {
-  color: var(--color-text-secondary);
-  font-size: 0.85rem;
-  padding-left: 1.5rem;
-  position: relative;
-}
-
-.help-list li::before {
-  content: counter(list-item) ".";
-  position: absolute;
-  left: 0;
-  color: var(--color-primary);
-  font-weight: 600;
-}
-
 /* Interactive Elements */
 .btn-primary {
   background-color: var(--surface-interactive);
@@ -313,34 +174,6 @@ select option {
   cursor: not-allowed;
 }
 
-.btn-test {
-  min-width: 100px;
-  height: 44px;
-  padding: 0 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  font-weight: 600;
-  font-size: 0.9rem;
-  border-radius: var(--radius-sm);
-  transition: var(--transition-all);
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-  background-color: grey;
-}
-
-.btn-content {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.btn-text {
-  white-space: nowrap;
-}
-
 .btn-success {
   background: var(--color-success);
   color: white;
@@ -348,15 +181,6 @@ select option {
 
 .btn-success:hover:not(:disabled) {
   background: #218838;
-}
-
-.btn-warning {
-  background: var(--color-warning);
-  color: white;
-}
-
-.btn-warning:hover:not(:disabled) {
-  background: #d97706;
 }
 
 /* Alerts */
@@ -368,81 +192,6 @@ select option {
   border-radius: var(--radius-sm);
   font-size: 0.9rem;
   margin-bottom: 1rem;
-}
-
-.alert-info {
-  background: var(--surface-raised);
-  border: 1px solid var(--color-primary);
-  color: var(--color-primary);
-}
-
-.alert-success {
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid var(--color-success);
-  color: var(--color-success);
-}
-
-.alert-danger {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid var(--color-error);
-  color: var(--color-error);
-}
-
-/* Form Elements */
-.input-field {
-  background-color: var(--color-bg-content-secondary);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  padding: 0.75rem 1rem;
-  font-size: 1rem;
-  transition: var(--transition-all);
-  width: 100%;
-}
-
-.input-field:focus-visible {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: var(--focus-ring);
-}
-
-.input-field::placeholder {
-  color: var(--color-text-muted);
-}
-
-/* Tab Navigation */
-.tabs-navigation {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 2rem;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.tab-button {
-  background-color: var(--surface-interactive);
-  border: 1px solid var(--color-border-light);
-  color: var(--color-text-muted);
-  padding: 0.75rem 1.5rem;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: var(--transition-all);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.tab-button:hover {
-  background-color: var(--surface-hover);
-  color: var(--color-text-primary);
-}
-
-.tab-button.active {
-  color: var(--color-text-primary);
-  border-color: var(--surface-hover);
-  background-color: var(--surface-hover);
-  backdrop-filter: blur(200px);
 }
 
 /* Loading States */
@@ -475,33 +224,6 @@ select option {
   100% { transform: rotate(360deg); }
 }
 
-/* Typography */
-.heading-primary {
-  font-size: 2.5rem;
-  font-weight: bold;
-  color: var(--color-text-primary);
-  margin-bottom: 0.5rem;
-}
-
-.heading-secondary {
-  font-size: 1.8rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: 1rem;
-}
-
-.heading-tertiary {
-  font-size: 1.2rem;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  margin-bottom: 0.75rem;
-}
-
-.text-muted {
-  color: var(--color-text-muted);
-  font-size: 1rem;
-}
-
 /* Utility Classes */
 .text-center {
   text-align: center;
@@ -510,15 +232,12 @@ select option {
 .mb-1 { margin-bottom: 0.25rem; }
 .mb-2 { margin-bottom: 0.5rem; }
 .mb-3 { margin-bottom: 0.75rem; }
-.mb-4 { margin-bottom: 1rem; }
-.mb-6 { margin-bottom: 1.5rem; }
-.mb-8 { margin-bottom: 2rem; }
 
 .mt-1 { margin-top: 0.25rem; }
 .mt-2 { margin-top: 0.5rem; }
-.mt-3 { margin-top: 0.75rem; }
+
 .mt-4 { margin-top: 1rem; }
-.mt-6 { margin-top: 1.5rem; }
+
 .mt-8 { margin-top: 2rem; }
 
 .flex { display: flex; }

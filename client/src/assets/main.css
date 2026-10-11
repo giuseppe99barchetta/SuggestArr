@@ -1,0 +1,46 @@
+/*
+ * Tailwind entry point.
+ * Legacy styles sit in their own layer between Tailwind's base and utilities:
+ * they still override the preflight reset, but every utility class wins over them.
+ * ponytail: delete the legacy layer once every screen is migrated to Tailwind.
+ */
+@layer theme, base, legacy, components, utilities;
+
+@import "tailwindcss";
+@import "./styles/theme.css" layer(legacy);
+@import "./styles/global.css" layer(legacy);
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-canvas: #0b0d12;
+  --color-side: #0f1219;
+  --color-panel: #141822;
+  --color-panel-2: #1b2030;
+  --color-raised: #1d2130;
+  --color-edge: #232838;
+  --color-edge-strong: #2a3042;
+  --color-ink: #e8eaf0;
+  --color-ink-2: #c5cbd8;
+  --color-ink-3: #9aa3b5;
+  --color-ink-4: #8790a3;
+  --color-brand: #6a5ae0;
+  --color-brand-soft: #2e2850;
+  --color-brand-ink: #b3a9ff;
+  --color-good: #4fc98a;
+  --color-caution: #f2b84b;
+  --color-bad: #f07067;
+  --color-notice: #5aa9f0;
+
+  /* Own names: legacy variables.css already defines --radius-lg/xl with other values. */
+  --radius-ctl: 10px;
+  --radius-card: 14px;
+}
+
+@layer base {
+  body {
+    background: var(--color-canvas);
+    font-family: var(--font-sans);
+  }
+}

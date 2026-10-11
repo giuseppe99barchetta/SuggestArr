@@ -1,23 +1,14 @@
 <template>
   <div class="settings-services">
     <!-- Section header hidden in wizard mode (wizard shell provides its own header) -->
-    <div v-if="!wizardMode" class="section-header">
-      <h2>Service Configuration</h2>
-      <p>Configure external service connections</p>
-    </div>
+    <PageHeader v-if="!wizardMode" title="Connections" subtitle="The services SuggestArr reads from and sends requests to. Test each one after changing it, then save." />
 
     <div class="services-stack">
       <!-- TMDB + OMDb: side by side in dashboard, single card in wizard -->
       <div v-if="showSection('tmdb') || showSection('omdb')" :class="!wizardMode ? 'rating-apis-row' : ''">
         <!-- TMDB -->
         <div v-if="showSection('tmdb')" :class="wizardMode ? '' : 'service-card'">
-          <div v-if="!wizardMode" class="service-header">
-            <h3><i class="fas fa-film"></i> TMDB API</h3>
-            <span class="status-badge" :class="getTmdbStatus">
-              <span class="status-dot"></span>
-              {{ getTmdbStatusText }}
-            </span>
-          </div>
+          <ServiceCardHeader v-if="!wizardMode" icon="fas fa-film" title="TMDB" description="Finds titles similar to what you watched, plus posters and metadata." required :status="getTmdbStatus" :status-text="getTmdbStatusText" />
 
           <div class="form-group">
             <label for="tmdbApiKey">API Key</label>
@@ -53,13 +44,7 @@
 
         <!-- OMDb (IMDB ratings) -->
         <div v-if="showSection('omdb')" :class="wizardMode ? '' : 'service-card'">
-          <div v-if="!wizardMode" class="service-header">
-            <h3><i class="fas fa-star"></i> IMDB (via OMDb)</h3>
-            <span class="status-badge" :class="getOmdbStatus">
-              <span class="status-dot"></span>
-              {{ getOmdbStatusText }}
-            </span>
-          </div>
+          <ServiceCardHeader v-if="!wizardMode" icon="fas fa-star" title="IMDb ratings (OMDb)" description="Lets jobs filter suggestions by IMDb rating." :status="getOmdbStatus" :status-text="getOmdbStatusText" />
 
           <div class="form-group">
             <label for="omdbApiKey">API Key</label>
@@ -137,13 +122,7 @@
 
       <!-- Media Server -->
       <div v-if="showSection('media-server')" :class="wizardMode ? '' : 'service-card'">
-        <div v-if="!wizardMode" class="service-header">
-          <h3><i class="fas fa-server"></i> Media Server</h3>
-          <span class="status-badge" :class="getMediaServerStatus">
-            <span class="status-dot"></span>
-            {{ getMediaServerStatusText }}
-          </span>
-        </div>
+        <ServiceCardHeader v-if="!wizardMode" icon="fas fa-server" title="Media server" description="Where SuggestArr reads users, libraries and watch history from." required :status="getMediaServerStatus" :status-text="getMediaServerStatusText" />
 
         <BaseDropdown
           v-if="!wizardMode"
@@ -353,13 +332,7 @@
 
       <!-- Trakt -->
       <div v-if="showSection('trakt')" :class="wizardMode ? '' : 'service-card'">
-        <div v-if="!wizardMode" class="service-header">
-          <h3><i class="fas fa-history"></i> Trakt</h3>
-          <span class="status-badge" :class="getTraktStatus">
-            <span class="status-dot"></span>
-            {{ getTraktStatusText }}
-          </span>
-        </div>
+        <ServiceCardHeader v-if="!wizardMode" icon="fas fa-history" title="Trakt" description="Adds Trakt watch history and personal recommendations. Users link their own accounts from their profile." :status="getTraktStatus" :status-text="getTraktStatusText" />
 
         <div class="form-group">
           <label for="traktClientId">Client ID</label>
@@ -399,13 +372,7 @@
 
       <!-- Seer  -->
       <div v-if="showSection('seer')" :class="wizardMode ? '' : 'service-card'">
-        <div v-if="!wizardMode" class="service-header">
-          <h3><i class="fas fa-list-alt"></i> Seer</h3>
-          <span class="status-badge" :class="getSeerStatus">
-            <span class="status-dot"></span>
-            {{ getSeerStatusText }}
-          </span>
-        </div>
+        <ServiceCardHeader v-if="!wizardMode" icon="fas fa-paper-plane" title="Jellyseerr / Overseerr" description="Receives the requests. Approved titles are downloaded through Radarr and Sonarr from here." required :status="getSeerStatus" :status-text="getSeerStatusText" />
 
         <div class="form-group">
           <label for="seerApiUrl">API URL</label>
@@ -562,7 +529,8 @@
     </div>
 
     <!-- Save Button (hidden in wizard mode — wizard shell handles saving) -->
-    <div v-if="!wizardMode" class="settings-actions">
+    <div v-if="!wizardMode" class="settings-actions" :class="{ 'settings-actions--dirty': hasChanges }">
+      <span class="settings-actions-note">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
       <button
         @click="saveSettings"
         class="btn btn-primary"
@@ -585,6 +553,8 @@
 </template>
 
 <script>
+import PageHeader from '@/components/ui/PageHeader.vue';
+import ServiceCardHeader from './ServiceCardHeader.vue';
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import {
@@ -595,7 +565,7 @@ import {
 
 export default {
   name: 'SettingsServices',
-  components: {
+  components: { PageHeader, ServiceCardHeader,
     BaseDropdown
   },
   props: {
@@ -1521,7 +1491,6 @@ export default {
 <style scoped>
 .settings-services {
   color: var(--color-text-primary);
-  padding: var(--spacing-lg);
 }
 
 /* Section Header */
@@ -1555,10 +1524,10 @@ export default {
 
 /* Service card */
 .service-card {
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--surface-interactive);
-  border-radius: var(--border-radius-md);
-  padding: 1.5rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.375rem;
 }
 
 /* Card header with status badge */
@@ -1909,10 +1878,31 @@ export default {
 /* Footer actions */
 .settings-actions {
   display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  padding-top: 2rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1.125rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+}
+.settings-actions--dirty {
+  position: sticky;
+  bottom: 1rem;
+  z-index: 10;
+  background: #18162b;
+  border-color: #2e2850;
+}
+.settings-actions-note {
+  flex: 1 1 200px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+.settings-actions--dirty .settings-actions-note {
+  color: var(--color-primary-light);
+}
+@media (max-width: 1023px) {
+  .settings-actions--dirty { bottom: 5.5rem; }
 }
 
 /* OMDb info section */
@@ -2008,8 +1998,6 @@ export default {
   .rating-apis-row { grid-template-columns: 1fr; }
   .omdb-pros-cons { grid-template-columns: 1fr; }
   .service-card { padding: 1rem; }
-  .service-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
-  .input-group { flex-direction: column; }
   .settings-actions { flex-direction: column; align-items: stretch; }
   .inline-form { flex-direction: column; }
   .profiles-grid { grid-template-columns: 1fr; }
