@@ -1,94 +1,66 @@
 <template>
-  <section id="profile-history-content" class="watched-media-history">
-    <h3><i class="fas fa-book-open" aria-hidden="true"></i> Recommendation history</h3>
-    <p class="card-desc">Add watched titles no longer in your media server to personalise recommendations and exclude them from future suggestions.</p>
-    <div class="history-content">
-    <div class="history-tools">
-    <div class="history-section">
-      <div class="history-section__heading">
-        <h4>Import CSV</h4>
-        <p>Use UTF-8 CSV with <code>tmdb_id,media_type,title,year,rating</code>. Rating is optional and ranges from 0 to 10.</p>
-      </div>
-      <div class="history-import-controls">
-        <div class="history-file-field">
-        <span id="history-file-label" class="history-field-label">CSV file</span>
-        <div class="history-file-control">
+  <SectionCard id="profile-history-content" icon="fas fa-book-open" title="Recommendation history" description="Titles you watched outside your media server. They personalise suggestions and are never suggested again.">
+    <div class="grid gap-5 md:grid-cols-2">
+      <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
+        <h3 class="m-0 text-sm font-bold text-ink">Import a CSV</h3>
+        <p class="m-0 text-[13px] leading-relaxed text-ink-3">UTF-8 with the columns <code>tmdb_id,media_type,title,year,rating</code>. Rating is optional, from 0 to 10.</p>
+        <div class="flex flex-wrap items-center gap-2">
           <input ref="file" type="file" hidden accept=".csv,text/csv" :disabled="isImporting" @change="onFileChange">
-          <button type="button" class="btn btn-secondary btn-sm" aria-describedby="history-file-label" :disabled="isImporting" @click="$refs.file.click()">
-            <i class="fas fa-folder-open" aria-hidden="true"></i> Choose CSV
+          <button type="button" class="ui-btn" :disabled="isImporting" @click="$refs.file.click()">
+            <i aria-hidden="true" class="fas fa-folder-open"></i>Choose CSV
           </button>
-          <span class="history-filename" aria-live="polite" :title="importFile?.name">{{ importFile?.name || 'No file selected' }}</span>
+          <span class="min-w-0 flex-1 truncate text-[13px] text-ink-3" aria-live="polite" :title="importFile?.name">{{ importFile?.name || 'No file selected' }}</span>
+          <button type="button" class="ui-btn-primary" :disabled="!importFile || isImporting" @click="importCsv">
+            <i aria-hidden="true" :class="isImporting ? 'fas fa-spinner fa-spin' : 'fas fa-file-import'"></i>{{ isImporting ? 'Importing…' : 'Import' }}
+          </button>
         </div>
-        </div>
-        <button type="button" class="btn btn-outline btn-sm" :disabled="!importFile || isImporting" @click="importCsv">
-          <i :class="isImporting ? 'fas fa-spinner fa-spin' : 'fas fa-file-import'"></i>
-          {{ isImporting ? 'Importing…' : 'Import CSV' }}
-        </button>
       </div>
-    </div>
 
-    <div class="history-section">
-      <div class="history-section__heading">
-        <h4>Add a title</h4>
-        <p>Search TMDb, then optionally add a personal rating.</p>
-      </div>
-      <div class="history-search">
-        <BaseInput v-model.trim="query" label="Search TMDb" type="search" placeholder="Movie or series title" icon="search" size="lg" @keyup.enter="search" />
-        <div class="history-search__controls">
-          <BaseDropdown
-            id="watchedSearchType"
-            v-model="searchType"
-            class="history-dropdown"
-            :options="searchTypeOptions"
-            label="Media type"
-          />
-          <button type="button" class="btn btn-outline btn-sm" :disabled="query.length < 2 || isSearching" @click="search">
-            <i :class="isSearching ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i> Search
+      <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
+        <h3 class="m-0 text-sm font-bold text-ink">Add a title</h3>
+        <form class="flex flex-wrap gap-2" role="search" @submit.prevent="search">
+          <label class="sr-only" for="watchedSearch">Search TMDb</label>
+          <input id="watchedSearch" v-model.trim="query" type="search" class="ui-input flex-[1_1_180px]" placeholder="Movie or series title">
+          <label class="sr-only" for="watchedSearchType">Media type</label>
+          <select id="watchedSearchType" v-model="searchType" class="ui-input w-auto">
+            <option v-for="option in searchTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+          <button type="submit" class="ui-btn" :disabled="query.length < 2 || isSearching">
+            <i aria-hidden="true" :class="isSearching ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>Search
           </button>
-        </div>
-      </div>
-      <div v-if="searchResults.length" class="history-search-results">
-        <div v-for="result in searchResults" :key="`${result.media_type}:${result.tmdb_id}`" class="history-result">
-          <span class="history-result__title">{{ result.title }} <small>({{ result.year || '—' }}) · {{ result.media_type }}</small></span>
-          <div class="history-result__actions">
-            <input v-model.number="ratings[`${result.media_type}:${result.tmdb_id}`]" class="form-control" type="number" min="0" max="10" step="0.5" placeholder="Rating">
-            <button type="button" class="btn btn-outline btn-sm" :disabled="addingKey === `${result.media_type}:${result.tmdb_id}`" @click="addResult(result)">
-              <i :class="addingKey === `${result.media_type}:${result.tmdb_id}` ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i> Add
+        </form>
+        <ul v-if="searchResults.length" class="m-0 flex max-h-64 list-none flex-col gap-1.5 overflow-y-auto p-0">
+          <li v-for="result in searchResults" :key="`${result.media_type}:${result.tmdb_id}`" class="flex flex-wrap items-center gap-2 rounded-[8px] bg-canvas px-3 py-2">
+            <span class="min-w-0 flex-1 text-sm text-ink">{{ result.title }} <small class="text-ink-4">({{ result.year || '—' }}) · {{ result.media_type === 'tv' ? 'TV' : 'Movie' }}</small></span>
+            <label class="sr-only" :for="`rating-${result.media_type}-${result.tmdb_id}`">Your rating for {{ result.title }}</label>
+            <input :id="`rating-${result.media_type}-${result.tmdb_id}`" v-model.number="ratings[`${result.media_type}:${result.tmdb_id}`]" class="ui-input h-9 w-24" type="number" min="0" max="10" step="0.5" placeholder="Rating">
+            <button type="button" class="ui-btn h-9 px-3" :disabled="addingKey === `${result.media_type}:${result.tmdb_id}`" @click="addResult(result)">
+              <i aria-hidden="true" :class="addingKey === `${result.media_type}:${result.tmdb_id}` ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i>Add
             </button>
-          </div>
-        </div>
+          </li>
+        </ul>
       </div>
     </div>
 
+    <h3 class="m-0 mb-2 mt-5 text-sm font-bold text-ink">Your titles <span v-if="items.length" class="font-normal text-ink-4">({{ items.length }})</span></h3>
+    <p v-if="isLoading" class="m-0 text-[13px] text-ink-4">Loading watched titles…</p>
+    <p v-else-if="!items.length" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[13px] text-ink-4">Nothing added yet. Imported and manually added titles show up here, private to your linked account.</p>
+    <div v-else class="overflow-x-auto rounded-ctl border border-edge">
+      <table class="w-full min-w-[520px] border-collapse text-sm">
+        <thead><tr class="text-left text-xs text-ink-4"><th class="px-3 py-2.5 font-semibold">Title</th><th class="px-3 py-2.5 font-semibold">Type</th><th class="px-3 py-2.5 font-semibold">Rating</th><th class="px-3 py-2.5 font-semibold">Source</th><th class="px-3 py-2.5"><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>
+          <tr v-for="item in items" :key="item.id" class="border-t border-edge">
+            <td class="px-3 py-2 text-ink">{{ item.title }} <small v-if="item.year" class="text-ink-4">({{ item.year }})</small></td>
+            <td class="px-3 py-2 text-ink-2">{{ item.media_type === 'tv' ? 'TV' : 'Movie' }}</td>
+            <td class="px-3 py-2 text-ink-2">{{ item.rating ?? '—' }}</td>
+            <td class="px-3 py-2 text-ink-2">{{ item.source === 'csv_import' ? 'CSV import' : 'Manual' }}</td>
+            <td class="px-3 py-1 text-right"><button type="button" class="ui-btn-icon-danger" :aria-label="`Remove ${item.title}`" title="Remove" @click="remove(item)"><i aria-hidden="true" class="fas fa-trash"></i></button></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-    <div class="history-divider"></div>
-
-    <div class="history-section">
-      <div class="history-section__heading">
-        <h4>Your seeds <span v-if="items.length">({{ items.length }})</span></h4>
-        <p>These titles are private to your linked media-server account.</p>
-      </div>
-      <p v-if="isLoading" class="history-empty">Loading watched titles…</p>
-      <p v-else-if="!items.length" class="history-empty"><i class="fas fa-film" aria-hidden="true"></i> No CSV or manual titles yet.</p>
-      <div v-else class="history-table-wrap">
-        <table class="history-table">
-          <thead><tr><th>Title</th><th>Type</th><th>Rating</th><th>Source</th><th></th></tr></thead>
-          <tbody>
-            <tr v-for="item in items" :key="item.id">
-              <td>{{ item.title }} <small v-if="item.year">({{ item.year }})</small></td>
-              <td>{{ item.media_type }}</td>
-              <td>{{ item.rating ?? '—' }}</td>
-              <td>{{ item.source === 'csv_import' ? 'CSV import' : 'Manual' }}</td>
-              <td><button type="button" class="btn btn-danger btn-sm icon-btn" title="Remove" @click="remove(item)"><i class="fas fa-trash"></i></button></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-    </div>
-  </section>
+  </SectionCard>
 </template>
-
 <script>
 import {
   addMyWatchedMedia,
@@ -97,12 +69,11 @@ import {
   listMyWatchedMedia,
   searchMyWatchedMedia,
 } from '@/api/api';
-import BaseDropdown from '@/components/common/BaseDropdown.vue';
-import BaseInput from '@/components/ui/BaseInput.vue';
+import SectionCard from '@/components/ui/SectionCard.vue';
 
 export default {
   name: 'WatchedMediaHistory',
-  components: { BaseDropdown, BaseInput },
+  components: { SectionCard },
   data() {
     return {
       items: [], importFile: null, query: '', searchType: 'both', searchResults: [], ratings: {},
@@ -162,49 +133,3 @@ export default {
   },
 };
 </script>
-
-<style scoped>
-.history-content { display: flex; flex-direction: column; gap: var(--spacing-lg); }
-.history-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--spacing-xl); row-gap: var(--spacing-sm); }
-.history-tools > .history-section { display: grid; grid-template-rows: subgrid; grid-row: span 3; }
-.history-tools > .history-section + .history-section { border-left: 1px solid var(--color-border-light); padding-left: var(--spacing-xl); }
-.history-tools > * { min-width: 0; }
-.history-section h4 { margin: 0; color: var(--color-text-secondary); }
-.history-section__heading p, .history-empty { margin: var(--spacing-xs) 0 0; color: var(--color-text-muted); font-size: var(--font-size-sm); line-height: var(--line-height-normal); }
-.history-section__heading code { overflow-wrap: anywhere; }
-.history-section { display: flex; flex-direction: column; gap: var(--spacing-sm); }
-.history-section h4 { font-size: var(--font-size-base); font-weight: var(--font-weight-semibold); }
-.history-divider { height: 1px; background: var(--surface-glass-light); }
-.history-import-controls, .history-search__controls, .history-result__actions { display: grid; align-items: center; gap: var(--spacing-sm); }
-.history-import-controls { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: var(--spacing-md); }
-.history-import-controls > .btn { min-height: var(--input-height-lg); }
-.history-file-field { width: 100%; min-width: 0; }
-.history-field-label { display: block; margin-bottom: var(--spacing-xs); font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text-secondary); }
-.history-file-control { display: flex; align-items: center; gap: var(--spacing-md); width: 100%; min-width: 0; min-height: var(--input-height-lg); padding: var(--spacing-xs); background: var(--surface-glass-subtle); border: 1px solid var(--color-border-light); border-radius: var(--radius-sm); }
-.history-file-control .btn { flex-shrink: 0; min-height: var(--input-height-sm); padding-block: var(--spacing-xs); }
-.history-filename { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text-muted); font-size: var(--font-size-sm); }
-.history-search { display: flex; flex-direction: column; gap: var(--spacing-md); }
-.history-search__controls { grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--spacing-md); }
-.history-search__controls > .btn { min-height: var(--input-height-lg); }
-.history-dropdown { min-width: 0; }
-.history-empty { display: flex; align-items: center; justify-content: center; gap: var(--spacing-sm); padding: var(--spacing-xl) var(--spacing-md); border: 1px dashed var(--color-border-light); border-radius: var(--radius-sm); }
-.history-search .form-control, .history-result__actions .form-control { min-width: 0; min-height: var(--input-height-lg); }
-.history-search-results { display: flex; flex-direction: column; gap: var(--spacing-sm); }
-.history-result { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--spacing-md); padding: var(--spacing-sm) var(--spacing-md); background: var(--surface-glass-subtle); border: 1px solid var(--color-border-light); border-radius: var(--radius-sm); }
-.history-result__title { min-width: 0; color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
-.history-result small, .history-table td small { color: var(--color-text-muted); font-size: var(--font-size-xs); }
-.history-result__actions { grid-template-columns: minmax(calc(var(--spacing-3xl) * 1.25), 1fr) auto; }
-.history-table-wrap { overflow-x: auto; border: 1px solid var(--color-border-light); border-radius: var(--radius-sm); }
-.history-table { width: 100%; border-collapse: collapse; color: var(--color-text-secondary); font-size: var(--font-size-sm); }
-.history-table th, .history-table td { padding: var(--spacing-sm) var(--spacing-md); text-align: left; border-bottom: 1px solid var(--surface-glass-light); }
-.history-table th { color: var(--color-text-muted); font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); text-transform: uppercase; }
-.history-table tbody tr:last-child td { border-bottom: 0; }
-.history-table td:last-child { width: 1%; }
-@media (max-width: 700px) {
-  .history-tools { row-gap: var(--spacing-lg); }
-  .history-tools > .history-section { display: flex; grid-row: auto; }
-  .history-tools, .history-import-controls, .history-search__controls, .history-result { grid-template-columns: minmax(0, 1fr); }
-  .history-tools > .history-section + .history-section { border-left: 0; padding-left: 0; border-top: 1px solid var(--color-border-light); padding-top: var(--spacing-lg); }
-  .history-result__actions { grid-template-columns: minmax(0, 1fr) auto; }
-}
-</style>

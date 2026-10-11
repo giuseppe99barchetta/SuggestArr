@@ -39,8 +39,37 @@
 }
 
 @layer base {
+  /* Native controls (date picker, select menus, scrollbars) follow the dark theme. */
+  :root {
+    color-scheme: dark;
+  }
   body {
     background: var(--color-canvas);
     font-family: var(--font-sans);
+  }
+}
+
+/* Form controls shared by the settings screens. */
+@layer components {
+  .ui-input {
+    @apply h-[42px] w-full min-w-0 rounded-ctl border border-edge-strong bg-canvas px-3 text-sm font-normal text-ink outline-none placeholder:text-ink-4 focus:border-brand-ink disabled:opacity-60;
+  }
+  .ui-label {
+    @apply flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2;
+  }
+  .ui-btn {
+    @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink hover:border-ink-4 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .ui-btn-primary {
+    @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border-0 bg-brand px-4 text-sm font-bold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .ui-btn-icon-danger {
+    @apply inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-bad/15 hover:text-bad disabled:opacity-50;
+  }
+  .ui-alert-bad {
+    @apply m-0 rounded-[8px] border border-bad/40 bg-bad/10 px-3 py-2 text-[13px] text-ink-2;
+  }
+  .ui-alert-good {
+    @apply m-0 rounded-[8px] border border-good/40 bg-good/10 px-3 py-2 text-[13px] text-ink-2;
   }
 }

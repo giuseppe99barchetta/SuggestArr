@@ -848,19 +848,34 @@ export default {
 
 /* ── Settings group card ───────────────────────────────────────────────── */
 .settings-group {
-  background: var(--surface-glass-subtle);
+  background: var(--surface-raised);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
 }
 
+/* Same header as the Tailwind SectionCard: 17px title, icon in a tile. */
 .settings-group h3 {
-  font-size: var(--font-size-xl);
-  margin-bottom: var(--spacing-md);
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 var(--spacing-md);
   color: var(--color-text-primary);
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: 0.875rem;
+}
+
+.settings-group h3 > i:first-child {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--surface-hover);
+  color: var(--color-text-secondary);
+  font-size: 15px;
 }
 
 .accounts-group {

@@ -1,60 +1,67 @@
 <template>
-  <div class="settings-group">
-    <h3><i class="fas fa-key"></i> API Keys</h3>
-    <p class="card-desc">Keys are for external integrations. The full value is shown only once.</p>
-    <form @submit.prevent="create">
-      <div class="form-group">
-        <label for="apiKeyName">Key name</label>
-        <input id="apiKeyName" v-model="name" class="form-control" maxlength="100" placeholder="Home Assistant" :disabled="creating">
+  <SectionCard icon="fas fa-key" title="API Keys" description="For external integrations such as Home Assistant. The full key is shown only once.">
+    <form class="flex flex-col gap-3" @submit.prevent="create">
+      <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
+        <label class="ui-label">Key name<input id="apiKeyName" v-model="name" class="ui-input" maxlength="100" placeholder="Home Assistant" :disabled="creating"></label>
+        <label class="ui-label">Expires (optional)<input id="apiKeyExpiry" v-model="expiresAt" type="date" class="ui-input" :min="today" :disabled="creating"></label>
       </div>
-      <div class="form-group">
-        <label for="apiKeyExpiry">Expiry (optional)</label>
-        <ApiKeyExpiryPicker id="apiKeyExpiry" v-model="expiresAt" :disabled="creating" />
-      </div>
-      <button type="submit" class="btn btn-outline btn-sm api-keys-create" :disabled="creating || !name.trim() || keys.length >= activeLimit">
-        <i :class="creating ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i> Create key
+      <button type="submit" class="ui-btn self-start" :disabled="creating || !name.trim() || keys.length >= activeLimit">
+        <i aria-hidden="true" :class="creating ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i>Create key
       </button>
+      <p v-if="keys.length >= activeLimit" role="alert" class="ui-alert-bad">You have reached the limit of {{ activeLimit }} active keys. Revoke one to create another.</p>
     </form>
-    <p v-if="keys.length >= activeLimit" class="error-banner">Active-key limit reached.</p>
-    <div v-if="!keys.length" class="list-empty">No API keys yet.</div>
-    <div v-else class="api-keys-table-wrap">
-      <table class="api-keys-table">
-        <thead><tr><th>Name</th><th>Created</th><th class="api-keys-table__action">Action</th></tr></thead>
-        <tbody>
-          <tr v-for="key in keys" :key="key.id">
-            <td><span class="api-keys-table__name"><i class="fas fa-key"></i>{{ key.name }}</span></td>
-            <td>{{ formatDate(key.created_at) }}</td>
-            <td class="api-keys-table__action"><button class="btn btn-danger btn-sm icon-btn" title="Revoke key" @click="keyToRevoke = key" :disabled="revoking === key.id"><i :class="revoking === key.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash'"></i><span class="sr-only">Revoke {{ key.name }}</span></button></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <Teleport to="body">
-      <div v-if="oneTimeKey" class="modal-overlay" @click.self="closeKey">
-        <section class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="api-key-modal-title">
-          <header class="modal-header"><div class="modal-title-wrap"><h3 id="api-key-modal-title" class="modal-title">Save this API key now</h3><p class="modal-subtitle">This value cannot be shown again.</p></div><button class="modal-close" aria-label="Close" @click="closeKey"><i class="fas fa-times"></i></button></header>
-          <div class="modal-body"><input class="form-control" :value="oneTimeKey" readonly aria-label="New API key"></div>
-          <footer class="modal-footer"><button class="btn btn-primary" @click="copy"><i class="fas fa-copy"></i> Copy key</button><button class="btn btn-outline" @click="closeKey">Done</button></footer>
-        </section>
-      </div>
-      <div v-if="keyToRevoke" class="modal-overlay" @click.self="keyToRevoke = null">
-        <section class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="revoke-api-key-modal-title">
-          <header class="modal-header"><div class="modal-title-wrap"><h3 id="revoke-api-key-modal-title" class="modal-title">Revoke API key?</h3><p class="modal-subtitle">Revoke <strong>{{ keyToRevoke.name }}</strong>? This cannot be undone.</p></div><button class="modal-close" aria-label="Close" @click="keyToRevoke = null"><i class="fas fa-times"></i></button></header>
-          <footer class="modal-footer"><button class="btn btn-danger" :disabled="revoking === keyToRevoke.id" @click="revoke"><i :class="revoking === keyToRevoke.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash'"></i> Revoke key</button><button class="btn btn-outline" :disabled="revoking === keyToRevoke.id" @click="keyToRevoke = null">Cancel</button></footer>
-        </section>
-      </div>
-    </Teleport>
-  </div>
-</template>
+    <p v-if="!keys.length" class="m-0 mt-4 text-[13px] text-ink-4">No API keys yet.</p>
+    <ul v-else class="m-0 mt-4 flex list-none flex-col gap-2 p-0">
+      <li v-for="key in keys" :key="key.id" class="flex items-center gap-3 rounded-ctl border border-edge bg-panel-2 px-3 py-2">
+        <i aria-hidden="true" class="fas fa-key text-ink-4"></i>
+        <span class="flex min-w-0 flex-1 flex-col">
+          <span class="truncate text-sm font-semibold text-ink">{{ key.name }}</span>
+          <span class="text-xs text-ink-4">Created {{ formatDate(key.created_at) }}</span>
+        </span>
+        <button type="button" class="ui-btn-icon-danger" :aria-label="`Revoke ${key.name}`" title="Revoke key" :disabled="revoking === key.id" @click="keyToRevoke = key">
+          <i aria-hidden="true" :class="revoking === key.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash'"></i>
+        </button>
+      </li>
+    </ul>
 
+    <AppDialog v-if="oneTimeKey" labelledby="api-key-modal-title" @close="closeKey">
+      <div class="flex flex-col gap-4 p-6">
+        <div>
+          <h3 id="api-key-modal-title" class="m-0 text-lg font-bold text-ink">Save this API key now</h3>
+          <p class="m-0 mt-1 text-sm text-ink-3">This value cannot be shown again.</p>
+        </div>
+        <input class="ui-input font-mono" :value="oneTimeKey" readonly aria-label="New API key" @focus="$event.target.select()">
+        <div class="flex justify-end gap-2">
+          <button type="button" class="ui-btn" @click="closeKey">Done</button>
+          <button type="button" class="ui-btn-primary" @click="copy"><i aria-hidden="true" class="fas fa-copy"></i>Copy key</button>
+        </div>
+      </div>
+    </AppDialog>
+    <AppDialog v-if="keyToRevoke" labelledby="revoke-api-key-modal-title" @close="keyToRevoke = null">
+      <div class="flex flex-col gap-4 p-6">
+        <div>
+          <h3 id="revoke-api-key-modal-title" class="m-0 text-lg font-bold text-bad">Revoke API key?</h3>
+          <p class="m-0 mt-1 text-sm text-ink-3">Integrations using <strong class="text-ink">{{ keyToRevoke.name }}</strong> stop working. This cannot be undone.</p>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="ui-btn" :disabled="revoking === keyToRevoke.id" @click="keyToRevoke = null">Cancel</button>
+          <button type="button" class="ui-btn-primary bg-bad text-[#2a0c0b]" :disabled="revoking === keyToRevoke.id" @click="revoke">
+            <i aria-hidden="true" :class="revoking === keyToRevoke.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash'"></i>Revoke key
+          </button>
+        </div>
+      </div>
+    </AppDialog>
+  </SectionCard>
+</template>
 <script>
 import { createApiKey, getApiKeys, revokeApiKey } from '@/api/api';
-import ApiKeyExpiryPicker from '@/components/common/ApiKeyExpiryPicker.vue';
+import AppDialog from '@/components/ui/AppDialog.vue';
+import SectionCard from '@/components/ui/SectionCard.vue';
 
 export default {
   name: 'ApiKeysPanel',
-  components: { ApiKeyExpiryPicker },
-  data: () => ({ keys: [], activeLimit: 10, name: '', expiresAt: '', creating: false, revoking: null, oneTimeKey: '', keyToRevoke: null }),
+  components: { AppDialog, SectionCard },
+  data: () => ({ today: new Date().toLocaleDateString('sv'), keys: [], activeLimit: 10, name: '', expiresAt: '', creating: false, revoking: null, oneTimeKey: '', keyToRevoke: null }),
   async mounted() { await this.load(); },
   methods: {
     async load() { try { const response = await getApiKeys(); this.keys = response.data.keys || []; this.activeLimit = response.data.active_limit || 10; } catch { this.$toast.error('Failed to load API keys'); } },
@@ -67,18 +74,3 @@ export default {
 };
 </script>
 
-<style scoped>
-.settings-group form { display: flex; flex-direction: column; gap: var(--spacing-sm); }
-.api-keys-table-wrap { overflow-x: auto; margin-top: var(--spacing-lg); border: 1px solid var(--color-border-light); border-radius: var(--radius-md); }
-.api-keys-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
-.api-keys-table th { padding: var(--spacing-sm) var(--spacing-md); color: var(--color-text-muted); font-weight: var(--font-weight-semibold); text-align: left; background: var(--surface-glass-subtle); }
-.api-keys-table td { padding: var(--spacing-md); color: var(--color-text-secondary); border-top: 1px solid var(--color-border-light); }
-.api-keys-table tbody tr { transition: background var(--transition-fast); }
-.api-keys-table tbody tr:hover { background: var(--surface-glass-subtle); }
-.api-keys-table__name { display: inline-flex; align-items: center; gap: var(--spacing-sm); color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
-.api-keys-table__name i { color: var(--color-text-muted); }
-.api-keys-table__action { width: 1%; text-align: right; white-space: nowrap; }
-.api-keys-create { align-self: flex-start; }
-.card-desc { margin: 0 0 var(--spacing-lg); color: var(--color-text-muted); font-size: var(--font-size-sm); line-height: var(--line-height-normal); }
-@media (max-width: 700px) { .api-keys-table th, .api-keys-table td { padding: var(--spacing-sm); } }
-</style>

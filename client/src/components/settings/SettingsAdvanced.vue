@@ -1,15 +1,9 @@
 <template>
   <div class="settings-advanced">
-    <PageHeader title="Advanced" subtitle="AI provider, request workflow, performance, maintenance, webhooks and cleanup." />
+    <PageHeader :title="sectionMeta.title" :subtitle="sectionMeta.subtitle" />
 
     <div class="settings-grid">
-      <SettingsPanel
-        panel-id="experimental-ai"
-        title="Experimental & AI"
-        description="Beta features, personalized suggestions, and AI provider configuration."
-        icon="fas fa-flask"
-        tone="warning"
-      >
+      <div v-if="section === 'ai'" class="advanced-section">
       <!-- Experimental Features -->
       <section class="advanced-subsection experimental">
         <h3>
@@ -191,7 +185,7 @@
           </div>
         </section>
       </transition>
-      </SettingsPanel>
+      </div>
 
       <!-- AI Info Modal -->
       <teleport to="body">
@@ -360,12 +354,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
         </transition>
       </teleport>
 
-      <SettingsPanel
-        panel-id="diagnostics-performance"
-        title="Diagnostics & Performance"
-        description="Logging, visual performance, monitoring, and TMDb cache controls."
-        icon="fas fa-tachometer-alt"
-      >
+      <div v-if="section === 'system'" class="advanced-section">
       <div class="advanced-subsection-grid">
       <!-- Debug Settings -->
       <section class="advanced-subsection">
@@ -409,7 +398,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             @update:model-value="localConfig.ENABLE_VISUAL_EFFECTS = !$event"
             :disabled="isLoading"
             label="Disable visual effects (blur)"
-            description="Check this box to improve UI performance and frame rates by turning off heavy CSS background blurs."
+            description="Turns off the blurred poster backgrounds on the setup and sign-in screens. Helps on slow devices."
           />
         </div>
 
@@ -418,7 +407,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             v-model="localConfig.ENABLE_STATIC_BACKGROUND"
             :disabled="isLoading"
             label="Enable static colored background"
-            description="Override the app's default rotating background pictures with a static color."
+            description="Use a solid color instead of rotating posters behind the setup wizard."
           />
         </div>
 
@@ -510,15 +499,10 @@ LLM_MODEL=gpt-4o-mini</code></pre>
         </div>
       </section>
       </div>
-      </SettingsPanel>
+      </div>
 
       <!-- Request Workflow -->
-      <SettingsPanel
-        panel-id="request-workflow"
-        title="Request Workflow"
-        description="Approvals, request visibility, job pauses, and pending-suggestion retention."
-        icon="fas fa-user-check"
-      >
+      <div v-if="section === 'workflow'" class="advanced-section">
       <div class="request-workflow-settings">
         <section class="workflow-card workflow-card--approval">
           <div class="workflow-card__header">
@@ -609,14 +593,9 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           </div>
         </section>
       </div>
-      </SettingsPanel>
+      </div>
 
-      <SettingsPanel
-        panel-id="application-maintenance"
-        title="Application & Maintenance"
-        description="Authentication, reverse-proxy routing, backups, imports, and reset controls."
-        icon="fas fa-gear"
-      >
+      <div v-if="section === 'system'" class="advanced-section">
       <div class="advanced-subsection-grid advanced-subsection-grid--application">
       <section class="advanced-subsection">
         <h3>
@@ -745,33 +724,16 @@ LLM_MODEL=gpt-4o-mini</code></pre>
         </div>
       </section>
       </div>
-      </SettingsPanel>
+      </div>
 
-      <SettingsWebhooks />
-      <SettingsCleanup embedded />
     </div>
 
 
 
-    <!-- Save Button -->
-    <div class="settings-actions">
-      <button
-        @click="saveSettings"
-        class="btn btn-primary"
-        :disabled="isLoading || !hasChanges"
-      >
-        <i class="fas fa-save"></i>
-        {{ isLoading ? 'Saving...' : 'Save Changes' }}
-      </button>
-
-      <button
-        @click="resetToDefaults"
-        class="btn btn-outline"
-        :disabled="isLoading"
-      >
-        <i class="fas fa-undo"></i>
-        Reset to Defaults
-      </button>
+    <div class="mt-5 flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-[#18162b] max-lg:bottom-24' : 'border-edge bg-panel'">
+      <span class="flex-[1_1_200px] text-sm" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
+      <button v-if="section === 'system'" type="button" class="ui-btn border-0 bg-transparent text-ink-3 hover:text-bad" :disabled="isLoading" title="Resets AI, diagnostics, cache and access settings" @click="resetToDefaults">Reset all advanced settings</button>
+      <button type="button" class="ui-btn-primary" :disabled="isLoading || !hasChanges" @click="saveSettings">{{ isLoading ? 'Saving…' : 'Save changes' }}</button>
     </div>
   </div>
 </template>
@@ -781,9 +743,6 @@ import PageHeader from '@/components/ui/PageHeader.vue';
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
-import SettingsCleanup from './SettingsCleanup.vue';
-import SettingsPanel from './SettingsPanel.vue';
-import SettingsWebhooks from './SettingsWebhooks.vue';
 import { languageOptions } from '@/utils/titleLanguage.js';
 
 export default {
@@ -791,11 +750,13 @@ export default {
   components: { PageHeader,
     BaseDropdown,
     BaseCheckbox,
-    SettingsCleanup,
-    SettingsPanel,
-    SettingsWebhooks,
   },
   props: {
+    // Which part of the former Advanced page to show: 'ai', 'workflow' or 'system'.
+    section: {
+      type: String,
+      default: 'ai',
+    },
     config: {
       type: Object,
       required: true,
@@ -806,6 +767,8 @@ export default {
     },
   },
   emits: ['save-section', 'export-config', 'import-config', 'reset-config'],
+  // The dashboard shell passes props this page does not declare.
+  inheritAttrs: false,
   data() {
     return {
       localConfig: {},
@@ -842,6 +805,13 @@ export default {
     };
   },
   computed: {
+    sectionMeta() {
+      return {
+        ai: { title: 'AI provider', subtitle: 'The language model behind AI Search and AI recommendations, plus beta features.' },
+        workflow: { title: 'Approvals', subtitle: 'Whether suggestions wait for your approval, who sees which requests, and how long pending ones stay.' },
+        system: { title: 'System', subtitle: 'Logging, cache, sign-in, reverse-proxy path and configuration backups.' },
+      }[this.section] || { title: 'Advanced', subtitle: '' };
+    },
     // Without a profile choice there is no "default of the default": English
     // is what TMDb answers with anyway.
     titleLanguageOptions() {
@@ -1200,10 +1170,34 @@ export default {
 
 .advanced-subsection {
   min-width: 0;
-  padding: var(--spacing-lg);
-  background: var(--surface-glass-subtle);
+  padding: 1.25rem;
+  background: var(--surface-raised);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+}
+
+/* Same header as the Tailwind SectionCard: 17px title, icon in a tile. */
+.advanced-subsection > h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  margin: 0 0 1rem;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.advanced-subsection > h3 > i:first-child {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--surface-hover);
+  color: var(--color-text-secondary);
+  font-size: 15px;
 }
 
 .advanced-subsection + .advanced-subsection {
@@ -1214,10 +1208,7 @@ export default {
   margin-top: 0;
 }
 
-.advanced-subsection.experimental {
-  background: var(--color-warning-alpha-10);
-  border-color: var(--color-warning);
-}
+
 
 .settings-group {
   background: rgba(255, 255, 255, 0.05);
@@ -1775,18 +1766,7 @@ export default {
 }
 
 /* AI Provider card */
-.advanced-subsection.ai-group {
-  background: var(--color-primary-alpha-10);
-  border-color: var(--color-primary);
-}
 
-.advanced-subsection.ai-group h3 {
-  color: var(--color-primary-light);
-}
-
-.advanced-subsection.ai-group h3 i {
-  color: var(--color-primary);
-}
 
 .ai-advanced-toggle {
   align-items: center;

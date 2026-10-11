@@ -31,6 +31,7 @@ const TONES = {
   good: 'bg-good text-[#05180e]',
   bad: 'bg-bad text-[#2a0c0b]',
   neutral: 'bg-canvas/80 text-ink',
+  brand: 'bg-brand text-white',
 };
 
 /**
