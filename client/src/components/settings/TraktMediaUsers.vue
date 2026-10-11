@@ -239,9 +239,9 @@ export default {
     },
     credentialsMissingMessage() {
       if (this.isSelfMode) {
-        return 'Trakt app credentials are not configured. Ask an admin to set the Trakt Client ID under Services.';
+        return 'Trakt app credentials are not configured. Ask an admin to set the Trakt Client ID in Connections.';
       }
-      return 'Trakt app credentials are not configured. Set the Trakt Client ID under Services before linking accounts.';
+      return 'Trakt app credentials are not configured. Set the Trakt Client ID in Connections before linking accounts.';
     },
     connectedTraktUsers() {
       return this.mediaUsers.filter(user => user.trakt && user.trakt.connected);

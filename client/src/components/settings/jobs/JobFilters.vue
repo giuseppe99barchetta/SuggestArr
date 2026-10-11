@@ -75,7 +75,7 @@
       </div>
       <small class="form-help">
         <i class="fas fa-star" style="color: #f5c518;"></i>
-        Filter by IMDB community rating — requires OMDb API key configured in Services
+        Filter by IMDB community rating — requires OMDb API key configured in Connections
       </small>
     </div>
 
@@ -368,7 +368,7 @@ export default {
         {
           value: 'imdb',
           label: 'IMDB Only',
-          description: 'Use IMDB ratings via OMDb API. Requires an OMDb API key in Services.'
+          description: 'Use IMDB ratings via OMDb API. Requires an OMDb API key in Connections.'
         },
         {
           value: 'both',

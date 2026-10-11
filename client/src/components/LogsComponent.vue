@@ -1,105 +1,68 @@
 <template>
-  <div class="logs-wrapper">
+  <div class="flex flex-col gap-4">
     <PageHeader v-if="!embedded" title="Logs" subtitle="What SuggestArr is doing right now. Filter by message or severity to track down a problem." />
-    <div class="filters-card">
-      <div class="filter-group">
-        <input 
-          type="text" 
-          v-model="filterText" 
-          placeholder="Filter logs by message..." 
-          class="filter-input" 
-        />
+
+    <div class="flex flex-wrap items-center gap-3">
+      <label class="relative min-w-[220px] flex-[1_1_280px]">
+        <span class="sr-only">Filter logs by message</span>
+        <i aria-hidden="true" class="fas fa-search pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-ink-4"></i>
+        <input v-model="filterText" type="search" placeholder="Filter by message…" class="ui-input pl-9" />
+      </label>
+
+      <div role="radiogroup" aria-label="Severity" class="flex rounded-ctl border border-edge-strong bg-canvas p-1">
+        <button
+          v-for="option in severityOptions"
+          :key="option.value"
+          type="button"
+          role="radio"
+          :aria-checked="selectedSeverity === option.value ? 'true' : 'false'"
+          class="h-8 cursor-pointer rounded-[7px] border-0 px-3 text-[13px] font-semibold"
+          :class="selectedSeverity === option.value ? 'bg-raised text-ink' : 'bg-transparent text-ink-3 hover:text-ink'"
+          @click="selectedSeverity = option.value"
+        >{{ option.label }}</button>
       </div>
 
-      <div class="filter-group">
-        <BaseDropdown
-          v-model="selectedSeverity"
-          :options="severityOptions"
-          placeholder="All Severities"
-          id="severity-filter"
-          class="severity-dropdown"
-        />
-      </div>
-
-      <div class="filter-stats">
-        <span class="stat-badge">
-          <font-awesome-icon icon="list" />
-          {{ filteredLogs.length }} 
-          <template v-if="filteredLogs.length < allFilteredLogs.length">
-            of {{ allFilteredLogs.length }}
-          </template>
-          rows
-        </span>
-        <button @click="toggleAutoUpdate" class="btn-toggle" :class="{ active: autoUpdate }">
-          <font-awesome-icon :icon="autoUpdate ? 'pause' : 'play'" />
-          <span>{{ autoUpdate ? 'Pause' : 'Resume' }}</span>
-        </button>
-      </div>
+      <span class="ml-auto text-[13px] text-ink-3" aria-live="polite">
+        {{ visibleLogs.length }}<template v-if="visibleLogs.length < filteredLogs.length"> of {{ filteredLogs.length }}</template> rows
+      </span>
+      <button type="button" class="ui-btn h-[42px]" :aria-pressed="autoUpdate ? 'true' : 'false'" @click="toggleAutoUpdate">
+        <span v-if="autoUpdate" class="h-2 w-2 animate-pulse rounded-full bg-good"></span>
+        <i v-else aria-hidden="true" class="fas fa-play text-xs"></i>
+        {{ autoUpdate ? 'Live' : 'Paused' }}
+      </button>
     </div>
 
-    <div class="logs-table-card">
-      <div class="table-scroll-container" @scroll="handleScroll">
-        <table class="logs-table">
-          <thead>
+    <div class="overflow-hidden rounded-card border border-edge bg-panel">
+      <div ref="scroller" class="overflow-auto" :class="embedded ? 'max-h-[60vh]' : 'max-h-[calc(100dvh-260px)] min-h-[320px]'" @scroll="handleScroll">
+        <table class="w-full border-collapse font-mono text-xs">
+          <thead class="sticky top-0 z-[1] bg-panel-2 text-left font-sans text-[11px] font-bold uppercase tracking-wider text-ink-4">
             <tr>
-              <th class="col-timestamp">
-                <font-awesome-icon icon="clock" />
-                Timestamp
-              </th>
-              <th class="col-severity">
-                <font-awesome-icon icon="exclamation-triangle" />
-                Severity
-              </th>
-              <th class="col-label">
-                <font-awesome-icon icon="tag" />
-                Label
-              </th>
-              <th class="col-message">
-                <font-awesome-icon icon="comment-alt" />
-                Message
-              </th>
-              <th class="col-actions"></th>
+              <th class="whitespace-nowrap px-4 py-2.5 font-bold">Time</th>
+              <th class="px-2 py-2.5 font-bold">Level</th>
+              <th class="px-2 py-2.5 font-bold max-sm:hidden">Source</th>
+              <th class="w-full px-2 py-2.5 font-bold">Message</th>
+              <th class="px-4 py-2.5"><span class="sr-only">Copy</span></th>
             </tr>
           </thead>
           <tbody>
-            <tr 
-              v-for="(log, index) in filteredLogs" 
-              :key="index"
-              class="log-row"
-              :class="`severity-${log.severity.toLowerCase()}`"
-            >
-              <td class="col-timestamp">
-                <span class="timestamp-text">{{ formatTimestamp(log.dateTime) }}</span>
-              </td>
-              <td class="col-severity">
-                <span :class="`severity-badge ${log.severity.toLowerCase()}`">
-                  <font-awesome-icon :icon="getSeverityIcon(log.severity)" />
-                  {{ log.severity }}
-                </span>
-              </td>
-              <td class="col-label">
-                <span class="label-text">{{ log.tag }}</span>
-              </td>
-              <td class="col-message">
-                <span class="message-text">{{ log.message }}</span>
-              </td>
-              <td class="col-actions">
-                <button @click="copyLog(log)" class="btn-copy" title="Copy log">
-                  <font-awesome-icon icon="copy" />
+            <tr v-for="(log, index) in visibleLogs" :key="index" class="group border-t border-edge align-top hover:bg-panel-2" :class="rowTone(log.severity)">
+              <td class="whitespace-nowrap py-2 pl-4 pr-2 text-ink-4 max-sm:pl-3" :title="log.dateTime">{{ log.time }}</td>
+              <td class="px-2 py-2"><span class="inline-block min-w-[62px] rounded px-1.5 py-px text-center text-[10px] font-bold" :class="levelTone(log.severity)">{{ log.severity }}</span></td>
+              <td class="max-w-[180px] truncate px-2 py-2 text-ink-3 max-sm:hidden" :title="log.tag">{{ log.tag }}</td>
+              <td class="px-2 py-2 leading-relaxed break-words whitespace-pre-wrap text-ink-2">{{ log.message }}</td>
+              <td class="py-1 pl-2 pr-3">
+                <button type="button" class="h-7 w-7 cursor-pointer rounded-[6px] border-0 bg-transparent text-ink-4 opacity-0 hover:bg-raised hover:text-ink focus-visible:opacity-100 group-hover:opacity-100" aria-label="Copy log line" title="Copy log line" @click="copyLog(log)">
+                  <i aria-hidden="true" class="fas fa-copy"></i>
                 </button>
               </td>
             </tr>
           </tbody>
         </table>
 
-        <div v-if="loadingMore" class="loading-state">
-          <div class="spinner"></div>
-          <p>Loading more logs...</p>
-        </div>
-
-        <div v-if="filteredLogs.length === 0" class="empty-state">
-          <font-awesome-icon icon="inbox" />
-          <p>No logs found</p>
+        <p v-if="loadingMore" class="m-0 py-4 text-center text-[13px] text-ink-3"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Loading more…</p>
+        <div v-if="!visibleLogs.length" class="flex flex-col items-center gap-2 py-14 text-ink-3">
+          <i aria-hidden="true" class="fas fa-inbox text-2xl text-ink-4"></i>
+          <p class="m-0 text-sm">{{ logs.length ? 'No logs match these filters.' : 'No logs yet.' }}</p>
         </div>
       </div>
     </div>
@@ -108,316 +71,128 @@
 
 <script>
 import PageHeader from '@/components/ui/PageHeader.vue';
-import '@/assets/styles/logs.css';
 import axios from 'axios';
-import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
-import { 
-  faPlay, faPause, faFileAlt, faSearch, faFilter, 
-  faList, faClock, faExclamationTriangle, faTag, 
-  faCommentAlt, faCopy, faInbox, faCheckCircle,
-  faInfoCircle, faExclamationCircle, faBug
-} from '@fortawesome/free-solid-svg-icons';
-import { library } from '@fortawesome/fontawesome-svg-core';
-import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import { parseLogs } from '@/utils/logs.js';
+
+const BATCH_SIZE = 100;
+
+const LEVEL_TONES = {
+  DEBUG: 'bg-raised text-ink-3',
+  INFO: 'bg-notice/15 text-notice',
+  WARNING: 'bg-caution/15 text-caution',
+  ERROR: 'bg-bad/15 text-bad',
+  CRITICAL: 'bg-bad/15 text-bad',
+};
 
 export default {
+  name: 'LogsComponent',
+  components: { PageHeader },
+  // The dashboard shell passes props this page does not declare.
+  inheritAttrs: false,
   props: {
     // True inside the setup wizard's log dialog, which has its own title.
     embedded: { type: Boolean, default: false },
   },
-  components: { PageHeader,
-    FontAwesomeIcon,
-    BaseDropdown
-  },
   data() {
     return {
       logs: [],
-      displayedLogs: [],
-      filteredDisplayedLogs: [],
       filterText: '',
       selectedSeverity: '',
       autoUpdate: true,
       updateInterval: null,
-      batchSize: 100,
-      filteredDisplayLimit: 100,
-      logOffset: 0,
+      displayLimit: BATCH_SIZE,
       hasMoreLogs: true,
       fetchingLogs: false,
       loadingMore: false,
       severityOptions: [
-        { value: '', label: 'All Severities' },
-        { value: 'DEBUG', label: 'DEBUG' },
-        { value: 'INFO', label: 'INFO' },
-        { value: 'WARNING', label: 'WARNING' },
-        { value: 'ERROR', label: 'ERROR' }
-      ]
+        { value: '', label: 'All' },
+        { value: 'DEBUG', label: 'Debug' },
+        { value: 'INFO', label: 'Info' },
+        { value: 'WARNING', label: 'Warning' },
+        { value: 'ERROR', label: 'Error' },
+      ],
     };
   },
   computed: {
     filteredLogs() {
-      const severity = (this.selectedSeverity === 'All Severities' || !this.selectedSeverity) ? '' : this.selectedSeverity;
-      const hasFilter = this.filterText.trim() !== '' || severity !== '';
-
-      if (!hasFilter) {
-        return this.displayedLogs;
-      }
-
-      return this.filteredDisplayedLogs;
+      const text = this.filterText.trim().toLowerCase();
+      if (!text && !this.selectedSeverity) return this.logs;
+      return this.logs.filter(log =>
+        (!text || log.message.toLowerCase().includes(text)) &&
+        (!this.selectedSeverity || log.severity === this.selectedSeverity));
     },
-    allFilteredLogs() {
-      const severity = (this.selectedSeverity === 'All Severities' || !this.selectedSeverity) ? '' : this.selectedSeverity;
-      const hasFilter = this.filterText.trim() !== '' || severity !== '';
-
-      if (!hasFilter) {
-        return this.logs;
-      }
-
-      return this.logs.filter(log => {
-        const matchesText = !this.filterText || 
-          (log.message && log.message.toLowerCase().includes(this.filterText.toLowerCase()));
-        const matchesSeverity = !severity || log.severity === severity;
-        return matchesText && matchesSeverity;
-      });
-    }
+    visibleLogs() {
+      return this.filteredLogs.slice(0, this.displayLimit);
+    },
   },
   watch: {
-    selectedSeverity(newVal, oldVal) {
-
-      if (newVal === 'All Severities') {
-        this.selectedSeverity = '';
-        return;
-      }
-
-      this.filteredDisplayLimit = this.batchSize;
-      this.applyFilters();
-
-      if (oldVal && (!newVal || newVal === '') && !this.filterText) {
-        this.displayedLogs = this.logs;
-      }
-    },
-    filterText(newVal, oldVal) {
-      this.filteredDisplayLimit = this.batchSize;
-      this.applyFilters();
-      if (oldVal && !newVal && (!this.selectedSeverity || this.selectedSeverity === '')) {
-        this.displayedLogs = this.logs;
-      }
-    }
+    filterText() { this.displayLimit = BATCH_SIZE; },
+    selectedSeverity() { this.displayLimit = BATCH_SIZE; },
   },
   mounted() {
     this.startAutoUpdate();
-    const container = this.$el.querySelector('.table-scroll-container');
-    if (container) {
-      container.addEventListener('scroll', this.handleScroll);
-    }
   },
   beforeUnmount() {
     this.stopAutoUpdate();
-    const container = this.$el.querySelector('.table-scroll-container');
-    if (container) {
-      container.removeEventListener('scroll', this.handleScroll);
-    }
   },
   methods: {
-    applyFilters() {
-      const severity = (this.selectedSeverity === 'All Severities' || !this.selectedSeverity) ? '' : this.selectedSeverity;
-      const hasFilter = this.filterText.trim() !== '' || severity !== '';
-      
-      if (hasFilter) {
-        const filtered = this.logs.filter(log => {
-          const matchesText = !this.filterText || 
-            (log.message && log.message.toLowerCase().includes(this.filterText.toLowerCase()));
-          const matchesSeverity = !severity || log.severity === severity;
-          return matchesText && matchesSeverity;
-        });
-
-        this.filteredDisplayedLogs = filtered.slice(0, this.filteredDisplayLimit);
-      }
-    },
-    fetchLogs() {
-      this.fetchLogPage(true);
-    },
-    fetchLogPage(reset = false) {
-      if (this.fetchingLogs || (!reset && !this.hasMoreLogs)) {
-        return Promise.resolve();
-      }
-
+    /**
+     * Fetches newest-first logs. A refresh reloads everything already paged in,
+     * so the live update does not throw away what the user scrolled to.
+     */
+    async fetchLogs({ more = false } = {}) {
+      if (this.fetchingLogs || (more && !this.hasMoreLogs)) return;
       this.fetchingLogs = true;
-      const offset = reset ? 0 : this.logOffset;
-
-      return axios.get('/api/logs', {
-        params: {
-          limit: this.batchSize,
-          offset
-        }
-      })
-        .then(response => {
-          const parsedLogs = this.parseLogs(response.data).reverse();
-          this.hasMoreLogs = parsedLogs.length === this.batchSize;
-
-          if (reset) {
-            this.logs = parsedLogs;
-            this.logOffset = parsedLogs.length;
-          } else {
-            this.logs = [...this.logs, ...parsedLogs];
-            this.logOffset += parsedLogs.length;
-          }
-
-          if (!this.filterText && !this.selectedSeverity) {
-            this.displayedLogs = this.logs;
-          } else {
-            this.applyFilters();
-          }
-        })
-        .catch(error => {
-          console.error('Error fetching logs:', error);
-        })
-        .finally(() => {
-          this.fetchingLogs = false;
-        });
-    },
-    loadMoreLogs() {
-      if (this.loadingMore || !this.hasMoreLogs) return;
-
-      this.loadingMore = true;
-
-      this.fetchLogPage(false)
-        .finally(() => {
-          this.loadingMore = false;
-        });
-    },
-    hasMoreVisibleLogs() {
-      const severity = (this.selectedSeverity === 'All Severities' || !this.selectedSeverity) ? '' : this.selectedSeverity;
-      const hasFilter = this.filterText.trim() !== '' || severity !== '';
-
-      if (!hasFilter) {
-        return this.hasMoreLogs;
+      const limit = more ? BATCH_SIZE : Math.max(BATCH_SIZE, this.logs.length);
+      const offset = more ? this.logs.length : 0;
+      try {
+        const response = await axios.get('/api/logs', { params: { limit, offset } });
+        const page = parseLogs(response.data).reverse();
+        this.hasMoreLogs = response.data.length === limit;
+        this.logs = more ? [...this.logs, ...page] : page;
+      } catch (error) {
+        console.error('Error fetching logs:', error);
+      } finally {
+        this.fetchingLogs = false;
       }
-
-      return this.hasMoreLogs || this.filteredDisplayedLogs.length < this.allFilteredLogs.length;
     },
-    loadMoreFilteredLogs() {
-      if (this.filteredDisplayedLogs.length < this.allFilteredLogs.length) {
-        this.filteredDisplayLimit += this.batchSize;
-        this.applyFilters();
+    async handleScroll() {
+      const el = this.$refs.scroller;
+      if (!el || el.scrollTop + el.clientHeight < el.scrollHeight * 0.9 || this.loadingMore) return;
+      if (this.displayLimit < this.filteredLogs.length) {
+        this.displayLimit += BATCH_SIZE;
         return;
       }
-
-      this.loadMoreLogs();
+      if (!this.hasMoreLogs) return;
+      this.loadingMore = true;
+      await this.fetchLogs({ more: true });
+      this.displayLimit += BATCH_SIZE;
+      this.loadingMore = false;
     },
-    loadMoreVisibleLogs() {
-      const severity = (this.selectedSeverity === 'All Severities' || !this.selectedSeverity) ? '' : this.selectedSeverity;
-      const hasFilter = this.filterText.trim() !== '' || severity !== '';
-
-      if (hasFilter) {
-        this.loadMoreFilteredLogs();
-      } else {
-        this.loadMoreLogs();
-      }
+    levelTone(severity) {
+      return LEVEL_TONES[severity] || LEVEL_TONES.DEBUG;
     },
-    shouldLoadMoreLogs() {
-      if (!this.hasMoreVisibleLogs()) {
-        return false;
-      }
-
-      const severity = (this.selectedSeverity === 'All Severities' || !this.selectedSeverity) ? '' : this.selectedSeverity;
-      const hasFilter = this.filterText.trim() !== '' || severity !== '';
-
-      if (!hasFilter) {
-        return true;
-      }
-
-      return this.filteredDisplayedLogs.length < this.allFilteredLogs.length || this.hasMoreLogs;
+    rowTone(severity) {
+      return severity === 'ERROR' || severity === 'CRITICAL' ? 'bg-bad/[0.04]' : '';
     },
-    handleScroll() {
-      const container = this.$el.querySelector('.table-scroll-container');
-      if (!container) return;
-    
-      const scrollPosition = container.scrollTop + container.clientHeight;
-      const bottomPosition = container.scrollHeight;
-      
-      if (scrollPosition >= bottomPosition * 0.9 && this.shouldLoadMoreLogs()) {
-        this.loadMoreVisibleLogs();
-      }
-    },
-    parseLogs(logData) {
-      return logData
-        .map(logLine => {
-          const parts = logLine.split(' - ');
-          if (parts.length < 4) return null;
-          
-          const [dateTime, tag, severity, ...messageParts] = parts;
-          const message = messageParts.join(' - ');
-          
-          return { 
-            dateTime: dateTime.trim(), 
-            tag: tag.trim(), 
-            severity: severity.trim(), 
-            message: message.trim() 
-          };
-        })
-        .filter(log => log !== null && log.message && log.message.trim() !== '');
-    },
-    formatTimestamp(timestamp) {
-      if (!timestamp) return 'N/A';
-      return timestamp;
-    },
-    getSeverityIcon(severity) {
-      const icons = {
-        'DEBUG': 'bug',
-        'INFO': 'info-circle',
-        'WARNING': 'exclamation-triangle',
-        'ERROR': 'exclamation-circle'
-      };
-      return icons[severity] || 'info-circle';
-    },
-    copyLog(log) {
-      const logText = `${log.dateTime} - ${log.tag} - ${log.severity} - ${log.message}`;
-      const showSuccess = () => {
-        this.$toast.open({
-          message: 'Log copied to clipboard!',
-          type: 'success',
-          duration: 5000,
-          position: 'top-right'
-        });
-      };
-      const showError = (err) => {
-        console.error('Error while copying log:', err);
-        this.$toast.open({
-          message: 'Failed to copy log to clipboard.',
-          type: 'error',
-          duration: 5000,
-          position: 'top-right'
-        });
-      };
-
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(logText).then(showSuccess).catch(() => {
-          this.fallbackCopyText(logText, showSuccess, showError);
-        });
-      } else {
-        this.fallbackCopyText(logText, showSuccess, showError);
-      }
-    },
-    fallbackCopyText(text, onSuccess, onError) {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
+    async copyLog(log) {
+      const text = `${log.dateTime} - ${log.tag} - ${log.severity} - ${log.message}`;
       try {
-        const success = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        if (success) {
-          onSuccess();
-        } else {
-          onError(new Error('execCommand copy returned false'));
+        await navigator.clipboard.writeText(text);
+      } catch {
+        // The clipboard API needs HTTPS or localhost; plain-HTTP LAN installs fall back to execCommand.
+        const textarea = Object.assign(document.createElement('textarea'), { value: text });
+        textarea.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        textarea.remove();
+        if (!copied) {
+          this.$toast.error('Failed to copy log to clipboard.');
+          return;
         }
-      } catch (err) {
-        document.body.removeChild(textarea);
-        onError(err);
       }
+      this.$toast.success('Log line copied.');
     },
     startAutoUpdate() {
       this.fetchLogs();
@@ -425,27 +200,14 @@ export default {
       this.autoUpdate = true;
     },
     stopAutoUpdate() {
-      if (this.updateInterval) {
-        clearInterval(this.updateInterval);
-        this.updateInterval = null;
-        this.autoUpdate = false;
-      }
+      clearInterval(this.updateInterval);
+      this.updateInterval = null;
+      this.autoUpdate = false;
     },
     toggleAutoUpdate() {
-      if (this.autoUpdate) {
-        this.stopAutoUpdate();
-      } else {
-        this.startAutoUpdate();
-      }
-    }
+      if (this.autoUpdate) this.stopAutoUpdate();
+      else this.startAutoUpdate();
+    },
   },
-  created() {
-    library.add(
-      faPlay, faPause, faFileAlt, faSearch, faFilter, 
-      faList, faClock, faExclamationTriangle, faTag, 
-      faCommentAlt, faCopy, faInbox, faCheckCircle,
-      faInfoCircle, faExclamationCircle, faBug
-    );
-  }
 };
 </script>

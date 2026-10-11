@@ -4,135 +4,17 @@
     <PageHeader v-if="!wizardMode" title="Connections" subtitle="The services SuggestArr reads from and sends requests to. Test each one after changing it, then save." />
 
     <div class="services-stack">
-      <!-- TMDB + OMDb: side by side in dashboard, single card in wizard -->
-      <div v-if="showSection('tmdb') || showSection('omdb')" :class="!wizardMode ? 'rating-apis-row' : ''">
-        <!-- TMDB -->
-        <div v-if="showSection('tmdb')" :class="wizardMode ? '' : 'service-card'">
-          <ServiceCardHeader v-if="!wizardMode" icon="fas fa-film" title="TMDB" description="Finds titles similar to what you watched, plus posters and metadata." required :status="getTmdbStatus" :status-text="getTmdbStatusText" />
-
-          <div class="form-group">
-            <label for="tmdbApiKey">API Key</label>
-            <div class="input-group">
-              <input
-                id="tmdbApiKey"
-                v-model="localConfig.TMDB_API_KEY"
-                :type="showTmdbKey ? 'text' : 'password'"
-                placeholder="Enter your TMDB API key"
-                class="form-control"
-                :disabled="isLoading"
-              />
-              <button @click="showTmdbKey = !showTmdbKey" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
-                <i :class="showTmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-              </button>
-            </div>
-            <small class="form-help">
-              Get one from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="link">TMDB Settings</a>
-            </small>
-          </div>
-
-          <button
-            @click="testTmdbConnection"
-            class="btn btn-outline btn-block"
-            :disabled="isLoading || !localConfig.TMDB_API_KEY || isTmdbTesting"
-          >
-            <i v-if="isTmdbTesting" class="fas fa-spinner fa-spin"></i>
-            <i v-else-if="wizardMode && wizardTmdbConnected" class="fas fa-check"></i>
-            <i v-else class="fas fa-plug"></i>
-            {{ isTmdbTesting ? 'Testing...' : (wizardMode && wizardTmdbConnected ? 'Connected ✓' : 'Test Connection') }}
-          </button>
-        </div>
-
-        <!-- OMDb (IMDB ratings) -->
-        <div v-if="showSection('omdb')" :class="wizardMode ? '' : 'service-card'">
-          <ServiceCardHeader v-if="!wizardMode" icon="fas fa-star" title="IMDb ratings (OMDb)" description="Lets jobs filter suggestions by IMDb rating." :status="getOmdbStatus" :status-text="getOmdbStatusText" />
-
-          <div class="form-group">
-            <label for="omdbApiKey">API Key</label>
-            <div class="input-group">
-              <input
-                id="omdbApiKey"
-                v-model="localConfig.OMDB_API_KEY"
-                :type="showOmdbKey ? 'text' : 'password'"
-                placeholder="Enter your OMDb API key (optional)"
-                class="form-control"
-                :disabled="isLoading"
-              />
-              <button @click="showOmdbKey = !showOmdbKey" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
-                <i :class="showOmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-              </button>
-            </div>
-            <small class="form-help">
-              Optional — needed only when rating source is set to IMDB or Both.
-              Free key (1,000 req/day) at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" class="link">omdbapi.com</a>
-            </small>
-          </div>
-
-          <button
-            @click="testOmdbConnection"
-            class="btn btn-outline btn-block"
-            :disabled="isLoading || !localConfig.OMDB_API_KEY || omdbTesting"
-          >
-            <i v-if="omdbTesting" class="fas fa-spinner fa-spin"></i>
-            <i v-else-if="omdbConnected" class="fas fa-check"></i>
-            <i v-else class="fas fa-plug"></i>
-            {{ omdbTesting ? 'Testing...' : (omdbConnected ? 'Connected' : 'Test Connection') }}
-          </button>
-
-          <!-- About IMDB Filtering -->
-          <div class="omdb-info-section">
-            <button class="collapsible-toggle" @click="omdbInfoExpanded = !omdbInfoExpanded">
-              <i class="fas fa-chevron-right toggle-arrow" :class="{ expanded: omdbInfoExpanded }"></i>
-              <span>What is IMDB filtering?</span>
-            </button>
-            <div class="collapsible-content" v-show="omdbInfoExpanded">
-              <div class="omdb-info-body">
-                <p class="omdb-info-lead">
-                  IMDB filtering uses the <a href="https://www.omdbapi.com/" target="_blank" class="link">OMDb API</a>
-                  to fetch IMDB community ratings for each recommendation candidate, letting you reject content
-                  that falls below your IMDB threshold.
-                </p>
-                <div class="omdb-pros-cons">
-                  <div class="pros-block">
-                    <div class="pros-cons-title pros"><i class="fas fa-check-circle"></i> Pros</div>
-                    <ul>
-                      <li>Widely trusted ratings from a large, diverse voter base</li>
-                      <li>Cross-validates quality when used alongside TMDB ("Both" mode)</li>
-                      <li>IMDB IDs are already stored by Jellyfin, Emby, and Plex</li>
-                    </ul>
-                  </div>
-                  <div class="cons-block">
-                    <div class="pros-cons-title cons"><i class="fas fa-exclamation-circle"></i> Cons</div>
-                    <ul>
-                      <li>Adds 1–2 extra API calls per recommendation (slight slowdown)</li>
-                      <li>Free tier limited to 1,000 requests/day</li>
-                      <li>Items missing an IMDB ID are skipped or passed through</li>
-                    </ul>
-                  </div>
-                </div>
-                <p class="omdb-info-footer">
-                  <i class="fas fa-cog"></i>
-                  Configure the rating source and thresholds in
-                  <strong>Content Filters → Rating & Popularity</strong>.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Media Server -->
       <div v-if="showSection('media-server')" :class="wizardMode ? '' : 'service-card'">
         <ServiceCardHeader v-if="!wizardMode" icon="fas fa-server" title="Media server" description="Where SuggestArr reads users, libraries and watch history from." required :status="getMediaServerStatus" :status-text="getMediaServerStatusText" />
 
-        <BaseDropdown
-          v-if="!wizardMode"
-          v-model="localConfig.SELECTED_SERVICE"
-          :options="serviceOptions"
-          label="Service"
-          placeholder="Select a service"
-          :disabled="isLoading"
-          id="selectedService"
-        />
+        <div v-if="!wizardMode" class="form-group">
+          <label for="selectedService">Service</label>
+          <select id="selectedService" v-model="localConfig.SELECTED_SERVICE" class="ui-input" :disabled="isLoading">
+            <option value="" disabled>Select a service</option>
+            <option v-for="option in serviceOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+        </div>
 
         <!-- Plex: OAuth flow (both wizard and dashboard) -->
         <template v-if="localConfig.SELECTED_SERVICE === 'plex'">
@@ -140,7 +22,7 @@
           <div v-if="!plexOAuthLoggedIn" class="form-group">
             <button
               @click="loginWithPlexOAuth"
-              class="btn btn-plex btn-block"
+              class="ui-btn btn-plex w-full"
               :disabled="plexOAuthLoading"
             >
               <i v-if="plexOAuthLoading" class="fas fa-spinner fa-spin"></i>
@@ -166,34 +48,34 @@
           <!-- Manual token fallback (also shown when user toggles it) -->
           <template v-if="plexOAuthManualMode">
             <div class="form-group">
-              <label for="plexTokenWizard">Plex Token</label>
+              <label for="plexTokenWizard">Plex token</label>
               <div class="input-group">
                 <input
                   id="plexTokenManual"
                   v-model="localConfig.PLEX_TOKEN"
                   :type="showPlexToken ? 'text' : 'password'"
                   placeholder="Enter your Plex token"
-                  class="form-control"
+                  class="ui-input"
                   :disabled="isLoading"
                 />
-                <button @click="showPlexToken = !showPlexToken" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
+                <button @click="showPlexToken = !showPlexToken" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
                   <i :class="showPlexToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
                 </button>
               </div>
             </div>
             <div class="form-group">
               <label for="plexApiUrlManual">API URL</label>
-              <input id="plexApiUrlManual" v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="form-control" :disabled="isLoading" />
+              <input id="plexApiUrlManual" v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="ui-input" :disabled="isLoading" />
             </div>
             <button
               @click="testAndFetchPlex"
-              class="btn btn-outline btn-block"
+              class="ui-btn mt-4"
               :disabled="!localConfig.PLEX_TOKEN || !localConfig.PLEX_API_URL || plexFetching"
             >
               <i v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
               <i v-else-if="plexConnected" class="fas fa-check"></i>
               <i v-else class="fas fa-plug"></i>
-              {{ plexFetching ? 'Connecting...' : (plexConnected ? 'Connected' : 'Test & Load') }}
+              {{ plexFetching ? 'Connecting…' : (plexConnected ? 'Connected' : 'Test & load') }}
             </button>
           </template>
 
@@ -206,7 +88,7 @@
             </div>
             <!-- Multiple servers: dropdown -->
             <div v-if="plexOAuthConnectionOptions.length > 1" class="form-group">
-              <label>Select Server Connection</label>
+              <label>Server connection</label>
               <BaseDropdown
                 v-model="plexOAuthSelectedConnIdx"
                 :options="plexOAuthConnectionOptions"
@@ -217,10 +99,10 @@
             <div class="form-group">
               <label>Or enter URL manually</label>
               <div class="input-group">
-                <input v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="form-control" />
+                <input v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="ui-input" />
                 <button
                   @click="testAndFetchPlex"
-                  class="btn btn-outline btn-sm"
+                  class="ui-btn w-[42px] shrink-0 px-0"
                   :disabled="!localConfig.PLEX_API_URL || plexFetching"
                 >
                   <i v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
@@ -236,33 +118,33 @@
         <template v-if="localConfig.SELECTED_SERVICE === 'jellyfin' || localConfig.SELECTED_SERVICE === 'emby'">
           <div class="form-group">
             <label for="jellyfinApiUrl">{{ localConfig.SELECTED_SERVICE === 'emby' ? 'Emby' : 'Jellyfin' }} URL</label>
-            <input id="jellyfinApiUrl" v-model="localConfig.JELLYFIN_API_URL" type="url" placeholder="http://localhost:8096" class="form-control" :disabled="isLoading" />
+            <input id="jellyfinApiUrl" v-model="localConfig.JELLYFIN_API_URL" type="url" placeholder="http://localhost:8096" class="ui-input" :disabled="isLoading" />
           </div>
           <div class="form-group">
-            <label for="jellyfinToken">API Token</label>
+            <label for="jellyfinToken">API token</label>
             <div class="input-group">
               <input
                 id="jellyfinToken"
                 v-model="localConfig.JELLYFIN_TOKEN"
                 :type="showJellyfinToken ? 'text' : 'password'"
                 placeholder="Enter your API token"
-                class="form-control"
+                class="ui-input"
                 :disabled="isLoading"
               />
-              <button @click="showJellyfinToken = !showJellyfinToken" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
+              <button @click="showJellyfinToken = !showJellyfinToken" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
                 <i :class="showJellyfinToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
               </button>
             </div>
           </div>
           <button
             @click="testAndFetchJellyfin"
-            class="btn btn-outline btn-block"
+            class="ui-btn mt-4"
             :disabled="isLoading || !localConfig.JELLYFIN_API_URL || !localConfig.JELLYFIN_TOKEN || jellyfinFetching"
           >
             <i v-if="jellyfinFetching" class="fas fa-spinner fa-spin"></i>
             <i v-else-if="jellyfinConnected" class="fas fa-check"></i>
             <i v-else class="fas fa-plug"></i>
-            {{ jellyfinFetching ? 'Connecting...' : (jellyfinConnected ? 'Connected' : 'Test & Load') }}
+            {{ jellyfinFetching ? 'Connecting…' : (jellyfinConnected ? 'Connected' : 'Test & load') }}
           </button>
         </template>
 
@@ -270,7 +152,7 @@
         <div v-if="mediaServerConnected" class="collapsible-section">
           <button class="collapsible-toggle" @click="mediaServerAdvancedExpanded = !mediaServerAdvancedExpanded">
             <i class="fas fa-chevron-right toggle-arrow" :class="{ expanded: mediaServerAdvancedExpanded }"></i>
-            <span>Advanced Options</span>
+            <span>Advanced options</span>
             <span class="toggle-summary" v-if="!mediaServerAdvancedExpanded">
               {{ currentSelectedLibraries.length }} libraries, {{ currentSelectedUsers.length }} users
             </span>
@@ -330,68 +212,28 @@
         </div>
       </div>
 
-      <!-- Trakt -->
-      <div v-if="showSection('trakt')" :class="wizardMode ? '' : 'service-card'">
-        <ServiceCardHeader v-if="!wizardMode" icon="fas fa-history" title="Trakt" description="Adds Trakt watch history and personal recommendations. Users link their own accounts from their profile." :status="getTraktStatus" :status-text="getTraktStatusText" />
-
-        <div class="form-group">
-          <label for="traktClientId">Client ID</label>
-          <input
-            id="traktClientId"
-            v-model="localConfig.TRAKT_CLIENT_ID"
-            type="text"
-            placeholder="Enter your Trakt Client ID"
-            class="form-control"
-            :disabled="isLoading"
-          />
-        </div>
-        <div class="form-group">
-          <label for="traktClientSecret">Client Secret (optional)</label>
-          <div class="input-group">
-            <input
-              id="traktClientSecret"
-              v-model="localConfig.TRAKT_CLIENT_SECRET"
-              :type="showTraktClientSecret ? 'text' : 'password'"
-              placeholder="Optional for legacy Trakt apps"
-              class="form-control"
-              :disabled="isLoading"
-            />
-            <button @click="showTraktClientSecret = !showTraktClientSecret" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
-              <i :class="showTraktClientSecret ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-            </button>
-          </div>
-          <small class="form-help">
-            Create an app at <a href="https://app.trakt.tv/settings/apps" target="_blank" rel="noopener noreferrer" class="link">Trakt Apps</a>. New Trakt apps use the Client ID without issuing a Client Secret.
-          </small>
-        </div>
-        <div class="oauth-success" v-if="isTraktAppConfigured">
-          <i class="fas fa-check-circle"></i>
-          Trakt app credentials configured. Users can link their own Trakt accounts from their profile.
-        </div>
-      </div>
-
       <!-- Seer  -->
       <div v-if="showSection('seer')" :class="wizardMode ? '' : 'service-card'">
         <ServiceCardHeader v-if="!wizardMode" icon="fas fa-paper-plane" title="Jellyseerr / Overseerr" description="Receives the requests. Approved titles are downloaded through Radarr and Sonarr from here." required :status="getSeerStatus" :status-text="getSeerStatusText" />
 
         <div class="form-group">
           <label for="seerApiUrl">API URL</label>
-          <input id="seerApiUrl" v-model="localConfig.SEER_API_URL" type="url" placeholder="http://localhost:5055" class="form-control" :disabled="isLoading" @input="onSeerConfigChange" />
+          <input id="seerApiUrl" v-model="localConfig.SEER_API_URL" type="url" placeholder="http://localhost:5055" class="ui-input" :disabled="isLoading" @input="onSeerConfigChange" />
         </div>
 
         <div class="form-group">
-          <label for="seerToken">API Token</label>
+          <label for="seerToken">API token</label>
           <div class="input-group">
             <input
               id="seerToken"
               v-model="localConfig.SEER_TOKEN"
               :type="showSeerToken ? 'text' : 'password'"
               placeholder="Enter your API token"
-              class="form-control"
+              class="ui-input"
               :disabled="isLoading"
               @input="onSeerConfigChange"
             />
-            <button @click="showSeerToken = !showSeerToken" type="button" class="btn btn-outline btn-sm" :disabled="isLoading">
+            <button @click="showSeerToken = !showSeerToken" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
               <i :class="showSeerToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
             </button>
           </div>
@@ -399,20 +241,20 @@
 
         <button
           @click="testSeerAndFetchUsers"
-          class="btn btn-outline btn-block"
+          class="ui-btn mt-4"
           :disabled="isLoading || !localConfig.SEER_API_URL || !localConfig.SEER_TOKEN || seerTesting"
         >
           <i v-if="seerTesting" class="fas fa-spinner fa-spin"></i>
           <i v-else-if="seerConnected" class="fas fa-check"></i>
           <i v-else class="fas fa-plug"></i>
-          {{ seerTesting ? 'Testing...' : (seerConnected ? 'Connected' : 'Test Connection') }}
+          {{ seerTesting ? 'Testing…' : (seerConnected ? 'Connected' : 'Test connection') }}
         </button>
 
         <!-- User Auth & Download Profiles (collapsible advanced section) -->
         <div v-if="seerConnected" class="collapsible-section">
           <button class="collapsible-toggle" @click="seerAdvancedExpanded = !seerAdvancedExpanded">
             <i class="fas fa-chevron-right toggle-arrow" :class="{ expanded: seerAdvancedExpanded }"></i>
-            <span>Advanced Options</span>
+            <span>Advanced options</span>
             <span class="toggle-summary" v-if="!seerAdvancedExpanded">
               {{ seerAuthenticated ? 'User authenticated' : 'Using admin account' }}
             </span>
@@ -421,17 +263,17 @@
             <!-- Request delay -->
             <div class="advanced-block">
               <div class="advanced-block-header">
-                <span class="advanced-block-title"><i class="fas fa-user-shield"></i> Request Delay</span>
+                <span class="advanced-block-title"><i class="fas fa-user-shield"></i> Request delay</span>
               </div>
               <p class="advanced-block-desc">Wait time between consecutive Seer requests. Increase if you receive notification rate-limit errors (0 = send all requests simultaneously)</p>
-              <div class="form-group" style="margin-top: 1.25rem;">
+              <div class="form-group" >
                 <input
                   id="seerRequestDelay"
                   v-model.number="localConfig.SEER_REQUEST_DELAY"
                   type="number"
                   min="0"
                   max="60"
-                  class="form-control"
+                  class="ui-input"
                   :disabled="isLoading"
                 />
               </div>
@@ -439,7 +281,7 @@
             <!-- User Authentication -->
             <div class="advanced-block">
               <div class="advanced-block-header">
-                <span class="advanced-block-title"><i class="fas fa-user-shield"></i> User Authentication</span>
+                <span class="advanced-block-title"><i class="fas fa-user-shield"></i> User authentication</span>
               </div>
               <p class="advanced-block-desc">Authenticate as a local user to make requests on their behalf.</p>
 
@@ -458,13 +300,14 @@
                     v-model="seerUserPassword"
                     type="password"
                     placeholder="Password"
-                    class="form-control flex-1"
+                    class="ui-input flex-1"
                     :disabled="isLoading"
                     autocomplete="new-password"
                   />
                   <button
                     @click="authenticateSeerUser"
-                    :class="['btn', seerAuthenticated ? 'btn-success' : 'btn-primary']"
+                    :class="seerAuthenticated ? 'ui-btn w-[42px] shrink-0 px-0 text-good' : 'ui-btn-primary w-[42px] shrink-0 px-0'"
+                    :aria-label="seerAuthenticated ? 'Authenticated' : 'Authenticate user'"
                     :disabled="isLoading || seerAuthenticating || !selectedSeerUser || !seerUserPassword"
                   >
                     <i v-if="seerAuthenticating" class="fas fa-spinner fa-spin"></i>
@@ -479,10 +322,10 @@
             <!-- Download Profiles -->
             <div class="advanced-block">
               <div class="advanced-block-header">
-                <span class="advanced-block-title"><i class="fas fa-download"></i> Download Profiles</span>
+                <span class="advanced-block-title"><i class="fas fa-download"></i> Download profiles</span>
                 <button @click="fetchArrServers" class="text-btn" :disabled="loadingServers">
                   <i :class="loadingServers ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
-                  {{ loadingServers ? 'Loading...' : 'Load Servers' }}
+                  {{ loadingServers ? 'Loading…' : 'Load servers' }}
                 </button>
               </div>
               <p class="advanced-block-desc">Configure Radarr/Sonarr servers, quality profiles, and root folders.</p>
@@ -526,28 +369,170 @@
           </div>
         </div>
       </div>
+
+      <!-- TMDB -->
+      <div v-if="showSection('tmdb')" :class="wizardMode ? '' : 'service-card'">
+        <ServiceCardHeader v-if="!wizardMode" icon="fas fa-film" title="TMDB" description="Finds titles similar to what you watched, plus posters and metadata." required :status="getTmdbStatus" :status-text="getTmdbStatusText" />
+
+        <div class="form-group">
+          <label for="tmdbApiKey">API key</label>
+          <div class="input-group">
+            <input
+              id="tmdbApiKey"
+              v-model="localConfig.TMDB_API_KEY"
+              :type="showTmdbKey ? 'text' : 'password'"
+              placeholder="Enter your TMDB API key"
+              class="ui-input"
+              :disabled="isLoading"
+            />
+            <button @click="showTmdbKey = !showTmdbKey" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+              <i :class="showTmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+            </button>
+          </div>
+          <small class="form-help">
+            Get one from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="link">TMDB Settings</a>
+          </small>
+        </div>
+
+        <button
+          @click="testTmdbConnection"
+          class="ui-btn mt-4"
+          :disabled="isLoading || !localConfig.TMDB_API_KEY || isTmdbTesting"
+        >
+          <i v-if="isTmdbTesting" class="fas fa-spinner fa-spin"></i>
+          <i v-else-if="wizardMode && wizardTmdbConnected" class="fas fa-check"></i>
+          <i v-else class="fas fa-plug"></i>
+          {{ isTmdbTesting ? 'Testing…' : (wizardMode && wizardTmdbConnected ? 'Connected ✓' : 'Test connection') }}
+        </button>
+      </div>
+
+
+      <!-- Optional services: side by side in the dashboard -->
+      <div v-if="showSection('omdb') || showSection('trakt')" :class="wizardMode ? '' : 'grid items-start gap-5 lg:grid-cols-2'">
+        <!-- OMDb (IMDB ratings) -->
+        <div v-if="showSection('omdb')" :class="wizardMode ? '' : 'service-card'">
+          <ServiceCardHeader v-if="!wizardMode" icon="fas fa-star" title="IMDb ratings (OMDb)" description="Lets jobs filter suggestions by IMDb rating." :status="getOmdbStatus" :status-text="getOmdbStatusText" />
+
+          <div class="form-group">
+            <label for="omdbApiKey">API key</label>
+            <div class="input-group">
+              <input
+                id="omdbApiKey"
+                v-model="localConfig.OMDB_API_KEY"
+                :type="showOmdbKey ? 'text' : 'password'"
+                placeholder="Enter your OMDb API key (optional)"
+                class="ui-input"
+                :disabled="isLoading"
+              />
+              <button @click="showOmdbKey = !showOmdbKey" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+                <i :class="showOmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+              </button>
+            </div>
+            <small class="form-help">
+              Optional — needed only when rating source is set to IMDB or Both.
+              Free key (1,000 req/day) at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" class="link">omdbapi.com</a>
+            </small>
+          </div>
+
+          <button
+            @click="testOmdbConnection"
+            class="ui-btn mt-4"
+            :disabled="isLoading || !localConfig.OMDB_API_KEY || omdbTesting"
+          >
+            <i v-if="omdbTesting" class="fas fa-spinner fa-spin"></i>
+            <i v-else-if="omdbConnected" class="fas fa-check"></i>
+            <i v-else class="fas fa-plug"></i>
+            {{ omdbTesting ? 'Testing…' : (omdbConnected ? 'Connected' : 'Test connection') }}
+          </button>
+
+          <!-- About IMDB Filtering -->
+          <div class="omdb-info-section">
+            <button class="collapsible-toggle" @click="omdbInfoExpanded = !omdbInfoExpanded">
+              <i class="fas fa-chevron-right toggle-arrow" :class="{ expanded: omdbInfoExpanded }"></i>
+              <span>What is IMDB filtering?</span>
+            </button>
+            <div class="collapsible-content" v-show="omdbInfoExpanded">
+              <div class="omdb-info-body">
+                <p class="omdb-info-lead">
+                  IMDB filtering uses the <a href="https://www.omdbapi.com/" target="_blank" class="link">OMDb API</a>
+                  to fetch IMDB community ratings for each recommendation candidate, letting you reject content
+                  that falls below your IMDB threshold.
+                </p>
+                <div class="omdb-pros-cons">
+                  <div class="pros-block">
+                    <div class="pros-cons-title pros"><i class="fas fa-check-circle"></i> Pros</div>
+                    <ul>
+                      <li>Widely trusted ratings from a large, diverse voter base</li>
+                      <li>Cross-validates quality when used alongside TMDB ("Both" mode)</li>
+                      <li>IMDB IDs are already stored by Jellyfin, Emby, and Plex</li>
+                    </ul>
+                  </div>
+                  <div class="cons-block">
+                    <div class="pros-cons-title cons"><i class="fas fa-exclamation-circle"></i> Cons</div>
+                    <ul>
+                      <li>Adds 1–2 extra API calls per recommendation (slight slowdown)</li>
+                      <li>Free tier limited to 1,000 requests/day</li>
+                      <li>Items missing an IMDB ID are skipped or passed through</li>
+                    </ul>
+                  </div>
+                </div>
+                <p class="omdb-info-footer">
+                  <i class="fas fa-cog"></i>
+                  Configure the rating source and thresholds in
+                  <strong>Content Filters → Rating & Popularity</strong>.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- Trakt -->
+        <div v-if="showSection('trakt')" :class="wizardMode ? '' : 'service-card'">
+          <ServiceCardHeader v-if="!wizardMode" icon="fas fa-history" title="Trakt" description="Adds Trakt watch history and personal recommendations. Users link their own accounts from their profile." :status="getTraktStatus" :status-text="getTraktStatusText" />
+
+          <div class="form-group">
+            <label for="traktClientId">Client ID</label>
+            <input
+              id="traktClientId"
+              v-model="localConfig.TRAKT_CLIENT_ID"
+              type="text"
+              placeholder="Enter your Trakt Client ID"
+              class="ui-input"
+              :disabled="isLoading"
+            />
+          </div>
+          <div class="form-group">
+            <label for="traktClientSecret">Client Secret (optional)</label>
+            <div class="input-group">
+              <input
+                id="traktClientSecret"
+                v-model="localConfig.TRAKT_CLIENT_SECRET"
+                :type="showTraktClientSecret ? 'text' : 'password'"
+                placeholder="Optional for legacy Trakt apps"
+                class="ui-input"
+                :disabled="isLoading"
+              />
+              <button @click="showTraktClientSecret = !showTraktClientSecret" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+                <i :class="showTraktClientSecret ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+              </button>
+            </div>
+            <small class="form-help">
+              Create an app at <a href="https://app.trakt.tv/settings/apps" target="_blank" rel="noopener noreferrer" class="link">Trakt Apps</a>. New Trakt apps use the Client ID without issuing a Client Secret.
+            </small>
+          </div>
+          <div class="oauth-success" v-if="isTraktAppConfigured">
+            <i class="fas fa-check-circle"></i>
+            Trakt app credentials configured. Users can link their own Trakt accounts from their profile.
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Save Button (hidden in wizard mode — wizard shell handles saving) -->
-    <div v-if="!wizardMode" class="settings-actions" :class="{ 'settings-actions--dirty': hasChanges }">
-      <span class="settings-actions-note">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
-      <button
-        @click="saveSettings"
-        class="btn btn-primary"
-        :disabled="isLoading || !hasChanges"
-      >
-        <i class="fas fa-save"></i>
-        {{ isLoading ? 'Saving...' : 'Save Changes' }}
-      </button>
-
-      <button
-        @click="resetToDefaults"
-        class="btn btn-outline"
-        :disabled="isLoading"
-      >
-        <i class="fas fa-undo"></i>
-        Reset
-      </button>
+    <div v-if="!wizardMode" class="flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-[#18162b] max-lg:bottom-24' : 'border-edge bg-panel'">
+      <span class="flex-[1_1_200px] text-sm" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
+      <button type="button" class="ui-btn border-0 bg-transparent text-ink-3 hover:text-ink" :disabled="isLoading" @click="resetToDefaults">Reset</button>
+      <button type="button" class="ui-btn-primary" :disabled="isLoading || !hasChanges" @click="saveSettings">{{ isLoading ? 'Saving…' : 'Save changes' }}</button>
     </div>
   </div>
 </template>
@@ -734,9 +719,9 @@ export default {
     getTmdbStatusText() {
       if (this.wizardMode) {
         if (this.wizardTmdbConnected) return 'Connected';
-        return this.localConfig.TMDB_API_KEY ? 'Not Tested' : 'Not Set';
+        return this.localConfig.TMDB_API_KEY ? 'Not tested' : 'Not set';
       }
-      return this.localConfig.TMDB_API_KEY ? 'Connected' : 'Not Set';
+      return this.localConfig.TMDB_API_KEY ? 'Connected' : 'Not set';
     },
     getOmdbStatus() {
       if (this.omdbConnected) return 'status-connected';
@@ -745,8 +730,8 @@ export default {
     },
     getOmdbStatusText() {
       if (this.omdbConnected) return 'Connected';
-      if (this.localConfig.OMDB_API_KEY) return 'Not Tested';
-      return 'Not Set';
+      if (this.localConfig.OMDB_API_KEY) return 'Not tested';
+      return 'Not set';
     },
     getMediaServerStatus() {
       const service = this.localConfig.SELECTED_SERVICE;
@@ -760,7 +745,7 @@ export default {
       const service = this.localConfig.SELECTED_SERVICE;
       if (!service) return 'No Service';
       if (this.mediaServerConnected) return 'Connected';
-      return 'Not Tested';
+      return 'Not tested';
     },
     getSeerStatus() {
       if (this.seerConnected) return 'status-connected';
@@ -771,8 +756,8 @@ export default {
     getSeerStatusText() {
       if (this.seerConnected) return 'Connected';
       return (this.localConfig.SEER_API_URL && this.localConfig.SEER_TOKEN)
-        ? 'Not Tested'
-        : 'Not Set';
+        ? 'Not tested'
+        : 'Not set';
     },
     getTraktStatus() {
       if (this.isTraktAppConfigured) return 'status-connected';
@@ -782,7 +767,7 @@ export default {
     getTraktStatusText() {
       if (this.isTraktAppConfigured) return 'Configured';
       if (this.localConfig.TRAKT_CLIENT_ID || this.localConfig.TRAKT_CLIENT_SECRET) return 'Incomplete';
-      return 'Not Set';
+      return 'Not set';
     },
     seerUserOptions() {
       return this.seerUsers.map(user => ({
@@ -1489,217 +1474,147 @@ export default {
 </script>
 
 <style scoped>
-.settings-services {
-  color: var(--color-text-primary);
-}
-
-/* Section Header */
-.section-header {
-  margin-bottom: 2rem;
-}
-.section-header h2 {
-  font-size: 1.8rem;
-  margin-bottom: 0.5rem;
-  color: var(--color-text-primary);
-}
-.section-header p {
-  color: var(--color-text-muted);
-  font-size: 1rem;
-}
-
-/* Vertical stack layout */
+/* Connections page: the controls use the shared .ui-* classes; these rules lay out what is left. */
 .services-stack {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-/* TMDB + OMDb side by side */
-.rating-apis-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-}
-
-/* Service card */
-.service-card {
-  background: var(--surface-raised);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  padding: 1.25rem 1.375rem;
-}
-
-/* Card header with status badge */
-.service-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  gap: 1.25rem;
   margin-bottom: 1.25rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
-.service-card h3 {
-  font-size: 1.2rem;
-  margin: 0;
-  color: var(--color-text-primary);
+
+.service-card {
+  min-width: 0;
+  padding: 1.25rem;
+  background: var(--color-panel);
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-card);
+}
+
+.form-group {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-bottom: 1rem;
+}
+.form-group:last-child { margin-bottom: 0; }
+.form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+.form-help {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-ink-4);
+}
+.input-group,
+.inline-form {
+  display: flex;
   gap: 0.5rem;
 }
+.flex-1 { flex: 1; min-width: 0; }
+.link { color: var(--color-brand-ink); text-decoration: none; }
+.link:hover { text-decoration: underline; }
 
-/* Status Badge */
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 0.55rem;
-  border-radius: var(--radius-full);
-  font-size: 0.65rem;
-  font-weight: 600;
-  border: 1.5px solid;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
+/* Collapsible "Advanced options" */
+.collapsible-section,
+.omdb-info-section {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-edge);
 }
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-full);
-}
-.status-connected { background-color: var(--color-success-alpha-10); border-color: var(--color-success); color: var(--color-success); }
-.status-connected .status-dot { background-color: var(--color-success); }
-.status-disconnected { background-color: var(--color-error-alpha-10); border-color: var(--color-error); color: var(--color-error); }
-.status-disconnected .status-dot { background-color: var(--color-error); }
-.status-warning { background-color: var(--color-warning-alpha-10); border-color: var(--color-warning); color: var(--color-warning); }
-.status-warning .status-dot { background-color: var(--color-warning); }
-
-/* Collapsible section */
-.collapsible-section {
-  margin-top: 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 1rem;
-}
-
 .collapsible-toggle {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.625rem;
   width: 100%;
-  padding: 0.75rem 1rem;
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--surface-glass-light);
-  border-radius: var(--border-radius-sm);
-  color: var(--color-text-primary);
-  font-size: 0.9rem;
-  font-weight: 500;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--color-ink-2);
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
 }
-
-.collapsible-toggle:hover {
-  background: var(--surface-glass-light);
-  border-color: var(--surface-hover);
-}
-
+.collapsible-toggle:hover { color: var(--color-ink); }
 .toggle-arrow {
-  font-size: 0.75rem;
-  transition: transform 0.2s ease;
-  color: var(--color-text-muted);
+  font-size: 10px;
+  color: var(--color-ink-4);
+  transition: transform 0.15s ease;
 }
-
-.toggle-arrow.expanded {
-  transform: rotate(90deg);
-}
-
+.toggle-arrow.expanded { transform: rotate(90deg); }
 .toggle-summary {
   margin-left: auto;
-  font-size: 0.8rem;
   font-weight: 400;
-  color: var(--color-text-muted);
+  color: var(--color-ink-4);
 }
-
 .collapsible-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   padding-top: 1rem;
 }
 
-/* Advanced blocks */
 .advanced-block {
   padding: 1rem;
-  margin-bottom: 1rem;
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--surface-glass-light);
-  border-radius: var(--border-radius-sm);
-}
-.advanced-block:last-child {
-  margin-bottom: 0;
+  background: var(--color-panel-2);
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-ctl);
 }
 .advanced-block-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
 }
 .advanced-block-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-.advanced-block-title i {
-  opacity: 0.7;
-}
-.advanced-block-desc {
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-  margin: 0 0 1rem 0;
-  line-height: 1.4;
-}
-.inline-badge {
-  display: inline-block;
-  padding: 0.1rem 0.4rem;
-  background: rgba(231, 76, 156, 0.2);
-  color: #e74c9c;
-  border-radius: var(--radius-sm);
-  font-size: 0.7rem;
+  font-size: 14px;
   font-weight: 700;
+  color: var(--color-ink);
+}
+.advanced-block-title i { color: var(--color-ink-4); }
+.advanced-block-desc {
+  margin: 0 0 0.875rem;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-ink-4);
 }
 .text-btn {
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--border-radius-sm);
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  color: var(--color-brand-ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
 }
-.text-btn:hover:not(:disabled) {
-  background: var(--color-primary-alpha-10);
-}
-.text-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.text-btn:hover:not(:disabled) { background: var(--color-raised); }
+.text-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .no-items {
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-  margin: 0;
-  padding: 0.75rem;
-  background: var(--surface-glass-subtle);
-  border-radius: var(--border-radius-sm);
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-ink-3);
+}
+.inline-badge {
+  padding: 0.05rem 0.375rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, #e74c9c 20%, transparent);
+  color: #e74c9c;
+  font-size: 11px;
+  font-weight: 700;
 }
 
-/* Chip list (libraries/users) */
+/* Library and user chips */
 .chip-list {
   display: flex;
   flex-wrap: wrap;
@@ -1708,355 +1623,144 @@ export default {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.75rem;
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--surface-interactive);
-  border-radius: var(--radius-full);
-  font-size: 0.8rem;
-  color: var(--color-text-secondary);
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-edge-strong);
+  border-radius: 999px;
+  color: var(--color-ink-3);
+  font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s ease;
 }
-.chip:hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-alpha-10);
-}
+.chip:hover { border-color: var(--color-ink-4); color: var(--color-ink); }
 .chip.active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
+  background: color-mix(in srgb, var(--color-brand-soft) 60%, transparent);
+  border-color: var(--color-brand-ink);
+  color: var(--color-ink);
 }
-.chip i {
-  font-size: 0.75rem;
-  opacity: 0.7;
-}
-.chip.active i {
-  opacity: 1;
-}
+.chip i { font-size: 11px; opacity: 0.7; }
 .chip-avatar {
-  width: 1.25rem;
-  height: 1.25rem;
-  border-radius: var(--radius-full);
-  background: var(--surface-hover);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.65rem;
-  font-weight: 600;
-}
-.chip.active .chip-avatar {
-  background: var(--surface-glass-strong);
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: var(--color-raised);
+  font-size: 10px;
+  font-weight: 700;
 }
 .chip-badge {
-  margin-left: 0.25rem;
-  padding: 0.1rem 0.35rem;
-  border-radius: var(--radius-lg);
-  font-size: 0.6rem;
+  padding: 0.05rem 0.375rem;
+  border: 0;
+  border-radius: 4px;
+  background: var(--color-raised);
+  color: var(--color-ink-3);
+  font-size: 10px;
   font-weight: 700;
-  background: var(--surface-glass-strong);
-  color: rgba(255, 255, 255, 0.8);
-  border: none;
   cursor: pointer;
-  transition: all 0.15s ease;
 }
-.chip-badge:hover {
-  background: var(--surface-glass-strong);
-}
-.chip-badge.badge-active {
-  background: #e74c9c;
-  color: white;
-}
+.chip-badge.badge-active { background: #e74c9c; color: white; }
 
-/* Inline form */
-.inline-form {
-  display: flex;
-  gap: 0.5rem;
-  align-items: flex-start;
-}
-.inline-form .form-control {
-  min-height: 42px;
-}
-.inline-form .btn {
-  min-height: 42px;
-  min-width: 42px;
-}
-.flex-1 {
-  flex: 1;
-}
-
-/* Profile cards grid */
+/* Radarr / Sonarr profile cards */
 .profiles-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 0.75rem;
 }
 .profile-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   padding: 0.75rem;
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--surface-glass-light);
-  border-radius: var(--border-radius-sm);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-ctl);
 }
-.profile-card.anime {
-  border-color: rgba(231, 76, 156, 0.3);
-  background: rgba(231, 76, 156, 0.05);
-}
+.profile-card.anime { border-color: color-mix(in srgb, #e74c9c 30%, transparent); }
 .profile-card-header {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.375rem;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
 }
-.profile-card-header i {
-  opacity: 0.7;
-}
-.profile-card.anime .profile-card-header {
-  color: #e74c9c;
-}
-.profile-card.anime .profile-card-header i {
-  opacity: 1;
-}
+.profile-card-header i { color: var(--color-ink-4); }
+.profile-card.anime .profile-card-header,
+.profile-card.anime .profile-card-header i { color: #e74c9c; }
 
-/* Form elements */
-.form-group {
-  margin-bottom: 1.5rem;
-}
-.form-group:last-child {
-  margin-bottom: 0;
-}
-.form-group label {
-  display: block;
-  margin-top: 0.5rem;
-  font-weight: 500;
-  color: #e5e7eb;
-}
-.form-control {
-  width: 100%;
-  padding: 0.75rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
-  color: var(--color-text-primary);
-  font-size: 1rem;
-  transition: var(--transition-base);
-  min-height: 44px;
-}
-.form-control:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  background: var(--color-bg-active);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-.form-control:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.form-help {
-  display: block;
-  margin-top: 0.25rem;
-  font-size: 0.875rem;
-  color: var(--color-text-muted);
-  line-height: 1.4;
-}
-.mb-3 { margin-bottom: 0.75rem; }
-
-/* Buttons */
-
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-outline { background: var(--color-bg-interactive); color: var(--color-text-primary); border: 1px solid var(--color-border-medium); }
-.btn-outline:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.5); }
-.btn-success { background: #10b981; color: white; border: 1px solid #10b981; }
-.btn-success:hover:not(:disabled) { background: #059669; }
-.btn-sm { padding: 0.375rem 0.75rem; font-size: 0.8125rem; min-height: 50px; min-width: 44px; }
-.btn-block { width: 100%; margin-top: 1rem; }
-.link { color: var(--color-primary); text-decoration: none; }
-.link:hover { text-decoration: underline; }
-
-/* Footer actions */
-.settings-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1.125rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-}
-.settings-actions--dirty {
-  position: sticky;
-  bottom: 1rem;
-  z-index: 10;
-  background: #18162b;
-  border-color: #2e2850;
-}
-.settings-actions-note {
-  flex: 1 1 200px;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-tertiary);
-}
-.settings-actions--dirty .settings-actions-note {
-  color: var(--color-primary-light);
-}
-@media (max-width: 1023px) {
-  .settings-actions--dirty { bottom: 5.5rem; }
-}
-
-/* OMDb info section */
-.omdb-info-section {
-  margin-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding-top: 0.75rem;
-}
-
+/* OMDb explainer */
 .omdb-info-body {
   padding-top: 0.75rem;
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
+  font-size: 13px;
+  color: var(--color-ink-3);
 }
-
-.omdb-info-lead {
-  margin: 0 0 1rem;
-  line-height: 1.5;
-}
-
+.omdb-info-lead { margin: 0 0 0.875rem; line-height: 1.5; }
 .omdb-pros-cons {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.875rem;
 }
-
-.pros-block, .cons-block {
-  padding: 0.75rem;
-  border-radius: var(--border-radius-sm);
-}
-
-.pros-block {
-  background: rgba(16, 185, 129, 0.06);
-  border: 1px solid rgba(16, 185, 129, 0.15);
-}
-
+.pros-block,
 .cons-block {
-  background: rgba(239, 68, 68, 0.06);
-  border: 1px solid rgba(239, 68, 68, 0.15);
+  padding: 0.75rem;
+  border-radius: var(--radius-ctl);
 }
-
+.pros-block { background: color-mix(in srgb, var(--color-good) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color-good) 25%, transparent); }
+.cons-block { background: color-mix(in srgb, var(--color-bad) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color-bad) 25%, transparent); }
 .pros-cons-title {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.375rem;
+  margin-bottom: 0.5rem;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
-
-.pros-cons-title.pros { color: #10b981; }
-.pros-cons-title.cons { color: #ef4444; }
-
-.pros-block ul, .cons-block ul {
-  margin: 0;
-  padding-left: 1rem;
+.pros-cons-title.pros { color: var(--color-good); }
+.pros-cons-title.cons { color: var(--color-bad); }
+.pros-block ul,
+.cons-block ul {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-}
-
-.pros-block ul li, .cons-block ul li {
-  line-height: 1.4;
-}
-
-.omdb-info-footer {
+  gap: 0.25rem;
   margin: 0;
-  padding: 0.6rem 0.75rem;
-  background: var(--surface-glass-subtle);
-  border-radius: var(--border-radius-sm);
-  border: 1px solid var(--surface-glass-light);
+  padding-left: 1rem;
   line-height: 1.4;
+}
+.omdb-info-footer {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
+  margin: 0;
+  line-height: 1.5;
 }
+.omdb-info-footer i { margin-top: 0.2rem; color: var(--color-brand-ink); }
 
-.omdb-info-footer i {
-  flex-shrink: 0;
-  margin-top: 0.15rem;
-  color: var(--color-primary);
-}
-
-/* Spinner */
-.fa-spinner.fa-spin { animation: spin 1s linear infinite; }
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-/* Responsive */
-@media (max-width: 768px) {
-  .rating-apis-row { grid-template-columns: 1fr; }
-  .omdb-pros-cons { grid-template-columns: 1fr; }
-  .service-card { padding: 1rem; }
-  .settings-actions { flex-direction: column; align-items: stretch; }
-  .inline-form { flex-direction: column; }
-  .profiles-grid { grid-template-columns: 1fr; }
-
-  .form-control {
-    padding: 0.875rem;
-    font-size: 16px;
-  }
-  .btn {
-    width: 100%;
-    justify-content: center;
-    padding: 0.875rem 1rem;
-    font-size: 1rem;
-  }
-  .btn-sm {
-    width: auto;
-    min-width: 44px;
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
-  }
-  .section-header h2 { font-size: 1.5rem; }
-  .service-card h3 { font-size: 1.1rem; }
-}
-
-@media (max-width: 480px) {
-  .services-stack { gap: 1rem; }
-  .service-card { padding: 0.75rem; }
-  .collapsible-content { padding-top: 0.75rem; }
-  .advanced-block { padding: 0.75rem; }
-  .form-control { padding: 0.75rem; }
-  .btn { padding: 0.75rem; }
-  .chip { padding: 0.4rem 0.6rem; font-size: 0.75rem; }
-}
-
-/* ── Plex OAuth wizard button ─────────────────────────────────────────────── */
+/* Plex sign-in */
 .btn-plex {
   background: #e5a00d;
+  border-color: #e5a00d;
   color: #1a1a1a;
   font-weight: 700;
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  justify-content: center;
 }
-.btn-plex:hover:not(:disabled) {
-  background: #cc8f0b;
-}
-.btn-plex:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-
+.btn-plex:hover:not(:disabled) { background: #cc8f0b; }
 .oauth-success {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #10b981;
+  margin-top: 0.75rem;
+  font-size: 13px;
   font-weight: 600;
-  font-size: 0.95rem;
+  color: var(--color-good);
+}
+
+@media (max-width: 640px) {
+  .omdb-pros-cons { grid-template-columns: 1fr; }
+  .inline-form { flex-direction: column; }
+  .service-card { padding: 1rem; }
 }
 </style>

@@ -3,7 +3,7 @@
     <PageHeader title="My profile" subtitle="Your account, preferences, API keys and the accounts SuggestArr learns from." />
 
     <div class="grid items-start gap-5 lg:grid-cols-2">
-      <SectionCard icon="fas fa-user-circle" title="Account Information" description="The name you sign in with and your password.">
+      <SectionCard icon="fas fa-user-circle" title="Account" description="The name you sign in with and your password.">
         <form class="flex flex-col gap-3" @submit.prevent="saveUsername">
           <label class="ui-label" for="newUsername">New username</label>
           <div class="flex gap-2">
@@ -56,7 +56,7 @@
     <SectionCard v-if="isLinkableService" icon="fas fa-link" title="Linked accounts" description="SuggestArr reads your watch history from these accounts to personalise suggestions.">
       <div class="grid items-start gap-5 md:grid-cols-2">
         <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
-          <h3 class="m-0 flex items-center gap-2 text-sm font-bold text-ink"><i aria-hidden="true" :class="providerIcon"></i>{{ providerLabel }} Account</h3>
+          <h3 class="m-0 flex items-center gap-2 text-sm font-bold text-ink"><i aria-hidden="true" :class="providerIcon"></i>{{ providerLabel }} account</h3>
 
           <div v-if="currentLink" class="flex items-center gap-3">
             <span class="flex h-9 w-9 items-center justify-center rounded-full bg-good/15 text-good"><i aria-hidden="true" class="fas fa-check"></i></span>
@@ -80,7 +80,7 @@
 
             <form v-else class="flex flex-col gap-3" @submit.prevent="linkAccount">
               <label v-if="isDirectoryBackedService" class="ui-label">
-                {{ providerLabel }} account
+                Your {{ providerLabel }} user
                 <select id="linkServerUser" v-model="selectedServerUserId" class="ui-input" :disabled="isLinking || isLoadingServerUsers">
                   <option value="" disabled>{{ isLoadingServerUsers ? `Loading ${providerLabel} users…` : 'Select your account' }}</option>
                   <option v-for="option in serverUserOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -103,7 +103,7 @@
         </div>
 
         <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
-          <h3 class="m-0 flex items-center gap-2 text-sm font-bold text-ink"><i aria-hidden="true" class="fas fa-tv"></i>Trakt Account</h3>
+          <h3 class="m-0 flex items-center gap-2 text-sm font-bold text-ink"><i aria-hidden="true" class="fas fa-tv"></i>Trakt account</h3>
           <TraktMediaUsers mode="self" :trakt-configured="isTraktAppConfigured" embedded />
         </div>
       </div>
