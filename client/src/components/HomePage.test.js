@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-const source = readFileSync(new URL('./SettingsRequests.vue', import.meta.url), 'utf8');
+const source = readFileSync(new URL('./HomePage.vue', import.meta.url), 'utf8');
 
 test('pending cards offer an already-seen action beside approve and reject', () => {
   assert.match(source, /aria-label="Already seen it"/);

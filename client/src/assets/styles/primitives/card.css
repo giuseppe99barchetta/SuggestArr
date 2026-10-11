@@ -121,35 +121,6 @@
   flex-wrap: wrap;
 }
 
-.card-footer--empty {
-  padding: 0;
-  border: none;
-}
-
-/* ────────────────────────────────────────────────────────────────────
-   CARD CONTENT SECTIONS
-   ──────────────────────────────────────────────────────────────────── */
-
-/* Media section (image, poster, etc.) */
-.card-media {
-  position: relative;
-  width: 100%;
-  overflow: hidden;
-  background: var(--surface-overlay);
-}
-
-.card-media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  transition: transform var(--transition-base);
-}
-
-.card--interactive:hover .card-media img {
-  transform: scale(1.05);
-}
-
 /* Info section for related metadata */
 .card-info {
   display: flex;
@@ -168,10 +139,6 @@
   display: flex;
   flex-direction: row;
   align-items: stretch;
-}
-
-.card--flex .card-media {
-  flex-shrink: 0;
 }
 
 .card--flex .card-body {

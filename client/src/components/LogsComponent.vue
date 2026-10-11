@@ -1,5 +1,6 @@
 <template>
   <div class="logs-wrapper">
+    <PageHeader v-if="!embedded" title="Logs" subtitle="What SuggestArr is doing right now. Filter by message or severity to track down a problem." />
     <div class="filters-card">
       <div class="filter-group">
         <input 
@@ -106,6 +107,7 @@
 </template>
 
 <script>
+import PageHeader from '@/components/ui/PageHeader.vue';
 import '@/assets/styles/logs.css';
 import axios from 'axios';
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
@@ -119,7 +121,11 @@ import { library } from '@fortawesome/fontawesome-svg-core';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 
 export default {
-  components: {
+  props: {
+    // True inside the setup wizard's log dialog, which has its own title.
+    embedded: { type: Boolean, default: false },
+  },
+  components: { PageHeader,
     FontAwesomeIcon,
     BaseDropdown
   },

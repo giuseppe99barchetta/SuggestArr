@@ -1,9 +1,6 @@
 <template>
   <div class="settings-database">
-    <div v-if="!wizardMode" class="section-header">
-      <h2>Database Configuration</h2>
-      <p>Configure your database connection settings</p>
-    </div>
+    <PageHeader v-if="!wizardMode" title="Database" subtitle="Where SuggestArr keeps its data. SQLite needs no setup; use PostgreSQL or MySQL for larger installs." />
 
     <div class="settings-grid">
       <!-- Database Type Selection -->
@@ -268,11 +265,12 @@
 </template>
 
 <script>
+import PageHeader from '@/components/ui/PageHeader.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 
 export default {
   name: 'SettingsDatabase',
-  components: {
+  components: { PageHeader,
     BaseDropdown
   },
   props: {
@@ -465,7 +463,6 @@ export default {
 <style scoped>
 .settings-database {
   color: var(--color-text-primary);
-  padding: var(--spacing-lg);
 }
 
 .section-header {

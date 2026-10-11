@@ -1,590 +1,266 @@
 <template>
-    <div class="request-container" :class="{ 'static-bg-active': config.ENABLE_STATIC_BACKGROUND }">
-      <div class="background-container">
-        <template v-if="!config.ENABLE_STATIC_BACKGROUND">
-          <div
-            class="background-layer"
-            :class="activeBg === 'bg1' ? 'bg-visible' : 'bg-hidden'"
-            :style="{ backgroundImage: 'url(' + bg1Url + ')' }"
-          ></div>
-          <div
-            class="background-layer"
-            :class="activeBg === 'bg2' ? 'bg-visible' : 'bg-hidden'"
-            :style="{ backgroundImage: 'url(' + bg2Url + ')' }"
-          ></div>
-        </template>
-        <div
-          v-if="config.ENABLE_STATIC_BACKGROUND"
-          class="background-layer static-bg"
-          :style="{ backgroundColor: config.STATIC_BACKGROUND_COLOR }"
-        ></div>
+  <div class="flex flex-col gap-6">
+    <header class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="m-0 text-3xl font-extrabold tracking-tight text-ink">Requests</h1>
+        <p class="m-0 mt-1.5 text-[15px] text-ink-3">Approve suggestions and follow what has been sent to Seer.</p>
       </div>
-      <div class="background-overlay"></div>
-      <div class="request-content">
-        <!-- Header -->
-        <div class="request-header">
-          <!-- Back Button -->
-          <div class="header-top">
-            <button type="button" class="back-button" @click="goHome">
-              <i class="fas fa-arrow-left"></i>
-              <span>Back to Home</span>
-            </button>
-            <div class="header-spacer"></div>
-          </div>
+      <button
+        v-if="viewMode === 'all-requests' && approvalEnabled"
+        type="button"
+        class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-ctl border px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        :class="workflowBulkMode ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong bg-panel-2 text-ink'"
+        :disabled="requestStatusFilter === 'sent' || workflowTotal < 1"
+        :title="bulkModeDisabledReason"
+        @click="workflowBulkMode = !workflowBulkMode"
+      >
+        <i aria-hidden="true" class="fas fa-check-double"></i>{{ workflowBulkMode ? 'Exit bulk mode' : 'Select several' }}
+      </button>
+    </header>
 
-          <div class="header-content">
-            <h1 class="page-title">Requests</h1>
-            <p class="page-subtitle">Review approvals and track requests sent to Seer</p>
-          </div>
-        </div>
-
-        <!-- View Toggle -->
-        <div class="view-toggle-section">
-          <div class="view-toggle">
-            <button
-              @click="viewMode = 'by-content'" 
-              :class="{ active: viewMode === 'by-content' }"
-              class="view-toggle-btn">
-              <i class="fas fa-film"></i>
-              <span>By Watched Content</span>
-              <span class="view-count">{{ totalSources }}</span>
-            </button>
-            <button
-              @click="viewMode = 'all-requests'"
-              :class="{ active: viewMode === 'all-requests' }"
-              class="view-toggle-btn">
-              <i class="fas fa-list"></i>
-              <span>All Requests</span>
-              <span class="view-count">{{ totalRequests }}</span>
-            </button>
-            <button
-              @click="switchToAiRequests"
-              :class="{ active: viewMode === 'ai-requests' }"
-              class="view-toggle-btn">
-              <i class="fas fa-magic"></i>
-              <span>AI Requests</span>
-              <span class="view-count">{{ aiRequestsTotal }}</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Filters & Search Bar -->
-        <div class="filters-section">
-          <!-- Container per affiancare filtri e search -->
-          <div class="filters-search-container">
-            <!-- Search Bar (affiancata ai filtri) -->
-            <div class="search-wrapper">
-              <i class="fas fa-search search-icon"></i>
-              <input 
-                v-model="searchQuery" 
-                type="text" 
-                :placeholder="viewMode === 'by-content' ? 'Search content...' : 'Search requests...'" 
-                class="search-input" />
-              <span v-if="searchQuery" @click="searchQuery = ''" class="clear-search">
-                <i class="fas fa-times"></i>
-              </span>
-            </div>
-            <button type="button" class="mobile-filters-toggle" :class="{ active: showMobileFilters }" :aria-expanded="showMobileFilters.toString()" aria-controls="request-filters" @click="showMobileFilters = !showMobileFilters"><span><i class="fas fa-sliders-h"></i> Filters</span><span v-if="activeFilterCount" class="mobile-filter-count">{{ activeFilterCount }}</span><i class="fas fa-chevron-down mobile-filter-chevron"></i></button>
-            <!-- Filter Buttons -->
-            <div id="request-filters" class="filter-bar" :class="{ 'mobile-open': showMobileFilters }">
-              <!-- Sort By -->
-              <BaseDropdown
-                v-model="sortBy"
-                :options="sortOptions"
-                placeholder="Select sort order"
-                :disabled="loading"
-                id="sortBy"
-              />
-            
-              <!-- Media Type Filter -->
-              <BaseDropdown
-                v-model="mediaTypeFilter"
-                :options="mediaTypeOptions"
-                placeholder="Select media type"
-                :disabled="loading"
-                id="mediaType"
-              />
-
-              <BaseDropdown
-                v-if="requestUserOptions.length > 1"
-                v-model="requestUserFilter"
-                :options="requestUserOptions"
-                placeholder="Requested for"
-                :disabled="loading"
-                id="requestUser"
-              />
-
-              <BaseDropdown
-                v-if="viewMode === 'all-requests' && approvalEnabled"
-                v-model="requestStatusFilter"
-                :options="requestStatusOptions"
-                placeholder="Request status"
-                :disabled="loading"
-                id="requestStatus"
-              />
-              <button v-if="viewMode === 'all-requests'" type="button" class="btn btn-outline workflow-bulk-toggle" :class="{ active: workflowBulkMode }" :disabled="!approvalEnabled || requestStatusFilter === 'sent' || workflowTotal < 1" :title="bulkModeDisabledReason" @click="workflowBulkMode = !workflowBulkMode"><i class="fas fa-check-double"></i><span>{{ workflowBulkMode ? 'Exit bulk mode' : 'Bulk mode' }}</span></button>
-            
-              <!-- Clear Filters -->
-              <button 
-                v-if="sortBy !== 'date-desc' || mediaTypeFilter !== 'all' || requestUserFilter !== 'all'"
-                @click="clearFilters" 
-                class="clear-filters-btn"
-                aria-label="Reset filters"
-                title="Reset filters">
-                <i class="fas fa-undo"></i>
-              </button>
-            </div>
-          </div>
-        
-          <!-- Search Results Count -->
-          <div class="search-results-count" v-if="searchQuery || mediaTypeFilter !== 'all' || requestUserFilter !== 'all'">
-            Found {{ viewMode === 'by-content' ? filteredAndSortedSources.length : filteredAndSortedRequests.length }} result(s)
-          </div>
-        </div>
-
-        <!-- View: By Content Watched -->
-        <transition name="fade-slide" mode="out-in">
-          <div v-if="viewMode === 'by-content'" key="by-content">
-            <transition-group 
-              name="fade-slide" 
-              tag="div"
-              class="content-grid">
-              <div 
-                v-for="source in filteredAndSortedSources" 
-                :key="source.id" 
-                class="content-card">
-                
-                <!-- Card Header with Backdrop -->
-                <div class="card-header" @click="openModal(source)">
-                  <div class="backdrop-container">
-                    <img
-                      v-if="source.backdrop_path && !source.visual"
-                      :src="source.backdrop_path"
-                      :alt="source.title"
-                      class="backdrop-image" />
-                    <div
-                      v-else-if="source.visual"
-                      class="source-visual-backdrop"
-                      :class="source.visual.key"
-                      :style="{ background: source.visual.gradient }">
-                      <i :class="source.visual.icon" class="source-visual-icon"></i>
-                    </div>
-
-                    <!-- Logo overlay -->
-                    <div class="backdrop-overlay">
-                      <img
-                        v-if="source.logo_path && !source.visual"
-                        :src="source.logo_path"
-                        alt="Logo"
-                        class="content-logo" />
-                      <h3 v-else class="content-title-overlay">{{ source.title }}</h3>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Card Body -->
-                <div class="card-body">
-                  <!-- Badges -->
-                  <div class="badge-container">
-                    <span v-if="shouldShowSourceMediaBadge(source)" class="badge badge-media">
-                      <i :class="source.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
-                      {{ source.media_type.toUpperCase() }}
-                    </span>
-                    <span v-if="!source.visual" class="badge badge-rating">
-                      <i class="fas fa-star"></i>
-                      {{ formatRating(source.rating) }}
-                    </span>
-                    <span v-if="!source.visual && source.release_date" class="badge badge-date">
-                      <i class="fas fa-calendar"></i>
-                      {{ source.release_date }}
-                    </span>
-                  </div>
-
-                  <!-- Toggle Requests -->
-                  <button 
-                    @click="source.showRequests = !source.showRequests"
-                    class="toggle-requests-btn">
-                    <i :class="source.showRequests ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
-                    <span>{{ source.showRequests ? 'Hide' : 'View' }} Requested Media ({{ source.requests.length }})</span>
-                  </button>
-
-                  <!-- Requests List -->
-                  <transition name="expand">
-                    <div v-show="source.showRequests" class="requests-list">
-                      <div 
-                        v-for="request in source.requests" 
-                        :key="request.request_id"
-                        class="request-item"
-                        @click="openModal(request)">
-                        <img 
-                          v-if="request.poster_path" 
-                          :src="request.poster_path" 
-                          :alt="request.title"
-                          class="request-poster" />
-                        <div class="request-info">
-                          <h4 class="request-title">{{ request.title }}</h4>
-                          <p class="request-date">
-                            <i class="fas fa-clock"></i>
-                            Requested {{ formatDate(request.requested_at) }}
-                          </p>
-                          <p v-if="request.user_name || request.user_id" class="request-date">
-                            <i class="fas fa-user"></i>
-                            For {{ request.user_name || request.user_id }}
-                          </p>
-                        </div>
-                        <i class="fas fa-chevron-right request-arrow"></i>
-                      </div>
-                    </div>
-                  </transition>
-                </div>
-              </div>
-            </transition-group>
-          </div>
-
-          <!-- View: AI Requests -->
-          <div v-else-if="viewMode === 'ai-requests'" key="ai-requests">
-            <transition-group
-              name="fade-slide"
-              tag="div"
-              class="requests-grid">
-              <div
-                v-for="item in aiRequests"
-                :key="item.request_id"
-                class="request-card"
-                @click="openModal(item, true)">
-
-                <div class="request-card-poster">
-                  <img
-                    v-if="item.poster_path"
-                    :src="item.poster_path"
-                    :alt="item.title"
-                    class="poster-image" />
-                  <div v-else class="poster-placeholder">
-                    <i class="fas fa-magic"></i>
-                  </div>
-                </div>
-
-                <div class="request-card-body">
-                  <h3 class="request-card-title">{{ item.title }}</h3>
-
-                  <div class="badge-container">
-                    <span class="badge badge-media">
-                      <i :class="item.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
-                      {{ item.media_type.toUpperCase() }}
-                    </span>
-                    <span v-if="item.rating" class="badge badge-rating">
-                      <i class="fas fa-star"></i>
-                      {{ formatRating(item.rating) }}
-                    </span>
-                    <span class="badge badge-requested">
-                      <i class="fas fa-clock"></i>
-                      {{ formatDate(item.requested_at) }}
-                    </span>
-                  </div>
-
-                  <div v-if="item.rationale" class="source-link">
-                    <i class="fas fa-search"></i>
-                    <span>Search: <em>"{{ item.rationale }}"</em></span>
-                  </div>
-                  <div v-else class="source-link">
-                    <i class="fas fa-magic"></i>
-                    <span>From: <strong>AI Search</strong></span>
-                  </div>
-                </div>
-              </div>
-            </transition-group>
-            <div v-if="aiRequestsHasMore" ref="loadMoreTriggerAi" class="load-more-trigger">
-              <div class="spinner-small"></div>
-              <p>Loading more...</p>
-            </div>
-          </div>
-
-          <!-- View: All Requests -->
-          <div v-else key="all-requests">
-            <div v-if="approvalEnabled && requestStatusFilter === 'all' && workflowTotal > 0" class="requests-section-heading">
-              <span class="requests-section-icon"><i class="fas fa-hourglass-half"></i></span>
-              <div><h2>Requests in progress</h2><p>Suggestions waiting for approval or still being processed.</p></div>
-            </div>
-            <RequestWorkflowPanel
-              v-if="approvalEnabled && requestStatusFilter !== 'sent'"
-              :status-filter="requestStatusFilter"
-              :search-query="searchQuery"
-              :media-type="mediaTypeFilter"
-              :requested-for="requestUserFilter"
-              :show-header="false"
-              :show-empty="false"
-              :bulk-mode="workflowBulkMode"
-              @open="openWorkflowModal"
-              @update:total="workflowTotal = $event"
-            />
-            <div v-if="approvalEnabled && requestStatusFilter === 'all' && workflowTotal > 0" class="requests-section-heading requests-section-heading--sent">
-              <span class="requests-section-icon"><i class="fas fa-check"></i></span>
-              <div><h2>Requested media</h2><p>Items already submitted to your media request service.</p></div>
-            </div>
-            <transition-group 
-              v-if="!approvalEnabled || requestStatusFilter === 'all' || requestStatusFilter === 'sent'"
-              name="fade-slide" 
-              tag="div"
-              class="requests-grid">
-              <div 
-                v-for="request in filteredAndSortedRequests" 
-                :key="request.request_id"
-                class="request-card"
-                @click="openModal(request)">
-                
-                <div class="request-card-poster">
-                  <img 
-                    v-if="request.poster_path" 
-                    :src="request.poster_path" 
-                    :alt="request.title"
-                    class="poster-image" />
-                  <div v-else class="poster-placeholder">
-                    <i class="fas fa-image"></i>
-                  </div>
-                </div>
-
-                <div class="request-card-body">
-                  <h3 class="request-card-title">{{ request.title }}</h3>
-                  
-                  <!-- Request Badges -->
-                  <div class="badge-container">
-                    <span class="badge badge-media">
-                      <i :class="request.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
-                      {{ request.media_type.toUpperCase() }}
-                    </span>
-                    <span class="badge badge-rating">
-                      <i class="fas fa-star"></i>
-                      {{ formatRating(request.rating) }}
-                    </span>
-                    <span class="badge badge-requested">
-                      <i class="fas fa-clock"></i>
-                      {{ formatDate(request.requested_at) }}
-                    </span>
-                  </div>
-
-                  <!-- Source Info -->
-                  <div class="source-link">
-                    <i class="fas fa-arrow-left"></i>
-                    <span>From: <strong>{{ request.source_title }}</strong></span>
-                  </div>
-                  <div v-if="request.user_name || request.user_id" class="source-link">
-                    <i class="fas fa-user"></i>
-                    <span>For: <strong>{{ request.user_name || request.user_id }}</strong></span>
-                  </div>
-                </div>
-              </div>
-            </transition-group>
-          </div>
-        </transition>
-        <div
-          v-if="hasMoreData && viewMode !== 'ai-requests' && (viewMode !== 'all-requests' || requestStatusFilter === 'all' || requestStatusFilter === 'sent')"
-          :ref="viewMode === 'by-content' ? 'loadMoreTrigger' : 'loadMoreTriggerRequests'"
-          class="load-more-trigger">
-          <div class="spinner-small"></div>
-          <p>Loading more requests...</p>
-        </div>
-        <!-- No Results -->
-        <div v-if="viewMode !== 'ai-requests' && (viewMode !== 'all-requests' || requestStatusFilter === 'all' || requestStatusFilter === 'sent') && (viewMode === 'by-content' ? filteredAndSortedSources : filteredAndSortedRequests).length === 0 && !loading" class="no-results">
-          <i class="fas fa-inbox text-6xl mb-4"></i>
-          <h3>No {{ viewMode === 'by-content' ? 'content' : 'requests' }} found</h3>
-          <p v-if="searchQuery || mediaTypeFilter !== 'all'">Try adjusting your filters</p>
-          <p v-else>Start watching content to see suggestions here</p>
-        </div>
-        <div v-if="viewMode === 'ai-requests' && aiRequests.length === 0 && !loading" class="no-results">
-          <i class="fas fa-magic text-6xl mb-4"></i>
-          <h3>No AI Search requests yet</h3>
-          <p>Use the <strong>AI Search</strong> tab to discover and request content.</p>
-        </div>
-
-        <!-- Initial Loading -->
-        <div v-if="loading && sources.length === 0" class="loading-initial">
-          <div class="spinner"></div>
-          <p>Loading your requests...</p>
-        </div>
-
-        <AppFooter />
-      </div>
-
-      <!-- Modal -->
-      <transition name="fade">
-        <div 
-          v-if="showModal" 
-          class="modal-overlay" 
-          @click.self="closeModal">
-          <div class="modal-content request-details-modal">
-            <!-- Close Button -->
-            <button @click="closeModal" class="modal-close">
-              <i class="fas fa-times"></i>
-            </button>
-
-            <div class="modal-layout">
-              <!-- Left: Poster -->
-              <div class="modal-poster-section">
-                <img
-                  v-if="selectedSource.poster_path && !getSourceVisual(selectedSource)"
-                  :src="selectedSource.poster_path"
-                  :alt="selectedSource.title"
-                  class="modal-poster" />
-                <div
-                  v-else-if="getSourceVisual(selectedSource)"
-                  class="modal-poster-placeholder source-visual-modal"
-                  :class="getSourceVisual(selectedSource).key"
-                  :style="{ background: getSourceVisual(selectedSource).gradient }">
-                  <i :class="getSourceVisual(selectedSource).icon" class="source-visual-icon"></i>
-                </div>
-                <div v-else class="modal-poster-placeholder">
-                  <i class="fas fa-image text-6xl"></i>
-                </div>
-                <section v-if="canFeedbackSelected" class="modal-feedback" aria-label="Feedback">
-                  <div class="feedback-reactions" role="group" aria-label="Choose feedback">
-                    <button
-                      v-for="option in feedbackOptions"
-                      :key="option.value"
-                      type="button"
-                      class="feedback-reaction"
-                      :class="{ active: selectedSource.feedback?.feedback === option.value }"
-                      :aria-label="option.label"
-                      :aria-pressed="(selectedSource.feedback?.feedback === option.value).toString()"
-                      :title="option.label"
-                      :disabled="isFeedbackSaving(selectedSource)"
-                      @click="toggleSelectedFeedback(option.value)">
-                      <span aria-hidden="true">{{ option.emoji }}</span>
-                    </button>
-                  </div>
-                  <div v-if="selectedSource.feedback?.feedback" class="feedback-reason-list" role="group" aria-label="Optional feedback reason">
-                    <button
-                      v-for="reason in feedbackReasons"
-                      :key="reason.value"
-                      type="button"
-                      class="feedback-reason"
-                      :class="{ active: selectedSource.feedback?.reason_type === reason.value }"
-                      :aria-pressed="(selectedSource.feedback?.reason_type === reason.value).toString()"
-                      :disabled="isFeedbackSaving(selectedSource)"
-                      @click="setSelectedFeedback(selectedSource.feedback.feedback, selectedSource.feedback.reason_type === reason.value ? null : reason.value)">
-                      {{ reason.label }}
-                    </button>
-                  </div>
-                  <div v-if="isFeedbackSaving(selectedSource)" class="modal-feedback-saving" role="status">
-                    <span class="spinner-small" aria-hidden="true"></span> Saving…
-                  </div>
-                </section>
-              </div>
-
-              <!-- Right: Details -->
-              <div class="modal-details-section">
-                <h2 class="modal-title">{{ selectedSource.title }}</h2>
-
-                <!-- Badges -->
-                <div class="badge-container mb-4">
-                  <span class="badge badge-media">
-                    <i :class="selectedSource.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
-                    {{ selectedSource.media_type?.toUpperCase() }}
-                  </span>
-                  <span class="badge badge-rating">
-                    <i class="fas fa-star"></i>
-                    {{ formatRating(selectedSource.rating) }}
-                  </span>
-                  <span class="badge badge-date">
-                    <i class="fas fa-calendar"></i>
-                    {{ selectedSource.release_date }}
-                  </span>
-                  <span v-if="selectedSource.requested_at" class="badge badge-requested">
-                    <i class="fas fa-clock"></i>
-                    Requested {{ formatDate(selectedSource.requested_at) }}
-                  </span>
-                  <span v-if="selectedSource.source_origin === 'trakt_history'" class="badge badge-date">
-                    <i class="fas fa-history"></i>
-                    Trakt History
-                  </span>
-                  <a
-                    v-if="trailerUrl"
-                    :href="trailerUrl"
-                    class="badge badge-trailer"
-                    target="_blank"
-                    rel="noopener noreferrer">
-                    <i class="fab fa-youtube"></i>
-                    Watch Trailer
-                  </a>
-                </div>
-
-                <!-- Source Link (for requests view) -->
-                <div v-if="selectedSource.source_title" class="source-link-modal">
-                  <i class="fas fa-link"></i>
-                  <span>Requested from: <strong>{{ selectedSource.source_title }}</strong></span>
-                </div>
-
-                <!-- Requested For (user) -->
-                <div v-if="selectedSource.user_name || selectedSource.user_id" class="source-link-modal">
-                  <i class="fas fa-user"></i>
-                  <span>Requested for: <strong>{{ selectedSource.user_name || selectedSource.user_id }}</strong></span>
-                </div>
-
-                <div class="modal-separator"></div>
-
-                <!-- LLM Rationale / Search Query -->
-                <div v-if="selectedSource.rationale" class="modal-section">
-                  <h3 class="modal-section-title" :style="selectedSource._isAiRequest ? 'color: var(--color-info)' : 'color: #a855f7'">
-                    <i :class="selectedSource._isAiRequest ? 'fas fa-search' : 'fas fa-robot'"></i>
-                    {{ selectedSource._isAiRequest ? 'Search Query' : 'AI Reasoning' }}
-                  </h3>
-                  <p class="modal-overview" :style="selectedSource._isAiRequest ? 'border-left: 3px solid var(--color-info); padding-left: 1rem; margin-top: 0.5rem;' : 'font-style: italic; border-left: 3px solid #a855f7; padding-left: 1rem; margin-top: 0.5rem; white-space: pre-wrap;'">
-                    {{ selectedSource.rationale }}
-                  </p>
-                </div>
-
-                <!-- Overview -->
-                <div class="modal-section">
-                  <h3 class="modal-section-title">
-                    <i class="fas fa-align-left"></i>
-                    Overview
-                  </h3>
-                  <p class="modal-overview">{{ selectedSource.overview || 'No overview available.' }}</p>
-                </div>
-
-                <!-- Related Requests -->
-                <div v-if="selectedSource.requests && selectedSource.requests.length > 0" class="modal-section">
-                  <h3 class="modal-section-title">
-                    <i class="fas fa-list"></i>
-                    Requested Media ({{ selectedSource.requests.length }})
-                  </h3>
-                  <div class="modal-requests-list">
-                    <div
-                      v-for="request in selectedSource.requests"
-                      :key="request.request_id"
-                      class="modal-request-item"
-                      @click="openModal(request)">
-                      <div class="flex-1">
-                        <h4 class="modal-request-title">{{ request.title }}</h4>
-                        <p class="modal-request-date">
-                          <i class="fas fa-clock"></i>
-                          Requested on {{ formatDate(request.requested_at) }}
-                        </p>
-                        <p v-if="request.user_name || request.user_id" class="modal-request-date">
-                          <i class="fas fa-user"></i>
-                          {{ request.user_name || request.user_id }}
-                        </p>
-                      </div>
-                      <button class="modal-request-btn">
-                        <i class="fas fa-external-link-alt"></i>
-                        Details
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </transition>
+    <div role="tablist" aria-label="Request views" class="-mb-2 flex gap-1 overflow-x-auto border-b border-edge">
+      <button
+        v-for="tab in viewTabs"
+        :key="tab.id"
+        type="button"
+        role="tab"
+        :aria-selected="tab.active ? 'true' : 'false'"
+        class="-mb-px inline-flex h-12 shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3.5 text-sm font-semibold"
+        :class="tab.active ? 'border-brand-ink text-white' : 'border-transparent text-ink-3 hover:text-ink'"
+        @click="selectTab(tab.id)"
+      >
+        {{ tab.label }}
+        <span v-if="tab.count !== null" class="rounded-full px-2 py-0.5 text-xs" :class="tab.active ? 'bg-brand text-white' : 'bg-raised text-ink-3'">{{ tab.count }}</span>
+      </button>
     </div>
+
+    <form role="search" class="flex flex-wrap items-center gap-2.5" @submit.prevent>
+      <label class="flex h-[42px] min-w-0 flex-[1_1_260px] items-center gap-2.5 rounded-ctl border border-edge-strong bg-panel px-3.5 text-ink-4 focus-within:border-brand-ink">
+        <i aria-hidden="true" class="fas fa-search text-sm"></i>
+        <span class="sr-only">Search</span>
+        <input v-model="searchQuery" type="search" :placeholder="viewMode === 'by-content' ? 'Search watched titles…' : 'Search by title…'" class="min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-4" />
+      </label>
+      <label v-for="control in filterControls" :key="control.key" class="contents">
+        <span class="sr-only">{{ control.label }}</span>
+        <select
+          :value="control.value"
+          :disabled="loading"
+          class="h-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel px-3 text-sm text-ink"
+          @change="setFilter(control.key, $event.target.value)"
+        >
+          <option v-for="option in control.options" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
+      </label>
+      <button
+        v-if="sortBy !== 'date-desc' || mediaTypeFilter !== 'all' || requestUserFilter !== 'all' || searchQuery"
+        type="button"
+        class="h-[42px] cursor-pointer rounded-ctl border-0 bg-transparent px-3 text-sm font-semibold text-ink-3 hover:text-ink"
+        @click="clearFilters"
+      >
+        Reset
+      </button>
+    </form>
+
+    <!-- By watched title -->
+    <div v-if="viewMode === 'by-content'" class="flex flex-col gap-4">
+      <section
+        v-for="source in filteredAndSortedSources"
+        :key="source.id"
+        class="flex flex-wrap gap-5 rounded-card border border-edge bg-panel p-4 sm:p-5"
+      >
+        <button type="button" class="relative aspect-[2/3] w-24 shrink-0 cursor-pointer overflow-hidden rounded-ctl border-0 p-0 sm:w-28" :style="source.visual ? { background: source.visual.gradient } : null" :aria-label="`Details for ${source.title}`" @click="openModal(source)">
+          <img v-if="source.poster_path && !source.visual" :src="source.poster_path" alt="" class="absolute inset-0 h-full w-full object-cover" />
+          <img v-else-if="source.backdrop_path && !source.visual" :src="source.backdrop_path" alt="" class="absolute inset-0 h-full w-full object-cover" />
+          <i aria-hidden="true" v-else-if="source.visual" :class="source.visual.icon" class="text-2xl text-white/90"></i>
+        </button>
+        <div class="flex min-w-0 flex-[1_1_380px] flex-col gap-3">
+          <div class="flex flex-col gap-1">
+            <span class="text-xs font-semibold uppercase tracking-wider text-ink-4">{{ source.visual ? 'Suggested by' : 'Because you watched' }}</span>
+            <h2 class="m-0 text-xl font-extrabold text-ink">{{ source.title }}</h2>
+            <span class="text-[13px] text-ink-4">
+              {{ source.requests.length }} {{ source.requests.length === 1 ? 'suggestion' : 'suggestions' }}
+              <template v-if="!source.visual && source.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(source.rating) }}</template>
+              <template v-if="!source.visual && source.release_date"> · {{ source.release_date }}</template>
+            </span>
+          </div>
+          <div class="flex gap-3 overflow-x-auto pb-1">
+            <button
+              v-for="request in source.requests"
+              :key="request.request_id"
+              type="button"
+              class="flex w-[104px] shrink-0 cursor-pointer flex-col gap-1.5 border-0 bg-transparent p-0 text-left"
+              @click="openModal(request)"
+            >
+              <span class="relative block aspect-[2/3] w-full overflow-hidden rounded-[8px] bg-raised">
+                <img v-if="request.poster_path" :src="request.poster_path" alt="" loading="lazy" class="absolute inset-0 h-full w-full object-cover" />
+              </span>
+              <span class="line-clamp-2 text-xs font-semibold leading-snug text-ink">{{ request.title }}</span>
+              <span v-if="request.user_name || request.user_id" class="text-[11px] text-ink-4">For {{ request.user_name || request.user_id }}</span>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- AI Search requests -->
+    <div v-else-if="viewMode === 'ai-requests'">
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
+        <MediaCard
+          v-for="item in aiRequests"
+          :key="item.request_id"
+          :title="item.title"
+          :poster="item.poster_path || ''"
+          :badge="item.media_type === 'movie' ? 'Movie' : 'TV'"
+          placeholder-icon="fas fa-magic"
+          @open="openModal(item, true)"
+        >
+          <span v-if="item.rationale" class="line-clamp-2 text-xs italic leading-snug text-ink-3">“{{ item.rationale }}”</span>
+          <span class="text-xs text-ink-4">{{ formatDate(item.requested_at) }}</span>
+        </MediaCard>
+      </div>
+      <div v-if="aiRequestsHasMore" ref="loadMoreTriggerAi" class="py-8 text-center text-sm text-ink-4">Loading more…</div>
+    </div>
+
+    <!-- Needs approval / All requests -->
+    <div v-else class="flex flex-col gap-4">
+      <h2 v-if="approvalEnabled && requestStatusFilter === 'all' && workflowTotal > 0" class="m-0 text-lg font-bold text-ink">In progress</h2>
+      <RequestWorkflowPanel
+        v-if="approvalEnabled && requestStatusFilter !== 'sent'"
+        :status-filter="requestStatusFilter"
+        :search-query="searchQuery"
+        :media-type="mediaTypeFilter"
+        :requested-for="requestUserFilter"
+        :show-header="false"
+        :show-empty="false"
+        :bulk-mode="workflowBulkMode"
+        @open="openWorkflowModal"
+        @update:total="onWorkflowTotal"
+      />
+      <div v-if="isApprovalTab && workflowTotal === 0" class="flex flex-col items-center gap-2 rounded-card border border-dashed border-edge-strong px-6 py-14 text-center">
+        <i aria-hidden="true" class="fas fa-check-circle text-4xl text-good"></i>
+        <h2 class="m-0 text-lg font-bold text-ink">You're all caught up</h2>
+        <p class="m-0 text-sm text-ink-3">New suggestions that need your approval will show up here.</p>
+      </div>
+      <h2 v-if="approvalEnabled && requestStatusFilter === 'all' && workflowTotal > 0" class="m-0 mt-4 text-lg font-bold text-ink">Sent to Seer</h2>
+      <div v-if="!approvalEnabled || requestStatusFilter === 'all' || requestStatusFilter === 'sent'" class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
+        <MediaCard
+          v-for="request in filteredAndSortedRequests"
+          :key="request.request_id"
+          :title="request.title"
+          :poster="request.poster_path || ''"
+          badge="Requested"
+          tone="notice"
+          @open="openModal(request)"
+        >
+          <span class="text-xs font-semibold text-ink-2">{{ request.media_type === 'movie' ? 'Movie' : 'TV' }}<template v-if="request.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(request.rating) }}</template></span>
+          <span class="line-clamp-2 text-xs leading-snug text-ink-3">From {{ request.source_title }}</span>
+          <span class="text-xs text-ink-4"><template v-if="request.user_name || request.user_id">For {{ request.user_name || request.user_id }} · </template>{{ formatDate(request.requested_at) }}</span>
+        </MediaCard>
+      </div>
+    </div>
+
+    <div
+      v-if="hasMoreData && viewMode !== 'ai-requests' && (viewMode !== 'all-requests' || requestStatusFilter === 'all' || requestStatusFilter === 'sent')"
+      :ref="viewMode === 'by-content' ? 'loadMoreTrigger' : 'loadMoreTriggerRequests'"
+      class="py-8 text-center text-sm text-ink-4"
+    >
+      Loading more requests…
+    </div>
+
+    <div
+      v-if="viewMode !== 'ai-requests' && (viewMode !== 'all-requests' || requestStatusFilter === 'all' || requestStatusFilter === 'sent') && (viewMode === 'by-content' ? filteredAndSortedSources : filteredAndSortedRequests).length === 0 && !loading"
+      class="flex flex-col items-center gap-2 rounded-card border border-dashed border-edge-strong px-6 py-14 text-center"
+    >
+      <i aria-hidden="true" class="fas fa-inbox text-4xl text-ink-4"></i>
+      <h2 class="m-0 text-lg font-bold text-ink">No {{ viewMode === 'by-content' ? 'titles' : 'requests' }} found</h2>
+      <p class="m-0 text-sm text-ink-3">{{ searchQuery || mediaTypeFilter !== 'all' ? 'Try changing the filters.' : 'Requests appear here once a job has run.' }}</p>
+    </div>
+    <div v-if="viewMode === 'ai-requests' && aiRequests.length === 0 && !loading" class="flex flex-col items-center gap-2 rounded-card border border-dashed border-edge-strong px-6 py-14 text-center">
+      <i aria-hidden="true" class="fas fa-magic text-4xl text-ink-4"></i>
+      <h2 class="m-0 text-lg font-bold text-ink">No AI Search requests yet</h2>
+      <p class="m-0 text-sm text-ink-3">Describe what you feel like watching in <router-link :to="{ name: 'DashboardTab', params: { tab: 'ai_search' } }">AI Search</router-link>.</p>
+    </div>
+
+    <div v-if="loading && sources.length === 0" class="py-14 text-center text-sm text-ink-3">
+      <i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Loading your requests…
+    </div>
+
+    <MediaDetailsModal
+      v-if="showModal"
+      :item="selectedSource"
+      :trailer-url="trailerUrl"
+      :placeholder-icon="getSourceVisual(selectedSource)?.icon || 'fas fa-image'"
+      :placeholder-background="getSourceVisual(selectedSource)?.gradient || 'var(--color-raised)'"
+      @close="closeModal"
+    >
+      <template #badges>
+        <span v-if="selectedSource.requested_at" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" class="fas fa-clock"></i> Requested {{ formatDate(selectedSource.requested_at) }}</span>
+        <span v-if="selectedSource.source_origin === 'trakt_history'" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" class="fas fa-history"></i> Trakt history</span>
+      </template>
+
+      <template v-if="canFeedbackSelected" #aside>
+        <section aria-label="Feedback" class="flex flex-col gap-2.5">
+          <div role="group" aria-label="Choose feedback" class="flex flex-wrap justify-center gap-1.5">
+            <button
+              v-for="option in feedbackOptions"
+              :key="option.value"
+              type="button"
+              class="h-10 w-10 cursor-pointer rounded-ctl border text-lg disabled:opacity-50"
+              :class="selectedSource.feedback?.feedback === option.value ? 'border-brand-ink bg-brand-soft' : 'border-edge-strong bg-panel-2 hover:border-ink-4'"
+              :aria-label="option.label"
+              :aria-pressed="(selectedSource.feedback?.feedback === option.value).toString()"
+              :title="option.label"
+              :disabled="isFeedbackSaving(selectedSource)"
+              @click="toggleSelectedFeedback(option.value)"
+            >
+              <span aria-hidden="true">{{ option.emoji }}</span>
+            </button>
+          </div>
+          <div v-if="selectedSource.feedback?.feedback" role="group" aria-label="Optional feedback reason" class="flex flex-wrap justify-center gap-1.5">
+            <button
+              v-for="reason in feedbackReasons"
+              :key="reason.value"
+              type="button"
+              class="h-8 cursor-pointer rounded-full border px-3 text-xs font-semibold disabled:opacity-50"
+              :class="selectedSource.feedback?.reason_type === reason.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong bg-transparent text-ink-3'"
+              :aria-pressed="(selectedSource.feedback?.reason_type === reason.value).toString()"
+              :disabled="isFeedbackSaving(selectedSource)"
+              @click="setSelectedFeedback(selectedSource.feedback.feedback, selectedSource.feedback.reason_type === reason.value ? null : reason.value)"
+            >
+              {{ reason.label }}
+            </button>
+          </div>
+          <p v-if="isFeedbackSaving(selectedSource)" role="status" class="m-0 text-center text-xs text-ink-4">Saving…</p>
+        </section>
+      </template>
+
+      <section v-if="selectedSource.rationale">
+        <h3 class="m-0 mb-1.5 text-xs font-bold uppercase tracking-wider text-brand-ink">{{ selectedSource._isAiRequest ? 'Search query' : 'Why it was suggested' }}</h3>
+        <p class="m-0 whitespace-pre-wrap border-l-2 border-brand-ink pl-3 leading-relaxed text-ink-2">{{ selectedSource.rationale }}</p>
+      </section>
+
+      <section v-if="selectedSource.requests && selectedSource.requests.length > 0" class="order-last">
+        <h3 class="m-0 mb-2 text-xs font-bold uppercase tracking-wider text-ink-4">Suggestions from this title ({{ selectedSource.requests.length }})</h3>
+        <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
+          <li v-for="request in selectedSource.requests" :key="request.request_id">
+            <button type="button" class="flex w-full cursor-pointer items-center gap-3 rounded-ctl border border-edge bg-panel-2 px-3 py-2.5 text-left hover:border-edge-strong" @click="openModal(request)">
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="truncate text-sm font-semibold text-ink">{{ request.title }}</span>
+                <span class="text-xs text-ink-4">{{ formatDate(request.requested_at) }}<template v-if="request.user_name || request.user_id"> · for {{ request.user_name || request.user_id }}</template></span>
+              </span>
+              <i aria-hidden="true" class="fas fa-chevron-right text-xs text-ink-4"></i>
+            </button>
+          </li>
+        </ul>
+      </section>
+    </MediaDetailsModal>
+  </div>
 </template>
 
 <script>
-import '@/assets/styles/requestsPage.css';
 import axios from "axios";
-import { useBackgroundImage } from '@/composables/useBackgroundImage';
-import AppFooter from './AppFooter.vue';
-import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import MediaCard from '@/components/ui/MediaCard.vue';
+import MediaDetailsModal from './MediaDetailsModal.vue';
 import { formatDate } from '@/utils/dateUtils.js';
 import { getRequestSourceVisual } from '@/utils/jobTypeVisuals.js';
 import { getAiSearchRequests } from '@/api/api.js';
@@ -594,27 +270,14 @@ import { loadTrailerUrl } from '@/utils/trailer.js';
 export default {
   name: "RequestsPage",
   components: {
-    AppFooter,
-    BaseDropdown,
+    MediaCard,
+    MediaDetailsModal,
     RequestWorkflowPanel,
   },
-  setup() {
-    const { bg1Url, bg2Url, activeBg, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
-    return {
-      bg1Url,
-      bg2Url,
-      activeBg,
-      isTransitioning,
-      startDefaultImageRotation,
-      startBackgroundImageRotation,
-      stopBackgroundImageRotation,
-    };
-  },
+  // The dashboard shell passes settings props to every tab; this page does not use them.
+  inheritAttrs: false,
   data() {
     return {
-      defaultImages: ["/images/default1.jpg", "/images/default2.jpg", "/images/default3.jpg"],
-      currentDefaultImageIndex: 0,
-      config: {},
       sources: [],
       viewMode: 'all-requests',
       searchQuery: "",
@@ -654,7 +317,7 @@ export default {
       requestStatusFilter: 'all',
       approvalEnabled: false,
       workflowTotal: null,
-      showMobileFilters: false,
+      pendingTotal: null,
       workflowBulkMode: false,
       feedbackSaving: {},
       feedbackOptions: [
@@ -692,8 +355,30 @@ export default {
         && (this.selectedSource.request_id || this.selectedSource._workflowSuggestionId)
       );
     },
-    activeFilterCount() {
-      return Number(this.sortBy !== 'date-desc') + Number(this.mediaTypeFilter !== 'all') + Number(this.requestUserFilter !== 'all') + Number(this.requestStatusFilter !== 'all') + Number(this.workflowBulkMode);
+    isApprovalTab() {
+      return this.viewMode === 'all-requests' && this.requestStatusFilter === 'awaiting_approval';
+    },
+    viewTabs() {
+      const tabs = [
+        { id: 'approval', label: 'Needs approval', count: this.pendingTotal, active: this.isApprovalTab },
+        { id: 'all', label: 'All requests', count: this.totalRequests, active: this.viewMode === 'all-requests' && !this.isApprovalTab },
+        { id: 'by-content', label: 'By watched title', count: this.totalSources, active: this.viewMode === 'by-content' },
+        { id: 'ai', label: 'AI Search', count: this.viewMode === 'ai-requests' || this.aiRequestsTotal ? this.aiRequestsTotal : null, active: this.viewMode === 'ai-requests' },
+      ];
+      return this.approvalEnabled ? tabs : tabs.slice(1);
+    },
+    filterControls() {
+      const controls = [
+        { key: 'sortBy', label: 'Sort', value: this.sortBy, options: this.sortOptions },
+        { key: 'mediaTypeFilter', label: 'Media type', value: this.mediaTypeFilter, options: this.mediaTypeOptions },
+      ];
+      if (this.requestUserOptions.length > 1) {
+        controls.push({ key: 'requestUserFilter', label: 'Requested for', value: this.requestUserFilter, options: this.requestUserOptions });
+      }
+      if (this.viewMode === 'all-requests' && this.approvalEnabled && !this.isApprovalTab) {
+        controls.push({ key: 'requestStatusFilter', label: 'Status', value: this.requestStatusFilter, options: this.requestStatusOptions });
+      }
+      return controls;
     },
     bulkModeDisabledReason() {
       if (!this.approvalEnabled) return 'Bulk mode requires a job with manual approval enabled';
@@ -847,6 +532,12 @@ export default {
           this.workflowTotal = 0;
           return;
         }
+        const pending = await axios.get('/api/automation/requests/workflow', { params: { status: 'awaiting_approval', page: 1, per_page: 1 } });
+        this.pendingTotal = pending.data.total || 0;
+        // Open on the approval queue when something is waiting, unless a link asked for a status.
+        if (this.pendingTotal > 0 && !this.$route.query.status && this.viewMode === 'all-requests') {
+          this.requestStatusFilter = 'awaiting_approval';
+        }
         const workflow = await axios.get('/api/automation/requests/workflow', { params: { status: this.requestStatusFilter, page: 1, per_page: 1 } });
         this.workflowTotal = workflow.data.total || 0;
       } catch (error) {
@@ -965,6 +656,28 @@ export default {
       this.retryCount = 0;
 
       this.fetchRequests(1);
+    },
+
+    selectTab(id) {
+      if (id === 'ai') {
+        this.switchToAiRequests();
+        return;
+      }
+      if (id === 'by-content') {
+        this.viewMode = 'by-content';
+        return;
+      }
+      this.viewMode = 'all-requests';
+      this.requestStatusFilter = id === 'approval' ? 'awaiting_approval' : 'all';
+    },
+
+    setFilter(key, value) {
+      this[key] = value;
+    },
+
+    onWorkflowTotal(total) {
+      this.workflowTotal = total;
+      if (this.isApprovalTab) this.pendingTotal = total;
     },
 
     switchToAiRequests() {
@@ -1163,10 +876,6 @@ export default {
       }
     },
 
-    goHome() {
-      this.$router.push({ name: "Home" });
-    },
-
     openModal(source, isAiRequest = false) {
       this.selectedSource = { ...source, _isAiRequest: isAiRequest };
       this.showModal = true;
@@ -1204,24 +913,6 @@ export default {
       this.viewMode = 'all-requests';
       this.requestStatusFilter = this.$route.query.status;
     }
-    const savedConfig = localStorage.getItem('suggestarr_config');
-    if (savedConfig) {
-      try {
-        const config = JSON.parse(savedConfig);
-        this.config = config || {};
-      } catch (e) {
-        console.error('❌ Failed to parse saved config:', e);
-      }
-    }
-
-    this.$nextTick(() => {
-      if (this.config.ENABLE_STATIC_BACKGROUND) {
-        // do not start rotation
-      } else {
-        this.startBackgroundImageRotation();
-      }
-    });
-
     setTimeout(() => {
       this.fetchRequests();
 
@@ -1232,7 +923,6 @@ export default {
   },
 
   beforeUnmount() {
-    this.stopBackgroundImageRotation();
     this.cleanupObserver();
     document.body.style.overflow = 'auto';
   },

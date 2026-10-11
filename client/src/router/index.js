@@ -4,7 +4,6 @@ import "vue-toast-notification/dist/theme-bootstrap.css";
 import { useAuth, setAuthRouter, initializeAuthReady, markAuthReady, waitForAuthReady } from "@/composables/useAuth";
 
 // Lazy load components for code splitting
-const RequestsPage = () => import("@/components/RequestsPage.vue");
 const ConfigWizard = () => import("@/components/ConfigWizard.vue");
 const DashboardPage = () => import("@/components/DashboardPage.vue");
 const LoginPage = () => import("@/components/LoginPage.vue");
@@ -219,8 +218,7 @@ export async function createAppRouter() {
     {
       path: `/requests`,
       name: "RequestsPage",
-      component: RequestsPage,
-      meta: { requiresSetup: true },
+      redirect: (to) => ({ name: "DashboardTab", params: { tab: "requests" }, query: to.query }),
     },
     {
       path: `/`,

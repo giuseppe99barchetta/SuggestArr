@@ -21,9 +21,9 @@
 
 /* Toast Success */
 .v-toast__item--success {
-  background: rgba(16, 185, 38, 0.3) !important;
-  border-color: rgba(16, 185, 38, 0.25) !important;
-  color: #e5e7eb !important;
+  background: var(--surface-raised) !important;
+  border-color: color-mix(in srgb, var(--color-success) 45%, transparent) !important;
+  color: var(--color-text-primary) !important;
 }
 
 .v-toast__item--success .v-toast__icon {
@@ -32,9 +32,9 @@
 
 /* Toast Error */
 .v-toast__item--error {
-  background: rgba(239, 68, 68, 0.3) !important;
-  border-color: rgba(245, 18, 18, 0.25) !important;
-  color: #e5e7eb !important;
+  background: var(--surface-raised) !important;
+  border-color: color-mix(in srgb, var(--color-error) 45%, transparent) !important;
+  color: var(--color-text-primary) !important;
 }
 
 .v-toast__item--error .v-toast__icon {
@@ -43,9 +43,9 @@
 
 /* Toast Warning */
 .v-toast__item--warning {
-  background: var(--color-warning-alpha-10) !important;
-  border-color: var(--color-warning-alpha-20) !important;
-  color: #e5e7eb !important;
+  background: var(--surface-raised) !important;
+  border-color: color-mix(in srgb, var(--color-warning) 45%, transparent) !important;
+  color: var(--color-text-primary) !important;
 }
 
 .v-toast__item--warning .v-toast__icon {
@@ -54,24 +54,24 @@
 
 /* Toast Info */
 .v-toast__item--info {
-  background: var(--color-primary-alpha-10) !important;
-  border-color: var(--color-primary-alpha-20) !important;
-  color: #e5e7eb !important;
+  background: var(--surface-raised) !important;
+  border-color: color-mix(in srgb, var(--color-info) 45%, transparent) !important;
+  color: var(--color-text-primary) !important;
 }
 
 .v-toast__item--info .v-toast__icon {
-  color: #3b82f6 !important;
+  color: var(--color-info) !important;
 }
 
 /* Toast Default */
 .v-toast__item--default {
-  background: rgba(255, 255, 255, 0.05) !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  color: #e5e7eb !important;
+  background: var(--surface-raised) !important;
+  border-color: color-mix(in srgb, var(--color-text-tertiary) 45%, transparent) !important;
+  color: var(--color-text-primary) !important;
 }
 
 .v-toast__item--default .v-toast__icon {
-  color: #9ca3af !important;
+  color: var(--color-text-tertiary) !important;
 }
 
 /* Icona */

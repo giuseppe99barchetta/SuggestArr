@@ -5,8 +5,7 @@ import "vue-toast-notification/dist/theme-bootstrap.css";
 import "@/assets/styles/toast-custom.css";
 import axios from "axios";
 import { createAppRouter } from "./router";
-import "@/assets/styles/theme.css";
-import "@/assets/styles/global.css";
+import "@/assets/main.css";
 
 async function initApp() {
   axios.defaults.withCredentials = true;

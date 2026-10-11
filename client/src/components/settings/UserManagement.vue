@@ -1,13 +1,7 @@
 <template>
   <div class="settings-users">
 
-    <!-- Admin's own profile -->
-    <UserProfile :config="config" :isLoading="isLoading" embedded />
-
-    <div class="admin-section-divider">
-      <h2>User Management</h2>
-      <p>Manage SuggestArr accounts, roles, and access.</p>
-    </div>
+    <PageHeader title="Users" subtitle="SuggestArr accounts, their roles and who can sign up. Your own settings are under Profile." />
 
     <div class="settings-grid">
 
@@ -447,12 +441,12 @@ import {
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
-import UserProfile from './UserProfile.vue';
+import PageHeader from '@/components/ui/PageHeader.vue';
 
 export default {
   name: 'UserManagement',
 
-  components: { BaseDropdown, BaseCheckbox, UserProfile },
+  components: { BaseDropdown, BaseCheckbox, PageHeader, },
 
   props: {
     config: Object,
