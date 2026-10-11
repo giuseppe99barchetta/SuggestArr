@@ -53,7 +53,7 @@ test("Profile has no administration controls", async ({ page }) => {
 test("Users page manages accounts without the admin's own profile", async ({ page }) => {
   await openPreview(page, "Users");
   await expect(page.getByRole("heading", { name: "Users", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Account Information", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Account", exact: true })).toHaveCount(0);
 });
 
 for (const width of [1280, 900, 390]) {
@@ -62,7 +62,7 @@ for (const width of [1280, 900, 390]) {
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
     await openPreview(page, "Profile");
-    for (const title of ["Account Information", "Title language", "API Keys", "Linked accounts", "Recommendation history"]) {
+    for (const title of ["Account", "Title language", "API keys", "Linked accounts", "Recommendation history"]) {
       await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
     }
     await page.getByLabel("New username", { exact: true }).fill("draft-name");
@@ -81,9 +81,9 @@ for (const width of [1280, 900, 390]) {
     if (width > 1000) {
       const byTitle = Object.fromEntries(cards.map(card => [card.title, card]));
       // Account on the left, preferences and keys stacked on the right, same top edge and width.
-      expect(byTitle["Account Information"].y).toBe(byTitle["Title language"].y);
-      expect(byTitle["Account Information"].width).toBe(byTitle["Title language"].width);
-      expect(byTitle["Title language"].x).toBe(byTitle["API Keys"].x);
+      expect(byTitle["Account"].y).toBe(byTitle["Title language"].y);
+      expect(byTitle["Account"].width).toBe(byTitle["Title language"].width);
+      expect(byTitle["Title language"].x).toBe(byTitle["API keys"].x);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);

@@ -13,7 +13,7 @@
 
       <div v-else-if="!traktConfigured" class="no-users">
         <i class="fas fa-link-slash"></i>
-        <span>Configure Trakt app credentials in Services first.</span>
+        <span>Configure Trakt app credentials in Connections first.</span>
       </div>
 
       <div v-else-if="connectedUsers.length === 0" class="no-users">

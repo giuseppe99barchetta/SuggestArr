@@ -157,7 +157,7 @@
               :options="seerIdentityOptions"
               label="Request as"
               placeholder="Select Seer identity"
-              help-text="Choose who Seer credits for these requests. Mapped users fall back to the technical user configured in Services."
+              help-text="Choose who Seer credits for these requests. Mapped users fall back to the technical user configured in Connections."
             />
             <div class="request-profiles-grid">
               <div v-for="type in visibleProfileTypes" :key="type" class="request-profile-card">
@@ -346,7 +346,7 @@ export default {
   computed: {
     seerIdentityOptions() {
       const options = [
-        { value: 'technical_user', label: 'Technical user configured in Services' },
+        { value: 'technical_user', label: 'Technical user configured in Connections' },
         { value: 'matching_user', label: 'Mapped Seer user (fallback to technical)' }
       ];
       if (this.currentUser?.role === 'admin') options.push({ value: 'admin_user', label: 'Mapped Seer admin' });
@@ -363,10 +363,10 @@ export default {
     },
     traktJobUnavailableReason() {
       if (!this.traktConfigured) {
-        return 'Configure Trakt app credentials in Services before creating a Trakt recommendations job.';
+        return 'Configure Trakt app credentials in Connections before creating a Trakt recommendations job.';
       }
       if (this.connectedUsers.length === 0) {
-        return 'Link at least one media user to Trakt in Services before creating a Trakt recommendations job.';
+        return 'Link at least one media user to Trakt in Connections before creating a Trakt recommendations job.';
       }
       return '';
     },

@@ -34,7 +34,7 @@
                 <p class="form-help">
                     <i class="fas fa-info-circle"></i>
                     <span v-if="ratingSource === 'tmdb'">Filter using TMDB ratings (default).</span>
-                    <span v-else-if="ratingSource === 'imdb'">Filter using IMDB ratings via OMDb (requires OMDb API key in Services).</span>
+                    <span v-else-if="ratingSource === 'imdb'">Filter using IMDB ratings via OMDb (requires OMDb API key in Connections).</span>
                     <span v-else>Content must pass both TMDB and IMDB thresholds (strictest).</span>
                 </p>
             </div>

@@ -91,7 +91,6 @@ client/src/assets/styles/
 ├── dashboardPage.css           # Dashboard-specific styles
 ├── requestsPage.css            # Requests page styles
 ├── aiSearchPage.css            # AI Search page styles
-├── logs.css                    # Logs page styles
 ├── toast-custom.css            # Toast notification overrides
 └── advancedFilterConfig.css    # Advanced filter styles
 ```

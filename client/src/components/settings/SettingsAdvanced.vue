@@ -502,97 +502,65 @@ LLM_MODEL=gpt-4o-mini</code></pre>
       </div>
 
       <!-- Request Workflow -->
-      <div v-if="section === 'workflow'" class="advanced-section">
-      <div class="request-workflow-settings">
-        <section class="workflow-card workflow-card--approval">
-          <div class="workflow-card__header">
-            <span class="workflow-card__icon"><i class="fas fa-check-double"></i></span>
-            <span>
-              <strong>Approval flow</strong>
-              <small>Control when suggestions can leave SuggestArr and reach Seer.</small>
-            </span>
-          </div>
-
-          <div class="workflow-card__body">
-            <div class="workflow-option">
-              <BaseCheckbox
-                v-model="localConfig.REQUIRE_REQUEST_APPROVAL"
-                :disabled="isLoading"
-                label="Require approval before delivery"
-                description="Hold new suggestions in SuggestArr until an administrator approves them."
-              />
-            </div>
-
-            <div class="workflow-option">
-              <BaseCheckbox
-                v-model="localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS"
-                :disabled="isLoading"
-                label="Pause jobs while approvals are pending"
-                description="Prevent automation from adding more suggestions until the current queue is reviewed."
-              />
-            </div>
-          </div>
-        </section>
-
-        <section class="workflow-card">
-          <div class="workflow-card__header">
-            <span class="workflow-card__icon"><i class="fas fa-users"></i></span>
-            <span>
-              <strong>Review policy</strong>
-              <small>Choose who can see requests and how long pending items remain open.</small>
-            </span>
-          </div>
-
-          <div class="workflow-card__body workflow-card__body--fields">
-            <div class="workflow-setting">
-              <label class="workflow-setting__label" for="requestVisibility">Request visibility</label>
-              <BaseDropdown
-                v-model="localConfig.REQUEST_VISIBILITY"
-                :options="requestVisibilityOptions"
-                :disabled="isLoading"
-                id="requestVisibility"
-              />
-              <p class="workflow-setting__help">
-                Limit users to requests from their linked media accounts — regular users only, or admins too.
-                A suggestion belongs to whoever an admin linked (or who signed in) to the media account it was made for;
-                suggestions without such an owner stay with the admins.
-              </p>
-            </div>
-
-            <div class="workflow-setting">
-              <label class="workflow-setting__label" for="tmdbLanguage">Default title language</label>
-              <BaseDropdown
-                v-model="localConfig.TMDB_LANGUAGE"
-                :options="titleLanguageOptions"
-                :disabled="isLoading"
-                id="tmdbLanguage"
-              />
-              <p class="workflow-setting__help">
-                Titles and descriptions for everyone who has not picked a language on their profile.
-              </p>
-            </div>
-
-            <div class="workflow-setting">
-              <span class="workflow-setting__label-row">
-                <label class="workflow-setting__label" for="autoRejectApprovalDays">Pending retention</label>
-                <span class="workflow-setting__range">0–365 days</span>
+      <div v-if="section === 'workflow'" class="grid items-start gap-5 lg:grid-cols-2">
+        <SectionCard icon="fas fa-check-double" title="Approval flow" description="Control when suggestions can leave SuggestArr and reach Seer.">
+          <div class="flex flex-col gap-2.5">
+            <button
+              v-for="toggle in approvalToggles"
+              :key="toggle.key"
+              type="button"
+              role="switch"
+              :aria-checked="localConfig[toggle.key] ? 'true' : 'false'"
+              :disabled="isLoading || (toggle.needsApproval && !localConfig.REQUIRE_REQUEST_APPROVAL)"
+              class="flex cursor-pointer items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 text-left hover:border-edge-strong disabled:cursor-not-allowed disabled:opacity-50"
+              @click="localConfig[toggle.key] = !localConfig[toggle.key]"
+            >
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="text-sm font-semibold text-ink">{{ toggle.title }}</span>
+                <span class="text-xs leading-snug text-ink-4">{{ toggle.hint }}</span>
               </span>
-              <input
-                id="autoRejectApprovalDays"
-                v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS"
-                type="number"
-                min="0"
-                max="365"
-                class="form-control"
-                :disabled="isLoading"
-              />
-              <p class="workflow-setting__help">
-                Automatically reject older pending suggestions. Use 0 to keep them until manual review.
-              </p>
-            </div>
+              <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="localConfig[toggle.key] ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="localConfig[toggle.key] ? 'left-[21px]' : 'left-[3px]'"></span></span>
+            </button>
+
+            <label class="flex items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5" :class="{ 'opacity-50': !localConfig.REQUIRE_REQUEST_APPROVAL }">
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="text-sm font-semibold text-ink">Auto-reject after</span>
+                <span class="text-xs leading-snug text-ink-4">Days a suggestion may wait for review. 0 keeps it until someone decides.</span>
+              </span>
+              <span class="flex shrink-0 items-center gap-2 text-[13px] text-ink-3">
+                <input id="autoRejectApprovalDays" v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS" type="number" min="0" max="365" class="ui-input h-9 w-20 px-2.5" :disabled="isLoading || !localConfig.REQUIRE_REQUEST_APPROVAL" />days
+              </span>
+            </label>
+            <p v-if="!localConfig.REQUIRE_REQUEST_APPROVAL" class="m-0 text-xs text-ink-4">Suggestions go straight to Seer, so the queue options are off.</p>
           </div>
-        </section>
-      </div>
+        </SectionCard>
+
+        <SectionCard icon="fas fa-eye" title="Who sees what" description="Which requests each user can see, and the language titles appear in.">
+          <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+            <legend class="mb-2 p-0 text-[13px] font-semibold text-ink-2">Request visibility</legend>
+            <label
+              v-for="option in requestVisibilityOptions"
+              :key="option.value"
+              class="flex cursor-pointer items-start gap-3 rounded-ctl border p-3.5"
+              :class="localConfig.REQUEST_VISIBILITY === option.value ? 'border-brand-ink bg-brand-soft/50' : 'border-edge bg-panel-2 hover:border-edge-strong'"
+            >
+              <input v-model="localConfig.REQUEST_VISIBILITY" type="radio" name="requestVisibility" :value="option.value" class="mt-1 accent-brand" :disabled="isLoading" />
+              <span class="flex flex-col gap-0.5">
+                <span class="text-sm font-semibold text-ink">{{ option.label }}</span>
+                <span class="text-xs leading-snug text-ink-4">{{ option.hint }}</span>
+              </span>
+            </label>
+            <p class="m-0 mt-1 text-xs leading-relaxed text-ink-4">A suggestion belongs to whoever is linked to the media account it was made for. Suggestions without an owner stay with the admins.</p>
+          </fieldset>
+
+          <label class="ui-label mt-5 border-t border-edge pt-5">
+            Default title language
+            <select id="tmdbLanguage" v-model="localConfig.TMDB_LANGUAGE" class="ui-input" :disabled="isLoading">
+              <option v-for="option in titleLanguageOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+            <span class="text-xs font-normal text-ink-4">For everyone who has not picked a language on their profile.</span>
+          </label>
+        </SectionCard>
       </div>
 
       <div v-if="section === 'system'" class="advanced-section">
@@ -740,6 +708,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 
 <script>
 import PageHeader from '@/components/ui/PageHeader.vue';
+import SectionCard from '@/components/ui/SectionCard.vue';
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
@@ -747,7 +716,7 @@ import { languageOptions } from '@/utils/titleLanguage.js';
 
 export default {
   name: 'SettingsAdvanced',
-  components: { PageHeader,
+  components: { PageHeader, SectionCard,
     BaseDropdown,
     BaseCheckbox,
   },
@@ -797,9 +766,13 @@ export default {
         { value: 'disabled', label: 'Disable Authentication' },
       ],
       requestVisibilityOptions: [
-        { value: 'all', label: 'All requests' },
-        { value: 'own', label: 'Own linked account only (admins see all)' },
-        { value: 'own_all', label: 'Own linked account only, admins too' },
+        { value: 'all', label: 'Everyone sees everything', hint: 'Every user sees every request.' },
+        { value: 'own', label: 'Users see their own', hint: 'Users see requests for their linked accounts; admins still see all.' },
+        { value: 'own_all', label: 'Everyone sees their own', hint: 'Admins are limited to their linked accounts too.' },
+      ],
+      approvalToggles: [
+        { key: 'REQUIRE_REQUEST_APPROVAL', title: 'Require approval before delivery', hint: 'Hold new suggestions in SuggestArr until an admin approves them.' },
+        { key: 'PAUSE_JOBS_WITH_PENDING_APPROVALS', title: 'Pause jobs while approvals are pending', hint: 'Stop automation from adding more until the current queue is reviewed.', needsApproval: true },
       ],
       tmdbLanguages: [],
     };
@@ -830,8 +803,6 @@ export default {
         if (this.localConfig.LLM_TEMPERATURE === 'unset') {
           this.localConfig.LLM_TEMPERATURE = '';
         }
-        this.originalConfig = { ...this.localConfig };
-
         // Ensure SELECTED_USERS is always a parsed array
         if (typeof this.localConfig.SELECTED_USERS === 'string') {
           try {
@@ -882,6 +853,9 @@ export default {
         if (!this.authModeOptions.some(option => option.value === this.localConfig.AUTH_MODE)) {
           this.localConfig.AUTH_MODE = 'enabled';
         }
+
+        // Snapshot after defaults and normalisation, so an untouched page is not "dirty".
+        this.originalConfig = { ...this.localConfig };
       },
     },
   },
@@ -1294,123 +1268,6 @@ export default {
   cursor: pointer;
 }
 
-.request-workflow-settings {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-lg);
-}
-
-.workflow-card {
-  min-width: 0;
-  padding: var(--spacing-lg);
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-}
-
-.workflow-card--approval {
-  background: var(--color-primary-alpha-10);
-  border-color: var(--color-primary);
-}
-
-.workflow-card__header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
-}
-
-.workflow-card__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: var(--input-height-md);
-  height: var(--input-height-md);
-  color: var(--color-primary-light);
-  background: var(--surface-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-}
-
-.workflow-card__header strong,
-.workflow-card__header small {
-  display: block;
-}
-
-.workflow-card__header strong {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-lg);
-}
-
-.workflow-card__header small {
-  margin-top: var(--spacing-xs);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-normal);
-}
-
-.workflow-card__body {
-  display: grid;
-  gap: var(--spacing-sm);
-}
-
-.workflow-card__body--fields {
-  gap: var(--spacing-lg);
-}
-
-.workflow-option {
-  padding: var(--spacing-md);
-  background: var(--surface-raised);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-}
-
-.request-workflow-settings .workflow-setting {
-  display: grid;
-  gap: var(--spacing-sm);
-  margin: 0;
-}
-
-.request-workflow-settings .workflow-setting__label {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  line-height: var(--line-height-normal);
-}
-
-.workflow-setting__label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-}
-
-.workflow-setting__range {
-  padding: var(--spacing-2xs) var(--spacing-sm);
-  color: var(--color-text-muted);
-  background: var(--surface-interactive);
-  border-radius: var(--radius-full);
-  font-size: var(--font-size-xs);
-  white-space: nowrap;
-}
-
-.request-workflow-settings .workflow-setting__help {
-  margin: var(--spacing-2xs) 0 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-normal);
-}
-
-.request-workflow-settings .form-control,
-.request-workflow-settings :deep(.value-text),
-.request-workflow-settings :deep(.placeholder-text) {
-  font-size: var(--font-size-sm);
-}
-
-.request-workflow-settings :deep(.base-checkbox) {
-  width: 100%;
-}
 
 .section-description {
   margin: 0 0 1rem;
@@ -2175,8 +2032,7 @@ export default {
     gap: 1rem;
   }
 
-  .advanced-subsection-grid,
-  .request-workflow-settings {
+  .advanced-subsection-grid {
     grid-template-columns: 1fr;
   }
 

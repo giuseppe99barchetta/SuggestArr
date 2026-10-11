@@ -1,5 +1,5 @@
 <template>
-  <SectionCard icon="fas fa-key" title="API Keys" description="For external integrations such as Home Assistant. The full key is shown only once.">
+  <SectionCard icon="fas fa-key" title="API keys" description="For external integrations such as Home Assistant. The full key is shown only once.">
     <form class="flex flex-col gap-3" @submit.prevent="create">
       <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
         <label class="ui-label">Key name<input id="apiKeyName" v-model="name" class="ui-input" maxlength="100" placeholder="Home Assistant" :disabled="creating"></label>
