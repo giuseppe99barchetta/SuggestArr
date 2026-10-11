@@ -1,9 +1,6 @@
 <template>
   <div class="settings-users" :class="{ 'settings-users--embedded': embedded }">
-    <div class="section-header">
-      <h2>My Profile</h2>
-      <p>Update your account credentials and link your media server account.</p>
-    </div>
+    <PageHeader title="My profile" subtitle="Your account, title language, API keys and linked media-server and Trakt accounts." />
 
     <div class="settings-grid">
 
@@ -293,6 +290,7 @@
 </template>
 
 <script>
+import PageHeader from '@/components/ui/PageHeader.vue';
 import axios from 'axios';
 import { useAuth } from '@/composables/useAuth';
 import {
@@ -320,7 +318,7 @@ const PROVIDER_META = {
 export default {
   name: 'UserProfile',
 
-  components: { BaseDropdown, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel },
+  components: { PageHeader, BaseDropdown, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel },
 
   props: {
     config: Object,
@@ -682,7 +680,6 @@ export default {
 /* ── Outer wrapper ─────────────────────────────────────────────────────── */
 .settings-users {
   color: var(--color-text-primary);
-  padding: var(--spacing-lg);
 }
 
 .settings-users--embedded {

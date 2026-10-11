@@ -1,10 +1,7 @@
 <template>
   <div class="ai-search-page">
     <!-- Header -->
-    <div class="section-header">
-      <h2>AI Search</h2>
-      <p>Describe what you want to watch and the AI will find it for you, personalised to your viewing history.</p>
-    </div>
+    <PageHeader title="AI Search" subtitle="Describe what you feel like watching. The AI finds matching titles, personalised to your viewing history." />
 
     <!-- LLM Not Configured Warning -->
     <div v-if="!llmAvailable" class="warning-banner">
@@ -347,12 +344,15 @@
 </template>
 
 <script>
+import PageHeader from '@/components/ui/PageHeader.vue';
 import axios from 'axios';
 import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear } from '@/api/api.js';
 import { loadTrailerUrl } from '@/utils/trailer.js';
 import '@/assets/styles/aiSearchPage.css';
+import '@/assets/styles/requestsPage.css';
 
 export default {
+  components: { PageHeader },
   name: 'AiSearchPage',
 
   data() {

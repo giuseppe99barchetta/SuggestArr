@@ -79,6 +79,7 @@
           <template v-for="(step, i) in allSteps" :key="step.id">
             <div
               class="stepper-step"
+              :title="step.optional ? `${step.label} (optional)` : step.label"
               :class="{
                 'is-completed': i < currentStepIndex,
                 'is-current': i === currentStepIndex,
@@ -87,7 +88,8 @@
             >
               <div class="stepper-circle">
                 <i v-if="i < currentStepIndex" class="fas fa-check"></i>
-                <span v-else>{{ i + 1 }}</span>
+                <!-- Only required steps are numbered, matching "Step N of M" in the header. -->
+                <span v-else-if="!step.optional">{{ requiredSteps.indexOf(step) + 1 }}</span>
               </div>
             </div>
             <div
@@ -209,7 +211,7 @@
             </button>
           </div>
           <div class="modal-body changelog-body">
-            <LogsComponent />
+            <LogsComponent embedded />
           </div>
           <div class="modal-actions">
             <button @click="showLogs = false" class="btn btn-primary">
@@ -831,9 +833,14 @@ export default {
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.22);
 }
 
+.stepper-step.is-optional .stepper-circle {
+  border-style: dashed;
+  transform: scale(0.8);
+}
+
 .stepper-step.is-current.is-optional .stepper-circle {
-  background: #f59e0b;
-  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.22);
+  background: var(--color-warning);
+  box-shadow: 0 0 0 4px var(--color-warning-alpha-20);
 }
 
 .stepper-step.is-completed .stepper-circle {

@@ -1,9 +1,6 @@
 <template>
   <div class="settings-advanced">
-    <div class="section-header">
-      <h2>Advanced Settings</h2>
-      <p>Configure advanced options and experimental features</p>
-    </div>
+    <PageHeader title="Advanced" subtitle="AI provider, request workflow, performance, maintenance, webhooks and cleanup." />
 
     <div class="settings-grid">
       <SettingsPanel
@@ -780,6 +777,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 </template>
 
 <script>
+import PageHeader from '@/components/ui/PageHeader.vue';
 import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
@@ -790,7 +788,7 @@ import { languageOptions } from '@/utils/titleLanguage.js';
 
 export default {
   name: 'SettingsAdvanced',
-  components: {
+  components: { PageHeader,
     BaseDropdown,
     BaseCheckbox,
     SettingsCleanup,
@@ -1170,7 +1168,6 @@ export default {
 <style scoped>
 .settings-advanced {
   color: var(--color-text-primary);
-  padding: var(--spacing-lg);
 }
 
 .section-header {

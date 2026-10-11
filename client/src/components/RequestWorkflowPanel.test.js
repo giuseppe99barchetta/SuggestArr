@@ -4,7 +4,7 @@ import { test } from 'node:test';
 
 const source = readFileSync(new URL('./RequestWorkflowPanel.vue', import.meta.url), 'utf8');
 const settings = readFileSync(
-  new URL('./settings/SettingsRequests.vue', import.meta.url), 'utf8');
+  new URL('./HomePage.vue', import.meta.url), 'utf8');
 
 // `confirmAction(` also appears in the template, so anchor on the script-block form.
 const markSeen = source.slice(source.indexOf('async markSeen('), source.indexOf('async decideOne('));
@@ -23,7 +23,7 @@ test('both pending UIs read their options from the shared module', () => {
 
 test('rating a card does not also open the detail view', () => {
   // The <article> carries @click="openItem(item)", so every action must stop propagation.
-  const actions = source.slice(source.indexOf('seenMenuId === item.id'), source.indexOf('request-card-body'));
+  const actions = source.slice(source.indexOf('seenMenuId === item.id'), source.indexOf('media-card-body'));
   for (const handler of actions.match(/@click[.\w]*="(markSeen|seenMenuId)[^"]*"/g) || []) {
     assert.match(handler, /@click\.stop=/);
   }

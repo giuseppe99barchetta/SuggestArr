@@ -23,7 +23,10 @@ export function formatDate(dateString) {
   if (diffDays === 0) return 'today';
   if (diffDays === 1) return 'yesterday';
   if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+  if (diffDays < 30) {
+    const weeks = Math.floor(diffDays / 7);
+    return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+  }
 
   return date.toLocaleDateString();
 }
@@ -34,3 +37,26 @@ export function formatDate(dateString) {
 export default {
   formatDate
 };
+/**
+ * Short distance between now and a date, in either direction:
+ * "in 2h 14m", "in 3 days", "5m ago", "2 days ago".
+ * @param {string|Date} value - Date or ISO string
+ * @param {Date} [now] - Reference time (for tests)
+ * @returns {string} Relative label, or '' for a missing/invalid date
+ */
+export function timeFromNow(value, now = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return '';
+  const minutes = Math.round((date - now) / 60000);
+  const abs = Math.abs(minutes);
+  let label;
+  if (abs < 1) return 'just now';
+  if (abs < 60) label = `${abs}m`;
+  // Minutes only matter for what is coming up; "18h ago" reads better than "18h 36m ago".
+  else if (abs < 24 * 60) label = `${Math.floor(abs / 60)}h${minutes > 0 && abs % 60 ? ` ${abs % 60}m` : ''}`;
+  else {
+    const days = Math.round(abs / (24 * 60));
+    label = days === 1 ? '1 day' : `${days} days`;
+  }
+  return minutes > 0 ? `in ${label}` : `${label} ago`;
+}

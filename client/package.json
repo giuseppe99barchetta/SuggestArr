@@ -30,6 +30,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.6.4",
     "@vitejs/plugin-vue": "^6.0.9",
     "@vue/compiler-sfc": "^3.5.42",
@@ -39,6 +40,7 @@
     "globals": "^17.13.0",
     "postcss-html": "^2.0.0",
     "stylelint": "^17.15.0",
+    "tailwindcss": "^4.3.3",
     "typescript": "~7.0.2",
     "vite": "^8.3.2",
     "vue-eslint-parser": "^10.4.1"

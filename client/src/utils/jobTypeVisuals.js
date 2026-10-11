@@ -87,3 +87,21 @@ export function getRequestSourceVisual(source) {
 export function isSystemRequestSource(source) {
   return getRequestSourceVisual(source) !== null;
 }
+
+const SCHEDULE_PRESETS = {
+  daily: 'Daily at midnight',
+  weekly: 'Weekly on Monday',
+  every_12h: 'Every 12 hours',
+  every_6h: 'Every 6 hours',
+  every_hour: 'Every hour',
+};
+
+/**
+ * Human-readable schedule of a job.
+ * @param {{ schedule_type?: string, schedule_value?: string }} job
+ * @returns {string}
+ */
+export function formatJobSchedule(job) {
+  if (job.schedule_type === 'preset') return SCHEDULE_PRESETS[job.schedule_value] || job.schedule_value;
+  return `Cron: ${job.schedule_value}`;
+}
