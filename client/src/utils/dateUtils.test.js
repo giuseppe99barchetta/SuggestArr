@@ -21,3 +21,11 @@ test('formatDate says "1 week ago", not "1 weeks ago"', () => {
   const eightDaysAgo = new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString();
   assert.equal(formatDate(eightDaysAgo), '1 week ago');
 });
+
+test('formatDate stays relative past a month', () => {
+  const daysAgo = days => new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
+  assert.equal(formatDate(daysAgo(40)), '1 month ago');
+  assert.equal(formatDate(daysAgo(100)), '3 months ago');
+  assert.equal(formatDate(daysAgo(400)), '1 year ago');
+  assert.equal(formatDate(daysAgo(800)), '2 years ago');
+});

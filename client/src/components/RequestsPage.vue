@@ -191,38 +191,49 @@
       :trailer-url="trailerUrl"
       :placeholder-icon="getSourceVisual(selectedSource)?.icon || 'fas fa-image'"
       :placeholder-background="getSourceVisual(selectedSource)?.gradient || 'var(--color-raised)'"
+      :rationale-title="selectedSource._isAiRequest ? 'Search query' : 'Why it was suggested'"
       @close="closeModal"
     >
       <template #badges>
-        <span v-if="selectedSource.requested_at" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" class="fas fa-clock"></i> Requested {{ formatDate(selectedSource.requested_at) }}</span>
+        <span v-if="selectedSource.requested_at" class="rounded-md bg-raised px-2 py-1 text-ink-2" :title="new Date(selectedSource.requested_at).toLocaleString()"><i aria-hidden="true" class="fas fa-clock"></i> Requested {{ formatDate(selectedSource.requested_at) }}</span>
         <span v-if="selectedSource.source_origin === 'trakt_history'" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" class="fas fa-history"></i> Trakt history</span>
       </template>
 
-      <template v-if="canFeedbackSelected" #aside>
-        <section aria-label="Feedback" class="flex flex-col gap-2.5">
-          <div role="group" aria-label="Choose feedback" class="flex flex-wrap justify-center gap-1.5">
+      <section v-if="canFeedbackSelected" aria-labelledby="media-feedback-title" class="flex flex-col gap-3">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h3 id="media-feedback-title" class="m-0 text-sm font-semibold text-ink-3">Good pick?</h3>
+          <div role="group" aria-labelledby="media-feedback-title" class="flex flex-wrap gap-1.5">
             <button
-              v-for="option in feedbackOptions"
+              v-for="option in visibleFeedbackOptions"
               :key="option.value"
               type="button"
-              class="h-10 w-10 cursor-pointer rounded-ctl border text-lg disabled:opacity-50"
-              :class="selectedSource.feedback?.feedback === option.value ? 'border-brand-ink bg-brand-soft' : 'border-edge-strong bg-panel-2 hover:border-ink-4'"
-              :aria-label="option.label"
+              class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold disabled:opacity-50"
+              :class="selectedSource.feedback?.feedback === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong bg-transparent text-ink-2 hover:border-ink-4'"
               :aria-pressed="(selectedSource.feedback?.feedback === option.value).toString()"
-              :title="option.label"
               :disabled="isFeedbackSaving(selectedSource)"
               @click="toggleSelectedFeedback(option.value)"
             >
-              <span aria-hidden="true">{{ option.emoji }}</span>
+              <span aria-hidden="true">{{ option.emoji }}</span>{{ option.label }}
+            </button>
+            <button
+              v-if="!feedbackExpanded"
+              type="button"
+              class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-[13px] font-semibold text-ink-4 hover:text-ink"
+              @click="feedbackExpanded = true"
+            >
+              More <i aria-hidden="true" class="fas fa-chevron-down text-[10px]"></i>
             </button>
           </div>
-          <div v-if="selectedSource.feedback?.feedback" role="group" aria-label="Optional feedback reason" class="flex flex-wrap justify-center gap-1.5">
+        </div>
+        <div v-if="selectedSource.feedback?.feedback" class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p id="media-feedback-reason" class="m-0 text-xs font-semibold text-ink-4">Mostly because of <span class="font-normal">(optional)</span></p>
+          <div role="group" aria-labelledby="media-feedback-reason" class="flex flex-wrap gap-1.5">
             <button
               v-for="reason in feedbackReasons"
               :key="reason.value"
               type="button"
-              class="h-8 cursor-pointer rounded-full border px-3 text-xs font-semibold disabled:opacity-50"
-              :class="selectedSource.feedback?.reason_type === reason.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong bg-transparent text-ink-3'"
+              class="h-7 cursor-pointer rounded-full border px-2.5 text-xs font-semibold disabled:opacity-50"
+              :class="selectedSource.feedback?.reason_type === reason.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge bg-transparent text-ink-3 hover:border-ink-4'"
               :aria-pressed="(selectedSource.feedback?.reason_type === reason.value).toString()"
               :disabled="isFeedbackSaving(selectedSource)"
               @click="setSelectedFeedback(selectedSource.feedback.feedback, selectedSource.feedback.reason_type === reason.value ? null : reason.value)"
@@ -230,16 +241,11 @@
               {{ reason.label }}
             </button>
           </div>
-          <p v-if="isFeedbackSaving(selectedSource)" role="status" class="m-0 text-center text-xs text-ink-4">Saving…</p>
-        </section>
-      </template>
-
-      <section v-if="selectedSource.rationale">
-        <h3 class="m-0 mb-1.5 text-xs font-bold uppercase tracking-wider text-brand-ink">{{ selectedSource._isAiRequest ? 'Search query' : 'Why it was suggested' }}</h3>
-        <p class="m-0 whitespace-pre-wrap border-l-2 border-brand-ink pl-3 leading-relaxed text-ink-2">{{ selectedSource.rationale }}</p>
+        </div>
+        <p v-if="isFeedbackSaving(selectedSource)" role="status" class="m-0 text-xs text-ink-4">Saving…</p>
       </section>
 
-      <section v-if="selectedSource.requests && selectedSource.requests.length > 0" class="order-last">
+      <section v-if="selectedSource.requests && selectedSource.requests.length > 0">
         <h3 class="m-0 mb-2 text-xs font-bold uppercase tracking-wider text-ink-4">Suggestions from this title ({{ selectedSource.requests.length }})</h3>
         <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
           <li v-for="request in selectedSource.requests" :key="request.request_id">
@@ -266,6 +272,9 @@ import { getRequestSourceVisual } from '@/utils/jobTypeVisuals.js';
 import { getAiSearchRequests } from '@/api/api.js';
 import RequestWorkflowPanel from './RequestWorkflowPanel.vue';
 import { loadTrailerUrl } from '@/utils/trailer.js';
+
+// Shown up front in the details modal; the other answers sit behind "More".
+const PRIMARY_FEEDBACK = ['interested', 'not_interested', 'already_seen'];
 
 export default {
   name: "RequestsPage",
@@ -320,6 +329,7 @@ export default {
       pendingTotal: null,
       workflowBulkMode: false,
       feedbackSaving: {},
+      feedbackExpanded: false,
       feedbackOptions: [
         { value: 'seen_liked', emoji: '👍', label: 'Seen it, liked it' },
         { value: 'seen_disliked', emoji: '👎', label: 'Seen it, did not like it' },
@@ -348,6 +358,12 @@ export default {
     };
   },
   computed: {
+    /** The three common answers, plus the current one when it is among the rest. */
+    visibleFeedbackOptions() {
+      if (this.feedbackExpanded) return this.feedbackOptions;
+      const current = this.selectedSource?.feedback?.feedback;
+      return this.feedbackOptions.filter((option) => PRIMARY_FEEDBACK.includes(option.value) || option.value === current);
+    },
     canFeedbackSelected() {
       return Boolean(
         this.selectedSource
@@ -878,6 +894,7 @@ export default {
 
     openModal(source, isAiRequest = false) {
       this.selectedSource = { ...source, _isAiRequest: isAiRequest };
+      this.feedbackExpanded = false;
       this.showModal = true;
       document.body.style.overflow = 'hidden';
       this.loadTrailer();
