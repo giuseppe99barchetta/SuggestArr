@@ -77,9 +77,12 @@ def _render_index(static_root, subpath):
         content = handle.read()
 
     escaped_subpath = escape(subpath, quote=True)
-    injected_tags = f'<meta name="suggestarr-subpath" content="{escaped_subpath}">'
-    if subpath:
-        injected_tags += f'<base href="{escaped_subpath}/">'
+    # Vite builds with relative asset URLs, so a <base> is always needed for
+    # deep links like /dashboard/ai_provider to resolve ./assets from the root.
+    injected_tags = (
+        f'<meta name="suggestarr-subpath" content="{escaped_subpath}">'
+        f'<base href="{escaped_subpath}/">'
+    )
 
     return Response(content.replace("<head>", f"<head>{injected_tags}"), mimetype="text/html")
 
