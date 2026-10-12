@@ -49,7 +49,7 @@ configured number of days. The pause behavior can be overridden per job.
 - Configured **[Jellyfin](https://jellyfin.org/)**, **[Plex](https://www.plex.tv/)**, or **[Emby](https://emby.media/)**
 - Configured **[Seer](https://github.com/seerr-team/seerr)**
 - (Optional) External database (PostgreSQL or MySQL) for improved performance
-- (Optional) **[Trakt application](https://app.trakt.tv/settings/apps)** for per-user Trakt watch-history integration
+- (Optional) **[Trakt application](https://developer.trakt.tv/apps/new)** for per-user Trakt watch-history integration
 
 ## Docker Usage
 
@@ -114,7 +114,7 @@ SuggestArr can enrich recommendations with each user's own Trakt watch history. 
 
 ### How to enable
 
-1. Create a Trakt app at <https://app.trakt.tv/settings/apps>.
+1. Create a Trakt app at <https://developer.trakt.tv/apps/new> (sign in with GitHub): set any **App name**, enter `urn:ietf:wg:oauth:2.0:oob` in **Redirect URIs**, leave **Allowed origins** empty, then click **Create app**.
 2. In SuggestArr, go to **Services -> Trakt**.
 3. Enter the Trakt **Client ID**, then save. New Trakt apps no longer receive a Client Secret; existing apps may keep their secret configured.
 4. Each user goes to **Profile -> Trakt Account** and clicks **Link Trakt**.
@@ -123,7 +123,7 @@ SuggestArr can enrich recommendations with each user's own Trakt watch history. 
 
 For admins, the same profile panel is available under **Users**. Trakt links are tied to the user's linked Plex, Jellyfin, or Emby media profile, so users should link their media-server account first.
 
-SuggestArr uses Trakt's device-code flow. For token refresh, add `urn:ietf:wg:oauth:2.0:oob` as a redirect URI in the Trakt app. Trakt may warn that it is not HTTPS, but it still allows the URI to be saved.
+SuggestArr uses Trakt's device-code flow and sends `urn:ietf:wg:oauth:2.0:oob` as the redirect URI when refreshing tokens. Trakt shows an **Insecure redirect URIs** warning for it, but the form accepts it; no HTTPS callback is needed.
 
 ## Job Pause and Cleanup Automation
 

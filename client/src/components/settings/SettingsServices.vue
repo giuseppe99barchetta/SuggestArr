@@ -487,7 +487,7 @@
               </button>
             </div>
             <small class="form-help">
-              Create an app at <a href="https://app.trakt.tv/settings/apps" target="_blank" rel="noopener noreferrer" class="link">Trakt Apps</a>. New Trakt apps use the Client ID without issuing a Client Secret.
+              Create an app at <a href="https://developer.trakt.tv/apps/new" target="_blank" rel="noopener noreferrer" class="link">Trakt Developer</a> with <code>urn:ietf:wg:oauth:2.0:oob</code> as Redirect URI (ignore the insecure-URI warning) and leave Allowed origins empty. New Trakt apps use the Client ID without issuing a Client Secret.
             </small>
           </div>
           <div class="oauth-success" v-if="isTraktAppConfigured">

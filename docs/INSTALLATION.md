@@ -317,16 +317,20 @@ Configuration export (Dashboard **Export**) can include Trakt link metadata and 
 
 ### Create a Trakt OAuth app
 
-1. Open <https://app.trakt.tv/settings/apps>.
-2. Create a new application.
-3. Copy the Client ID. New Trakt apps created after the PKCE change do not receive a Client Secret; older apps can continue using theirs.
+1. Open <https://developer.trakt.tv/apps/new> and sign in with your GitHub account (the Trakt developer portal requires a verified GitHub login).
+2. Fill in the form:
+   - **App name**: anything, e.g. `SuggestArr`.
+   - **Description**: optional.
+   - **Redirect URIs**: `urn:ietf:wg:oauth:2.0:oob` (one per line).
+   - **Allowed origins**: leave empty.
+3. Click **Create app**, then copy the Client ID from the app page. New Trakt apps created after the PKCE change do not receive a Client Secret; older apps can continue using theirs.
 4. In SuggestArr, open Services > Trakt.
 5. Paste the Client ID and, if your app has one, the optional Client Secret.
 6. Save.
 
 Device-code OAuth is used for user linking, so users do not need to paste Trakt passwords or tokens into SuggestArr.
 
-Add `urn:ietf:wg:oauth:2.0:oob` to the Trakt app's redirect URIs because SuggestArr uses that URI when refreshing tokens. Trakt may show a warning because it is not HTTPS, but the app form still permits saving it.
+SuggestArr sends `urn:ietf:wg:oauth:2.0:oob` as the redirect URI when refreshing tokens, so it must be listed in the app. Trakt shows an **Insecure redirect URIs** warning because it is not HTTPS; that is expected for the device-code flow and the form still saves it. Existing apps can add it from **Edit** on <https://developer.trakt.tv/apps>.
 
 ### Link media-server users first
 
