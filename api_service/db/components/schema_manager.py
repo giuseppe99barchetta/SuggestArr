@@ -415,6 +415,7 @@ class SchemaManager:
         self.add_missing_columns()
         self._migrate_execution_history()
         self._migrate_suggestion_feedback()
+        self._widen_mysql_overview_columns()
         self._create_api_key_indexes()
 
         # Create submission lock table (separate to control column types per DB engine)
@@ -488,6 +489,32 @@ class SchemaManager:
                 conn.commit()
         except Exception as exc:
             raise DatabaseError(error=f"Suggestion-feedback migration failed: {exc}", db_type=self.db_type) from exc
+
+    def _widen_mysql_overview_columns(self):
+        """Turn MySQL overview columns created as VARCHAR into TEXT.
+
+        Older installs mapped every TEXT column to VARCHAR(255), later VARCHAR(512),
+        and TMDb overviews are often longer, so they were stored cut mid-word.
+        Rows saved before this keep their cut text until the title is saved again.
+        """
+        if self.db_type not in ('mysql', 'mariadb'):
+            return
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                for table in ('metadata', 'metadata_translations'):
+                    cursor.execute(
+                        "SELECT DATA_TYPE FROM information_schema.columns "
+                        "WHERE table_schema = DATABASE() AND table_name = %s AND column_name = 'overview'",
+                        (table,),
+                    )
+                    row = cursor.fetchone()
+                    if row and str(row[0]).lower() == 'varchar':
+                        cursor.execute(f"ALTER TABLE {table} MODIFY overview TEXT")
+                        self.logger.info("Widened %s.overview to TEXT", table)
+                conn.commit()
+        except Exception as exc:
+            raise DatabaseError(error=f"Overview column migration failed: {exc}", db_type=self.db_type) from exc
 
     def _prepare_create_table_query_for_db(self, table_name: str, query: str, db_type: str) -> str:
         """Apply database-specific DDL rewrites for a table creation query."""
@@ -624,6 +651,10 @@ class SchemaManager:
             query = query.replace("INTEGER", "INT")
             query = query.replace("TEXT", "VARCHAR(512)")
             query = query.replace("REAL", "DOUBLE")
+
+            # Overviews are free text; TMDb ones regularly exceed 512 characters.
+            if table_name in ('metadata', 'metadata_translations'):
+                query = query.replace("overview VARCHAR(512)", "overview TEXT")
 
             # Job filters are serialized JSON and can easily exceed the generic
             # VARCHAR(512) compatibility mapping used for MySQL text columns.

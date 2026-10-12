@@ -64,3 +64,23 @@ def test_mysql_discover_jobs_migration_expands_legacy_filters_column():
         'ALTER TABLE discover_jobs MODIFY COLUMN filters LONGTEXT NOT NULL;'
     )
     database.connection.commit.assert_called()
+
+
+def test_mysql_metadata_ddl_keeps_overview_as_text():
+    source = "CREATE TABLE IF NOT EXISTS metadata (media_id TEXT PRIMARY KEY, title TEXT, overview TEXT, UNIQUE(media_id, media_type))"
+
+    query = SchemaManager(None)._prepare_create_table_query_for_db('metadata', source, 'mysql')
+
+    assert 'overview TEXT' in query
+    assert 'title VARCHAR(512)' in query
+
+
+def test_mysql_overview_migration_widens_only_varchar_columns():
+    database = _MysqlDatabase()
+    database.cursor.fetchone.side_effect = [('varchar',), ('text',)]
+
+    SchemaManager(database)._widen_mysql_overview_columns()
+
+    database.cursor.execute.assert_any_call("ALTER TABLE metadata MODIFY overview TEXT")
+    altered = [c.args[0] for c in database.cursor.execute.call_args_list if c.args[0].startswith('ALTER')]
+    assert altered == ["ALTER TABLE metadata MODIFY overview TEXT"]

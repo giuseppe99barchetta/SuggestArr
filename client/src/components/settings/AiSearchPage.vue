@@ -166,31 +166,28 @@
       :item="selectedItem"
       :trailer-url="trailerUrl"
       :placeholder-icon="selectedItem.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"
+      rationale-title="Why the AI picked this"
       @close="closeModal"
     >
       <template #badges>
         <span v-if="selectedItem.votes" class="rounded-md bg-raised px-2 py-1 text-ink-2">{{ formatVotes(selectedItem.votes) }} votes</span>
         <span v-if="selectedItem.original_language" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" class="fas fa-globe"></i> {{ selectedItem.original_language.toUpperCase() }}</span>
       </template>
-      <template #aside>
+      <template #actions>
         <div class="flex gap-1.5">
           <button
             type="button"
-            class="h-10 flex-1 cursor-pointer rounded-ctl border-0 text-sm font-bold disabled:cursor-default"
+            class="h-10 cursor-pointer rounded-ctl border-0 px-4 text-sm font-bold disabled:cursor-default"
             :class="requestButtonTone(selectedItem)"
             :disabled="isRequested(selectedItem) || isRequesting(selectedItem)"
             @click="requestItem(selectedItem)"
           >
             <i aria-hidden="true" :class="requestButtonIcon(selectedItem)" class="mr-1"></i>{{ requestButtonLabel(selectedItem) }}
           </button>
-          <button type="button" class="h-10 w-10 cursor-pointer rounded-ctl border" :class="feedbackOf(selectedItem) === 'like' ? 'border-good bg-good/15 text-good' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(selectedItem) === 'like' ? 'true' : 'false'" aria-label="More like this" @click="toggleFeedback(selectedItem, 'like')"><i aria-hidden="true" class="fas fa-thumbs-up"></i></button>
-          <button type="button" class="h-10 w-10 cursor-pointer rounded-ctl border" :class="feedbackOf(selectedItem) === 'dislike' ? 'border-bad bg-bad/15 text-bad' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(selectedItem) === 'dislike' ? 'true' : 'false'" aria-label="Don't show this again" @click="toggleFeedback(selectedItem, 'dislike')"><i aria-hidden="true" class="fas fa-thumbs-down"></i></button>
+          <button type="button" class="h-10 w-10 cursor-pointer rounded-ctl border" :class="feedbackOf(selectedItem) === 'like' ? 'border-good bg-good/15 text-good' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(selectedItem) === 'like' ? 'true' : 'false'" aria-label="More like this" title="More like this" @click="toggleFeedback(selectedItem, 'like')"><i aria-hidden="true" class="fas fa-thumbs-up"></i></button>
+          <button type="button" class="h-10 w-10 cursor-pointer rounded-ctl border" :class="feedbackOf(selectedItem) === 'dislike' ? 'border-bad bg-bad/15 text-bad' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(selectedItem) === 'dislike' ? 'true' : 'false'" aria-label="Don't show this again" title="Don't show this again" @click="toggleFeedback(selectedItem, 'dislike')"><i aria-hidden="true" class="fas fa-thumbs-down"></i></button>
         </div>
       </template>
-      <section v-if="selectedItem.rationale">
-        <h3 class="m-0 mb-1.5 text-xs font-bold uppercase tracking-wider text-brand-ink">Why the AI picked this</h3>
-        <p class="m-0 border-l-2 border-brand-ink pl-3 leading-relaxed text-ink-2">{{ selectedItem.rationale }}</p>
-      </section>
     </MediaDetailsModal>
   </div>
 </template>
