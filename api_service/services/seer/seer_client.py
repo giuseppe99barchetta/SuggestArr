@@ -305,17 +305,16 @@ class SeerClient(BaseHTTPClient):
         """Fetch servers and enrich list-only responses with profiles and root folders.
 
         The list endpoint carries no profiles; the per-server endpoint does, and
-        Jellyseerr answers it with the API key as well as with a session cookie.
-        Enriching only when a cookie was present left API-key-only setups with
-        empty profile and root-folder lists — nothing to choose from.
+        Always use the API key: the session cookie belongs to the configured
+        requesting user, who usually lacks the admin permission this endpoint
+        needs and gets a 403.
         """
         servers = await self._make_request("GET", f"api/v1/service/{service}") or []
         for index, server in enumerate(servers):
             if server.get('profiles') and server.get('rootFolders'):
                 continue
             details = await self._make_request(
-                "GET", f"api/v1/service/{service}/{server['id']}",
-                use_cookie=bool(self.session_token),
+                "GET", f"api/v1/service/{service}/{server['id']}"
             )
             if details:
                 detail_server = details.get('server', {})
