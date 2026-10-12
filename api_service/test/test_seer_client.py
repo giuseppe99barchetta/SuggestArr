@@ -894,7 +894,7 @@ class TestGetArrServers(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(servers[0]['activeLanguageProfileId'], 2)
         self.assertNotIn('apiKey', servers[0])
         client._make_request.assert_any_await(
-            'GET', 'api/v1/service/sonarr/7', use_cookie=True
+            'GET', 'api/v1/service/sonarr/7'
         )
 
 
@@ -1144,9 +1144,10 @@ class TestGetArrServersEnrichment(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(servers[0]["rootFolders"], [{"id": 1, "path": "/movies"}])
         self.assertIn(("api/v1/service/radarr/0", False), calls)
 
-    async def test_cookie_is_used_when_there_is_one(self):
+    async def test_api_key_is_used_even_with_a_cookie(self):
+        # The cookie user is usually not an admin and gets a 403 here.
         servers, calls = await self._servers(session_token="tok")
-        self.assertIn(("api/v1/service/radarr/0", True), calls)
+        self.assertIn(("api/v1/service/radarr/0", False), calls)
         self.assertEqual(len(servers[0]["profiles"]), 1)
 
     async def test_server_secrets_are_not_copied(self):
