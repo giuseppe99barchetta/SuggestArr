@@ -197,6 +197,7 @@
       <template #badges>
         <span v-if="selectedSource.requested_at" class="rounded-md bg-raised px-2 py-1 text-ink-2" :title="new Date(selectedSource.requested_at).toLocaleString()"><i aria-hidden="true" class="fas fa-clock"></i> Requested {{ formatDate(selectedSource.requested_at) }}</span>
         <span v-if="selectedSource.source_origin === 'trakt_history'" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" class="fas fa-history"></i> Trakt history</span>
+        <span v-if="selectedSource.source_origin === 'simkl_history'" class="rounded-md bg-raised px-2 py-1 text-ink-2"><i aria-hidden="true" class="icon-simkl"></i> Simkl history</span>
       </template>
 
       <section v-if="canFeedbackSelected" aria-labelledby="media-feedback-title" class="flex flex-col gap-3">

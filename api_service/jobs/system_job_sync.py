@@ -215,6 +215,15 @@ def _build_filters_from_config(env_vars: Dict[str, Any]) -> Dict[str, Any]:
     if trakt_use_as_exclusion is not None:
         filters['use_trakt_as_exclusion'] = bool(trakt_use_as_exclusion)
 
+    # Simkl seed / exclusion flags
+    simkl_use_as_seed = env_vars.get('SIMKL_USE_AS_SEED')
+    if simkl_use_as_seed is not None:
+        filters['use_simkl_as_seed'] = bool(simkl_use_as_seed)
+
+    simkl_use_as_exclusion = env_vars.get('SIMKL_USE_AS_EXCLUSION')
+    if simkl_use_as_exclusion is not None:
+        filters['use_simkl_as_exclusion'] = bool(simkl_use_as_exclusion)
+
     return filters
 
 

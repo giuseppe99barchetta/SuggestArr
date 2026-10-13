@@ -82,6 +82,9 @@
             <p v-if="item.rationale" class="m-0 text-xs italic text-brand-ink"><i aria-hidden="true" class="fas fa-magic mr-1"></i>{{ item.rationale }}</p>
             <p v-if="item.overview" class="m-0 text-xs leading-snug text-ink-3">{{ truncate(item.overview, 120) }}</p>
             <p v-if="item.source && item.source.title" class="m-0 truncate text-xs text-ink-4">Similar to <span class="text-ink-2">{{ item.source.title }}</span></p>
+            <p v-if="sourceOriginLabel(item)" class="m-0 text-xs text-ink-4">
+              <i :class="sourceOriginLabel(item).icon"></i> Seeded from {{ sourceOriginLabel(item).name }} watch history
+            </p>
           </div>
         </li>
       </ul>
@@ -136,6 +139,13 @@ export default {
     },
     trailerKey(item) {
       return `${item.media_type}:${item.tmdb_id}`;
+    },
+    sourceOriginLabel(item) {
+      const origins = {
+        trakt_history: { name: 'Trakt', icon: 'icon-trakt' },
+        simkl_history: { name: 'Simkl', icon: 'icon-simkl' },
+      };
+      return origins[item.source?.source_origin] || null;
     },
     trailerUnavailable(item) {
       const key = this.trailerKey(item);

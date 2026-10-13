@@ -106,6 +106,10 @@
           <h3 class="m-0 flex items-center gap-2 text-sm font-bold text-ink"><i aria-hidden="true" class="fas fa-tv"></i>Trakt account</h3>
           <TraktMediaUsers mode="self" :trakt-configured="isTraktAppConfigured" embedded />
         </div>
+        <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
+          <h3 class="m-0 flex items-center gap-2 text-sm font-bold text-ink"><i aria-hidden="true" class="fas fa-check-double"></i>Simkl account</h3>
+          <SimklMediaUsers mode="self" :simkl-configured="isSimklAppConfigured" embedded />
+        </div>
       </div>
     </SectionCard>
 
@@ -132,6 +136,7 @@ import {
 import SectionCard from '@/components/ui/SectionCard.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
 import WatchedMediaHistory from './WatchedMediaHistory.vue';
+import SimklMediaUsers from './SimklMediaUsers.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
 import { languageOptions, languagePayload } from '@/utils/titleLanguage.js';
 
@@ -144,7 +149,7 @@ const PROVIDER_META = {
 export default {
   name: 'UserProfile',
 
-  components: { PageHeader, SectionCard, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel },
+  components: { PageHeader, SectionCard, TraktMediaUsers, SimklMediaUsers, WatchedMediaHistory, ApiKeysPanel },
 
   // The dashboard shell passes props this page does not declare.
   inheritAttrs: false,
@@ -183,6 +188,7 @@ export default {
       configStatus: {
         selected_service: '',
         trakt_app_configured: false,
+        simkl_app_configured: false,
       },
 
       // Credential-based link form
@@ -253,6 +259,11 @@ export default {
 
     isTraktAppConfigured() {
       return !!this.config?.TRAKT_CLIENT_ID || this.configStatus?.trakt_app_configured === true;
+    },
+
+    isSimklAppConfigured() {
+      return !!this.config?.SIMKL_CLIENT_ID
+        || this.configStatus?.simkl_app_configured === true;
     },
 
     serverUserOptions() {
@@ -504,4 +515,3 @@ export default {
   },
 };
 </script>
-
