@@ -23,6 +23,7 @@ PIN = {
     "verification_uri": "https://simkl.com/pin",
     "verification_uri_complete": "https://simkl.com/pin?user_code=8CCE9",
     "device_code": "device-code",
+    "code_verifier": "verifier",
     "expires_in": 900,
     "interval": 5,
 }
@@ -36,6 +37,7 @@ TOKENS = {
 class FakeClient:
     """Stands in for SimklClient; behaviour is driven by class-level knobs."""
     pin_error = None
+    settings_error = None
     instances = []
 
     def __init__(self, client_id, access_token="", session=None, link_id=None):
@@ -53,12 +55,14 @@ class FakeClient:
             raise FakeClient.pin_error
         return dict(PIN)
 
-    async def poll_for_token(self, device_code):
+    async def poll_for_token(self, device_code, code_verifier):
         if FakeClient.pin_error:
             raise FakeClient.pin_error
         return dict(TOKENS)
 
     async def get_user_settings(self):
+        if FakeClient.settings_error:
+            raise FakeClient.settings_error
         return dict(SETTINGS)
 
 
@@ -70,6 +74,7 @@ async def _sync_ok(self, link, token):
 @pytest.fixture(autouse=True)
 def reset_fake():
     FakeClient.pin_error = None
+    FakeClient.settings_error = None
     FakeClient.instances = []
     yield
 
@@ -93,8 +98,13 @@ def make_db(**overrides):
         "id": 1, "provider": "jellyfin", "external_user_id": "jf-1",
     }
     db.upsert_simkl_account_link.return_value = 5
+    db.persist_simkl_link.return_value = {
+        "link_id": 5, "account_changed": False, "cleared_cache": 0,
+    }
     db.get_simkl_account_link.return_value = None
-    db.get_simkl_pending_device_code.return_value = "device-code"
+    db.get_simkl_pending_authorization.return_value = {
+        "device_code": "device-code", "code_verifier": "verifier",
+    }
     db.get_simkl_watched_cache.return_value = []
     db.get_enabled_simkl_sources.return_value = []
     for key, value in overrides.items():
@@ -144,7 +154,8 @@ def test_requesting_a_pin_returns_the_code_and_binds_it_to_the_identity():
     assert body["user_code"] == "8CCE9"
     assert body["verification_uri"] == "https://simkl.com/pin"
     assert body["verification_uri_complete"].endswith("8CCE9")
-    db.set_simkl_pending_device_code.assert_called_once_with(1, "device-code")
+    assert "code_verifier" not in body
+    db.set_simkl_pending_device_code.assert_called_once_with(1, "device-code", "verifier")
 
 
 def test_the_poll_uses_the_stored_code_not_one_supplied_by_the_caller():
@@ -154,8 +165,9 @@ def test_the_poll_uses_the_stored_code_not_one_supplied_by_the_caller():
     polled = {}
 
     class Recording(FakeClient):
-        async def poll_for_token(self, device_code):
+        async def poll_for_token(self, device_code, code_verifier):
             polled["code"] = device_code
+            polled["verifier"] = code_verifier
             return dict(TOKENS)
 
     app = make_app()
@@ -170,10 +182,11 @@ def test_the_poll_uses_the_stored_code_not_one_supplied_by_the_caller():
 
     assert resp.status_code == 200
     assert polled["code"] == "device-code"
+    assert polled["verifier"] == "verifier"
 
 
 def test_polling_before_requesting_a_pin_is_rejected():
-    db = make_db(get_simkl_pending_device_code=None)
+    db = make_db(get_simkl_pending_authorization=None)
     resp = run(db, "post", "/api/simkl/media-users/jellyfin/jf-1/pin/token")
     assert resp.status_code == 400
 
@@ -192,7 +205,7 @@ def test_an_expired_pin_clears_the_stored_code():
     resp = run(db, "post", "/api/simkl/media-users/jellyfin/jf-1/pin/token")
 
     assert resp.status_code == 400
-    db.set_simkl_pending_device_code.assert_called_with(1, None)
+    db.set_simkl_pending_device_code.assert_called_with(1, None, None)
 
 
 def test_a_rejected_client_id_surfaces_as_a_400_not_a_500():
@@ -213,6 +226,18 @@ def test_an_expired_pin_is_not_tagged_as_an_install_level_failure():
     FakeClient.pin_error = SimklPinExpired("expired")
     resp = run(make_db(), "post", "/api/simkl/media-users/jellyfin/jf-1/pin/token")
     assert "code" not in resp.get_json()
+
+
+def test_failed_relink_keeps_an_existing_connection_usable():
+    FakeClient.settings_error = RuntimeError("temporary settings failure")
+    db = make_db(get_simkl_account_link={
+        "id": 5, "simkl_user_id": "old-account", "connected": True, "status": "connected",
+    })
+
+    resp = run(db, "post", "/api/simkl/media-users/jellyfin/jf-1/pin/token")
+
+    assert resp.status_code == 500
+    db.mark_simkl_account_link_error.assert_not_called()
 
 
 # ---- Cancelling an in-flight PIN ---------------------------------------------
@@ -253,12 +278,16 @@ def test_a_completed_pin_persists_the_link_token_and_default_source():
 
     assert resp.status_code == 200
     assert resp.get_json()["simkl_username"] == "Wire"
-    db.upsert_simkl_account_link.assert_called_once()
-    db.upsert_simkl_oauth_tokens.assert_called_once_with(
-        link_id=5, access_token="tok-123", refresh_token="refresh-123", expires_at=123456,
+    db.persist_simkl_link.assert_called_once_with(
+        media_user_identity_id=1,
+        simkl_user_id="8307044",
+        simkl_username="Wire",
+        access_token="tok-123",
+        refresh_token="refresh-123",
+        expires_at=123456,
+        status="connected",
     )
-    db.upsert_simkl_source.assert_called_once()
-    db.set_simkl_pending_device_code.assert_called_with(1, None)
+    db.set_simkl_pending_device_code.assert_called_with(1, None, None)
 
 
 def test_relinking_a_different_simkl_account_clears_the_cache():
@@ -266,9 +295,13 @@ def test_relinking_a_different_simkl_account_clears_the_cache():
     db = make_db(get_simkl_account_link={
         "id": 5, "simkl_user_id": "99999", "connected": True, "status": "connected",
     })
+    db.persist_simkl_link.return_value = {
+        "link_id": 5, "account_changed": True, "cleared_cache": 3,
+    }
     run(db, "post", "/api/simkl/media-users/jellyfin/jf-1/pin/token")
-    db.clear_simkl_watched_cache.assert_called_once_with(5)
-    db.reset_simkl_sync_state.assert_called_once_with(5)
+    assert db.persist_simkl_link.call_args.kwargs["simkl_user_id"] == "8307044"
+    db.clear_simkl_watched_cache.assert_not_called()
+    db.reset_simkl_sync_state.assert_not_called()
 
 
 def test_relinking_the_same_simkl_account_keeps_the_cache():

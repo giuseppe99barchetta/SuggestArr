@@ -10,6 +10,7 @@ import pytest
 
 import api_service.db.database_manager as dm_mod
 from api_service.db.database_manager import DatabaseManager
+from api_service.db.components.simkl_mixin import SimklLinkBusyError
 
 
 @pytest.fixture
@@ -107,16 +108,51 @@ def test_upserting_tokens_twice_replaces_rather_than_duplicates(db, link):
 def test_a_pending_code_can_be_stored_before_any_link_exists(db):
     """The first link has no row yet, so setting a code must create one."""
     identity = db.upsert_media_user_identity("plex", "fresh", "New")
-    db.set_simkl_pending_device_code(identity["id"], "device-code")
+    db.set_simkl_pending_device_code(identity["id"], "device-code", "verifier")
 
     assert db.get_simkl_pending_device_code(identity["id"]) == "device-code"
+    assert db.get_simkl_pending_authorization(identity["id"])["code_verifier"] == "verifier"
     assert db.get_simkl_account_link(identity["id"])["status"] == "pending"
 
 
 def test_completing_a_link_clears_the_pending_code(db, link):
-    db.set_simkl_pending_device_code(link["identity_id"], "device-code")
+    db.set_simkl_pending_device_code(link["identity_id"], "device-code", "verifier")
     db.upsert_simkl_account_link(link["identity_id"], "8307044", "Wire")
     assert db.get_simkl_pending_device_code(link["identity_id"]) is None
+
+
+def test_persisting_a_different_account_resets_cache_and_tokens(db, link):
+    db.upsert_simkl_oauth_tokens(link["link_id"], "old-access", refresh_token="old-refresh")
+    db.upsert_simkl_watched_cache(link["link_id"], rows())
+    db.update_simkl_sync_state(
+        link["link_id"], activities={"all": "old"}, mark_full_sync=True,
+        mark_activities_check=True,
+    )
+
+    result = db.persist_simkl_link(
+        link["identity_id"], "new-account", "New", "new-access", "new-refresh", 123,
+    )
+
+    assert result["account_changed"] is True
+    assert db.get_simkl_watched_cache(link["link_id"]) == []
+    assert db.get_simkl_sync_state(link["link_id"]) == {
+        "activities": {}, "last_full_sync_at": None, "last_activities_check_at": None,
+    }
+    assert db.get_simkl_oauth_tokens(link["link_id"]) == {
+        "access_token": "new-access", "refresh_token": "new-refresh", "expires_at": 123,
+    }
+
+
+def test_persisting_an_account_change_respects_the_sync_lock(db, link):
+    lock_key = f"simkl:{link['link_id']}"
+    assert db.try_acquire_submission_lock(lock_key, "simkl_sync", 3600) is True
+
+    with pytest.raises(SimklLinkBusyError):
+        db.persist_simkl_link(
+            link["identity_id"], "new-account", "New", "new-access", "new-refresh", 123,
+        )
+
+    db.release_submission_lock(lock_key, "simkl_sync")
 
 
 # ---- Cache -------------------------------------------------------------------

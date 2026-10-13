@@ -64,6 +64,17 @@ test('specific mode with nothing selected cannot be usable', () => {
   );
 });
 
+test('specific mode matches numeric and string media-user IDs', () => {
+  assert.equal(
+    state({
+      users: [{ external_user_id: '1', simkl: { connected: true } }],
+      userMode: 'specific',
+      selectedIds: [1],
+    }),
+    'usable',
+  );
+});
+
 test('each tracker key is read independently', () => {
   const traktOnly = [{ external_user_id: '1', trakt: { connected: true }, simkl: {} }];
   assert.equal(state({ users: traktOnly, key: 'trakt' }), 'usable');

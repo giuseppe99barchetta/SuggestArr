@@ -371,6 +371,7 @@ class SchemaManager:
                     last_full_sync_at BIGINT,
                     last_activities_check_at BIGINT,
                     pending_device_code TEXT,
+                    pending_code_verifier TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
@@ -929,6 +930,10 @@ class SchemaManager:
                 if 'pending_device_code' not in link_columns:
                     cursor.execute(
                         "ALTER TABLE simkl_account_links ADD COLUMN pending_device_code TEXT"
+                    )
+                if 'pending_code_verifier' not in link_columns:
+                    cursor.execute(
+                        "ALTER TABLE simkl_account_links ADD COLUMN pending_code_verifier TEXT"
                     )
                 if 'refresh_token' not in token_columns:
                     cursor.execute(

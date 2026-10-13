@@ -14,8 +14,9 @@ export function monitoredConnected({ users, key, userMode, selectedIds }) {
     return users.some(u => u[key]?.connected);
   }
   if (!selectedIds.length) return false;
+  const monitoredIds = new Set(selectedIds.map(id => String(id)));
   return users.some(
-    u => selectedIds.includes(u.external_user_id) && u[key]?.connected
+    u => monitoredIds.has(String(u.external_user_id)) && u[key]?.connected
   );
 }
 

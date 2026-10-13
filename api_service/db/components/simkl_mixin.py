@@ -10,6 +10,10 @@ import time
 from typing import Any, Dict, List, Optional, Sequence
 
 
+class SimklLinkBusyError(RuntimeError):
+    """A Simkl account transition overlapped an active library sync."""
+
+
 class SimklMixin:
     # ---- simkl_account_links --------------------------------------------------
 
@@ -36,7 +40,7 @@ class SimklMixin:
                 f"token_source = excluded.token_source, "
                 f"status = excluded.status, "
                 f"last_error = NULL, "
-                f"pending_device_code = NULL, "
+                f"pending_device_code = NULL, pending_code_verifier = NULL, "
                 f"updated_at = CURRENT_TIMESTAMP"
             )
         elif self.db_type == 'postgres':
@@ -48,7 +52,7 @@ class SimklMixin:
                 f"token_source = EXCLUDED.token_source, "
                 f"status = EXCLUDED.status, "
                 f"last_error = NULL, "
-                f"pending_device_code = NULL, "
+                f"pending_device_code = NULL, pending_code_verifier = NULL, "
                 f"updated_at = CURRENT_TIMESTAMP"
             )
         else:
@@ -60,7 +64,7 @@ class SimklMixin:
                 f"token_source = VALUES(token_source), "
                 f"status = VALUES(status), "
                 f"last_error = NULL, "
-                f"pending_device_code = NULL, "
+                f"pending_device_code = NULL, pending_code_verifier = NULL, "
                 f"updated_at = CURRENT_TIMESTAMP"
             )
         with self.get_connection() as conn:
@@ -81,7 +85,8 @@ class SimklMixin:
     _SIMKL_LINK_COLUMNS = (
         "id, media_user_identity_id, simkl_user_id, simkl_username, token_source, "
         "status, last_synced_at, last_error, activities_json, last_full_sync_at, "
-        "last_activities_check_at, pending_device_code, created_at, updated_at"
+        "last_activities_check_at, pending_device_code, pending_code_verifier, "
+        "created_at, updated_at"
     )
 
     def _row_to_simkl_link(self, row) -> Dict[str, Any]:
@@ -92,8 +97,8 @@ class SimklMixin:
             "last_synced_at": row[6], "last_error": row[7],
             "activities_json": row[8],
             "last_full_sync_at": row[9], "last_activities_check_at": row[10],
-            "pending_device_code": row[11],
-            "created_at": row[12], "updated_at": row[13],
+            "pending_device_code": row[11], "pending_code_verifier": row[12],
+            "created_at": row[13], "updated_at": row[14],
             "connected": status == "connected",
         }
 
@@ -181,10 +186,172 @@ class SimklMixin:
             rows = cursor.fetchall()
         return [self._row_to_simkl_link(row) for row in rows]
 
+    def persist_simkl_link(
+        self,
+        media_user_identity_id: int,
+        simkl_user_id: Optional[str],
+        simkl_username: Optional[str],
+        access_token: Optional[str] = None,
+        refresh_token: Optional[str] = None,
+        expires_at: Any = None,
+        status: str = "connected",
+        token_provided: bool = True,
+    ) -> Dict[str, Any]:
+        """Atomically replace a link and its derived state.
+
+        The same database lock used by :class:`SimklWatchHistorySync` prevents
+        an old-account sync from writing after an account transition begins.
+        """
+        previous = self.get_simkl_account_link(media_user_identity_id) or {}
+        link_id = previous.get("id")
+        lock_key = f"simkl:{link_id}" if link_id else None
+        if lock_key and not self.try_acquire_submission_lock(
+            lock_key, "simkl_sync", 3600
+        ):
+            raise SimklLinkBusyError("Simkl account is currently being synchronized")
+
+        ph = self._ph()
+        new_account = str(simkl_user_id or "")
+        previous_account = str(previous.get("simkl_user_id") or "")
+        account_changed = bool(previous_account and previous_account != new_account)
+        expires_at = self._coerce_trakt_expires_at(expires_at)
+        cleared_cache = 0
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                if link_id:
+                    assignments = [
+                        f"simkl_user_id = {ph}",
+                        f"simkl_username = {ph}",
+                        f"token_source = {ph}",
+                        f"status = {ph}",
+                        "last_error = NULL",
+                        "pending_device_code = NULL",
+                        "pending_code_verifier = NULL",
+                    ]
+                    params: List[Any] = [
+                        simkl_user_id, simkl_username, "manual_oauth", status,
+                    ]
+                    if account_changed:
+                        assignments.extend([
+                            "activities_json = NULL",
+                            "last_synced_at = NULL",
+                            "last_full_sync_at = NULL",
+                            "last_activities_check_at = NULL",
+                        ])
+                    assignments.append("updated_at = CURRENT_TIMESTAMP")
+                    params.append(link_id)
+                    cursor.execute(
+                        f"UPDATE simkl_account_links SET {', '.join(assignments)} "
+                        f"WHERE id = {ph}", tuple(params),
+                    )
+                else:
+                    columns = (
+                        "media_user_identity_id, simkl_user_id, simkl_username, "
+                        "token_source, status, updated_at"
+                    )
+                    cursor.execute(
+                        f"INSERT INTO simkl_account_links ({columns}) VALUES "
+                        f"({ph}, {ph}, {ph}, {ph}, {ph}, CURRENT_TIMESTAMP)",
+                        (media_user_identity_id, simkl_user_id, simkl_username,
+                         "manual_oauth", status),
+                    )
+                    cursor.execute(
+                        f"SELECT id FROM simkl_account_links "
+                        f"WHERE media_user_identity_id = {ph}",
+                        (media_user_identity_id,),
+                    )
+                    link_id = cursor.fetchone()[0]
+
+                if account_changed:
+                    cursor.execute(
+                        f"DELETE FROM simkl_watched_cache WHERE link_id = {ph}",
+                        (link_id,),
+                    )
+                    cleared_cache = cursor.rowcount
+                    if not token_provided:
+                        cursor.execute(
+                            f"DELETE FROM simkl_oauth_tokens WHERE link_id = {ph}",
+                            (link_id,),
+                        )
+
+                if token_provided and access_token:
+                    columns = "link_id, access_token, refresh_token, expires_at, updated_at"
+                    values = f"{ph}, {ph}, {ph}, {ph}, CURRENT_TIMESTAMP"
+                    if self.db_type == "sqlite":
+                        query = (
+                            f"INSERT INTO simkl_oauth_tokens ({columns}) VALUES ({values}) "
+                            "ON CONFLICT(link_id) DO UPDATE SET access_token = excluded.access_token, "
+                            "refresh_token = excluded.refresh_token, expires_at = excluded.expires_at, "
+                            "updated_at = CURRENT_TIMESTAMP"
+                        )
+                    elif self.db_type == "postgres":
+                        query = (
+                            f"INSERT INTO simkl_oauth_tokens ({columns}) VALUES ({values}) "
+                            "ON CONFLICT (link_id) DO UPDATE SET access_token = EXCLUDED.access_token, "
+                            "refresh_token = EXCLUDED.refresh_token, expires_at = EXCLUDED.expires_at, "
+                            "updated_at = CURRENT_TIMESTAMP"
+                        )
+                    else:
+                        query = (
+                            f"INSERT INTO simkl_oauth_tokens ({columns}) VALUES ({values}) "
+                            "ON DUPLICATE KEY UPDATE access_token = VALUES(access_token), "
+                            "refresh_token = VALUES(refresh_token), expires_at = VALUES(expires_at), "
+                            "updated_at = CURRENT_TIMESTAMP"
+                        )
+                    cursor.execute(
+                        query, (link_id, access_token, refresh_token, expires_at),
+                    )
+
+                columns = (
+                    "media_user_identity_id, source_type, source_key, enabled, "
+                    "use_as_seed, use_as_exclusion, updated_at"
+                )
+                values = f"{ph}, {ph}, {ph}, {ph}, {ph}, {ph}, CURRENT_TIMESTAMP"
+                if self.db_type == "sqlite":
+                    query = (
+                        f"INSERT INTO simkl_sources ({columns}) VALUES ({values}) "
+                        "ON CONFLICT(media_user_identity_id, source_type, source_key) DO UPDATE SET "
+                        "enabled = excluded.enabled, use_as_seed = excluded.use_as_seed, "
+                        "use_as_exclusion = excluded.use_as_exclusion, updated_at = CURRENT_TIMESTAMP"
+                    )
+                elif self.db_type == "postgres":
+                    query = (
+                        f"INSERT INTO simkl_sources ({columns}) VALUES ({values}) "
+                        "ON CONFLICT (media_user_identity_id, source_type, source_key) DO UPDATE SET "
+                        "enabled = EXCLUDED.enabled, use_as_seed = EXCLUDED.use_as_seed, "
+                        "use_as_exclusion = EXCLUDED.use_as_exclusion, updated_at = CURRENT_TIMESTAMP"
+                    )
+                else:
+                    query = (
+                        f"INSERT INTO simkl_sources ({columns}) VALUES ({values}) "
+                        "ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), "
+                        "use_as_seed = VALUES(use_as_seed), use_as_exclusion = VALUES(use_as_exclusion), "
+                        "updated_at = CURRENT_TIMESTAMP"
+                    )
+                cursor.execute(
+                    query,
+                    (media_user_identity_id, "watched_history", "watched_history", 1, 1, 1),
+                )
+                conn.commit()
+        finally:
+            if lock_key:
+                self.release_submission_lock(lock_key, "simkl_sync")
+
+        return {
+            "link_id": link_id,
+            "previous_account": previous_account,
+            "account_changed": account_changed,
+            "cleared_cache": cleared_cache,
+        }
+
     # ---- pending device authorization ----------------------------------------
 
     def set_simkl_pending_device_code(
-        self, media_user_identity_id: int, device_code: Optional[str]
+        self,
+        media_user_identity_id: int,
+        device_code: Optional[str],
+        code_verifier: Optional[str] = None,
     ) -> None:
         """Bind an in-flight device code to the identity that requested it.
 
@@ -202,16 +369,26 @@ class SimklMixin:
             )
         query = (
             f"UPDATE simkl_account_links SET pending_device_code = {ph}, "
+            f"pending_code_verifier = {ph}, "
             f"updated_at = CURRENT_TIMESTAMP WHERE media_user_identity_id = {ph}"
         )
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query, (device_code, media_user_identity_id))
+            cursor.execute(query, (device_code, code_verifier, media_user_identity_id))
             conn.commit()
 
     def get_simkl_pending_device_code(self, media_user_identity_id: int) -> Optional[str]:
         link = self.get_simkl_account_link(media_user_identity_id)
         return (link or {}).get("pending_device_code") or None
+
+    def get_simkl_pending_authorization(self, media_user_identity_id: int) -> Optional[dict]:
+        link = self.get_simkl_account_link(media_user_identity_id)
+        if not link or not link.get("pending_device_code"):
+            return None
+        return {
+            "device_code": link["pending_device_code"],
+            "code_verifier": link.get("pending_code_verifier") or "",
+        }
 
     # ---- simkl_oauth_tokens ---------------------------------------------------
 

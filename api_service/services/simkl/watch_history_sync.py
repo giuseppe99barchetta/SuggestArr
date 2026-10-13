@@ -134,7 +134,6 @@ class SimklWatchHistorySync:
         self, client: SimklClient, link_id: int, state: dict
     ) -> bool:
         activities = await client.get_activities()
-        self.db.update_simkl_sync_state(link_id, mark_activities_check=True)
 
         stored = state.get("activities") or {}
         first_sync = not state.get("last_full_sync_at")
@@ -148,10 +147,12 @@ class SimklWatchHistorySync:
             # also the path a first sync of an empty library takes. It still
             # has to be recorded, or the UI reads "linked but never synced"
             # forever instead of "linked, and there is genuinely nothing here".
-            if first_sync:
-                self.db.update_simkl_sync_state(
-                    link_id, activities=activities, mark_full_sync=True
-                )
+            self.db.update_simkl_sync_state(
+                link_id,
+                activities=activities,
+                mark_full_sync=first_sync,
+                mark_activities_check=True,
+            )
             return True
 
         total = 0
@@ -197,6 +198,7 @@ class SimklWatchHistorySync:
             link_id,
             activities=self._activities_to_store(activities, stored, skipped_sweeps),
             mark_full_sync=first_sync or bool(swept),
+            mark_activities_check=True,
         )
 
         if dropped:

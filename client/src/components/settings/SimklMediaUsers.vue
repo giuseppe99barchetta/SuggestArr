@@ -272,6 +272,7 @@ export default {
       previewLoading: false,
       previewError: null,
       previewFetched: false,
+      previewGeneration: 0,
     };
   },
   computed: {
@@ -482,6 +483,7 @@ export default {
       }
     },
     resetPreview() {
+      this.previewGeneration += 1;
       this.previewTargetKey = '';
       this.clearPreviewItems();
     },
@@ -500,6 +502,8 @@ export default {
     async loadPreviewItems() {
       const user = this.previewTargetUser;
       if (!user) return;
+      const generation = ++this.previewGeneration;
+      const targetKey = this.rowKey(user);
       this.previewLoading = true;
       this.previewError = null;
       this.previewFetched = false;
@@ -507,9 +511,11 @@ export default {
         const res = this.isSelfMode
           ? await previewMySimklRecent(10)
           : await previewMediaUserSimklRecent(user.provider, user.external_user_id, 10);
+        if (generation !== this.previewGeneration || targetKey !== this.previewTargetKey) return;
         this.previewItems = res.data?.items || [];
         this.previewFetched = true;
       } catch (err) {
+        if (generation !== this.previewGeneration || targetKey !== this.previewTargetKey) return;
         this.previewItems = [];
         this.previewFetched = true;
         if (err.response?.data?.code === 'client_id_failed') {
@@ -518,7 +524,7 @@ export default {
           this.previewError = err.response?.data?.message || 'Failed to fetch recent Simkl items';
         }
       } finally {
-        this.previewLoading = false;
+        if (generation === this.previewGeneration) this.previewLoading = false;
       }
     },
     previewItemKey(item) {

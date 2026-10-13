@@ -316,6 +316,31 @@ def test_activities_are_stored_only_after_every_pull_succeeded(monkeypatch):
     assert saved_activities == []
 
 
+def test_a_failed_bucket_pull_does_not_start_the_activities_cooldown(monkeypatch):
+    current = activities(tv_shows={"watching": "2026-08-05T21:22:00Z"})
+
+    class Failing(FakeClient):
+        async def get_all_items(self, *args, **kwargs):
+            raise SimklError("temporary bucket failure")
+
+    client = Failing(current)
+    sync, db = make_sync(monkeypatch, client)
+    db.get_simkl_sync_state.return_value = {
+        "activities": {}, "last_full_sync_at": None, "last_activities_check_at": None,
+    }
+
+    asyncio.run(sync.ensure_synced(LINK, "tok"))
+    asyncio.run(sync.ensure_synced(LINK, "tok"))
+
+    assert [call for call in client.calls if call[0] == "activities"] == [
+        ("activities", None, None), ("activities", None, None),
+    ]
+    assert not [
+        call for call in db.update_simkl_sync_state.call_args_list
+        if call.kwargs.get("mark_activities_check")
+    ]
+
+
 # ---- Reconcile ---------------------------------------------------------------
 
 def test_removed_from_list_advancing_triggers_a_reconcile(monkeypatch):
@@ -465,10 +490,10 @@ def test_an_unchanged_library_does_not_re_record_a_full_sync(monkeypatch):
 
     asyncio.run(sync.ensure_synced(LINK, "tok"))
 
-    assert not [
-        call for call in db.update_simkl_sync_state.call_args_list
-        if call.kwargs.get("activities") is not None or call.kwargs.get("mark_full_sync")
-    ]
+    updates = db.update_simkl_sync_state.call_args_list
+    assert len(updates) == 1
+    assert updates[0].kwargs["mark_activities_check"] is True
+    assert updates[0].kwargs["mark_full_sync"] is False
 
 
 # ---- Normalization -----------------------------------------------------------

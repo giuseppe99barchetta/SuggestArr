@@ -12,7 +12,10 @@ three ways that are forced by the Simkl API rather than by preference:
   are never retried.
 """
 import asyncio
+import base64
+import hashlib
 import random
+import secrets
 import time
 from typing import Any, Optional
 
@@ -148,10 +151,19 @@ class SimklClient(BaseHTTPClient):
             dict[str, Any]: The public code and verification URLs. The private
             ``device_code`` is retained only in the server-side pending state.
         """
+        code_verifier = secrets.token_urlsafe(64)
+        code_challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(code_verifier.encode("ascii")).digest()
+        ).rstrip(b"=").decode("ascii")
         payload = await self._request(
             "POST",
             "/oauth2/device",
-            data={"client_id": self.client_id, "scope": "media:read"},
+            data={
+                "client_id": self.client_id,
+                "scope": "media:read",
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
+            },
             authenticated=False,
         )
         return {
@@ -159,11 +171,14 @@ class SimklClient(BaseHTTPClient):
             "verification_uri": payload.get("verification_uri") or "https://simkl.com/pin",
             "verification_uri_complete": payload.get("verification_uri_complete") or "",
             "device_code": payload.get("device_code") or "",
+            "code_verifier": code_verifier,
             "expires_in": int(payload.get("expires_in") or 900),
             "interval": int(payload.get("interval") or 5),
         }
 
-    async def poll_for_token(self, device_code: str) -> dict[str, Any]:
+    async def poll_for_token(
+        self, device_code: str, code_verifier: str = ""
+    ) -> dict[str, Any]:
         """Poll a pending device authorization once.
 
         Simkl answers with HTTP 200 in every case and puts the state in the
@@ -190,6 +205,7 @@ class SimklClient(BaseHTTPClient):
                 "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
                 "client_id": self.client_id,
                 "device_code": device_code,
+                "code_verifier": code_verifier,
             },
         )
         if status in self.HTTP_OK:

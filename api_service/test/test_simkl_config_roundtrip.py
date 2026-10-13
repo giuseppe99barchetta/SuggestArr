@@ -160,6 +160,36 @@ def test_import_accepts_a_legacy_access_token_without_a_refresh_token(db):
     assert db.get_simkl_oauth_tokens(link["id"])["access_token"] == "only-access"
 
 
+def test_importing_a_different_account_clears_old_token_cache_and_clocks(db):
+    identity, link_id = link_simkl(db, account_id="account-a")
+    db.upsert_simkl_watched_cache(link_id, [{
+        "simkl_id": "1", "simkl_type": "shows", "media_type": "tv",
+        "status": "completed", "tmdb_id": "1", "title": "Old", "year": 2020,
+        "last_watched_at": 1,
+    }])
+    db.update_simkl_sync_state(
+        link_id, activities={"all": "old"}, mark_full_sync=True,
+        mark_activities_check=True,
+    )
+
+    config_service._import_media_users(db, [{
+        "provider": "jellyfin", "external_user_id": "jf-1", "external_username": "Wire",
+        "simkl": {
+            "simkl_user_id": "account-b", "simkl_username": "Other",
+            "status": "connected", "oauth_tokens": {"access_token": config_service.REDACTED},
+        },
+    }])
+
+    link = db.get_simkl_account_link(identity["id"])
+    assert link["simkl_user_id"] == "account-b"
+    assert link["status"] == "needs_reauth"
+    assert db.get_simkl_oauth_tokens(link_id) is None
+    assert db.get_simkl_watched_cache(link_id) == []
+    assert db.get_simkl_sync_state(link_id) == {
+        "activities": {}, "last_full_sync_at": None, "last_activities_check_at": None,
+    }
+
+
 def test_a_redacted_token_is_not_restored(db):
     config_service._import_media_users(db, [{
         "provider": "jellyfin", "external_user_id": "jf-11",

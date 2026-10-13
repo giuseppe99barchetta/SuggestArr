@@ -660,16 +660,17 @@ def _reconcile_plex_account_id(db, plex_account_id: str, plex_username: str) -> 
         plex_account_id, resolved,
     )
     try:
-        db.get_media_user_identity("plex", resolved)
+        target = db.get_media_user_identity("plex", resolved)
     except ValueError:
         pass
     else:
-        logger.warning(
-            "Could not move Plex identity from %s to existing destination %s; "
-            "keeping the Plex.tv id",
-            plex_account_id, resolved,
-        )
-        return str(plex_account_id)
+        if not db.delete_empty_media_user_identity(target["id"]):
+            logger.warning(
+                "Could not move Plex identity from %s to existing destination %s; "
+                "keeping the Plex.tv id",
+                plex_account_id, resolved,
+            )
+            return str(plex_account_id)
 
     try:
         db.get_media_user_identity("plex", plex_account_id)

@@ -138,17 +138,24 @@ def reconcile_plex_profiles(db, list_server_users: Callable[[], List[Dict[str, A
             # a media profile. Moving the profile anyway would hide any tracker
             # links still attached to the old identity.
             try:
-                db.get_media_user_identity("plex", resolved)
+                target = db.get_media_user_identity("plex", resolved)
             except ValueError:
                 # There was no identity to move, so there are no links to strand.
                 pass
             else:
-                logger.warning(
-                    "Not re-pointing the Plex profile for user id=%s from %s to %s: "
-                    "the destination identity already exists",
-                    profile.get("user_id"), stored_id, resolved,
-                )
-                continue
+                if db.delete_empty_media_user_identity(target["id"]):
+                    renamed = db.rename_media_user_identity("plex", stored_id, resolved)
+                    if renamed is not None:
+                        pass
+                    else:
+                        continue
+                else:
+                    logger.warning(
+                        "Not re-pointing the Plex profile for user id=%s from %s to %s: "
+                        "the destination identity contains linked data",
+                        profile.get("user_id"), stored_id, resolved,
+                    )
+                    continue
         db.update_media_profile_external_id(profile["user_id"], "plex", resolved)
         claimed.pop(stored_id, None)
         claimed[resolved] = profile["user_id"]

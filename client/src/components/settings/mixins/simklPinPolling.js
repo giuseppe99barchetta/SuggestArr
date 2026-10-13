@@ -24,6 +24,8 @@ export default {
       simklVerificationUri: '',
       simklPollTimer: null,
       simklPollDeadline: null,
+      simklPollGeneration: 0,
+      simklPollInFlight: false,
       // Per-poll-session configuration captured at start time.
       simklPollConfig: null,
     };
@@ -56,8 +58,10 @@ export default {
     async startSimklPolling({ requestCode, pollToken, onConnected, setError, cancelCode }) {
       setError(null);
       this.stopSimklPolling();
+      const generation = this.simklPollGeneration;
       try {
         const start = await requestCode();
+        if (generation !== this.simklPollGeneration) return false;
         const {
           user_code: userCode,
           verification_uri: verificationUri,
@@ -82,6 +86,7 @@ export default {
         this.simklPollTimer = setInterval(() => this.pollSimklPinToken(), intervalMs);
         return true;
       } catch (err) {
+        if (generation !== this.simklPollGeneration) return false;
         setError(err.response?.data?.message || err.message || 'Failed to start Simkl connection', err);
         return false;
       }
@@ -89,14 +94,18 @@ export default {
 
     async pollSimklPinToken() {
       if (!this.simklUserCode || !this.simklPollConfig) return;
+      if (this.simklPollInFlight) return;
+      const generation = this.simklPollGeneration;
       const { pollToken, onConnected, setError } = this.simklPollConfig;
       if (this.simklPollDeadline && Date.now() >= this.simklPollDeadline) {
         this.stopSimklPolling();
         setError('Simkl PIN expired. Please try again.');
         return;
       }
+      this.simklPollInFlight = true;
       try {
         const poll = await pollToken();
+        if (generation !== this.simklPollGeneration) return;
         if (poll.data?.connected) {
           this.stopSimklPolling();
           await onConnected(poll.data);
@@ -108,9 +117,12 @@ export default {
           );
         }
       } catch (err) {
+        if (generation !== this.simklPollGeneration) return;
         const message = err.response?.data?.message || '';
         this.stopSimklPolling();
         setError(message || 'Simkl authorization failed. Please try again.', err);
+      } finally {
+        if (generation === this.simklPollGeneration) this.simklPollInFlight = false;
       }
     },
 
@@ -133,6 +145,7 @@ export default {
     },
 
     stopSimklPolling() {
+      this.simklPollGeneration += 1;
       if (this.simklPollTimer) {
         clearInterval(this.simklPollTimer);
         this.simklPollTimer = null;
@@ -142,6 +155,7 @@ export default {
       this.simklVerificationUri = '';
       this.simklPollDeadline = null;
       this.simklPollConfig = null;
+      this.simklPollInFlight = false;
     },
   },
 };

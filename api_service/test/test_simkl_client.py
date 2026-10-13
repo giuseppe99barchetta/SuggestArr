@@ -4,6 +4,8 @@ Response shapes here were captured from the live Simkl API rather than written
 from the docs, because several of them contradict what the docs imply.
 """
 import asyncio
+import base64
+import hashlib
 import time
 from unittest.mock import MagicMock, patch
 
@@ -106,7 +108,7 @@ def test_authenticated_requests_send_the_bearer_token_and_anonymous_ones_do_not(
 # ---- Device flow -------------------------------------------------------------
 
 def test_request_pin_code_normalizes_the_live_payload():
-    client, _ = make_client([FakeResponse(payload={
+    client, session = make_client([FakeResponse(payload={
         "device_code": "DEVICE_CODE",
         "user_code": "8CCE9",
         "verification_uri": "https://simkl.com/pin",
@@ -116,13 +118,15 @@ def test_request_pin_code_normalizes_the_live_payload():
     })])
     result = asyncio.run(client.request_pin_code())
 
-    assert result == {
-        "user_code": "8CCE9",
-        "verification_uri": "https://simkl.com/pin",
-        "verification_uri_complete": "https://simkl.com/pin?user_code=8CCE9",
-        "device_code": "DEVICE_CODE",
-        "expires_in": 900,
-        "interval": 5,
+    assert result["user_code"] == "8CCE9"
+    assert result["device_code"] == "DEVICE_CODE"
+    assert len(result["code_verifier"]) >= 43
+    expected_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(result["code_verifier"].encode()).digest()
+    ).rstrip(b"=").decode()
+    assert session.calls[0]["data"] == {
+        "client_id": "cid", "scope": "media:read",
+        "code_challenge": expected_challenge, "code_challenge_method": "S256",
     }
 
 
@@ -186,10 +190,11 @@ def test_polling_without_a_device_code_never_reaches_the_network():
 
 def test_device_code_is_sent_in_the_private_form_body():
     client, session = make_client([FakeResponse(payload={"access_token": "t"})])
-    asyncio.run(client.poll_for_token("device-code"))
+    asyncio.run(client.poll_for_token("device-code", "verifier"))
 
     assert session.calls[0]["url"].endswith("/oauth2/token")
     assert session.calls[0]["data"]["device_code"] == "device-code"
+    assert session.calls[0]["data"]["code_verifier"] == "verifier"
 
 
 # ---- Error mapping -----------------------------------------------------------

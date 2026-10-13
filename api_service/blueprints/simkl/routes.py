@@ -19,6 +19,7 @@ from api_service.auth.middleware import require_role
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.db.components.simkl_mixin import SimklLinkBusyError
 from api_service.services.config_service import ConfigService
 from api_service.services.simkl.simkl_client import (
     SimklAuthError,
@@ -141,10 +142,12 @@ async def _request_pin(client_id: str) -> dict[str, Any]:
         return await client.request_pin_code()
 
 
-async def _exchange_pin(client_id: str, device_code: str) -> tuple[dict[str, Any], dict[str, Any]]:
+async def _exchange_pin(
+    client_id: str, device_code: str, code_verifier: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Exchange an authorized device code for tokens and the account identity."""
     async with SimklClient(client_id) as client:
-        token_payload = await client.poll_for_token(device_code)
+        token_payload = await client.poll_for_token(device_code, code_verifier)
         settings = await client.get_user_settings()
     return token_payload, settings
 
@@ -174,42 +177,20 @@ def _link_and_persist(
     db: DatabaseManager, identity: dict, token_payload: dict, settings: dict
 ) -> dict:
     """Persist a completed link, its token, and the default source."""
-    # Captured before the upsert overwrites it. A re-link may point at a
-    # different Simkl account than the cache was built from, and those stale
-    # rows would otherwise be served as the new account's history.
-    previous = db.get_simkl_account_link(identity["id"]) or {}
-    previous_account = str(previous.get("simkl_user_id") or "")
-    new_account = str(settings.get("simkl_user_id") or "")
-
-    link_id = db.upsert_simkl_account_link(
+    persisted = db.persist_simkl_link(
         media_user_identity_id=identity["id"],
         simkl_user_id=settings.get("simkl_user_id"),
         simkl_username=settings.get("simkl_username"),
-        token_source="manual_oauth",
-        status="connected",
-    )
-    db.upsert_simkl_oauth_tokens(
-        link_id=link_id,
         access_token=token_payload.get("access_token") or "",
         refresh_token=token_payload.get("refresh_token"),
         expires_at=token_payload.get("expires_at"),
+        status="connected",
     )
-    db.upsert_simkl_source(
-        media_user_identity_id=identity["id"],
-        source_type="watched_history",
-        source_key="watched_history",
-        enabled=True,
-        use_as_seed=True,
-        use_as_exclusion=True,
-    )
-    if previous_account and previous_account != new_account:
+    if persisted["account_changed"]:
         logger.info(
             "Simkl link now points at a different account; clearing %d cached rows",
-            db.clear_simkl_watched_cache(link_id),
+            persisted["cleared_cache"],
         )
-        # Force a full rebuild rather than a delta or cooldown against the old
-        # account's activity timestamps.
-        db.reset_simkl_sync_state(link_id)
     return {
         "connected": True,
         "status": "connected",
@@ -293,7 +274,9 @@ def _start_pin(db: DatabaseManager, identity: dict, label: str):
     if not user_code or not device_code:
         return jsonify({"message": "Simkl returned an invalid device code", "status": "error"}), 502
 
-    db.set_simkl_pending_device_code(identity["id"], device_code)
+    db.set_simkl_pending_device_code(
+        identity["id"], device_code, activation.get("code_verifier"),
+    )
     # The private device code is returned by the API client only to this server;
     # the browser receives the public user code and verification URL.
     return jsonify({
@@ -312,29 +295,38 @@ def _finish_pin(db: DatabaseManager, identity: dict, label: str):
         return jsonify({"message": _NOT_CONFIGURED, "status": "error"}), 400
 
     # Read the private code from server-side state rather than the request body.
-    device_code = db.get_simkl_pending_device_code(identity["id"])
-    if not device_code:
+    pending = db.get_simkl_pending_authorization(identity["id"])
+    if not pending:
         return jsonify({"message": "Request Simkl authorization first", "status": "error"}), 400
 
     try:
-        token_payload, settings = async_to_sync(_exchange_pin)(client_id, device_code)
+        token_payload, settings = async_to_sync(_exchange_pin)(
+            client_id, pending["device_code"], pending["code_verifier"],
+        )
     except SimklPinPending as exc:
         body = {"connected": False, "status": "pending"}
         if exc.interval:
             body["interval"] = exc.interval
         return jsonify(body), 202
     except SimklPinExpired:
-        db.set_simkl_pending_device_code(identity["id"], None)
+        db.set_simkl_pending_device_code(identity["id"], None, None)
         return jsonify({"message": "Simkl authorization expired. Request a new one.", "status": "error"}), 400
     except SimklClientIdError as exc:
         return jsonify(_CLIENT_ID_FAILED(exc)), 400
     except Exception as exc:
         logger.error("Simkl device exchange failed for %s: %s", label, exc, exc_info=True)
-        db.mark_simkl_account_link_error(identity["id"], "error", "Simkl connection failed")
+        # Preserve an existing connection until the replacement account and
+        # token have completed successfully.
         return jsonify({"message": "Error connecting Simkl", "status": "error"}), 500
 
-    result = _link_and_persist(db, identity, token_payload, settings)
-    db.set_simkl_pending_device_code(identity["id"], None)
+    try:
+        result = _link_and_persist(db, identity, token_payload, settings)
+    except SimklLinkBusyError:
+        return jsonify({
+            "message": "Simkl history is currently syncing. Try linking again shortly.",
+            "status": "busy",
+        }), 409
+    db.set_simkl_pending_device_code(identity["id"], None, None)
     return jsonify(result), 200
 
 

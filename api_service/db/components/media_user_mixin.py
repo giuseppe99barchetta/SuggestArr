@@ -80,6 +80,30 @@ class MediaUserMixin:
         return {"id": row[0], "provider": row[1], "external_user_id": row[2],
                 "external_username": row[3], "created_at": row[4]}
 
+    def delete_empty_media_user_identity(self, identity_id: int) -> bool:
+        """Delete an identity only when no tracker or imported data claims it."""
+        ph = self._ph()
+        child_tables = (
+            "trakt_account_links", "trakt_sources", "simkl_account_links",
+            "simkl_sources", "watched_media",
+        )
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            for table in child_tables:
+                cursor.execute(
+                    f"SELECT 1 FROM {table} WHERE media_user_identity_id = {ph} LIMIT 1",
+                    (identity_id,),
+                )
+                if cursor.fetchone():
+                    return False
+            cursor.execute(
+                f"DELETE FROM media_user_identities WHERE id = {ph}",
+                (identity_id,),
+            )
+            deleted = cursor.rowcount > 0
+            conn.commit()
+        return deleted
+
     def rename_media_user_identity(
         self, provider: str, old_external_user_id: str, new_external_user_id: str
     ) -> Optional[Dict[str, Any]]:

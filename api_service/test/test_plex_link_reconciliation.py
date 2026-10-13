@@ -32,6 +32,7 @@ def make_db(plex_profiles=()):
     db = MagicMock()
     db.get_media_profiles_by_provider.return_value = list(plex_profiles)
     db.get_media_user_identity.side_effect = ValueError("not found")
+    db.delete_empty_media_user_identity.return_value = False
     db.rename_media_user_identity.return_value = None
     return db
 
@@ -94,3 +95,19 @@ def test_an_existing_destination_identity_aborts_the_profile_move(_users, app_co
 
     assert _reconcile_plex_account_id(db, "14621895", "Wirewraith") == "14621895"
     db.rename_media_user_identity.assert_not_called()
+
+
+@patch("api_service.blueprints.users.routes.list_plex_server_users", return_value=SERVER_USERS)
+def test_an_empty_destination_identity_is_absorbed(_users, app_context):
+    db = make_db()
+    db.get_media_user_identity.side_effect = lambda provider, external_user_id: (
+        {"id": 2, "provider": provider, "external_user_id": "1"}
+        if str(external_user_id) == "1" else
+        {"id": 1, "provider": provider, "external_user_id": "14621895"}
+    )
+    db.delete_empty_media_user_identity.return_value = True
+    db.rename_media_user_identity.return_value = {"id": 1, "external_user_id": "1"}
+
+    assert _reconcile_plex_account_id(db, "14621895", "Wirewraith") == "1"
+    db.delete_empty_media_user_identity.assert_called_once_with(2)
+    db.rename_media_user_identity.assert_called_once_with("plex", "14621895", "1")

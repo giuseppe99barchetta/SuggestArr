@@ -187,26 +187,39 @@ def _import_simkl_link(db: DatabaseManager, identity_id: int, simkl: dict) -> No
     that the next sync rebuilds, and shipping a few hundred watch rows per user
     inside a config snapshot would bloat it for no gain.
     """
-    link_id = db.upsert_simkl_account_link(
+    existing = db.get_simkl_account_link(identity_id) or {}
+    previous_account = str(existing.get("simkl_user_id") or "")
+    new_account = str(simkl.get("simkl_user_id") or "")
+    oauth = simkl.get("oauth_tokens")
+    access_token = None
+    refresh_token = None
+    expires_at = None
+    token_provided = False
+    if isinstance(oauth, dict):
+        candidate = oauth.get("access_token")
+        if candidate and not is_redacted(candidate):
+            access_token = candidate
+            refresh_token = oauth.get("refresh_token")
+            if is_redacted(refresh_token):
+                refresh_token = None
+            expires_at = oauth.get("expires_at")
+            token_provided = True
+
+    status = simkl.get("status") or "connected"
+    if (not existing or previous_account != new_account) and not token_provided:
+        status = "needs_reauth"
+
+    persisted = db.persist_simkl_link(
         media_user_identity_id=identity_id,
         simkl_user_id=simkl.get("simkl_user_id"),
         simkl_username=simkl.get("simkl_username"),
-        token_source=simkl.get("token_source") or "manual_oauth",
-        status=simkl.get("status") or "connected",
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_at=expires_at,
+        status=status,
+        token_provided=token_provided,
     )
-    oauth = simkl.get("oauth_tokens")
-    if isinstance(oauth, dict):
-        access_token = oauth.get("access_token")
-        refresh_token = oauth.get("refresh_token")
-        if access_token and not is_redacted(access_token):
-            db.upsert_simkl_oauth_tokens(
-                link_id=link_id,
-                access_token=access_token,
-                refresh_token=(
-                    refresh_token if refresh_token and not is_redacted(refresh_token) else None
-                ),
-                expires_at=oauth.get("expires_at"),
-            )
+    link_id = persisted["link_id"]
     for source in simkl.get("sources") or []:
         if not isinstance(source, dict):
             continue

@@ -263,3 +263,43 @@ test('a poll after the flow was stopped is a no-op', async () => {
 
   assert.equal(polls, 0);
 });
+
+test('a late result from an older flow cannot replace the active flow', async () => {
+  const ctx = makeContext();
+  let resolveFirst;
+  const first = ctx.startSimklPolling({
+    ...baseOptions().options,
+    requestCode: () => new Promise(resolve => { resolveFirst = resolve; }),
+  });
+  await Promise.resolve();
+
+  await ctx.startSimklPolling({
+    ...baseOptions().options,
+    requestCode: async () => ({ data: { ...PIN_RESPONSE.data, user_code: 'NEW456' } }),
+  });
+  resolveFirst(PIN_RESPONSE);
+
+  assert.equal(await first, false);
+  assert.equal(ctx.simklUserCode, 'NEW456');
+  ctx.stopSimklPolling();
+});
+
+test('a slow poll cannot overlap with a second poll', async () => {
+  const ctx = makeContext();
+  let calls = 0;
+  let release;
+  await ctx.startSimklPolling({
+    ...baseOptions().options,
+    pollToken: () => {
+      calls += 1;
+      return new Promise(resolve => { release = resolve; });
+    },
+  });
+
+  const first = ctx.pollSimklPinToken();
+  const second = ctx.pollSimklPinToken();
+  assert.equal(calls, 1);
+  release({ data: { connected: false } });
+  await Promise.all([first, second]);
+  ctx.stopSimklPolling();
+});
