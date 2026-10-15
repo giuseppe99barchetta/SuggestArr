@@ -397,6 +397,18 @@ The Seerr API key must have `MANAGE_REQUESTS` or `ADMIN` permissions. Requests a
 
 Admins can also use `POST /api/automation/requests/expiry/run` with an optional boolean `dry_run`, and `GET /api/automation/requests/expiry/log?limit=100` (maximum 500 entries). Concurrent runs return `409`; manual runs are limited to five per minute. The run returns candidate, simulated, declined, skipped and error counts. The log records delivery/Seerr/TMDb IDs, media type, time, mode, outcome and reason.
 
+### Replace rejected requests
+
+In **Settings → Approvals**, enable **Generate an alternative after rejection** (`REPLACE_REJECTED_REQUESTS`, default `false`) to try another title when a tracked SuggestArr request is explicitly declined in Seerr, Jellyseerr or Overseerr. Checks run every 15 minutes; admins can also use **Check rejections now** after saving the setting.
+
+Only deliveries with a saved remote request ID, creation timestamp, instance URL and originating job are eligible. Older untracked requests are not matched by title. Deleted requests, API failures and identity mismatches never count as rejections. Automatic expiry declines are excluded, including attempts interrupted after the decline was requested.
+
+Each rejection can produce at most one alternative, recorded atomically with its queue entry so repeated checks and restarts cannot produce duplicates. Alternatives use the originating job's **current** filters, profiles and approval rules, restricted to the original media user and media type. Disabled jobs, pending-approval pauses and unwatched-content pauses defer the attempt. Removed jobs, changed ownership and users or media types removed from a job are skipped. Confirmed rejected titles remain in request history to avoid suggesting them again, but no longer block the unwatched-content gate. An admin's rejection does not automatically become personal dislike feedback.
+
+Each check examines up to 50 tracked requests and attempts up to 10 replacements, respecting each job's maximum request count within that check. Discover and Trakt jobs search up to 100 candidates for a single alternative; no match is recorded as `exhausted` and is not retried. Generation failures are deferred to a later check. A replacement that is later explicitly declined can itself produce one alternative. The setting creates suggestions; Seerr/Sonarr/Radarr still control approval and downloading.
+
+Admins can inspect recent decisions in the same settings card, or call `GET /api/automation/requests/replacements/log?limit=100` (maximum 500). `POST /api/automation/requests/replacements/run` runs the enabled check and returns counts for checked requests, queued alternatives, deferred attempts, exhausted searches, ignored decisions and errors. Both endpoints require an administrator; manual checks are limited to five per minute and return `409` if expiry or another replacement check is already running. Turning the setting off stops checks and new alternatives; existing queued suggestions retain their normal lifecycle.
+
 ## Cleanup Automation
 
 Cleanup Automation removes old SuggestArr-originated requests and their media files when users did not mark the item as a favorite in the configured media server.

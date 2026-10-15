@@ -363,6 +363,9 @@ class TraktRecommendationsAutomation:
         job_filters = self.job_data.get("filters", {})
         media_type = self.job_data.get("media_type", "movie")
         max_results = int(self.job_data.get("max_results") or 20)
+        if self.job_data.get('_replacement_for') is not None:
+            # shortcut: scan at most 100 candidates; paginate if searches often exhaust.
+            max_results = 100
         fetch_limit = max(max_results * 3, max_results)
 
         ignore_collected = bool(job_filters.get("ignore_collected", True))
@@ -490,6 +493,8 @@ class TraktRecommendationsAutomation:
         dry_run_items: Optional[List[Dict[str, Any]]] = [] if dry_run else None
 
         for item in results:
+            if self.job_data.get('_replacement_for') is not None and requested_count >= 1:
+                break
             media_type = item.get("media_type") or self.job_data.get("media_type", "movie")
             tmdb_id = item["id"]
             title = item.get("title") or item.get("name") or "Unknown"

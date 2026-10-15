@@ -46,7 +46,7 @@ class DiscoverAutomation:
         self.local_content: Dict[str, set[str]] = {}
 
     @classmethod
-    async def create(cls, job_id: int) -> 'DiscoverAutomation':
+    async def create(cls, job_id: int, overrides=None) -> 'DiscoverAutomation':
         """
         Async factory method to create and initialize DiscoverAutomation.
 
@@ -68,6 +68,8 @@ class DiscoverAutomation:
         instance.job_data = instance.repository.get_job(job_id)
         if not instance.job_data:
             raise ValueError(f"Job not found: {job_id}")
+        if overrides:
+            instance.job_data.update(overrides)
 
         instance.logger.info(f"Initializing DiscoverAutomation for job: {instance.job_data['name']}")
 
@@ -217,6 +219,9 @@ class DiscoverAutomation:
         filters = {**raw_filters, **normalized_filters}
         media_type = self.job_data.get('media_type', 'movie')
         max_results = self.job_data.get('max_results', 20)
+        if self.job_data.get('_replacement_for') is not None:
+            # shortcut: scan at most 100 candidates; paginate if searches often exhaust.
+            max_results = 100
 
         raw_language_filter = normalized_filters.get('language') or filters.get('with_original_language')
         normalized_language_filter = self.tmdb_discover._normalize_language_code(raw_language_filter)
@@ -254,6 +259,8 @@ class DiscoverAutomation:
         media_type = self.job_data.get('media_type', 'movie')
 
         for item in results:
+            if self.job_data.get('_replacement_for') is not None and requested_count >= 1:
+                break
             tmdb_id = item['id']
             title = item.get('title', 'Unknown')
 
@@ -359,7 +366,7 @@ class DiscoverAutomation:
             self.logger.warning(f"Failed to save metadata for {item.get('title')}: {str(e)}")
 
 
-async def execute_discover_job(job_id: int, execution_id=None) -> ExecutionResult:
+async def execute_discover_job(job_id: int, execution_id=None, *, overrides=None) -> ExecutionResult:
     """
     Execute a discover job by ID.
     This is the function to be called by JobManager.
@@ -374,7 +381,10 @@ async def execute_discover_job(job_id: int, execution_id=None) -> ExecutionResul
     logger.info(f"Starting execution of discover job: {job_id}")
 
     try:
-        automation = await DiscoverAutomation.create(job_id)
+        if overrides:
+            automation = await DiscoverAutomation.create(job_id, overrides=overrides)
+        else:
+            automation = await DiscoverAutomation.create(job_id)
         result = await automation.run(execution_id=execution_id)
         return result
     except Exception as e:

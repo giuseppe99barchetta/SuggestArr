@@ -87,6 +87,7 @@ class TestConfig(unittest.TestCase):
         "AUTO_REJECT_APPROVAL_DAYS": 0,
         "SEER_AUTO_DECLINE_DAYS": 0,
         "SEER_AUTO_DECLINE_DRY_RUN": True,
+        "REPLACE_REJECTED_REQUESTS": False,
         "FILTER_MIN_RUNTIME": 0,
         "ENABLE_VISUAL_EFFECTS": False,
         "ENABLE_STATIC_BACKGROUND": False,

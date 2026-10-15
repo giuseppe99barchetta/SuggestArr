@@ -274,6 +274,7 @@ try:
     from api_service.jobs.queue_worker import run_queue_worker
     from api_service.jobs.webhook_worker import run_webhook_worker
     from api_service.jobs.request_expiry import run_request_expiry
+    from api_service.jobs.request_replacement import run_request_replacements
 
     # Initialize database tables (including discover_jobs).
     # DatabaseManager.__init__ already calls initialize_db(), so no need to
@@ -346,7 +347,11 @@ try:
         run_request_expiry, 'cron', hour=4, minute=30, id='seer_request_expiry',
         max_instances=1, replace_existing=True,
     )
-    logger.info("Jobs scheduler initialized (discover + recommendation + trakt_recommendations + queue_worker + cleanup + request_expiry)")
+    job_manager.scheduler.add_job(
+        run_request_replacements, 'interval', minutes=15, id='seer_request_replacements',
+        max_instances=1, replace_existing=True,
+    )
+    logger.info("Jobs scheduler initialized (discover + recommendation + trakt_recommendations + queue_worker + cleanup + request_expiry + request_replacements)")
 except Exception as e:
     import traceback
     logger.error(f"Failed to initialize discover jobs scheduler: {e}")

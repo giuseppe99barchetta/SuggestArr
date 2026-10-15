@@ -165,6 +165,16 @@ class SchemaManager:
                     UNIQUE(tmdb_id, media_type)
                 )
             """,
+            'request_replacements': """
+                CREATE TABLE IF NOT EXISTS request_replacements (
+                    delivery_id INTEGER PRIMARY KEY,
+                    remote_status INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    replacement_delivery_id INTEGER,
+                    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """,
             'request_expiry_log': """
                 CREATE TABLE IF NOT EXISTS request_expiry_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -151,12 +151,24 @@ class RequestQueueMixin:
                 cursor.execute(query, params)
                 inserted = cursor.rowcount > 0
                 delivery_id = getattr(cursor, 'lastrowid', None) if inserted else None
-                if inserted and delivery_id is None:
+                if inserted and (delivery_id is None or self.db_type == 'postgres'):
                     cursor.execute(
                         f"SELECT id FROM pending_requests WHERE tmdb_id={ph} AND media_type={ph}",
                         (str(tmdb_id), media_type),
                     )
                     delivery_id = cursor.fetchone()[0]
+                replacement_for = payload.get('_replacement_for')
+                if inserted and replacement_for is not None:
+                    # Claim the rejection in the same transaction as the new delivery.
+                    cursor.execute(
+                        f'UPDATE request_replacements SET replacement_delivery_id={ph},'
+                        "status='queued',reason='Alternative queued',checked_at=CURRENT_TIMESTAMP "
+                        f"WHERE delivery_id={ph} AND status='pending' AND replacement_delivery_id IS NULL",
+                        (delivery_id, replacement_for),
+                    )
+                    if cursor.rowcount != 1:
+                        conn.rollback()
+                        return False
                 conn.commit()
             if inserted:
                 self.logger.info(

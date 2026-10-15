@@ -507,6 +507,8 @@ class SeerClient(BaseHTTPClient):
                 pass
 
         context = self.queue_context
+        if context.get('_replacement_for') is not None:
+            payload['_replacement_for'] = context['_replacement_for']
         profile = (context.get('request_profiles') or {}).get(media_type) or {}
         for key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId'):
             if profile.get(key) is not None:

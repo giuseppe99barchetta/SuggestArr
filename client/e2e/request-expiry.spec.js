@@ -56,11 +56,14 @@ for (const width of [1440, 1280, 900, 390]) {
     await expect(card.locator('details')).not.toHaveAttribute('open');
     const flow = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Approval flow', exact: true }) });
     const visibility = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Who sees what', exact: true }) });
+    const replacements = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Replace rejected requests', exact: true }) });
     const [flowBox, expiryBox, visibilityBox] = await Promise.all([flow.boundingBox(), card.boundingBox(), visibility.boundingBox()]);
     if (width >= 1280) {
       expect(Math.abs(flowBox.y - expiryBox.y)).toBeLessThan(1);
       expect(Math.abs(flowBox.height - expiryBox.height)).toBeLessThan(1);
-      expect(visibilityBox.y - flowBox.y - flowBox.height).toBeCloseTo(20, 0);
+      const replacementBox = await replacements.boundingBox();
+      expect(replacementBox.y - flowBox.y - flowBox.height).toBeCloseTo(20, 0);
+      expect(visibilityBox.y - replacementBox.y - replacementBox.height).toBeCloseTo(20, 0);
       const localRows = await flow.locator('button[role="switch"]').all();
       const remoteRows = [card.getByLabel('Auto-decline after (days)').locator('..').locator('..'), card.getByLabel('Preview only (dry-run)').locator('..').locator('..').locator('..')];
       for (let index = 0; index < 2; index++) {

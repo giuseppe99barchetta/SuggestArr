@@ -31,6 +31,7 @@ from api_service.db.components.metadata_mixin import MetadataMixin
 from api_service.db.components.request_mixin import RequestMixin
 from api_service.db.components.request_queue_mixin import RequestQueueMixin
 from api_service.db.components.request_expiry_mixin import RequestExpiryMixin
+from api_service.db.components.request_replacement_mixin import RequestReplacementMixin
 from api_service.db.components.schema_manager import SchemaManager
 from api_service.db.components.suggestion_feedback_mixin import SuggestionFeedbackMixin
 from api_service.db.components.translation_mixin import TranslationMixin
@@ -38,7 +39,7 @@ from api_service.db.components.webhook_mixin import WebhookMixin
 from api_service.db.components.watched_media_mixin import WatchedMediaMixin
 
 
-class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueueMixin, RequestExpiryMixin, SuggestionFeedbackMixin, TranslationMixin, AiSearchMixin, CleanupMixin, AuthMixin, MediaUserMixin, WebhookMixin, WatchedMediaMixin):
+class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueueMixin, RequestExpiryMixin, RequestReplacementMixin, SuggestionFeedbackMixin, TranslationMixin, AiSearchMixin, CleanupMixin, AuthMixin, MediaUserMixin, WebhookMixin, WatchedMediaMixin):
     """Singleton database manager with connection pooling."""
     
     _instance = None
