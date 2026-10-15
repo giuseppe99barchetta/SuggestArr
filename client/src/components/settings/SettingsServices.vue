@@ -376,122 +376,97 @@
 
 
       <!-- Optional services: side by side in the dashboard -->
-      <div v-if="showSection('omdb') || showSection('trakt')" :class="wizardMode ? '' : 'grid items-start gap-5 lg:grid-cols-2'">
+      <div v-if="showSection('omdb') || showSection('trakt')" :class="wizardMode ? '' : 'grid gap-5 lg:grid-cols-2'">
         <!-- OMDb (IMDB ratings) -->
-        <div v-if="showSection('omdb')" :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4'">
+        <div v-if="showSection('omdb')" :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4 lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0'">
           <ServiceCardHeader v-if="!wizardMode" icon="fas fa-star" title="IMDb ratings (OMDb)" description="Lets jobs filter suggestions by IMDb rating." :status="getOmdbStatus" :status-text="getOmdbStatusText" />
 
-          <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-            <label for="omdbApiKey">API key</label>
-            <div class="flex gap-2">
-              <input
-                id="omdbApiKey"
-                v-model="localConfig.OMDB_API_KEY"
-                :type="showOmdbKey ? 'text' : 'password'"
-                placeholder="Enter your OMDb API key (optional)"
-                class="ui-input"
-                :disabled="isLoading"
-              />
-              <button @click="showOmdbKey = !showOmdbKey" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
-                <i :class="showOmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-              </button>
-            </div>
-            <small class="text-xs leading-normal text-ink-4">
-              Optional — needed only when rating source is set to IMDB or Both.
-              Free key (1,000 req/day) at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" class="text-brand-ink no-underline hover:underline">omdbapi.com</a>
-            </small>
-          </div>
-
-          <button
-            @click="testOmdbConnection"
-            class="ui-btn mt-4"
-            :disabled="isLoading || !localConfig.OMDB_API_KEY || omdbTesting"
-          >
-            <i v-if="omdbTesting" class="fas fa-spinner fa-spin"></i>
-            <i v-else-if="omdbConnected" class="fas fa-check"></i>
-            <i v-else class="fas fa-plug"></i>
-            {{ omdbTesting ? 'Testing…' : (omdbConnected ? 'Connected' : 'Test connection') }}
-          </button>
-
-          <!-- About IMDB Filtering -->
-          <div class="mt-5 overflow-hidden rounded-ctl border border-edge bg-panel-2">
-            <button type="button" class="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 py-3 text-left text-inherit hover:bg-raised" :aria-expanded="String(omdbInfoExpanded)" @click="omdbInfoExpanded = !omdbInfoExpanded">
-              <span class="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-raised text-[13px] text-ink-3"><i aria-hidden="true" class="fas fa-question"></i></span>
-              <span class="min-w-0 flex-1 text-sm font-semibold text-ink">What is IMDb filtering?</span>
-              <i aria-hidden="true" class="fas fa-chevron-down text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': omdbInfoExpanded }"></i>
-            </button>
-            <div v-show="omdbInfoExpanded" class="divide-y divide-edge border-t border-edge bg-panel">
-              <div class="p-4 text-[13px] text-ink-3">
-                <p class="m-0 mb-3.5 leading-normal">
-                  IMDB filtering uses the <a href="https://www.omdbapi.com/" target="_blank" class="text-brand-ink no-underline hover:underline">OMDb API</a>
-                  to fetch IMDB community ratings for each recommendation candidate, letting you reject content
-                  that falls below your IMDB threshold.
-                </p>
-                <div class="mb-3.5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div class="rounded-ctl border border-good/25 bg-good/8 p-3">
-                    <div class="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-good"><i class="fas fa-check-circle"></i> Pros</div>
-                    <ul class="m-0 flex flex-col gap-1 pl-4 leading-snug">
-                      <li>Widely trusted ratings from a large, diverse voter base</li>
-                      <li>Cross-validates quality when used alongside TMDB ("Both" mode)</li>
-                      <li>IMDB IDs are already stored by Jellyfin, Emby, and Plex</li>
-                    </ul>
-                  </div>
-                  <div class="rounded-ctl border border-bad/25 bg-bad/8 p-3">
-                    <div class="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-bad"><i class="fas fa-exclamation-circle"></i> Cons</div>
-                    <ul class="m-0 flex flex-col gap-1 pl-4 leading-snug">
-                      <li>Adds 1–2 extra API calls per recommendation (slight slowdown)</li>
-                      <li>Free tier limited to 1,000 requests/day</li>
-                      <li>Items missing an IMDB ID are skipped or passed through</li>
-                    </ul>
-                  </div>
-                </div>
-                <p class="m-0 flex items-start gap-2 leading-normal [&>i]:mt-1 [&>i]:text-brand-ink">
-                  <i class="fas fa-cog"></i>
-                  <span>Configure the rating source and thresholds in <strong>Content Filters → Rating & Popularity</strong>.</span>
-                </p>
+          <div class="min-w-0">
+            <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+              <label for="omdbApiKey">API key</label>
+              <div class="flex gap-2">
+                <input
+                  id="omdbApiKey"
+                  v-model="localConfig.OMDB_API_KEY"
+                  :type="showOmdbKey ? 'text' : 'password'"
+                  placeholder="Enter your OMDb API key (optional)"
+                  class="ui-input"
+                  :disabled="isLoading"
+                />
+                <button @click="showOmdbKey = !showOmdbKey" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+                  <i :class="showOmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                </button>
               </div>
+              <small class="text-xs leading-normal text-ink-4">
+                Optional — needed only when rating source is set to IMDB or Both.
+                Free key (1,000 req/day) at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" class="text-brand-ink no-underline hover:underline">omdbapi.com</a>
+              </small>
+              <details class="group text-xs leading-relaxed text-ink-3">
+                <summary class="flex min-h-10 w-fit cursor-pointer list-none items-center gap-2 rounded-ctl text-brand-ink hover:text-ink [&::-webkit-details-marker]:hidden">
+                  <i aria-hidden="true" class="fas fa-info-circle"></i>
+                  How IMDb filtering works
+                  <i aria-hidden="true" class="fas fa-chevron-down text-[10px] transition-transform group-open:rotate-180"></i>
+                </summary>
+                <div class="space-y-2 border-l border-edge-strong pl-3">
+                  <p class="m-0">OMDb provides IMDb community ratings so jobs can skip suggestions below your minimum score. Choose IMDb to use these ratings on their own, or Both to combine them with TMDb.</p>
+                  <p class="m-0">Set the rating source and minimum scores in <strong>Content Filters → Rating &amp; Popularity</strong>. Enabling IMDb filtering adds API calls and can slow down recommendations.</p>
+                </div>
+              </details>
             </div>
+
+            <button
+              @click="testOmdbConnection"
+              class="ui-btn mt-4"
+              :disabled="isLoading || !localConfig.OMDB_API_KEY || omdbTesting"
+            >
+              <i v-if="omdbTesting" class="fas fa-spinner fa-spin"></i>
+              <i v-else-if="omdbConnected" class="fas fa-check"></i>
+              <i v-else class="fas fa-plug"></i>
+              {{ omdbTesting ? 'Testing…' : (omdbConnected ? 'Connected' : 'Test connection') }}
+            </button>
           </div>
         </div>
 
 
         <!-- Trakt -->
-        <div v-if="showSection('trakt')" :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4'">
+        <div v-if="showSection('trakt')" :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4 lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0'">
           <ServiceCardHeader v-if="!wizardMode" icon="fas fa-history" title="Trakt" description="Adds Trakt watch history and personal recommendations. Users link their own accounts from their profile." :status="getTraktStatus" :status-text="getTraktStatusText" />
 
-          <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-            <label for="traktClientId">Client ID</label>
-            <input
-              id="traktClientId"
-              v-model="localConfig.TRAKT_CLIENT_ID"
-              type="text"
-              placeholder="Enter your Trakt Client ID"
-              class="ui-input"
-              :disabled="isLoading"
-            />
-          </div>
-          <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-            <label for="traktClientSecret">Client Secret (optional)</label>
-            <div class="flex gap-2">
+          <div class="min-w-0">
+            <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+              <label for="traktClientId">Client ID</label>
               <input
-                id="traktClientSecret"
-                v-model="localConfig.TRAKT_CLIENT_SECRET"
-                :type="showTraktClientSecret ? 'text' : 'password'"
-                placeholder="Optional for legacy Trakt apps"
+                id="traktClientId"
+                v-model="localConfig.TRAKT_CLIENT_ID"
+                type="text"
+                placeholder="Enter your Trakt Client ID"
                 class="ui-input"
                 :disabled="isLoading"
               />
-              <button @click="showTraktClientSecret = !showTraktClientSecret" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
-                <i :class="showTraktClientSecret ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-              </button>
             </div>
-            <small class="text-xs leading-normal text-ink-4">
-              Create an app at <a href="https://developer.trakt.tv/apps/new" target="_blank" rel="noopener noreferrer" class="text-brand-ink no-underline hover:underline">Trakt Developer</a> with <code>urn:ietf:wg:oauth:2.0:oob</code> as Redirect URI (ignore the insecure-URI warning) and leave Allowed origins empty. New Trakt apps use the Client ID without issuing a Client Secret.
-            </small>
-          </div>
-          <div class="mt-3 flex items-center gap-2 text-[13px] font-semibold text-good" v-if="isTraktAppConfigured">
-            <i class="fas fa-check-circle"></i>
-            Trakt app credentials configured. Users can link their own Trakt accounts from their profile.
+            <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+              <label for="traktClientSecret">Client Secret (optional)</label>
+              <div class="flex gap-2">
+                <input
+                  id="traktClientSecret"
+                  v-model="localConfig.TRAKT_CLIENT_SECRET"
+                  :type="showTraktClientSecret ? 'text' : 'password'"
+                  placeholder="Optional for legacy Trakt apps"
+                  class="ui-input"
+                  :disabled="isLoading"
+                />
+                <button @click="showTraktClientSecret = !showTraktClientSecret" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+                  <i :class="showTraktClientSecret ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                </button>
+              </div>
+              <small class="text-xs leading-normal text-ink-4">
+                Create an app at <a href="https://developer.trakt.tv/apps/new" target="_blank" rel="noopener noreferrer" class="text-brand-ink no-underline hover:underline">Trakt Developer</a> with <code>urn:ietf:wg:oauth:2.0:oob</code> as Redirect URI (ignore the insecure-URI warning) and leave Allowed origins empty. New Trakt apps use the Client ID without issuing a Client Secret.
+              </small>
+            </div>
+            <div class="mt-3 flex items-center gap-2 text-[13px] font-semibold text-good" v-if="isTraktAppConfigured">
+              <i class="fas fa-check-circle"></i>
+              Trakt app credentials configured. Users can link their own Trakt accounts from their profile.
+            </div>
           </div>
         </div>
       </div>
@@ -560,7 +535,6 @@ export default {
       // OMDb connection test
       omdbTesting: false,
       omdbConnected: false,
-      omdbInfoExpanded: false,
       // Collapsible sections
       mediaServerAdvancedExpanded: false,
       seerAdvancedExpanded: false,
