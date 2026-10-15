@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Run Commands
 - Backend Docker: `docker build . -f ./docker/Dockerfile --target dev --tag suggestarr:nightly`
 - Frontend serve (dev): `cd client && npm run serve`
-- Frontend build: `cd client && npm run build --skip-plugins @vue/cli-plugin-eslint`
+- Frontend build: `cd client && npm run build`
 - Frontend lint: `cd client && npm run lint`
 - Backend tests: `cd api_service && python -m pytest`
 - Single test: `cd api_service && python -m pytest test/test_file.py::TestClass::test_function -v`
