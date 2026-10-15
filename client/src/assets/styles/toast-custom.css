@@ -8,76 +8,76 @@
 
 /* Singolo toast - Minimal style */
 .v-toast__item {
-  border-radius: var(--radius-md) !important;
+  border-radius: 8px !important;
   padding: 12px 16px !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
   backdrop-filter: blur(10px);
   font-family: inherit !important;
-  font-size: var(--font-size-sm) !important;
+  font-size: 0.875rem !important;
   min-width: 280px !important;
   border: 1px solid !important;
-  transition: var(--transition-all) !important;
+  transition: all 200ms ease !important;
 }
 
 /* Toast Success */
 .v-toast__item--success {
-  background: var(--surface-raised) !important;
-  border-color: color-mix(in srgb, var(--color-success) 45%, transparent) !important;
-  color: var(--color-text-primary) !important;
+  background: var(--color-panel) !important;
+  border-color: color-mix(in srgb, var(--color-good) 45%, transparent) !important;
+  color: var(--color-ink) !important;
 }
 
 .v-toast__item--success .v-toast__icon {
-  color: var(--color-success) !important;
+  color: var(--color-good) !important;
 }
 
 /* Toast Error */
 .v-toast__item--error {
-  background: var(--surface-raised) !important;
-  border-color: color-mix(in srgb, var(--color-error) 45%, transparent) !important;
-  color: var(--color-text-primary) !important;
+  background: var(--color-panel) !important;
+  border-color: color-mix(in srgb, var(--color-bad) 45%, transparent) !important;
+  color: var(--color-ink) !important;
 }
 
 .v-toast__item--error .v-toast__icon {
-  color: var(--color-error) !important;
+  color: var(--color-bad) !important;
 }
 
 /* Toast Warning */
 .v-toast__item--warning {
-  background: var(--surface-raised) !important;
-  border-color: color-mix(in srgb, var(--color-warning) 45%, transparent) !important;
-  color: var(--color-text-primary) !important;
+  background: var(--color-panel) !important;
+  border-color: color-mix(in srgb, var(--color-caution) 45%, transparent) !important;
+  color: var(--color-ink) !important;
 }
 
 .v-toast__item--warning .v-toast__icon {
-  color: var(--color-warning) !important;
+  color: var(--color-caution) !important;
 }
 
 /* Toast Info */
 .v-toast__item--info {
-  background: var(--surface-raised) !important;
-  border-color: color-mix(in srgb, var(--color-info) 45%, transparent) !important;
-  color: var(--color-text-primary) !important;
+  background: var(--color-panel) !important;
+  border-color: color-mix(in srgb, var(--color-notice) 45%, transparent) !important;
+  color: var(--color-ink) !important;
 }
 
 .v-toast__item--info .v-toast__icon {
-  color: var(--color-info) !important;
+  color: var(--color-notice) !important;
 }
 
 /* Toast Default */
 .v-toast__item--default {
-  background: var(--surface-raised) !important;
-  border-color: color-mix(in srgb, var(--color-text-tertiary) 45%, transparent) !important;
-  color: var(--color-text-primary) !important;
+  background: var(--color-panel) !important;
+  border-color: color-mix(in srgb, var(--color-ink-3) 45%, transparent) !important;
+  color: var(--color-ink) !important;
 }
 
 .v-toast__item--default .v-toast__icon {
-  color: var(--color-text-tertiary) !important;
+  color: var(--color-ink-3) !important;
 }
 
 /* Icona */
 .v-toast__icon {
   margin-right: 10px !important;
-  font-size: var(--font-size-base) !important;
+  font-size: 1rem !important;
   flex-shrink: 0 !important;
 }
 
@@ -92,9 +92,9 @@
 /* Pulsante di chiusura */
 .v-toast__item .v-toast__item__close {
   opacity: 0.5 !important;
-  transition: opacity var(--transition-base) !important;
+  transition: opacity 200ms ease !important;
   color: currentColor !important;
-  font-size: var(--font-size-sm) !important;
+  font-size: 0.875rem !important;
   cursor: pointer !important;
   background: transparent !important;
   border: none !important;
@@ -109,7 +109,7 @@
 /* Animazioni */
 .v-toast__item.v-toast--fade-enter-active,
 .v-toast__item.v-toast--fade-leave-active {
-  transition: var(--transition-all) !important;
+  transition: all 200ms ease !important;
 }
 
 .v-toast__item.v-toast--fade-enter-from {
@@ -137,6 +137,6 @@
   }
 
   .v-toast__icon {
-    font-size: var(--font-size-sm) !important;
+    font-size: 0.875rem !important;
   }
 }

@@ -1,22 +1,22 @@
 <template>
-  <div class="wizard-container" :class="{ 'static-bg-active': config.ENABLE_STATIC_BACKGROUND }">
+  <div class="relative min-h-screen">
     <!-- Background layers -->
-    <div class="background-container">
+    <div class="fixed inset-0 z-0">
       <template v-if="!config.ENABLE_STATIC_BACKGROUND">
           <div
-            class="background-layer"
-            :class="activeBg === 'bg1' ? 'bg-visible' : 'bg-hidden'"
+            class="absolute inset-0 bg-cover bg-fixed bg-center transition-opacity duration-1000 will-change-[opacity]"
+            :class="activeBg === 'bg1' ? 'opacity-100' : 'opacity-0'"
             :style="{ backgroundImage: 'url(' + bg1Url + ')' }"
           ></div>
           <div
-            class="background-layer"
-            :class="activeBg === 'bg2' ? 'bg-visible' : 'bg-hidden'"
+            class="absolute inset-0 bg-cover bg-fixed bg-center transition-opacity duration-1000 will-change-[opacity]"
+            :class="activeBg === 'bg2' ? 'opacity-100' : 'opacity-0'"
             :style="{ backgroundImage: 'url(' + bg2Url + ')' }"
           ></div>
       </template>
       <div
         v-if="config.ENABLE_STATIC_BACKGROUND"
-        class="background-layer static-bg"
+        class="absolute inset-0"
         :style="{ backgroundColor: config.STATIC_BACKGROUND_COLOR }"
       ></div>
     </div>
@@ -219,7 +219,6 @@ import { ref, computed, watch } from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
 import { useToast } from 'vue-toastification';
-import '@/assets/styles/dashboardPage.css';
 
 import AppFooter from './AppFooter.vue';
 import LogsComponent from './LogsComponent.vue';

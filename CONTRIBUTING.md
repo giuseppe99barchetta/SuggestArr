@@ -16,13 +16,11 @@ Thank you for considering contributing to this project! Here's how you can get s
 
 ## Frontend Design System Rules (Required)
 
-For all CSS and Vue `<style>` changes under `client/src`:
+The frontend is styled with Tailwind CSS v4 utilities in the templates; Vue components have no `<style>` blocks.
 
-- Use design tokens from `client/src/assets/styles/variables.css`.
-- Do **not** introduce hardcoded color values (`#hex`, `rgb/rgba`, `hsl/hsla`) in style declarations.
-- Do **not** introduce hardcoded spacing values for `margin`, `padding`, or `gap`; use `var(--spacing-*)` (or `calc(...)` from tokens).
-- Do **not** introduce hardcoded `border-radius`; use `var(--radius-*)` / component radius tokens.
-- Do **not** introduce hardcoded `font-size`; use typography tokens (`var(--font-size-*)`, input/button font-size tokens).
+- Use the theme colors defined in `client/src/assets/main.css` (`canvas`, `panel`, `ink`, `brand`, `good`, `caution`, `bad`, …) instead of hardcoded hex/rgb values.
+- Use `rounded-ctl` for controls and `rounded-card` for cards.
+- Reuse the shared `.ui-input`, `.ui-label`, `.ui-btn*` and `.ui-alert-*` classes and the `SectionCard`, `PageHeader` and `AppDialog` components.
 
 ### Advisory Linting (Warning-level)
 

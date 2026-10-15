@@ -77,7 +77,7 @@
       <!-- Content -->
       <main class="flex-1 min-w-0 px-4 sm:px-8 lg:px-12 pt-6 lg:pt-8 pb-28 lg:pb-12">
         <div class="max-w-[1240px] mx-auto">
-          <transition name="fade-slide" mode="out-in">
+          <transition mode="out-in" enter-active-class="transition duration-300" leave-active-class="transition duration-300" enter-from-class="translate-x-5 opacity-0" leave-to-class="-translate-x-5 opacity-0">
             <component
               v-if="activeTabComponent"
               :key="activeTab"
@@ -120,10 +120,10 @@
       </nav>
 
       <!-- Loading Overlay -->
-      <transition name="fade">
-        <div v-if="isLoading" class="loading-overlay">
-          <div class="loading-content">
-            <div class="spinner"></div>
+      <transition enter-active-class="transition-opacity duration-300" leave-active-class="transition-opacity duration-300" enter-from-class="opacity-0" leave-to-class="opacity-0">
+        <div v-if="isLoading" class="fixed inset-0 z-[1000] flex items-center justify-center bg-[rgba(11,13,18,0.92)]">
+          <div class="text-center text-ink">
+            <div class="mx-auto mb-4 h-11 w-11 animate-spin rounded-full border-4 border-edge-strong border-t-brand"></div>
             <p>{{ loadingMessage }}</p>
           </div>
         </div>
@@ -137,7 +137,7 @@
           <p class="ui-alert-bad">{{ changelogError }}</p>
           <button type="button" class="ui-btn" @click="showChangelog">Retry</button>
         </div>
-        <div v-else-if="changelogData" class="changelog-content" v-html="changelogData"></div>
+        <div v-else-if="changelogData" class="leading-relaxed text-ink [&_a]:border-b [&_a]:border-dotted [&_a]:border-brand [&_a]:text-brand-ink [&_a:hover]:border-solid [&_h2]:mt-6 [&_h2]:mb-4 [&_h2]:border-b-2 [&_h2]:border-edge-strong [&_h2]:pb-2 [&_h3]:mt-5 [&_h3]:mb-3 [&_h4]:mt-4 [&_h4]:mb-2 [&_li]:my-2 [&_li]:text-ink-2 [&_strong]:font-semibold [&_ul]:mt-2 [&_ul]:mb-4 [&_ul]:list-disc [&_ul]:pl-6" v-html="changelogData"></div>
         <p v-else class="m-0 py-10 text-center text-sm text-ink-3">No changelog available for this version.</p>
         <template #footer>
           <a v-if="changelogData" :href="`https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${currentVersion}`" target="_blank" rel="noopener" class="ui-btn mr-auto no-underline">
@@ -189,9 +189,9 @@
     </div>
 
     <div v-else>
-      <div class="loading-overlay">
-        <div class="loading-content">
-          <div class="spinner"></div>
+      <div class="fixed inset-0 z-[1000] flex items-center justify-center bg-[rgba(11,13,18,0.92)]">
+        <div class="text-center text-ink">
+          <div class="mx-auto mb-4 h-11 w-11 animate-spin rounded-full border-4 border-edge-strong border-t-brand"></div>
           <p>Loading dashboard...</p>
         </div>
       </div>
@@ -213,10 +213,7 @@ import AppDialog from './ui/AppDialog.vue';
 import OnboardingTour from './OnboardingTour.vue';
 import { useVersionCheck } from '@/composables/useVersionCheck';
 import { useAuth } from '@/composables/useAuth';
-import '@/assets/styles/dashboardPage.css';
 // ponytail: legacy sheets still styling the job dialogs; drop once those are rebuilt.
-import '@/assets/styles/aiSearchPage.css';
-import '@/assets/styles/requestsPage.css';
 
 // Import tab components
 import SettingsServices from './settings/SettingsServices.vue';
