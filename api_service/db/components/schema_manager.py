@@ -118,6 +118,16 @@ class SchemaManager:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """,
+            'job_list_state': """
+                CREATE TABLE IF NOT EXISTS job_list_state (
+                    job_id INTEGER PRIMARY KEY,
+                    source_key TEXT NOT NULL,
+                    scan_offset INTEGER NOT NULL DEFAULT 0,
+                    lease_token TEXT,
+                    lease_until TIMESTAMP NULL,
+                    FOREIGN KEY (job_id) REFERENCES discover_jobs(id) ON DELETE CASCADE
+                )
+            """,
             'job_execution_history': """
                 CREATE TABLE IF NOT EXISTS job_execution_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

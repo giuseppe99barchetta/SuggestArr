@@ -13,7 +13,7 @@ class UnwatchedSuggestionGate:
 
     async def allowed_slices(self, job):
         """Return runnable ``{media_type, user_ids}`` slices; fail open on provider errors."""
-        if not job.get("prevent_suggestions_if_unwatched") or job.get("job_type") == "discover":
+        if not job.get("prevent_suggestions_if_unwatched") or job.get("job_type") in ("discover", "list_import"):
             return None
         users = [str(value) for value in job.get("user_ids") or []]
         if not users:

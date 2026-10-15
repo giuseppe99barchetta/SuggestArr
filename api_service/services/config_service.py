@@ -39,6 +39,7 @@ _DB_INTEGRATION_KEYS: frozenset = frozenset({
     'SEER_TOKEN',
     'SEER_SESSION_TOKEN',
     'OMDB_API_KEY',
+    'MDBLIST_API_KEY',
     'OPENAI_API_KEY',
     'OPENAI_BASE_URL',
     'LLM_MODEL',

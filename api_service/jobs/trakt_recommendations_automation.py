@@ -27,6 +27,8 @@ from api_service.utils.tmdb_images import tmdb_image_url
 class TraktRecommendationsAutomation:
     """Automates fetching Trakt personalized recommendations and requesting via Seer."""
 
+    JOB_TYPE = 'trakt_recommendations'
+
     def __init__(self):
         """Initialize with logger only. Use create() for full initialization."""
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
@@ -66,8 +68,8 @@ class TraktRecommendationsAutomation:
             raise ValueError(f"Job not found: {job_id}")
         if overrides:
             instance.job_data.update(overrides)
-        if instance.job_data.get("job_type") != "trakt_recommendations":
-            raise ValueError(f"Job {job_id} is not a trakt_recommendations job")
+        if instance.job_data.get("job_type") != cls.JOB_TYPE:
+            raise ValueError(f"Job {job_id} is not a {cls.JOB_TYPE} job")
 
         instance.logger.info(
             "Initializing TraktRecommendationsAutomation for job: %s",
@@ -452,7 +454,7 @@ class TraktRecommendationsAutomation:
 
         return details
 
-    async def _fetch_tmdb_details(self, tmdb_id: int, media_type: str) -> Optional[Dict[str, Any]]:
+    async def _fetch_tmdb_details(self, tmdb_id: int, media_type: str, raise_on_error=False) -> Optional[Dict[str, Any]]:
         """Load TMDb details for a recommendation item."""
         url = f"{self.tmdb_client.tmdb_api_url}/{media_type}/{tmdb_id}"
         params = {"api_key": self.tmdb_client.api_key}
@@ -460,9 +462,13 @@ class TraktRecommendationsAutomation:
             session = await self.tmdb_client._get_session()
             async with session.get(url, params=params, timeout=self.tmdb_client.REQUEST_TIMEOUT) as response:
                 if response.status not in {200, 201}:
+                    if raise_on_error and response.status != 404:
+                        raise RuntimeError('TMDb details temporarily unavailable.')
                     return None
                 data = await response.json()
         except Exception as exc:
+            if raise_on_error:
+                raise RuntimeError('TMDb details temporarily unavailable.') from None
             self.logger.debug("TMDb details fetch failed for %s %s: %s", media_type, tmdb_id, exc)
             return None
 

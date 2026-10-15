@@ -4,6 +4,10 @@ import axios from 'axios';
  * API client for discover jobs management.
  */
 export const jobsApi = {
+  async verifyList(source) {
+    const response = await axios.post('/api/jobs/lists/verify', source);
+    return response.data;
+  },
   /**
    * Get all discover jobs.
    * @returns {Promise<Object>} Response with jobs array.

@@ -171,7 +171,8 @@ def request_workflow():
     scope = _suggestion_scope(db)
     items, total = db.list_suggestions(
         scope.owner_id, status, request.args.get('search', '').strip()[:100], page, per_page, media_type,
-        scope.media_user_ids, int(g.current_user['id']), scope.include_unassigned)
+        scope.media_user_ids, int(g.current_user['id']), scope.include_unassigned,
+        include_owned_list_imports=scope.include_owned_list_imports)
     _localize(db, (items, [('tmdb_id', 'media_type', 'title', 'overview')]))
     return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
@@ -279,6 +280,7 @@ def set_request_feedback(suggestion_id):
     result = db.set_suggestion_feedback(
         suggestion_id, scope.owner_id, int(g.current_user['id']), feedback, reason_type, reason_text,
         scope.media_user_ids, scope.include_unassigned, title, year,
+        include_owned_list_imports=scope.include_owned_list_imports,
     )
     if result is None:
         return jsonify({'status': 'error', 'message': 'Suggestion not found'}), 404
@@ -292,7 +294,7 @@ def clear_request_feedback(suggestion_id):
     scope = _suggestion_scope(db)
     removed = db.clear_suggestion_feedback(
         suggestion_id, scope.owner_id, int(g.current_user['id']), scope.media_user_ids,
-        scope.include_unassigned,
+        scope.include_unassigned, include_owned_list_imports=scope.include_owned_list_imports,
     )
     return jsonify({'status': 'success', 'removed': removed}), 200
 

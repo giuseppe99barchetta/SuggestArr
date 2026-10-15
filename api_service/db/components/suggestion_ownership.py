@@ -5,13 +5,13 @@ Shared by the queue and the feedback mixins; the rule itself is explained in
 """
 
 
-def payload_user_expression(db_type, column='payload'):
-    """SQL expression reading ``_user_id`` from a JSON payload column."""
+def payload_user_expression(db_type, column='payload', field='_user_id'):
+    """Read a server-selected field from a JSON payload column; defaults to media user."""
     if db_type == 'postgres':
-        return f"({column}::jsonb ->> '_user_id')"
+        return f"({column}::jsonb ->> '{field}')"
     if db_type in ('mysql', 'mariadb'):
-        return f"JSON_UNQUOTE(JSON_EXTRACT({column}, '$._user_id'))"
-    return f"json_extract({column}, '$._user_id')"
+        return f"JSON_UNQUOTE(JSON_EXTRACT({column}, '$.{field}'))"
+    return f"json_extract({column}, '$.{field}')"
 
 
 def ownership_clause(db_type, owner_id, include_unassigned=False, prefix=''):

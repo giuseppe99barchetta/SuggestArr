@@ -14,6 +14,7 @@ from api_service.jobs.job_manager import JobManager
 from api_service.jobs.discover_automation import DiscoverAutomation
 from api_service.jobs.recommendation_automation import RecommendationAutomation
 from api_service.jobs.trakt_recommendations_automation import TraktRecommendationsAutomation
+from api_service.jobs.list_import_automation import ListImportAutomation
 from api_service.utils.asyncio_loop import run_coroutine_sync
 from api_service.config.logger_manager import LoggerManager
 from api_service.observability.metrics import render_metrics
@@ -203,7 +204,7 @@ def jobs():
         return jsonify({'error': {'code': 'validation_error', 'message': 'Invalid pagination.'}}), 400
     enabled = request.args.get('enabled')
     job_type = request.args.get('job_type')
-    if enabled not in (None, 'true', 'false') or job_type not in (None, 'discover', 'recommendation', 'trakt_recommendations'):
+    if enabled not in (None, 'true', 'false') or job_type not in (None, 'discover', 'recommendation', 'trakt_recommendations', 'list_import'):
         return jsonify({'error': {'code': 'validation_error', 'message': 'Invalid filters.'}}), 400
     items = [job for job in JobRepository().get_all_jobs() if _visible_job(job)]
     if enabled is not None:
@@ -237,6 +238,8 @@ def preview_job(job_id):
             automation = await RecommendationAutomation.create(job_id, dry_run=True)
         elif item.get('job_type') == 'trakt_recommendations':
             automation = await TraktRecommendationsAutomation.create(job_id, dry_run=True)
+        elif item.get('job_type') == 'list_import':
+            automation = await ListImportAutomation.create(job_id, dry_run=True)
         else:
             automation = await DiscoverAutomation.create(job_id)
         return await automation.run(dry_run=True)
@@ -384,6 +387,7 @@ def suggestions():
     items, total = db.list_suggestions(
         scope.owner_id, status, search, page, per_page, media_type, scope.media_user_ids,
         int(g.current_user['id']), scope.include_unassigned,
+        include_owned_list_imports=scope.include_owned_list_imports,
     )
     return jsonify({'data': items, 'meta': {'page': page, 'per_page': per_page, 'total': total, 'pages': max(1, (total + per_page - 1) // per_page)}}), 200
 
@@ -465,7 +469,7 @@ def installation_stats():
     """Return installation-wide, non-sensitive operational counters for admins."""
     db = DatabaseManager()
     jobs = JobRepository().get_all_jobs()
-    job_types = ('discover', 'recommendation', 'trakt_recommendations')
+    job_types = ('discover', 'recommendation', 'trakt_recommendations', 'list_import')
     jobs_by_type = {job_type: sum(job.get('job_type') == job_type for job in jobs) for job_type in job_types}
 
     suggestion_statuses = ('awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed', 'blacklisted')

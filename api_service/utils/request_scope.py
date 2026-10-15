@@ -41,6 +41,8 @@ class SuggestionScope:
     owner_id: Optional[int]
     include_unassigned: bool
     media_user_ids: Optional[List[str]]
+    # Public list jobs have an owner but no linked media account to filter by.
+    include_owned_list_imports: bool = False
 
 
 def visibility_mode(env):
@@ -104,4 +106,5 @@ def suggestion_scope(db, user, env, selected=''):
             # else's history must stay reachable.
             return SuggestionScope(int(user['id']), True, media_user_ids)
         return SuggestionScope(None, False, media_user_ids)
-    return SuggestionScope(int(user['id']), False, visible_request_user_ids(db, user, env, selected))
+    return SuggestionScope(int(user['id']), False, visible_request_user_ids(db, user, env, selected),
+                           include_owned_list_imports=not (selected or '').strip())

@@ -3,7 +3,7 @@
     <header class="flex flex-wrap items-end justify-between gap-4" data-tour-id="jobs-section-header">
       <div>
         <h1 class="m-0 text-3xl font-extrabold tracking-tight text-ink">Jobs</h1>
-        <p class="m-0 mt-1.5 max-w-2xl text-[15px] text-ink-3">A job looks at what your users watch, finds similar titles and sends them as requests. Each one runs on its own schedule.</p>
+        <p class="m-0 mt-1.5 max-w-2xl text-[15px] text-ink-3">Discover titles, find recommendations or import a public list. Each job runs on its own schedule and sends requests to Seer.</p>
       </div>
       <div class="flex gap-2">
         <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Replay the Jobs tour" aria-label="Replay the Jobs tour" @click="restartJobsTour"><i aria-hidden="true" class="fas fa-question-circle"></i></button>
@@ -253,6 +253,7 @@ export default {
         { id: 'discover', label: 'Discover', icon: 'fas fa-search', bg: 'bg-notice/15', text: 'text-notice', description: 'Finds titles with TMDb filters (genre, rating, year), independent of what anyone watched.' },
         { id: 'recommendation', label: 'Recommendation', icon: 'fas fa-users', bg: 'bg-caution/15', text: 'text-caution', description: 'Finds titles similar to what your users watched on the media server or Trakt.' },
         { id: 'trakt_recommendations', label: 'Trakt', icon: 'icon-trakt', bg: 'bg-bad/15', text: 'text-bad', description: 'Uses the personal recommendations of a linked Trakt account.' },
+        { id: 'list_import', label: 'Import list', icon: 'fas fa-list', bg: 'bg-notice/15', text: 'text-notice', description: 'Imports missing movies and shows from a public MDBList or Trakt list.' },
       ],
       jobsTourSteps: [
         {
@@ -661,6 +662,7 @@ export default {
       const styles = {
         recommendation: { bg: 'bg-caution/15', text: 'text-caution' },
         trakt_recommendations: { bg: 'bg-bad/15', text: 'text-bad' },
+        list_import: { bg: 'bg-notice/15', text: 'text-notice' },
         llm_recommendation: { bg: 'bg-brand-soft', text: 'text-brand-ink' },
       };
       return styles[jobType] || { bg: 'bg-notice/15', text: 'text-notice' };

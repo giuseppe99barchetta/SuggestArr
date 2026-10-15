@@ -158,7 +158,7 @@ paths:
         - {name: page, in: query, schema: {type: integer, minimum: 1}}
         - {name: per_page, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
         - {name: enabled, in: query, schema: {type: boolean}, description: Filter enabled or disabled jobs.}
-        - {name: job_type, in: query, schema: {type: string, enum: [discover, recommendation, trakt_recommendations]}}
+        - {name: job_type, in: query, schema: {type: string, enum: [discover, recommendation, trakt_recommendations, list_import]}}
       responses:
         <<: *errorResponses
         '200': {description: Visible jobs, content: {application/json: {schema: {$ref: '#/components/schemas/JobListResponse'}}}}
@@ -416,6 +416,7 @@ components:
             discover: {type: integer, minimum: 0}
             recommendation: {type: integer, minimum: 0}
             trakt_recommendations: {type: integer, minimum: 0}
+            list_import: {type: integer, minimum: 0}
     ExecutionStatistics:
       type: object
       required: [total, by_status]
@@ -553,7 +554,7 @@ components:
       properties:
         id: {type: integer}
         name: {type: string}
-        job_type: {type: string, enum: [discover, recommendation, trakt_recommendations]}
+        job_type: {type: string, enum: [discover, recommendation, trakt_recommendations, list_import]}
         enabled: {type: boolean}
         media_type: {type: string, enum: [movie, tv, both]}
         filters: {type: object, additionalProperties: true}

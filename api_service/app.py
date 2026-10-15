@@ -270,6 +270,7 @@ try:
     from api_service.jobs.discover_automation import execute_discover_job
     from api_service.jobs.recommendation_automation import execute_recommendation_job
     from api_service.jobs.trakt_recommendations_automation import execute_trakt_recommendations_job
+    from api_service.jobs.list_import_automation import execute_list_import_job
     from api_service.jobs.system_job_sync import sync_system_job_from_config
     from api_service.jobs.queue_worker import run_queue_worker
     from api_service.jobs.webhook_worker import run_webhook_worker
@@ -298,6 +299,7 @@ try:
     job_manager.set_job_executor(execute_discover_job, job_type='discover')
     job_manager.set_job_executor(execute_recommendation_job, job_type='recommendation')
     job_manager.set_job_executor(execute_trakt_recommendations_job, job_type='trakt_recommendations')
+    job_manager.set_job_executor(execute_list_import_job, job_type='list_import')
     job_manager.start()
     job_manager.sync_jobs_from_db()
 

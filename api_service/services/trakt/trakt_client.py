@@ -83,6 +83,29 @@ class TraktClient(BaseHTTPClient):
             headers["Authorization"] = f"Bearer {self.access_token}"
         return headers
 
+    async def public_list_info(self, url):
+        from api_service.services.public_lists import PublicListError, parse_list_url, read_list_json
+        user, slug = parse_list_url('trakt', url)
+        data, _ = await read_list_json(self, f'/users/{user}/lists/{slug}', headers=self._headers(False))
+        if not isinstance(data, dict) or data.get('privacy') != 'public':
+            raise PublicListError('Only public Trakt lists are supported.')
+        return {'name': data.get('name') or slug, 'provider': 'trakt'}
+
+    async def public_list_page(self, url, offset, limit=100):
+        from api_service.services.public_lists import PublicListError, parse_list_url, read_list_json
+        user, slug = parse_list_url('trakt', url)
+        # Keep the provider page aligned while resuming partway through a page.
+        page = offset // limit + 1
+        data, headers = await read_list_json(self, f'/users/{user}/lists/{slug}/items',
+            params={'page': page, 'limit': limit}, headers=self._headers(False))
+        if not isinstance(data, list) or len(data) > limit:
+            raise PublicListError('Trakt returned an invalid list page.')
+        try:
+            more = page < int(headers['X-Pagination-Page-Count'])
+        except (KeyError, TypeError, ValueError):
+            more = len(data) == limit
+        return data[offset % limit:], more
+
     async def request_device_code(self) -> dict[str, Any]:
         return await self._request(
             "POST",

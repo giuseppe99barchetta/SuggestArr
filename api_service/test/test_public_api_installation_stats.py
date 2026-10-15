@@ -78,7 +78,7 @@ def test_installation_stats_returns_complete_admin_snapshot():
     assert data['requests'] == {'total': 20, 'today': 2, 'this_week': 5, 'this_month': 9}
     assert data['jobs'] == {
         'total': 2, 'enabled': 1, 'disabled': 1, 'system': 1,
-        'by_type': {'discover': 1, 'recommendation': 1, 'trakt_recommendations': 0},
+        'by_type': {'discover': 1, 'recommendation': 1, 'trakt_recommendations': 0, 'list_import': 0},
     }
     assert data['runs'] == {
         'total': 7,

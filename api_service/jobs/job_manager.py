@@ -229,7 +229,7 @@ class JobManager:
                     return
                 slices = None
                 if (job_data.get('prevent_suggestions_if_unwatched') and
-                        job_data.get('job_type') != 'discover'):
+                        job_data.get('job_type') not in ('discover', 'list_import')):
                     from api_service.jobs.unwatched_suggestion_gate import UnwatchedSuggestionGate
                     slices = loop.run_until_complete(UnwatchedSuggestionGate().allowed_slices(job_data))
                 if slices == []:
@@ -278,7 +278,7 @@ class JobManager:
             return 'ignored', 'Media type is no longer enabled in the job'
         job_type = job.get('job_type', 'discover')
         user_id = item['user_id']
-        if job_type != 'discover':
+        if job_type not in ('discover', 'list_import'):
             if user_id is None:
                 return 'ignored', 'Original media user is unknown'
             selected = {str(user.get('id') if isinstance(user, dict) else user) for user in job.get('user_ids') or []}
@@ -286,13 +286,13 @@ class JobManager:
                 return 'ignored', 'User is no longer selected in the job'
         overrides = {'media_type': item['media_type'], 'max_results': 1,
                      'owner_id': item['owner_id'], '_replacement_for': item['delivery_id']}
-        if job_type != 'discover':
+        if job_type not in ('discover', 'list_import'):
             overrides['user_ids'] = [str(user_id)]
         scoped_job = {**job, **overrides}
         if (self._should_pause_for_suggestarr_approvals(scoped_job) or
                 await self._should_pause_for_pending_requests(scoped_job)):
             return 'pending', 'Job is paused for pending approvals'
-        if job_type != 'discover' and scoped_job.get('prevent_suggestions_if_unwatched'):
+        if job_type not in ('discover', 'list_import') and scoped_job.get('prevent_suggestions_if_unwatched'):
             from api_service.jobs.unwatched_suggestion_gate import UnwatchedSuggestionGate
             if await UnwatchedSuggestionGate().allowed_slices(scoped_job) == []:
                 return 'pending', 'Job is paused for unwatched suggestions'

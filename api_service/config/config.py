@@ -19,6 +19,7 @@ INTEGRATION_TO_FLAT: dict = {
     'seer':     {'api_url': 'SEER_API_URL', 'api_key': 'SEER_TOKEN',
                  'session_token': 'SEER_SESSION_TOKEN'},
     'omdb':     {'api_key': 'OMDB_API_KEY'},
+    'mdblist':  {'api_key': 'MDBLIST_API_KEY'},
     'openai':   {'api_key': 'OPENAI_API_KEY', 'base_url': 'OPENAI_BASE_URL', 'model': 'LLM_MODEL'},
     'trakt':    {'client_id': 'TRAKT_CLIENT_ID', 'client_secret': 'TRAKT_CLIENT_SECRET'},
 }
@@ -211,6 +212,7 @@ def get_default_values():
         'ENABLE_STATIC_BACKGROUND': lambda: False,
         'STATIC_BACKGROUND_COLOR': lambda: '#2E3440',
         'OMDB_API_KEY': lambda: '',
+        'MDBLIST_API_KEY': lambda: '',
         'FILTER_RATING_SOURCE': lambda: 'tmdb',
         'FILTER_IMDB_THRESHOLD': lambda: None,
         'FILTER_IMDB_MIN_VOTES': lambda: None,
@@ -347,7 +349,7 @@ def get_config_sections():
     Returns a dictionary of configuration sections and their associated keys.
     """
     return {
-        'services': ['TMDB_API_KEY', 'OMDB_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL', 'PLEX_CLIENT_ID',
+        'services': ['TMDB_API_KEY', 'OMDB_API_KEY', 'MDBLIST_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL', 'PLEX_CLIENT_ID',
                     'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
                     'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_USER_PSW',
                     'SEER_SESSION_TOKEN', 'SEER_ANIME_PROFILE_CONFIG', 'SEER_REQUEST_DELAY',
