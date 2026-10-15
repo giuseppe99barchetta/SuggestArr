@@ -9,6 +9,7 @@ from api_service.config.config import (
     get_default_values,
     load_env_vars,
     save_env_vars,
+    validate_seer_expiry_settings,
 )
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
@@ -288,6 +289,7 @@ class ConfigService:
         Raises:
             ValueError: If the version field is missing or unsupported.
         """
+        validate_seer_expiry_settings(data.get("settings") or {})
         version = data.get("version")
         if version != CURRENT_VERSION:
             raise ValueError(

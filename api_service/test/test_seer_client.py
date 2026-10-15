@@ -965,14 +965,14 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
         login.assert_awaited_once()
         self.assertTrue(request.call_args.kwargs['use_cookie'])
 
-    async def test_strips_private_keys_and_returns_true_on_success(self):
+    async def test_strips_private_keys_and_returns_remote_response_on_success(self):
         client = _make_client(session_token='tok')
         payload = self._valid_payload()
         with patch.object(client, 'login', AsyncMock()) as mock_login, \
              patch.object(client, '_make_request', AsyncMock(return_value={'id': 55})) as mock_req:
             result = await client.submit_queued_request(payload)
 
-        self.assertTrue(result)
+        self.assertEqual(result, {'id': 55})
         mock_login.assert_awaited_once()
         sent_data = mock_req.call_args[1]['data']
         for key in sent_data:

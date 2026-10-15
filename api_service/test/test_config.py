@@ -85,6 +85,8 @@ class TestConfig(unittest.TestCase):
         "TMDB_LANGUAGE": "en",
         "PAUSE_JOBS_WITH_PENDING_APPROVALS": False,
         "AUTO_REJECT_APPROVAL_DAYS": 0,
+        "SEER_AUTO_DECLINE_DAYS": 0,
+        "SEER_AUTO_DECLINE_DRY_RUN": True,
         "FILTER_MIN_RUNTIME": 0,
         "ENABLE_VISUAL_EFFECTS": False,
         "ENABLE_STATIC_BACKGROUND": False,

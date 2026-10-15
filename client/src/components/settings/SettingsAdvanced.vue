@@ -355,9 +355,9 @@ LLM_MODEL=gpt-4o-mini</code></pre>
       </div>
 
       <!-- Request Workflow -->
-      <div v-if="section === 'workflow'" class="grid items-start gap-5 lg:grid-cols-2">
-        <SectionCard icon="fas fa-check-double" title="Approval flow" description="Control when suggestions can leave SuggestArr and reach Seer.">
-          <div class="flex flex-col gap-2.5">
+      <div v-if="section === 'workflow'" class="grid gap-5 xl:grid-cols-2">
+        <SectionCard icon="fas fa-check-double" title="Approval flow" description="Review suggestions before they are sent to Seer.">
+          <div class="flex flex-1 flex-col gap-2.5">
             <button
               v-for="toggle in approvalToggles"
               :key="toggle.key"
@@ -365,7 +365,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
               role="switch"
               :aria-checked="localConfig[toggle.key] ? 'true' : 'false'"
               :disabled="isLoading || (toggle.needsApproval && !localConfig.REQUIRE_REQUEST_APPROVAL)"
-              class="flex cursor-pointer items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 text-left hover:border-edge-strong disabled:cursor-not-allowed disabled:opacity-50"
+              class="flex min-h-20 cursor-pointer items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 text-left hover:border-edge-strong disabled:cursor-not-allowed disabled:opacity-50 xl:h-[88px]"
               @click="localConfig[toggle.key] = !localConfig[toggle.key]"
             >
               <span class="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -375,22 +375,42 @@ LLM_MODEL=gpt-4o-mini</code></pre>
               <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="localConfig[toggle.key] ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="localConfig[toggle.key] ? 'left-[21px]' : 'left-[3px]'"></span></span>
             </button>
 
-            <label class="flex items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5" :class="{ 'opacity-50': !localConfig.REQUIRE_REQUEST_APPROVAL }">
+            <label class="flex min-h-20 items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 xl:h-[88px]" :class="{ 'opacity-50': !localConfig.REQUIRE_REQUEST_APPROVAL }">
               <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span class="text-sm font-semibold text-ink">Auto-reject after</span>
-                <span class="text-xs leading-snug text-ink-4">Days a suggestion may wait for review. 0 keeps it until someone decides.</span>
+                <span class="text-xs leading-snug text-ink-4">Days awaiting review. 0 keeps suggestions indefinitely.</span>
               </span>
               <span class="flex shrink-0 items-center gap-2 text-[13px] text-ink-3">
-                <input id="autoRejectApprovalDays" v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS" type="number" min="0" max="365" class="ui-input h-9 w-20 px-2.5" :disabled="isLoading || !localConfig.REQUIRE_REQUEST_APPROVAL" />days
+                <input id="autoRejectApprovalDays" v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS" type="number" min="0" max="365" class="ui-input h-9 w-20 px-2.5 tabular-nums" :disabled="isLoading || !localConfig.REQUIRE_REQUEST_APPROVAL" />days
               </span>
             </label>
-            <p v-if="!localConfig.REQUIRE_REQUEST_APPROVAL" class="m-0 text-xs text-ink-4">Suggestions go straight to Seer, so the queue options are off.</p>
+            <p class="m-0 mt-auto pt-2 text-xs leading-relaxed text-ink-4">{{ localConfig.REQUIRE_REQUEST_APPROVAL ? 'Suggestions wait here before they reach Seer.' : 'Suggestions go straight to Seer, so the queue options are off.' }}</p>
           </div>
         </SectionCard>
 
-        <SectionCard icon="fas fa-eye" title="Who sees what" description="Which requests each user can see, and the language titles appear in.">
-          <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+        <SectionCard icon="fas fa-hourglass-end" title="Seerr pending requests" description="Expire requests still waiting for approval in Seerr.">
+          <div class="flex flex-col gap-2.5">
+            <label class="flex min-h-20 items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 xl:h-[88px]">
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="text-sm font-semibold text-ink">Auto-decline after</span>
+                <span class="text-xs leading-snug text-ink-4">Days pending in Seerr. 0 disables expiry.</span>
+              </span>
+              <span class="flex shrink-0 items-center gap-2 text-[13px] text-ink-3">
+                <input v-model.number="localConfig.SEER_AUTO_DECLINE_DAYS" aria-label="Auto-decline after (days)" type="number" min="0" max="365" step="1" class="ui-input h-9 w-20 px-2.5 tabular-nums" :disabled="isLoading" />days
+              </span>
+            </label>
+            <div class="flex min-h-20 items-center rounded-ctl border border-edge bg-panel-2 p-3.5 xl:h-[88px]">
+              <BaseCheckbox v-model="localConfig.SEER_AUTO_DECLINE_DRY_RUN" label="Preview only (dry-run)" description="Log what would be declined without changing Seerr." class="w-full" :disabled="isLoading" />
+            </div>
+          </div>
+          <RequestExpiryControls :enabled="originalConfig.SEER_AUTO_DECLINE_DAYS > 0" :dry-run="originalConfig.SEER_AUTO_DECLINE_DRY_RUN" :disabled="isLoading || hasChanges" />
+          <p class="m-0 mt-auto pt-3 text-xs leading-relaxed text-ink-4">Checked daily at 04:30 server time. Only new SuggestArr deliveries are tracked; media files stay untouched.</p>
+        </SectionCard>
+
+        <SectionCard icon="fas fa-eye" title="Who sees what" description="Choose request visibility and the default title language." class="xl:col-span-2">
+          <fieldset class="m-0 min-w-0 border-0 p-0">
             <legend class="mb-2 p-0 text-[13px] font-semibold text-ink-2">Request visibility</legend>
+            <div class="grid gap-2.5 md:grid-cols-3">
             <label
               v-for="option in requestVisibilityOptions"
               :key="option.value"
@@ -398,21 +418,24 @@ LLM_MODEL=gpt-4o-mini</code></pre>
               :class="localConfig.REQUEST_VISIBILITY === option.value ? 'border-brand-ink bg-brand-soft/50' : 'border-edge bg-panel-2 hover:border-edge-strong'"
             >
               <input v-model="localConfig.REQUEST_VISIBILITY" type="radio" name="requestVisibility" :value="option.value" class="mt-1 accent-brand" :disabled="isLoading" />
-              <span class="flex flex-col gap-0.5">
+              <span class="flex min-w-0 flex-col gap-0.5">
                 <span class="text-sm font-semibold text-ink">{{ option.label }}</span>
                 <span class="text-xs leading-snug text-ink-4">{{ option.hint }}</span>
               </span>
             </label>
-            <p class="m-0 mt-1 text-xs leading-relaxed text-ink-4">A suggestion belongs to whoever is linked to the media account it was made for. Suggestions without an owner stay with the admins.</p>
+            </div>
+            <p class="m-0 mt-3 text-xs leading-relaxed text-ink-4">A suggestion belongs to whoever is linked to the media account it was made for. Suggestions without an owner stay with the admins.</p>
           </fieldset>
 
-          <label class="ui-label mt-5 border-t border-edge pt-5">
-            Default title language
+          <div class="mt-5 grid gap-3 border-t border-edge pt-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] sm:items-center">
+            <label for="tmdbLanguage" class="flex flex-col gap-1 text-[13px] font-semibold text-ink-2">
+              Default title language
+              <span class="text-xs font-normal leading-relaxed text-ink-4">For everyone who has not picked a language on their profile.</span>
+            </label>
             <select id="tmdbLanguage" v-model="localConfig.TMDB_LANGUAGE" class="ui-input" :disabled="isLoading">
               <option v-for="option in titleLanguageOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
             </select>
-            <span class="text-xs font-normal text-ink-4">For everyone who has not picked a language on their profile.</span>
-          </label>
+          </div>
         </SectionCard>
       </div>
 
@@ -421,10 +444,10 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 
 
 
-    <div class="mt-5 flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-[#18162b] max-lg:bottom-24' : 'border-edge bg-panel'">
-      <span class="flex-[1_1_200px] text-sm" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
+    <div class="mt-5 flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-panel max-lg:bottom-24' : 'border-edge bg-panel'">
+      <span class="min-w-0 flex-1 text-sm" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
       <button v-if="section === 'system'" type="button" class="ui-btn border-0 bg-transparent text-ink-3 hover:text-bad" :disabled="isLoading" title="Resets AI, diagnostics, cache and access settings" @click="resetToDefaults">Reset all advanced settings</button>
-      <button type="button" class="ui-btn-primary" :disabled="isLoading || !hasChanges" @click="saveSettings">{{ isLoading ? 'Saving…' : 'Save changes' }}</button>
+      <button type="button" class="ui-btn-primary shrink-0" :disabled="isLoading || !hasChanges" @click="saveSettings">{{ isLoading ? 'Saving…' : 'Save changes' }}</button>
     </div>
   </div>
 </template>
@@ -437,12 +460,14 @@ import axios from 'axios';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import { languageOptions } from '@/utils/titleLanguage.js';
+import RequestExpiryControls from './RequestExpiryControls.vue';
 
 export default {
   name: 'SettingsAdvanced',
   components: { AppDialog, PageHeader, SectionCard,
     BaseDropdown,
     BaseCheckbox,
+    RequestExpiryControls,
   },
   props: {
     // Which part of the former Advanced page to show: 'ai', 'workflow' or 'system'.
@@ -497,8 +522,8 @@ export default {
         { value: 'own_all', label: 'Everyone sees their own', hint: 'Admins are limited to their linked accounts too.' },
       ],
       approvalToggles: [
-        { key: 'REQUIRE_REQUEST_APPROVAL', title: 'Require approval before delivery', hint: 'Hold new suggestions in SuggestArr until an admin approves them.' },
-        { key: 'PAUSE_JOBS_WITH_PENDING_APPROVALS', title: 'Pause jobs while approvals are pending', hint: 'Stop automation from adding more until the current queue is reviewed.', needsApproval: true },
+        { key: 'REQUIRE_REQUEST_APPROVAL', title: 'Require approval before delivery', hint: 'Review each suggestion in SuggestArr before delivery.' },
+        { key: 'PAUSE_JOBS_WITH_PENDING_APPROVALS', title: 'Pause jobs while approvals are pending', hint: 'Wait for the current queue to be reviewed.', needsApproval: true },
       ],
       configActions: [
         { event: 'export-config', icon: 'fas fa-download', title: 'Export a backup', hint: 'Download the current SuggestArr configuration for safekeeping or migration.', label: 'Export' },
@@ -512,7 +537,7 @@ export default {
     sectionMeta() {
       return {
         ai: { title: 'AI provider', subtitle: 'The language model behind AI Search and AI recommendations.' },
-        workflow: { title: 'Approvals', subtitle: 'Whether suggestions wait for your approval, who sees which requests, and how long pending ones stay.' },
+        workflow: { title: 'Approvals', subtitle: 'Choose how suggestions are reviewed, when Seerr requests expire, and who can see them.' },
         system: { title: 'System', subtitle: 'Logging, cache, sign-in, reverse-proxy path and configuration backups.' },
       }[this.section] || { title: 'Advanced', subtitle: '' };
     },
@@ -562,6 +587,8 @@ export default {
           TMDB_LANGUAGE: 'en',
           PAUSE_JOBS_WITH_PENDING_APPROVALS: false,
           AUTO_REJECT_APPROVAL_DAYS: 0,
+          SEER_AUTO_DECLINE_DAYS: 0,
+          SEER_AUTO_DECLINE_DRY_RUN: true,
           ENABLE_ADVANCED_ALGORITHM: false,
           OPENAI_API_KEY: '',
           OPENAI_BASE_URL: '',
@@ -729,6 +756,10 @@ export default {
     },
 
     async saveSettings() {
+      if (!Number.isInteger(this.localConfig.SEER_AUTO_DECLINE_DAYS) || this.localConfig.SEER_AUTO_DECLINE_DAYS < 0 || this.localConfig.SEER_AUTO_DECLINE_DAYS > 365) {
+        this.$toast.error('Seerr auto-decline days must be an integer between 0 and 365.');
+        return;
+      }
       const cidrText = String(this.localConfig.AUTH_TRUSTED_CIDRS || '').trim();
       const temperatureText = String(this.localConfig.LLM_TEMPERATURE ?? '').trim();
       const temperature = temperatureText.toLowerCase() === 'legacy' ? 'legacy' : temperatureText;
@@ -773,6 +804,8 @@ export default {
             TMDB_LANGUAGE: /^[a-z]{2}(-[A-Z]{2})?$/.test(this.localConfig.TMDB_LANGUAGE || '') ? this.localConfig.TMDB_LANGUAGE : 'en',
             PAUSE_JOBS_WITH_PENDING_APPROVALS: this.localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS === true,
             AUTO_REJECT_APPROVAL_DAYS: Math.max(0, Number(this.localConfig.AUTO_REJECT_APPROVAL_DAYS) || 0),
+            SEER_AUTO_DECLINE_DAYS: this.localConfig.SEER_AUTO_DECLINE_DAYS,
+            SEER_AUTO_DECLINE_DRY_RUN: this.localConfig.SEER_AUTO_DECLINE_DRY_RUN,
             ENABLE_ADVANCED_ALGORITHM: this.localConfig.ENABLE_ADVANCED_ALGORITHM || false,
             OPENAI_API_KEY: this.localConfig.OPENAI_API_KEY || '',
             OPENAI_BASE_URL: this.localConfig.OPENAI_BASE_URL || '',

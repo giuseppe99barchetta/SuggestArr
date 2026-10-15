@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
-from api_service.services.seer.seer_client import SeerClient
+from api_service.services.seer.seer_client import SeerClient, normalize_seer_url, parse_seer_timestamp
 from api_service.utils.asyncio_loop import close_event_loop
 from api_service.observability.metrics import INTEGRATION_ERRORS, QUEUE_RETRIES
 
@@ -137,6 +137,18 @@ async def _run_worker() -> int:
                                 source_origin=source_origin)
 
                 db.mark_pending_submitted(row_id, retry_count)
+                # Expiry tracking must never turn a successful delivery into a retry.
+                if isinstance(success, dict):
+                    try:
+                        remote_id = success.get('id')
+                        if type(remote_id) is not int or remote_id <= 0:
+                            raise ValueError('Missing remote ID')
+                        db.track_seer_request(
+                            row_id, remote_id, parse_seer_timestamp(success['createdAt']),
+                            normalize_seer_url(env.get('SEER_API_URL', '')),
+                        )
+                    except Exception:
+                        logger.warning('Delivery %s could not be tracked for expiry; excluded from expiry.', row_id)
                 logger.info("Queue worker: delivery id=%s from job run id=%s submitted.", row_id, item.get('execution_id'))
                 try:
                     db.enqueue_webhook_event("request.submitted", {

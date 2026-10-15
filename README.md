@@ -127,7 +127,7 @@ SuggestArr uses Trakt's device-code flow and sends `urn:ietf:wg:oauth:2.0:oob` a
 
 ## Job Pause and Cleanup Automation
 
-SuggestArr includes two safety tools for running automation without flooding Seer or keeping unwanted media forever.
+SuggestArr includes safety tools for running automation without flooding Seer or keeping unwanted media forever.
 
 ### Pause jobs while Seer has pending requests
 
@@ -138,6 +138,12 @@ When enabled, SuggestArr checks Seer before running that job. If Seer has reques
 Recommendation and Trakt Recommendation jobs can also enable **Pause if suggestions remain unwatched**. Movie and TV activity is tracked separately per linked media user. Watching a requested movie or one episode of a requested show starts a fresh cycle; only scheduled runs are paused.
 
 Use this when Seer approvals are part of your workflow and you want new automation runs to wait until the previous batch has been reviewed.
+
+### Auto-decline pending Seerr requests
+
+Under **Approvals -> Seerr pending requests**, set **Auto-decline after (days)** to expire requests still waiting for approval in Seerr. `0` disables the feature; preview-only mode is enabled by default. Runs happen daily at 04:30 server time, or manually from the same page, which also shows the audit log.
+
+Only new requests delivered by SuggestArr after upgrading can be tracked, including deliveries made while expiry is disabled. Existing requests are excluded. Age starts at creation in Seerr. Approved requests and media files are untouched; SuggestArr keeps its history and duplicate guards. The Seerr API key needs `MANAGE_REQUESTS` or `ADMIN` permissions for real declines.
 
 ### Cleanup Automation
 
