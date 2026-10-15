@@ -251,24 +251,22 @@ LLM_MODEL=gpt-4o-mini</code></pre>
         </template>
       </AppDialog>
 
-      <div v-if="section === 'system'" class="grid items-start gap-5 lg:grid-cols-2">
-        <SectionCard icon="fas fa-bug" title="Debug &amp; appearance" description="Logging verbosity and visual effects.">
+      <div v-if="section === 'system'" class="grid gap-5 lg:grid-cols-2">
+        <SectionCard icon="fas fa-bug" title="Debug &amp; appearance" description="Logs, diagnostics and backgrounds." class="lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0">
           <div class="flex flex-col gap-4">
-            <div class="flex flex-col gap-1.5">
-              <BaseDropdown v-model="localConfig.LOG_LEVEL" :options="logLevelOptions" label="Log level" :disabled="isLoading" id="logLevel" />
-              <span class="text-xs text-ink-4">Set the verbosity of application logs.</span>
-            </div>
+            <BaseDropdown v-model="localConfig.LOG_LEVEL" :options="logLevelOptions" label="Log level" :disabled="isLoading" id="logLevel" class="[&>label]:mb-1.5 [&>label]:text-[13px] [&>label]:font-semibold" />
 
-            <BaseCheckbox v-model="localConfig.ENABLE_DEBUG_MODE" :disabled="isLoading" label="Enable debug mode" description="Enable detailed logging and debugging information" />
-            <BaseCheckbox v-model="localConfig.ENABLE_PERFORMANCE_MONITORING" :disabled="isLoading" label="Enable performance monitoring" description="Track performance metrics for optimization" />
+            <BaseCheckbox v-model="localConfig.ENABLE_DEBUG_MODE" :disabled="isLoading" label="Debug mode" description="Detailed logs for troubleshooting." />
+            <BaseCheckbox v-model="localConfig.ENABLE_PERFORMANCE_MONITORING" :disabled="isLoading" label="Performance monitoring" description="Track application performance." />
+            <h3 class="m-0 border-t border-edge pt-4 text-xs font-semibold text-ink-3">Appearance</h3>
             <BaseCheckbox
               :model-value="!localConfig.ENABLE_VISUAL_EFFECTS"
               :disabled="isLoading"
-              label="Disable visual effects (blur)"
-              description="Turns off the blurred poster backgrounds on the setup and sign-in screens. Helps on slow devices."
+              label="Disable background blur"
+              description="Reduce visual effects on setup and sign-in screens."
               @update:model-value="localConfig.ENABLE_VISUAL_EFFECTS = !$event"
             />
-            <BaseCheckbox v-model="localConfig.ENABLE_STATIC_BACKGROUND" :disabled="isLoading" label="Enable static colored background" description="Use a solid color instead of rotating posters behind the setup wizard." />
+            <BaseCheckbox v-model="localConfig.ENABLE_STATIC_BACKGROUND" :disabled="isLoading" label="Solid setup background" description="Replace rotating posters with a single color." />
 
             <div v-if="localConfig.ENABLE_STATIC_BACKGROUND" class="ui-label">
               <label for="staticBackgroundColor">Static background color (hex)</label>
@@ -280,33 +278,32 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           </div>
         </SectionCard>
 
-        <SectionCard icon="fas fa-memory" title="Cache" description="How long TMDb data is kept and how much space it may use.">
+        <SectionCard icon="fas fa-memory" title="Cache" description="Storage limits for TMDb data." class="lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0">
           <div class="flex flex-col gap-4">
             <label class="ui-label" for="cacheTtl">
-              Cache TTL (hours)
+              Cache lifetime (hours)
               <input id="cacheTtl" v-model.number="localConfig.CACHE_TTL" type="number" min="1" max="168" placeholder="24" class="ui-input" :disabled="isLoading" />
-              <span class="text-xs font-normal text-ink-4">How long to cache API responses and data (1-168 hours).</span>
+              <span class="text-xs font-normal text-ink-4">Refresh cached data after 1–168 hours.</span>
             </label>
 
             <label class="ui-label" for="maxCacheSize">
               Max cache size (MB)
               <input id="maxCacheSize" v-model.number="localConfig.MAX_CACHE_SIZE" type="number" min="10" max="1024" placeholder="100" class="ui-input" :disabled="isLoading" />
-              <span class="text-xs font-normal text-ink-4">Maximum cache size in megabytes (10-1024 MB).</span>
+              <span class="text-xs font-normal text-ink-4">Keep up to 10–1024 MB of cached data.</span>
             </label>
 
-            <BaseCheckbox v-model="localConfig.ENABLE_API_CACHING" :disabled="isLoading" label="Enable TMDb response caching" description="Cache repeated TMDb metadata requests to reduce external API calls" />
+            <BaseCheckbox v-model="localConfig.ENABLE_API_CACHING" :disabled="isLoading" label="Cache TMDb responses" description="Reuse metadata to reduce API calls." />
 
-            <div class="flex flex-col items-start gap-1.5">
+            <div class="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-4">
+              <span class="min-w-0 flex-[1_1_180px] text-xs text-ink-4">Remove cached metadata and fetch fresh data.</span>
               <button type="button" class="ui-btn" :disabled="isLoading" @click="clearCache"><i aria-hidden="true" class="fas fa-trash"></i>Clear cache</button>
-              <span class="text-xs text-ink-4">Clear cached TMDb metadata and force fresh API calls.</span>
             </div>
           </div>
         </SectionCard>
 
-        <SectionCard icon="fas fa-shield-alt" title="Access &amp; routing" description="Choose how users access SuggestArr and where it is served from.">
+        <SectionCard icon="fas fa-shield-alt" title="Access &amp; routing" description="Sign-in rules and reverse-proxy path." class="lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0">
           <div class="flex flex-col gap-4">
             <BaseDropdown v-model="localConfig.AUTH_MODE" :options="authModeOptions" label="Authentication mode" :disabled="isLoading" id="authMode" />
-            <p class="m-0 text-[13px] leading-relaxed text-ink-3">Require login for everyone, let trusted local networks bypass login, or disable authentication.</p>
 
             <div v-if="localConfig.AUTH_MODE === 'disabled' || localConfig.AUTH_MODE === 'local_bypass'" role="alert" class="flex items-start gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
               <i aria-hidden="true" class="fas fa-exclamation-triangle mt-0.5 text-caution"></i>
@@ -319,38 +316,39 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             <label v-if="localConfig.AUTH_MODE === 'local_bypass'" class="ui-label" for="authTrustedCidrs">
               Trusted CIDRs
               <input id="authTrustedCidrs" v-model="localConfig.AUTH_TRUSTED_CIDRS" type="text" placeholder="127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" class="ui-input" :disabled="isLoading" />
-              <span class="text-xs font-normal text-ink-4">Comma-separated CIDR ranges that can bypass auth when mode is <code>local_bypass</code>.</span>
+              <span class="text-xs font-normal text-ink-4">Networks allowed to skip sign-in, separated by commas.</span>
             </label>
 
             <label v-if="localConfig.AUTH_MODE === 'local_bypass' || localConfig.AUTH_MODE === 'disabled'" class="ui-label" for="authBypassUsername">
               Bypass username
               <input id="authBypassUsername" v-model="localConfig.AUTH_BYPASS_USERNAME" type="text" placeholder="local_admin" class="ui-input" :disabled="isLoading" />
-              <span class="text-xs font-normal text-ink-4">Username used as internal request context when auth is bypassed.</span>
+              <span class="text-xs font-normal text-ink-4">Account name used when sign-in is bypassed.</span>
             </label>
 
-            <label class="ui-label" for="subpath">
+            <label class="ui-label border-t border-edge pt-4" for="subpath">
               Subpath
               <input id="subpath" v-model="localConfig.SUBPATH" type="text" placeholder="/suggestarr" class="ui-input" :disabled="isLoading" />
-              <span class="text-xs font-normal text-ink-4">For running SuggestArr under a subdirectory (e.g. "/suggestarr"). Leave empty for root.</span>
+              <span class="text-xs font-normal text-ink-4">Use <code>/suggestarr</code> for a subdirectory. Leave empty for root.</span>
             </label>
           </div>
         </SectionCard>
 
-        <SectionCard icon="fas fa-file-export" title="Configuration management" description="Back up, restore, or reset the complete SuggestArr configuration.">
-          <div class="flex flex-col gap-2.5">
-            <div v-for="action in configActions" :key="action.event" class="flex flex-wrap items-center gap-3 rounded-ctl border p-3.5" :class="action.danger ? 'border-bad/40 bg-bad/10' : 'border-edge bg-panel-2'">
-              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-ctl bg-raised" :class="action.danger ? 'text-bad' : 'text-brand-ink'"><i aria-hidden="true" :class="action.icon"></i></span>
-              <span class="flex min-w-[180px] flex-1 flex-col gap-0.5">
-                <span class="text-sm font-semibold text-ink">{{ action.title }}</span>
-                <span class="text-xs leading-snug text-ink-4">{{ action.hint }}</span>
-              </span>
-              <button type="button" :class="action.danger ? 'ui-btn-danger' : 'ui-btn'" :disabled="isLoading" @click="$emit(action.event)">{{ action.label }}</button>
+        <SectionCard icon="fas fa-file-export" title="Configuration management" description="Back up, restore or reset your settings." class="lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0">
+          <div class="flex min-w-0 flex-col gap-4">
+            <div class="flex flex-col gap-2.5">
+              <div v-for="action in configActions" :key="action.event" class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-ctl border p-3.5" :class="action.danger ? 'border-bad/40 bg-bad/10' : 'border-edge bg-panel-2'">
+                <span class="flex min-w-0 flex-col gap-0.5">
+                  <span class="text-sm font-semibold text-ink">{{ action.title }}</span>
+                  <span class="text-xs leading-snug text-ink-4">{{ action.hint }}</span>
+                </span>
+                <button type="button" class="min-w-20" :class="action.danger ? 'ui-btn-danger' : 'ui-btn'" :disabled="isLoading" @click="$emit(action.event)">{{ action.label }}</button>
+              </div>
             </div>
+            <p class="m-0 mt-auto flex items-start gap-2 border-t border-edge pt-4 text-xs leading-relaxed text-ink-4">
+              <i aria-hidden="true" class="fas fa-lock mt-0.5 text-caution"></i>
+              <span>Configuration backups may contain service credentials. Store exported files securely.</span>
+            </p>
           </div>
-          <p class="m-0 mt-4 flex items-start gap-2 rounded-ctl bg-panel-2 p-3 text-xs leading-relaxed text-ink-4">
-            <i aria-hidden="true" class="fas fa-lock mt-0.5 text-caution"></i>
-            <span>Configuration backups may contain service credentials. Store exported files securely.</span>
-          </p>
         </SectionCard>
       </div>
 
@@ -445,9 +443,9 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 
 
     <div class="mt-5 flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-panel max-lg:bottom-24' : 'border-edge bg-panel'">
-      <span class="min-w-0 flex-1 text-sm" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
-      <button v-if="section === 'system'" type="button" class="ui-btn border-0 bg-transparent text-ink-3 hover:text-bad" :disabled="isLoading" title="Resets AI, diagnostics, cache and access settings" @click="resetToDefaults">Reset all advanced settings</button>
-      <button type="button" class="ui-btn-primary shrink-0" :disabled="isLoading || !hasChanges" @click="saveSettings">{{ isLoading ? 'Saving…' : 'Save changes' }}</button>
+      <span class="min-w-0 flex-[1_0_100%] text-sm sm:flex-1" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
+      <button v-if="section === 'system'" type="button" class="ui-btn h-auto min-h-10 flex-1 whitespace-normal border-0 bg-transparent px-2 py-2 text-ink-3 hover:text-bad sm:flex-none sm:px-4" :disabled="isLoading" title="Resets AI, diagnostics, cache and access settings" @click="resetToDefaults">Reset all advanced settings</button>
+      <button type="button" class="ui-btn-primary h-auto min-h-10 flex-1 py-2 sm:flex-none" :disabled="isLoading || !hasChanges" @click="saveSettings">{{ isLoading ? 'Saving…' : 'Save changes' }}</button>
     </div>
   </div>
 </template>
@@ -526,9 +524,9 @@ export default {
         { key: 'PAUSE_JOBS_WITH_PENDING_APPROVALS', title: 'Pause jobs while approvals are pending', hint: 'Wait for the current queue to be reviewed.', needsApproval: true },
       ],
       configActions: [
-        { event: 'export-config', icon: 'fas fa-download', title: 'Export a backup', hint: 'Download the current SuggestArr configuration for safekeeping or migration.', label: 'Export' },
-        { event: 'import-config', icon: 'fas fa-upload', title: 'Restore a backup', hint: 'Import a previously exported configuration into this instance.', label: 'Import' },
-        { event: 'reset-config', icon: 'fas fa-undo', title: 'Reset SuggestArr', hint: 'Discard the current configuration and return application settings to their defaults.', label: 'Reset', danger: true },
+        { event: 'export-config', title: 'Export a backup', hint: 'Download your current configuration.', label: 'Export' },
+        { event: 'import-config', title: 'Restore a backup', hint: 'Load a previously exported configuration.', label: 'Import' },
+        { event: 'reset-config', title: 'Reset SuggestArr', hint: 'Discard your configuration and restore defaults.', label: 'Reset', danger: true },
       ],
       tmdbLanguages: [],
     };
