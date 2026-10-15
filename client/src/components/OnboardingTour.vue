@@ -2,40 +2,46 @@
   <teleport to="body">
     <template v-if="active && currentStep">
       <!-- Dark backdrop — click to skip -->
-      <div class="tour-backdrop" @click="skip"></div>
+      <div class="fixed inset-0 z-[9000] cursor-pointer" @click="skip"></div>
 
       <!-- Spotlight "hole" via box-shadow -->
-      <div class="tour-spotlight" :style="spotlightStyle"></div>
+      <div class="pointer-events-none fixed z-[9001] rounded-[10px] shadow-[0_0_0_9999px_rgba(0,0,0,0.72)] transition-[top,left,width,height] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]" :style="spotlightStyle"></div>
 
       <!-- Tooltip card -->
-      <transition name="tour-tooltip-pop" mode="out-in">
-        <div :key="currentIndex" class="tour-tooltip" :style="tooltipStyle" @click.stop>
+      <transition
+        mode="out-in"
+        enter-active-class="transition duration-200"
+        leave-active-class="transition duration-150"
+        enter-from-class="opacity-0 scale-[0.94] translate-y-1.5"
+        leave-to-class="opacity-0 scale-[0.94] -translate-y-1"
+      >
+        <div :key="currentIndex" class="fixed z-[9002] rounded-card border border-white/12 bg-[rgba(18,24,38,0.97)] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.05)] backdrop-blur-xl" :style="tooltipStyle" @click.stop>
           <!-- Arrow indicator -->
-          <div class="tour-arrow" :class="`arrow-${arrowSide}`"></div>
+          <div class="absolute h-0 w-0 border-8 border-transparent" :class="arrowClass"></div>
 
           <!-- Header: pips + step count -->
-          <div class="tour-header">
-            <div class="tour-pips">
+          <div class="mb-3 flex items-center justify-between">
+            <div class="flex gap-[5px]">
               <span
                 v-for="(_, i) in steps"
                 :key="i"
-                class="tour-pip"
-                :class="{ 'is-active': i === currentIndex, 'is-done': i < currentIndex }"
+                class="h-1.5 w-1.5 rounded-full transition"
+                :class="i === currentIndex ? 'scale-[1.3] bg-brand' : i < currentIndex ? 'bg-good/70' : 'bg-white/20'"
               ></span>
             </div>
-            <span class="tour-count">{{ currentIndex + 1 }} / {{ steps.length }}</span>
+            <span class="text-[0.72rem] text-white/35 tabular-nums">{{ currentIndex + 1 }} / {{ steps.length }}</span>
           </div>
 
-          <h3 class="tour-title">{{ currentStep.title }}</h3>
-          <p class="tour-desc">{{ currentStep.description }}</p>
+          <h3 class="m-0 mb-1.5 text-base font-bold text-white">{{ currentStep.title }}</h3>
+          <p class="m-0 mb-4 text-[0.85rem] leading-relaxed text-white/65">{{ currentStep.description }}</p>
 
-          <div class="tour-footer">
-            <button class="tour-skip" @click="skip">Skip tour</button>
-            <div class="tour-nav">
-              <button v-if="currentIndex > 0" class="tour-btn-outline" @click="prev">
+          <div class="flex items-center justify-between gap-2">
+            <button class="cursor-pointer border-0 bg-transparent p-0 text-[0.78rem] text-white/35 transition-colors hover:text-white/65" @click="skip">Skip tour</button>
+            <div class="flex gap-2">
+              <button v-if="currentIndex > 0" class="cursor-pointer rounded-lg border border-white/18 bg-transparent px-3.5 py-1.5 text-[0.82rem] font-medium text-white/70 transition hover:border-white/30 hover:bg-white/6" @click="prev">
                 ← Back
               </button>
-              <button class="tour-btn-primary" @click="next">
+              <button class="cursor-pointer rounded-lg border-0 bg-brand px-4 py-1.5 text-[0.82rem] font-semibold text-white transition hover:-translate-y-px hover:brightness-110" @click="next">
                 {{ isLast ? 'Finish ✓' : 'Next →' }}
               </button>
             </div>
@@ -109,6 +115,16 @@ export default {
       if (preferred === 'right'  && this.targetRect.right + TOOLTIP_WIDTH + 24 < vw) return 'left';
       // fallback
       return bottom + TOOLTIP_EST_HEIGHT + 24 < vh ? 'top' : 'bottom';
+    },
+
+    // Border-triangle arrow pointing at the target; the light edge matches the card border.
+    arrowClass() {
+      return {
+        top: '-top-2 left-1/2 -translate-x-1/2 border-t-0 border-b-white/12',
+        bottom: '-bottom-2 left-1/2 -translate-x-1/2 border-b-0 border-t-white/12',
+        left: '-left-2 top-1/2 -translate-y-1/2 border-l-0 border-r-white/12',
+        right: '-right-2 top-1/2 -translate-y-1/2 border-r-0 border-l-white/12',
+      }[this.arrowSide];
     },
 
     tooltipStyle() {
@@ -235,235 +251,3 @@ export default {
   },
 };
 </script>
-
-<style scoped>
-/* ── Backdrop ─────────────────────────────────────────────────────────────── */
-.tour-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 9000;
-  cursor: pointer;
-}
-
-/* ── Spotlight ────────────────────────────────────────────────────────────── */
-.tour-spotlight {
-  position: fixed;
-  z-index: 9001;
-  border-radius: 10px;
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.72);
-  pointer-events: none;
-  transition: top 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-              left 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-              width 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-              height 0.32s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* ── Tooltip card ─────────────────────────────────────────────────────────── */
-.tour-tooltip {
-  position: fixed;
-  z-index: 9002;
-  background: rgba(18, 24, 38, 0.97);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  padding: 1.25rem;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-}
-
-/* Arrow */
-.tour-arrow {
-  position: absolute;
-  width: 0;
-  height: 0;
-}
-
-.arrow-top {
-  /* Tooltip is below target, arrow points up */
-  top: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-bottom: 8px solid rgba(255, 255, 255, 0.12);
-}
-
-.arrow-top::after {
-  content: '';
-  position: absolute;
-  top: 1px;
-  left: -7px;
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-bottom: 7px solid rgb(18, 24, 38);
-}
-
-.arrow-bottom {
-  /* Tooltip is above target, arrow points down */
-  bottom: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-top: 8px solid rgba(255, 255, 255, 0.12);
-}
-
-.arrow-bottom::after {
-  content: '';
-  position: absolute;
-  bottom: 1px;
-  left: -7px;
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-top: 7px solid rgb(18, 24, 38);
-}
-
-.arrow-left {
-  left: -8px;
-  top: 50%;
-  transform: translateY(-50%);
-  border-top: 8px solid transparent;
-  border-bottom: 8px solid transparent;
-  border-right: 8px solid rgba(255, 255, 255, 0.12);
-}
-
-.arrow-right {
-  right: -8px;
-  top: 50%;
-  transform: translateY(-50%);
-  border-top: 8px solid transparent;
-  border-bottom: 8px solid transparent;
-  border-left: 8px solid rgba(255, 255, 255, 0.12);
-}
-
-/* Header row */
-.tour-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.75rem;
-}
-
-.tour-pips {
-  display: flex;
-  gap: 5px;
-}
-
-.tour-pip {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  transition: background 0.2s, transform 0.2s;
-}
-
-.tour-pip.is-active {
-  background: var(--color-primary, #3b82f6);
-  transform: scale(1.3);
-}
-
-.tour-pip.is-done {
-  background: rgba(16, 185, 129, 0.7);
-}
-
-.tour-count {
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.35);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Content */
-.tour-title {
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 700;
-  margin: 0 0 0.4rem;
-}
-
-.tour-desc {
-  color: rgba(255, 255, 255, 0.65);
-  font-size: 0.85rem;
-  line-height: 1.55;
-  margin: 0 0 1rem;
-}
-
-/* Footer */
-.tour-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.tour-skip {
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 0.78rem;
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.18s;
-}
-
-.tour-skip:hover {
-  color: rgba(255, 255, 255, 0.65);
-}
-
-.tour-nav {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.tour-btn-outline {
-  padding: 0.4rem 0.875rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.82rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.18s, border-color 0.18s;
-}
-
-.tour-btn-outline:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.tour-btn-primary {
-  padding: 0.4rem 1rem;
-  border: none;
-  border-radius: 8px;
-  background: var(--color-primary, #3b82f6);
-  color: #fff;
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: filter 0.18s, transform 0.18s;
-}
-
-.tour-btn-primary:hover {
-  filter: brightness(1.12);
-  transform: translateY(-1px);
-}
-
-/* ── Tooltip enter/leave transition ──────────────────────────────────────── */
-.tour-tooltip-pop-enter-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.tour-tooltip-pop-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.tour-tooltip-pop-enter-from {
-  opacity: 0;
-  transform: scale(0.94) translateY(6px);
-}
-
-.tour-tooltip-pop-leave-to {
-  opacity: 0;
-  transform: scale(0.94) translateY(-4px);
-}
-</style>

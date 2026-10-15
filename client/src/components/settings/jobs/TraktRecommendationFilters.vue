@@ -1,29 +1,29 @@
 <template>
-  <div class="trakt-recommendation-filters">
-    <div class="form-group">
-      <label id="trakt-user-label">Trakt Account</label>
-      <p class="form-help">
+  <div class="flex flex-col gap-5">
+    <div>
+      <label id="trakt-user-label" class="mb-1 block text-[13px] font-semibold text-ink-2">Trakt Account</label>
+      <p class="mb-3 block text-xs text-ink-4">
         Choose the media user whose linked Trakt recommendations this job should fetch.
       </p>
 
-      <div v-if="isLoading" class="loading-users">
+      <div v-if="isLoading" class="flex items-center gap-2 rounded-ctl border border-dashed border-edge p-3 text-[0.8rem] text-ink-4">
         <i class="fas fa-spinner fa-spin"></i>
         <span>Loading Trakt users...</span>
       </div>
 
-      <div v-else-if="!traktConfigured" class="no-users">
+      <div v-else-if="!traktConfigured" class="flex items-center gap-2 rounded-ctl border border-dashed border-edge p-3 text-[0.8rem] text-ink-4">
         <i class="fas fa-link-slash"></i>
         <span>Configure Trakt app credentials in Connections first.</span>
       </div>
 
-      <div v-else-if="connectedUsers.length === 0" class="no-users">
+      <div v-else-if="connectedUsers.length === 0" class="flex items-center gap-2 rounded-ctl border border-dashed border-edge p-3 text-[0.8rem] text-ink-4">
         <i class="fas fa-user-slash"></i>
         <span>No media users have a linked Trakt account yet.</span>
       </div>
 
       <div
         v-else
-        class="users-list"
+        class="flex flex-col gap-2"
         role="radiogroup"
         aria-labelledby="trakt-user-label"
       >
@@ -31,51 +31,51 @@
           v-for="user in connectedUsers"
           :key="user.external_user_id"
           type="button"
-          class="user-item"
-          :class="{ selected: selectedUserId === user.external_user_id }"
+          class="flex w-full cursor-pointer items-center gap-3 rounded-ctl border p-3 text-left text-inherit transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          :class="selectedUserId === user.external_user_id ? 'border-brand bg-brand/10' : 'border-edge bg-transparent hover:bg-white/5'"
           role="radio"
           :aria-checked="selectedUserId === user.external_user_id"
           @click="selectUser(user.external_user_id)"
         >
-          <div class="user-avatar">
+          <div class="flex h-8 w-8 items-center justify-center rounded-full bg-panel-2 text-ink-4">
             <i class="fas fa-user"></i>
           </div>
-          <div class="user-meta">
-            <span class="user-name">{{ user.external_username || user.external_user_id }}</span>
-            <span class="user-sub">Trakt connected</span>
+          <div class="flex flex-1 flex-col gap-0.5">
+            <span class="text-[0.85rem] text-ink">{{ user.external_username || user.external_user_id }}</span>
+            <span class="text-[0.7rem] text-ink-4">Trakt connected</span>
           </div>
-          <i v-if="selectedUserId === user.external_user_id" class="fas fa-check check-icon"></i>
+          <i v-if="selectedUserId === user.external_user_id" class="fas fa-check text-brand-ink"></i>
         </button>
       </div>
     </div>
 
-    <div class="form-group">
-      <label>Request Behavior</label>
-      <div class="toggle-options">
-        <div class="toggle-item">
+    <div>
+      <label class="mb-1 block text-[13px] font-semibold text-ink-2">Request Behavior</label>
+      <div class="flex flex-col gap-1.5">
+        <div class="flex items-center gap-3">
           <BaseCheckbox v-model="localFilters.exclude_downloaded">
-            <span class="toggle-label-modal">
+            <span class="inline-flex items-center gap-2 font-medium text-ink">
               <i class="fas fa-download"></i>
               Exclude downloaded content
             </span>
           </BaseCheckbox>
         </div>
-        <small class="toggle-help">Skip titles already in your library</small>
+        <small class="mb-2 ml-7 block text-xs text-ink-4">Skip titles already in your library</small>
 
-        <div class="toggle-item">
+        <div class="flex items-center gap-3">
           <BaseCheckbox v-model="localFilters.exclude_requested">
-            <span class="toggle-label-modal">
+            <span class="inline-flex items-center gap-2 font-medium text-ink">
               <i class="fas fa-clock"></i>
               Exclude requested content
             </span>
           </BaseCheckbox>
         </div>
-        <small class="toggle-help">Skip titles already requested in Seer</small>
+        <small class="mb-2 ml-7 block text-xs text-ink-4">Skip titles already requested in Seer</small>
       </div>
     </div>
 
-    <div v-if="showAdvanced" class="form-group">
-      <label for="maxTraktResults">Total Request Limit: {{ maxResults }}</label>
+    <div v-if="showAdvanced">
+      <label for="maxTraktResults" class="mb-1 block text-[13px] font-semibold text-ink-2">Total Request Limit: {{ maxResults }}</label>
       <input
         id="maxTraktResults"
         :value="maxResults"
@@ -83,10 +83,10 @@
         min="5"
         max="100"
         step="5"
-        class="form-range"
+        class="w-full accent-brand"
         @input="updateMaxResults"
       />
-      <small class="form-help">Maximum Trakt recommendations to request per run</small>
+      <small class="mt-1.5 block text-xs text-ink-4">Maximum Trakt recommendations to request per run</small>
     </div>
   </div>
 </template>
@@ -203,124 +203,3 @@ export default {
   }
 };
 </script>
-
-<style scoped>
-.trakt-recommendation-filters {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.trakt-recommendation-filters .form-help {
-  display: block;
-  margin-bottom: 0.75rem;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
-.users-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.user-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: var(--transition-base);
-}
-
-.user-item:hover {
-  background: var(--color-bg-overlay-light);
-}
-
-.user-item:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.user-item.selected {
-  border-color: var(--color-primary);
-  background: var(--color-primary-alpha-10);
-}
-
-.user-avatar {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-bg-interactive);
-  color: var(--color-text-muted);
-}
-
-.user-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  flex: 1;
-}
-
-.user-name {
-  font-size: 0.85rem;
-  color: var(--color-text-primary);
-}
-
-.user-sub {
-  font-size: 0.7rem;
-  color: var(--color-text-muted);
-}
-
-.check-icon {
-  color: var(--color-primary);
-}
-
-.no-users,
-.loading-users {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  border: 1px dashed var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  font-size: 0.8rem;
-}
-
-.toggle-options {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.toggle-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.toggle-label-modal {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-}
-
-.toggle-help {
-  display: block;
-  margin: 0 0 0.5rem 1.75rem;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-</style>

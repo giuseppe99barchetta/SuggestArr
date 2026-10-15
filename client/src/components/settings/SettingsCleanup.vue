@@ -1,117 +1,82 @@
 <template>
-  <div class="cleanup-page" :class="{ embedded }">
-    <PageHeader v-if="!embedded" title="Cleanup" subtitle="Delete SuggestArr requests and their files when nobody favorited the title in your media server within a grace period." />
+  <div class="flex flex-col gap-5">
+    <PageHeader title="Cleanup" subtitle="Delete SuggestArr requests and their files when nobody favorited the title in your media server within a grace period." />
 
-    <button
-      v-else
-      class="embedded-header"
-      type="button"
-      :aria-expanded="expanded.toString()"
-      aria-controls="cleanup-settings-content"
-      @click="expanded = !expanded"
-    >
-      <span class="embedded-header__heading">
-        <span class="embedded-header__icon"><i class="fas fa-broom"></i></span>
-        <span>
-          <span class="embedded-header__title">Cleanup Automation</span>
-          <span class="embedded-header__description">Remove old SuggestArr requests when media-server users never favorite them.</span>
-        </span>
-      </span>
-      <i class="fas fa-chevron-right embedded-header__chevron" :class="{ expanded }"></i>
-    </button>
-
-    <Transition name="cleanup-collapse">
-      <div id="cleanup-settings-content" v-show="!embedded || expanded" class="cleanup-collapse">
-        <div class="cleanup-collapse__content">
-          <div class="warning-banner">
-      <i class="fas fa-exclamation-triangle"></i>
-      <div class="warning-content">
-        <strong>Destructive action</strong>
-        <span>When enabled and not in dry-run, this asks Seer to delete the matched media files. Always run in dry-run first to verify the candidate list.</span>
-      </div>
+    <div role="alert" class="flex items-start gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
+      <i aria-hidden="true" class="fas fa-exclamation-triangle mt-0.5 text-caution"></i>
+      <p class="m-0 text-sm text-ink-2"><strong class="block text-ink">Destructive action</strong>When enabled and not in dry-run, this asks Seer to delete the matched media files. Always run in dry-run first to verify the candidate list.</p>
     </div>
 
-    <div v-if="loading" class="placeholder">Loading…</div>
+    <p v-if="loading" class="m-0 py-2 text-sm italic text-ink-4">Loading…</p>
 
-    <div v-else class="cleanup-panel">
-      <label class="toggle-option">
-        <span class="toggle-label">
-          <span class="toggle-title">
-            <i class="fas fa-power-off"></i>
-            Enable cleanup automation
+    <SectionCard v-else icon="fas fa-broom" title="Cleanup automation" description="Runs daily at 04:15 server-time.">
+      <div class="flex flex-col gap-2.5">
+        <button
+          v-for="toggle in toggles"
+          :key="toggle.key"
+          type="button"
+          role="switch"
+          :aria-checked="form[toggle.key] ? 'true' : 'false'"
+          class="flex cursor-pointer items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 text-left hover:border-edge-strong"
+          @click="form[toggle.key] = !form[toggle.key]"
+        >
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-raised text-ink-3"><i aria-hidden="true" :class="toggle.icon"></i></span>
+          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="text-sm font-semibold text-ink">{{ toggle.title }}</span>
+            <span class="text-xs leading-snug text-ink-4">{{ toggle.hint }}</span>
           </span>
-          <span class="toggle-hint">Runs daily at 04:15 server-time. When off, no scans happen.</span>
-        </span>
-        <div class="toggle-switch" :class="{ on: form.enabled }" @click="form.enabled = !form.enabled">
-          <div class="toggle-knob"></div>
-        </div>
-      </label>
+          <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="form[toggle.key] ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="form[toggle.key] ? 'left-[21px]' : 'left-[3px]'"></span></span>
+        </button>
 
-      <label class="toggle-option">
-        <span class="toggle-label">
-          <span class="toggle-title">
-            <i class="fas fa-vial"></i>
-            Dry-run mode
+        <label class="flex items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5">
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-raised text-ink-3"><i aria-hidden="true" class="fas fa-hourglass-half"></i></span>
+          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="text-sm font-semibold text-ink">Grace period (days)</span>
+            <span class="text-xs leading-snug text-ink-4">If a requested item has not been favorited in Plex, Jellyfin, or Emby within this many days of being requested, it becomes a deletion candidate.</span>
           </span>
-          <span class="toggle-hint">Logs which items would be sent to Seer for deletion without touching files. Strongly recommended before flipping to real deletion.</span>
-        </span>
-        <div class="toggle-switch" :class="{ on: form.dry_run }" @click="form.dry_run = !form.dry_run">
-          <div class="toggle-knob"></div>
-        </div>
-      </label>
-
-      <div class="number-option">
-        <span class="toggle-label">
-          <span class="toggle-title">
-            <i class="fas fa-hourglass-half"></i>
-            Grace period (days)
-          </span>
-          <span class="toggle-hint">If a requested item has not been favorited in Plex, Jellyfin, or Emby within this many days of being requested, it becomes a deletion candidate.</span>
-        </span>
-        <input v-model.number="form.grace_days" type="number" min="1" max="365" class="number-input" />
+          <input v-model.number="form.grace_days" type="number" min="1" max="365" class="ui-input h-9 w-20 shrink-0 px-2.5" />
+        </label>
       </div>
 
-      <div class="actions-row">
-        <button class="btn btn-primary" :disabled="saving" @click="save">
-          <i :class="saving ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <button type="button" class="ui-btn-primary" :disabled="saving" @click="save">
+          <i aria-hidden="true" :class="saving ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
           {{ saving ? 'Saving…' : 'Save settings' }}
         </button>
-        <button class="btn" :disabled="running" @click="runNow(true)">
-          <i :class="running && lastTrigger === 'dry' ? 'fas fa-spinner fa-spin' : 'fas fa-vial'"></i>
+        <button type="button" class="ui-btn" :disabled="running" @click="runNow(true)">
+          <i aria-hidden="true" :class="running && lastTrigger === 'dry' ? 'fas fa-spinner fa-spin' : 'fas fa-vial'"></i>
           Run now (dry-run)
         </button>
-        <button class="btn btn-danger" :disabled="running || !form.enabled" @click="runNow(false)" title="Performs real deletions">
-          <i :class="running && lastTrigger === 'real' ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
+        <button type="button" class="ui-btn-danger" :disabled="running || !form.enabled" title="Performs real deletions" @click="runNow(false)">
+          <i aria-hidden="true" :class="running && lastTrigger === 'real' ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
           Run now (real)
         </button>
       </div>
 
-      <div v-if="lastResult" class="result-banner" :class="{ ok: lastResult.status === 'success', err: lastResult.status === 'error' }">
-        <i :class="lastResult.status === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle'"></i>
+      <p v-if="lastResult" class="mt-3 flex items-center gap-2" :class="lastResult.status === 'success' ? 'ui-alert-good' : 'ui-alert-bad'">
+        <i aria-hidden="true" :class="lastResult.status === 'success' ? 'fas fa-check-circle text-good' : 'fas fa-exclamation-circle text-bad'"></i>
         <span>{{ lastResult.message }}</span>
-      </div>
+      </p>
 
-      <div v-if="settings && settings.last_run_at" class="last-run-info">
+      <div v-if="settings && settings.last_run_at" class="mt-3 text-sm text-ink-4">
         <span><strong>Last run:</strong> {{ formatTs(settings.last_run_at) }} · {{ settings.last_run_status || '—' }}</span>
-        <div v-if="settings.last_run_summary" class="last-run-summary">{{ settings.last_run_summary }}</div>
+        <div v-if="settings.last_run_summary" class="mt-1 font-mono text-[0.82rem]">{{ settings.last_run_summary }}</div>
       </div>
-    </div>
+    </SectionCard>
 
-          <div class="cleanup-panel cleanup-log-panel">
-      <div class="card-header-row">
-        <button class="log-title-button" @click="logCollapsed = !logCollapsed">
-          <i :class="logCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down'"></i>
-          <span><i class="fas fa-history"></i> Audit log</span>
-          <span v-if="log.length" class="log-count">{{ log.length }}</span>
+    <section class="overflow-x-auto rounded-card border border-edge bg-panel p-5">
+      <div class="mb-2 flex items-center justify-between gap-3">
+        <button type="button" class="inline-flex cursor-pointer items-center gap-2.5 border-0 bg-transparent py-1 text-base font-semibold text-ink" :aria-expanded="(!logCollapsed).toString()" @click="logCollapsed = !logCollapsed">
+          <i aria-hidden="true" :class="logCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-down'"></i>
+          <span class="inline-flex items-center gap-2"><i aria-hidden="true" class="fas fa-history"></i> Audit log</span>
+          <span v-if="log.length" class="min-w-6 rounded-full bg-white/8 px-2 py-0.5 text-center text-[0.78rem] font-semibold text-ink-4">{{ log.length }}</span>
         </button>
-        <div class="log-header-actions">
-          <button class="btn btn-link" @click="loadLog" :disabled="loadingLog">
-            <i :class="loadingLog ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i> Refresh
-          </button>
-        </div>
+        <button type="button" class="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent px-2 py-1 text-sm text-brand-ink disabled:opacity-50" :disabled="loadingLog" @click="loadLog">
+          <i aria-hidden="true" :class="loadingLog ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i> Refresh
+        </button>
       </div>
-      <div v-if="!logCollapsed && !log.length" class="placeholder">No cleanup actions logged yet.</div>
-      <table v-else-if="!logCollapsed" class="log-table">
+      <p v-if="!logCollapsed && !log.length" class="m-0 py-2 text-sm italic text-ink-4">No cleanup actions logged yet.</p>
+      <table v-else-if="!logCollapsed" class="w-full border-collapse text-[0.85rem] [&_td]:border-b [&_td]:border-edge [&_td]:px-2 [&_td]:py-1.5 [&_th]:border-b [&_th]:border-edge [&_th]:px-2 [&_th]:py-1.5 [&_th]:text-left [&_th]:font-semibold [&_th]:text-ink-4">
         <thead>
           <tr>
             <th>When</th>
@@ -135,42 +100,32 @@
           </tr>
         </tbody>
       </table>
-      <div v-if="!logCollapsed && totalLogPages > 1" class="pagination-row">
-        <button class="btn btn-sm" :disabled="logPage <= 1" @click="logPage -= 1">
-          <i class="fas fa-chevron-left"></i>
+      <div v-if="!logCollapsed && totalLogPages > 1" class="mt-3 flex items-center justify-end gap-3 text-[0.85rem] text-ink-4">
+        <button type="button" class="ui-btn h-8 px-3 text-[0.82rem]" :disabled="logPage <= 1" @click="logPage -= 1">
+          <i aria-hidden="true" class="fas fa-chevron-left"></i>
           Previous
         </button>
         <span>Page {{ logPage }} of {{ totalLogPages }}</span>
-        <button class="btn btn-sm" :disabled="logPage >= totalLogPages" @click="logPage += 1">
+        <button type="button" class="ui-btn h-8 px-3 text-[0.82rem]" :disabled="logPage >= totalLogPages" @click="logPage += 1">
           Next
-          <i class="fas fa-chevron-right"></i>
+          <i aria-hidden="true" class="fas fa-chevron-right"></i>
         </button>
       </div>
-          </div>
-        </div>
-      </div>
-    </Transition>
+    </section>
   </div>
 </template>
 
 <script>
 import PageHeader from '@/components/ui/PageHeader.vue';
+import SectionCard from '@/components/ui/SectionCard.vue';
 import { getCleanupSettings, setCleanupSettings, runCleanupNow, getCleanupLog } from '@/api/api.js';
 
 export default {
-  components: { PageHeader },
+  components: { PageHeader, SectionCard },
   name: 'SettingsCleanup',
-
-  props: {
-    embedded: {
-      type: Boolean,
-      default: false,
-    },
-  },
 
   data() {
     return {
-      expanded: false,
       loading: true,
       loadingLog: false,
       saving: false,
@@ -183,6 +138,10 @@ export default {
       logPage: 1,
       logPageSize: 25,
       lastResult: null,
+      toggles: [
+        { key: 'enabled', icon: 'fas fa-power-off', title: 'Enable cleanup automation', hint: 'When off, no scans happen.' },
+        { key: 'dry_run', icon: 'fas fa-vial', title: 'Dry-run mode', hint: 'Logs which items would be sent to Seer for deletion without touching files. Strongly recommended before flipping to real deletion.' },
+      ],
     };
   },
 
@@ -276,9 +235,9 @@ export default {
     },
 
     actionClass(action) {
-      if (action === 'deleted' || action === 'would_delete') return 'row-delete';
-      if (action === 'kept_favorited') return 'row-kept';
-      if (action === 'error' || action === 'delete_failed') return 'row-error';
+      if (action === 'deleted' || action === 'would_delete') return 'text-caution';
+      if (action === 'kept_favorited') return 'text-good';
+      if (action === 'error' || action === 'delete_failed') return 'text-bad';
       return '';
     },
   },
@@ -289,249 +248,3 @@ export default {
   },
 };
 </script>
-
-<style scoped>
-.cleanup-page { padding: 0; }
-.cleanup-page.embedded {
-  grid-column: 1 / -1;
-  background: rgba(220, 38, 38, 0.06);
-  border: 1px solid rgba(220, 38, 38, 0.22);
-  border-radius: var(--border-radius-md, 8px);
-  padding: 1.5rem;
-}
-.section-header h2 { font-size: 1.6rem; margin-bottom: 0.25rem; }
-.section-header p { color: var(--color-text-muted, #aaa); }
-.embedded-header {
-  margin-bottom: 1rem;
-}
-.embedded-header h3 {
-  font-size: 1.2rem;
-  margin: 0 0 0.35rem;
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.embedded-header p {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.95rem;
-}
-
-.embedded-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  margin: 0;
-  padding: var(--spacing-sm);
-  color: var(--color-text-primary);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-md);
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-
-.embedded-header:hover,
-.embedded-header:focus-visible {
-  background: var(--surface-glass-subtle);
-}
-
-.embedded-header:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-.embedded-header__heading {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.embedded-header__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: var(--input-height-md);
-  height: var(--input-height-md);
-  color: var(--color-error-light);
-  background: var(--color-error-alpha-10);
-  border: 1px solid var(--color-error);
-  border-radius: var(--radius-md);
-}
-
-.embedded-header__title,
-.embedded-header__description {
-  display: block;
-}
-
-.embedded-header__title {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-}
-
-.embedded-header__description {
-  margin-top: var(--spacing-xs);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-}
-
-.embedded-header__chevron {
-  color: var(--color-text-muted);
-  transition: transform var(--transition-fast);
-}
-
-.embedded-header__chevron.expanded {
-  transform: rotate(90deg);
-}
-
-.cleanup-collapse {
-  display: grid;
-  grid-template-rows: 1fr;
-  opacity: 1;
-}
-
-.cleanup-collapse__content {
-  min-height: 0;
-  overflow: hidden;
-}
-
-.cleanup-collapse-enter-active,
-.cleanup-collapse-leave-active {
-  transition:
-    grid-template-rows var(--transition-slow),
-    opacity var(--transition-base);
-}
-
-.cleanup-collapse-enter-from,
-.cleanup-collapse-leave-to {
-  grid-template-rows: 0fr;
-  opacity: 0;
-}
-
-.warning-banner {
-  display: flex; gap: 12px; align-items: flex-start;
-  background: rgba(231, 138, 0, 0.1); border: 1px solid rgba(231, 138, 0, 0.4);
-  padding: 12px; border-radius: 8px; margin: 16px 0;
-}
-.warning-banner i { color: var(--color-warning); font-size: 1.1rem; margin-top: 2px; }
-.warning-content strong { display: block; margin-bottom: 2px; }
-
-.cleanup-panel {
-  background: var(--color-card, #2a2a2a);
-  border: 1px solid var(--color-border, #444);
-  border-radius: 8px; padding: 16px; margin-bottom: 20px;
-}
-.embedded .cleanup-panel {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-.cleanup-log-panel {
-  overflow-x: auto;
-}
-
-.toggle-option, .number-option {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 0; border-bottom: 1px solid var(--color-border-soft, #333);
-}
-.toggle-option:last-of-type, .number-option:last-of-type { border-bottom: none; }
-.toggle-label { display: flex; flex-direction: column; gap: 4px; max-width: 70%; }
-.toggle-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--color-text-primary, #fff);
-}
-.toggle-title i {
-  width: 16px;
-  color: var(--color-text-muted, #aaa);
-  text-align: center;
-}
-.toggle-hint { color: var(--color-text-muted, #888); font-size: 0.85rem; }
-
-.number-input {
-  width: 90px; padding: 6px 8px;
-  background: var(--color-bg, #1f1f1f); border: 1px solid var(--color-border, #444);
-  border-radius: 6px; color: var(--color-text-primary, white);
-}
-
-.actions-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-.btn {
-  padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;
-  border: 1px solid var(--color-border, #444); background: transparent; color: var(--color-text-primary, #ddd);
-  display: inline-flex; align-items: center; gap: 6px;
-}
-.btn:hover:not(:disabled) { border-color: #888; }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: var(--color-primary); border-color: var(--color-primary); color: white; }
-.btn-danger { background: var(--color-error); border-color: var(--color-error); color: var(--color-text-inverse); }
-.btn-link { background: transparent; border: none; color: var(--color-primary-light); padding: 4px 8px; }
-.btn-sm { padding: 6px 10px; font-size: 0.82rem; }
-
-.result-banner {
-  margin-top: 12px; padding: 10px; border-radius: 6px;
-  display: flex; gap: 8px; align-items: center;
-}
-.result-banner.ok { background: var(--color-success-alpha-10); border: 1px solid var(--color-success); color: var(--color-success-light); }
-.result-banner.err { background: var(--color-error-alpha-10); border: 1px solid var(--color-error); color: var(--color-error-light); }
-
-.last-run-info { margin-top: 12px; font-size: 0.9rem; color: var(--color-text-muted, #aaa); }
-.last-run-summary { margin-top: 4px; font-family: monospace; font-size: 0.82rem; }
-
-.card-header-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
-.log-title-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  background: transparent;
-  border: 0;
-  color: var(--color-text-primary, #fff);
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 600;
-  padding: 4px 0;
-}
-.log-title-button span {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.log-count {
-  min-width: 24px;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 2px 8px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--color-text-muted, #aaa);
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-.log-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.placeholder { color: var(--color-text-muted, #888); padding: 8px 0; font-style: italic; }
-
-.log-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-.log-table th, .log-table td {
-  text-align: left; padding: 6px 8px;
-  border-bottom: 1px solid var(--color-border-soft, #333);
-}
-.log-table th { color: var(--color-text-muted, #aaa); font-weight: 600; }
-.log-table .row-delete { color: var(--color-warning); }
-.log-table .row-kept { color: var(--color-success); }
-.log-table .row-error { color: var(--color-error); }
-.pagination-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 12px;
-  color: var(--color-text-muted, #aaa);
-  font-size: 0.85rem;
-}
-</style>

@@ -22,96 +22,96 @@
     </div>
 
     <!-- WELCOME SCREEN -->
-    <div v-if="screen === 'welcome'" class="wizard-welcome-screen">
-      <div class="welcome-card glass-card">
+    <div v-if="screen === 'welcome'" :class="screenClass">
+      <div class="w-full max-w-[520px] rounded-[20px] border border-white/12 bg-[rgba(15,20,30,0.75)] px-6 py-8 text-center shadow-[0_24px_64px_rgba(0,0,0,0.5)] backdrop-blur-xl md:px-10 md:py-12">
         <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank" rel="noopener noreferrer">
-          <img src="@/assets/logo.png" alt="SuggestArr Logo" class="welcome-logo">
+          <img src="@/assets/logo.png" alt="SuggestArr Logo" class="mx-auto mb-7 h-16">
         </a>
-        <h1>Welcome to SuggestArr!</h1>
-        <p class="welcome-subtitle">
+        <h1 class="mb-3 text-[2rem] font-bold text-ink">Welcome to SuggestArr!</h1>
+        <p class="mb-8 text-base leading-relaxed text-ink-4">
           Let's get you configured. This wizard guides you through the required steps.
           Optional items can be configured later from the dashboard.
         </p>
 
-        <div class="welcome-actions">
-          <button @click="startSetup" class="btn btn-primary btn-xl">
+        <div class="mb-3 flex flex-col gap-3.5">
+          <button type="button" @click="startSetup" class="ui-btn-primary h-auto py-3.5 text-[1.05rem] font-semibold">
             <i class="fas fa-rocket"></i>
             Start Setup
           </button>
-          <button @click="importConfig" class="btn btn-outline" :disabled="isImporting">
+          <button type="button" @click="importConfig" class="ui-btn" :disabled="isImporting">
             <i :class="isImporting ? 'fas fa-spinner fa-spin' : 'fas fa-file-import'"></i>
             {{ isImporting ? 'Importing...' : 'Import Configuration' }}
           </button>
         </div>
-        <p class="import-hint">Already have a configuration file? Import it to restore all settings.</p>
+        <p class="mb-6 text-[0.8rem] text-ink-4">Already have a configuration file? Import it to restore all settings.</p>
 
-        <div v-if="hasExistingConfig" class="existing-config-notice">
+        <div v-if="hasExistingConfig" class="flex flex-wrap items-center justify-center gap-2 rounded-ctl border border-notice/30 bg-notice/12 px-5 py-3.5 text-[0.9rem] text-ink">
           <i class="fas fa-info-circle"></i>
           Existing configuration detected.
-          <router-link to="/" class="go-dashboard-link">Go to Dashboard →</router-link>
+          <router-link to="/" class="font-semibold text-brand-ink no-underline hover:underline">Go to Dashboard →</router-link>
         </div>
       </div>
       <AppFooter />
     </div>
 
     <!-- WIZARD LAYOUT: centered compact card with top stepper -->
-    <div v-else-if="screen === 'wizard'" class="wizard-centered-screen">
-      <div class="wizard-card">
+    <div v-else-if="screen === 'wizard'" :class="[screenClass, 'max-md:justify-start max-md:px-3 max-md:py-4']">
+      <div class="flex w-full max-w-[700px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[rgba(15,20,30,0.82)] shadow-[0_32px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl md:max-h-[calc(100vh-4rem)] md:rounded-[20px]">
 
         <!-- Card header: logo + step count + logs -->
-        <div class="wizard-card-header">
-          <img src="@/assets/logo.png" alt="SuggestArr" class="wizard-logo-small">
-          <div class="wizard-header-right">
-            <span v-if="!currentStep.optional" class="wizard-step-count">
+        <div :class="[sectionClass, 'flex items-center justify-between border-b border-white/7 py-4']">
+          <img src="@/assets/logo.png" alt="SuggestArr" class="h-[26px]">
+          <div class="flex items-center gap-3">
+            <span v-if="!currentStep.optional" class="text-[0.8rem] text-ink-4">
               Step {{ currentRequiredIndex + 1 }} of {{ requiredSteps.length }}
             </span>
-            <span v-else class="wizard-step-count is-optional">
+            <span v-else class="text-[0.8rem] text-caution">
               Optional {{ currentOptionalIndex + 1 }} of {{ optionalSteps.length }}
             </span>
-            <button @click="showLogs = true" class="btn-icon" title="View Logs" aria-label="View Logs">
+            <button type="button" @click="showLogs = true" class="cursor-pointer rounded-lg border border-white/12 bg-transparent px-2.5 py-1.5 text-[0.8rem] text-ink-4 transition hover:border-white/22 hover:bg-white/7 hover:text-ink" title="View Logs" aria-label="View Logs">
               <i class="fas fa-clipboard-list"></i>
             </button>
           </div>
         </div>
 
         <!-- Horizontal stepper -->
-        <div class="wizard-stepper">
+        <div :class="[sectionClass, 'flex items-center border-b border-white/7 py-3.5 md:py-4']">
           <template v-for="(step, i) in allSteps" :key="step.id">
             <div
-              class="stepper-step"
+              class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-[1.5px] text-[0.65rem] font-bold transition md:h-7 md:w-7 md:text-[0.72rem]"
               :title="step.optional ? `${step.label} (optional)` : step.label"
-              :class="{
-                'is-completed': i < currentStepIndex,
-                'is-current': i === currentStepIndex,
-                'is-optional': step.optional,
-              }"
+              :class="[stepCircleClass(step, i), { 'scale-80 border-dashed': step.optional }]"
             >
-              <div class="stepper-circle">
-                <i v-if="i < currentStepIndex" class="fas fa-check"></i>
-                <!-- Only required steps are numbered, matching "Step N of M" in the header. -->
-                <span v-else-if="!step.optional">{{ requiredSteps.indexOf(step) + 1 }}</span>
-              </div>
+              <i v-if="i < currentStepIndex" class="fas fa-check"></i>
+              <!-- Only required steps are numbered, matching "Step N of M" in the header. -->
+              <span v-else-if="!step.optional">{{ requiredSteps.indexOf(step) + 1 }}</span>
             </div>
             <div
               v-if="i < allSteps.length - 1"
-              class="stepper-connector"
-              :class="{ 'is-done': i < currentStepIndex }"
+              class="mx-[3px] h-0.5 flex-1 transition-colors duration-300"
+              :class="i < currentStepIndex ? 'bg-[#10b981]/40' : 'bg-white/10'"
             ></div>
           </template>
         </div>
 
         <!-- Step title & description -->
-        <div class="wizard-step-header">
-          <div class="step-title-row">
-            <h2>{{ currentStep.label }}</h2>
-            <div v-if="currentStep.optional" class="step-badge">Optional</div>
+        <div :class="[sectionClass, 'pt-4 pb-2 md:pt-5']">
+          <div class="mb-1 flex items-center gap-3">
+            <h2 class="m-0 text-[1.3rem] font-bold text-ink">{{ currentStep.label }}</h2>
+            <div v-if="currentStep.optional" class="shrink-0 rounded-full border border-[#f59e0b]/35 bg-[#f59e0b]/15 px-2 py-0.5 text-[0.68rem] font-bold uppercase tracking-[0.08em] text-[#f59e0b]">Optional</div>
           </div>
-          <p>{{ currentStep.description }}</p>
+          <p class="m-0 text-[0.9rem] leading-normal text-ink-4">{{ currentStep.description }}</p>
         </div>
 
         <!-- Step component (scrollable body) -->
-        <div class="wizard-card-body">
-          <transition name="fade-slide" mode="out-in">
+        <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4 md:px-7 md:py-5">
+          <transition
+            mode="out-in"
+            enter-active-class="transition duration-200"
+            leave-active-class="transition duration-200"
+            enter-from-class="translate-x-5 opacity-0"
+            leave-to-class="-translate-x-5 opacity-0"
+          >
             <div :key="currentStep.id">
               <component
                 :is="currentStep.component"
@@ -126,7 +126,7 @@
               />
               <!-- When on the service step, show the media server config inline once a service is selected -->
               <template v-if="currentStep.id === 'service' && config.SELECTED_SERVICE">
-                <div class="step-section-divider">
+                <div class="mt-6 mb-4 flex items-center gap-3 text-[0.78rem] font-semibold uppercase tracking-[0.07em] text-ink-4 before:h-px before:flex-1 before:bg-white/8 after:h-px after:flex-1 after:bg-white/8">
                   <span>{{ config.SELECTED_SERVICE.charAt(0).toUpperCase() + config.SELECTED_SERVICE.slice(1) }} Configuration</span>
                 </div>
                 <SettingsServices
@@ -146,33 +146,35 @@
         </div>
 
         <!-- Inline hint: explains why Continue is disabled -->
-        <transition name="fade">
+        <transition enter-active-class="transition-opacity duration-300" leave-active-class="transition-opacity duration-300" enter-from-class="opacity-0" leave-to-class="opacity-0">
           <div
             v-if="!isCurrentStepValid && !currentStep.optional && currentStepHint"
-            class="wizard-step-hint"
+            :class="[sectionClass, 'flex items-center gap-2 border-t border-[#f59e0b]/18 bg-[#f59e0b]/8 py-2.5 text-[0.82rem] text-[#f59e0b]']"
           >
-            <i class="fas fa-info-circle"></i>
+            <i class="fas fa-info-circle shrink-0 text-[0.8rem]"></i>
             {{ currentStepHint }}
           </div>
         </transition>
 
         <!-- Navigation footer -->
-        <div class="wizard-card-footer">
-          <button @click="goBack" class="btn btn-outline">
+        <div :class="[sectionClass, 'flex items-center justify-between border-t border-white/7 bg-black/15 py-3.5 md:py-4']">
+          <button type="button" @click="goBack" class="ui-btn">
             <i class="fas fa-arrow-left"></i>
             {{ currentStepIndex === 0 ? 'Welcome' : 'Back' }}
           </button>
-          <div class="footer-right">
+          <div class="flex items-center gap-3">
             <button
               v-if="currentStep.optional"
+              type="button"
               @click="skipStep"
-              class="btn btn-outline"
+              class="ui-btn"
             >
               Skip <i class="fas fa-forward"></i>
             </button>
             <button
+              type="button"
               @click="goNext"
-              class="btn btn-primary"
+              class="ui-btn-primary"
               :disabled="!isCurrentStepValid && !isSaving"
             >
               <i v-if="isSaving" class="fas fa-spinner fa-spin"></i>
@@ -189,7 +191,7 @@
     </div>
 
     <!-- COMPLETION SCREEN -->
-    <div v-else-if="screen === 'complete'" class="wizard-welcome-screen">
+    <div v-else-if="screen === 'complete'" :class="screenClass">
       <WizardCompletion
         @go-settings="goToSettings"
         @go-requests="goToRequests"
@@ -207,7 +209,7 @@
       type="file"
       accept=".json,application/json"
       @change="handleFileImport"
-      style="display: none;"
+      class="hidden"
     />
   </div>
 </template>
@@ -572,7 +574,24 @@ export default {
       preValidateFromConfig();
     });
 
+    // Layout classes shared by the three screens and the card's horizontal bands.
+    const screenClass = 'relative z-10 flex min-h-screen flex-col items-center justify-center bg-[rgba(5,10,18,0.45)] px-4 py-8 backdrop-blur-sm';
+    const sectionClass = 'shrink-0 px-5 md:px-7';
+
+    const stepCircleClass = (step, i) => {
+      if (i < currentStepIndex.value) return 'border-[#10b981]/40 bg-[#10b981]/18 text-[#10b981]';
+      if (i === currentStepIndex.value) {
+        return step.optional
+          ? 'border-transparent bg-caution text-white shadow-[0_0_0_4px] shadow-caution/20'
+          : 'border-transparent bg-brand text-white shadow-[0_0_0_4px] shadow-brand/22';
+      }
+      return 'border-white/15 bg-white/6 text-ink-4';
+    };
+
     return {
+      screenClass,
+      sectionClass,
+      stepCircleClass,
       screen,
       showLogs,
       isSaving,
@@ -615,457 +634,3 @@ export default {
   },
 };
 </script>
-
-<style scoped>
-/* ── Welcome Screen ───────────────────────────────────────────────────────── */
-.wizard-welcome-screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 2rem;
-  position: relative;
-  z-index: 10;
-  background: rgba(5, 10, 18, 0.45);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.welcome-card {
-  max-width: 520px;
-  width: 100%;
-  text-align: center;
-  padding: 3rem 2.5rem;
-  border-radius: 20px;
-  background: rgba(15, 20, 30, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
-}
-
-.welcome-logo {
-  height: 64px;
-  margin-bottom: 1.75rem;
-  display: inherit !important;
-}
-
-.welcome-card h1 {
-  color: var(--color-text-primary);
-  font-size: 2rem;
-  font-weight: 700;
-  margin-bottom: 0.75rem;
-}
-
-.welcome-subtitle {
-  color: var(--color-text-muted);
-  font-size: 1rem;
-  line-height: 1.6;
-  margin-bottom: 2rem;
-}
-
-.welcome-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-  margin-bottom: 0.75rem;
-}
-
-.btn-xl {
-  padding: 0.875rem 1.75rem;
-  font-size: 1.05rem;
-  font-weight: 600;
-}
-
-.import-hint {
-  color: var(--color-text-muted);
-  font-size: 0.8rem;
-  margin-bottom: 1.5rem;
-}
-
-.existing-config-notice {
-  background: rgba(59, 130, 246, 0.12);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 10px;
-  padding: 0.875rem 1.25rem;
-  color: #e5e7eb;
-  font-size: 0.9rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.go-dashboard-link {
-  color: var(--color-primary);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.go-dashboard-link:hover {
-  text-decoration: underline;
-}
-
-/* ── Wizard Centered Layout ───────────────────────────────────────────────── */
-.wizard-centered-screen {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 2rem 1rem;
-  position: relative;
-  z-index: 10;
-  background: rgba(5, 10, 18, 0.45);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.wizard-card {
-  width: 100%;
-  max-width: 700px;
-  max-height: calc(100vh - 4rem);
-  display: flex;
-  flex-direction: column;
-  background: rgba(15, 20, 30, 0.82);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55);
-  overflow: hidden;
-}
-
-/* Card header */
-.wizard-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.1rem 1.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  flex-shrink: 0;
-}
-
-.wizard-logo-small {
-  height: 26px;
-}
-
-.wizard-header-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.wizard-step-count {
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.btn-icon {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  color: var(--color-text-muted);
-  padding: 0.35rem 0.6rem;
-  cursor: pointer;
-  font-size: 0.8rem;
-  transition: all 0.2s;
-}
-
-.btn-icon:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--color-text-primary);
-  border-color: rgba(255, 255, 255, 0.22);
-}
-
-/* ── Horizontal Stepper ───────────────────────────────────────────────────── */
-.wizard-stepper {
-  display: flex;
-  align-items: center;
-  padding: 1rem 1.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  flex-shrink: 0;
-}
-
-.stepper-step {
-  flex-shrink: 0;
-}
-
-.stepper-circle {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.72rem;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1.5px solid rgba(255, 255, 255, 0.15);
-  color: var(--color-text-muted);
-  transition: all 0.25s ease;
-}
-
-.stepper-step.is-current .stepper-circle {
-  background: var(--color-primary);
-  border-color: transparent;
-  color: white;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.22);
-}
-
-.stepper-step.is-optional .stepper-circle {
-  border-style: dashed;
-  transform: scale(0.8);
-}
-
-.stepper-step.is-current.is-optional .stepper-circle {
-  background: var(--color-warning);
-  box-shadow: 0 0 0 4px var(--color-warning-alpha-20);
-}
-
-.stepper-step.is-completed .stepper-circle {
-  background: rgba(16, 185, 129, 0.18);
-  border-color: rgba(16, 185, 129, 0.4);
-  color: #10b981;
-}
-
-.stepper-connector {
-  flex: 1;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.1);
-  margin: 0 3px;
-  transition: background 0.3s ease;
-}
-
-.stepper-connector.is-done {
-  background: rgba(16, 185, 129, 0.4);
-}
-
-/* ── Step header ──────────────────────────────────────────────────────────── */
-.wizard-step-header {
-  padding: 1.25rem 1.75rem 0.5rem;
-  flex-shrink: 0;
-}
-
-.step-title-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.3rem;
-}
-
-.wizard-step-header h2 {
-  color: var(--color-text-primary);
-  font-size: 1.3rem;
-  font-weight: 700;
-  margin: 0;
-}
-
-.wizard-step-header p {
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-  line-height: 1.5;
-  margin: 0;
-}
-
-.step-badge {
-  display: inline-block;
-  background: rgba(245, 158, 11, 0.15);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  color: #f59e0b;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 0.18rem 0.55rem;
-  border-radius: 20px;
-  flex-shrink: 0;
-}
-
-/* ── Step section divider (inside combined steps) ────────────────────────── */
-.step-section-divider {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 1.5rem 0 1rem;
-  color: var(--color-text-muted);
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-}
-
-.step-section-divider::before,
-.step-section-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-/* ── Scrollable card body ─────────────────────────────────────────────────── */
-.wizard-card-body {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
-  padding: 1.25rem 1.75rem;
-}
-
-.wizard-card-body::-webkit-scrollbar { width: 4px; }
-.wizard-card-body::-webkit-scrollbar-track { background: transparent; }
-.wizard-card-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 2px;
-}
-
-/* ── Step hint (why Continue is disabled) ─────────────────────────────────── */
-.wizard-step-hint {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1.75rem;
-  font-size: 0.82rem;
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.08);
-  border-top: 1px solid rgba(245, 158, 11, 0.18);
-  flex-shrink: 0;
-}
-
-.wizard-step-hint i {
-  flex-shrink: 0;
-  font-size: 0.8rem;
-}
-
-/* Optional step counter accent */
-.wizard-step-count.is-optional {
-  color: #f59e0b;
-}
-
-/* ── Card navigation footer ───────────────────────────────────────────────── */
-.wizard-card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(0, 0, 0, 0.15);
-  flex-shrink: 0;
-}
-
-.footer-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-/* ── Shared button styles (supplement dashboardPage.css) ─────────────────── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  border-radius: 10px;
-  font-weight: 500;
-  font-size: 0.925rem;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s ease;
-  text-decoration: none;
-}
-
-.btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover, #2563eb);
-  transform: translateY(-1px);
-}
-
-.btn-outline {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--color-text-primary);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-.btn-outline:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-/* ── Spinner ──────────────────────────────────────────────────────────────── */
-.fa-spinner.fa-spin {
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-
-/* ── Fade-slide transition for step changes ───────────────────────────────── */
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.fade-slide-enter-from {
-  opacity: 0;
-  transform: translateX(20px);
-}
-
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateX(-20px);
-}
-
-/* ── Responsive (mobile) ─────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .wizard-centered-screen {
-    padding: 1rem 0.75rem;
-    align-items: flex-start;
-  }
-
-  .wizard-card {
-    max-height: none;
-    border-radius: 16px;
-  }
-
-  .wizard-card-header {
-    padding: 1rem 1.25rem;
-  }
-
-  .wizard-stepper {
-    padding: 0.875rem 1.25rem;
-  }
-
-  .stepper-circle {
-    width: 24px;
-    height: 24px;
-    font-size: 0.65rem;
-  }
-
-  .wizard-step-header {
-    padding: 1rem 1.25rem 0.5rem;
-  }
-
-  .wizard-card-body {
-    padding: 1rem 1.25rem;
-  }
-
-  .wizard-card-footer {
-    padding: 0.875rem 1.25rem;
-  }
-
-  .welcome-card {
-    padding: 2rem 1.5rem;
-  }
-}
-</style>

@@ -1,29 +1,29 @@
 <template>
-  <div class="scheduling-step">
-    <p class="step-intro">
+  <div>
+    <p class="mb-6 text-[0.9rem] leading-relaxed text-ink-4">
       Choose how often SuggestArr should run automatically. Each run it will scan your recently
       watched content, find similar titles via TMDB, and submit requests to Seer —
       so new content keeps appearing in your request queue without any manual effort.
     </p>
 
-    <div class="schedule-grid">
+    <div class="mb-5 grid grid-cols-3 gap-3 min-[541px]:grid-cols-5">
       <button
         v-for="opt in scheduleOptions"
         :key="opt.value"
         type="button"
-        class="schedule-card"
-        :class="{ 'is-selected': currentValue === opt.value }"
+        class="relative flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-[1.5px] px-2 pt-[1.1rem] pb-[0.9rem] text-center transition hover:-translate-y-0.5"
+        :class="currentValue === opt.value ? 'border-brand bg-brand/12 text-ink shadow-[0_0_0_3px] shadow-brand/20' : 'border-white/10 bg-white/4 text-ink-3 hover:border-white/20 hover:bg-white/7'"
         @click="select(opt.value)"
       >
-        <div v-if="opt.recommended" class="rec-badge">Recommended</div>
-        <i :class="['schedule-icon', opt.icon]"></i>
-        <span class="schedule-label">{{ opt.label }}</span>
-        <span class="schedule-sub">{{ opt.description }}</span>
+        <div v-if="opt.recommended" class="absolute -top-[9px] -right-[9px] whitespace-nowrap rounded-full bg-brand px-[7px] py-0.5 text-[0.6rem] font-bold uppercase tracking-wider text-white">Recommended</div>
+        <i :class="[opt.icon, 'mb-0.5 text-[1.4rem]', { 'text-brand-ink': currentValue === opt.value }]"></i>
+        <span class="text-[0.88rem] font-semibold">{{ opt.label }}</span>
+        <span class="text-[0.71rem] leading-tight text-ink-4">{{ opt.description }}</span>
       </button>
     </div>
 
-    <p class="schedule-note">
-      <i class="fas fa-info-circle"></i>
+    <p class="m-0 flex items-center gap-1.5 text-[0.8rem] text-ink-4">
+      <i class="fas fa-info-circle shrink-0 opacity-60"></i>
       You can change the schedule or add more jobs anytime from <strong>Settings → Jobs</strong>.
     </p>
   </div>
@@ -34,7 +34,6 @@ export default {
   name: 'SchedulingStep',
   props: {
     config: { type: Object, required: true },
-    wizardMode: { type: Boolean, default: false },
   },
   emits: ['update-config'],
   data() {
@@ -65,103 +64,3 @@ export default {
   },
 };
 </script>
-
-<style scoped>
-.step-intro {
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-  line-height: 1.6;
-  margin-bottom: 1.5rem;
-}
-
-.schedule-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-
-.schedule-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 1.1rem 0.5rem 0.9rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1.5px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--color-text-secondary);
-  text-align: center;
-}
-
-.schedule-card:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
-}
-
-.schedule-card.is-selected {
-  background: rgba(79, 70, 229, 0.12);
-  border-color: var(--color-primary);
-  color: var(--color-text-primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
-}
-
-.schedule-icon {
-  font-size: 1.4rem;
-  margin-bottom: 0.15rem;
-}
-
-.schedule-card.is-selected .schedule-icon {
-  color: var(--color-primary);
-}
-
-.schedule-label {
-  font-size: 0.88rem;
-  font-weight: 600;
-}
-
-.schedule-sub {
-  font-size: 0.71rem;
-  color: var(--color-text-muted);
-  line-height: 1.3;
-}
-
-.rec-badge {
-  position: absolute;
-  top: -9px;
-  right: -9px;
-  background: var(--color-primary);
-  color: white;
-  font-size: 0.6rem;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 20px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-
-.schedule-note {
-  color: var(--color-text-muted);
-  font-size: 0.8rem;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.schedule-note i {
-  flex-shrink: 0;
-  opacity: 0.6;
-}
-
-@media (max-width: 540px) {
-  .schedule-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-</style>

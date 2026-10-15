@@ -104,7 +104,7 @@
 
         <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
           <h3 class="m-0 flex items-center gap-2 text-sm font-bold text-ink"><i aria-hidden="true" class="fas fa-tv"></i>Trakt account</h3>
-          <TraktMediaUsers mode="self" :trakt-configured="isTraktAppConfigured" embedded />
+          <TraktMediaUsers mode="self" :trakt-configured="isTraktAppConfigured" />
         </div>
       </div>
     </SectionCard>

@@ -1,14 +1,14 @@
 <template>
-  <div class="settings-services">
+  <div>
     <!-- Section header hidden in wizard mode (wizard shell provides its own header) -->
     <PageHeader v-if="!wizardMode" title="Connections" subtitle="The services SuggestArr reads from and sends requests to. Test each one after changing it, then save." />
 
-    <div class="services-stack">
+    <div class="mb-5 flex flex-col gap-5">
       <!-- Media Server -->
-      <div v-if="showSection('media-server')" :class="wizardMode ? '' : 'service-card'">
+      <div v-if="showSection('media-server')" :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4'">
         <ServiceCardHeader v-if="!wizardMode" icon="fas fa-server" title="Media server" description="Where SuggestArr reads users, libraries and watch history from." required :status="getMediaServerStatus" :status-text="getMediaServerStatusText" />
 
-        <div v-if="!wizardMode" class="form-group">
+        <div v-if="!wizardMode" class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
           <label for="selectedService">Service</label>
           <select id="selectedService" v-model="localConfig.SELECTED_SERVICE" class="ui-input" :disabled="isLoading">
             <option value="" disabled>Select a service</option>
@@ -19,10 +19,10 @@
         <!-- Plex: OAuth flow (both wizard and dashboard) -->
         <template v-if="localConfig.SELECTED_SERVICE === 'plex'">
           <!-- Step 1: not yet logged in → show Sign in button -->
-          <div v-if="!plexOAuthLoggedIn" class="form-group">
+          <div v-if="!plexOAuthLoggedIn" class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
             <button
               @click="loginWithPlexOAuth"
-              class="ui-btn btn-plex w-full"
+              class="ui-btn w-full border-[#e5a00d] bg-[#e5a00d] font-bold text-[#1a1a1a] hover:bg-[#cc8f0b]"
               :disabled="plexOAuthLoading"
             >
               <i v-if="plexOAuthLoading" class="fas fa-spinner fa-spin"></i>
@@ -31,14 +31,13 @@
               </svg>
               {{ plexOAuthLoading ? 'Waiting for Plex authorisation…' : 'Sign in with Plex' }}
             </button>
-            <small class="form-help" style="text-align:center;display:block">
+            <small class="block text-center text-xs leading-normal text-ink-4">
               <i class="fas fa-lock"></i> Opens Plex.tv in a new window for secure authentication.
             </small>
             <!-- Manual token fallback toggle -->
             <button
               @click="plexOAuthManualMode = !plexOAuthManualMode"
-              class="text-btn"
-              style="margin-top:0.5rem"
+              class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50 mt-2"
             >
               <i class="fas fa-keyboard"></i>
               {{ plexOAuthManualMode ? 'Use Plex login instead' : 'Enter token manually' }}
@@ -47,9 +46,9 @@
 
           <!-- Manual token fallback (also shown when user toggles it) -->
           <template v-if="plexOAuthManualMode">
-            <div class="form-group">
+            <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
               <label for="plexTokenWizard">Plex token</label>
-              <div class="input-group">
+              <div class="flex gap-2">
                 <input
                   id="plexTokenManual"
                   v-model="localConfig.PLEX_TOKEN"
@@ -63,7 +62,7 @@
                 </button>
               </div>
             </div>
-            <div class="form-group">
+            <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
               <label for="plexApiUrlManual">API URL</label>
               <input id="plexApiUrlManual" v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="ui-input" :disabled="isLoading" />
             </div>
@@ -81,22 +80,22 @@
 
           <!-- Step 2: logged in via OAuth → server selection -->
           <template v-if="plexOAuthLoggedIn && !plexOAuthManualMode">
-            <div class="form-group">
-              <div class="oauth-success">
+            <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+              <div class="mt-3 flex items-center gap-2 text-[13px] font-semibold text-good">
                 <i class="fas fa-check-circle"></i> Authenticated with Plex
               </div>
             </div>
             <!-- Multiple servers: dropdown -->
-            <div v-if="plexOAuthConnectionOptions.length > 1" class="form-group">
+            <div v-if="plexOAuthConnectionOptions.length > 1" class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
               <label>Server connection</label>
               <select v-model="plexOAuthSelectedConnIdx" class="ui-input" @change="onPlexOAuthServerSelect(plexOAuthSelectedConnIdx)">
                 <option :value="null" disabled>Choose a server connection…</option>
                 <option v-for="option in plexOAuthConnectionOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
               </select>
             </div>
-            <div class="form-group">
+            <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
               <label>Or enter URL manually</label>
-              <div class="input-group">
+              <div class="flex gap-2">
                 <input v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="ui-input" />
                 <button
                   @click="testAndFetchPlex"
@@ -114,13 +113,13 @@
 
         <!-- Jellyfin / Emby fields -->
         <template v-if="localConfig.SELECTED_SERVICE === 'jellyfin' || localConfig.SELECTED_SERVICE === 'emby'">
-          <div class="form-group">
+          <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
             <label for="jellyfinApiUrl">{{ localConfig.SELECTED_SERVICE === 'emby' ? 'Emby' : 'Jellyfin' }} URL</label>
             <input id="jellyfinApiUrl" v-model="localConfig.JELLYFIN_API_URL" type="url" placeholder="http://localhost:8096" class="ui-input" :disabled="isLoading" />
           </div>
-          <div class="form-group">
+          <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
             <label for="jellyfinToken">API token</label>
-            <div class="input-group">
+            <div class="flex gap-2">
               <input
                 id="jellyfinToken"
                 v-model="localConfig.JELLYFIN_TOKEN"
@@ -147,31 +146,31 @@
         </template>
 
         <!-- Libraries & users -->
-        <div v-if="mediaServerConnected" class="disclosure">
-          <button type="button" class="disclosure-toggle" :aria-expanded="String(mediaServerAdvancedExpanded)" @click="mediaServerAdvancedExpanded = !mediaServerAdvancedExpanded">
-            <span class="disclosure-icon"><i aria-hidden="true" class="fas fa-photo-video"></i></span>
+        <div v-if="mediaServerConnected" class="mt-5 overflow-hidden rounded-ctl border border-edge bg-panel-2">
+          <button type="button" class="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 py-3 text-left text-inherit hover:bg-raised" :aria-expanded="String(mediaServerAdvancedExpanded)" @click="mediaServerAdvancedExpanded = !mediaServerAdvancedExpanded">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-raised text-[13px] text-ink-3"><i aria-hidden="true" class="fas fa-photo-video"></i></span>
             <span class="min-w-0 flex-1">
               <span class="block text-sm font-semibold text-ink">Libraries and users</span>
               <span class="block text-xs text-ink-4">{{ currentSelectedLibraries.length }} libraries · {{ currentSelectedUsers.length }} users selected</span>
             </span>
             <i aria-hidden="true" class="fas fa-chevron-down text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': mediaServerAdvancedExpanded }"></i>
           </button>
-          <div v-show="mediaServerAdvancedExpanded" class="disclosure-body">
-            <section class="disclosure-section">
+          <div v-show="mediaServerAdvancedExpanded" class="divide-y divide-edge border-t border-edge bg-panel">
+            <section class="p-4">
               <div class="flex items-baseline justify-between gap-3">
-                <h4 class="disclosure-title">Libraries</h4>
-                <button v-if="currentSelectedLibraries.length > 0" type="button" class="text-btn" @click="clearCurrentLibraries">Clear</button>
+                <h4 class="m-0 text-[13px] font-bold text-ink">Libraries</h4>
+                <button v-if="currentSelectedLibraries.length > 0" type="button" class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50" @click="clearCurrentLibraries">Clear</button>
               </div>
-              <p class="disclosure-desc">Libraries to monitor. Mark anime libraries with <span class="inline-badge">Anime</span> to send them to the anime profiles.</p>
-              <div v-if="currentLibraries.length > 0" class="chip-list">
+              <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Libraries to monitor. Mark anime libraries with <span class="rounded bg-[#e74c9c]/20 px-1.5 py-px text-[11px] font-bold text-[#e74c9c]">Anime</span> to send them to the anime profiles.</p>
+              <div v-if="currentLibraries.length > 0" class="flex flex-wrap gap-2">
                 <div
                   v-for="lib in currentLibraries"
                   :key="lib._id"
                   role="checkbox"
                   tabindex="0"
                   :aria-checked="String(isLibSelected(lib._id))"
-                  class="chip"
-                  :class="{ active: isLibSelected(lib._id) }"
+                  class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] [&>i]:text-[11px] [&>i]:opacity-70"
+                  :class="isLibSelected(lib._id) ? 'border-brand-ink bg-brand-soft/60 text-ink' : 'border-edge-strong bg-canvas text-ink-3 hover:border-ink-4 hover:text-ink'"
                   @click="toggleLibrary(lib)"
                   @keydown.space.prevent="toggleLibrary(lib)"
                 >
@@ -180,57 +179,57 @@
                   <button
                     v-if="isLibSelected(lib._id)"
                     type="button"
-                    class="chip-badge"
-                    :class="{ 'badge-active': isAnimeLibrary(localConfig.SELECTED_SERVICE, lib._id) }"
+                    class="cursor-pointer rounded border-0 px-1.5 py-px text-[10px] font-bold"
+                    :class="isAnimeLibrary(localConfig.SELECTED_SERVICE, lib._id) ? 'bg-[#e74c9c] text-white' : 'bg-raised text-ink-3'"
                     :aria-pressed="String(isAnimeLibrary(localConfig.SELECTED_SERVICE, lib._id))"
                     title="Mark as anime"
                     @click.stop="toggleAnimeFlag(localConfig.SELECTED_SERVICE, lib._id)"
                   >Anime</button>
                 </div>
               </div>
-              <p v-else class="no-items">No libraries found.</p>
+              <p v-else class="m-0 flex items-center gap-2 text-[13px] text-ink-3">No libraries found.</p>
             </section>
 
-            <section class="disclosure-section">
+            <section class="p-4">
               <div class="flex items-baseline justify-between gap-3">
-                <h4 class="disclosure-title">Users</h4>
-                <button v-if="currentSelectedUsers.length > 0" type="button" class="text-btn" @click="clearCurrentUsers">Clear</button>
+                <h4 class="m-0 text-[13px] font-bold text-ink">Users</h4>
+                <button v-if="currentSelectedUsers.length > 0" type="button" class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50" @click="clearCurrentUsers">Clear</button>
               </div>
-              <p class="disclosure-desc">Users whose watch history drives suggestions.</p>
-              <div v-if="currentUsers.length > 0" class="chip-list">
+              <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Users whose watch history drives suggestions.</p>
+              <div v-if="currentUsers.length > 0" class="flex flex-wrap gap-2">
                 <div
                   v-for="user in currentUsers"
                   :key="user.id"
                   role="checkbox"
                   tabindex="0"
                   :aria-checked="String(isUserSelected(user.id))"
-                  class="chip"
-                  :class="{ active: isUserSelected(user.id) }"
+                  class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] [&>i]:text-[11px] [&>i]:opacity-70"
+                  :class="isUserSelected(user.id) ? 'border-brand-ink bg-brand-soft/60 text-ink' : 'border-edge-strong bg-canvas text-ink-3 hover:border-ink-4 hover:text-ink'"
                   @click="toggleUser(user)"
                   @keydown.space.prevent="toggleUser(user)"
                 >
-                  <span class="chip-avatar">{{ (user.name || 'U').charAt(0).toUpperCase() }}</span>
+                  <span class="flex h-5 w-5 items-center justify-center rounded-full bg-raised text-[10px] font-bold">{{ (user.name || 'U').charAt(0).toUpperCase() }}</span>
                   <span>{{ user.name }}</span>
                 </div>
               </div>
-              <p v-else class="no-items">No users found.</p>
+              <p v-else class="m-0 flex items-center gap-2 text-[13px] text-ink-3">No users found.</p>
             </section>
           </div>
         </div>
       </div>
 
       <!-- Seer  -->
-      <div v-if="showSection('seer')" :class="wizardMode ? '' : 'service-card'">
+      <div v-if="showSection('seer')" :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4'">
         <ServiceCardHeader v-if="!wizardMode" icon="fas fa-paper-plane" title="Jellyseerr / Overseerr" description="Receives the requests. Approved titles are downloaded through Radarr and Sonarr from here." required :status="getSeerStatus" :status-text="getSeerStatusText" />
 
-        <div class="form-group">
+        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
           <label for="seerApiUrl">API URL</label>
           <input id="seerApiUrl" v-model="localConfig.SEER_API_URL" type="url" placeholder="http://localhost:5055" class="ui-input" :disabled="isLoading" @input="onSeerConfigChange" />
         </div>
 
-        <div class="form-group">
+        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
           <label for="seerToken">API token</label>
-          <div class="input-group">
+          <div class="flex gap-2">
             <input
               id="seerToken"
               v-model="localConfig.SEER_TOKEN"
@@ -258,29 +257,29 @@
         </button>
 
         <!-- Request settings -->
-        <div v-if="seerConnected" class="disclosure">
-          <button type="button" class="disclosure-toggle" :aria-expanded="String(seerAdvancedExpanded)" @click="seerAdvancedExpanded = !seerAdvancedExpanded">
-            <span class="disclosure-icon"><i aria-hidden="true" class="fas fa-sliders-h"></i></span>
+        <div v-if="seerConnected" class="mt-5 overflow-hidden rounded-ctl border border-edge bg-panel-2">
+          <button type="button" class="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 py-3 text-left text-inherit hover:bg-raised" :aria-expanded="String(seerAdvancedExpanded)" @click="seerAdvancedExpanded = !seerAdvancedExpanded">
+            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-raised text-[13px] text-ink-3"><i aria-hidden="true" class="fas fa-sliders-h"></i></span>
             <span class="min-w-0 flex-1">
               <span class="block text-sm font-semibold text-ink">Request settings</span>
               <span class="block text-xs text-ink-4">{{ seerAuthenticated ? `As ${selectedSeerUser}` : 'As the admin account' }} · {{ localConfig.SEER_REQUEST_DELAY ?? 2 }}s between requests</span>
             </span>
             <i aria-hidden="true" class="fas fa-chevron-down text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': seerAdvancedExpanded }"></i>
           </button>
-          <div v-show="seerAdvancedExpanded" class="disclosure-body">
-            <section class="disclosure-section">
-              <h4 class="disclosure-title"><label for="seerRequestDelay">Delay between requests</label></h4>
-              <p class="disclosure-desc">Raise it if Seer's notifications hit rate limits. 0 sends everything at once.</p>
+          <div v-show="seerAdvancedExpanded" class="divide-y divide-edge border-t border-edge bg-panel">
+            <section class="p-4">
+              <h4 class="m-0 text-[13px] font-bold text-ink"><label for="seerRequestDelay">Delay between requests</label></h4>
+              <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Raise it if Seer's notifications hit rate limits. 0 sends everything at once.</p>
               <div class="flex max-w-[180px] items-center gap-2">
                 <input id="seerRequestDelay" v-model.number="localConfig.SEER_REQUEST_DELAY" type="number" min="0" max="60" class="ui-input" :disabled="isLoading" />
                 <span class="text-sm text-ink-3">seconds</span>
               </div>
             </section>
 
-            <section class="disclosure-section">
-              <h4 class="disclosure-title">Request as a local user</h4>
-              <p class="disclosure-desc">Sign in as a Seer local user so requests are made on their behalf instead of the admin account.</p>
-              <div v-if="seerUsers.length > 0" class="inline-form">
+            <section class="p-4">
+              <h4 class="m-0 text-[13px] font-bold text-ink">Request as a local user</h4>
+              <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Sign in as a Seer local user so requests are made on their behalf instead of the admin account.</p>
+              <div v-if="seerUsers.length > 0" class="flex gap-2 max-sm:flex-col">
                 <select v-model="selectedSeerUser" class="ui-input flex-1" aria-label="Seer user" :disabled="isLoading" @change="onSeerUserChange(selectedSeerUser)">
                   <option :value="null" disabled>Select user…</option>
                   <option v-for="option in seerUserOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -297,22 +296,22 @@
                   {{ seerAuthenticated ? 'Signed in' : 'Sign in' }}
                 </button>
               </div>
-              <p v-else class="no-items">No local users found. Requests use the admin account.</p>
+              <p v-else class="m-0 flex items-center gap-2 text-[13px] text-ink-3">No local users found. Requests use the admin account.</p>
             </section>
 
-            <section class="disclosure-section">
+            <section class="p-4">
               <div class="flex items-baseline justify-between gap-3">
-                <h4 class="disclosure-title">Download profiles</h4>
-                <button type="button" class="text-btn" :disabled="loadingServers" @click="fetchArrServers">
+                <h4 class="m-0 text-[13px] font-bold text-ink">Download profiles</h4>
+                <button type="button" class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50" :disabled="loadingServers" @click="fetchArrServers">
                   <i aria-hidden="true" :class="loadingServers ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
                   {{ loadingServers ? 'Loading…' : (serversLoaded ? 'Reload' : 'Load servers') }}
                 </button>
               </div>
-              <p class="disclosure-desc">Default Radarr and Sonarr server, quality profile and root folder for automatic requests. Jobs can override them.</p>
+              <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Default Radarr and Sonarr server, quality profile and root folder for automatic requests. Jobs can override them.</p>
 
-              <div v-if="profileCards.length > 0" class="profiles-grid">
-                <fieldset v-for="card in profileCards" :key="card.key" class="profile-card" :class="{ anime: card.anime }">
-                  <legend class="profile-card-header"><i aria-hidden="true" :class="card.icon"></i>{{ card.title }}</legend>
+              <div v-if="profileCards.length > 0" class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
+                <fieldset v-for="card in profileCards" :key="card.key" class="m-0 flex min-w-0 flex-col gap-3 rounded-ctl border bg-canvas p-3.5" :class="card.anime ? 'border-[#e74c9c]/30' : 'border-edge'">
+                  <legend class="flex items-center gap-1.5 p-0 text-[13px] font-bold" :class="card.anime ? 'text-[#e74c9c]' : 'text-ink [&>i]:text-ink-4'"><i aria-hidden="true" :class="card.icon"></i>{{ card.title }}</legend>
                   <label class="ui-label">Server
                     <select :value="$data[card.key + 'ServerId'] ?? ''" class="ui-input" :disabled="isLoading" @change="card.onServer($event.target.value || null)">
                       <option value="">Seer default</option>
@@ -333,19 +332,19 @@
                   </label>
                 </fieldset>
               </div>
-              <p v-else-if="serversLoaded" class="no-items"><i aria-hidden="true" class="fas fa-exclamation-triangle text-caution"></i>No Radarr or Sonarr servers found in Seer.</p>
+              <p v-else-if="serversLoaded" class="m-0 flex items-center gap-2 text-[13px] text-ink-3"><i aria-hidden="true" class="fas fa-exclamation-triangle text-caution"></i>No Radarr or Sonarr servers found in Seer.</p>
             </section>
           </div>
         </div>
       </div>
 
       <!-- TMDB -->
-      <div v-if="showSection('tmdb')" :class="wizardMode ? '' : 'service-card'">
+      <div v-if="showSection('tmdb')" :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4'">
         <ServiceCardHeader v-if="!wizardMode" icon="fas fa-film" title="TMDB" description="Finds titles similar to what you watched, plus posters and metadata." required :status="getTmdbStatus" :status-text="getTmdbStatusText" />
 
-        <div class="form-group">
+        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
           <label for="tmdbApiKey">API key</label>
-          <div class="input-group">
+          <div class="flex gap-2">
             <input
               id="tmdbApiKey"
               v-model="localConfig.TMDB_API_KEY"
@@ -358,8 +357,8 @@
               <i :class="showTmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
             </button>
           </div>
-          <small class="form-help">
-            Get one from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="link">TMDB Settings</a>
+          <small class="text-xs leading-normal text-ink-4">
+            Get one from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="text-brand-ink no-underline hover:underline">TMDB Settings</a>
           </small>
         </div>
 
@@ -379,12 +378,12 @@
       <!-- Optional services: side by side in the dashboard -->
       <div v-if="showSection('omdb') || showSection('trakt')" :class="wizardMode ? '' : 'grid items-start gap-5 lg:grid-cols-2'">
         <!-- OMDb (IMDB ratings) -->
-        <div v-if="showSection('omdb')" :class="wizardMode ? '' : 'service-card'">
+        <div v-if="showSection('omdb')" :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4'">
           <ServiceCardHeader v-if="!wizardMode" icon="fas fa-star" title="IMDb ratings (OMDb)" description="Lets jobs filter suggestions by IMDb rating." :status="getOmdbStatus" :status-text="getOmdbStatusText" />
 
-          <div class="form-group">
+          <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
             <label for="omdbApiKey">API key</label>
-            <div class="input-group">
+            <div class="flex gap-2">
               <input
                 id="omdbApiKey"
                 v-model="localConfig.OMDB_API_KEY"
@@ -397,9 +396,9 @@
                 <i :class="showOmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
               </button>
             </div>
-            <small class="form-help">
+            <small class="text-xs leading-normal text-ink-4">
               Optional — needed only when rating source is set to IMDB or Both.
-              Free key (1,000 req/day) at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" class="link">omdbapi.com</a>
+              Free key (1,000 req/day) at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" class="text-brand-ink no-underline hover:underline">omdbapi.com</a>
             </small>
           </div>
 
@@ -415,38 +414,38 @@
           </button>
 
           <!-- About IMDB Filtering -->
-          <div class="disclosure">
-            <button type="button" class="disclosure-toggle" :aria-expanded="String(omdbInfoExpanded)" @click="omdbInfoExpanded = !omdbInfoExpanded">
-              <span class="disclosure-icon"><i aria-hidden="true" class="fas fa-question"></i></span>
+          <div class="mt-5 overflow-hidden rounded-ctl border border-edge bg-panel-2">
+            <button type="button" class="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 py-3 text-left text-inherit hover:bg-raised" :aria-expanded="String(omdbInfoExpanded)" @click="omdbInfoExpanded = !omdbInfoExpanded">
+              <span class="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-raised text-[13px] text-ink-3"><i aria-hidden="true" class="fas fa-question"></i></span>
               <span class="min-w-0 flex-1 text-sm font-semibold text-ink">What is IMDb filtering?</span>
               <i aria-hidden="true" class="fas fa-chevron-down text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': omdbInfoExpanded }"></i>
             </button>
-            <div v-show="omdbInfoExpanded" class="disclosure-body">
-              <div class="omdb-info-body disclosure-section">
-                <p class="omdb-info-lead">
-                  IMDB filtering uses the <a href="https://www.omdbapi.com/" target="_blank" class="link">OMDb API</a>
+            <div v-show="omdbInfoExpanded" class="divide-y divide-edge border-t border-edge bg-panel">
+              <div class="p-4 text-[13px] text-ink-3">
+                <p class="m-0 mb-3.5 leading-normal">
+                  IMDB filtering uses the <a href="https://www.omdbapi.com/" target="_blank" class="text-brand-ink no-underline hover:underline">OMDb API</a>
                   to fetch IMDB community ratings for each recommendation candidate, letting you reject content
                   that falls below your IMDB threshold.
                 </p>
-                <div class="omdb-pros-cons">
-                  <div class="pros-block">
-                    <div class="pros-cons-title pros"><i class="fas fa-check-circle"></i> Pros</div>
-                    <ul>
+                <div class="mb-3.5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div class="rounded-ctl border border-good/25 bg-good/8 p-3">
+                    <div class="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-good"><i class="fas fa-check-circle"></i> Pros</div>
+                    <ul class="m-0 flex flex-col gap-1 pl-4 leading-snug">
                       <li>Widely trusted ratings from a large, diverse voter base</li>
                       <li>Cross-validates quality when used alongside TMDB ("Both" mode)</li>
                       <li>IMDB IDs are already stored by Jellyfin, Emby, and Plex</li>
                     </ul>
                   </div>
-                  <div class="cons-block">
-                    <div class="pros-cons-title cons"><i class="fas fa-exclamation-circle"></i> Cons</div>
-                    <ul>
+                  <div class="rounded-ctl border border-bad/25 bg-bad/8 p-3">
+                    <div class="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-bad"><i class="fas fa-exclamation-circle"></i> Cons</div>
+                    <ul class="m-0 flex flex-col gap-1 pl-4 leading-snug">
                       <li>Adds 1–2 extra API calls per recommendation (slight slowdown)</li>
                       <li>Free tier limited to 1,000 requests/day</li>
                       <li>Items missing an IMDB ID are skipped or passed through</li>
                     </ul>
                   </div>
                 </div>
-                <p class="omdb-info-footer">
+                <p class="m-0 flex items-start gap-2 leading-normal [&>i]:mt-1 [&>i]:text-brand-ink">
                   <i class="fas fa-cog"></i>
                   <span>Configure the rating source and thresholds in <strong>Content Filters → Rating & Popularity</strong>.</span>
                 </p>
@@ -457,10 +456,10 @@
 
 
         <!-- Trakt -->
-        <div v-if="showSection('trakt')" :class="wizardMode ? '' : 'service-card'">
+        <div v-if="showSection('trakt')" :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4'">
           <ServiceCardHeader v-if="!wizardMode" icon="fas fa-history" title="Trakt" description="Adds Trakt watch history and personal recommendations. Users link their own accounts from their profile." :status="getTraktStatus" :status-text="getTraktStatusText" />
 
-          <div class="form-group">
+          <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
             <label for="traktClientId">Client ID</label>
             <input
               id="traktClientId"
@@ -471,9 +470,9 @@
               :disabled="isLoading"
             />
           </div>
-          <div class="form-group">
+          <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
             <label for="traktClientSecret">Client Secret (optional)</label>
-            <div class="input-group">
+            <div class="flex gap-2">
               <input
                 id="traktClientSecret"
                 v-model="localConfig.TRAKT_CLIENT_SECRET"
@@ -486,11 +485,11 @@
                 <i :class="showTraktClientSecret ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
               </button>
             </div>
-            <small class="form-help">
-              Create an app at <a href="https://developer.trakt.tv/apps/new" target="_blank" rel="noopener noreferrer" class="link">Trakt Developer</a> with <code>urn:ietf:wg:oauth:2.0:oob</code> as Redirect URI (ignore the insecure-URI warning) and leave Allowed origins empty. New Trakt apps use the Client ID without issuing a Client Secret.
+            <small class="text-xs leading-normal text-ink-4">
+              Create an app at <a href="https://developer.trakt.tv/apps/new" target="_blank" rel="noopener noreferrer" class="text-brand-ink no-underline hover:underline">Trakt Developer</a> with <code>urn:ietf:wg:oauth:2.0:oob</code> as Redirect URI (ignore the insecure-URI warning) and leave Allowed origins empty. New Trakt apps use the Client ID without issuing a Client Secret.
             </small>
           </div>
-          <div class="oauth-success" v-if="isTraktAppConfigured">
+          <div class="mt-3 flex items-center gap-2 text-[13px] font-semibold text-good" v-if="isTraktAppConfigured">
             <i class="fas fa-check-circle"></i>
             Trakt app credentials configured. Users can link their own Trakt accounts from their profile.
           </div>
@@ -1447,285 +1446,3 @@ export default {
   },
 };
 </script>
-
-<style scoped>
-/* Connections page: the controls use the shared .ui-* classes; these rules lay out what is left. */
-.services-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  margin-bottom: 1.25rem;
-}
-
-.service-card {
-  min-width: 0;
-  padding: 1.25rem;
-  background: var(--color-panel);
-  border: 1px solid var(--color-edge);
-  border-radius: var(--radius-card);
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-  margin-bottom: 1rem;
-}
-.form-group:last-child { margin-bottom: 0; }
-.form-group label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-ink-2);
-}
-.form-help {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--color-ink-4);
-}
-.input-group,
-.inline-form {
-  display: flex;
-  gap: 0.5rem;
-}
-.flex-1 { flex: 1; min-width: 0; }
-.link { color: var(--color-brand-ink); text-decoration: none; }
-.link:hover { text-decoration: underline; }
-
-/* Disclosure under a service ("Libraries and users", "Request settings") */
-.disclosure {
-  margin-top: 1.25rem;
-  border: 1px solid var(--color-edge);
-  border-radius: var(--radius-ctl);
-  background: var(--color-panel-2);
-  overflow: hidden;
-}
-.disclosure-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  padding: 0.75rem 1rem;
-  background: none;
-  border: 0;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.disclosure-toggle:hover { background: var(--color-raised); }
-.disclosure-icon {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  flex-shrink: 0;
-  border-radius: 8px;
-  background: var(--color-raised);
-  color: var(--color-ink-3);
-  font-size: 13px;
-}
-.disclosure-body {
-  border-top: 1px solid var(--color-edge);
-  background: var(--color-panel);
-}
-.disclosure-section {
-  padding: 1rem;
-}
-.disclosure-section + .disclosure-section {
-  border-top: 1px solid var(--color-edge);
-}
-.disclosure-title {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-ink);
-}
-.disclosure-desc {
-  margin: 0.25rem 0 0.875rem;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--color-ink-4);
-}
-.text-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  background: none;
-  border: 0;
-  border-radius: 6px;
-  color: var(--color-brand-ink);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.text-btn:hover:not(:disabled) { background: var(--color-raised); }
-.text-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.no-items {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  font-size: 13px;
-  color: var(--color-ink-3);
-}
-.inline-badge {
-  padding: 0.05rem 0.375rem;
-  border-radius: 4px;
-  background: color-mix(in srgb, #e74c9c 20%, transparent);
-  color: #e74c9c;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-/* Library and user chips */
-.chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.75rem;
-  background: var(--color-canvas);
-  border: 1px solid var(--color-edge-strong);
-  border-radius: 999px;
-  color: var(--color-ink-3);
-  font-size: 13px;
-  cursor: pointer;
-}
-.chip:hover { border-color: var(--color-ink-4); color: var(--color-ink); }
-.chip.active {
-  background: color-mix(in srgb, var(--color-brand-soft) 60%, transparent);
-  border-color: var(--color-brand-ink);
-  color: var(--color-ink);
-}
-.chip i { font-size: 11px; opacity: 0.7; }
-.chip-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  border-radius: 999px;
-  background: var(--color-raised);
-  font-size: 10px;
-  font-weight: 700;
-}
-.chip-badge {
-  padding: 0.05rem 0.375rem;
-  border: 0;
-  border-radius: 4px;
-  background: var(--color-raised);
-  color: var(--color-ink-3);
-  font-size: 10px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.chip-badge.badge-active { background: #e74c9c; color: white; }
-
-/* Radarr / Sonarr profile cards */
-.profiles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 0.75rem;
-}
-.profile-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  min-width: 0;
-  margin: 0;
-  padding: 0.875rem;
-  background: var(--color-canvas);
-  border: 1px solid var(--color-edge);
-  border-radius: var(--radius-ctl);
-}
-.profile-card.anime { border-color: color-mix(in srgb, #e74c9c 30%, transparent); }
-.profile-card-header {
-  display: flex;
-  padding: 0;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-ink);
-}
-.profile-card-header i { color: var(--color-ink-4); }
-.profile-card.anime .profile-card-header,
-.profile-card.anime .profile-card-header i { color: #e74c9c; }
-
-/* OMDb explainer */
-.omdb-info-body {
-  font-size: 13px;
-  color: var(--color-ink-3);
-}
-.omdb-info-lead { margin: 0 0 0.875rem; line-height: 1.5; }
-.omdb-pros-cons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  margin-bottom: 0.875rem;
-}
-.pros-block,
-.cons-block {
-  padding: 0.75rem;
-  border-radius: var(--radius-ctl);
-}
-.pros-block { background: color-mix(in srgb, var(--color-good) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color-good) 25%, transparent); }
-.cons-block { background: color-mix(in srgb, var(--color-bad) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color-bad) 25%, transparent); }
-.pros-cons-title {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  margin-bottom: 0.5rem;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.pros-cons-title.pros { color: var(--color-good); }
-.pros-cons-title.cons { color: var(--color-bad); }
-.pros-block ul,
-.cons-block ul {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin: 0;
-  padding-left: 1rem;
-  line-height: 1.4;
-}
-.omdb-info-footer {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin: 0;
-  line-height: 1.5;
-}
-.omdb-info-footer i { margin-top: 0.2rem; color: var(--color-brand-ink); }
-
-/* Plex sign-in */
-.btn-plex {
-  background: #e5a00d;
-  border-color: #e5a00d;
-  color: #1a1a1a;
-  font-weight: 700;
-}
-.btn-plex:hover:not(:disabled) { background: #cc8f0b; }
-.oauth-success {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-good);
-}
-
-@media (max-width: 640px) {
-  .omdb-pros-cons { grid-template-columns: 1fr; }
-  .inline-form { flex-direction: column; }
-  .service-card { padding: 1rem; }
-}
-</style>

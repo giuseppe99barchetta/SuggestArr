@@ -15,71 +15,45 @@
       </header>
 
       <form @submit.prevent="handleSubmit" class="flex min-h-0 flex-1 flex-col">
-        <div class="min-h-0 flex-1 overflow-y-auto p-6 max-sm:p-4">
+        <div class="min-h-0 flex-1 overflow-y-auto p-6 max-sm:p-4 [&_h4]:m-0 [&_h4]:mb-3 [&_h4]:text-[11px] [&_h4]:font-bold [&_h4]:uppercase [&_h4]:tracking-[0.08em] [&_h4]:text-ink-4">
           <!-- Job Type Selector -->
-          <div class="settings-group" data-tour-id="job-modal-type-selector">
+          <div class="mb-7" data-tour-id="job-modal-type-selector">
             <h4>Job type</h4>
-            <div class="job-type-selector">
+            <div class="grid gap-2 md:grid-cols-3">
               <button
+                v-for="type in jobTypes"
+                :key="type.value"
                 type="button"
-                class="job-type-btn discover"
-                :class="{ active: form.job_type === 'discover' }"
-                @click="setJobType('discover')"
+                :class="choiceClass(form.job_type === type.value)"
+                :disabled="type.value === 'trakt_recommendations' && !traktJobAvailable"
+                :title="type.value === 'trakt_recommendations' ? traktJobUnavailableReason : null"
+                @click="setJobType(type.value)"
               >
-                <i class="fas fa-search"></i>
-                <div class="job-type-info">
-                  <span class="job-type-name">Discover</span>
-                  <span class="job-type-desc">Find content using TMDb filters</span>
-                </div>
-              </button>
-              <button
-                type="button"
-                class="job-type-btn recommendation"
-                :class="{ active: form.job_type === 'recommendation' }"
-                @click="setJobType('recommendation')"
-              >
-                <i class="fas fa-users"></i>
-                <div class="job-type-info">
-                  <span class="job-type-name">Recommendation</span>
-                  <span class="job-type-desc">Based on user watch history</span>
-                </div>
-              </button>
-              <button
-                type="button"
-                class="job-type-btn trakt_recommendations"
-                :class="{
-                  active: form.job_type === 'trakt_recommendations',
-                  disabled: !traktJobAvailable
-                }"
-                :disabled="!traktJobAvailable"
-                :title="traktJobUnavailableReason"
-                @click="setJobType('trakt_recommendations')"
-              >
-                <i class="icon-trakt"></i>
-                <div class="job-type-info">
-                  <span class="job-type-name">Trakt Recommendations</span>
-                  <span class="job-type-desc">Personalized lists from Trakt.tv</span>
-                </div>
+                <i :class="type.icon" class="w-5 text-center"></i>
+                <span class="flex min-w-0 flex-col gap-0.5">
+                  <span>{{ type.label }}</span>
+                  <span class="text-[0.72rem] font-normal text-ink-3">{{ type.description }}</span>
+                </span>
               </button>
             </div>
-            <div v-if="!traktJobAvailable" class="trakt-setup-alert" role="status">
-              <i class="fas fa-circle-info"></i>
+            <div v-if="!traktJobAvailable" class="mt-3 flex items-start gap-2 rounded-ctl border border-dashed border-edge-strong p-3 text-[0.8rem] text-ink-3" role="status">
+              <i class="fas fa-circle-info mt-0.5 text-brand-ink"></i>
               <span>{{ traktJobUnavailableReason }}</span>
             </div>
           </div>
 
           <!-- Info Note based on job type -->
-          <div class="info-note" :class="form.job_type">
-            <i :class="jobTypeInfoIcon"></i>
+          <div class="mb-6 flex items-start gap-3 rounded-ctl border border-edge bg-panel-2 px-4 py-3 text-[0.8rem] leading-normal text-ink-3">
+            <i :class="jobTypeInfoIcon" class="mt-0.5 shrink-0 text-brand-ink"></i>
             <span>{{ jobTypeInfoText }}</span>
           </div>
 
           <!-- Basic Info -->
-          <div class="settings-group" data-tour-id="job-modal-basic-info">
-            <h4>Basics</h4>
+          <div class="mb-7 flex flex-col gap-4" data-tour-id="job-modal-basic-info">
+            <h4 class="mb-0!">Basics</h4>
 
-            <div class="form-group">
-              <label for="jobName">Name</label>
+            <label class="ui-label" for="jobName">
+              Name
               <input
                 id="jobName"
                 v-model="form.name"
@@ -88,50 +62,33 @@
                 class="ui-input"
                 required
               />
-            </div>
+            </label>
 
-            <div class="form-group">
-              <label>Media Type</label>
-              <div class="media-type-selector">
+            <div class="ui-label">
+              <span>Media Type</span>
+              <div class="flex gap-2 max-[600px]:flex-col">
                 <button
+                  v-for="type in mediaTypes"
+                  v-show="type.value !== 'both' || form.job_type !== 'discover'"
+                  :key="type.value"
                   type="button"
-                  class="media-type-btn"
-                  :class="{ active: form.media_type === 'movie' }"
-                  @click="form.media_type = 'movie'"
+                  :class="[choiceClass(form.media_type === type.value), 'flex-1 justify-center']"
+                  @click="form.media_type = type.value"
                 >
-                  <i class="fas fa-film"></i>
-                  Movies
-                </button>
-                <button
-                  type="button"
-                  class="media-type-btn"
-                  :class="{ active: form.media_type === 'tv' }"
-                  @click="form.media_type = 'tv'"
-                >
-                  <i class="fas fa-tv"></i>
-                  TV shows
-                </button>
-                <button
-                  v-if="form.job_type !== 'discover'"
-                  type="button"
-                  class="media-type-btn"
-                  :class="{ active: form.media_type === 'both' }"
-                  @click="form.media_type = 'both'"
-                >
-                  <i class="fas fa-layer-group"></i>
-                  Both
+                  <i :class="type.icon"></i>
+                  {{ type.label }}
                 </button>
               </div>
             </div>
           </div>
 
           <!-- User Selection (only for recommendation jobs) -->
-          <div v-if="form.job_type === 'recommendation'" class="settings-group">
+          <div v-if="form.job_type === 'recommendation'" class="mb-7">
             <h4>Users to monitor</h4>
             <RecommendationFilters v-model="form" :show-advanced="showAdvanced" :llm-configured="llmConfigured" />
           </div>
 
-          <div v-if="form.job_type === 'trakt_recommendations'" class="settings-group">
+          <div v-if="form.job_type === 'trakt_recommendations'" class="mb-7">
             <h4>Trakt user</h4>
             <TraktRecommendationFilters
               v-model="form"
@@ -142,18 +99,12 @@
             />
           </div>
 
-          <!-- Schedule -->
-          <div class="settings-group">
+          <!-- Seer delivery -->
+          <div class="mb-7">
             <h4>Seer delivery</h4>
-            <div class="delivery-mode-selector">
-              <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'inherit' }" @click="form.delivery_mode = 'inherit'">
-                <i class="fas fa-sliders"></i><span><strong>Use global setting</strong><small>Follow Advanced settings</small></span>
-              </button>
-              <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'automatic' }" @click="form.delivery_mode = 'automatic'">
-                <i class="fas fa-paper-plane"></i><span><strong>Send automatically</strong><small>Queue for Seer immediately</small></span>
-              </button>
-              <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'manual' }" @click="form.delivery_mode = 'manual'">
-                <i class="fas fa-user-check"></i><span><strong>Approve first</strong><small>Review in Requests</small></span>
+            <div class="mb-4 grid gap-2 md:grid-cols-3">
+              <button v-for="mode in deliveryModes" :key="mode.value" type="button" :class="choiceClass(form.delivery_mode === mode.value)" @click="form.delivery_mode = mode.value">
+                <i :class="mode.icon" class="w-4 shrink-0 text-center"></i><span class="grid flex-1 gap-0.5"><strong>{{ mode.label }}</strong><small class="text-[0.72rem] font-normal text-ink-3">{{ mode.hint }}</small></span>
               </button>
             </div>
             <BaseDropdown
@@ -163,9 +114,9 @@
               placeholder="Select Seer identity"
               help-text="Choose who Seer credits for these requests. Mapped users fall back to the technical user configured in Connections."
             />
-            <div class="request-profiles-grid">
-              <div v-for="type in visibleProfileTypes" :key="type" class="request-profile-card">
-                <div class="request-profile-heading"><i :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
+            <div class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
+              <div v-for="type in visibleProfileTypes" :key="type" class="grid gap-2 rounded-ctl border border-edge bg-panel-2 p-4">
+                <div class="flex items-center gap-2 text-[0.85rem] font-semibold text-ink"><i :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'" class="text-ink-4"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
                 <BaseDropdown :model-value="form.request_profiles[type].serverId || ''" :options="serverOptions(type)" label="Server" placeholder="Use Seer default" @update:model-value="setRequestServer(type, $event)" />
                 <template v-if="form.request_profiles[type].serverId">
                   <BaseDropdown v-model="form.request_profiles[type].profileId" :options="profileOptions(type)" label="Quality profile" placeholder="Select quality profile" />
@@ -176,26 +127,20 @@
             </div>
           </div>
 
-          <div class="settings-group" data-tour-id="job-modal-schedule">
+          <div class="mb-7" data-tour-id="job-modal-schedule">
             <h4>Schedule</h4>
             <SchedulePicker v-model="schedule" />
-            <div class="schedule-options">
+            <div class="mt-4 grid gap-4">
               <BaseCheckbox
                 v-model="form.pause_if_pending_requests"
                 label="Pause while Seer requests are pending"
                 description="Skip this job when Seer still has requests awaiting approval or denial."
               />
-              <div class="form-group">
-                <label>Pause while this job has SuggestArr approvals pending</label>
-                <div class="delivery-mode-selector">
-                  <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'inherit' }" @click="form.approval_pause_mode = 'inherit'">
-                    <i class="fas fa-sliders"></i><span><strong>Use global setting</strong><small>Follow Advanced settings</small></span>
-                  </button>
-                  <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'always' }" @click="form.approval_pause_mode = 'always'">
-                    <i class="fas fa-pause"></i><span><strong>Always pause</strong><small>Wait for this job's approvals</small></span>
-                  </button>
-                  <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'never' }" @click="form.approval_pause_mode = 'never'">
-                    <i class="fas fa-play"></i><span><strong>Never pause</strong><small>Ignore pending approvals</small></span>
+              <div class="ui-label">
+                <span>Pause while this job has SuggestArr approvals pending</span>
+                <div class="grid gap-2 md:grid-cols-3">
+                  <button v-for="mode in approvalPauseModes" :key="mode.value" type="button" :class="choiceClass(form.approval_pause_mode === mode.value)" @click="form.approval_pause_mode = mode.value">
+                    <i :class="mode.icon" class="w-4 shrink-0 text-center"></i><span class="grid flex-1 gap-0.5"><strong>{{ mode.label }}</strong><small class="text-[0.72rem] font-normal text-ink-3">{{ mode.hint }}</small></span>
                   </button>
                 </div>
               </div>
@@ -205,39 +150,44 @@
                 label="Pause if suggestions remain unwatched"
                 description="Scheduled runs only. Manual Run now remains available."
               />
-              <div v-if="form.job_type !== 'discover' && form.prevent_suggestions_if_unwatched" class="form-group">
-                <label for="unwatchedDays">Days before pausing</label>
+              <label v-if="form.job_type !== 'discover' && form.prevent_suggestions_if_unwatched" class="ui-label" for="unwatchedDays">
+                Days before pausing
                 <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days"
                   class="ui-input" type="number" min="1" required />
-              </div>
-              <div class="form-group">
-                <label for="maxRequestsPerUser">Automatic requests per user</label>
+              </label>
+              <label class="ui-label" for="maxRequestsPerUser">
+                Automatic requests per user
                 <input id="maxRequestsPerUser" v-model.number="form.max_requests_per_user"
                   class="ui-input" type="number" min="0" max="1000" required />
-                <small class="form-help">Set 0 for no extra limit. Max Results still caps each run.</small>
-              </div>
-              <div v-if="form.max_requests_per_user > 0" class="form-group">
-                <label for="requestLimitWindowHours">Rolling window (hours)</label>
+                <small class="text-xs font-normal text-ink-4">Set 0 for no extra limit. Max Results still caps each run.</small>
+              </label>
+              <label v-if="form.max_requests_per_user > 0" class="ui-label" for="requestLimitWindowHours">
+                Rolling window (hours)
                 <input id="requestLimitWindowHours" v-model.number="form.request_limit_window_hours"
                   class="ui-input" type="number" min="1" max="8760" required />
-              </div>
+              </label>
             </div>
           </div>
 
           <!-- Advanced Settings Toggle -->
-          <button type="button" class="advanced-toggle" data-tour-id="job-modal-advanced-toggle" @click="showAdvanced = !showAdvanced">
-            <i :class="showAdvanced ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+          <button type="button" class="mt-7 mb-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-ctl border border-dashed border-edge-strong bg-transparent px-4 py-3 text-[0.85rem] font-semibold text-ink-3 hover:border-brand-ink hover:text-brand-ink" data-tour-id="job-modal-advanced-toggle" :aria-expanded="showAdvanced.toString()" @click="showAdvanced = !showAdvanced">
+            <i :class="showAdvanced ? 'fas fa-chevron-up' : 'fas fa-chevron-down'" class="text-xs"></i>
             {{ showAdvanced ? 'Hide advanced settings' : 'Show advanced settings' }}
           </button>
 
           <!-- Advanced Settings (collapsible) -->
-          <transition name="slide">
-            <div v-if="showAdvanced" class="advanced-section">
+          <transition
+            enter-active-class="transition-opacity duration-300"
+            leave-active-class="transition-opacity duration-300"
+            enter-from-class="opacity-0"
+            leave-to-class="opacity-0"
+          >
+            <div v-if="showAdvanced" class="border-t border-edge pt-5 pb-4">
               <!-- Max Results -->
-              <div v-if="form.job_type !== 'recommendation'" class="settings-group" data-tour-id="job-modal-max-results">
+              <div v-if="form.job_type !== 'recommendation'" class="mb-7" data-tour-id="job-modal-max-results">
                 <h4>Results</h4>
-                <div class="form-group">
-                  <label for="maxResults">Max results: {{ form.max_results }}</label>
+                <label class="ui-label" for="maxResults">
+                  Max results: {{ form.max_results }}
                   <input
                     id="maxResults"
                     v-model.number="form.max_results"
@@ -245,16 +195,16 @@
                     min="5"
                     max="100"
                     step="5"
-                    class="form-range"
+                    class="mt-2 w-full accent-brand"
                   />
-                  <small class="form-help">
+                  <small class="text-xs font-normal text-ink-4">
                     Maximum content to discover per run
                   </small>
-                </div>
+                </label>
               </div>
 
-              <!-- Filters -->
-              <div class="settings-group filters-section" data-tour-id="job-modal-filters">
+              <!-- Filters: own stacking context so its dropdowns overlap what follows -->
+              <div class="relative z-50" data-tour-id="job-modal-filters">
                 <h4>{{ form.job_type === 'discover' ? 'Discovery filters' : 'Quality filters' }}</h4>
                 <JobFilters
                   v-model="form.filters"
@@ -262,9 +212,6 @@
                   :job-type="form.job_type"
                 />
               </div>
-
-              <!-- Spacer for dropdown overflow -->
-              <div class="dropdown-spacer"></div>
             </div>
           </transition>
         </div>
@@ -337,6 +284,26 @@ export default {
       },
       isSaving: false,
       showAdvanced: false,
+      jobTypes: [
+        { value: 'discover', label: 'Discover', description: 'Find content using TMDb filters', icon: 'fas fa-search' },
+        { value: 'recommendation', label: 'Recommendation', description: 'Based on user watch history', icon: 'fas fa-users' },
+        { value: 'trakt_recommendations', label: 'Trakt Recommendations', description: 'Personalized lists from Trakt.tv', icon: 'icon-trakt' },
+      ],
+      mediaTypes: [
+        { value: 'movie', label: 'Movies', icon: 'fas fa-film' },
+        { value: 'tv', label: 'TV shows', icon: 'fas fa-tv' },
+        { value: 'both', label: 'Both', icon: 'fas fa-layer-group' },
+      ],
+      deliveryModes: [
+        { value: 'inherit', label: 'Use global setting', hint: 'Follow Advanced settings', icon: 'fas fa-sliders' },
+        { value: 'automatic', label: 'Send automatically', hint: 'Queue for Seer immediately', icon: 'fas fa-paper-plane' },
+        { value: 'manual', label: 'Approve first', hint: 'Review in Requests', icon: 'fas fa-user-check' },
+      ],
+      approvalPauseModes: [
+        { value: 'inherit', label: 'Use global setting', hint: 'Follow Advanced settings', icon: 'fas fa-sliders' },
+        { value: 'always', label: 'Always pause', hint: "Wait for this job's approvals", icon: 'fas fa-pause' },
+        { value: 'never', label: 'Never pause', hint: 'Ignore pending approvals', icon: 'fas fa-play' },
+      ],
       llmConfigured: false,
       traktConfigured: false,
       traktLoading: false
@@ -466,6 +433,15 @@ export default {
     } catch { /* Seer defaults remain available. */ }
   },
   methods: {
+    // Selectable option tile used by every choice group in this modal.
+    choiceClass(active) {
+      return [
+        'flex cursor-pointer items-center gap-3 rounded-ctl border px-3.5 py-3 text-left text-[0.85rem] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45',
+        active
+          ? 'border-brand bg-brand-soft text-ink [&>i]:text-brand-ink'
+          : 'border-edge-strong bg-panel-2 text-ink-2 hover:enabled:border-ink-4 hover:enabled:text-ink [&>i]:text-ink-4',
+      ];
+    },
     serversFor(type) { return type === 'movie' ? this.radarrServers : this.sonarrServers; },
     selectedServer(type) { return this.serversFor(type).find(server => String(server.id) === String(this.form.request_profiles[type].serverId)); },
     serverOptions(type) { return this.serversFor(type).map(server => ({ value: server.id, label: `${server.name}${server.is4k ? ' (4K)' : ''}` })); },
@@ -541,303 +517,3 @@ export default {
   }
 };
 </script>
-
-<style scoped>
-/* Job type selector */
-.job-type-selector {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
-}
-
-.job-type-btn,
-.media-type-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 0.875rem;
-  background: var(--color-panel-2);
-  border: 1px solid var(--color-edge-strong);
-  border-radius: var(--radius-ctl);
-  color: var(--color-ink-2);
-  cursor: pointer;
-  text-align: left;
-  font-size: 0.85rem;
-  font-weight: 600;
-  transition: border-color 0.15s, background-color 0.15s;
-}
-
-.job-type-btn:hover:not(:disabled),
-.media-type-btn:hover {
-  border-color: var(--color-ink-4);
-  color: var(--color-ink);
-}
-
-.job-type-btn.active,
-.media-type-btn.active {
-  background: var(--color-brand-soft);
-  border-color: var(--color-brand);
-  color: var(--color-ink);
-}
-
-.job-type-btn i {
-  width: 1.25rem;
-  text-align: center;
-  color: var(--color-ink-4);
-}
-
-.job-type-btn.active i,
-.media-type-btn.active > i {
-  color: var(--color-brand-ink);
-}
-
-.job-type-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  min-width: 0;
-}
-
-.job-type-desc {
-  font-size: 0.72rem;
-  font-weight: 400;
-  color: var(--color-ink-3);
-}
-
-.job-type-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.trakt-setup-alert {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  border: 1px dashed var(--color-edge-strong);
-  border-radius: var(--radius-ctl);
-  color: var(--color-ink-3);
-  font-size: 0.8rem;
-}
-
-.trakt-setup-alert i {
-  color: var(--color-brand-ink);
-  margin-top: 0.1rem;
-}
-
-.info-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  background: var(--color-panel-2);
-  border: 1px solid var(--color-edge);
-  border-radius: var(--radius-ctl);
-  margin-bottom: 1.5rem;
-  font-size: 0.8rem;
-  line-height: 1.5;
-  color: var(--color-ink-3);
-}
-
-.info-note i {
-  flex-shrink: 0;
-  margin-top: 0.15rem;
-  color: var(--color-brand-ink);
-}
-
-.settings-group {
-  margin-bottom: 1.75rem;
-}
-
-.settings-group:last-of-type {
-  margin-bottom: 0;
-}
-
-/* Filters section needs room for dropdowns */
-.settings-group.filters-section {
-  position: relative;
-  z-index: 50;
-}
-
-.dropdown-spacer {
-  height: 1rem;
-}
-
-.settings-group h4 {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--color-ink-4);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin: 0 0 0.75rem;
-}
-
-.delivery-mode-selector {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.delivery-mode-selector .media-type-btn span {
-  display: grid;
-  flex: 1;
-  gap: 0.15rem;
-}
-
-.delivery-mode-selector .media-type-btn > i {
-  flex: 0 0 1rem;
-  text-align: center;
-  color: var(--color-ink-4);
-}
-
-.delivery-mode-selector small {
-  color: var(--color-ink-3);
-  font-size: 0.72rem;
-  font-weight: 400;
-}
-
-.request-profiles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-.request-profile-card {
-  display: grid;
-  gap: 0.5rem;
-  padding: 1rem;
-  background: var(--color-panel-2);
-  border: 1px solid var(--color-edge);
-  border-radius: var(--radius-ctl);
-}
-
-.request-profile-heading {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--color-ink);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.request-profile-heading i {
-  color: var(--color-ink-4);
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-group label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-ink-2);
-  margin-bottom: 0.4rem;
-}
-
-.form-help {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--color-ink-4);
-  margin-top: 0.35rem;
-}
-
-.schedule-options {
-  display: grid;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-.schedule-options > .form-group,
-.schedule-options .delivery-mode-selector {
-  margin-bottom: 0;
-}
-
-.media-type-selector {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.media-type-selector .media-type-btn {
-  flex: 1;
-  justify-content: center;
-}
-
-.form-range {
-  width: 100%;
-  margin-top: 0.5rem;
-  accent-color: var(--color-brand);
-}
-
-.advanced-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  margin: 1.75rem 0 1rem;
-  padding: 0.7rem 1rem;
-  background: transparent;
-  border: 1px dashed var(--color-edge-strong);
-  border-radius: var(--radius-ctl);
-  color: var(--color-ink-3);
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.advanced-toggle:hover {
-  border-color: var(--color-brand-ink);
-  color: var(--color-brand-ink);
-}
-
-.advanced-toggle i {
-  font-size: 0.75rem;
-}
-
-.advanced-section {
-  border-top: 1px solid var(--color-edge);
-  padding-top: 1.25rem;
-}
-
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s ease;
-  overflow: hidden;
-}
-
-.slide-enter-from,
-.slide-leave-to {
-  opacity: 0;
-  max-height: 0;
-  padding-top: 0;
-}
-
-.slide-enter-to,
-.slide-leave-from {
-  opacity: 1;
-  max-height: 2000px;
-}
-
-@media (max-width: 768px) {
-  .job-type-selector,
-  .delivery-mode-selector,
-  .request-profiles-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 600px) {
-  .media-type-selector {
-    flex-direction: column;
-  }
-}
-</style>

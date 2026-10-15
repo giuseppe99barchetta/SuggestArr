@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="[&_code]:break-all [&_code]:px-[0.35rem] [&_code]:py-[0.1rem] [&_code]:text-xs">
     <PageHeader :title="sectionMeta.title" :subtitle="sectionMeta.subtitle" />
 
     <div class="mb-6">
@@ -105,10 +105,10 @@
             SuggestArr uses any <strong>OpenAI-compatible API</strong> to generate personalized recommendations based on your watch history. You can use a cloud provider or a local LLM running on your machine.
           </p>
 
-          <div class="provider-tabs" role="tablist" aria-label="AI Providers">
+          <div class="flex flex-wrap gap-2" role="tablist" aria-label="AI Providers">
             <button
-              class="provider-tab"
-              :class="{ active: activeAiGuideTab === 'openai' }"
+              class="cursor-pointer rounded-ctl border px-[0.7rem] py-[0.4rem] text-[0.85rem] font-semibold transition"
+              :class="activeAiGuideTab === 'openai' ? 'border-brand bg-brand-soft text-ink' : 'border-edge-strong bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
               role="tab"
               :aria-selected="activeAiGuideTab === 'openai'"
               @click="activeAiGuideTab = 'openai'"
@@ -116,8 +116,8 @@
               OpenAI
             </button>
             <button
-              class="provider-tab"
-              :class="{ active: activeAiGuideTab === 'ollama' }"
+              class="cursor-pointer rounded-ctl border px-[0.7rem] py-[0.4rem] text-[0.85rem] font-semibold transition"
+              :class="activeAiGuideTab === 'ollama' ? 'border-brand bg-brand-soft text-ink' : 'border-edge-strong bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
               role="tab"
               :aria-selected="activeAiGuideTab === 'ollama'"
               @click="activeAiGuideTab = 'ollama'"
@@ -125,8 +125,8 @@
               Ollama
             </button>
             <button
-              class="provider-tab"
-              :class="{ active: activeAiGuideTab === 'lmstudio' }"
+              class="cursor-pointer rounded-ctl border px-[0.7rem] py-[0.4rem] text-[0.85rem] font-semibold transition"
+              :class="activeAiGuideTab === 'lmstudio' ? 'border-brand bg-brand-soft text-ink' : 'border-edge-strong bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
               role="tab"
               :aria-selected="activeAiGuideTab === 'lmstudio'"
               @click="activeAiGuideTab = 'lmstudio'"
@@ -134,8 +134,8 @@
               LM Studio
             </button>
             <button
-              class="provider-tab"
-              :class="{ active: activeAiGuideTab === 'gemini' }"
+              class="cursor-pointer rounded-ctl border px-[0.7rem] py-[0.4rem] text-[0.85rem] font-semibold transition"
+              :class="activeAiGuideTab === 'gemini' ? 'border-brand bg-brand-soft text-ink' : 'border-edge-strong bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
               role="tab"
               :aria-selected="activeAiGuideTab === 'gemini'"
               @click="activeAiGuideTab = 'gemini'"
@@ -143,8 +143,8 @@
               Gemini
             </button>
             <button
-              class="provider-tab"
-              :class="{ active: activeAiGuideTab === 'litellm' }"
+              class="cursor-pointer rounded-ctl border px-[0.7rem] py-[0.4rem] text-[0.85rem] font-semibold transition"
+              :class="activeAiGuideTab === 'litellm' ? 'border-brand bg-brand-soft text-ink' : 'border-edge-strong bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
               role="tab"
               :aria-selected="activeAiGuideTab === 'litellm'"
               @click="activeAiGuideTab = 'litellm'"
@@ -153,87 +153,87 @@
             </button>
           </div>
 
-          <div class="provider-panel" role="tabpanel" v-if="activeAiGuideTab === 'openai'">
-            <div class="provider-card">
-              <div class="provider-name"><i class="fas fa-cloud"></i> OpenAI</div>
-              <ol class="provider-steps">
+          <div role="tabpanel" v-if="activeAiGuideTab === 'openai'">
+            <div class="rounded-ctl border border-edge bg-panel-2 px-4 py-3.5">
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i class="fas fa-cloud"></i> OpenAI</div>
+              <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
                 <li>Create an API key in your OpenAI account.</li>
                 <li>Use a model that supports chat completions, such as <code>gpt-4o-mini</code>.</li>
                 <li>Leave Base URL empty to use the default OpenAI endpoint.</li>
               </ol>
-              <pre class="provider-code" aria-label="OpenAI config example"><code>OPENAI_API_KEY=sk-proj-...
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2" aria-label="OpenAI config example"><code>OPENAI_API_KEY=sk-proj-...
 OPENAI_BASE_URL=
 LLM_MODEL=gpt-4o-mini</code></pre>
             </div>
           </div>
 
-          <div class="provider-panel" role="tabpanel" v-else-if="activeAiGuideTab === 'ollama'">
-            <div class="provider-card provider-card--local">
-              <div class="provider-name"><i class="fas fa-server"></i> Ollama <span class="badge-local">Local</span></div>
-              <ol class="provider-steps">
+          <div role="tabpanel" v-else-if="activeAiGuideTab === 'ollama'">
+            <div class="rounded-ctl border border-brand/40 bg-panel-2 px-4 py-3.5">
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i class="fas fa-server"></i> Ollama <span class="rounded-lg bg-brand-soft px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-brand-ink">Local</span></div>
+              <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
                 <li>Install and run Ollama on your machine.</li>
                 <li>Pull a model (example: <code>ollama pull llama3.1</code>).</li>
                 <li>Set Base URL to <code>http://localhost:11434/v1</code> and model to your local model name.</li>
               </ol>
-              <pre class="provider-code" aria-label="Ollama config example"><code>OPENAI_API_KEY=sk-local
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2" aria-label="Ollama config example"><code>OPENAI_API_KEY=sk-local
 OPENAI_BASE_URL=http://localhost:11434/v1
 LLM_MODEL=llama3.1</code></pre>
-              <pre class="provider-code provider-code--scroll" aria-label="Ollama docker example"><code>docker run --rm -it \
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2 mt-2.5 max-h-[140px] overflow-y-auto" aria-label="Ollama docker example"><code>docker run --rm -it \
   -p 11434:11434 \
   -v ollama:/root/.ollama \
   ollama/ollama</code></pre>
             </div>
           </div>
 
-          <div class="provider-panel" role="tabpanel" v-else-if="activeAiGuideTab === 'lmstudio'">
-            <div class="provider-card provider-card--local">
-              <div class="provider-name"><i class="fas fa-laptop-code"></i> LM Studio <span class="badge-local">Local</span></div>
-              <ol class="provider-steps">
+          <div role="tabpanel" v-else-if="activeAiGuideTab === 'lmstudio'">
+            <div class="rounded-ctl border border-brand/40 bg-panel-2 px-4 py-3.5">
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i class="fas fa-laptop-code"></i> LM Studio <span class="rounded-lg bg-brand-soft px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-brand-ink">Local</span></div>
+              <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
                 <li>Run LM Studio.</li>
                 <li>Start the OpenAI-compatible server from LM Studio.</li>
                 <li>Use Base URL <code>http://localhost:1234/v1</code>.</li>
                 <li>Use any dummy API key, for example <code>sk-local</code>.</li>
               </ol>
-              <pre class="provider-code" aria-label="LM Studio config example"><code>OPENAI_API_KEY=sk-local
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2" aria-label="LM Studio config example"><code>OPENAI_API_KEY=sk-local
 OPENAI_BASE_URL=http://localhost:1234/v1
 LLM_MODEL=your-loaded-model</code></pre>
-              <small class="provider-note">
+              <small class="mt-2 block text-[0.8rem] text-ink-3">
                 SuggestArr automatically falls back if a provider rejects
                 <code>response_format={"type":"json_object"}</code>, so LM Studio works without requiring a LiteLLM proxy.
               </small>
             </div>
           </div>
 
-          <div class="provider-panel" role="tabpanel" v-else-if="activeAiGuideTab === 'gemini'">
-            <div class="provider-card">
-              <div class="provider-name"><i class="fas fa-gem"></i> Google Gemini</div>
-              <p class="provider-description">
+          <div role="tabpanel" v-else-if="activeAiGuideTab === 'gemini'">
+            <div class="rounded-ctl border border-edge bg-panel-2 px-4 py-3.5">
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i class="fas fa-gem"></i> Google Gemini</div>
+              <p class="mb-3 text-sm text-ink-2">
                 Use Google's Gemini API through its OpenAI-compatible endpoint.
               </p>
-              <ol class="provider-steps">
+              <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
                 <li>Create an API key in Google AI Studio.</li>
                 <li>Paste the API key into SuggestArr.</li>
                 <li>Use the Gemini OpenAI-compatible base URL shown below.</li>
               </ol>
-              <pre class="provider-code" aria-label="Gemini config example"><code>OPENAI_API_KEY=AIza...
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2" aria-label="Gemini config example"><code>OPENAI_API_KEY=AIza...
 OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 LLM_MODEL=gemini-2.0-flash</code></pre>
-              <small class="provider-note">Generate keys at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>.</small>
+              <small class="mt-2 block text-[0.8rem] text-ink-3">Generate keys at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>.</small>
             </div>
           </div>
 
-          <div class="provider-panel" role="tabpanel" v-else>
-            <div class="provider-card">
-              <div class="provider-name"><i class="fas fa-exchange-alt"></i> LiteLLM Proxy <span class="badge-advanced">Advanced</span></div>
-              <ol class="provider-steps">
+          <div role="tabpanel" v-else>
+            <div class="rounded-ctl border border-edge bg-panel-2 px-4 py-3.5">
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i class="fas fa-exchange-alt"></i> LiteLLM Proxy <span class="rounded-lg bg-caution/15 px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-caution">Advanced</span></div>
+              <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
                 <li>Run LiteLLM proxy with your provider mappings.</li>
                 <li>Set SuggestArr Base URL to the proxy endpoint.</li>
                 <li>Use the model alias configured in LiteLLM.</li>
               </ol>
-              <pre class="provider-code" aria-label="LiteLLM config example"><code>OPENAI_API_KEY=sk-your-proxy-key
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2" aria-label="LiteLLM config example"><code>OPENAI_API_KEY=sk-your-proxy-key
 OPENAI_BASE_URL=http://localhost:4000/v1
 LLM_MODEL=gpt-4o-mini</code></pre>
-              <pre class="provider-code provider-code--scroll" aria-label="LiteLLM docker example"><code>docker run --rm -it \
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2 mt-2.5 max-h-[140px] overflow-y-auto" aria-label="LiteLLM docker example"><code>docker run --rm -it \
   -p 4000:4000 \
   -v ./litellm_config.yaml:/app/config.yaml \
   ghcr.io/berriai/litellm:main-latest \
@@ -857,136 +857,3 @@ export default {
   },
 };
 </script>
-
-<style scoped>
-code {
-  padding: 0.1rem 0.35rem;
-  font-size: 0.75rem;
-  word-break: break-all;
-}
-
-/* Provider setup guide inside the info dialog. */
-.provider-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.provider-tab {
-  background: var(--color-panel-2);
-  color: var(--color-ink-3);
-  border: 1px solid var(--color-edge-strong);
-  border-radius: var(--radius-ctl);
-  padding: 0.4rem 0.7rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition-base);
-}
-
-.provider-tab:hover {
-  color: var(--color-ink);
-  border-color: var(--color-ink-4);
-}
-
-.provider-tab.active {
-  color: var(--color-ink);
-  border-color: var(--color-brand);
-  background: var(--color-brand-soft);
-}
-
-.provider-panel {
-  display: flex;
-  flex-direction: column;
-}
-
-.provider-list,
-.provider-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.provider-steps {
-  color: var(--color-ink-2);
-  margin: 0 0 0.8rem;
-  padding-left: 1.15rem;
-  font-size: 0.9rem;
-  line-height: 1.45;
-}
-
-.provider-card {
-  background: var(--color-panel-2);
-  border: 1px solid var(--color-edge);
-  border-radius: var(--radius-ctl);
-  padding: 0.9rem 1rem;
-}
-
-.provider-card--local {
-  border-color: color-mix(in srgb, var(--color-brand) 40%, transparent);
-}
-
-.provider-name {
-  font-weight: 600;
-  color: var(--color-ink);
-  margin-bottom: 0.6rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.95rem;
-}
-
-.provider-name i {
-  color: var(--color-brand-ink);
-}
-
-.badge-local {
-  font-size: 0.7rem;
-  font-weight: 600;
-  background: var(--color-brand-soft);
-  color: var(--color-brand-ink);
-  border-radius: 8px;
-  padding: 0.1rem 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.badge-advanced {
-  font-size: 0.7rem;
-  font-weight: 600;
-  background: color-mix(in srgb, var(--color-caution) 15%, transparent);
-  color: var(--color-caution);
-  border-radius: 8px;
-  padding: 0.1rem 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.provider-code {
-  margin: 0;
-  background: var(--color-canvas);
-  border: 1px solid var(--color-edge);
-  border-radius: 8px;
-  color: var(--color-ink-2);
-  padding: 0.75rem;
-  font-size: 0.8rem;
-  line-height: 1.4;
-  overflow-x: auto;
-}
-
-.provider-code + .provider-code {
-  margin-top: 0.6rem;
-}
-
-.provider-code--scroll {
-  max-height: 140px;
-  overflow-y: auto;
-}
-
-.provider-note {
-  display: block;
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--color-ink-3);
-}
-</style>

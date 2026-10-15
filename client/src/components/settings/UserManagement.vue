@@ -1,54 +1,49 @@
 <template>
-  <div class="settings-users">
+  <div class="text-ink">
 
     <PageHeader title="Users" subtitle="SuggestArr accounts, their roles and who can sign up. Your own settings are under Profile." />
 
-    <div class="settings-grid">
+    <div class="mb-8 grid items-stretch gap-5 min-[1001px]:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
 
-      <!-- Accounts Card -->
-      <div class="settings-group accounts-group">
-        <div class="group-title-row">
-          <h3>
-            <i class="fas fa-users"></i>
-            Accounts
-          </h3>
-          <button class="btn btn-outline btn-sm" @click="openCreateModal">
-            <i class="fas fa-user-plus"></i>
+      <SectionCard icon="fas fa-users" title="Accounts">
+        <template #actions>
+          <button type="button" class="ui-btn h-9" @click="openCreateModal">
+            <i aria-hidden="true" class="fas fa-user-plus"></i>
             New User
           </button>
-        </div>
+        </template>
 
         <!-- Loading -->
-        <div v-if="isLoadingUsers" class="list-empty">
+        <p v-if="isLoadingUsers" :class="emptyClass">
           <i class="fas fa-spinner fa-spin"></i>
           Loading users…
-        </div>
+        </p>
 
         <!-- Empty -->
-        <div v-else-if="users.length === 0" class="list-empty">
+        <p v-else-if="users.length === 0" :class="emptyClass">
           <i class="fas fa-users"></i>
           No accounts found.
-        </div>
+        </p>
 
         <!-- User rows -->
-        <div v-else class="user-list">
+        <div v-else class="flex flex-col gap-2">
           <div
             v-for="user in users"
             :key="user.id"
-            class="user-row"
-            :class="{ 'user-row--inactive': !user.is_active }"
+            class="flex items-center gap-4 rounded-ctl border border-edge bg-panel-2 px-4 py-3 transition hover:border-edge-strong hover:bg-raised max-[700px]:grid max-[700px]:grid-cols-3 max-[700px]:gap-2"
+            :class="{ 'opacity-50': !user.is_active }"
           >
             <!-- Avatar + name -->
-            <div class="user-identity">
-              <div class="user-avatar">
+            <div class="flex min-w-0 flex-1 items-center gap-3 max-[700px]:col-span-full">
+              <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-edge-strong bg-raised text-sm text-ink-4">
                 <i class="fas fa-user"></i>
               </div>
-              <div class="user-info">
-                <span class="user-name">
+              <div class="flex min-w-0 flex-col gap-0.5">
+                <span class="flex items-center gap-1.5 truncate text-[0.95rem] font-semibold text-ink">
                   {{ user.username }}
-                  <span v-if="user.id === currentUserId" class="you-badge">you</span>
+                  <span v-if="user.id === currentUserId" class="shrink-0 rounded-full bg-brand px-1.5 py-px text-[0.65rem] font-bold uppercase tracking-wide text-white">you</span>
                 </span>
-                <span class="user-meta">
+                <span class="text-[0.78rem] text-ink-4">
                   Last login: {{ formatDate(user.last_login) }}
                 </span>
               </div>
@@ -56,8 +51,10 @@
 
             <!-- Status chip -->
             <button
+              type="button"
               :disabled="user.id === currentUserId || !!isSaving[user.id]"
-              :class="['status-chip', user.is_active ? 'status-chip--active' : 'status-chip--inactive']"
+              class="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-[0.78rem] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40"
+              :class="user.is_active ? 'border-good bg-good/10 text-good hover:enabled:bg-good/20' : 'border-edge-strong bg-panel-2 text-ink-4 hover:enabled:bg-raised'"
               @click="toggleActive(user)"
             >
               <i :class="user.is_active ? 'fas fa-circle' : 'far fa-circle'"></i>
@@ -65,7 +62,7 @@
             </button>
 
             <!-- Role select -->
-            <div class="role-dropdown-wrap">
+            <div class="w-[140px] shrink-0 max-[700px]:col-span-2 max-[700px]:w-full">
               <BaseDropdown
                 v-model="user.role"
                 :options="roleOptions"
@@ -76,18 +73,22 @@
 
             <!-- Edit permissions -->
             <button
+              type="button"
               :disabled="!!isSaving[user.id]"
-              class="btn btn-outline btn-sm icon-btn"
+              class="ui-btn h-9 w-9 shrink-0 px-0"
               title="Edit permissions"
+              aria-label="Edit permissions"
               @click="openEditPermissionsModal(user)"
             >
               <i class="fas fa-pencil-alt"></i>
             </button>
 
             <button
+              type="button"
               :disabled="!!isSaving[user.id] || !supportsUserLinks"
-              class="btn btn-outline btn-sm icon-btn"
+              class="ui-btn h-9 w-9 shrink-0 px-0"
               title="Assign media account"
+              aria-label="Assign media account"
               @click="openMediaLinkModal(user)"
             >
               <i class="fas fa-link"></i>
@@ -95,43 +96,32 @@
 
             <!-- Delete -->
             <button
+              type="button"
               :disabled="user.id === currentUserId || !!isSaving[user.id]"
-              class="btn btn-danger btn-sm icon-btn"
+              class="ui-btn-icon-danger"
               title="Delete user"
+              aria-label="Delete user"
               @click="confirmDelete(user)"
             >
               <i class="fas fa-trash"></i>
             </button>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
-      <!-- Self-Registration Card -->
-      <div class="settings-group">
-        <h3>
-          <i class="fas fa-door-open"></i>
-          Self-Registration
-        </h3>
+      <SectionCard icon="fas fa-door-open" title="Self-Registration" description="When enabled, anyone with access to the login page can create their own account. New accounts are assigned the user role.">
+        <BaseCheckbox
+          v-model="localAllowRegistration"
+          :disabled="isSavingRegistration"
+          label="Allow self-registration"
+          @change="saveRegistration"
+        />
+        <small class="mt-1 block text-sm leading-snug text-ink-4">
+          Disabled by default. Enable only if you want users to sign up themselves.
+        </small>
+      </SectionCard>
 
-        <p class="card-desc">
-          When enabled, anyone with access to the login page can create their own account.
-          New accounts are assigned the <strong>user</strong> role.
-        </p>
-
-        <div class="form-group">
-          <BaseCheckbox
-            v-model="localAllowRegistration"
-            :disabled="isSavingRegistration"
-            label="Allow self-registration"
-            @change="saveRegistration"
-          />
-          <small class="form-help">
-            Disabled by default. Enable only if you want users to sign up themselves.
-          </small>
-        </div>
-      </div>
-
-    </div><!-- /settings-grid -->
+    </div>
 
     <AppDialog v-if="showCreateModal" width="max-w-xl" title="Create account" subtitle="A new SuggestArr login. Share the password with the person securely." icon="fas fa-user-plus" @close="showCreateModal = false">
       <form id="create-user-form" class="flex flex-col gap-4" @submit.prevent="submitCreate">
@@ -272,11 +262,12 @@ import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import AppDialog from '@/components/ui/AppDialog.vue';
+import SectionCard from '@/components/ui/SectionCard.vue';
 
 export default {
   name: 'UserManagement',
 
-  components: { AppDialog, BaseDropdown, BaseCheckbox, PageHeader },
+  components: { AppDialog, BaseDropdown, BaseCheckbox, PageHeader, SectionCard },
 
   props: {
     config: Object,
@@ -291,6 +282,7 @@ export default {
   data() {
     return {
       users: [],
+      emptyClass: 'm-0 flex items-center justify-center gap-3 rounded-[8px] border border-dashed border-edge-strong px-4 py-8 text-[0.95rem] text-ink-4',
       isLoadingUsers: false,
       isSaving: {},
       localAllowRegistration: false,
@@ -643,297 +635,3 @@ export default {
   },
 };
 </script>
-
-<style scoped>
-/* ── Outer wrapper ─────────────────────────────────────────────────────── */
-.settings-users {
-  color: var(--color-text-primary);
-}
-
-/* ── Admin section divider ─────────────────────────────────────────────── */
-.admin-section-divider {
-  margin-top: var(--spacing-xl);
-  margin-bottom: var(--spacing-xl);
-  padding-top: var(--spacing-xl);
-  border-top: 1px solid var(--color-border-light);
-}
-
-.admin-section-divider h2 {
-  font-size: var(--font-size-3xl);
-  margin-bottom: var(--spacing-sm);
-  color: var(--color-text-primary);
-}
-
-.admin-section-divider p {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-base);
-  margin: 0;
-}
-
-/* ── Settings grid ─────────────────────────────────────────────────────── */
-.settings-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-  align-items: stretch;
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-xl);
-}
-
-/* ── Settings group card ───────────────────────────────────────────────── */
-.settings-group {
-  background: var(--surface-raised);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-lg);
-  padding: 1.25rem;
-}
-
-/* Same header as the Tailwind SectionCard: 17px title, icon in a tile. */
-.settings-group h3 {
-  font-size: 17px;
-  font-weight: 700;
-  margin: 0 0 var(--spacing-md);
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 0.875rem;
-}
-
-.settings-group h3 > i:first-child {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: var(--surface-hover);
-  color: var(--color-text-secondary);
-  font-size: 15px;
-}
-
-.accounts-group {
-  grid-column: 1 / 1;
-}
-
-.group-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--spacing-lg);
-}
-
-.group-title-row h3 {
-  margin: 0;
-}
-
-.card-desc {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  margin-bottom: var(--spacing-lg);
-  line-height: 1.5;
-}
-
-/* ── Form controls (match other settings modals) ─────────────────────── */
-.form-group {
-  margin-bottom: var(--spacing-lg);
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-group label:not(.base-checkbox) {
-  display: block;
-  margin-top: 0;
-  margin-bottom: var(--spacing-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.form-help {
-  display: block;
-  margin-top: var(--spacing-xs);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  line-height: 1.4;
-}
-
-/* ── Empty / loading state ─────────────────────────────────────────────── */
-.list-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: calc(var(--spacing-sm) + var(--spacing-xs));
-  padding: var(--spacing-xl) var(--spacing-md);
-  color: var(--color-text-muted);
-  font-size: calc(var(--font-size-base) * 0.95);
-  border: 1px dashed var(--color-border-medium);
-  border-radius: var(--radius-sm);
-}
-
-/* ── User list ─────────────────────────────────────────────────────────── */
-.user-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.user-row {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: calc(var(--spacing-sm) + var(--spacing-xs)) var(--spacing-md);
-  background: var(--surface-base);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  transition: var(--transition-base);
-}
-
-.user-row:hover {
-  background: var(--surface-interactive);
-  border-color: var(--color-border-medium);
-}
-
-.user-row--inactive {
-  opacity: 0.5;
-}
-
-/* ── User identity ─────────────────────────────────────────────────────── */
-.user-identity {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--spacing-sm) + var(--spacing-xs));
-  flex: 1;
-  min-width: 0;
-}
-
-.user-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-full);
-  background: var(--surface-interactive);
-  border: 1px solid var(--color-border-medium);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  flex-shrink: 0;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--spacing-sm) * 0.3);
-  min-width: 0;
-}
-
-.user-name {
-  font-weight: var(--font-weight-semibold);
-  font-size: calc(var(--font-size-base) * 0.95);
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
-  gap: calc(var(--spacing-sm) * 0.8);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.you-badge {
-  background: var(--color-primary);
-  color: var(--color-text-primary);
-  font-size: calc(var(--font-size-base) * 0.65);
-  font-weight: var(--font-weight-bold);
-  padding: calc(var(--spacing-sm) * 0.2) calc(var(--spacing-sm) * 0.8);
-  border-radius: var(--radius-full);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  flex-shrink: 0;
-}
-
-.user-meta {
-  font-size: calc(var(--font-size-base) * 0.78);
-  color: var(--color-text-muted);
-}
-
-/* ── Role dropdown ─────────────────────────────────────────────────────── */
-.role-dropdown-wrap {
-  width: 140px;
-  flex-shrink: 0;
-}
-
-/* ── Status chip ───────────────────────────────────────────────────────── */
-.status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(var(--spacing-sm) * 0.7);
-  padding: calc(var(--spacing-sm) * 0.6) calc(var(--spacing-sm) * 1.4);
-  border-radius: var(--radius-full);
-  font-size: calc(var(--font-size-base) * 0.78);
-  font-weight: var(--font-weight-semibold);
-  border: 1px solid;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: var(--transition-base);
-}
-
-.status-chip--active {
-  color: var(--color-success);
-  border-color: var(--color-success);
-  background: var(--color-success-alpha-10);
-}
-
-.status-chip--active:hover:not(:disabled) {
-  background: var(--color-success-alpha-20);
-}
-
-.status-chip--inactive {
-  color: var(--color-text-muted);
-  border-color: var(--color-border-medium);
-  background: var(--surface-base);
-}
-
-.status-chip--inactive:hover:not(:disabled) {
-  background: var(--surface-interactive);
-}
-
-.status-chip:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* ── Icon-only button ──────────────────────────────────────────────────── */
-.icon-btn {
-  min-width: 36px;
-  min-height: 36px;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-/* ── Responsive ────────────────────────────────────────────────────────── */
-@media (max-width: 1000px) {
-  .settings-grid { grid-template-columns: minmax(0, 1fr); }
-}
-
-@media (max-width: 700px) {
-  .user-row {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--spacing-sm);
-  }
-  .user-identity {
-    grid-column: 1 / -1;
-  }
-  .role-dropdown-wrap {
-    grid-column: 2 / -1;
-    width: 100%;
-  }
-  .settings-grid {
-    grid-template-columns: 1fr;
-  }
-}
-</style>
