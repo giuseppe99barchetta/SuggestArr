@@ -190,7 +190,7 @@ def test_feedback_route_validates_and_scopes_to_current_user(monkeypatch):
     )
     assert response.status_code == 200
     db.set_suggestion_feedback.assert_called_once_with(5, None, 7, 'too_similar', 'genre', None, None, False,
-                                                       None, None)
+                                                       None, None, include_owned_list_imports=False)
 
     db.has_visible_suggestarr_request.return_value = True
     db.set_media_feedback.return_value = {

@@ -122,6 +122,18 @@ def test_durable_slot_prevents_second_alternative_and_survives_repeated_observat
     assert db.get_request_replacement_log()[0]['status'] == 'queued'
 
 
+def test_list_replacement_uses_owner_without_media_user(db):
+    remote = add_delivery(db)
+    db.connection.execute('UPDATE pending_requests SET user_id=NULL')
+    db.connection.commit()
+    manager, _, executor = make_manager(db, job_type='list_import', user_ids=[])
+    result, _ = run_check(db, remote, manager=manager)
+    assert result['queued'] == 1
+    executor.assert_awaited_once_with(1, overrides={
+        'media_type': 'movie', 'max_results': 1, 'owner_id': 7, '_replacement_for': 1,
+    })
+
+
 @pytest.mark.parametrize('changes', [{'tracked': False}, {'instance': 'http://other.local'}, {'status': 'queued'}])
 def test_only_tracked_submitted_current_instance_deliveries_are_checked(db, changes):
     remote = add_delivery(db, **changes)

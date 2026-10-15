@@ -315,7 +315,7 @@ def test_a_regular_user_owns_only_their_rows_in_every_mode():
     db = _db([ROBERT])
     for mode, media_users in (('all', None), ('own', [ROBERT]), ('own_all', [ROBERT])):
         scope = request_scope.suggestion_scope(db, USER, {'REQUEST_VISIBILITY': mode})
-        assert scope == request_scope.SuggestionScope(ROBERT_ID, False, media_users)
+        assert scope == request_scope.SuggestionScope(ROBERT_ID, False, media_users, include_owned_list_imports=True)
 
 
 # --- the route the dashboard and the Requests page use --------------------

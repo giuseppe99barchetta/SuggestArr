@@ -7,7 +7,7 @@ REDACTED = '***'
 INTEGRATION_SECRET_PATTERNS = ('token', 'api_key', 'password', 'secret')
 
 SETTINGS_SECRET_KEYS = frozenset({
-    'TMDB_API_KEY', 'OMDB_API_KEY',
+    'TMDB_API_KEY', 'OMDB_API_KEY', 'MDBLIST_API_KEY',
     'PLEX_TOKEN', 'JELLYFIN_TOKEN',
     'SEER_TOKEN', 'SEER_USER_PSW', 'SEER_SESSION_TOKEN',
     'DB_PASSWORD',

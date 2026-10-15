@@ -12,6 +12,9 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
 from api_service.utils import request_scope
 from api_service.jobs.job_manager import JobManager
+from api_service.jobs.list_import_automation import ListImportAutomation, execute_list_import_job, validate_list_job
+from api_service.services.public_lists import PublicListError, build_list_client
+from api_service.services.config_service import ConfigService
 from api_service.jobs.discover_automation import DiscoverAutomation, execute_discover_job
 from api_service.jobs.recommendation_automation import RecommendationAutomation, execute_recommendation_job
 from api_service.jobs.trakt_recommendations_automation import (
@@ -73,7 +76,29 @@ def get_job_manager() -> JobManager:
         manager.set_job_executor(execute_recommendation_job, job_type='recommendation')
     if 'trakt_recommendations' not in manager._job_executors:
         manager.set_job_executor(execute_trakt_recommendations_job, job_type='trakt_recommendations')
+    if 'list_import' not in manager._job_executors:
+        manager.set_job_executor(execute_list_import_job, job_type='list_import')
     return manager
+
+
+@jobs_bp.route('/lists/verify', methods=['POST'])
+@limiter.limit('10 per minute')
+def verify_public_list():
+    if not getattr(g, 'current_user', None):
+        return jsonify({'status': 'error', 'message': 'Authentication required.'}), 401
+    data = request.get_json(silent=True) or {}
+    try:
+        async def verify():
+            client = build_list_client(data, ConfigService.get_runtime_config())
+            async with client:
+                return await client.public_list_info(data.get('list_url'))
+        info = run_async(verify())
+        return jsonify({'status': 'success', 'data': info}), 200
+    except PublicListError as exc:
+        return jsonify({'status': 'error', 'message': str(exc)}), 400
+    except Exception:
+        logger.error('Public list verification failed.')
+        return jsonify({'status': 'error', 'message': 'Could not verify the public list.'}), 502
 
 
 @jobs_bp.route('', methods=['GET'])
@@ -275,12 +300,17 @@ def create_job():
 
         # Set default job_type
         job_type = data.get('job_type', 'discover')
-        if job_type not in ['discover', 'recommendation', 'trakt_recommendations']:
+        if job_type not in ['discover', 'recommendation', 'trakt_recommendations', 'list_import']:
             return jsonify({
                 'status': 'error',
-                'message': 'job_type must be one of: discover, recommendation, trakt_recommendations'
+                'message': 'job_type must be one of: discover, recommendation, trakt_recommendations, list_import'
             }), 400
         data['job_type'] = job_type
+        if job_type == 'list_import':
+            try:
+                validate_list_job(data)
+            except PublicListError as exc:
+                return jsonify({'status': 'error', 'message': str(exc)}), 400
         delivery_mode = data.get('delivery_mode', 'inherit')
         if delivery_mode not in ('inherit', 'automatic', 'manual'):
             return jsonify({'status': 'error', 'message': 'delivery_mode must be inherit, automatic or manual'}), 400
@@ -419,11 +449,19 @@ def update_job(job_id: int):
             _validate_request_limits(data)
         except ValueError as exc:
             return jsonify({'status': 'error', 'message': str(exc)}), 400
-        if 'job_type' in data and job_type not in ['discover', 'recommendation', 'trakt_recommendations']:
+        if 'job_type' in data and job_type not in ['discover', 'recommendation', 'trakt_recommendations', 'list_import']:
             return jsonify({
                 'status': 'error',
-                'message': 'job_type must be one of: discover, recommendation, trakt_recommendations'
+                'message': 'job_type must be one of: discover, recommendation, trakt_recommendations, list_import'
             }), 400
+
+        if job_type == 'list_import':
+            merged = {**existing, **data}
+            try:
+                validate_list_job(merged)
+            except PublicListError as exc:
+                return jsonify({'status': 'error', 'message': str(exc)}), 400
+            data.update({key: merged[key] for key in ('max_results', 'user_ids', 'prevent_suggestions_if_unwatched')})
 
         # Validate media_type if provided
         valid_media_types = ['movie', 'tv'] if job_type == 'discover' else ['movie', 'tv', 'both']
@@ -631,6 +669,8 @@ def run_job_now(job_id: int):
             result = run_async(execute_recommendation_job(job_id, execution_id=exec_id))
         elif job_type == 'trakt_recommendations':
             result = run_async(execute_trakt_recommendations_job(job_id, execution_id=exec_id))
+        elif job_type == 'list_import':
+            result = run_async(execute_list_import_job(job_id, execution_id=exec_id))
         else:
             result = run_async(execute_discover_job(job_id, execution_id=exec_id))
 
@@ -694,6 +734,8 @@ def dry_run_job(job_id: int):
                 automation = await RecommendationAutomation.create(job_id, dry_run=True)
             elif job_type == 'trakt_recommendations':
                 automation = await TraktRecommendationsAutomation.create(job_id, dry_run=True)
+            elif job_type == 'list_import':
+                automation = await ListImportAutomation.create(job_id, dry_run=True)
             else:
                 automation = await DiscoverAutomation.create(job_id)
             return await automation.run(dry_run=True)
@@ -753,6 +795,8 @@ def _run_all_jobs_in_background():
                     run_async(execute_recommendation_job(job_id))
                 elif job_type == 'trakt_recommendations':
                     run_async(execute_trakt_recommendations_job(job_id))
+                elif job_type == 'list_import':
+                    run_async(execute_list_import_job(job_id))
                 else:
                     run_async(execute_discover_job(job_id))
                 logger.info(f"Force run all: job {job_id} completed")

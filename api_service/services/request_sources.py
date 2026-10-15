@@ -4,6 +4,7 @@ DISCOVER_SOURCE = "discover"
 TRAKT_RECOMMENDATIONS_SOURCE = "trakt_recommendations"
 
 REQUEST_SOURCE_LABELS = {
+    'list_import': 'Import list',
     DISCOVER_SOURCE: "Discover",
     TRAKT_RECOMMENDATIONS_SOURCE: "Trakt Recommendations",
 }

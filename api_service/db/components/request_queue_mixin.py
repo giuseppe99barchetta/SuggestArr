@@ -248,7 +248,7 @@ class RequestQueueMixin:
 
     def list_suggestions(self, owner_id=None, status='awaiting_approval', search='', page=1, per_page=24,
                          media_type='all', media_user_ids=None, feedback_user_id=None,
-                         include_unassigned=False):
+                         include_unassigned=False, include_owned_list_imports=False):
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.execution_id,p.owner_id,
                           p.retry_count,p.last_attempt_at,p.last_error,p.payload,
@@ -278,8 +278,14 @@ class RequestQueueMixin:
             params.append(media_type)
         if media_user_ids is not None:
             expression = payload_user_expression(self.db_type, 'p.payload')
-            query += f" AND {expression} IN ({','.join([ph] * len(media_user_ids))})" if media_user_ids else " AND 1=0"
+            restriction = f"{expression} IN ({','.join([ph] * len(media_user_ids))})" if media_user_ids else '1=0'
+            if include_owned_list_imports and owner_id is not None:
+                source = payload_user_expression(self.db_type, 'p.payload', '_source_id')
+                restriction = f"({restriction} OR (COALESCE(NULLIF({expression}, 'null'), '')='' AND {source}='list_import' AND p.owner_id={ph}))"
+            query += f' AND {restriction}'
             params.extend(str(user_id) for user_id in media_user_ids)
+            if include_owned_list_imports and owner_id is not None:
+                params.append(owner_id)
         count_query = f"SELECT COUNT(*) FROM ({query}) suggestion_rows"
         query += (" ORDER BY CASE p.status WHEN 'awaiting_approval' THEN 0 WHEN 'queued' THEN 1 "
                   "WHEN 'submitting' THEN 2 WHEN 'failed' THEN 3 WHEN 'rejected' THEN 4 ELSE 5 END, "

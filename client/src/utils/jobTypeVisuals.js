@@ -1,6 +1,12 @@
 /** Shared icons, labels, and colors for automation job types and system request sources. */
 
 export const JOB_TYPE_CONFIG = {
+  list_import: {
+    icon: 'fas fa-list',
+    label: 'Import list',
+    color: 'var(--color-notice)',
+    gradient: 'linear-gradient(135deg, var(--color-brand), var(--color-notice))',
+  },
   discover: {
     icon: 'fas fa-search',
     label: 'Discover',
@@ -67,6 +73,9 @@ export function getRequestSourceVisual(source) {
   }
 
   const id = String(source.id ?? '');
+  if (id === 'list_import') {
+    return { ...JOB_TYPE_CONFIG.list_import, key: 'list_import' };
+  }
   if (id === 'discover') {
     return { ...JOB_TYPE_CONFIG.discover, key: 'discover' };
   }

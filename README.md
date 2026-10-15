@@ -100,6 +100,35 @@ processed to Seerr's `jellyfinUserId`, then submits with the configured API key 
 user's Seerr ID. This also supports Jellyfin-authenticated Seerr accounts without a local
 password. If no match can be resolved, the configured technical Seer identity is used.
 
+## Public List Import
+
+Create an **Import list** job in Jobs to request missing titles from one public
+MDBList or Trakt list. In **Connections**, configure an MDBList API key (from
+[MDBList Preferences](https://mdblist.com/preferences/)) or the shared Trakt
+Client ID. Public Trakt lists do not require a linked personal Trakt account.
+
+Use `https://mdblist.com/lists/username/list-name` or
+`https://trakt.tv/users/username/lists/list-name`, then **Verify list**. Private
+lists, watchlists, seasons, episodes, people and entries without a valid TMDb ID
+are not supported. Select movies, shows or both, quality filters, schedule,
+delivery mode and request profiles. **Mapped Seer user** credits the job owner,
+with the existing fallback to the configured technical user.
+
+The first run includes existing list entries. Each run follows list order and
+creates up to **20 new requests by default**, skipping titles already requested,
+queued, blocked by feedback or present in the library. Manual approval and rolling
+job limits still apply. Lists are read in pages of 100, scanning at most 1,000
+entries per run. A persistent cursor resumes the next run and returns to the
+beginning at the end, so later cycles reconsider changed lists. Changing source,
+media type or filters restarts the scan. List order changes may defer an entry
+until the next cycle; queue duplicate guards prevent duplicate requests.
+
+Preview uses the current cursor without advancing it or creating requests.
+Provider failures preserve requests already queued; subsequent runs resume safely.
+Removing an entry from a list never removes a Seer request or library content.
+If rejected-request replacement is enabled, alternatives come from the same list
+with the current filters and original request's media type.
+
 ## Trakt Watch History Integration
 
 SuggestArr can enrich recommendations with each user's own Trakt watch history. Trakt is optional: media-server history still works without it.

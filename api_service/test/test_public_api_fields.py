@@ -29,7 +29,7 @@ def test_suggestion_all_status_reaches_repository():
         def __init__(self):
             self.status = None
 
-        def list_suggestions(self, _owner_id, status, *_args):
+        def list_suggestions(self, _owner_id, status, *_args, **_kwargs):
             self.status = status
             return [], 0
 

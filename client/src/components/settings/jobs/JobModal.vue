@@ -19,7 +19,7 @@
           <!-- Job Type Selector -->
           <div class="mb-7" data-tour-id="job-modal-type-selector">
             <h4>Job type</h4>
-            <div class="grid gap-2 md:grid-cols-3">
+            <div class="grid gap-2 md:grid-cols-2">
               <button
                 v-for="type in jobTypes"
                 :key="type.value"
@@ -100,6 +100,19 @@
           </div>
 
           <!-- Seer delivery -->
+          <div v-if="form.job_type === 'list_import'" class="mb-7 grid gap-3" data-testid="public-list-source">
+            <h4>Public list</h4>
+            <BaseDropdown v-model="form.filters.list_provider" :options="listProviders" label="Provider" placeholder="Select provider" @update:model-value="listCheckMessage = ''" />
+            <label class="ui-label" for="listUrl">List URL
+              <input id="listUrl" v-model="form.filters.list_url" type="url" required class="ui-input" placeholder="https://mdblist.com/lists/username/list-name" @input="listCheckMessage = ''" />
+            </label>
+            <p class="m-0 text-xs text-ink-3">Public lists only. Existing list entries are imported gradually; requests are credited to this job's owner when using a mapped Seer user.</p>
+            <div class="flex flex-wrap items-center gap-3">
+              <button type="button" class="ui-btn" :disabled="listChecking || !form.filters.list_provider || !form.filters.list_url" @click="verifyList">{{ listChecking ? 'Checking…' : 'Verify list' }}</button>
+              <span v-if="listCheckMessage" role="status" class="min-w-0 break-words text-sm" :class="listCheckSuccess ? 'text-good' : 'text-bad'">{{ listCheckMessage }}</span>
+            </div>
+          </div>
+
           <div class="mb-7">
             <h4>Seer delivery</h4>
             <div class="mb-4 grid gap-2 md:grid-cols-3">
@@ -145,12 +158,12 @@
                 </div>
               </div>
               <BaseCheckbox
-                v-if="form.job_type !== 'discover'"
+                v-if="!['discover', 'list_import'].includes(form.job_type)"
                 v-model="form.prevent_suggestions_if_unwatched"
                 label="Pause if suggestions remain unwatched"
                 description="Scheduled runs only. Manual Run now remains available."
               />
-              <label v-if="form.job_type !== 'discover' && form.prevent_suggestions_if_unwatched" class="ui-label" for="unwatchedDays">
+              <label v-if="!['discover', 'list_import'].includes(form.job_type) && form.prevent_suggestions_if_unwatched" class="ui-label" for="unwatchedDays">
                 Days before pausing
                 <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days"
                   class="ui-input" type="number" min="1" required />
@@ -192,13 +205,13 @@
                     id="maxResults"
                     v-model.number="form.max_results"
                     type="range"
-                    min="5"
-                    max="100"
-                    step="5"
+                    :min="form.job_type === 'list_import' ? 1 : 5"
+                    :max="form.job_type === 'list_import' ? 1000 : 100"
+                    :step="form.job_type === 'list_import' ? 1 : 5"
                     class="mt-2 w-full accent-brand"
                   />
                   <small class="text-xs font-normal text-ink-4">
-                    Maximum content to discover per run
+                    {{ form.job_type === 'list_import' ? 'Maximum new requests per run' : 'Maximum content to discover per run' }}
                   </small>
                 </label>
               </div>
@@ -285,6 +298,7 @@ export default {
       isSaving: false,
       showAdvanced: false,
       jobTypes: [
+        { value: 'list_import', label: 'Import list', description: 'Public MDBList or Trakt list', icon: 'fas fa-list' },
         { value: 'discover', label: 'Discover', description: 'Find content using TMDb filters', icon: 'fas fa-search' },
         { value: 'recommendation', label: 'Recommendation', description: 'Based on user watch history', icon: 'fas fa-users' },
         { value: 'trakt_recommendations', label: 'Trakt Recommendations', description: 'Personalized lists from Trakt.tv', icon: 'icon-trakt' },
@@ -305,6 +319,10 @@ export default {
         { value: 'never', label: 'Never pause', hint: 'Ignore pending approvals', icon: 'fas fa-play' },
       ],
       llmConfigured: false,
+      listProviders: [{ value: 'mdblist', label: 'MDBList' }, { value: 'trakt', label: 'Trakt' }],
+      listChecking: false,
+      listCheckMessage: '',
+      listCheckSuccess: false,
       traktConfigured: false,
       traktLoading: false
       , radarrServers: [], sonarrServers: []
@@ -341,6 +359,9 @@ export default {
       return getJobTypeIcon(this.form.job_type);
     },
     jobTypeInfoText() {
+      if (this.form.job_type === 'list_import') {
+        return 'Import missing titles from a public list, in list order, using your quality filters and delivery settings.';
+      }
       if (this.form.job_type === 'discover') {
         return 'Discover Jobs find content using TMDb filters, independent from user watch history.';
       }
@@ -350,11 +371,13 @@ export default {
       return 'Recommendation Jobs find similar content based on what your users have watched on your media server or Trakt.tv.';
     },
     jobNamePlaceholder() {
+      if (this.form.job_type === 'list_import') return 'e.g., Weekly MDBList Movies';
       if (this.form.job_type === 'discover') return 'e.g., Popular Movies 2024';
       if (this.form.job_type === 'trakt_recommendations') return 'e.g., Weekly Trakt Picks';
       return 'e.g., Weekly Recommendations';
     },
     isValid() {
+      if (this.form.job_type === 'list_import' && (!this.form.filters.list_provider || !this.form.filters.list_url?.trim())) return false;
       if (!this.form.name.trim().length || !this.form.media_type) {
         return false;
       }
@@ -433,6 +456,23 @@ export default {
     } catch { /* Seer defaults remain available. */ }
   },
   methods: {
+    async verifyList() {
+      const source = { list_provider: this.form.filters.list_provider, list_url: this.form.filters.list_url };
+      this.listChecking = true;
+      this.listCheckMessage = '';
+      try {
+        const response = await jobsApi.verifyList(source);
+        if (source.list_url !== this.form.filters.list_url || source.list_provider !== this.form.filters.list_provider) return;
+        this.listCheckSuccess = true;
+        this.listCheckMessage = `Public list: ${response.data.name}`;
+      } catch (error) {
+        if (source.list_url !== this.form.filters.list_url || source.list_provider !== this.form.filters.list_provider) return;
+        this.listCheckSuccess = false;
+        this.listCheckMessage = error.response?.data?.message || 'Could not verify the list.';
+      } finally {
+        this.listChecking = false;
+      }
+    },
     // Selectable option tile used by every choice group in this modal.
     choiceClass(active) {
       return [
@@ -485,8 +525,10 @@ export default {
       if (jobType === 'discover' && this.form.media_type === 'both') {
         this.form.media_type = 'movie';
       }
-      if (jobType === 'discover') {
+      this.listCheckMessage = '';
+      if (['discover', 'list_import'].includes(jobType)) {
         this.form.user_ids = [];
+        this.form.prevent_suggestions_if_unwatched = false;
       }
     },
     async handleSubmit() {

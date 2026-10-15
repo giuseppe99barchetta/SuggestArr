@@ -472,6 +472,13 @@
       </div>
     </div>
 
+    <SectionCard v-if="!wizardMode && showSection('mdblist')" title="MDBList" icon="fas fa-list" description="Import missing titles from public lists.">
+      <label for="mdblistApiKey" class="ui-label">API key
+        <input id="mdblistApiKey" v-model="localConfig.MDBLIST_API_KEY" type="password" autocomplete="off" class="ui-input" :disabled="isLoading" placeholder="Enter your MDBList API key" />
+      </label>
+      <p class="mb-0 mt-2 text-xs text-ink-3">Get a key from <a href="https://mdblist.com/preferences/" target="_blank" rel="noopener noreferrer" class="text-brand-ink hover:underline">MDBList Preferences</a>, save, then verify your public list in an Import list job.</p>
+    </SectionCard>
+
     <div v-if="!wizardMode" class="flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-[#18162b] max-lg:bottom-24' : 'border-edge bg-panel'">
       <span class="flex-[1_1_200px] text-sm" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
       <button type="button" class="ui-btn border-0 bg-transparent text-ink-3 hover:text-ink" :disabled="isLoading" @click="resetToDefaults">Reset</button>
@@ -482,6 +489,7 @@
 
 <script>
 import PageHeader from '@/components/ui/PageHeader.vue';
+import SectionCard from '@/components/ui/SectionCard.vue';
 import ServiceCardHeader from './ServiceCardHeader.vue';
 import axios from 'axios';
 import {
@@ -492,7 +500,7 @@ import {
 
 export default {
   name: 'SettingsServices',
-  components: { PageHeader, ServiceCardHeader },
+  components: { PageHeader, SectionCard, ServiceCardHeader },
   props: {
     config: {
       type: Object,
@@ -1363,6 +1371,7 @@ export default {
         const dataToSave = {
           TMDB_API_KEY: this._secretValue('TMDB_API_KEY'),
           OMDB_API_KEY: this._secretValue('OMDB_API_KEY') || '',
+          MDBLIST_API_KEY: this._secretValue('MDBLIST_API_KEY') || '',
           SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE,
           TRAKT_CLIENT_ID: this.localConfig.TRAKT_CLIENT_ID || '',
           TRAKT_CLIENT_SECRET: traktClientSecret,
@@ -1399,7 +1408,7 @@ export default {
 
     async resetToDefaults() {
       const defaults = {
-        TMDB_API_KEY: '', OMDB_API_KEY: '', SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
+        TMDB_API_KEY: '', OMDB_API_KEY: '', MDBLIST_API_KEY: '', SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
         JELLYFIN_API_URL: '', JELLYFIN_TOKEN: '', JELLYFIN_LIBRARIES: [],
         TRAKT_CLIENT_ID: '', TRAKT_CLIENT_SECRET: '',
         SEER_API_URL: '', SEER_TOKEN: '', SEER_USER_NAME: null, SEER_USER_PSW: null,

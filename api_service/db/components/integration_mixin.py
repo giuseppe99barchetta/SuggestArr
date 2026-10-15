@@ -10,6 +10,7 @@ _INTEGRATION_REQUIRED_FIELDS = {
     'seer': ['api_url', 'api_key'],
     'tmdb': ['api_key'],
     'omdb': ['api_key'],
+    'mdblist': ['api_key'],
     'trakt': ['client_id'],
     'openai': [],
 }
@@ -145,6 +146,9 @@ class IntegrationMixin:
             },
             'omdb': {
                 'api_key': env_vars.get('OMDB_API_KEY', ''),
+            },
+            'mdblist': {
+                'api_key': env_vars.get('MDBLIST_API_KEY', ''),
             },
             'trakt': {
                 'client_id': env_vars.get('TRAKT_CLIENT_ID', ''),
