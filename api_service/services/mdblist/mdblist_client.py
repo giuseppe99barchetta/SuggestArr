@@ -10,6 +10,11 @@ class MDBListClient(BaseHTTPClient):
         super().__init__()
         self.api_key = api_key
 
+    async def test_connection(self):
+        data, _ = await read_list_json(self, '/user', params={'apikey': self.api_key})
+        if not isinstance(data, dict) or not data or data.get('error'):
+            raise PublicListError('MDBList API key could not be validated.')
+
     async def public_list_info(self, url):
         user, slug = parse_list_url('mdblist', url)
         data, _ = await read_list_json(self, f'/lists/{user}/{slug}', params={'apikey': self.api_key})

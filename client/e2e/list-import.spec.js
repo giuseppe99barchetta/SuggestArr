@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-async function openPreview(page, component, job = null) {
+async function openPreview(page, component, job = null, servicesProps = {}) {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route(url => !['127.0.0.1', 'localhost'].includes(url.hostname), route => route.abort());
@@ -32,7 +32,7 @@ async function openPreview(page, component, job = null) {
       window.savedServices=[];
       const app=createApp({render:()=>h(${component},${component === 'JobModal'
         ? `{job:${JSON.stringify(job)},onSave:value=>{window.savedJob=value;}}`
-        : `{config:{SELECTED_SERVICE:'jellyfin',MDBLIST_API_KEY:'***',TRAKT_CLIENT_ID:'test-client'},onSaveSection:value=>window.savedServices.push(value)}`})});
+        : `{config:{SELECTED_SERVICE:'jellyfin',MDBLIST_API_KEY:'***',TRAKT_CLIENT_ID:'test-client'},...${JSON.stringify(servicesProps)},onSaveSection:value=>window.savedServices.push(value)}`})});
       app.config.globalProperties.$toast={error(){},success(){}};
       app.mount('#preview');
       </script></body></html>`,
@@ -86,4 +86,114 @@ test('MDBList connection key is saved and an unchanged key stays masked', async 
   await page.locator('#traktClientId').fill('changed-client');
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   expect(await page.evaluate(() => window.savedServices[1].data.MDBLIST_API_KEY)).toBe('***');
+});
+
+for (const width of [1400, 1100, 1024, 900, 390]) {
+  test(`TMDB and MDBList connection cards align at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const errors = await openPreview(page, 'Services');
+    const tmdb = page.getByTestId('tmdb-connection');
+    const mdblist = page.getByTestId('mdblist-connection');
+    await expect(tmdb).toBeVisible();
+    await expect(mdblist).toBeVisible();
+    const a = await tmdb.boundingBox();
+    const b = await mdblist.boundingBox();
+    const tmdbKey = await page.locator('#tmdbApiKey').boundingBox();
+    const mdbKey = await page.locator('#mdblistApiKey').boundingBox();
+    if (width >= 1024) {
+      expect(Math.abs(a.y - b.y)).toBeLessThan(1);
+      expect(Math.abs(a.height - b.height)).toBeLessThan(1);
+      expect(Math.abs(a.width - b.width)).toBeLessThan(1);
+      expect(Math.abs(tmdbKey.y - mdbKey.y)).toBeLessThan(1);
+      expect(b.x).toBeGreaterThan(a.x + a.width);
+    } else {
+      expect(b.y).toBeGreaterThanOrEqual(a.y + a.height + 19);
+      expect(Math.abs(a.x - b.x)).toBeLessThan(1);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole('button', { name: 'Show MDBList API key', exact: true }).click();
+    await expect(page.locator('#mdblistApiKey')).toHaveAttribute('type', 'text');
+    await page.getByRole('button', { name: 'Hide MDBList API key', exact: true }).click();
+    await expect(page.locator('#mdblistApiKey')).toHaveAttribute('type', 'password');
+    await tmdb.locator('..').screenshot({ path: testInfo.outputPath('metadata-connections.png') });
+    expect(errors).toEqual([]);
+  });
+}
+
+test('TMDB wizard keeps its standalone connection form', async ({ page }) => {
+  const errors = await openPreview(page, 'Services', null, { wizardMode: true, wizardSection: 'tmdb' });
+  await expect(page.locator('#tmdbApiKey')).toBeVisible();
+  await expect(page.locator('#mdblistApiKey')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Test connection' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('MDBList test resets after editing and restores on navigation, reload and a new browser context', async ({ page, browser }) => {
+  const errors = await openPreview(page, 'Services');
+  const card = page.getByTestId('mdblist-connection');
+  await expect(card.getByRole('button', { name: 'Connected', exact: true })).toBeVisible();
+  await expect(card.getByText('Save your key, then verify a list in Jobs.')).toHaveCount(0);
+  await page.locator('#mdblistApiKey').fill('changed-test-key');
+  const button = card.getByRole('button', { name: 'Test connection', exact: true });
+  await expect(button).toBeEnabled();
+  let release;
+  let started;
+  const waiting = new Promise(resolve => { release = resolve; });
+  const began = new Promise(resolve => { started = resolve; });
+  await page.route('**/api/mdblist/test', async route => {
+    expect(route.request().postDataJSON()).toEqual({ api_key: 'changed-test-key' });
+    started();
+    await waiting;
+    await route.fulfill({ json: { status: 'success' } });
+  });
+  await button.click();
+  await began;
+  await expect(card.getByRole('button', { name: 'Testing…' })).toBeDisabled();
+  release();
+  await expect(card.getByRole('button', { name: 'Connected', exact: true })).toBeEnabled();
+  await page.unroute('**/api/mdblist/test');
+  await page.goto('about:blank');
+  await page.goto('/list-import-preview');
+  await expect(card.getByRole('button', { name: 'Connected', exact: true })).toBeVisible();
+  await page.reload();
+  await expect(card.getByRole('button', { name: 'Connected', exact: true })).toBeVisible();
+  const context = await browser.newContext({ baseURL: 'http://127.0.0.1:5173' });
+  try {
+    const reopened = await context.newPage();
+    await openPreview(reopened, 'Services');
+    await expect(reopened.getByTestId('mdblist-connection').getByRole('button', { name: 'Connected', exact: true })).toBeVisible();
+  } finally {
+    await context.close();
+  }
+  expect(errors).toEqual([]);
+});
+
+test('MDBList failed or stale tests do not keep the card connected', async ({ page }) => {
+  await openPreview(page, 'Services');
+  const card = page.getByTestId('mdblist-connection');
+  await expect(card.getByRole('button', { name: 'Connected', exact: true })).toBeVisible();
+  await page.route('**/api/mdblist/test', route => route.fulfill({ status: 400, json: { status: 'error', message: 'Invalid key' } }));
+  await card.getByRole('button', { name: 'Connected', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Test connection', exact: true })).toBeEnabled();
+  await expect(card.getByText('Not tested', { exact: true })).toBeVisible();
+  await page.unroute('**/api/mdblist/test');
+  let release;
+  let started;
+  const waiting = new Promise(resolve => { release = resolve; });
+  const began = new Promise(resolve => { started = resolve; });
+  await page.route('**/api/mdblist/test', async route => {
+    started();
+    await waiting;
+    await route.fulfill({ json: { status: 'success' } });
+  });
+  await card.getByRole('button', { name: 'Test connection', exact: true }).click();
+  await began;
+  await page.locator('#mdblistApiKey').fill('another-test-key');
+  release();
+  await expect(card.getByRole('button', { name: 'Test connection', exact: true })).toBeEnabled();
+  await expect(card.getByText('Connected', { exact: true })).toHaveCount(0);
+  await page.locator('#mdblistApiKey').fill('');
+  await expect(card.getByRole('button', { name: 'Test connection', exact: true })).toBeDisabled();
+  await expect(card.getByText('Not set', { exact: true })).toBeVisible();
 });

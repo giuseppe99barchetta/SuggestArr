@@ -107,6 +107,10 @@ MDBList or Trakt list. In **Connections**, configure an MDBList API key (from
 [MDBList Preferences](https://mdblist.com/preferences/)) or the shared Trakt
 Client ID. Public Trakt lists do not require a linked personal Trakt account.
 
+Use **Test connection** on the MDBList card to validate the API key without a list.
+Connections automatically rechecks saved MDBList credentials when reopened, including
+after restarting the browser. Editing the key clears its previous connection status.
+
 Use `https://mdblist.com/lists/username/list-name` or
 `https://trakt.tv/users/username/lists/list-name`, then **Verify list**. Private
 lists, watchlists, seasons, episodes, people and entries without a valid TMDb ID
