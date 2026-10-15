@@ -118,6 +118,21 @@ class SchemaManager:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """,
+            'list_import_runs': """
+                CREATE TABLE IF NOT EXISTS list_import_runs (
+                    id TEXT PRIMARY KEY,
+                    owner_id INTEGER UNIQUE NOT NULL,
+                    config_json TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    scan_offset INTEGER NOT NULL DEFAULT 0,
+                    scanned_count INTEGER NOT NULL DEFAULT 0,
+                    requested_count INTEGER NOT NULL DEFAULT 0,
+                    lease_token TEXT,
+                    lease_until TIMESTAMP NULL,
+                    last_error TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """,
             'job_list_state': """
                 CREATE TABLE IF NOT EXISTS job_list_state (
                     job_id INTEGER PRIMARY KEY,
@@ -722,6 +737,8 @@ class SchemaManager:
 
             # Job filters are serialized JSON and can easily exceed the generic
             # VARCHAR(512) compatibility mapping used for MySQL text columns.
+            if table_name == 'list_import_runs':
+                query = query.replace('config_json VARCHAR(512) NOT NULL', 'config_json LONGTEXT NOT NULL')
             if table_name == 'discover_jobs':
                 query = query.replace(
                     "filters VARCHAR(512) NOT NULL",

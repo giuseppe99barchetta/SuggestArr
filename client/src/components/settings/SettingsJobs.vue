@@ -5,12 +5,24 @@
         <h1 class="m-0 text-3xl font-extrabold tracking-tight text-ink">Jobs</h1>
         <p class="m-0 mt-1.5 max-w-2xl text-[15px] text-ink-3">Discover titles, find recommendations or import a public list. Each job runs on its own schedule and sends requests to Seer.</p>
       </div>
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2">
         <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Replay the Jobs tour" aria-label="Replay the Jobs tour" @click="restartJobsTour"><i aria-hidden="true" class="fas fa-question-circle"></i></button>
         <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink disabled:opacity-50" :disabled="isLoading" title="Refresh" aria-label="Refresh" @click="loadJobs"><i aria-hidden="true" :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i></button>
+        <button type="button" class="ui-btn" :disabled="importStarting || ['queued', 'running'].includes(listImport?.status)" @click="showImportModal = true"><i aria-hidden="true" class="fas fa-list"></i>Import list once</button>
         <button type="button" class="inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-ctl border-0 bg-brand px-[18px] text-sm font-bold text-white" data-tour-id="jobs-new-btn" @click="showCreateModal = true"><i aria-hidden="true" class="fas fa-plus"></i>New job</button>
       </div>
     </header>
+
+    <section v-if="listImport" class="flex flex-wrap items-center gap-3 rounded-card border border-edge bg-panel px-4 py-3" aria-label="One-time list import" role="status">
+      <i aria-hidden="true" :class="['queued', 'running'].includes(listImport.status) ? 'fas fa-spinner fa-spin text-notice' : listImport.status === 'completed' ? 'fas fa-check-circle text-good' : 'fas fa-circle-exclamation text-caution'"></i>
+      <div class="min-w-0 flex-1">
+        <strong class="text-sm text-ink">{{ listImport.status === 'completed' ? 'List import complete' : ['failed', 'interrupted'].includes(listImport.status) ? 'List import paused' : 'Importing list…' }}</strong>
+        <p class="m-0 mt-1 truncate text-xs text-ink-3">{{ listImport.list_url }}</p>
+        <p class="m-0 mt-1 text-xs text-ink-2">{{ listImport.scanned_count }} titles checked · {{ listImport.requested_count }} queued for delivery or approval</p>
+        <p v-if="listImport.last_error" class="m-0 mt-1 text-xs text-caution">{{ listImport.last_error }}</p>
+      </div>
+      <button v-if="['failed', 'interrupted'].includes(listImport.status)" type="button" class="ui-btn" :disabled="importStarting" @click="resumeListImport">Resume import</button>
+    </section>
 
     <!-- Seer delivery queue -->
     <div v-if="queueStatus.total_pending > 0 && !queueBannerDismissed" role="status" class="flex items-center gap-3 rounded-card border border-notice/40 bg-notice/10 px-4 py-3">
@@ -162,6 +174,7 @@
       @close="closeModal"
       @save="saveJob"
     />
+    <JobModal v-if="showImportModal" one-time @close="showImportModal = false" @save="importListOnce" />
 
     <AppDialog v-if="jobToDelete" labelledby="delete-job-title" @close="jobToDelete = null">
       <div class="flex flex-col gap-4 p-6">
@@ -239,6 +252,10 @@ export default {
       isDryRunning: {},
       isDeleting: false,
       showCreateModal: false,
+      showImportModal: false,
+      listImport: null,
+      importStarting: false,
+      importPollInterval: null,
       showHistoryModal: false,
       dryRunResult: null,
       lastDryRunCache: {},
@@ -351,17 +368,57 @@ export default {
     await this.loadJobs();
     await this.loadHistory();
     await this.pollQueueStatus();
+    await this.pollListImport();
 
     if (!localStorage.getItem(JOBS_TOUR_KEY)) {
       setTimeout(() => this.startJobsTour(), 600);
     }
   },
   beforeUnmount() {
+    if (this.importPollInterval) clearInterval(this.importPollInterval);
     if (this.queuePollInterval) {
       clearInterval(this.queuePollInterval);
     }
   },
   methods: {
+    async pollListImport() {
+      try {
+        const response = await jobsApi.getListImport();
+        this.listImport = response.data || null;
+      } catch { /* Keep the last progress visible until the next poll. */ }
+      if (['queued', 'running'].includes(this.listImport?.status)) {
+        if (!this.importPollInterval) this.importPollInterval = setInterval(() => this.pollListImport(), 3000);
+      } else if (this.importPollInterval) {
+        clearInterval(this.importPollInterval);
+        this.importPollInterval = null;
+        await this.pollQueueStatus();
+      }
+    },
+    async importListOnce(config) {
+      if (this.importStarting) return;
+      this.importStarting = true;
+      try {
+        const response = await jobsApi.importListOnce(config);
+        this.listImport = response.data;
+        this.showImportModal = false;
+        await this.pollListImport();
+      } catch (error) {
+        this.$toast.open({ type: 'error', message: error.response?.data?.message || 'Could not start list import.' });
+      } finally {
+        this.importStarting = false;
+      }
+    },
+    async resumeListImport() {
+      this.importStarting = true;
+      try {
+        await jobsApi.resumeListImport(this.listImport.id);
+        await this.pollListImport();
+      } catch (error) {
+        this.$toast.open({ type: 'error', message: error.response?.data?.message || 'Could not resume list import.' });
+      } finally {
+        this.importStarting = false;
+      }
+    },
     async loadJobs() {
       this.isLoading = true;
       try {

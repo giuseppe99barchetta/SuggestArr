@@ -22,6 +22,7 @@
           >{{ option.label }}</button>
         </div>
       </div>
+      <p v-if="hasMore" class="m-0 text-xs text-ink-3">More list entries remain to check. Load more titles to continue the preview.</p>
 
       <div v-if="displayedItems.length === 0" class="flex flex-col items-center gap-2 py-10 text-center">
         <i aria-hidden="true" class="fas fa-check-circle text-3xl text-good"></i>
@@ -32,7 +33,7 @@
       <ul v-else class="m-0 flex list-none flex-col gap-2 p-0">
         <li
           v-for="item in displayedItems"
-          :key="item.tmdb_id"
+          :key="`${item.media_type}:${item.tmdb_id}`"
           class="flex gap-3.5 rounded-ctl border border-edge bg-panel-2 p-3"
           :class="{ 'opacity-60': !itemWouldRequest(item) }"
         >
@@ -88,8 +89,9 @@
     </div>
 
     <template #footer>
+      <button v-if="hasMore" type="button" class="ui-btn" :disabled="loadingMore" @click="$emit('more')">{{ loadingMore ? 'Loading…' : 'Load more titles' }}</button>
       <button type="button" class="ui-btn" @click="$emit('close')">Close</button>
-      <button v-if="wouldRequestCount > 0" type="button" class="ui-btn-primary" @click="$emit('run')"><i aria-hidden="true" class="fas fa-bolt"></i>Run job now</button>
+      <button v-if="wouldRequestCount > 0 && runLabel" type="button" class="ui-btn-primary" @click="$emit('run')"><i aria-hidden="true" class="fas fa-bolt"></i>{{ runLabel }}</button>
     </template>
   </AppDialog>
 </template>
@@ -106,8 +108,11 @@ export default {
     job: { type: Object, required: true },
     items: { type: Array, default: () => [] },
     cachedAt: { type: Number, default: null },
+    runLabel: { type: String, default: 'Run job now' },
+    hasMore: { type: Boolean, default: false },
+    loadingMore: { type: Boolean, default: false },
   },
-  emits: ['close', 'run'],
+  emits: ['close', 'run', 'more'],
   data() {
     return { showAll: true, withoutTrailer: [], openingTrailer: [] };
   },

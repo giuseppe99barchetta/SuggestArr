@@ -11,6 +11,10 @@ async function openPreview(page, component, job = null, servicesProps = {}) {
       '/api/jobs/default-filters': { status: 'success', defaults: { vote_average_gte: 6, vote_count_gte: 20 } },
       '/api/jobs/llm/status': { configured: false },
       '/api/jobs/lists/verify': { status: 'success', data: { name: 'Weekly favorites', provider: 'mdblist' } },
+      '/api/jobs': { status: 'success', jobs: [] },
+      '/api/jobs/history': { status: 'success', history: [] },
+      '/api/jobs/queue-status': { status: 'success', total_pending: 0 },
+      '/api/jobs/lists/import': { status: 'success', data: null },
     };
     if (path === '/api/config/section/services' && route.request().method() === 'POST') {
       return route.fulfill({ json: { status: 'success' } });
@@ -24,16 +28,18 @@ async function openPreview(page, component, job = null, servicesProps = {}) {
       import {createApp,h} from '/node_modules/.vite/deps/vue.js';
       import JobModal from '/src/components/settings/jobs/JobModal.vue';
       import Services from '/src/components/settings/SettingsServices.vue';
+      import Jobs from '/src/components/settings/SettingsJobs.vue';
       import {useAuth,markAuthReady} from '/src/composables/useAuth.js';
       import '/src/assets/main.css';
       useAuth().currentUser.value={id:7,username:'owner',role:'admin'};
       markAuthReady();
+      localStorage.setItem('suggestarr_jobs_tour_done','1');
       window.savedJob=null;
       window.savedServices=[];
       const app=createApp({render:()=>h(${component},${component === 'JobModal'
-        ? `{job:${JSON.stringify(job)},onSave:value=>{window.savedJob=value;}}`
+        ? `{job:${JSON.stringify(job)},...${JSON.stringify(servicesProps)},onSave:value=>{window.savedJob=value;}}`
         : `{config:{SELECTED_SERVICE:'jellyfin',MDBLIST_API_KEY:'***',TRAKT_CLIENT_ID:'test-client'},...${JSON.stringify(servicesProps)},onSaveSection:value=>window.savedServices.push(value)}`})});
-      app.config.globalProperties.$toast={error(){},success(){}};
+      app.config.globalProperties.$toast={error(){},success(){},open(){}};
       app.mount('#preview');
       </script></body></html>`,
   }));
@@ -196,4 +202,101 @@ test('MDBList failed or stale tests do not keep the card connected', async ({ pa
   await page.locator('#mdblistApiKey').fill('');
   await expect(card.getByRole('button', { name: 'Test connection', exact: true })).toBeDisabled();
   await expect(card.getByText('Not set', { exact: true })).toBeVisible();
+});
+
+for (const width of [1400, 390]) {
+  test(`Preview and import an entire list without creating a job at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const errors = await openPreview(page, 'Jobs');
+    let run = null;
+    let imported;
+    let jobCreates = 0;
+    page.on('request', request => {
+      if (new URL(request.url()).pathname === '/api/jobs' && request.method() === 'POST') jobCreates++;
+    });
+    await page.route('**/api/jobs/lists/import', route => {
+      if (route.request().method() === 'POST') {
+        imported = route.request().postDataJSON();
+        run = { id: 'one-time-1', status: 'running', scanned_count: 100, requested_count: 10,
+          list_url: imported.filters.list_url, list_provider: 'mdblist', last_error: null };
+        return route.fulfill({ status: 202, json: { status: 'success', data: run } });
+      }
+      return route.fulfill({ json: { status: 'success', data: run } });
+    });
+    await page.route('**/api/jobs/lists/preview', route => {
+      const offset = route.request().postDataJSON().offset;
+      return route.fulfill({ json: { status: 'success', has_more: offset === 0, next_offset: offset === 0 ? 100 : 0,
+        items: offset === 0 ? [{ tmdb_id: 7, media_type: 'movie', title: 'New movie' }, { tmdb_id: 7, media_type: 'tv', title: 'New show' }]
+          : [{ tmdb_id: 8, media_type: 'movie', title: 'Next page movie' }] } });
+    });
+    await page.getByRole('button', { name: 'Import list once', exact: true }).click();
+    const modal = page.getByRole('dialog');
+    await expect(modal.getByRole('heading', { name: 'Import list once' })).toBeVisible();
+    await expect(page.locator('#jobName')).toHaveCount(0);
+    await expect(page.locator('[data-tour-id="job-modal-schedule"]')).toHaveCount(0);
+    const source = page.getByTestId('public-list-source');
+    await source.getByRole('button', { name: 'Select provider' }).click();
+    await page.getByRole('menuitem', { name: 'MDBList', exact: true }).click();
+    await page.getByLabel('List URL').fill('https://mdblist.com/lists/alice/favorites');
+    await modal.getByRole('button', { name: 'Approve first', exact: false }).click();
+    await source.getByRole('button', { name: 'Preview list' }).click();
+    const preview = page.locator('dialog');
+    await expect(preview.getByText('New movie', { exact: true })).toBeVisible();
+    await expect(preview.getByText('New show', { exact: true })).toBeVisible();
+    await expect(preview.getByRole('button', { name: 'Run job now' })).toHaveCount(0);
+    await preview.getByRole('button', { name: 'Load more titles' }).click();
+    await expect(preview.getByText('Next page movie', { exact: true })).toBeVisible();
+    expect(imported).toBeUndefined();
+    expect(jobCreates).toBe(0);
+    await preview.screenshot({ path: testInfo.outputPath('list-preview.png') });
+    await preview.getByRole('button', { name: 'Close', exact: true }).last().click();
+    await modal.screenshot({ path: testInfo.outputPath('one-time-import.png') });
+    await modal.getByRole('button', { name: 'Import entire list' }).click();
+    const progress = page.locator('section[aria-label="One-time list import"]');
+    await expect(progress).toContainText('100 titles checked');
+    expect(imported).toMatchObject({ media_type: 'both', delivery_mode: 'manual', filters: { list_provider: 'mdblist' } });
+    expect(imported).not.toHaveProperty('schedule_type');
+    expect(jobCreates).toBe(0);
+    run = { ...run, status: 'completed', scanned_count: 1250, requested_count: 1125 };
+    await expect(progress).toContainText('List import complete', { timeout: 6000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.reload();
+    await expect(progress).toContainText('1250 titles checked');
+    expect(jobCreates).toBe(0);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('Unsaved list job preview leaves the form open and creates no job', async ({ page }) => {
+  await openPreview(page, 'JobModal');
+  await page.getByRole('button', { name: 'Import list Public MDBList or Trakt list' }).click();
+  const source = page.getByTestId('public-list-source');
+  await source.getByRole('button', { name: 'Select provider' }).click();
+  await page.getByRole('menuitem', { name: 'Trakt', exact: true }).click();
+  await page.getByLabel('List URL').fill('https://trakt.tv/users/alice/lists/favorites');
+  await page.route('**/api/jobs/lists/preview', route => route.fulfill({ json: { status: 'success', has_more: false, next_offset: 0,
+    items: [{ tmdb_id: 9, media_type: 'movie', title: 'Unsaved preview' }] } }));
+  await source.getByRole('button', { name: 'Preview list' }).click();
+  await expect(page.locator('dialog').getByText('Unsaved preview', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.savedJob)).toBeNull();
+  await page.locator('dialog').getByRole('button', { name: 'Close', exact: true }).last().click();
+  await expect(page.getByRole('button', { name: 'Create job', exact: true })).toBeVisible();
+});
+
+test('An interrupted one-time import can be resumed after returning to Jobs', async ({ page }) => {
+  await openPreview(page, 'Jobs');
+  let run = { id: 'interrupted-1', status: 'interrupted', scanned_count: 100, requested_count: 8,
+    list_url: 'https://mdblist.com/lists/alice/favorites', list_provider: 'mdblist', last_error: 'Import interrupted.' };
+  await page.route('**/api/jobs/lists/import', route => route.fulfill({ json: { status: 'success', data: run } }));
+  await page.route('**/api/jobs/lists/import/interrupted-1/resume', route => {
+    run = { ...run, status: 'running', last_error: null };
+    return route.fulfill({ status: 202, json: { status: 'success' } });
+  });
+  await page.reload();
+  const progress = page.locator('section[aria-label="One-time list import"]');
+  await expect(progress).toContainText('100 titles checked');
+  await progress.getByRole('button', { name: 'Resume import' }).click();
+  await expect(progress).toContainText('Importing list');
+  await expect(page.getByRole('button', { name: 'Import list once', exact: true })).toBeDisabled();
+  await expect(progress.getByRole('button', { name: 'Resume import' })).toHaveCount(0);
 });

@@ -111,6 +111,22 @@ Use **Test connection** on the MDBList card to validate the API key without a li
 Connections automatically rechecks saved MDBList credentials when reopened, including
 after restarting the browser. Editing the key clears its previous connection status.
 
+For a single import, choose **Import list once** on the Jobs page. It processes the
+entire public list in the background without creating a job or schedule, using
+your chosen media types, quality filters, delivery mode and Seer identity. Existing
+library titles, requests and queued items are skipped. Progress stays visible in
+Jobs after navigating away or closing the browser; it counts titles checked and
+new requests queued, not completed downloads. Only one import runs per user at a
+time. Use **Resume import** after a provider error or server interruption. Only
+your latest one-time import is retained; creating a new one replaces that progress.
+After a server restart, resume becomes available when the previous worker lease
+expires (up to 10 minutes).
+
+**Preview list** is available before saving a job or starting a one-time import.
+It checks up to 100 list entries at a time without creating requests; use
+**Load more titles** to inspect the next page. The import rechecks availability
+before enqueueing, so titles acquired since the preview are still excluded.
+
 Use `https://mdblist.com/lists/username/list-name` or
 `https://trakt.tv/users/username/lists/list-name`, then **Verify list**. Private
 lists, watchlists, seasons, episodes, people and entries without a valid TMDb ID
