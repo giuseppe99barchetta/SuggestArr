@@ -4,7 +4,7 @@
 
     <div v-if="!llmAvailable" role="alert" class="flex flex-wrap items-center gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
       <i aria-hidden="true" class="fas fa-exclamation-triangle text-caution"></i>
-      <p class="m-0 flex-[1_1_280px] text-sm text-ink-2"><strong class="text-ink">No AI provider configured.</strong> Add one under Advanced → AI provider to use AI Search.</p>
+      <p class="m-0 flex-[1_1_280px] text-sm text-ink-2"><strong class="text-ink">No AI provider configured.</strong> Add one in the AI provider settings to use AI Search.</p>
       <router-link :to="{ name: 'DashboardTab', params: { tab: 'ai_provider' } }" class="inline-flex h-9 items-center rounded-[8px] bg-caution px-3.5 text-[13px] font-bold text-[#1a1405] no-underline hover:text-[#1a1405]">Set up AI provider</router-link>
     </div>
 
