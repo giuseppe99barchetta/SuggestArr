@@ -1,103 +1,95 @@
 <template>
-  <div class="recommendation-filters">
+  <div class="flex flex-col gap-5">
     <!-- User Selection Mode -->
-    <div v-if="!isTraktSource" class="form-group">
-      <label>Monitor Users</label>
-      <div class="user-mode-selector">
+    <div v-if="!isTraktSource">
+      <label class="mb-2 block text-sm font-medium text-ink-2">Monitor Users</label>
+      <div class="flex gap-2">
         <button
+          v-for="mode in userModes"
+          :key="mode.value"
           type="button"
-          class="mode-btn"
-          :class="{ active: userMode === 'all' }"
-          @click="setUserMode('all')"
+          class="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-ctl border px-4 py-3 text-[0.9rem] transition"
+          :class="userMode === mode.value ? 'border-brand bg-brand text-white' : 'border-edge bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
+          @click="setUserMode(mode.value)"
         >
-          <i class="fas fa-users"></i>
-          All Users
-        </button>
-        <button
-          type="button"
-          class="mode-btn"
-          :class="{ active: userMode === 'specific' }"
-          @click="setUserMode('specific')"
-        >
-          <i class="fas fa-user-check"></i>
-          Specific Users
+          <i :class="mode.icon"></i>
+          {{ mode.label }}
         </button>
       </div>
     </div>
 
     <!-- User Selection (when specific mode) -->
-    <div v-if="!isTraktSource && userMode === 'specific'" class="form-group">
-      <label>Select Users</label>
-      <div v-if="usersUnavailable" class="no-users">
+    <div v-if="!isTraktSource && userMode === 'specific'">
+      <label class="mb-2 block text-sm font-medium text-ink-2">Select Users</label>
+      <div v-if="usersUnavailable" :class="emptyClass">
         <i class="fas fa-lock"></i>
         <span>User selection is only available to administrators.</span>
       </div>
-      <div class="users-list" v-else-if="availableUsers.length > 0">
-        <div
+      <div v-else-if="availableUsers.length > 0" class="flex max-h-[200px] flex-col gap-2 overflow-y-auto rounded-ctl border border-edge bg-white/3 p-2">
+        <button
           v-for="user in availableUsers"
           :key="user.id"
-          class="user-item"
-          :class="{ selected: isUserSelected(user.id) }"
+          type="button"
+          class="flex cursor-pointer items-center gap-3 rounded-ctl border p-3 text-left transition"
+          :class="isUserSelected(user.id) ? 'border-brand bg-brand/10' : 'border-edge bg-panel-2 hover:border-ink-4'"
+          :aria-pressed="isUserSelected(user.id) ? 'true' : 'false'"
           @click="toggleUser(user.id)"
         >
-          <div class="user-avatar">
+          <span class="flex h-8 w-8 items-center justify-center rounded-full" :class="isUserSelected(user.id) ? 'bg-brand text-white' : 'bg-white/5 text-ink-4'">
             <i class="fas fa-user"></i>
-          </div>
-          <span class="user-name">{{ user.name || user.id }}</span>
-          <i v-if="isUserSelected(user.id)" class="fas fa-check check-icon"></i>
-        </div>
+          </span>
+          <span class="flex-1 font-medium text-ink">{{ user.name || user.id }}</span>
+          <i v-if="isUserSelected(user.id)" class="fas fa-check text-brand-ink"></i>
+        </button>
       </div>
-      <div v-else-if="isLoading" class="loading-users">
+      <div v-else-if="isLoading" :class="emptyClass">
         <i class="fas fa-spinner fa-spin"></i>
         <span>Loading users...</span>
       </div>
-      <div v-else class="no-users">
+      <div v-else :class="emptyClass">
         <i class="fas fa-user-slash"></i>
         <span>No users found. Configure SELECTED_USERS in settings.</span>
       </div>
     </div>
 
-    <div v-if="isTraktSource" class="form-group">
-      <label>Trakt Account</label>
-      <div class="no-users">
+    <div v-if="isTraktSource">
+      <label class="mb-2 block text-sm font-medium text-ink-2">Trakt Account</label>
+      <div :class="emptyClass">
         <i class="fas fa-tv"></i>
         <span>This job uses the owner's linked Trakt account.</span>
       </div>
     </div>
 
     <!-- AI Enhancement (shown when LLM is configured) -->
-    <div v-if="llmConfigured" class="form-group llm-section">
-      <label class="llm-label">
-        <i class="fas fa-robot llm-icon"></i>
+    <div v-if="llmConfigured" class="rounded-ctl border border-brand bg-brand/10 px-4 py-3">
+      <label class="mb-3 flex items-center gap-2 text-sm font-medium text-brand-ink">
+        <i class="fas fa-robot"></i>
         AI Enhancement
       </label>
-      <div class="llm-toggle-row">
-        <div class="toggle-item">
-          <BaseCheckbox
-            v-model="localFilters.use_llm"
-            @change="updateFilters(localFilters)"
-          >
-            <span class="toggle-label-modal">
-              <i class="fas fa-brain"></i>
-              Enable AI-powered recommendations
-            </span>
-          </BaseCheckbox>
-        </div>
+      <div class="py-1">
+        <BaseCheckbox
+          v-model="localFilters.use_llm"
+          @change="updateFilters(localFilters)"
+        >
+          <span class="flex items-center gap-2 font-medium text-ink">
+            <i class="fas fa-brain w-4 text-ink-4"></i>
+            Enable AI-powered recommendations
+          </span>
+        </BaseCheckbox>
       </div>
-      <small class="form-help llm-help" v-if="localFilters.use_llm">
-        <i class="fas fa-info-circle"></i>
+      <small v-if="localFilters.use_llm" class="mt-2 flex items-start gap-1.5 text-sm text-brand-ink opacity-85">
+        <i class="fas fa-info-circle mt-0.5"></i>
         The AI will analyze the full watch history to generate personalized recommendations, replacing the standard TMDb similarity search.
       </small>
-      <small class="form-help" v-else>
+      <small v-else class="mt-2 block text-sm text-ink-4">
         Use your configured LLM to generate recommendations based on watch history patterns instead of TMDb similarity.
       </small>
     </div>
 
     <!-- Advanced Recommendation Settings (only shown when showAdvanced is true) -->
     <template v-if="showAdvanced">
-      <!-- Recommendation-specific settings -->
-      <div class="form-group">
-        <label for="maxRecommendationResults">Total Request Limit: {{ maxResults }}</label>
+      <div>
+        <label class="mb-2 block text-sm font-medium text-ink-2" for="maxRecommendationResults">Total Request Limit: {{ maxResults }}</label>
         <input
           id="maxRecommendationResults"
           :value="maxResults"
@@ -105,147 +97,45 @@
           min="5"
           max="100"
           step="5"
-          class="form-range"
+          class="w-full accent-brand"
           @input="updateMaxResults"
         />
-        <small class="form-help">Maximum items this recommendation job can request per run</small>
+        <small class="mt-2 block text-sm text-ink-4">Maximum items this recommendation job can request per run</small>
       </div>
 
-      <div class="form-group">
-        <label for="maxSimilarMovie">Similar Movies Per Watched: {{ localFilters.max_similar_movie || 5 }}</label>
+      <div v-for="slider in sliders" :key="slider.key">
+        <label class="mb-2 block text-sm font-medium text-ink-2" :for="slider.key">{{ slider.label }}: {{ localFilters[slider.key] || slider.fallback }}</label>
         <input
-          id="maxSimilarMovie"
-          v-model.number="localFilters.max_similar_movie"
+          :id="slider.key"
+          v-model.number="localFilters[slider.key]"
           type="range"
-          min="1"
-          max="10"
-          step="1"
-          class="form-range"
+          :min="slider.min"
+          :max="slider.max"
+          :step="slider.step"
+          class="w-full accent-brand"
         />
-        <small class="form-help">How many similar movies to find for each watched movie</small>
-      </div>
-
-      <div class="form-group">
-        <label for="maxSimilarTv">Similar TV Shows Per Watched: {{ localFilters.max_similar_tv || 2 }}</label>
-        <input
-          id="maxSimilarTv"
-          v-model.number="localFilters.max_similar_tv"
-          type="range"
-          min="1"
-          max="10"
-          step="1"
-          class="form-range"
-        />
-        <small class="form-help">How many similar TV shows to find for each watched show</small>
-      </div>
-
-      <div class="form-group">
-        <label for="maxContent">Max Content to Check: {{ localFilters.max_content || 10 }}</label>
-        <input
-          id="maxContent"
-          v-model.number="localFilters.max_content"
-          type="range"
-          min="5"
-          max="50"
-          step="5"
-          class="form-range"
-        />
-        <small class="form-help">Maximum recently watched items to analyze per user</small>
-      </div>
-
-      <div class="form-group">
-        <label for="searchSize">Search Size: {{ localFilters.search_size || 20 }}</label>
-        <input
-          id="searchSize"
-          v-model.number="localFilters.search_size"
-          type="range"
-          min="10"
-          max="50"
-          step="5"
-          class="form-range"
-        />
-        <small class="form-help">Number of results to fetch per TMDb search</small>
+        <small class="mt-2 block text-sm text-ink-4">{{ slider.help }}</small>
       </div>
 
       <!-- Behavior Toggles -->
-      <div class="form-group">
-        <label>Behavior Options</label>
-        <div class="toggle-options">
-          <div class="toggle-item">
-            <BaseCheckbox v-model="localFilters.exclude_downloaded">
-              <span class="toggle-label-modal">
-                <i class="fas fa-download"></i>
-                Exclude Downloaded Content
-              </span>
-            </BaseCheckbox>
-          </div>
-          <small class="toggle-help">Skip content already in your library</small>
-
-          <div class="toggle-item">
-            <BaseCheckbox v-model="localFilters.exclude_requested">
-              <span class="toggle-label-modal">
-                <i class="fas fa-clock"></i>
-                Exclude Requested Content
-              </span>
-            </BaseCheckbox>
-          </div>
-          <small class="toggle-help">Skip content already requested in Seer</small>
-
-          <div class="toggle-item">
-            <BaseCheckbox v-model="localFilters.honor_seer_discovery">
-              <span class="toggle-label-modal">
-                <i class="fas fa-compass"></i>
-                Honor Seer Discovery
-              </span>
-            </BaseCheckbox>
-          </div>
-          <small class="toggle-help">Respect Seer's discovery settings for requests</small>
-
-          <div class="toggle-item">
-            <BaseCheckbox v-model="localFilters.only_first_movie_in_collection">
-              <span class="toggle-label-modal">
-                <i class="fas fa-layer-group"></i>
-                Only First Movie in Collections
-              </span>
-            </BaseCheckbox>
-          </div>
-          <small class="toggle-help">Skip sequels while still introducing new movie collections</small>
-
-          <div class="toggle-item">
-            <BaseCheckbox v-model="localFilters.use_trakt_as_seed" :disabled="!traktUsable">
-              <span class="toggle-label-modal" :class="{ 'toggle-disabled': !traktUsable }">
-                <i class="fas fa-seedling"></i>
-                Use Trakt as Seed
-              </span>
-            </BaseCheckbox>
-          </div>
-          <small v-if="!traktConfigured" class="toggle-help toggle-help--warn">
-            <i class="fas fa-exclamation-triangle"></i>
-            Trakt not configured — set Client ID / Secret in Connections
-          </small>
-          <small v-else-if="!traktUsable" class="toggle-help toggle-help--warn">
-            <i class="fas fa-exclamation-triangle"></i>
-            No linked Trakt accounts — link accounts in Connections &gt; Trakt
-          </small>
-          <small v-else class="toggle-help">Use linked Trakt watch history to find similar content</small>
-
-          <div class="toggle-item">
-            <BaseCheckbox v-model="localFilters.use_trakt_as_exclusion" :disabled="!traktUsable">
-              <span class="toggle-label-modal" :class="{ 'toggle-disabled': !traktUsable }">
-                <i class="fas fa-ban"></i>
-                Exclude Trakt Watched
-              </span>
-            </BaseCheckbox>
-          </div>
-          <small v-if="!traktConfigured" class="toggle-help toggle-help--warn">
-            <i class="fas fa-exclamation-triangle"></i>
-            Trakt not configured — set Client ID / Secret in Connections
-          </small>
-          <small v-else-if="!traktUsable" class="toggle-help toggle-help--warn">
-            <i class="fas fa-exclamation-triangle"></i>
-            No linked Trakt accounts — link accounts in Connections &gt; Trakt
-          </small>
-          <small v-else class="toggle-help">Skip content already watched on Trakt</small>
+      <div>
+        <label class="mb-2 block text-sm font-medium text-ink-2">Behavior Options</label>
+        <div class="flex flex-col gap-1 rounded-ctl border border-edge bg-white/3 p-3">
+          <template v-for="toggle in behaviorToggles" :key="toggle.key">
+            <div class="flex items-center gap-3 rounded-[8px] p-2 transition hover:bg-panel-2">
+              <BaseCheckbox v-model="localFilters[toggle.key]" :disabled="toggle.trakt && !traktUsable">
+                <span class="flex items-center gap-2 font-medium text-ink" :class="{ 'opacity-50': toggle.trakt && !traktUsable }">
+                  <i :class="[toggle.icon, 'w-4 text-ink-4']"></i>
+                  {{ toggle.label }}
+                </span>
+              </BaseCheckbox>
+            </div>
+            <small v-if="toggle.trakt && traktWarning" class="mb-2 ml-10 text-xs text-caution">
+              <i class="fas fa-exclamation-triangle"></i>
+              {{ traktWarning }}
+            </small>
+            <small v-else class="mb-2 ml-10 text-xs text-ink-4">{{ toggle.help }}</small>
+          </template>
         </div>
       </div>
     </template>
@@ -299,6 +189,25 @@ export default {
       selectedService: '',
       traktConfigured: false,
       traktMediaUsers: [],
+      emptyClass: 'flex items-center justify-center gap-2 rounded-ctl border border-edge bg-white/3 p-6 text-[0.9rem] text-ink-4',
+      userModes: [
+        { value: 'all', label: 'All Users', icon: 'fas fa-users' },
+        { value: 'specific', label: 'Specific Users', icon: 'fas fa-user-check' },
+      ],
+      sliders: [
+        { key: 'max_similar_movie', label: 'Similar Movies Per Watched', fallback: 5, min: 1, max: 10, step: 1, help: 'How many similar movies to find for each watched movie' },
+        { key: 'max_similar_tv', label: 'Similar TV Shows Per Watched', fallback: 2, min: 1, max: 10, step: 1, help: 'How many similar TV shows to find for each watched show' },
+        { key: 'max_content', label: 'Max Content to Check', fallback: 10, min: 5, max: 50, step: 5, help: 'Maximum recently watched items to analyze per user' },
+        { key: 'search_size', label: 'Search Size', fallback: 20, min: 10, max: 50, step: 5, help: 'Number of results to fetch per TMDb search' },
+      ],
+      behaviorToggles: [
+        { key: 'exclude_downloaded', icon: 'fas fa-download', label: 'Exclude Downloaded Content', help: 'Skip content already in your library' },
+        { key: 'exclude_requested', icon: 'fas fa-clock', label: 'Exclude Requested Content', help: 'Skip content already requested in Seer' },
+        { key: 'honor_seer_discovery', icon: 'fas fa-compass', label: 'Honor Seer Discovery', help: "Respect Seer's discovery settings for requests" },
+        { key: 'only_first_movie_in_collection', icon: 'fas fa-layer-group', label: 'Only First Movie in Collections', help: 'Skip sequels while still introducing new movie collections' },
+        { key: 'use_trakt_as_seed', icon: 'fas fa-seedling', label: 'Use Trakt as Seed', help: 'Use linked Trakt watch history to find similar content', trakt: true },
+        { key: 'use_trakt_as_exclusion', icon: 'fas fa-ban', label: 'Exclude Trakt Watched', help: 'Skip content already watched on Trakt', trakt: true },
+      ],
     };
   },
   computed: {
@@ -310,6 +219,11 @@ export default {
     },
     maxResults() {
       return this.modelValue.max_results || 20;
+    },
+    traktWarning() {
+      if (!this.traktConfigured) return 'Trakt not configured — set Client ID / Secret in Connections';
+      if (!this.traktUsable) return 'No linked Trakt accounts — link accounts in Connections > Trakt';
+      return '';
     },
     traktUsable() {
       if (!this.traktConfigured || !this.traktMediaUsers.length) return false;
@@ -479,256 +393,3 @@ export default {
   }
 };
 </script>
-
-<style scoped>
-.recommendation-filters {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-group label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-  margin-bottom: 0.5rem;
-}
-
-.user-mode-selector {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.mode-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: var(--transition-base);
-  font-size: 0.9rem;
-}
-
-.mode-btn:hover {
-  border-color: var(--color-border-heavy);
-  color: var(--color-text-primary);
-}
-
-.mode-btn.active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
-}
-
-.users-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: 200px;
-  overflow-y: auto;
-  padding: 0.5rem;
-  background: var(--color-bg-overlay-light);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-}
-
-.user-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: var(--transition-base);
-}
-
-.user-item:hover {
-  border-color: var(--color-border-heavy);
-}
-
-.user-item.selected {
-  background: var(--color-primary-alpha-10);
-  border-color: var(--color-primary);
-}
-
-.user-avatar {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-bg-overlay-light);
-  border-radius: 50%;
-  color: var(--color-text-muted);
-}
-
-.user-item.selected .user-avatar {
-  background: var(--color-primary);
-  color: white;
-}
-
-.user-name {
-  flex: 1;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.check-icon {
-  color: var(--color-primary);
-}
-
-.loading-users,
-.no-users {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 1.5rem;
-  background: var(--color-bg-overlay-light);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-}
-
-.form-range {
-  width: 100%;
-  height: 6px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--color-border-light);
-  border-radius: var(--radius-full);
-  outline: none;
-  margin-top: 0.5rem;
-}
-
-.form-range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  background: var(--color-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.form-range::-webkit-slider-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: var(--shadow-glow);
-}
-
-.form-range::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  background: var(--color-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-}
-
-.form-help {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  margin-top: 0.5rem;
-}
-
-.toggle-options {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.75rem;
-  background: var(--color-bg-overlay-light);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-}
-
-.toggle-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem;
-  border-radius: var(--radius-sm);
-  transition: var(--transition-base);
-}
-
-.toggle-item:hover {
-  background: var(--color-bg-interactive);
-}
-
-.toggle-label-modal {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.toggle-label-modal i {
-  color: var(--color-text-muted);
-  width: 1rem;
-}
-
-.toggle-help {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  margin-left: 2.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.toggle-help--warn {
-  color: var(--color-warning);
-}
-
-.toggle-disabled {
-  opacity: 0.5;
-}
-
-/* LLM section */
-.llm-section {
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-sm);
-  padding: 0.75rem 1rem;
-  background: var(--color-primary-alpha-10);
-}
-
-.llm-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-primary) !important;
-  margin-bottom: 0.75rem !important;
-}
-
-.llm-icon {
-  color: var(--color-primary);
-}
-
-.llm-toggle-row {
-  padding: 0.25rem 0;
-}
-
-.llm-help {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-  color: var(--color-primary) !important;
-  opacity: 0.85;
-}
-</style>

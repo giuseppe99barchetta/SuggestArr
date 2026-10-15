@@ -1,441 +1,95 @@
 <template>
-    <div class="config-section">
-        <!-- Full header shown only in dashboard mode -->
-        <template v-if="!wizardMode">
-            <h3 class="section-title">Advanced Filter Configuration</h3>
-            <p class="section-description">
-                Set up advanced filters to customize your content recommendations. Each field below allows you to narrow down suggestions based on specific criteria. All fields are optional.
-            </p>
-        </template>
-
-        <!-- Wizard-mode intro (simplified) -->
-        <p v-if="wizardMode" class="wizard-filters-intro">
-            <i class="fas fa-info-circle"></i>
-            All settings below are optional and use sensible defaults. You can fine-tune everything anytime from <strong>Settings → Jobs</strong>.
+    <div class="flex flex-col gap-5">
+        <p class="m-0 flex items-start gap-2 text-[0.85rem] leading-normal text-ink-4">
+            <i class="fas fa-info-circle mt-0.5 shrink-0 opacity-70"></i>
+            <span>All settings below are optional and use sensible defaults. You can fine-tune everything anytime from <strong>Settings → Jobs</strong>.</span>
         </p>
 
-        <!-- Rating & Votes Card -->
-        <div class="settings-card">
-            <h4 class="card-title">Rating & Popularity Filters</h4>
+        <section class="rounded-card border border-edge bg-white/5 p-6">
+            <h4 class="m-0 mb-5 border-b border-edge pb-3 text-[1.1rem] font-semibold text-ink">Rating & Popularity Filters</h4>
 
-            <!-- Rating Source Selector (dashboard only) -->
-            <div v-if="!wizardMode" class="form-group">
-                <label class="form-label">Rating Source</label>
-                <div class="rating-source-tabs">
-                    <button
-                        v-for="opt in ratingSourceOptions"
-                        :key="opt.value"
-                        type="button"
-                        class="rating-tab"
-                        :class="{ active: ratingSource === opt.value }"
-                        @click="updateRatingSource(opt.value)"
-                    >{{ opt.label }}</button>
-                </div>
-                <p class="form-help">
-                    <i class="fas fa-info-circle"></i>
-                    <span v-if="ratingSource === 'tmdb'">Filter using TMDB ratings (default).</span>
-                    <span v-else-if="ratingSource === 'imdb'">Filter using IMDB ratings via OMDb (requires OMDb API key in Connections).</span>
-                    <span v-else>Content must pass both TMDB and IMDB thresholds (strictest).</span>
-                </p>
-            </div>
-
-            <!-- TMDB Rating fields -->
-            <div v-if="wizardMode || ratingSource !== 'imdb'">
-                <p v-if="!wizardMode" class="source-section-label">TMDB Rating</p>
-                <div class="form-row">
-                    <div class="form-group flex-1">
-                        <label for="FILTER_TMDB_THRESHOLD" class="form-label">Minimum Rating (0–100)</label>
-                        <input type="number" :value="config.FILTER_TMDB_THRESHOLD"
-                            @input="validateThreshold($event.target.value)"
-                            class="form-input"
-                            id="FILTER_TMDB_THRESHOLD" placeholder="Leave empty to allow all ratings" min="0" max="100">
-                        <span v-if="errors.FILTER_TMDB_THRESHOLD" class="form-error">{{ errors.FILTER_TMDB_THRESHOLD }}</span>
-                    </div>
-
-                    <div class="form-group flex-1">
-                        <label for="FILTER_TMDB_MIN_VOTES" class="form-label">Minimum Votes</label>
-                        <input type="number" :value="config.FILTER_TMDB_MIN_VOTES"
-                            @input="validateMinVotes($event.target.value)"
-                            class="form-input"
-                            id="FILTER_TMDB_MIN_VOTES" placeholder="Leave empty to allow all" min="0">
-                        <span v-if="errors.FILTER_TMDB_MIN_VOTES" class="form-error">{{ errors.FILTER_TMDB_MIN_VOTES }}</span>
-                    </div>
-                </div>
-                <p v-if="wizardMode" class="form-help">
-                    <i class="fas fa-info-circle"></i>
-                    Based on TMDB community ratings. Leave empty to include all content regardless of rating.
-                </p>
-            </div>
-
-            <!-- IMDB Rating fields (dashboard only) -->
-            <div v-if="!wizardMode && ratingSource !== 'tmdb'">
-                <p class="source-section-label">IMDB Rating <span class="omdb-note">(via OMDb API)</span></p>
-                <div class="form-row">
-                    <div class="form-group flex-1">
-                        <label for="FILTER_IMDB_THRESHOLD" class="form-label">Minimum Rating (0-100)</label>
-                        <input type="number" :value="config.FILTER_IMDB_THRESHOLD"
-                            @input="validateImdbThreshold($event.target.value)"
-                            class="form-input"
-                            id="FILTER_IMDB_THRESHOLD" placeholder="60" min="0" max="100">
-                        <span v-if="errors.FILTER_IMDB_THRESHOLD" class="form-error">{{ errors.FILTER_IMDB_THRESHOLD }}</span>
-                    </div>
-
-                    <div class="form-group flex-1">
-                        <label for="FILTER_IMDB_MIN_VOTES" class="form-label">Minimum Votes</label>
-                        <input type="number" :value="config.FILTER_IMDB_MIN_VOTES"
-                            @input="validateImdbMinVotes($event.target.value)"
-                            class="form-input"
-                            id="FILTER_IMDB_MIN_VOTES" placeholder="100" min="0">
-                        <span v-if="errors.FILTER_IMDB_MIN_VOTES" class="form-error">{{ errors.FILTER_IMDB_MIN_VOTES }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Content Exclusion Card -->
-        <div class="settings-card">
-            <h4 class="card-title">Content Exclusion Options</h4>
-
-            <div class="space-y-3">
-                <div class="toggle-item">
-                    <div class="toggle-info">
-                        <h4 class="toggle-title">Include content with missing ratings</h4>
-                        <p class="toggle-description">Show recommendations even without rating information</p>
-                    </div>
-                    <label class="switch">
-                        <input type="checkbox"
-                            :checked="config.FILTER_INCLUDE_NO_RATING"
-                            @change="handleUpdate('FILTER_INCLUDE_NO_RATING', $event.target.checked)">
-                        <span class="slider round"></span>
-                    </label>
-                </div>
-
-                <div class="toggle-item">
-                    <div class="toggle-info">
-                        <h4 class="toggle-title">Exclude downloaded content</h4>
-                        <p class="toggle-description">Skip suggesting items already in your library</p>
-                    </div>
-                    <label class="switch">
-                        <input type="checkbox"
-                            :checked="config.EXCLUDE_DOWNLOADED"
-                            @change="handleUpdate('EXCLUDE_DOWNLOADED', $event.target.checked)">
-                        <span class="slider round"></span>
-                    </label>
-                </div>
-
-                <div class="toggle-item">
-                    <div class="toggle-info">
-                        <h4 class="toggle-title">Exclude requested content</h4>
-                        <p class="toggle-description">Avoid recommending shows or movies you've already requested</p>
-                    </div>
-                    <label class="switch">
-                        <input type="checkbox"
-                            :checked="config.EXCLUDE_REQUESTED"
-                            @change="handleUpdate('EXCLUDE_REQUESTED', $event.target.checked)">
-                        <span class="slider round"></span>
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        <!-- Genre & Content Type Card (dashboard only) -->
-        <div v-if="!wizardMode" class="settings-card">
-            <h4 class="card-title">Genre & Content Filters</h4>
-
-            <div class="form-group">
-                <label for="FILTER_GENRES_EXCLUDE" class="form-label">Exclude Genres</label>
-                <vue-multiselect v-model="selectedGenres" :options="genres" track-by="id" label="name" multiple
-                    placeholder="No excluded genre" @update:modelValue="updateGenres"
-                    class="multiselect-genres"
-                    id="FILTER_GENRES_EXCLUDE">
-                </vue-multiselect>
-                <p class="form-help">
-                    <i class="fas fa-info-circle"></i>
-                    Select genres to exclude from recommendations (e.g., Horror, Documentary)
-                </p>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group flex-1">
-                    <label for="FILTER_NUM_SEASONS" class="form-label">Maximum Number of Seasons</label>
-                    <input type="number" :value="config.FILTER_NUM_SEASONS"
-                        @input="validateNumSeasons($event.target.value)"
-                        class="form-input"
-                        id="FILTER_NUM_SEASONS" placeholder="0 (unlimited)" min="0">
-                    <span v-if="errors.FILTER_NUM_SEASONS" class="form-error">{{ errors.FILTER_NUM_SEASONS }}</span>
-                </div>
-
-                <div class="form-group flex-1">
-                    <label for="FILTER_MIN_RUNTIME" class="form-label">Minimum Runtime (minutes)</label>
-                    <input type="number" :value="config.FILTER_MIN_RUNTIME"
-                        @input="validateMinRuntime($event.target.value)"
-                        class="form-input"
-                        id="FILTER_MIN_RUNTIME" placeholder="0 (no limit)" min="0">
-                    <span v-if="errors.FILTER_MIN_RUNTIME" class="form-error">{{ errors.FILTER_MIN_RUNTIME }}</span>
-                </div>
-            </div>
-            <div class="toggle-item" style="margin-top: 0.75rem;">
-                <div class="toggle-info">
-                    <h4 class="toggle-title">Request first season only</h4>
-                    <p class="toggle-description">Request only season 1 for new TV series, regardless of the maximum seasons value</p>
-                </div>
-                <label class="switch">
-                    <input type="checkbox"
-                        :checked="config.REQUEST_FIRST_SEASON_ONLY"
-                        @change="handleUpdate('REQUEST_FIRST_SEASON_ONLY', $event.target.checked)">
-                    <span class="slider round"></span>
+            <div class="grid gap-4 md:grid-cols-2">
+                <label v-for="field in ratingFields" :key="field.key" class="ui-label" :for="field.key">
+                    {{ field.label }}
+                    <input type="number" :value="config[field.key]"
+                        @input="field.validate($event.target.value)"
+                        class="ui-input"
+                        :id="field.key" :placeholder="field.placeholder" min="0" :max="field.max">
+                    <span v-if="errors[field.key]" class="text-[0.8125rem] font-medium text-bad">{{ errors[field.key] }}</span>
                 </label>
             </div>
-            <p class="form-help">
+            <p class="m-0 mt-2 flex items-center gap-2 text-[0.8rem] text-ink-4">
                 <i class="fas fa-info-circle"></i>
-                Limit TV series by number of seasons, control requested seasons, and exclude short content below a minimum runtime
+                Based on TMDB community ratings. Leave empty to include all content regardless of rating.
             </p>
-        </div>
+        </section>
 
-        <!-- Streaming & Region Card (dashboard only) -->
-        <div v-if="!wizardMode" class="settings-card">
-            <h4 class="card-title">Streaming & Regional Filters</h4>
+        <section class="rounded-card border border-edge bg-white/5 p-6">
+            <h4 class="m-0 mb-5 border-b border-edge pb-3 text-[1.1rem] font-semibold text-ink">Content Exclusion Options</h4>
 
-            <div class="form-row">
-                <div class="form-group flex-1">
-                    <label for="FILTER_REGION_PROVIDER" class="form-label">Region</label>
-                    <vue-multiselect v-model="selectedRegion" :options="regions" track-by="iso_3166_1" label="english_name"
-                        placeholder="Select a region" @update:modelValue="updateRegion"
-                        class="multiselect-region"
-                        id="FILTER_REGION_PROVIDER">
-                    </vue-multiselect>
-                </div>
-
-                <div class="form-group flex-1">
-                    <label for="FILTER_STREAMING_SERVICES" class="form-label">Exclude Streaming Services</label>
-                    <vue-multiselect v-model="selectedStreamingServices" :options="streamingServices" track-by="provider_id"
-                        label="provider_name" multiple placeholder="No excluded service"
-                        @update:modelValue="updateStreamingServices"
-                        class="multiselect-services"
-                        id="FILTER_STREAMING_SERVICES">
-                    </vue-multiselect>
-                </div>
+            <div class="flex flex-col gap-3">
+                <button
+                    v-for="toggle in toggles"
+                    :key="toggle.key"
+                    type="button"
+                    role="switch"
+                    :aria-checked="config[toggle.key] ? 'true' : 'false'"
+                    class="flex cursor-pointer items-center gap-4 rounded-ctl border border-edge bg-white/2 p-4 text-left transition hover:border-brand hover:bg-white/4"
+                    @click="handleUpdate(toggle.key, !config[toggle.key])"
+                >
+                    <span class="flex flex-1 flex-col gap-1">
+                        <span class="text-[0.9rem] font-semibold text-ink">{{ toggle.title }}</span>
+                        <span class="text-[0.8125rem] text-ink-4">{{ toggle.hint }}</span>
+                    </span>
+                    <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="config[toggle.key] ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="config[toggle.key] ? 'left-[21px]' : 'left-[3px]'"></span></span>
+                </button>
             </div>
-            <p class="form-help">
-                <i class="fas fa-info-circle"></i>
-                Filter by region and exclude specific streaming services.
-                <strong>Note:</strong> TMDB's provider data may be inaccurate for Amazon — "Amazon Video"
-                can include content from Amazon Channels (e.g. Paramount+ via Amazon), which require
-                an additional subscription beyond basic Prime Video. Use the most specific provider
-                entry for your subscription to reduce false exclusions.
-            </p>
+        </section>
 
-            <div class="toggle-item" style="margin-top: 0.75rem;">
-                <div class="toggle-info">
-                    <h4 class="toggle-title">Include rent/buy (TVOD) availability</h4>
-                    <p class="toggle-description">Also match providers available for rent or purchase, not just subscription (flatrate)</p>
-                </div>
-                <label class="switch">
-                    <input type="checkbox"
-                        :checked="config.FILTER_INCLUDE_TVOD"
-                        @change="handleUpdate('FILTER_INCLUDE_TVOD', $event.target.checked)">
-                    <span class="slider round"></span>
-                </label>
-            </div>
-        </div>
-
-        <!-- Language & Year Card (dashboard only) -->
-        <div v-if="!wizardMode" class="settings-card">
-            <h4 class="card-title">Language & Release Date</h4>
-
-            <div class="form-row">
-                <div class="form-group flex-1">
-                    <label for="FILTER_LANGUAGE" class="form-label">Original Language</label>
-                    <vue-multiselect v-model="selectedLanguages" :options="languages" track-by="iso_639_1"
-                        label="english_name" multiple placeholder="No preferred language"
-                        @update:modelValue="updateLanguages"
-                        class="multiselect-languages"
-                        id="FILTER_LANGUAGE">
-                    </vue-multiselect>
-                </div>
-
-                <div class="form-group flex-1">
-                    <label for="FILTER_RELEASE_YEAR" class="form-label">Earliest Release Year</label>
-                    <input type="number" :value="config.FILTER_RELEASE_YEAR"
-                        @focusout="validateReleaseYear($event.target.value)"
-                        class="form-input"
-                        id="FILTER_RELEASE_YEAR" placeholder="2000" min="1900">
-                    <span v-if="errors.FILTER_RELEASE_YEAR" class="form-error">{{ errors.FILTER_RELEASE_YEAR }}</span>
-                </div>
-            </div>
-            <p class="form-help">
-                <i class="fas fa-info-circle"></i>
-                Filter by original language and minimum release year
-            </p>
-        </div>
-
-        <!-- Wizard-mode note about advanced options -->
-        <p v-if="wizardMode" class="wizard-advanced-note">
-            <i class="fas fa-sliders-h"></i>
-            More advanced filters (genres, language, streaming services, runtime) are available in <strong>Settings → Jobs</strong> after setup.
+        <p class="m-0 flex items-start gap-2 rounded-lg border border-white/7 bg-white/3 px-4 py-3 text-[0.85rem] leading-normal text-ink-4">
+            <i class="fas fa-sliders-h mt-0.5 shrink-0 opacity-70"></i>
+            <span>More advanced filters (genres, language, streaming services, runtime) are available in <strong>Settings → Jobs</strong> after setup.</span>
         </p>
-
-        <!-- Navigation Buttons (hidden in wizard mode — wizard shell provides navigation) -->
-        <div v-if="!wizardMode" class="flex justify-between mt-8 gap-4">
-            <button @click="$emit('previous-step')"
-                class="btn-secondary w-full flex items-center justify-center gap-2 py-4 px-8">
-                <i class="fas fa-arrow-left"></i>
-                Back
-            </button>
-            <button @click="submit" :disabled="hasErrors"
-                class="btn-primary w-full flex items-center justify-center gap-2 py-4 px-8"
-                :class="{ 'opacity-50 cursor-not-allowed': hasErrors }">
-                Next Step
-                <i class="fas fa-arrow-right"></i>
-            </button>
-        </div>
     </div>
 </template>
 
 
 <script>
-import axios from 'axios';
-import Multiselect from 'vue-multiselect';
-import 'vue-multiselect/dist/vue-multiselect.min.css';
-import '@/assets/styles/advancedFilterConfig.css';
-
 export default {
-    components: {
-        'vue-multiselect': Multiselect
-    },
     props: {
         config: { type: Object, required: true },
-        wizardMode: { type: Boolean, default: false },
     },
-    emits: ['update-config', 'next-step', 'previous-step', 'skip-step', 'validation-changed'],
+    emits: ['update-config', 'validation-changed'],
     data() {
         return {
-            genres: [],
-            selectedGenres: this.config.FILTER_GENRES_EXCLUDE || [],
-            languages: [],
-            selectedLanguages: this.config.FILTER_LANGUAGE || [],
-            regions: [],
-            selectedRegion: this.config.FILTER_REGION_PROVIDER || null,
-            streamingServices: [],
-            selectedStreamingServices: this.config.FILTER_STREAMING_SERVICES || [],
-            ratingSource: this.config.FILTER_RATING_SOURCE || 'tmdb',
-            ratingSourceOptions: [
-                { value: 'tmdb', label: 'TMDB Only' },
-                { value: 'imdb', label: 'IMDB Only' },
-                { value: 'both', label: 'Both' },
+            ratingFields: [
+                { key: 'FILTER_TMDB_THRESHOLD', label: 'Minimum Rating (0–100)', placeholder: 'Leave empty to allow all ratings', max: 100, validate: this.validateThreshold },
+                { key: 'FILTER_TMDB_MIN_VOTES', label: 'Minimum Votes', placeholder: 'Leave empty to allow all', validate: this.validateMinVotes },
+            ],
+            toggles: [
+                { key: 'FILTER_INCLUDE_NO_RATING', title: 'Include content with missing ratings', hint: 'Show recommendations even without rating information' },
+                { key: 'EXCLUDE_DOWNLOADED', title: 'Exclude downloaded content', hint: 'Skip suggesting items already in your library' },
+                { key: 'EXCLUDE_REQUESTED', title: 'Exclude requested content', hint: "Avoid recommending shows or movies you've already requested" },
             ],
             errors: {
                 FILTER_TMDB_THRESHOLD: '',
                 FILTER_TMDB_MIN_VOTES: '',
-                FILTER_IMDB_THRESHOLD: '',
-                FILTER_IMDB_MIN_VOTES: '',
-                FILTER_RELEASE_YEAR: '',
-                FILTER_NUM_SEASONS: '',
-                FILTER_MIN_RUNTIME: ''
             }
         };
     },
     computed: {
-            hasErrors() {
-                return Object.values(this.errors).some(error => error !== '');
-            }
+        hasErrors() {
+            return Object.values(this.errors).some(error => error !== '');
+        }
     },
     watch: {
         hasErrors(val) {
-            if (this.wizardMode) {
-                this.$emit('validation-changed', !val);
-            }
-        },
-        regions(newRegions) {
-            const matchedRegion = newRegions.find(region => region.iso_3166_1 === this.config.FILTER_REGION_PROVIDER);
-            if (matchedRegion) {
-                this.selectedRegion = matchedRegion;
-            } else {
-                this.selectedRegion = null;
-            }
-        },
-        selectedRegion() {
-            this.fetchStreamingServices();
+            this.$emit('validation-changed', !val);
         },
     },
     methods: {
         handleUpdate(key, value) {
             this.$emit('update-config', key, value);
-        },
-        updateRatingSource(value) {
-            this.ratingSource = value;
-            this.handleUpdate('FILTER_RATING_SOURCE', value);
-        },
-        validateImdbThreshold(value) {
-            if (value < 0 || value > 100) {
-                this.errors.FILTER_IMDB_THRESHOLD = "Rating must be between 0 and 100.";
-            } else {
-                this.errors.FILTER_IMDB_THRESHOLD = "";
-                this.handleUpdate('FILTER_IMDB_THRESHOLD', value);
-            }
-        },
-        validateImdbMinVotes(value) {
-            if (value < 0) {
-                this.errors.FILTER_IMDB_MIN_VOTES = "Minimum votes cannot be negative.";
-            } else {
-                this.errors.FILTER_IMDB_MIN_VOTES = "";
-                this.handleUpdate('FILTER_IMDB_MIN_VOTES', value);
-            }
-        },
-        async fetchGenres() {
-            try {
-                const response = await axios.get('/api/tmdb/genres/movie');
-                this.genres = response.data.genres;
-            } catch (error) {
-                console.error("Error fetching genres:", error);
-            }
-        },
-        async fetchLanguages() {
-            try {
-                const response = await axios.get('/api/tmdb/languages');
-                this.languages = response.data.languages;
-            } catch (error) {
-                console.error("Error fetching languages:", error);
-            }
-        },
-        async fetchRegions() {
-            try {
-                const response = await axios.get('/api/tmdb/providers/regions');
-                this.regions = response.data.results;
-            } catch (error) {
-                console.error("Error fetching regions:", error);
-            }
-        },
-        async fetchStreamingServices() {
-            if (!this.selectedRegion) return;
-
-            const region_code = this.selectedRegion?.iso_3166_1;
-
-            try {
-                const response = await axios.get('/api/tmdb/providers/movie', {
-                    params: { watch_region: region_code },
-                });
-                this.streamingServices = response.data.results;
-            } catch (error) {
-                console.error("Error fetching streaming services:", error);
-            }
-        },
-        updateLanguages(selected) {
-            this.handleUpdate(
-                'FILTER_LANGUAGE',
-                selected
-                    .filter(lang => lang.iso_639_1 && lang.english_name)
-                    .map(lang => ({ id: lang.iso_639_1, english_name: lang.english_name }))
-            );
-        },
-        updateGenres(selected) {
-            this.handleUpdate('FILTER_GENRES_EXCLUDE', selected.map(genre => ({ id: genre.id, name: genre.name })));
-        },
-        updateRegion(selected) {
-            this.handleUpdate('FILTER_REGION_PROVIDER', selected ? selected.iso_3166_1 : null);
-        },
-        updateStreamingServices(selected) {
-            this.handleUpdate('FILTER_STREAMING_SERVICES', selected.map(service => ({ provider_id: service.provider_id, provider_name: service.provider_name })));
         },
         validateThreshold(value) {
             if (value < 0 || value > 100) {
@@ -453,230 +107,6 @@ export default {
                 this.handleUpdate('FILTER_TMDB_MIN_VOTES', value);
             }
         },
-        validateReleaseYear(value) {
-            const year = parseInt(value, 10);
-            const currentYear = new Date().getFullYear();
-            if (isNaN(year) || year < 1900 || year > currentYear) {
-                this.errors.FILTER_RELEASE_YEAR = `Year must be between 1900 and ${currentYear}.`;
-            } else {
-                this.errors.FILTER_RELEASE_YEAR = "";
-                this.handleUpdate('FILTER_RELEASE_YEAR', value);
-            }
-        },
-        validateNumSeasons(value) {
-            if (value < 0) {
-                this.errors.FILTER_NUM_SEASONS = "Seasons count must be at least 0 to select all seasons.";
-            } else {
-                this.errors.FILTER_NUM_SEASONS = "";
-                this.handleUpdate('FILTER_NUM_SEASONS', value);
-            }
-        },
-        validateMinRuntime(value) {
-            if (value < 0) {
-                this.errors.FILTER_MIN_RUNTIME = "Minimum runtime cannot be negative.";
-            } else {
-                this.errors.FILTER_MIN_RUNTIME = "";
-                this.handleUpdate('FILTER_MIN_RUNTIME', value || null);
-            }
-        },
-        submit() {
-            if (!this.hasErrors) {
-                this.$emit('next-step');
-            }
-        }
     },
-    mounted() {
-        this.fetchGenres();
-        this.fetchLanguages();
-        this.fetchRegions();
-    }
 };
 </script>
-
-<style scoped>
-/* Config Section */
-.config-section {
-  display: flex;
-  flex-direction: column;
-}
-
-/* Wizard-mode intro & footer note */
-.wizard-filters-intro,
-.wizard-advanced-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-  line-height: 1.5;
-  margin-bottom: 1.25rem;
-}
-
-.wizard-filters-intro i,
-.wizard-advanced-note i {
-  flex-shrink: 0;
-  margin-top: 0.1rem;
-  opacity: 0.7;
-}
-
-.wizard-advanced-note {
-  margin-top: 1rem;
-  margin-bottom: 0;
-  padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-}
-
-.section-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  margin-bottom: 0.5rem;
-}
-
-.section-description {
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-  line-height: 1.5;
-  margin-bottom: 1.5rem;
-}
-
-/* Form Row */
-.form-row {
-  display: flex;
-  gap: 1rem;
-  align-items: flex-start;
-}
-
-.form-row .form-group {
-  margin-bottom: 0;
-}
-
-.form-row + .form-help {
-  margin-top: 0.5rem;
-}
-
-.flex-1 {
-  flex: 1;
-}
-
-/* Form Error */
-.form-error {
-  display: block;
-  color: var(--color-error);
-  font-size: 0.8125rem;
-  margin-top: 0.25rem;
-  font-weight: 500;
-}
-
-/* Toggle Items */
-.space-y-3 > * + * {
-  margin-top: 0.75rem;
-}
-
-.toggle-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--color-border-light);
-  padding: 1rem;
-  border-radius: var(--border-radius-sm);
-  transition: var(--transition-base);
-}
-
-.toggle-item:hover {
-  border-color: var(--color-primary);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.toggle-info {
-  flex-grow: 1;
-  padding-right: 1rem;
-}
-
-.toggle-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0 0 0.25rem 0;
-}
-
-.toggle-description {
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  margin: 0;
-}
-
-/* Rating Source Tabs */
-.rating-source-tabs {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.5rem;
-}
-
-.rating-tab {
-  padding: 0.4rem 1rem;
-  border: 1px solid var(--color-border-medium);
-  border-radius: 2rem;
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition-base);
-}
-
-.rating-tab:hover {
-  border-color: var(--color-primary);
-  color: var(--color-text-primary);
-}
-
-.rating-tab.active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
-  font-weight: 600;
-}
-
-.source-section-label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 0.75rem 0 0.5rem 0;
-}
-
-.omdb-note {
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .form-row {
-    flex-direction: column;
-    gap: 0;
-  }
-
-  .form-row .form-group {
-    margin-bottom: 1rem;
-  }
-
-  .rating-source-tabs {
-    gap: 0.35rem;
-  }
-
-  .rating-tab {
-    padding: 0.35rem 0.75rem;
-    font-size: 0.8rem;
-  }
-
-}
-</style>

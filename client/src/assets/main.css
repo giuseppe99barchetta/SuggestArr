@@ -36,6 +36,12 @@
   /* Own names: legacy variables.css already defines --radius-lg/xl with other values. */
   --radius-ctl: 10px;
   --radius-card: 14px;
+
+  --animate-pop: pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  @keyframes pop {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
 }
 
 @layer base {

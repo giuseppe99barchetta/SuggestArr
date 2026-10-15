@@ -1,26 +1,26 @@
 <template>
   <label
-    class="base-checkbox"
-    :class="{ 'base-checkbox--disabled': disabled }"
+    class="base-checkbox group inline-flex cursor-pointer select-none items-start gap-2 leading-normal"
+    :class="{ 'pointer-events-none cursor-not-allowed opacity-50': disabled }"
   >
     <!-- Track: contains hidden native input + custom visual box -->
-    <span class="base-checkbox__track">
+    <span class="relative mt-0.5 inline-flex h-[1.125rem] w-[1.125rem] shrink-0">
       <!--
         The native input is visually hidden but remains fully accessible
         to keyboards and screen readers. It handles all native events
         (change, focus, blur) which bubble up to the root label when needed.
       -->
       <input
-        class="base-checkbox__input"
+        class="peer absolute inset-0 z-[1] m-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
         type="checkbox"
         :checked="modelValue"
         :disabled="disabled"
         @change="$emit('update:modelValue', $event.target.checked)"
       />
       <!-- Custom visual box — aria-hidden since the real input is the a11y target -->
-      <span class="base-checkbox__box" aria-hidden="true">
+      <span class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-[6px] border-[1.5px] border-edge-strong bg-panel-2 transition group-hover:border-ink-4 group-hover:bg-raised peer-checked:border-brand peer-checked:bg-brand peer-focus-visible:border-brand peer-focus-visible:ring-3 peer-focus-visible:ring-brand/40 peer-checked:[&>svg]:scale-100 peer-checked:[&>svg]:opacity-100" aria-hidden="true">
         <svg
-          class="base-checkbox__icon"
+          class="pointer-events-none h-2 w-2.5 scale-50 text-white opacity-0 transition"
           viewBox="0 0 10 8"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
@@ -38,9 +38,9 @@
     </span>
 
     <!-- Label content: uses slot for rich content, prop fallback for simple text -->
-    <span class="base-checkbox__content">
+    <span class="flex flex-col gap-0.5 text-sm font-medium leading-normal text-ink">
       <slot>{{ label }}</slot>
-      <span v-if="description" class="base-checkbox__description">
+      <span v-if="description" class="text-xs font-normal leading-normal text-ink-4">
         {{ description }}
       </span>
     </span>
@@ -90,145 +90,3 @@ export default {
   emits: ['update:modelValue'],
 };
 </script>
-
-<style scoped>
-/* ================================================================
-   BaseCheckbox — Custom Checkbox Component
-   All values use SuggestArr design tokens from variables.css.
-
-   States handled:
-   - unchecked   (default)
-   - checked     (input:checked)
-   - hover       (.base-checkbox:hover)
-   - focus-visible (input:focus-visible ~ .base-checkbox__box)
-   - disabled    (.base-checkbox--disabled)
-================================================================ */
-
-/* ── Root label ───────────────────────────────────────────── */
-
-.base-checkbox {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
-  cursor: pointer;
-  user-select: none;
-  line-height: var(--line-height-normal);
-}
-
-.base-checkbox--disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-/* ── Track: size container for input + box ────────────────── */
-
-.base-checkbox__track {
-  /* Explicitly block-like so width/height apply even when the parent
-     label is forced to display:block by an ancestor scoped rule. */
-  display: inline-flex;
-  position: relative;
-  flex-shrink: 0;
-  width: 1.125rem;  /* 18px */
-  height: 1.125rem; /* 18px */
-  margin-top: 0.125rem; /* optical alignment with text cap-height */
-}
-
-/* ── Hidden native input ──────────────────────────────────── */
-/*
-   Positioned over the entire track so it captures click/keyboard
-   events correctly. Opacity 0 so the browser native checkbox
-   is invisible, but it remains in the a11y tree.
-*/
-
-.base-checkbox__input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  z-index: 1;
-}
-
-.base-checkbox--disabled .base-checkbox__input {
-  cursor: not-allowed;
-}
-
-/* ── Custom visual box ────────────────────────────────────── */
-
-.base-checkbox__box {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1.5px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  background: var(--surface-interactive);
-  transition:
-    background var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
-  pointer-events: none;
-}
-
-/* Hover state */
-.base-checkbox:not(.base-checkbox--disabled):hover .base-checkbox__box {
-  border-color: var(--color-border-heavy);
-  background: var(--surface-hover);
-}
-
-/* Focus-visible state (keyboard navigation — WCAG 2.1 AA) */
-.base-checkbox__input:focus-visible ~ .base-checkbox__box {
-  border-color: var(--color-primary);
-  box-shadow: var(--focus-ring);
-  outline: none;
-}
-
-/* Checked state */
-.base-checkbox__input:checked ~ .base-checkbox__box {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-}
-
-/* ── Checkmark SVG icon ───────────────────────────────────── */
-
-.base-checkbox__icon {
-  width: 0.625rem;  /* 10px */
-  height: 0.5rem;   /* 8px */
-  color: white;
-  opacity: 0;
-  transform: scale(0.5);
-  transition:
-    opacity var(--transition-fast),
-    transform var(--transition-fast);
-  pointer-events: none;
-}
-
-.base-checkbox__input:checked ~ .base-checkbox__box .base-checkbox__icon {
-  opacity: 1;
-  transform: scale(1);
-}
-
-/* ── Label text ───────────────────────────────────────────── */
-
-.base-checkbox__content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2xs);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-  line-height: var(--line-height-normal);
-}
-
-/* Secondary / description text below the label */
-.base-checkbox__description {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-normal);
-  color: var(--color-text-muted);
-  line-height: var(--line-height-normal);
-}
-</style>

@@ -1,31 +1,31 @@
 <template>
-  <div class="job-filters">
+  <div class="flex flex-col gap-5">
     <!-- Rating Source Selector -->
-    <div class="form-group">
+    <div class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
       <label>Rating Source</label>
-      <div class="rating-source-options">
+      <div class="flex flex-col gap-2">
         <label
           v-for="option in ratingSourceOptions"
           :key="option.value"
-          class="rating-source-option"
-          :class="{ active: localFilters.rating_source === option.value }"
+          class="flex cursor-pointer items-start gap-2.5 rounded-ctl border px-3 py-2.5 transition hover:border-brand"
+          :class="localFilters.rating_source === option.value ? 'border-brand bg-brand/8' : 'border-edge bg-white/2 hover:bg-white/4'"
         >
           <input
             type="radio"
             :value="option.value"
             v-model="localFilters.rating_source"
-            class="rating-source-radio"
+            class="mt-1 shrink-0 accent-brand"
           />
-          <div class="option-content">
-            <span class="option-label">{{ option.label }}</span>
-            <span class="option-desc">{{ option.description }}</span>
+          <div class="flex flex-col gap-0.5">
+            <span class="text-sm font-semibold text-ink">{{ option.label }}</span>
+            <span class="text-xs leading-tight text-ink-4">{{ option.description }}</span>
           </div>
         </label>
       </div>
     </div>
 
     <!-- TMDB Rating Filter (hidden when source is imdb-only) -->
-    <div v-if="localFilters.rating_source !== 'imdb'" class="form-group">
+    <div v-if="localFilters.rating_source !== 'imdb'" class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
       <label>{{ localFilters.rating_source === 'both' ? 'Minimum Rating (TMDB)' : 'Minimum Rating' }}: {{ localFilters.vote_average_gte || 0 }}</label>
       <input
         v-model.number="localFilters.vote_average_gte"
@@ -33,9 +33,9 @@
         min="0"
         max="10"
         step="0.5"
-        class="form-range"
+        class="mt-2 w-full accent-brand"
       />
-      <div class="range-labels">
+      <div class="mt-2 flex justify-between text-xs text-ink-4">
         <span>0</span>
         <span>5</span>
         <span>10</span>
@@ -43,7 +43,7 @@
     </div>
 
     <!-- TMDB Vote Count Filter (hidden when source is imdb-only) -->
-    <div v-if="localFilters.rating_source !== 'imdb'" class="form-group">
+    <div v-if="localFilters.rating_source !== 'imdb'" class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
       <label for="voteCount">{{ localFilters.rating_source === 'both' ? 'Minimum Vote Count (TMDB)' : 'Minimum Vote Count' }}</label>
       <input
         id="voteCount"
@@ -52,13 +52,13 @@
         min="0"
         step="100"
         placeholder="e.g., 1000"
-        class="form-control"
+        class="ui-input"
       />
-      <small class="form-help">Filter out content with too few votes</small>
+      <small class="mt-2 text-sm text-ink-4">Filter out content with too few votes</small>
     </div>
 
     <!-- IMDB Rating Filter (shown when IMDB is part of rating source) -->
-    <div v-if="localFilters.rating_source !== 'tmdb'" class="form-group">
+    <div v-if="localFilters.rating_source !== 'tmdb'" class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
       <label>IMDB Minimum Rating: {{ (localFilters.imdb_rating_gte || 0).toFixed(1) }}</label>
       <input
         v-model.number="localFilters.imdb_rating_gte"
@@ -66,21 +66,21 @@
         min="0"
         max="10"
         step="0.1"
-        class="form-range imdb-range"
+        class="mt-2 w-full accent-[#f5c518]"
       />
-      <div class="range-labels">
+      <div class="mt-2 flex justify-between text-xs text-ink-4">
         <span>0</span>
         <span>5</span>
         <span>10</span>
       </div>
-      <small class="form-help">
-        <i class="fas fa-star" style="color: #f5c518;"></i>
+      <small class="mt-2 text-sm text-ink-4">
+        <i class="fas fa-star text-[#f5c518]"></i>
         Filter by IMDB community rating — requires OMDb API key configured in Connections
       </small>
     </div>
 
     <!-- IMDB Vote Count Filter (shown when IMDB is part of rating source) -->
-    <div v-if="localFilters.rating_source !== 'tmdb'" class="form-group">
+    <div v-if="localFilters.rating_source !== 'tmdb'" class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
       <label for="imdbVotes">IMDB Minimum Vote Count</label>
       <input
         id="imdbVotes"
@@ -89,31 +89,31 @@
         min="0"
         step="1"
         placeholder="e.g., 10000"
-        class="form-control"
+        class="ui-input"
       />
-      <small class="form-help">Filter out content with too few IMDB votes (more votes = more reliable rating)</small>
+      <small class="mt-2 text-sm text-ink-4">Filter out content with too few IMDB votes (more votes = more reliable rating)</small>
     </div>
 
     <!-- "Both must pass" notice -->
-    <div v-if="localFilters.rating_source === 'both'" class="rating-both-notice">
+    <div v-if="localFilters.rating_source === 'both'" class="flex items-center gap-2 rounded-ctl border border-[#f5c518]/25 bg-[#f5c518]/8 px-3.5 py-2.5 text-sm text-ink-2 [&>i]:shrink-0 [&>i]:text-[#f5c518]">
       <i class="fas fa-info-circle"></i>
       Content must pass <strong>both</strong> TMDB and IMDB thresholds to be recommended.
     </div>
 
     <!-- Include No Rating Toggle -->
-    <div class="form-group">
-      <div class="toggle-item inline">
+    <div class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
+      <div class="flex items-center gap-3 py-2">
         <BaseCheckbox v-model="localFilters.include_no_rating">
-          <span class="toggle-label-jobs">
+          <span class="font-medium text-ink">
             {{ localFilters.rating_source !== 'tmdb' ? 'Include content without IMDB rating' : 'Include content without rating' }}
           </span>
         </BaseCheckbox>
       </div>
-      <small class="form-help">Also include content that doesn't have any rating data yet</small>
+      <small class="mt-2 text-sm text-ink-4">Also include content that doesn't have any rating data yet</small>
     </div>
 
     <!-- Minimum Seasons Filter (TV only, discover/recommendation) -->
-    <div v-if="mediaType === 'tv' && jobType !== 'trakt_recommendations'" class="form-group">
+    <div v-if="mediaType === 'tv' && jobType !== 'trakt_recommendations'" class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
       <label for="minSeasons">Minimum Seasons: {{ localFilters.min_seasons || 1 }}</label>
       <input
         id="minSeasons"
@@ -122,23 +122,23 @@
         min="1"
         max="10"
         step="1"
-        class="form-range"
+        class="mt-2 w-full accent-brand"
       />
-      <small class="form-help">Only include TV shows with at least this many seasons</small>
+      <small class="mt-2 text-sm text-ink-4">Only include TV shows with at least this many seasons</small>
     </div>
 
     <!-- Request Seasons Option (TV-capable jobs) -->
-    <div v-if="mediaType === 'tv' || mediaType === 'both'" class="form-group">
-      <div class="toggle-item inline">
+    <div v-if="mediaType === 'tv' || mediaType === 'both'" class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
+      <div class="flex items-center gap-3 py-2">
         <BaseCheckbox v-model="localFilters.request_first_season_only">
-          <span class="toggle-label-jobs">Request first season only</span>
+          <span class="font-medium text-ink">Request first season only</span>
         </BaseCheckbox>
       </div>
-      <small class="form-help">Send season 1 only when requesting new TV series</small>
+      <small class="mt-2 text-sm text-ink-4">Send season 1 only when requesting new TV series</small>
     </div>
 
     <!-- Minimum Runtime Filter -->
-    <div class="form-group">
+    <div class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
       <label for="minRuntime">Minimum Runtime (minutes)</label>
       <input
         id="minRuntime"
@@ -147,28 +147,28 @@
         min="0"
         step="1"
         placeholder="e.g., 60"
-        class="form-control"
+        class="ui-input"
       />
-      <small class="form-help">Exclude short content below this runtime — useful to filter out clips and shorts</small>
+      <small class="mt-2 text-sm text-ink-4">Exclude short content below this runtime — useful to filter out clips and shorts</small>
     </div>
 
     <!-- Release Date Filter -->
-    <div class="form-group">
+    <div class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
       <label>Release Date Range</label>
-      <div class="date-range">
-        <div class="date-field">
-          <span class="date-label">From</span>
-          <input v-model="releaseDateFrom" type="date" class="form-control" />
+      <div class="flex gap-4 max-[480px]:flex-col">
+        <div class="flex-1">
+          <span class="mb-1.5 block text-xs text-ink-4">From</span>
+          <input v-model="releaseDateFrom" type="date" class="ui-input" />
         </div>
-        <div class="date-field">
-          <span class="date-label">To</span>
-          <input v-model="releaseDateTo" type="date" class="form-control" />
+        <div class="flex-1">
+          <span class="mb-1.5 block text-xs text-ink-4">To</span>
+          <input v-model="releaseDateTo" type="date" class="ui-input" />
         </div>
       </div>
     </div>
 
     <!-- Language Filter -->
-    <div class="form-group dropdown-wrapper">
+    <div class="flex flex-col">
       <BaseDropdown
         v-model="localFilters.with_original_language"
         :options="languageOptions"
@@ -181,7 +181,7 @@
     </div>
 
     <!-- Streaming Region & Provider Exclusion -->
-    <div class="form-group dropdown-wrapper">
+    <div class="flex flex-col">
       <BaseDropdown
         v-model="localFilters.watch_region"
         :options="watchRegions"
@@ -192,125 +192,125 @@
         option-value="iso_3166_1"
         @update:modelValue="onRegionChange"
       />
-      <small class="form-help">Region used to check streaming availability</small>
+      <small class="mt-2 text-sm text-ink-4">Region used to check streaming availability</small>
     </div>
 
-    <div class="form-group">
+    <div class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
       <label>Streaming Services to Exclude</label>
-      <div v-if="localFilters.watch_region && watchProviders.length > 0" class="genre-grid">
+      <div v-if="localFilters.watch_region && watchProviders.length > 0" class="flex max-h-[200px] flex-wrap gap-2 overflow-y-auto rounded-ctl border border-edge bg-white/3 p-4">
         <button
           v-for="provider in watchProviders"
           :key="provider.provider_id"
           type="button"
-          class="genre-btn"
-          :class="{ active: isProviderExcluded(provider.provider_id) }"
+          class="cursor-pointer rounded-[8px] border px-3 py-2 text-sm transition"
+          :class="isProviderExcluded(provider.provider_id) ? 'border-bad bg-bad/10 text-bad' : 'border-edge bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
           @click="toggleProvider(provider)"
         >
           {{ provider.provider_name }}
         </button>
       </div>
-      <p v-else-if="localFilters.watch_region && watchProviders.length === 0" class="loading-text">
+      <p v-else-if="localFilters.watch_region && watchProviders.length === 0" class="flex items-center gap-2 p-4 text-sm text-ink-4">
         <i class="fas fa-spinner fa-spin"></i> Loading providers...
       </p>
-      <p v-else class="form-help" style="padding: 0.75rem 1rem; background: var(--color-bg-overlay-light); border-radius: var(--radius-sm); border: 1px solid var(--color-border-light);">
+      <p v-else class="m-0 rounded-ctl border border-edge bg-white/3 px-4 py-3 text-sm text-ink-4">
         Select a region above to choose which streaming services to exclude
       </p>
-      <small class="form-help">Content already available on these services will be skipped</small>
+      <small class="mt-2 text-sm text-ink-4">Content already available on these services will be skipped</small>
     </div>
 
     <!-- Include TVOD Toggle -->
-    <div class="form-group">
-      <div class="toggle-item inline">
+    <div class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
+      <div class="flex items-center gap-3 py-2">
         <BaseCheckbox v-model="localFilters.include_tvod">
-          <span class="toggle-label-jobs">Include rent/buy (TVOD) availability</span>
+          <span class="font-medium text-ink">Include rent/buy (TVOD) availability</span>
         </BaseCheckbox>
       </div>
-      <small class="form-help">Also match providers available for rent or purchase, not just subscription (flatrate)</small>
+      <small class="mt-2 text-sm text-ink-4">Also match providers available for rent or purchase, not just subscription (flatrate)</small>
     </div>
 
     <!-- Genre Filters -->
-    <div class="form-group">
+    <div class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
       <label>Genres to Include</label>
-      <div class="genre-grid" v-if="genres.length > 0">
+      <div class="flex max-h-[200px] flex-wrap gap-2 overflow-y-auto rounded-ctl border border-edge bg-white/3 p-4" v-if="genres.length > 0">
         <button
           v-for="genre in genres"
           :key="genre.id"
           type="button"
-          class="genre-btn include"
-          :class="{ active: isGenreIncluded(genre.id) }"
+          class="cursor-pointer rounded-[8px] border px-3 py-2 text-sm transition"
+          :class="isGenreIncluded(genre.id) ? 'border-good bg-good/10 text-good' : 'border-edge bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
           @click="toggleGenreInclude(genre.id)"
         >
           {{ genre.name }}
         </button>
       </div>
-      <p v-else class="loading-text">
+      <p v-else class="flex items-center gap-2 p-4 text-sm text-ink-4">
         <i class="fas fa-spinner fa-spin"></i> Loading genres...
       </p>
-      <small class="form-help">Content must match at least one selected genre</small>
+      <small class="mt-2 text-sm text-ink-4">Content must match at least one selected genre</small>
     </div>
 
-    <div class="form-group">
+    <div class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
       <label>Genres to Exclude</label>
-      <div class="genre-grid" v-if="genres.length > 0">
+      <div class="flex max-h-[200px] flex-wrap gap-2 overflow-y-auto rounded-ctl border border-edge bg-white/3 p-4" v-if="genres.length > 0">
         <button
           v-for="genre in genres"
           :key="genre.id"
           type="button"
-          class="genre-btn"
-          :class="{ active: isGenreExcluded(genre.id) }"
+          class="cursor-pointer rounded-[8px] border px-3 py-2 text-sm transition"
+          :class="isGenreExcluded(genre.id) ? 'border-bad bg-bad/10 text-bad' : 'border-edge bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
           @click="toggleGenreExclude(genre.id)"
         >
           {{ genre.name }}
         </button>
       </div>
-      <p v-else class="loading-text">
+      <p v-else class="flex items-center gap-2 p-4 text-sm text-ink-4">
         <i class="fas fa-spinner fa-spin"></i> Loading genres...
       </p>
     </div>
 
-    <div class="form-group">
+    <div class="flex flex-col [&>label]:mb-2 [&>label]:text-sm [&>label]:font-medium [&>label]:text-ink-2">
       <label for="keywordSearch">TMDb Keywords to Exclude</label>
-      <div class="keyword-search">
+      <div class="flex gap-2">
         <input
           id="keywordSearch"
           v-model.trim="keywordQuery"
           type="search"
           placeholder="e.g., Bollywood"
-          class="form-control"
+          class="ui-input flex-1"
           @keydown.enter.prevent="searchKeywords"
         />
-        <button type="button" class="btn btn-outline" :disabled="keywordQuery.length < 2" @click="searchKeywords">
+        <button type="button" class="ui-btn" :disabled="keywordQuery.length < 2" @click="searchKeywords">
           Search
         </button>
       </div>
-      <div v-if="(localFilters.without_keywords || []).length" class="genre-grid">
+      <div v-if="(localFilters.without_keywords || []).length" class="flex max-h-[200px] flex-wrap gap-2 overflow-y-auto rounded-ctl border border-edge bg-white/3 p-4">
         <button
           v-for="keyword in localFilters.without_keywords"
           :key="keyword.id"
           type="button"
-          class="genre-btn active"
+          class="cursor-pointer rounded-[8px] border px-3 py-2 text-sm transition border-bad bg-bad/10 text-bad"
           @click="toggleKeyword(keyword)"
         >
           {{ keyword.name }} <i class="fas fa-times"></i>
         </button>
       </div>
-      <div v-if="keywordResults.length" class="genre-grid">
+      <div v-if="keywordResults.length" class="flex max-h-[200px] flex-wrap gap-2 overflow-y-auto rounded-ctl border border-edge bg-white/3 p-4">
         <button
           v-for="keyword in keywordResults"
           :key="keyword.id"
           type="button"
-          class="genre-btn"
-          :class="{ active: isKeywordExcluded(keyword.id) }"
+          class="cursor-pointer rounded-[8px] border px-3 py-2 text-sm transition"
+          :class="isKeywordExcluded(keyword.id) ? 'border-bad bg-bad/10 text-bad' : 'border-edge bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
           @click="toggleKeyword(keyword)"
         >
           {{ keyword.name }}
         </button>
       </div>
-      <small class="form-help">Exclude titles carrying any selected TMDb keyword. Search and select the exact keyword.</small>
+      <small class="mt-2 text-sm text-ink-4">Exclude titles carrying any selected TMDb keyword. Search and select the exact keyword.</small>
     </div>
 
     <!-- Sort By (discover jobs only) -->
-    <div v-if="jobType === 'discover'" class="form-group dropdown-wrapper">
+    <div v-if="jobType === 'discover'" class="flex flex-col">
       <BaseDropdown
         v-model="localFilters.sort_by"
         :options="sortOptions"
@@ -633,316 +633,3 @@ export default {
   }
 };
 </script>
-
-<style scoped>
-.job-filters {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-group label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-  margin-bottom: 0.5rem;
-}
-
-.form-control {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  font-size: 1rem;
-  transition: var(--transition-base);
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-glow);
-}
-
-.dropdown-wrapper {
-  position: relative;
-  z-index: 100;
-}
-
-.dropdown-wrapper:first-of-type {
-  z-index: 101;
-}
-
-/* Make dropdown menu appear above the trigger (upward) */
-.dropdown-wrapper :deep(.dropdown-menu) {
-  z-index: 9999;
-  top: auto;
-  bottom: calc(100% + 0.5rem);
-}
-
-/* Adjust animation for upward dropdown */
-.dropdown-wrapper :deep(.dropdown-slide-enter-active) {
-  animation: dropdown-appear-up 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.dropdown-wrapper :deep(.dropdown-slide-leave-active) {
-  animation: dropdown-disappear-up 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes dropdown-appear-up {
-  0% {
-    opacity: 0;
-    transform: translateY(12px) scale(0.95);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes dropdown-disappear-up {
-  0% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(8px) scale(0.98);
-  }
-}
-
-.form-help {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  margin-top: 0.5rem;
-}
-
-.form-range {
-  width: 100%;
-  height: 6px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--color-border-light);
-  border-radius: var(--radius-full);
-  outline: none;
-  margin-top: 0.5rem;
-}
-
-.form-range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  background: var(--color-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.form-range::-webkit-slider-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: var(--shadow-glow);
-}
-
-.form-range::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  background: var(--color-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-}
-
-.range-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  margin-top: 0.5rem;
-}
-
-.date-range {
-  display: flex;
-  gap: 1rem;
-}
-
-.keyword-search {
-  display: flex;
-  gap: var(--spacing-sm);
-}
-
-.keyword-search .form-control {
-  flex: 1;
-}
-
-.date-field {
-  flex: 1;
-}
-
-.date-label {
-  display: block;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  margin-bottom: 0.35rem;
-}
-
-input[type="date"] {
-  color-scheme: dark;
-}
-
-.genre-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 1rem;
-  background: var(--color-bg-overlay-light);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-light);
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.genre-btn {
-  padding: 0.5rem 0.75rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  transition: var(--transition-base);
-}
-
-.genre-btn:hover {
-  border-color: var(--color-border-heavy);
-  color: var(--color-text-primary);
-}
-
-.genre-btn.active {
-  background: var(--color-error-alpha-10);
-  border-color: var(--color-error);
-  color: var(--color-error);
-}
-
-.genre-btn.include.active {
-  background: var(--color-success-alpha-10);
-  border-color: var(--color-success);
-  color: var(--color-success);
-}
-
-.loading-text {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
-}
-
-.toggle-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.toggle-item.inline {
-  padding: 0.5rem 0;
-}
-
-.toggle-label-jobs {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-  flex-direction: row !important;
-}
-
-/* Rating source selector */
-.rating-source-options {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.rating-source-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.65rem;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: var(--transition-base);
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.rating-source-option:hover {
-  border-color: var(--color-primary);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.rating-source-option.active {
-  border-color: var(--color-primary);
-  background: rgba(59, 130, 246, 0.08);
-}
-
-.rating-source-radio {
-  margin-top: 0.2rem;
-  accent-color: var(--color-primary);
-  flex-shrink: 0;
-}
-
-.option-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.option-label {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.option-desc {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  line-height: 1.3;
-}
-
-.imdb-range::-webkit-slider-thumb {
-  background: #f5c518;
-}
-.imdb-range::-webkit-slider-thumb:hover {
-  box-shadow: 0 0 0 3px rgba(245, 197, 24, 0.25);
-}
-.imdb-range::-moz-range-thumb {
-  background: #f5c518;
-}
-
-.rating-both-notice {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.65rem 0.875rem;
-  background: rgba(245, 197, 24, 0.08);
-  border: 1px solid rgba(245, 197, 24, 0.25);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-.rating-both-notice i {
-  color: #f5c518;
-  flex-shrink: 0;
-}
-
-@media (max-width: 480px) {
-  .date-range {
-    flex-direction: column;
-  }
-}
-</style>
