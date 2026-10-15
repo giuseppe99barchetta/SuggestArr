@@ -1,13 +1,11 @@
 <template>
   <div class="flex flex-col gap-6">
-    <PageHeader title="AI Search" subtitle="Describe what you feel like watching. The AI finds matching titles, personalised to your viewing history.">
-      <span class="inline-flex h-7 items-center rounded-full bg-brand-soft px-3 text-xs font-bold tracking-wider text-brand-ink">BETA</span>
-    </PageHeader>
+    <PageHeader title="AI Search" subtitle="Describe what you feel like watching. The AI finds matching titles, personalised to your viewing history." />
 
     <div v-if="!llmAvailable" role="alert" class="flex flex-wrap items-center gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
       <i aria-hidden="true" class="fas fa-exclamation-triangle text-caution"></i>
-      <p class="m-0 flex-[1_1_280px] text-sm text-ink-2"><strong class="text-ink">No AI provider configured.</strong> Add one under Advanced → Experimental &amp; AI to use AI Search.</p>
-      <router-link :to="{ name: 'DashboardTab', params: { tab: 'advanced' } }" class="inline-flex h-9 items-center rounded-[8px] bg-caution px-3.5 text-[13px] font-bold text-[#1a1405] no-underline hover:text-[#1a1405]">Open Advanced</router-link>
+      <p class="m-0 flex-[1_1_280px] text-sm text-ink-2"><strong class="text-ink">No AI provider configured.</strong> Add one under Advanced → AI provider to use AI Search.</p>
+      <router-link :to="{ name: 'DashboardTab', params: { tab: 'ai_provider' } }" class="inline-flex h-9 items-center rounded-[8px] bg-caution px-3.5 text-[13px] font-bold text-[#1a1405] no-underline hover:text-[#1a1405]">Set up AI provider</router-link>
     </div>
 
     <form class="flex flex-col gap-4 rounded-card border border-edge bg-panel p-4 sm:p-5" :class="{ 'opacity-60': !llmAvailable }" @submit.prevent="runSearch">

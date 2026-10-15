@@ -41,7 +41,6 @@
             >
               <i aria-hidden="true" :class="tab.icon" class="w-[18px] text-center"></i>
               <span>{{ tab.name }}</span>
-              <span v-if="tab.isBeta" class="ml-auto text-[10px] font-bold tracking-wider text-brand-ink">BETA</span>
               <span v-if="tab.id === 'requests' && requestCount > 0" class="ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
             </router-link>
           </template>
@@ -298,7 +297,7 @@ export default {
       tabs: [
         { id: 'home',      name: 'Home',        icon: 'fas fa-home',        group: 'main',     permission: 'requests' },
         { id: 'requests',  name: 'Requests',    icon: 'fas fa-inbox',       group: 'main',     tourId: 'tab-requests' },
-        { id: 'ai_search', name: 'AI Search',   icon: 'fas fa-magic',       group: 'main',     tourId: 'tab-ai-search', isBeta: true },
+        { id: 'ai_search', name: 'AI Search',   icon: 'fas fa-magic',       group: 'main',     tourId: 'tab-ai-search' },
         { id: 'jobs',      name: 'Jobs',        icon: 'fas fa-clock',       group: 'main',     tourId: 'tab-jobs' },
         { id: 'services',    name: 'Connections', icon: 'fas fa-plug',          group: 'settings', tourId: 'tab-services', adminOnly: true },
         { id: 'ai_provider', name: 'AI provider', icon: 'fas fa-robot',         group: 'settings', tourId: 'tab-advanced', adminOnly: true, section: 'ai' },

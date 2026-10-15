@@ -70,7 +70,6 @@
       <label class="llm-label">
         <i class="fas fa-robot llm-icon"></i>
         AI Enhancement
-        <span class="llm-badge">Beta</span>
       </label>
       <div class="llm-toggle-row">
         <div class="toggle-item">
@@ -718,17 +717,6 @@ export default {
 
 .llm-icon {
   color: var(--color-primary);
-}
-
-.llm-badge {
-  font-size: 0.65rem;
-  font-weight: 600;
-  background: var(--color-primary);
-  color: white;
-  padding: 0.1rem 0.4rem;
-  border-radius: var(--radius-full);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .llm-toggle-row {

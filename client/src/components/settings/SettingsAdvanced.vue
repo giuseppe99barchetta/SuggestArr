@@ -4,52 +4,36 @@
 
     <div class="settings-grid">
       <div v-if="section === 'ai'" class="advanced-section">
-      <!-- Experimental Features -->
-      <section class="advanced-subsection experimental">
+      <section class="advanced-subsection">
         <h3>
-          <i class="fas fa-flask"></i>
-          Experimental Features
+          <i class="fas fa-wand-magic-sparkles"></i>
+          AI Recommendations
         </h3>
-      
-        <div class="warning-box">
-          <i class="fas fa-exclamation-triangle"></i>
-          <div>
-            <strong>Warning:</strong>
-            <p>
-              These features are experimental and may cause unexpected behavior. Use with caution.
-            </p>
-          </div>
-        </div>
-      
+
         <div class="form-group">
           <BaseCheckbox
-            v-model="localConfig.ENABLE_BETA_FEATURES"
-            :disabled="isLoading"
-            label="Enable beta features"
-            description="Enable experimental features that are still in development"
-          />
-        </div>
-      
-        <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES }">
-          <BaseCheckbox
             v-model="localConfig.ENABLE_ADVANCED_ALGORITHM"
-            :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES"
-            label="Use advanced suggestion algorithm"
+            :disabled="isLoading"
+            label="Use AI suggestion algorithm"
             description="Use an AI-powered algorithm for hyper-personalized content suggestions based on watch history."
           />
         </div>
+
+        <div v-if="localConfig.ENABLE_ADVANCED_ALGORITHM && !hasAiProvider" role="alert" class="warning-box">
+          <i class="fas fa-exclamation-triangle"></i>
+          <div>
+            <strong>No AI provider configured.</strong>
+            <p>The AI algorithm needs an API key or a base URL (for local providers) below, otherwise it cannot run.</p>
+          </div>
+        </div>
       </section>
 
-      <!-- AI Provider Configuration (visible only when advanced algorithm is enabled) -->
-      <transition name="ai-card">
-        <section
-          v-if="localConfig.ENABLE_ADVANCED_ALGORITHM && localConfig.ENABLE_BETA_FEATURES"
-          class="advanced-subsection ai-group"
-        >
+      <!-- AI Provider Configuration (also used by AI Search, so always visible) -->
+        <section class="advanced-subsection ai-group">
           <h3>
             <i class="fas fa-robot"></i>
             AI Provider Configuration
-            <button class="info-btn" @click="showAiInfoModal = true" title="Learn how to configure AI providers">
+            <button type="button" class="info-btn" @click="showAiInfoModal = true" title="Learn how to configure AI providers" aria-label="Learn how to configure AI providers">
               <i class="fas fa-circle-info"></i>
             </button>
           </h3>
@@ -182,9 +166,12 @@
               <i :class="isTestingLlm ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>
               {{ isTestingLlm ? 'Testing...' : 'Test Connection' }}
             </button>
+            <span v-if="llmStatus && !isTestingLlm" class="llm-status" :class="llmStatus === 'ok' ? 'llm-status--ok' : 'llm-status--error'" role="status">
+              <i :class="llmStatus === 'ok' ? 'fas fa-check-circle' : 'fas fa-times-circle'"></i>
+              {{ llmStatus === 'ok' ? 'Connected' : 'Connection failed' }}
+            </span>
           </div>
         </section>
-      </transition>
       </div>
 
       <AppDialog v-if="showAiInfoModal" width="max-w-2xl" title="Set up an AI provider" subtitle="Any OpenAI-compatible API works, in the cloud or on your machine." icon="fas fa-robot" @close="showAiInfoModal = false">
@@ -734,6 +721,8 @@ export default {
       aiAdvancedExpanded: false,
       activeAiGuideTab: 'openai',
       isTestingLlm: false,
+      llmStatus: null, // null | 'ok' | 'error', result of the last connection test
+      removeLeaveGuard: null,
       logLevelOptions: [
         { value: 'ERROR', label: 'Error' },
         { value: 'WARNING', label: 'Warning' },
@@ -766,7 +755,7 @@ export default {
   computed: {
     sectionMeta() {
       return {
-        ai: { title: 'AI provider', subtitle: 'The language model behind AI Search and AI recommendations, plus beta features.' },
+        ai: { title: 'AI provider', subtitle: 'The language model behind AI Search and AI recommendations.' },
         workflow: { title: 'Approvals', subtitle: 'Whether suggestions wait for your approval, who sees which requests, and how long pending ones stay.' },
         system: { title: 'System', subtitle: 'Logging, cache, sign-in, reverse-proxy path and configuration backups.' },
       }[this.section] || { title: 'Advanced', subtitle: '' };
@@ -779,6 +768,10 @@ export default {
     },
     hasChanges() {
       return JSON.stringify(this.localConfig) !== JSON.stringify(this.originalConfig);
+    },
+    // Local providers (Ollama, LM Studio) only need a base URL; hosted ones need a key.
+    hasAiProvider() {
+      return Boolean((this.localConfig.OPENAI_API_KEY || '').trim() || (this.localConfig.OPENAI_BASE_URL || '').trim());
     },
   },
   watch: {
@@ -813,7 +806,6 @@ export default {
           TMDB_LANGUAGE: 'en',
           PAUSE_JOBS_WITH_PENDING_APPROVALS: false,
           AUTO_REJECT_APPROVAL_DAYS: 0,
-          ENABLE_BETA_FEATURES: false,
           ENABLE_ADVANCED_ALGORITHM: false,
           OPENAI_API_KEY: '',
           OPENAI_BASE_URL: '',
@@ -848,8 +840,20 @@ export default {
   mounted() {
     this.loadUsers();
     this.loadTmdbLanguages();
+    // Tabs are switched by changing the route param, so guard route changes plus tab close.
+    this.removeLeaveGuard = this.$router.beforeEach(() => {
+      if (this.hasChanges && !window.confirm('You have unsaved changes. Leave without saving?')) return false;
+    });
+    window.addEventListener('beforeunload', this.warnBeforeUnload);
+  },
+  beforeUnmount() {
+    if (this.removeLeaveGuard) this.removeLeaveGuard();
+    window.removeEventListener('beforeunload', this.warnBeforeUnload);
   },
   methods: {
+    warnBeforeUnload(event) {
+      if (this.hasChanges) event.preventDefault();
+    },
     async loadTmdbLanguages() {
       try {
         const { data } = await axios.get('/api/tmdb/languages', { timeout: 10000 });
@@ -1013,7 +1017,6 @@ export default {
             TMDB_LANGUAGE: /^[a-z]{2}(-[A-Z]{2})?$/.test(this.localConfig.TMDB_LANGUAGE || '') ? this.localConfig.TMDB_LANGUAGE : 'en',
             PAUSE_JOBS_WITH_PENDING_APPROVALS: this.localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS === true,
             AUTO_REJECT_APPROVAL_DAYS: Math.max(0, Number(this.localConfig.AUTO_REJECT_APPROVAL_DAYS) || 0),
-            ENABLE_BETA_FEATURES: this.localConfig.ENABLE_BETA_FEATURES || false,
             ENABLE_ADVANCED_ALGORITHM: this.localConfig.ENABLE_ADVANCED_ALGORITHM || false,
             OPENAI_API_KEY: this.localConfig.OPENAI_API_KEY || '',
             OPENAI_BASE_URL: this.localConfig.OPENAI_BASE_URL || '',
@@ -1033,6 +1036,8 @@ export default {
         });
 
         this.originalConfig = { ...this.localConfig };
+
+        if (this.section === 'ai' && this.hasAiProvider) this.testLlmConnection();
       } catch (error) {
         console.error('Error saving advanced settings:', error);
       }
@@ -1047,11 +1052,14 @@ export default {
           LLM_MODEL: this.localConfig.LLM_MODEL || 'gpt-4o-mini',
         });
         if (response.data.status === 'success') {
+          this.llmStatus = 'ok';
           this.$toast.success('AI connection successful!');
         } else {
+          this.llmStatus = 'error';
           this.$toast.error(response.data.message || 'Connection failed');
         }
       } catch (error) {
+        this.llmStatus = 'error';
         const msg = error.response?.data?.message || 'Connection failed';
         this.$toast.error(msg);
       } finally {
@@ -1068,7 +1076,6 @@ export default {
         CACHE_TTL: 24,
         MAX_CACHE_SIZE: 100,
         ENABLE_API_CACHING: true,
-        ENABLE_BETA_FEATURES: false,
         ENABLE_ADVANCED_ALGORITHM: false,
         OPENAI_API_KEY: '',
         OPENAI_BASE_URL: '',
@@ -1575,19 +1582,6 @@ export default {
   border: 1px solid var(--color-border-medium);
 }
 
-/* Disabled feature styling with blur effect */
-.feature-disabled {
-  opacity: 0.5;
-  filter: blur(0.8px);
-  pointer-events: none;
-  transition: all 0.3s ease;
-}
-
-/* Feature wrapper for positioning */
-.feature-wrapper {
-  position: relative;
-}
-
 .btn-outline:hover:not(:disabled) {
   border-color: rgba(255, 255, 255, 0.5);
 }
@@ -1706,23 +1700,14 @@ export default {
   vertical-align: middle;
 }
 
-/* Transition for the AI card appearing in the grid */
-.ai-card-enter-active,
-.ai-card-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
+.llm-status {
+  margin-left: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
 }
 
-.ai-card-enter-from,
-.ai-card-leave-to {
-  opacity: 0;
-  transform: scale(0.97) translateY(-8px);
-}
-
-.ai-card-enter-to,
-.ai-card-leave-from {
-  opacity: 1;
-  transform: scale(1) translateY(0);
-}
+.llm-status--ok { color: var(--color-success); }
+.llm-status--error { color: var(--color-error); }
 
 /* Info button next to AI section title */
 .info-btn {
