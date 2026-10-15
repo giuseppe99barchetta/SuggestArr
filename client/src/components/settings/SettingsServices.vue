@@ -338,10 +338,12 @@
         </div>
       </div>
 
-      <!-- TMDB -->
-      <div v-if="showSection('tmdb')" :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4'">
-        <ServiceCardHeader v-if="!wizardMode" icon="fas fa-film" title="TMDB" description="Finds titles similar to what you watched, plus posters and metadata." required :status="getTmdbStatus" :status-text="getTmdbStatusText" />
+      <!-- Metadata and public lists -->
+      <div v-if="showSection('tmdb') || (!wizardMode && showSection('mdblist'))" :class="wizardMode ? '' : 'grid gap-5 lg:grid-cols-2'">
+      <div v-if="showSection('tmdb')" data-testid="tmdb-connection" :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4 lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0'">
+        <ServiceCardHeader v-if="!wizardMode" icon="fas fa-film" title="TMDB" description="Recommendations, posters and metadata." required :status="getTmdbStatus" :status-text="getTmdbStatusText" />
 
+        <div class="flex min-w-0 flex-col">
         <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
           <label for="tmdbApiKey">API key</label>
           <div class="flex gap-2">
@@ -353,7 +355,7 @@
               class="ui-input"
               :disabled="isLoading"
             />
-            <button @click="showTmdbKey = !showTmdbKey" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+            <button @click="showTmdbKey = !showTmdbKey" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading" :aria-label="showTmdbKey ? 'Hide TMDB API key' : 'Show TMDB API key'">
               <i :class="showTmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
             </button>
           </div>
@@ -364,7 +366,7 @@
 
         <button
           @click="testTmdbConnection"
-          class="ui-btn mt-4"
+          class="ui-btn mt-auto self-start"
           :disabled="isLoading || !localConfig.TMDB_API_KEY || isTmdbTesting"
         >
           <i v-if="isTmdbTesting" class="fas fa-spinner fa-spin"></i>
@@ -372,6 +374,28 @@
           <i v-else class="fas fa-plug"></i>
           {{ isTmdbTesting ? 'Testing…' : (wizardMode && wizardTmdbConnected ? 'Connected ✓' : 'Test connection') }}
         </button>
+        </div>
+      </div>
+
+      <div v-if="!wizardMode && showSection('mdblist')" data-testid="mdblist-connection" class="min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4 lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0">
+        <ServiceCardHeader icon="fas fa-list" title="MDBList" description="Import titles from public lists." :status="getMdblistStatus" :status-text="getMdblistStatusText" />
+        <div class="flex min-w-0 flex-col">
+          <div class="mb-4 flex flex-col gap-1.5 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+            <label for="mdblistApiKey">API key</label>
+            <div class="flex gap-2">
+              <input id="mdblistApiKey" v-model="localConfig.MDBLIST_API_KEY" :type="showMdblistKey ? 'text' : 'password'" autocomplete="off" class="ui-input" :disabled="isLoading" placeholder="Enter your MDBList API key (optional)" />
+              <button @click="showMdblistKey = !showMdblistKey" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading" :aria-label="showMdblistKey ? 'Hide MDBList API key' : 'Show MDBList API key'">
+                <i aria-hidden="true" :class="showMdblistKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+              </button>
+            </div>
+            <small class="text-xs leading-normal text-ink-4">Get one from <a href="https://mdblist.com/preferences/" target="_blank" rel="noopener noreferrer" class="text-brand-ink no-underline hover:underline">MDBList Preferences</a></small>
+          </div>
+          <button type="button" class="ui-btn mt-auto self-start" :disabled="isLoading || !localConfig.MDBLIST_API_KEY || mdblistTesting" @click="testMdblistConnection()">
+            <i aria-hidden="true" :class="mdblistTesting ? 'fas fa-spinner fa-spin' : mdblistConnected ? 'fas fa-check' : 'fas fa-plug'"></i>
+            {{ mdblistTesting ? 'Testing…' : mdblistConnected ? 'Connected' : 'Test connection' }}
+          </button>
+        </div>
+      </div>
       </div>
 
 
@@ -472,13 +496,6 @@
       </div>
     </div>
 
-    <SectionCard v-if="!wizardMode && showSection('mdblist')" title="MDBList" icon="fas fa-list" description="Import missing titles from public lists.">
-      <label for="mdblistApiKey" class="ui-label">API key
-        <input id="mdblistApiKey" v-model="localConfig.MDBLIST_API_KEY" type="password" autocomplete="off" class="ui-input" :disabled="isLoading" placeholder="Enter your MDBList API key" />
-      </label>
-      <p class="mb-0 mt-2 text-xs text-ink-3">Get a key from <a href="https://mdblist.com/preferences/" target="_blank" rel="noopener noreferrer" class="text-brand-ink hover:underline">MDBList Preferences</a>, save, then verify your public list in an Import list job.</p>
-    </SectionCard>
-
     <div v-if="!wizardMode" class="flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-[#18162b] max-lg:bottom-24' : 'border-edge bg-panel'">
       <span class="flex-[1_1_200px] text-sm" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
       <button type="button" class="ui-btn border-0 bg-transparent text-ink-3 hover:text-ink" :disabled="isLoading" @click="resetToDefaults">Reset</button>
@@ -489,18 +506,17 @@
 
 <script>
 import PageHeader from '@/components/ui/PageHeader.vue';
-import SectionCard from '@/components/ui/SectionCard.vue';
 import ServiceCardHeader from './ServiceCardHeader.vue';
 import axios from 'axios';
 import {
   testSeerApi, authenticateUser, fetchRadarrServers, fetchSonarrServers,
   fetchJellyfinLibraries, fetchJellyfinUsers, fetchPlexLibraries, fetchPlexUsers,
-  testOmdbApi, testTmdbApi
+  testOmdbApi, testTmdbApi, testMdblistApi
 } from '@/api/api';
 
 export default {
   name: 'SettingsServices',
-  components: { PageHeader, SectionCard, ServiceCardHeader },
+  components: { PageHeader, ServiceCardHeader },
   props: {
     config: {
       type: Object,
@@ -532,6 +548,7 @@ export default {
       localConfig: {},
       originalConfig: {},
       showTmdbKey: false,
+      showMdblistKey: false,
       showOmdbKey: false,
       showPlexToken: false,
       showJellyfinToken: false,
@@ -543,6 +560,8 @@ export default {
       // OMDb connection test
       omdbTesting: false,
       omdbConnected: false,
+      mdblistTesting: false,
+      mdblistConnected: false,
       // Collapsible sections
       mediaServerAdvancedExpanded: false,
       seerAdvancedExpanded: false,
@@ -675,6 +694,15 @@ export default {
       if (this.localConfig.OMDB_API_KEY) return 'status-warning';
       return 'status-disconnected';
     },
+    getMdblistStatus() {
+      if (this.mdblistConnected) return 'status-connected';
+      return this.localConfig.MDBLIST_API_KEY ? 'status-warning' : 'status-disconnected';
+    },
+    getMdblistStatusText() {
+      if (this.mdblistTesting) return 'Testing…';
+      if (this.mdblistConnected) return 'Connected';
+      return this.localConfig.MDBLIST_API_KEY ? 'Not tested' : 'Not set';
+    },
     getOmdbStatusText() {
       if (this.omdbConnected) return 'Connected';
       if (this.localConfig.OMDB_API_KEY) return 'Not tested';
@@ -792,6 +820,9 @@ export default {
     },
   },
   watch: {
+    'localConfig.MDBLIST_API_KEY'() {
+      this.mdblistConnected = false;
+    },
     config: {
       immediate: true,
       handler(newConfig) {
@@ -878,6 +909,9 @@ export default {
 
       if (this.localConfig.OMDB_API_KEY) {
         tasks.push(this.testOmdbConnection(silent));
+      }
+      if (!this.wizardMode && this.localConfig.MDBLIST_API_KEY) {
+        tasks.push(this.testMdblistConnection(true));
       }
 
       Promise.allSettled(tasks);
@@ -997,6 +1031,24 @@ export default {
         await this.$emit('test-connection', 'tmdb', {
           api_key: this.localConfig.TMDB_API_KEY.trim(),
         });
+      }
+    },
+
+    async testMdblistConnection(silent = false) {
+      const key = this.localConfig.MDBLIST_API_KEY;
+      if (!key || this.mdblistTesting) return;
+      this.mdblistTesting = true;
+      this.mdblistConnected = false;
+      try {
+        await testMdblistApi(key.trim());
+        if (this.localConfig.MDBLIST_API_KEY !== key) return;
+        this.mdblistConnected = true;
+        if (!silent && this.$toast) this.$toast.success('MDBList connection verified!', { position: 'top-right', duration: 3000 });
+      } catch {
+        if (this.localConfig.MDBLIST_API_KEY !== key) return;
+        if (!silent) this._notifyError('Could not connect to MDBList. Check your API key and try again.');
+      } finally {
+        this.mdblistTesting = false;
       }
     },
 
