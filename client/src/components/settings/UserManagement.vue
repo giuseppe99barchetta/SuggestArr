@@ -109,16 +109,15 @@
         </div>
       </SectionCard>
 
-      <SectionCard icon="fas fa-door-open" title="Self-Registration" description="When enabled, anyone with access to the login page can create their own account. New accounts are assigned the user role.">
+      <SectionCard icon="fas fa-door-open" title="Self-Registration">
         <BaseCheckbox
           v-model="localAllowRegistration"
           :disabled="isSavingRegistration"
-          label="Allow self-registration"
+          class="w-full rounded-ctl border border-edge bg-panel-2 px-4 py-3"
+          label="Allow sign-ups"
+          description="Anyone with access to the login page can create a User account."
           @change="saveRegistration"
         />
-        <small class="mt-1 block text-sm leading-snug text-ink-4">
-          Disabled by default. Enable only if you want users to sign up themselves.
-        </small>
       </SectionCard>
 
     </div>
