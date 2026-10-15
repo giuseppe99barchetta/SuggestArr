@@ -5,6 +5,8 @@ from contextlib import AsyncExitStack
 
 from api_service.jobs.discover_automation import ExecutionResult
 from api_service.jobs.trakt_recommendations_automation import TraktRecommendationsAutomation
+from api_service.db.database_manager import DatabaseManager
+from api_service.services.config_service import ConfigService
 from api_service.services.public_lists import PublicListError, build_list_client, normalize_list_item, parse_list_url
 
 
@@ -30,10 +32,24 @@ class ListImportAutomation(TraktRecommendationsAutomation):
     PAGE_SIZE = 100
     SCAN_LIMIT = 1000
 
+    @classmethod
+    async def from_config(cls, data, owner_id, dry_run=False):
+        """Initialize an unsaved list import without creating a job or schedule."""
+        instance = cls()
+        instance.job_data = {**data, 'id': None, 'job_type': 'list_import', 'owner_id': owner_id,
+                             'name': 'One-time list import', 'max_results': 1000}
+        instance.db_manager = DatabaseManager()
+        instance.env_vars = ConfigService.get_runtime_config()
+        await instance._initialize_components(dry_run=dry_run)
+        return instance
+
     async def _initialize_components(self, dry_run=False):
         validate_list_job(self.job_data)
         try:
             await super()._initialize_components(dry_run=dry_run)
+            # List imports always exclude owned/requested titles, regardless of global opt-outs.
+            self.seer_client.exclude_downloaded = True
+            self.seer_client.exclude_requested = True
         except Exception:
             await self._close_clients()
             raise
@@ -53,17 +69,20 @@ class ListImportAutomation(TraktRecommendationsAutomation):
         # Keep the cursor at this candidate on transient TMDb failures.
         return await super()._fetch_tmdb_details(tmdb_id, media_type, raise_on_error=True)
 
-    async def run(self, dry_run=False, execution_id=None):
+    async def run(self, dry_run=False, execution_id=None, start_offset=0, progress=None):
         validate_list_job(self.job_data)
-        original = self.repository.get_job(self.job_id)
-        source_key = hashlib.sha256(json.dumps({
-            'filters': original['filters'], 'media_type': original['media_type'],
-        }, sort_keys=True).encode()).hexdigest()
+        transient = self.job_id is None
+        if not transient:
+            original = self.repository.get_job(self.job_id)
+            source_key = hashlib.sha256(json.dumps({
+                'filters': original['filters'], 'media_type': original['media_type'],
+            }, sort_keys=True).encode()).hexdigest()
         token = None
-        offset = self.repository.list_scan_offset(self.job_id, source_key)
+        offset = start_offset if transient else self.repository.list_scan_offset(self.job_id, source_key)
+        self.next_offset, self.scan_complete = offset, False
         count = scanned = 0
         preview = [] if dry_run else None
-        exec_id = None if dry_run else (execution_id or self.repository.log_execution_start(self.job_id))
+        exec_id = None if dry_run or transient else (execution_id or self.repository.log_execution_start(self.job_id))
         self.seer_client.queue_context['execution_id'] = exec_id
         try:
             async with AsyncExitStack() as stack:
@@ -71,7 +90,7 @@ class ListImportAutomation(TraktRecommendationsAutomation):
                     if client:
                         await stack.enter_async_context(client)
                 await self.trakt_client.public_list_info(self.job_data['filters']['list_url'])
-                if not dry_run:
+                if not dry_run and not transient:
                     token = self.repository.claim_list_scan(self.job_id, source_key)
                     if not token:
                         raise PublicListError('This list job is already running. Try again later.')
@@ -105,14 +124,18 @@ class ListImportAutomation(TraktRecommendationsAutomation):
                         scanned += 1
                         consumed += 1
                         offset += 1
+                        self.next_offset = offset
+                        if progress and not progress(offset, scanned, count):
+                            raise PublicListError('Import is no longer active.')
                         if token and not self.repository.checkpoint_list_scan(
                                 self.job_id, token, offset):
                             raise PublicListError('List job lease expired. Try again later.')
                     # Only reset after consuming the complete final page.
                     if not page or (not more and consumed == len(page)):
                         offset = 0
+                        self.next_offset, self.scan_complete = 0, True
                         break
-                if not dry_run:
+                if not dry_run and not transient:
                     self.repository.log_execution_end(exec_id, 'completed', results_count=scanned, requested_count=count)
                 if self.job_data.get('_replacement_for') is not None and not count and offset:
                     return ExecutionResult(False, scanned, count, error_message='List scan will continue on the next replacement check.')
@@ -120,7 +143,7 @@ class ListImportAutomation(TraktRecommendationsAutomation):
         except Exception as exc:
             message = str(exc) if isinstance(exc, PublicListError) else 'List import failed. Check the server logs.'
             self.logger.error('List import job %s failed (%s).', self.job_id, type(exc).__name__)
-            if not dry_run:
+            if not dry_run and not transient:
                 self.repository.log_execution_end(exec_id, 'failed', results_count=scanned,
                                                   requested_count=count, error_message=message)
             return ExecutionResult(False, scanned, count, error_message=message, dry_run_items=preview)
@@ -139,6 +162,8 @@ class ListImportAutomation(TraktRecommendationsAutomation):
             if cursor.fetchone():
                 return False
         if self.db_manager.is_suggestion_blacklisted(tmdb_id, kind):
+            return False
+        if self.job_id is None and self.db_manager.should_skip_feedback(self.job_data.get('owner_id'), tmdb_id, kind, None):
             return False
         if self.db_manager._automated_submission_skip_reason(self.job_id, self.job_data.get('owner_id'), tmdb_id, kind, None):
             return False

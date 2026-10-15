@@ -6,8 +6,8 @@
       <header class="flex shrink-0 items-start gap-3 border-b border-edge px-6 py-4 max-sm:px-4">
         <span aria-hidden="true" class="grid h-9 w-9 shrink-0 place-items-center rounded-ctl bg-brand-soft text-sm text-brand-ink"><i :class="jobTypeInfoIcon"></i></span>
         <div class="min-w-0 flex-1 self-center">
-          <h2 id="job-modal-title" class="m-0 text-base font-bold text-ink">{{ isEditing ? 'Edit job' : 'New job' }}</h2>
-          <p class="m-0 mt-0.5 text-[13px] text-ink-3">{{ isEditing ? form.name : 'Pick what to look for, when, and how it reaches Seer.' }}</p>
+          <h2 id="job-modal-title" class="m-0 text-base font-bold text-ink">{{ oneTime ? 'Import list once' : isEditing ? 'Edit job' : 'New job' }}</h2>
+          <p class="m-0 mt-0.5 text-[13px] text-ink-3">{{ oneTime ? 'Import all matching titles without creating a scheduled job.' : isEditing ? form.name : 'Pick what to look for, when, and how it reaches Seer.' }}</p>
         </div>
         <button type="button" class="-mr-2 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" aria-label="Close" @click="$emit('close')">
           <i aria-hidden="true" class="fas fa-times"></i>
@@ -17,7 +17,7 @@
       <form @submit.prevent="handleSubmit" class="flex min-h-0 flex-1 flex-col">
         <div class="min-h-0 flex-1 overflow-y-auto p-6 max-sm:p-4 [&_h4]:m-0 [&_h4]:mb-3 [&_h4]:text-[11px] [&_h4]:font-bold [&_h4]:uppercase [&_h4]:tracking-[0.08em] [&_h4]:text-ink-4">
           <!-- Job Type Selector -->
-          <div class="mb-7" data-tour-id="job-modal-type-selector">
+          <div v-if="!oneTime" class="mb-7" data-tour-id="job-modal-type-selector">
             <h4>Job type</h4>
             <div class="grid gap-2 md:grid-cols-2">
               <button
@@ -52,7 +52,7 @@
           <div class="mb-7 flex flex-col gap-4" data-tour-id="job-modal-basic-info">
             <h4 class="mb-0!">Basics</h4>
 
-            <label class="ui-label" for="jobName">
+            <label v-if="!oneTime" class="ui-label" for="jobName">
               Name
               <input
                 id="jobName"
@@ -106,9 +106,10 @@
             <label class="ui-label" for="listUrl">List URL
               <input id="listUrl" v-model="form.filters.list_url" type="url" required class="ui-input" placeholder="https://mdblist.com/lists/username/list-name" @input="listCheckMessage = ''" />
             </label>
-            <p class="m-0 text-xs text-ink-3">Public lists only. Existing list entries are imported gradually; requests are credited to this job's owner when using a mapped Seer user.</p>
+            <p class="m-0 text-xs text-ink-3">{{ oneTime ? 'All matching titles are checked and queued in the background. Titles already in your library, requested or queued are skipped.' : 'Public lists only. Existing list entries are imported gradually; requests are credited to this job’s owner when using a mapped Seer user.' }}</p>
             <div class="flex flex-wrap items-center gap-3">
               <button type="button" class="ui-btn" :disabled="listChecking || !form.filters.list_provider || !form.filters.list_url" @click="verifyList">{{ listChecking ? 'Checking…' : 'Verify list' }}</button>
+              <button type="button" class="ui-btn" :disabled="listPreviewLoading || !form.filters.list_provider || !form.filters.list_url" @click="previewList()"><i aria-hidden="true" :class="listPreviewLoading ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>{{ listPreviewLoading ? 'Loading…' : 'Preview list' }}</button>
               <span v-if="listCheckMessage" role="status" class="min-w-0 break-words text-sm" :class="listCheckSuccess ? 'text-good' : 'text-bad'">{{ listCheckMessage }}</span>
             </div>
           </div>
@@ -140,7 +141,7 @@
             </div>
           </div>
 
-          <div class="mb-7" data-tour-id="job-modal-schedule">
+          <div v-if="!oneTime" class="mb-7" data-tour-id="job-modal-schedule">
             <h4>Schedule</h4>
             <SchedulePicker v-model="schedule" />
             <div class="mt-4 grid gap-4">
@@ -197,7 +198,7 @@
           >
             <div v-if="showAdvanced" class="border-t border-edge pt-5 pb-4">
               <!-- Max Results -->
-              <div v-if="form.job_type !== 'recommendation'" class="mb-7" data-tour-id="job-modal-max-results">
+              <div v-if="!oneTime && form.job_type !== 'recommendation'" class="mb-7" data-tour-id="job-modal-max-results">
                 <h4>Results</h4>
                 <label class="ui-label" for="maxResults">
                   Max results: {{ form.max_results }}
@@ -233,13 +234,14 @@
           <button type="button" class="ui-btn" @click="$emit('close')">Cancel</button>
           <button type="submit" class="ui-btn-primary" :disabled="!isValid || isSaving">
             <i v-if="isSaving" aria-hidden="true" class="fas fa-spinner fa-spin"></i>
-            {{ isEditing ? 'Save job' : 'Create job' }}
+            {{ oneTime ? 'Import entire list' : isEditing ? 'Save job' : 'Create job' }}
           </button>
         </footer>
       </form>
       </div>
     </div>
   </Teleport>
+  <DryRunResultModal v-if="listPreview" :job="{ name: 'List preview' }" :items="listPreview.items" run-label="" :has-more="listPreview.has_more" :loading-more="listPreviewLoading" @more="previewList(true)" @close="listPreview = null" />
 </template>
 
 <script>
@@ -247,6 +249,7 @@ import JobFilters from './JobFilters.vue';
 import RecommendationFilters from './RecommendationFilters.vue';
 import TraktRecommendationFilters from './TraktRecommendationFilters.vue';
 import SchedulePicker from './SchedulePicker.vue';
+import DryRunResultModal from './DryRunResultModal.vue';
 import { jobsApi } from '@/api/jobsApi';
 import { listTraktJobUsers } from '@/api/api';
 import { waitForAuthReady, useAuth } from '@/composables/useAuth';
@@ -262,10 +265,12 @@ export default {
     RecommendationFilters,
     TraktRecommendationFilters,
     SchedulePicker,
+    DryRunResultModal,
     BaseCheckbox,
     BaseDropdown
   },
   props: {
+    oneTime: { type: Boolean, default: false },
     job: {
       type: Object,
       default: null
@@ -277,9 +282,9 @@ export default {
     return {
       connectedUsers: [],
       form: {
-        name: '',
-        job_type: 'discover',
-        media_type: 'movie',
+        name: this.oneTime ? 'One-time list import' : '',
+        job_type: this.oneTime ? 'list_import' : 'discover',
+        media_type: this.oneTime ? 'both' : 'movie',
         max_results: 20,
         filters: {},
         user_ids: [],
@@ -321,6 +326,8 @@ export default {
       llmConfigured: false,
       listProviders: [{ value: 'mdblist', label: 'MDBList' }, { value: 'trakt', label: 'Trakt' }],
       listChecking: false,
+      listPreview: null,
+      listPreviewLoading: false,
       listCheckMessage: '',
       listCheckSuccess: false,
       traktConfigured: false,
@@ -456,6 +463,39 @@ export default {
     } catch { /* Seer defaults remain available. */ }
   },
   methods: {
+    listConfig() {
+      return {
+        filters: this.form.filters,
+        media_type: this.form.media_type,
+        delivery_mode: this.form.delivery_mode,
+        seer_identity_mode: this.form.seer_identity_mode,
+        request_profiles: Object.fromEntries(Object.entries(this.form.request_profiles).map(([type, profile]) => [type,
+          profile.serverId !== '' && profile.serverId != null && profile.profileId !== '' && profile.profileId != null && profile.rootFolder ? {
+            serverId: Number(profile.serverId), profileId: Number(profile.profileId), rootFolder: profile.rootFolder,
+            is4k: profile.is4k === true,
+            ...(profile.languageProfileId !== '' && profile.languageProfileId != null ? { languageProfileId: Number(profile.languageProfileId) } : {})
+          } : {}
+        ]))
+      };
+    },
+    async previewList(more = false) {
+      this.listPreviewLoading = true;
+      this.listCheckMessage = '';
+      const config = JSON.parse(JSON.stringify(this.listConfig()));
+      try {
+        const response = await jobsApi.previewList(config, more ? this.listPreview.next_offset : 0);
+        if (JSON.stringify(config) !== JSON.stringify(this.listConfig())) return;
+        const previous = more && this.listPreview ? this.listPreview.items : [];
+        const items = [...new Map([...previous, ...(response.items || [])].map(item => [`${item.media_type}:${item.tmdb_id}`, item])).values()];
+        this.listPreview = { ...response, items };
+      } catch (error) {
+        this.listCheckSuccess = false;
+        this.listCheckMessage = error.response?.data?.message || 'Could not preview the list.';
+        this.listPreview = null;
+      } finally {
+        this.listPreviewLoading = false;
+      }
+    },
     async verifyList() {
       const source = { list_provider: this.form.filters.list_provider, list_url: this.form.filters.list_url };
       this.listChecking = true;
@@ -533,6 +573,11 @@ export default {
     },
     async handleSubmit() {
       if (!this.isValid) return;
+
+      if (this.oneTime) {
+        this.$emit('save', this.listConfig());
+        return;
+      }
 
       this.isSaving = true;
       try {
