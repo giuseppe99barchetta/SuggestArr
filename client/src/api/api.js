@@ -246,3 +246,7 @@ export const getWebhookSettings = () => axios.get('/api/v1/webhooks/settings');
 export const updateWebhookSettings = (allowed_hosts) => axios.put('/api/v1/webhooks/settings', { allowed_hosts });
 export const getWebhookDeliveries = () => axios.get('/api/v1/webhooks/deliveries');
 export const retryWebhookDelivery = (id) => axios.post(`/api/v1/webhooks/deliveries/${id}/retry`);
+
+// Seerr pending-request expiry (admin only)
+export const runRequestExpiry = (dry_run) => axios.post('/api/automation/requests/expiry/run', { dry_run });
+export const getRequestExpiryLog = (limit = 100) => axios.get('/api/automation/requests/expiry/log', { params: { limit } });

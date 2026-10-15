@@ -159,7 +159,23 @@ class SchemaManager:
                     decided_by INTEGER,
                     last_error TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    seer_request_id INTEGER,
+                    seer_created_at TIMESTAMP NULL,
+                    seer_instance TEXT,
                     UNIQUE(tmdb_id, media_type)
+                )
+            """,
+            'request_expiry_log': """
+                CREATE TABLE IF NOT EXISTS request_expiry_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    delivery_id INTEGER NOT NULL,
+                    seer_request_id INTEGER NOT NULL,
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    dry_run INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """,
             'api_keys': """
@@ -414,6 +430,7 @@ class SchemaManager:
         # Add missing columns
         self.add_missing_columns()
         self._migrate_execution_history()
+        self._migrate_request_expiry()
         self._migrate_suggestion_feedback()
         self._widen_mysql_overview_columns()
         self._create_api_key_indexes()
@@ -461,6 +478,28 @@ class SchemaManager:
                 conn.commit()
         except Exception as exc:
             raise DatabaseError(error=f"Execution-history migration failed: {exc}", db_type=self.db_type) from exc
+
+    def _migrate_request_expiry(self):
+        """Older deliveries remain untracked; never infer their remote identity."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type == 'sqlite':
+                cursor.execute('PRAGMA table_info(pending_requests)')
+                existing = {row[1] for row in cursor.fetchall()}
+            elif self.db_type == 'postgres':
+                cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='pending_requests'")
+                existing = {row[0] for row in cursor.fetchall()}
+            else:
+                cursor.execute('SHOW COLUMNS FROM pending_requests')
+                existing = {row[0] for row in cursor.fetchall()}
+            for name, kind in {
+                'seer_request_id': 'INTEGER',
+                'seer_created_at': 'TIMESTAMP(6) NULL' if self.db_type in ('mysql', 'mariadb') else 'TIMESTAMP NULL',
+                'seer_instance': 'TEXT',
+            }.items():
+                if name not in existing:
+                    cursor.execute(f'ALTER TABLE pending_requests ADD COLUMN {name} {kind}')
+            conn.commit()
 
     def _migrate_suggestion_feedback(self):
         """Add the title/year columns feedback needs to reach the recommendation prompt.
@@ -651,6 +690,11 @@ class SchemaManager:
             query = query.replace("INTEGER", "INT")
             query = query.replace("TEXT", "VARCHAR(512)")
             query = query.replace("REAL", "DOUBLE")
+
+            if table_name == 'pending_requests':
+                # Identity comparisons require the exact timestamp returned by Seer.
+                query = query.replace('seer_created_at TIMESTAMP NULL', 'seer_created_at TIMESTAMP(6) NULL')
+                query = query.replace('seer_instance VARCHAR(512)', 'seer_instance TEXT')
 
             # Overviews are free text; TMDb ones regularly exceed 512 characters.
             if table_name in ('metadata', 'metadata_translations'):

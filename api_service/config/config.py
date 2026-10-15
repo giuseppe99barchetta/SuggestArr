@@ -236,6 +236,8 @@ def get_default_values():
         'TMDB_LANGUAGE': lambda: 'en',
         'PAUSE_JOBS_WITH_PENDING_APPROVALS': lambda: False,
         'AUTO_REJECT_APPROVAL_DAYS': lambda: 0,
+        'SEER_AUTO_DECLINE_DAYS': lambda: 0,
+        'SEER_AUTO_DECLINE_DRY_RUN': lambda: True,
         # Database connection pool settings
         'DB_MIN_CONNECTIONS': lambda: '2',
         'DB_MAX_CONNECTIONS': lambda: '10',
@@ -264,11 +266,20 @@ def get_config_values():
     logger.debug(f"Resolved configuration values: {resolved_values}")
     return resolved_values
 
+def validate_seer_expiry_settings(config_data):
+    days = config_data.get('SEER_AUTO_DECLINE_DAYS', 0)
+    if type(days) is not int or not 0 <= days <= 365:
+        raise ValueError('SEER_AUTO_DECLINE_DAYS must be an integer between 0 and 365')
+    if not isinstance(config_data.get('SEER_AUTO_DECLINE_DRY_RUN', True), bool):
+        raise ValueError('SEER_AUTO_DECLINE_DRY_RUN must be a boolean')
+
+
 def save_env_vars(config_data):
     """
     Save environment variables from the web interface to the config.yaml file.
     Also validates cron times and updates them if needed.
     """
+    validate_seer_expiry_settings(config_data)
     logger.debug("Saving environment variables to config.yaml")
     cron_times = config_data.get('CRON_TIMES', '0 0 * * *')
 
@@ -356,6 +367,7 @@ def get_config_sections():
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
                      'ENABLE_API_CACHING', 'REQUIRE_REQUEST_APPROVAL', 'REQUEST_VISIBILITY', 'TMDB_LANGUAGE',
                      'PAUSE_JOBS_WITH_PENDING_APPROVALS', 'AUTO_REJECT_APPROVAL_DAYS',
+                     'SEER_AUTO_DECLINE_DAYS', 'SEER_AUTO_DECLINE_DRY_RUN',
                      'OPENAI_API_KEY', 'OPENAI_BASE_URL',
                      'LLM_MODEL', 'LLM_TEMPERATURE', 'LLM_REASONING_EFFORT', 'SEARXNG_BASE_URL',
                      'SUBPATH', 'ALLOW_REGISTRATION',

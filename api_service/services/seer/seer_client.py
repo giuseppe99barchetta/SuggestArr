@@ -1,5 +1,7 @@
 import aiohttp
 import asyncio
+from datetime import datetime, timezone
+from urllib.parse import urlsplit, urlunsplit
 from typing import Dict, List, Set
 from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
@@ -15,6 +17,30 @@ MEDIA_PAGE_SIZE = 100  # Number of media items fetched per page when loading ava
 # 4 = PARTIALLY_AVAILABLE, 5 = AVAILABLE (same values in Overseerr and Jellyseerr).
 # Seer tracks regular and 4K availability separately (status / status4k).
 AVAILABLE_MEDIA_STATUSES = {4, 5}
+
+
+def normalize_seer_url(url):
+    """Bind remote request IDs to the configured instance, without credentials."""
+    parts = urlsplit(url.strip())
+    if parts.scheme.lower() not in ('http', 'https') or not parts.hostname or parts.username or parts.password:
+        raise ValueError('Invalid Seer base URL')
+    host = parts.hostname.lower()
+    if ':' in host:
+        host = f'[{host}]'
+    port = parts.port
+    if port and (parts.scheme.lower(), port) not in (('http', 80), ('https', 443)):
+        host += f':{port}'
+    if parts.query or parts.fragment:
+        raise ValueError('Invalid Seer base URL')
+    return urlunsplit((parts.scheme.lower(), host, parts.path.rstrip('/'), '', ''))
+
+
+def parse_seer_timestamp(value):
+    """Parse remote ISO timestamps as naive UTC for all database adapters."""
+    parsed = value if isinstance(value, datetime) else datetime.fromisoformat(value.replace('Z', '+00:00'))
+    if parsed.tzinfo is None:
+        return parsed
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class SeerPermissionError(Exception):
@@ -515,7 +541,7 @@ class SeerClient(BaseHTTPClient):
             self.logger.info("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)
         return enqueued
 
-    async def submit_queued_request(self, payload: dict) -> bool:
+    async def submit_queued_request(self, payload: dict):
         """Perform the actual HTTP submission to Seer for a single queue row.
 
         Called by the queue worker.  Strips private meta-keys before sending.
@@ -524,7 +550,7 @@ class SeerClient(BaseHTTPClient):
         absent or ``None``.
 
         :param payload: The JSON-decoded payload stored in pending_requests.
-        :return: True on HTTP success, False on any failure.
+        :return: The Seer response on success, False on failure.
         """
         # Build clean Seer body (drop private meta-keys)
         data = {k: v for k, v in payload.items() if not k.startswith('_')}
@@ -591,7 +617,7 @@ class SeerClient(BaseHTTPClient):
             return False
         if response and 'error' not in response:
             self.logger.debug("Seer submission successful: %s", response)
-            return True
+            return response
 
         self.logger.error(
             "Jellyseerr request failed for %s tmdb:%s | "
@@ -644,6 +670,22 @@ class SeerClient(BaseHTTPClient):
             self.logger.info("Skipping check for already requested media.")
         
         return False
+
+    async def request_expiry_action(self, request_id, *, decline=False):
+        """Use admin API-key auth and retain statuses needed for safe expiry decisions."""
+        endpoint = f'api/v1/request/{int(request_id)}' + ('/decline' if decline else '')
+        headers, cookies = self._get_auth_headers(False)
+        session = await self._get_session()
+        try:
+            async with session.request(
+                'POST' if decline else 'GET', f'{self.api_url}/{endpoint}',
+                headers=headers, cookies=cookies, timeout=self.REQUEST_TIMEOUT,
+                allow_redirects=False,
+            ) as response:
+                data = await response.json() if response.status == 200 else None
+                return response.status, data
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+            return 0, None
 
     async def check_requests_exist_batch(self, media_type: str, tmdb_ids: List[str]) -> Set[str]:
         """Check which of the provided TMDB IDs already have requests in the database."""

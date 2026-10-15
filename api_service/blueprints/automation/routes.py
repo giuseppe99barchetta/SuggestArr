@@ -14,6 +14,8 @@ from api_service.utils.request_profiles import (
 )
 from api_service.utils import request_scope
 from api_service.services.tmdb.localization import display_language, localize_groups
+from api_service.jobs.request_expiry import execute_request_expiry
+from api_service.utils.asyncio_loop import run_coroutine_sync
 
 logger = LoggerManager().get_logger("AutomationRoute")
 automation_bp = Blueprint('automation', __name__)
@@ -23,6 +25,41 @@ _force_run_running = False
 _FEEDBACK_VALUES = {'interested', 'not_interested', 'already_seen', 'seen_liked',
                     'seen_disliked', 'too_similar', 'save_for_later'}
 _FEEDBACK_REASONS = {'genre', 'provider', 'content', 'title', 'other'}
+
+
+@automation_bp.route('/requests/expiry/run', methods=['POST'])
+@require_role('admin')
+@limiter.limit('5 per minute')
+def run_request_expiry_now():
+    data = request.get_json(silent=True)
+    if data is None:
+        if request.data:
+            return jsonify({'status': 'error', 'message': 'Expected a JSON object'}), 400
+        data = {}
+    if not isinstance(data, dict) or ('dry_run' in data and not isinstance(data['dry_run'], bool)):
+        return jsonify({'status': 'error', 'message': 'dry_run must be a boolean'}), 400
+    try:
+        result = run_coroutine_sync(execute_request_expiry(dry_run=data.get('dry_run')), logger)
+        if result['status'] == 'already_running':
+            return jsonify({'status': 'error', 'message': 'Request expiry is already running'}), 409
+        return jsonify({'status': 'success', 'result': result}), 200
+    except Exception:
+        logger.error('Manual request expiry failed', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Request expiry failed'}), 500
+
+
+@automation_bp.route('/requests/expiry/log', methods=['GET'])
+@require_role('admin')
+def request_expiry_log():
+    try:
+        limit = max(1, min(500, int(request.args.get('limit', 100))))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'limit must be an integer'}), 400
+    try:
+        return jsonify({'status': 'success', 'log': DatabaseManager().get_request_expiry_log(limit)}), 200
+    except Exception:
+        logger.error('Request expiry log failed', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Unable to fetch request expiry log'}), 500
 
 
 def _feedback_payload():

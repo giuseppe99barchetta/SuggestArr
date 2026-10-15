@@ -144,6 +144,8 @@ def save_config():
         _sync_integrations_from_flat(db, config_data)
         db.refresh_config()
         return jsonify({'message': 'Configuration saved successfully!', 'status': 'success'}), 200
+    except ValueError as e:
+        return jsonify({'message': str(e), 'status': 'error'}), 400
     except Exception as e:
         logger.error(f'Error saving configuration: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error saving configuration', 'status': 'error'}), 500

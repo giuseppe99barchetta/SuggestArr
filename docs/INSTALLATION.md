@@ -381,6 +381,22 @@ Recommendation jobs can use linked Trakt accounts:
 
 If no linked Trakt accounts exist, job filters will warn that Trakt is not usable yet. Media-server history still works without Trakt.
 
+## Auto-decline pending Seerr requests
+
+Open **Approvals -> Seerr pending requests**:
+
+1. Set **Auto-decline after (days)** to an integer from 1 to 365. `0` disables both scheduled and manual expiry.
+2. Keep **Preview only (dry-run)** enabled, save, and select **Preview now** to review the audit log.
+3. To enable real declines, disable preview-only mode and save. The daily run at 04:30 server time now applies declines; **Decline expired requests** runs it immediately. Expand **Activity log** to inspect the results or refresh the log.
+
+These settings are independent of approval inside SuggestArr. They use `SEER_AUTO_DECLINE_DAYS` (default `0`) and `SEER_AUTO_DECLINE_DRY_RUN` (default `true`) in the runtime configuration. Preview always reads the saved settings, so save pending changes before running it.
+
+Only requests sent after installing this version are tracked. SuggestArr saves the exact remote request ID, creation timestamp, and Seerr base URL even when expiry is disabled. It does not infer identities for older requests. Each pass verifies the current remote identity and pending status before declining; changing the configured Seerr URL excludes requests tracked for the previous URL. Age is measured in UTC from creation in Seerr, not generation of the suggestion in SuggestArr.
+
+The Seerr API key must have `MANAGE_REQUESTS` or `ADMIN` permissions. Requests already approved, declined or removed are skipped. Failures are logged and retried on a later pass; no media files are deleted. Local request history remains in place to prevent immediate resubmission.
+
+Admins can also use `POST /api/automation/requests/expiry/run` with an optional boolean `dry_run`, and `GET /api/automation/requests/expiry/log?limit=100` (maximum 500 entries). Concurrent runs return `409`; manual runs are limited to five per minute. The run returns candidate, simulated, declined, skipped and error counts. The log records delivery/Seerr/TMDb IDs, media type, time, mode, outcome and reason.
+
 ## Cleanup Automation
 
 Cleanup Automation removes old SuggestArr-originated requests and their media files when users did not mark the item as a favorite in the configured media server.
