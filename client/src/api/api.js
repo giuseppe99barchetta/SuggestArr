@@ -250,3 +250,5 @@ export const retryWebhookDelivery = (id) => axios.post(`/api/v1/webhooks/deliver
 // Seerr pending-request expiry (admin only)
 export const runRequestExpiry = (dry_run) => axios.post('/api/automation/requests/expiry/run', { dry_run });
 export const getRequestExpiryLog = (limit = 100) => axios.get('/api/automation/requests/expiry/log', { params: { limit } });
+export const runRequestReplacements = () => axios.post('/api/automation/requests/replacements/run');
+export const getRequestReplacementLog = () => axios.get('/api/automation/requests/replacements/log');

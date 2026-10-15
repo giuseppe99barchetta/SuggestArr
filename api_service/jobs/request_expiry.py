@@ -68,6 +68,8 @@ async def execute_request_expiry(*, dry_run=None):
                     elif dry_run:
                         action, reason = 'simulated', f'Would decline: pending for more than {days} days'
                     else:
+                        # Persist intent before the remote mutation, including crash recovery.
+                        db.add_request_expiry_log(item, 'decline_requested', 'Automatic expiry decline requested', False)
                         status, remote = await seer.request_expiry_action(item['seer_request_id'], decline=True)
                         if status == 200 and _matches_request(item, remote) and remote.get('status') in (3, '3'):
                             action, reason = 'declined', f'Automatically declined after {days} days'

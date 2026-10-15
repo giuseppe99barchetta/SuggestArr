@@ -405,6 +405,12 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           <p class="m-0 mt-auto pt-3 text-xs leading-relaxed text-ink-4">Checked daily at 04:30 server time. Only new SuggestArr deliveries are tracked; media files stay untouched.</p>
         </SectionCard>
 
+        <SectionCard icon="fas fa-sync-alt" title="Replace rejected requests" description="Offer an alternative when a request is declined in Seerr or Overseerr." class="xl:col-span-2">
+          <BaseCheckbox v-model="localConfig.REPLACE_REJECTED_REQUESTS" label="Generate an alternative after rejection" description="Try one new title using the same job, user and media type. Approval rules still apply." :disabled="isLoading" />
+          <RequestReplacementControls :enabled="originalConfig.REPLACE_REJECTED_REQUESTS" :disabled="isLoading || hasChanges" />
+          <p class="m-0 mt-3 text-xs leading-relaxed text-ink-4">Checked every 15 minutes for tracked SuggestArr requests. Deleted requests and automatic expiry declines do not trigger alternatives. Disabled or paused jobs wait.</p>
+        </SectionCard>
+
         <SectionCard icon="fas fa-eye" title="Who sees what" description="Choose request visibility and the default title language." class="xl:col-span-2">
           <fieldset class="m-0 min-w-0 border-0 p-0">
             <legend class="mb-2 p-0 text-[13px] font-semibold text-ink-2">Request visibility</legend>
@@ -459,6 +465,7 @@ import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import { languageOptions } from '@/utils/titleLanguage.js';
 import RequestExpiryControls from './RequestExpiryControls.vue';
+import RequestReplacementControls from './RequestReplacementControls.vue';
 
 export default {
   name: 'SettingsAdvanced',
@@ -466,6 +473,7 @@ export default {
     BaseDropdown,
     BaseCheckbox,
     RequestExpiryControls,
+    RequestReplacementControls,
   },
   props: {
     // Which part of the former Advanced page to show: 'ai', 'workflow' or 'system'.
@@ -556,6 +564,7 @@ export default {
   watch: {
     config: {
       immediate: true,
+      deep: true,
       handler(newConfig) {
         this.localConfig = { ...newConfig };
         if (this.localConfig.LLM_TEMPERATURE === 'unset') {
@@ -587,6 +596,7 @@ export default {
           AUTO_REJECT_APPROVAL_DAYS: 0,
           SEER_AUTO_DECLINE_DAYS: 0,
           SEER_AUTO_DECLINE_DRY_RUN: true,
+          REPLACE_REJECTED_REQUESTS: false,
           ENABLE_ADVANCED_ALGORITHM: false,
           OPENAI_API_KEY: '',
           OPENAI_BASE_URL: '',
@@ -804,6 +814,7 @@ export default {
             AUTO_REJECT_APPROVAL_DAYS: Math.max(0, Number(this.localConfig.AUTO_REJECT_APPROVAL_DAYS) || 0),
             SEER_AUTO_DECLINE_DAYS: this.localConfig.SEER_AUTO_DECLINE_DAYS,
             SEER_AUTO_DECLINE_DRY_RUN: this.localConfig.SEER_AUTO_DECLINE_DRY_RUN,
+            REPLACE_REJECTED_REQUESTS: this.localConfig.REPLACE_REJECTED_REQUESTS === true,
             ENABLE_ADVANCED_ALGORITHM: this.localConfig.ENABLE_ADVANCED_ALGORITHM || false,
             OPENAI_API_KEY: this.localConfig.OPENAI_API_KEY || '',
             OPENAI_BASE_URL: this.localConfig.OPENAI_BASE_URL || '',
@@ -821,8 +832,6 @@ export default {
             SUBPATH: this.localConfig.SUBPATH || null,
           },
         });
-
-        this.originalConfig = { ...this.localConfig };
 
         if (this.section === 'ai' && this.hasAiProvider) this.testLlmConnection();
       } catch (error) {

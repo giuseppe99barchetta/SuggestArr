@@ -265,6 +265,47 @@ class JobManager:
         finally:
             observe_job(job_type, outcome, time.monotonic() - started_at)
 
+    async def execute_replacement(self, item):
+        """Run one alternative within the originating job's current scope and gates."""
+        job = self.repository.get_job(item['job_id'])
+        if not job:
+            return 'ignored', 'Originating job no longer exists'
+        if not job.get('enabled'):
+            return 'pending', 'Originating job is disabled'
+        if job.get('owner_id') is not None and job['owner_id'] != item['owner_id']:
+            return 'ignored', 'Job ownership changed'
+        if job.get('media_type') not in ('both', item['media_type']):
+            return 'ignored', 'Media type is no longer enabled in the job'
+        job_type = job.get('job_type', 'discover')
+        user_id = item['user_id']
+        if job_type != 'discover':
+            if user_id is None:
+                return 'ignored', 'Original media user is unknown'
+            selected = {str(user.get('id') if isinstance(user, dict) else user) for user in job.get('user_ids') or []}
+            if selected and str(user_id) not in selected:
+                return 'ignored', 'User is no longer selected in the job'
+        overrides = {'media_type': item['media_type'], 'max_results': 1,
+                     'owner_id': item['owner_id'], '_replacement_for': item['delivery_id']}
+        if job_type != 'discover':
+            overrides['user_ids'] = [str(user_id)]
+        scoped_job = {**job, **overrides}
+        if (self._should_pause_for_suggestarr_approvals(scoped_job) or
+                await self._should_pause_for_pending_requests(scoped_job)):
+            return 'pending', 'Job is paused for pending approvals'
+        if job_type != 'discover' and scoped_job.get('prevent_suggestions_if_unwatched'):
+            from api_service.jobs.unwatched_suggestion_gate import UnwatchedSuggestionGate
+            if await UnwatchedSuggestionGate().allowed_slices(scoped_job) == []:
+                return 'pending', 'Job is paused for unwatched suggestions'
+        executor = self._job_executors.get(job_type)
+        if executor is None:
+            return 'ignored', 'Job type is not supported'
+        result = await executor(item['job_id'], overrides=overrides)
+        if not result.success:
+            return 'pending', 'Alternative generation failed; will retry'
+        if result.requested_count:
+            return 'queued', 'Alternative queued'
+        return 'exhausted', 'No alternative matched the current job filters'
+
     def _queue_webhook(self, event, job_id, job_type, execution_id, reason=None):
         payload = {"job_id": job_id, "job_type": job_type, "execution_id": execution_id}
         if reason:

@@ -15,6 +15,7 @@ from api_service.utils.request_profiles import (
 from api_service.utils import request_scope
 from api_service.services.tmdb.localization import display_language, localize_groups
 from api_service.jobs.request_expiry import execute_request_expiry
+from api_service.jobs.request_replacement import execute_request_replacements
 from api_service.utils.asyncio_loop import run_coroutine_sync
 
 logger = LoggerManager().get_logger("AutomationRoute")
@@ -60,6 +61,34 @@ def request_expiry_log():
     except Exception:
         logger.error('Request expiry log failed', exc_info=True)
         return jsonify({'status': 'error', 'message': 'Unable to fetch request expiry log'}), 500
+
+
+@automation_bp.route('/requests/replacements/run', methods=['POST'])
+@require_role('admin')
+@limiter.limit('5 per minute')
+def run_request_replacements_now():
+    try:
+        result = run_coroutine_sync(execute_request_replacements(), logger)
+        if result['status'] == 'already_running':
+            return jsonify({'status': 'error', 'message': 'A request check is already running'}), 409
+        return jsonify({'status': 'success', 'result': result}), 200
+    except Exception:
+        logger.error('Manual replacement check failed', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Replacement check failed'}), 500
+
+
+@automation_bp.route('/requests/replacements/log', methods=['GET'])
+@require_role('admin')
+def request_replacement_log():
+    try:
+        limit = max(1, min(500, int(request.args.get('limit', 100))))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'limit must be an integer'}), 400
+    try:
+        return jsonify({'status': 'success', 'log': DatabaseManager().get_request_replacement_log(limit)}), 200
+    except Exception:
+        logger.error('Request replacement log failed', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Unable to fetch replacement log'}), 500
 
 
 def _feedback_payload():

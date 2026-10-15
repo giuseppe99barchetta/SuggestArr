@@ -43,6 +43,9 @@ class UnwatchedSuggestionGate:
             row = cursor.fetchone()
             reset_at = row[0] if row else None
             query = f"SELECT tmdb_request_id, requested_at FROM requests WHERE requested_by='SuggestArr' AND user_id={ph} AND media_type={ph}"
+            query += (" AND NOT EXISTS (SELECT 1 FROM pending_requests p JOIN request_replacements r "
+                      "ON r.delivery_id=p.id WHERE p.tmdb_id=requests.tmdb_request_id "
+                      "AND p.media_type=requests.media_type AND r.remote_status=3)")
             params = [user_id, media_type]
             if reset_at:
                 query += f" AND requested_at > {ph}"
