@@ -68,7 +68,7 @@
             <span v-else class="wizard-step-count is-optional">
               Optional {{ currentOptionalIndex + 1 }} of {{ optionalSteps.length }}
             </span>
-            <button @click="showLogs = true" class="btn-icon" title="View Logs">
+            <button @click="showLogs = true" class="btn-icon" title="View Logs" aria-label="View Logs">
               <i class="fas fa-clipboard-list"></i>
             </button>
           </div>

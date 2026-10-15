@@ -26,8 +26,8 @@ configured number of days. The pause behavior can be overridden per job.
 ## Features
 - **Multi-Media Server Support**: Supports Jellyfin, Plex, and Emby for retrieving media content.
 - **TMDb Integration**: Searches for similar movies and TV shows on TMDb.
-- **AI-Powered Recommendations** *(beta)*: Uses any OpenAI-compatible LLM (OpenAI, Ollama, Gemini, LiteLLM…) to generate hyper-personalized suggestions based on watch history, complete with AI reasoning for each pick.
-- **AI Search** *(beta)*: Describe in natural language what you want to watch and let the AI find matching titles, personalised to your viewing history, with one-click request to Seer.
+- **AI-Powered Recommendations**: Uses any OpenAI-compatible LLM (OpenAI, Ollama, Gemini, LiteLLM…) to generate hyper-personalized suggestions based on watch history, complete with AI reasoning for each pick.
+- **AI Search**: Describe in natural language what you want to watch and let the AI find matching titles, personalised to your viewing history, with one-click request to Seer.
 - **Trakt Watch History**: Let each user link their own Trakt account. SuggestArr can use Trakt recent watches as recommendation seeds and skip content already watched on Trakt.
 - **Imported Watch History**: Add CSV or manually searched TMDb titles with optional 0–10 ratings to personalise recommendations even after media has been removed from a server. See [the import format](docs/WATCH_HISTORY_IMPORT.md).
 - **Automated Requests**: Sends download requests for recommended content to Seer.
@@ -152,7 +152,7 @@ It looks at requests created by SuggestArr, waits for the configured grace perio
 
 Cleanup is off by default and starts safely in dry-run mode. Always run dry-run first and review the audit log before enabling real deletions.
 
-## AI-Powered Recommendations (Beta)
+## AI-Powered Recommendations
 
 SuggestArr includes an optional AI recommendation engine that analyzes your watch history and suggests titles that match your taste, with a short explanation for each pick.
 
@@ -163,10 +163,9 @@ The engine works with **any OpenAI-compatible API**, so you can use a cloud prov
 ### How to enable
 
 1. Open the web interface and go to **Settings → Advanced**.
-2. Check **Enable beta features**.
-3. Check **Use advanced suggestion algorithm**.
-4. Fill in the **AI Provider Configuration** fields that appear (click the **ⓘ** button next to the section title for an in-app guide).
-5. Save. The AI engine will be used automatically on the next automation run.
+2. Fill in the **AI Provider Configuration** fields (click the **ⓘ** button next to the section title for an in-app guide).
+3. Check **Use AI suggestion algorithm**.
+4. Save. The AI engine will be used automatically on the next automation run.
 
 > If the LLM is unavailable or returns no results, SuggestArr falls back to the standard TMDb-based recommendation algorithm transparently.
 
@@ -227,7 +226,7 @@ Then in SuggestArr Advanced settings set:
 
 ---
 
-## 🔍 AI Search (Beta)
+## 🔍 AI Search
 
 SuggestArr includes an **AI Search** tab in the dashboard that lets you find movies and TV shows using plain text, no browsing required.
 
@@ -254,9 +253,8 @@ Type a natural-language description of what you feel like watching. The LLM inte
 AI Search requires an LLM to be configured (same setup as AI-Powered Recommendations):
 
 1. Open the web interface → **Settings → Advanced**.
-2. Check **Enable beta features**.
-3. Fill in the **AI Provider Configuration** fields (API key, base URL, model).
-4. Save. The **AI Search** tab will become active in the dashboard.
+2. Fill in the **AI Provider Configuration** fields (API key, base URL, model).
+3. Save. The **AI Search** tab will become active in the dashboard.
 
 > AI Search is independent of the automated recommendations run — it is triggered manually from the dashboard and does not affect cron-based automation.
 

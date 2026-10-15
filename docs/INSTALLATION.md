@@ -144,7 +144,7 @@ SQLite is the recommended default. PostgreSQL, MySQL, and MariaDB are available 
 
 ### Advanced
 
-Use this page for beta features, AI provider setup, logging, caching, API timeouts, reverse-proxy subpath, registration, authentication, and Cleanup Automation.
+Use this page for AI provider setup, logging, caching, API timeouts, reverse-proxy subpath, registration, authentication, and Cleanup Automation.
 
 ![SuggestArr advanced configuration](docs/assets/suggestarr-config-advanced.png)
 
@@ -238,14 +238,13 @@ If you want SuggestArr to keep requesting even while Seer has pending approvals,
 
 ### AI Recommendations and AI Search
 
-AI features are optional beta features. They work with OpenAI-compatible APIs.
+AI features are optional. They work with OpenAI-compatible APIs.
 
 Enable:
 
 1. Go to Settings > Advanced.
-2. Enable beta features.
-3. Configure AI provider.
-4. Enable advanced suggestion algorithm if you want automated AI recommendations.
+2. Configure AI provider.
+3. Enable the AI suggestion algorithm if you want automated AI recommendations.
 
 OpenAI example:
 

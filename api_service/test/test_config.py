@@ -71,7 +71,6 @@ class TestConfig(unittest.TestCase):
         "DB_RETRY_DELAY": "1.0",
         "LOG_LEVEL": "INFO",
         "SEER_ANIME_PROFILE_CONFIG": {},
-        "ENABLE_BETA_FEATURES": False,
         "ENABLE_ADVANCED_ALGORITHM": False,
         "ENABLE_SOCIAL_FEATURES": False,
         "ENABLE_DEBUG_MODE": False,
