@@ -47,11 +47,11 @@
     </div>
 
     <!-- Job types explained -->
-    <aside v-if="showInfoBox" class="relative rounded-card border border-edge bg-panel p-5 pr-12" data-tour-id="jobs-info-box">
-      <h2 class="m-0 mb-3 text-sm font-bold uppercase tracking-wider text-ink-4">Job types</h2>
-      <dl class="m-0 grid gap-3 sm:grid-cols-3">
-        <div v-for="type in jobTypes" :key="type.id" class="flex flex-col gap-1.5">
-          <dt class="flex items-center gap-2 text-sm font-bold" :class="type.text"><span class="flex h-7 w-7 items-center justify-center rounded-[8px]" :class="type.bg"><i aria-hidden="true" :class="type.icon"></i></span>{{ type.label }}</dt>
+    <aside v-if="showInfoBox" class="@container relative rounded-card border border-edge bg-panel p-4 sm:p-5" data-tour-id="jobs-info-box">
+      <h2 class="m-0 mb-4 pr-10 text-sm font-bold uppercase tracking-wider text-ink-4">Job types</h2>
+      <dl class="m-0 grid grid-cols-1 gap-3 @xl:grid-cols-2 @5xl:grid-cols-4">
+        <div v-for="type in jobTypes" :key="type.id" class="flex min-w-0 flex-col gap-2 rounded-ctl border border-edge bg-canvas/40 p-3.5">
+          <dt class="flex items-center gap-2.5 text-sm font-bold" :class="type.text"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-ctl" :class="type.bg"><i aria-hidden="true" :class="type.icon"></i></span>{{ type.label }}</dt>
           <dd class="m-0 text-[13px] leading-relaxed text-ink-3">{{ type.description }}</dd>
         </div>
       </dl>
