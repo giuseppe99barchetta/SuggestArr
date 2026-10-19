@@ -10,10 +10,12 @@ const real = () => ({ year: 2025, isDemo: false, scope: 'personal', requested: {
 test('real stories and captions preserve the year and unavailable watch data', () => {
   const data = prepareYearRecap(real());
   const stories = yearStories(data);
+  // No watch data, genres or titles: those stories are skipped instead of shown empty.
+  assert.deepEqual(stories.map(story => story.id), ['intro', 'discovery', 'time', 'summary']);
   assert.equal(stories[0].title, 'Your 2025, on screen');
-  assert.equal(stories[3].title, 'A year of discoveries');
-  assert.match(yearCaption(data, stories[6]), /2025.*2 recorded titles/);
-  assert.doesNotMatch(yearCaption(data, stories[6]), /Sample|undefined|null|NaN/);
+  assert.equal(stories[2].title, 'A year of discoveries');
+  assert.match(yearCaption(data, stories.at(-1)), /2025.*2 recorded titles/);
+  assert.doesNotMatch(yearCaption(data, stories.at(-1)), /Sample|undefined|null|NaN/);
   for (const story of stories) assert.doesNotMatch(yearDescription(data, story), /Sample|undefined|null|NaN/);
 });
 

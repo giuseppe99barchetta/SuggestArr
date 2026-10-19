@@ -55,7 +55,7 @@
           <template v-else>
         <section aria-label="Recap settings" class="flex flex-col gap-3">
           <div class="grid grid-cols-2 gap-2">
-            <label class="ui-label">Data source<select v-model="mode" class="ui-input"><option value="real">My activity</option><option value="demo">Sample data</option></select></label>
+            <label v-if="sampleDataAvailable" class="ui-label">Data source<select v-model="mode" class="ui-input"><option value="real">My activity</option><option value="demo">Sample data</option></select></label>
             <label v-if="mode === 'real'" class="ui-label">Year<select v-model.number="year" aria-label="Year" class="ui-input"><option v-for="value in availableYears" :key="value" :value="value">{{ value }}</option></select></label>
             <label v-else class="ui-label">Media server<select v-model="provider" class="ui-input"><option value="jellyfin">Jellyfin</option><option value="plex">Plex</option></select></label>
             <label v-if="isAdmin && (mode === 'demo' || realData?.allowedScopes.includes('server'))" class="ui-label col-span-2">Recap scope<select v-model="scope" class="ui-input"><option value="personal">Personal recap</option><option value="server">Server recap</option></select></label>
@@ -102,6 +102,8 @@ const STORY_DURATION = 8000;
 const HOLD_DELAY = 250;
 const GLASS_BUTTON = 'grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-white/10 text-white transition-colors hover:bg-white/20 disabled:cursor-default disabled:opacity-35 disabled:hover:bg-white/10';
 
+const SAMPLE_DATA_AVAILABLE = import.meta.env.DEV === true;
+
 let nextId = 0;
 
 export default {
@@ -113,7 +115,9 @@ export default {
     elapsed: 0, rendering: true, ready: false, blob: null, error: '', notice: '', reducedMotion: false,
     generation: 0, active: true, timer: null, lastTick: 0, touch: null, animation: null, motionQuery: null,
     stageWidth: 0, stageHeight: 0, resizeObserver: null,
-    mode: this.initialMode, year: this.initialYear ?? yearRecapSeason().year, realData: null, loading: false,
+    // Sample data is a development aid only; installed builds always show real activity.
+    sampleDataAvailable: SAMPLE_DATA_AVAILABLE,
+    mode: SAMPLE_DATA_AVAILABLE ? this.initialMode : 'real', year: this.initialYear ?? yearRecapSeason().year, realData: null, loading: false,
     requestVersion: 0, controller: null,
     panel: null, titleId: `year-recap-title-${++nextId}`, glassButton: GLASS_BUTTON }; },
   computed: {

@@ -6,8 +6,14 @@ export function prepareYearRecap(data) {
   return { ...data, titles: data.titles.map(title => ({ ...title, artwork: posterUrl(title.poster_path) })) };
 }
 
+/** Stories without data to show are left out rather than rendered as empty placeholders. */
+const hasContent = (data, story) => data.isDemo
+  || (story.id === 'watched' ? Boolean(data.watched)
+    : story.id === 'genres' ? Boolean(data.genres?.length)
+      : story.id === 'titles' ? Boolean(data.titles?.length) : true);
+
 export function yearStories(data) {
-  return YEAR_RECAP_STORIES.map(story => {
+  return YEAR_RECAP_STORIES.filter(story => hasContent(data, story)).map(story => {
     if (story.id === 'intro') return { ...story, title: `Your ${data.year}, on screen` };
     if (!data.isDemo && story.id === 'time') return { ...story, title: 'A year of discoveries', kicker: 'RECORDED REQUEST ACTIVITY' };
     if (!data.isDemo && story.id === 'genres') return { ...story, kicker: 'GENRES OF YOUR REQUESTS' };

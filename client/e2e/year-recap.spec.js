@@ -163,7 +163,9 @@ test('missing profiles and empty years never substitute sample statistics', asyn
   await page.getByLabel('Data source').selectOption('real');
   await expect(page.getByRole('link', { name: 'Link your media account', exact: true })).toBeVisible();
   await expect(page.getByLabel('Recap scope')).toHaveCount(0);
-  for (let index = 0; index < 7; index += 1) {
+  // Stories without data (watch activity, genres, titles) are skipped instead of shown empty.
+  await expect(page.getByRole('button', { name: /^Go to story / })).toHaveCount(4);
+  for (let index = 0; index < 4; index += 1) {
     await page.getByRole('button', { name: new RegExp(`Go to story ${index + 1}:`) }).click();
     await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
     await expect(page.getByRole('img')).not.toHaveAttribute('aria-label', /Fictional|248|314 hours/);

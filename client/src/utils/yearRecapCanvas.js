@@ -13,8 +13,11 @@ const asset = url => {
   return images.get(url);
 };
 const number = value => value == null ? '—' : value.toLocaleString('en-US');
+const percent = (part, total) => total ? Math.round(part / total * 100) : 0;
+// Title cards stand in for covers that could not be loaded; each gets its own tint.
+const CARD_TINTS = ['brand', 'anime', 'notice', 'good'];
 
-export async function renderYearStory(canvas, data, story, index) {
+export async function renderYearStory(canvas, data, story) {
   await document.fonts?.ready;
   const [logo, providerLogo, ...posters] = await Promise.all([
     asset(logoUrl), asset(providerLogos[data.provider]), ...data.titles.map(title => asset(title.artwork)),
@@ -25,20 +28,36 @@ export async function renderYearStory(canvas, data, story, index) {
   const styles = getComputedStyle(document.documentElement);
   const color = name => styles.getPropertyValue(`--color-${name}`).trim();
   const family = styles.getPropertyValue('--font-sans').trim();
+  const font = (size, weight) => { ctx.font = `${weight} ${size}px ${family}`; };
   const text = (value, x, y, size, { weight = 700, ink = 'ink', align = 'left', width = 920 } = {}) => {
     ctx.textAlign = align;
     ctx.fillStyle = color(ink);
-    ctx.font = `${weight} ${size}px ${family}`;
-    while (ctx.measureText(value).width > width && size > 12) {
-      size -= 1;
-      ctx.font = `${weight} ${size}px ${family}`;
-    }
+    font(size, weight);
+    while (ctx.measureText(value).width > width && size > 12) font(--size, weight);
     ctx.fillText(value, x, y);
   };
-  const panel = (x, y, w, h, fill = 'panel-2') => {
+  /** Word-wrapped text from baseline `y`; returns the baseline of the last line drawn. */
+  const paragraph = (value, x, y, size, { weight = 700, width = 920, max = 2, leading = 1.18, ...options } = {}) => {
+    font(size, weight);
+    const lines = [];
+    for (const word of String(value).split(/\s+/)) {
+      const next = lines.length ? `${lines.at(-1)} ${word}` : word;
+      if (lines.length && ctx.measureText(next).width <= width) lines[lines.length - 1] = next;
+      else lines.push(word);
+    }
+    if (lines.length > max) {
+      lines.length = max;
+      let last = lines[max - 1];
+      while (last.length > 1 && ctx.measureText(`${last}…`).width > width) last = last.slice(0, -1).trimEnd();
+      lines[max - 1] = `${last}…`;
+    }
+    lines.forEach((line, i) => text(line, x, y + i * size * leading, size, { weight, width, ...options }));
+    return y + (lines.length - 1) * size * leading;
+  };
+  const panel = (x, y, w, h, fill = 'panel-2', radius = 24) => {
     ctx.fillStyle = color(fill);
     ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 24);
+    ctx.roundRect(x, y, w, h, radius);
     ctx.fill();
   };
   const image = (img, x, y, w, h) => {
@@ -46,7 +65,25 @@ export async function renderYearStory(canvas, data, story, index) {
     const rect = containRect(img.naturalWidth, img.naturalHeight, x, y, w, h);
     ctx.drawImage(img, rect.x, rect.y, rect.width, rect.height);
   };
-  const poster = (i, x, y, w, angle = 0) => {
+  const titleCard = (i, w, h, label) => {
+    const tint = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+    tint.addColorStop(0, color(CARD_TINTS[i % CARD_TINTS.length]));
+    tint.addColorStop(1, color('panel-2'));
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = tint;
+    ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.restore();
+    if (!label) return;
+    const size = Math.round(w * 0.12);
+    const pad = w * 0.1;
+    // Bottom-aligned like a real poster title; long names wrap instead of being cut.
+    const lines = Math.min(3, Math.ceil(data.titles[i].title.length / 12));
+    paragraph(data.titles[i].title, -w / 2 + pad, h / 2 - pad - (lines - 1) * size * 1.12, size,
+      { weight: 800, width: w - pad * 2, max: 3, leading: 1.12 });
+  };
+  /** `label` writes the title on a stand-in card; off where the title is printed next to it. */
+  const poster = (i, x, y, w, angle = 0, label = true) => {
     if (!data.titles[i]) return;
     const h = w * 1.5;
     ctx.save();
@@ -55,22 +92,36 @@ export async function renderYearStory(canvas, data, story, index) {
     ctx.shadowColor = color('canvas');
     ctx.shadowBlur = 45;
     ctx.shadowOffsetY = 20;
-    panel(-w / 2, -h / 2, w, h);
+    panel(-w / 2, -h / 2, w, h, 'panel-2', 20);
     ctx.shadowBlur = ctx.shadowOffsetY = 0;
     ctx.beginPath();
     ctx.roundRect(-w / 2, -h / 2, w, h, 20);
     ctx.clip();
     if (posters[i]) image(posters[i], -w / 2, -h / 2, w, h);
-    else text(data.titles[i].title, 0, 0, 24, { align: 'center', width: w - 20 });
+    else titleCard(i, w, h, label);
     ctx.restore();
   };
   const fan = (y, w = 270) => fanLayout(data.titles.length).forEach(slot => {
     poster(slot.index, 540 + slot.x * (w / 246), y + slot.y * (w / 246), w, slot.angle);
   });
+  /** Straight, evenly spaced covers centred on `y`; returns each cover's centre x. */
+  const posterRow = (y, w, gap = 30, label = true) => {
+    const count = Math.min(4, data.titles.length);
+    const start = 540 - (count * w + (count - 1) * gap) / 2 + w / 2;
+    const centres = Array.from({ length: count }, (_, i) => start + i * (w + gap));
+    centres.forEach((x, i) => poster(i, x, y, w, 0, label));
+    return centres;
+  };
   const tile = (value, label, x, y, { w = 435, h = 178, size = 100 } = {}) => {
     panel(x, y, w, h);
     text(value, x + 28, y + (h >= 220 ? 150 : 105), size, { weight: 800, width: w - 56 });
     text(label, x + 28, y + h - 25, 26, { ink: 'ink-3', width: w - 56 });
+  };
+  /** Full-width stat row: big number on the left, label on the right. */
+  const statRow = (value, label, y) => {
+    panel(80, y, 920, 215);
+    text(value, 120, y + 150, 124, { weight: 800, width: 480 });
+    text(label, 960, y + 128, 38, { ink: 'ink-2', align: 'right', width: 380 });
   };
   const headline = (first, second) => {
     text(first, 80, 395, 83, { weight: 800 });
@@ -102,103 +153,117 @@ export async function renderYearStory(canvas, data, story, index) {
       text(String(data.year), 70, 570, 250, { weight: 800 });
       text('Good stories.', 80, 680, 67, { weight: 800 });
       text('Even better discoveries.', 80, 766, 62, { weight: 800 });
-      fan(1160, 270);
-      text(data.scope === 'server' ? (data.activeUsers == null ? 'Your server, on screen.' : `${data.activeUsers} viewers. One great year.`) : 'Your year, on screen.', 540, 1560, 43, { align: 'center' });
-      image(providerLogo, 397, 1610, 65, 60);
-      text(data.providerLabel, 478, 1653, 35, { ink: 'ink-2', width: 250 });
+      fan(1210, 270);
+      text(data.scope === 'server' ? (data.activeUsers == null ? 'Your server, on screen.' : `${data.activeUsers} viewers. One great year.`) : 'Your year, on screen.', 540, 1620, 46, { align: 'center' });
       break;
-    case 'discovery':
+    case 'discovery': {
+      const { total, movies, series } = data.requested;
       headline('Discovery, on', 'autopilot.');
-      text(number(data.requested.total), 76, 742, 200, { weight: 800 });
+      text(number(total), 76, 742, 200, { weight: 800 });
       text('titles requested by SuggestArr', 80, 812, 38, { ink: 'ink-2' });
-      tile(number(data.requested.movies), 'movies requested', 80, 890);
-      tile(number(data.requested.series), 'TV series requested', 565, 890);
-      fan(1330, 210);
-      text('A new favorite, without the search.', 540, 1630, 34, { align: 'center', ink: 'ink-2' });
+      tile(number(movies), 'movies', 80, 900, { h: 240, size: 140 });
+      tile(number(series), 'TV series', 565, 900, { h: 240, size: 140 });
+      if (total) {
+        // Movies vs TV split, so the two counts read as one picture.
+        const split = 920 * movies / total;
+        panel(80, 1250, 920, 28, 'panel-2', 14);
+        if (movies) panel(80, 1250, split, 28, 'brand', 14);
+        text(`${percent(movies, total)}% movies`, 80, 1330, 30, { ink: 'ink-2', width: 440 });
+        text(`${percent(series, total)}% TV series`, 1000, 1330, 30, { ink: 'ink-2', align: 'right', width: 440 });
+      }
+      text('A new favorite, without the search.', 540, 1560, 40, { align: 'center', ink: 'ink-2' });
       break;
+    }
     case 'watched':
       headline('You pressed', 'play.');
-      if (!data.watched) {
-        text('Watch activity', 80, 800, 76);
-        text('not available yet.', 80, 895, 76);
-        text('Your discoveries are already here.', 80, 1030, 37, { ink: 'ink-2' });
-        text(data.watchStatus === 'unavailable' ? 'Your media server could not be reached.' : 'Link your media server to include it.', 80, 1095, 30, { ink: 'ink-3' });
-        // No covers without watch history: requested titles must not read as watched ones.
-        break;
-      }
       image(providerLogo, 80, 555, 62, 62);
-      text(`WATCHED ON ${data.providerLabel.toUpperCase()}`, 160, 598, 25, { ink: 'notice', width: 820 });
-      tile(number(data.watched.movies), 'movies watched', 80, 700, { h: 240, size: 140 });
-      tile(number(data.watched.episodes), 'episodes watched', 565, 700, { h: 240, size: 140 });
-      text(`${number(data.watched.series)} TV series in the mix.`, 80, 1050, 49);
-      poster(2, 320, 1340, 250, -12);
-      poster(1, 720, 1340, 250, 10);
-      text(data.isDemo ? 'The stories you made time for.' : data.provider === 'jellyfin' ? 'Last-played snapshot · Partial coverage' : 'Retained watch history · Partial coverage', 540, 1650, 30, { align: 'center', ink: 'ink-2' });
+      text(`WATCHED ON ${String(data.providerLabel).toUpperCase()}`, 160, 598, 25, { ink: 'notice', width: 820 });
+      statRow(number(data.watched?.movies), 'movies', 700);
+      statRow(number(data.watched?.episodes), 'episodes', 945);
+      statRow(number(data.watched?.series), 'TV series', 1190);
+      text(data.isDemo ? 'The stories you made time for.' : data.provider === 'jellyfin' ? 'Last-played snapshot · Partial coverage' : 'Retained watch history · Partial coverage', 540, 1580, 34, { align: 'center', ink: 'ink-2' });
       break;
     case 'time': {
       const hasTime = data.watchMinutes != null;
-      headline(hasTime ? 'Time well' : 'A year of', hasTime ? 'watched.' : 'discoveries.');
-      text(hasTime ? `${number(Math.floor(data.watchMinutes / 60))}h` : number(data.requested.total), 76, 740, 177, { weight: 800 });
-      text(hasTime ? `and ${data.watchMinutes % 60} minutes of good stories.` : 'recorded title requests this year.', 80, 817, 36, { ink: 'ink-2' });
-      panel(60, 940, 960, 610, 'panel');
-      text(hasTime ? 'YOUR YEAR IN HOURS' : 'SUGGESTARR REQUESTS BY MONTH', 100, 1015, 23, { ink: 'ink-3' });
       const metric = hasTime ? 'minutes' : 'requests';
       const peak = data.peakMonth[metric];
+      headline(hasTime ? 'Time well' : 'A year of', hasTime ? 'watched.' : 'discoveries.');
+      if (hasTime) {
+        text(`${number(Math.floor(data.watchMinutes / 60))}h`, 76, 740, 177, { weight: 800 });
+        text(`and ${data.watchMinutes % 60} minutes of good stories.`, 80, 817, 36, { ink: 'ink-2' });
+      } else {
+        // The request total is already on the discovery story; lead with the busiest month instead.
+        text(peak ? data.peakMonth.label : 'Just started.', 76, 720, 150, { weight: 800 });
+        text(peak ? `your busiest month · ${number(peak)} requests` : 'Your first discoveries are ahead.', 80, 817, 36, { ink: 'ink-2' });
+      }
+      panel(60, 940, 960, 610, 'panel');
+      text(hasTime ? 'YOUR YEAR IN HOURS' : 'REQUESTS BY MONTH', 100, 1015, 23, { ink: 'ink-3' });
       data.monthly.forEach((month, i) => {
         const x = 103 + i * 74;
         const height = peak ? month[metric] / peak * 350 : 0;
         if (height) panel(x, 1435 - height, 48, height, month[metric] === peak ? 'caution' : 'brand');
         text(month.month, x + 24, 1484, 18, { align: 'center', ink: 'ink-3', width: 65 });
       });
-      text(peak ? `${data.peakMonth.label} · ${number(hasTime ? peak / 60 : peak)} ${hasTime ? 'hours' : 'requests'}.` : 'Your first discoveries are ahead.', 540, 1630, 39, { align: 'center', ink: 'caution' });
-      if (!hasTime) text('Actual watch time is not available.', 540, 1685, 27, { align: 'center', ink: 'ink-3' });
+      if (hasTime && peak) text(`${data.peakMonth.label} · ${number(Math.round(peak / 60))} hours.`, 540, 1640, 42, { align: 'center', ink: 'caution' });
       break;
     }
-    case 'genres':
+    case 'genres': {
+      const [top, ...rest] = data.genres;
       headline('Your kind', 'of stories.');
-      if (!data.genres.length) {
-        text('More discoveries.', 80, 810, 73);
-        text('More of your story.', 80, 905, 73);
-        text('Genre metadata is not available yet.', 80, 1030, 36, { ink: 'ink-3' });
-        fan(1400, 200);
-        break;
-      }
-      text(data.genres[0].label, 80, 703, 125, { weight: 800, width: 660 });
-      text(`${data.genres[0].percent}%`, 1000, 700, 100, { weight: 800, align: 'right', ink: 'anime', width: 300 });
-      data.genres.forEach((genre, i) => {
-        const y = 850 + i * 125;
-        text(genre.label, 80, y, 31);
-        text(`${genre.percent}%`, 1000, y, 31, { align: 'right', ink: 'ink-2', width: 150 });
-        panel(80, y + 24, 920, 20);
-        panel(80, y + 24, 920 * genre.percent / 100, 20, ['anime', 'brand', 'notice', 'caution'][i]);
+      text(top.label, 76, 740, 150, { weight: 800 });
+      text(`${top.percent}% of your ${data.isDemo ? 'history' : 'requests'}`, 80, 815, 38, { ink: 'anime' });
+      if (rest.length) text('ALSO IN THE MIX', 80, 960, 23, { ink: 'ink-3' });
+      rest.slice(0, 3).forEach((genre, i) => {
+        const y = 1050 + i * 140;
+        text(genre.label, 80, y, 38);
+        text(`${genre.percent}%`, 1000, y, 38, { align: 'right', ink: 'ink-2', width: 150 });
+        panel(80, y + 30, 920, 22, 'panel-2', 11);
+        panel(80, y + 30, Math.max(22, 920 * genre.percent / 100), 22, ['brand', 'notice', 'caution'][i], 11);
       });
-      data.titles.forEach((_, i) => poster(i, 218 + i * 215, 1470, 166, (i - 1.5) * 4));
-      text(data.isDemo ? 'Genres of your sample watch history.' : `Genre tags · ${data.genreCoverage} requested titles with metadata`, 540, 1650, 28, { align: 'center', ink: 'ink-3' });
+      text(data.isDemo ? 'Based on your sample watch history.' : `Based on ${number(data.genreCoverage)} requested titles.`, 540, 1600, 30, { align: 'center', ink: 'ink-3' });
       break;
+    }
     case 'titles':
       headline(data.isDemo ? 'The titles that' : 'Your recent', data.isDemo ? 'defined your year.' : 'discoveries.');
-      fan(1000, 280);
-      if (!data.titles.length) text('Your next story is waiting.', 540, 1200, 50, { align: 'center', ink: 'ink-2' });
-      data.titles.forEach((title, i) => {
-        text(title.title, 80, 1435 + i * 66, 35, { width: 540 });
-        text(title.detail, 1000, 1435 + i * 66, 23, { align: 'right', ink: 'ink-3', width: 350 });
+      if (data.titles.length <= 2) {
+        // One or two titles get large covers instead of a mostly empty list.
+        const w = data.titles.length === 1 ? 400 : 360;
+        posterRow(1030, w, 60, false).forEach((x, i) => {
+          const last = paragraph(data.titles[i].title, x, 1400, 46, { weight: 800, width: w + 20, max: 2, leading: 1.12, align: 'center' });
+          text(data.titles[i].detail, x, last + 50, 30, { ink: 'ink-3', align: 'center', width: w + 20 });
+        });
+        break;
+      }
+      // A ranked list with covers: every title stays whole and readable.
+      data.titles.slice(0, 4).forEach((title, i) => {
+        const y = 590 + i * 260;
+        poster(i, 155, y + 112, 150, 0, false);
+        text(String(i + 1).padStart(2, '0'), 270, y + 62, 30, { weight: 800, ink: 'good' });
+        const last = paragraph(title.title, 270, y + 122, 48, { weight: 800, width: 730, max: 2, leading: 1.12 });
+        text(title.detail, 270, last + 50, 30, { ink: 'ink-3', width: 730 });
       });
       break;
-    case 'summary':
+    case 'summary': {
       headline('Your year,', 'wrapped.');
-      tile(number(data.requested.total), 'titles requested', 80, 580);
-      tile(number(data.watched?.movies ?? data.requested.movies), data.watched ? 'movies watched' : 'movies requested', 565, 580);
-      tile(number(data.watched?.episodes ?? data.requested.series), data.watched ? 'episodes watched' : 'TV series requested', 80, 795);
-      tile(data.watchMinutes == null ? '—' : `${number(Math.floor(data.watchMinutes / 60))}h`, data.watchMinutes == null ? 'watch time unavailable' : 'watch time', 565, 795);
-      fan(1250, 210);
-      text(data.isDemo ? 'YOUR LEADING GENRE' : 'LEADING GENRE OF YOUR REQUESTS', 540, 1540, 21, { align: 'center', ink: 'ink-3' });
-      text(data.genres[0]?.label || 'Your story starts here', 540, 1620, 68, { align: 'center', weight: 800, ink: 'brand-ink' });
+      const stats = [
+        [number(data.requested.total), 'titles requested'],
+        data.watched ? [number(data.watched.movies), 'movies watched'] : [number(data.requested.movies), 'movies requested'],
+        data.watched ? [number(data.watched.episodes), 'episodes watched'] : [number(data.requested.series), 'TV series requested'],
+        data.watchMinutes != null ? [`${number(Math.floor(data.watchMinutes / 60))}h`, 'watch time'] : null,
+        data.genres[0] ? [data.genres[0].label, 'leading genre'] : null,
+      ].filter(Boolean).slice(0, 4);
+      stats.forEach(([value, label], i) => {
+        const wide = i === stats.length - 1 && stats.length % 2;
+        tile(value, label, i % 2 ? 565 : 80, 580 + Math.floor(i / 2) * 215, wide ? { w: 920 } : undefined);
+      });
+      posterRow(1250, 190);
+      text('Here’s to more good stories.', 540, 1590, 44, { align: 'center', ink: 'brand-ink' });
       break;
+    }
   }
-  text(data.isDemo ? 'PREVIEW · SAMPLE DATA' : `RECORDED PROGRESS${data.isYearToDate ? ' · YEAR TO DATE' : ''}`, 540, 1748, 26, { align: 'center', ink: 'brand-ink' });
-  const watchLabel = !data.isDemo && data.watched ? ' · Partial watch data' : '';
-  text(`${data.scope === 'server' ? 'Server recap' : 'Personal recap'} · ${data.providerLabel}${watchLabel}`, 540, 1795, 23, { align: 'center', ink: 'ink-3' });
-  text('github.com/giuseppe99barchetta/SuggestArr', 540, 1850, 24, { align: 'center', ink: 'ink-2' });
-  text(`${index + 1} / 7`, 995, 1890, 15, { align: 'right', ink: 'ink-4', width: 90 });
+  const meta = [data.isDemo ? 'Sample data' : null, data.scope === 'server' ? 'Server recap' : 'Personal recap',
+    data.providerLabel, !data.isDemo && data.isYearToDate ? 'Year to date' : null].filter(Boolean).join(' · ');
+  text(meta, 540, 1790, 25, { align: 'center', ink: data.isDemo ? 'brand-ink' : 'ink-3' });
+  text('github.com/giuseppe99barchetta/SuggestArr', 540, 1845, 24, { align: 'center', ink: 'ink-2' });
   return { missingPosters: posters.filter((poster, i) => data.titles[i].artwork && !poster).length };
 }
