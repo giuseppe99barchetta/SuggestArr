@@ -183,7 +183,7 @@
         >
           <span class="text-xs font-semibold text-ink-2">{{ request.media_type === 'movie' ? 'Movie' : 'TV' }}<template v-if="request.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(request.rating) }}</template></span>
           <span class="line-clamp-2 text-xs leading-snug text-ink-3">From {{ request.source_title }}</span>
-          <span class="text-xs text-ink-4"><template v-if="request.user_name || request.user_id">For {{ request.user_name || request.user_id }} · </template>{{ formatDate(request.requested_at) }}</span>
+          <span class="flex min-w-0 text-xs text-ink-4"><span v-if="request.user_name || request.user_id" class="truncate" :title="`For ${request.user_name || request.user_id}`">For {{ request.user_name || request.user_id }}</span><span class="shrink-0 whitespace-pre"><template v-if="request.user_name || request.user_id"> · </template>{{ formatDate(request.requested_at) }}</span></span>
         </MediaCard>
       </div>
     </div>
@@ -280,7 +280,7 @@
             <button type="button" class="flex w-full cursor-pointer items-center gap-3 rounded-ctl border border-edge bg-panel-2 px-3 py-2.5 text-left hover:border-edge-strong" @click="openModal(request)">
               <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span class="truncate text-sm font-semibold text-ink">{{ request.title }}</span>
-                <span class="text-xs text-ink-4">{{ formatDate(request.requested_at) }}<template v-if="request.user_name || request.user_id"> · for {{ request.user_name || request.user_id }}</template></span>
+                <span class="truncate text-xs text-ink-4" :title="request.user_name || request.user_id ? `for ${request.user_name || request.user_id}` : null">{{ formatDate(request.requested_at) }}<template v-if="request.user_name || request.user_id"> · for {{ request.user_name || request.user_id }}</template></span>
               </span>
               <i aria-hidden="true" class="fas fa-chevron-right text-xs text-ink-4"></i>
             </button>

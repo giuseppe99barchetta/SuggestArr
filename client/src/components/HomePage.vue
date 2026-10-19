@@ -53,7 +53,7 @@
             </template>
           </template>
           <span v-if="request.source_title" class="line-clamp-2 text-xs leading-snug text-ink-3">Because you watched {{ request.source_title }}</span>
-          <span v-if="request.user_name || request.user_id" class="text-xs text-ink-4">For {{ request.user_name || request.user_id }}</span>
+          <span v-if="request.user_name || request.user_id" class="truncate text-xs text-ink-4" :title="`For ${request.user_name || request.user_id}`">For {{ request.user_name || request.user_id }}</span>
         </MediaCard>
       </div>
     </section>
@@ -78,7 +78,7 @@
           :badge="request.media_type === 'movie' ? 'Movie' : 'TV'"
           @open="openDetails(request)"
         >
-          <span class="text-xs text-ink-4">{{ formatDate(request.requested_at) }}<template v-if="request.user_name || request.user_id"> · for {{ request.user_name || request.user_id }}</template></span>
+          <span class="truncate text-xs text-ink-4" :title="request.user_name || request.user_id ? `for ${request.user_name || request.user_id}` : null">{{ formatDate(request.requested_at) }}<template v-if="request.user_name || request.user_id"> · for {{ request.user_name || request.user_id }}</template></span>
         </MediaCard>
       </div>
     </section>

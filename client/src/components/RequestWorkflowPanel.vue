@@ -53,7 +53,7 @@
         <div class="media-card-body flex flex-col gap-1 text-xs">
           <span class="font-semibold text-ink-2">{{ item.media_type === 'movie' ? 'Movie' : 'TV' }}<template v-if="item.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(item.rating) }}</template></span>
           <span v-if="item.name" class="line-clamp-2 leading-snug text-ink-3">From {{ item.name }}</span>
-          <span v-if="item.user_name || item.media_user_id" class="text-ink-4">For {{ item.user_name || item.media_user_id }}</span>
+          <span v-if="item.user_name || item.media_user_id" class="truncate text-ink-4" :title="`For ${item.user_name || item.media_user_id}`">For {{ item.user_name || item.media_user_id }}</span>
           <small v-if="item.status === 'failed'" class="text-bad">{{ item.last_error || `Failed after ${item.retry_count} attempts` }}</small>
         </div>
       </MediaCard>
