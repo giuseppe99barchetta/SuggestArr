@@ -77,7 +77,7 @@
           <div class="absolute inset-0 bg-gradient-to-r from-black/45 to-transparent"></div>
         </div>
         <div v-else-if="source.visual" aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 opacity-25" :style="{ background: source.visual.gradient }"></div>
-        <header class="relative flex items-center gap-4 px-4 pb-4 pt-6 [text-shadow:0_1px_8px_rgba(0,0,0,0.5)] sm:px-5">
+        <header class="relative flex items-center gap-4 px-4 pb-3 pt-6 [text-shadow:0_1px_8px_rgba(0,0,0,0.5)] sm:px-5">
           <button
             type="button"
             class="relative flex aspect-[2/3] w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-[8px] border-0 bg-raised p-0 shadow-[0_4px_16px_rgba(0,0,0,0.5)] ring-1 ring-white/15 sm:w-20"
@@ -102,7 +102,7 @@
             <span v-if="latestRequestDate(source)" class="text-xs text-white/65">Last {{ formatDate(latestRequestDate(source)) }}</span>
           </div>
         </header>
-        <div class="flex snap-x gap-3 overflow-x-auto px-4 pb-4 sm:px-5">
+        <div class="flex snap-x gap-3 overflow-x-auto px-4 pb-4 pt-1 sm:px-5">
           <button
             v-for="request in source.requests"
             :key="`${request.request_id}:${request.user_id || ''}`"
@@ -115,13 +115,17 @@
               <span v-else class="absolute inset-0 flex items-center justify-center text-2xl text-white/40"><i aria-hidden="true" class="fas fa-film"></i></span>
               <span v-if="request.media_type === 'tv'" class="absolute left-1.5 top-1.5 rounded-md bg-canvas/80 px-1.5 py-0.5 text-[10px] font-bold text-ink">TV</span>
             </span>
-            <span class="line-clamp-2 text-[13px] font-semibold leading-snug text-white" :title="request.title">{{ request.title }}</span>
+            <span class="block w-full truncate text-[13px] font-semibold leading-snug text-white" :title="request.title">{{ request.title }}</span>
             <span class="text-[11px] text-white/60">
               <template v-if="request.release_date">{{ releaseYear(request.release_date) }}</template>
               <template v-if="request.rating && request.release_date"> · </template>
               <template v-if="request.rating"><i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(request.rating) }}</template>
-              <template v-if="showRequestUser && (request.user_name || request.user_id)"><br />For {{ request.user_name || request.user_id }}</template>
             </span>
+            <span
+              v-if="showRequestUser && (request.user_name || request.user_id)"
+              class="-mt-1 block w-full truncate text-[11px] text-white/60"
+              :title="`For ${request.user_name || request.user_id}`"
+            >For {{ request.user_name || request.user_id }}</span>
           </button>
         </div>
       </section>
