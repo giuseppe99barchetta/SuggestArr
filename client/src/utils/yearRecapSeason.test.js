@@ -13,3 +13,12 @@ test('Home invitation runs from December 15 through January 31 inclusive', () =>
     assert.equal(yearRecapSeason(new Date(2026, month, 15)).available, false);
   }
 });
+
+test('development can preview the annual recap throughout the year', () => {
+  for (let month = 0; month < 12; month += 1) {
+    assert.deepEqual(yearRecapSeason(new Date(2026, month, 1), true), {
+      available: true, year: month === 0 ? 2025 : 2026,
+    });
+  }
+  assert.deepEqual(yearRecapSeason(new Date(2026, 9, 19), false), { available: false, year: 2026 });
+});

@@ -229,23 +229,23 @@ test('Home opens the preview even when recap API and linked profiles are unavail
 });
 
 for (const admin of [true, false]) {
-  test(`Home hides annual recap outside its season for ${admin ? 'admins' : 'users'}`, async ({ page }) => {
+  test(`development Home keeps annual recap available outside its season for ${admin ? 'admins' : 'users'}`, async ({ page }) => {
     await openPreview(page, { journey: true, admin, date: '2026-10-19T12:00:00Z' });
     await expect(page.getByText('Your journey could not be loaded.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Year recap', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Year recap', exact: true })).toBeVisible();
     await page.clock.setFixedTime(new Date('2026-12-14T12:00:00Z'));
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await expect(page.getByRole('button', { name: 'Year recap', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Year recap', exact: true })).toBeVisible();
     await page.clock.setFixedTime(new Date('2026-12-15T12:00:00Z'));
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await expect(page.getByRole('button', { name: 'Year recap', exact: true })).toBeVisible();
     await page.clock.setFixedTime(new Date('2027-02-01T12:00:00Z'));
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await expect(page.getByRole('button', { name: 'Year recap', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Year recap', exact: true })).toBeVisible();
   });
 }
 
-test('January opens the previous year and the recap closes when the season ends', async ({ page }) => {
+test('January opens the previous year and development keeps the recap open after the season ends', async ({ page }) => {
   await openPreview(page, { journey: true, date: '2027-01-31T12:00:00Z' });
   let requestedYear;
   await page.route('**/api/recap/year?*', route => {
@@ -258,8 +258,9 @@ test('January opens the previous year and the recap closes when the season ends'
   await expect(page.getByRole('heading', { name: '2026 Year recap', exact: true })).toBeVisible();
   await page.clock.setFixedTime(new Date('2027-02-01T12:00:00Z'));
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Year recap', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Year recap', exact: true })).toBeVisible();
 });
 
 test('keyboard navigation and reduced-motion playback work without animation', async ({ page }) => {

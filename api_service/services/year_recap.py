@@ -24,9 +24,12 @@ class YearWatchActivity(BaseHTTPClient):
         try:
             async with asyncio.timeout(25):
                 return await self._load(data, ids, url.rstrip('/'), token)
-        except Exception:
-            # Credentials, server addresses and provider responses never enter API errors.
-            self.logger.warning('Annual watch activity could not be loaded from %s', provider)
+        except Exception as exc:
+            # Credentials, server addresses and provider responses never enter API errors or logs;
+            # only the failure type and HTTP status are logged to make the cause diagnosable.
+            status = getattr(exc, 'status', None)
+            self.logger.warning('Annual watch activity could not be loaded from %s: %s%s', provider,
+                                type(exc).__name__, f' (HTTP {status})' if status else '')
             return {'watchStatus': 'unavailable', 'watchNote': 'Watch activity is unavailable. Check the connection and try again. Your recorded discoveries are still available.'}
         finally:
             await self.close()
@@ -41,6 +44,9 @@ class YearWatchActivity(BaseHTTPClient):
     async def _load(self, data, ids, url, token):
         plex = data['provider'] == 'plex'
         headers = {'X-Plex-Token' if plex else 'X-Emby-Token': token, 'Accept': 'application/json'}
+        if not plex:
+            # Newer Jellyfin releases expect the MediaBrowser scheme, matching JellyfinClient.
+            headers['Authorization'] = f'MediaBrowser Token="{token}"'
         if data['scope'] == 'server':
             ids = [None] if plex else [str(user['Id']) for user in await self._json(f'{url}/Users', headers)]
         truncated = len(ids) > MAX_PROFILES

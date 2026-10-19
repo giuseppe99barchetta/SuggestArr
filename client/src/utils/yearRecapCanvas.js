@@ -123,7 +123,7 @@ export async function renderYearStory(canvas, data, story, index) {
         text('not available yet.', 80, 895, 76);
         text('Your discoveries are already here.', 80, 1030, 37, { ink: 'ink-2' });
         text('Load watch activity to check your linked server.', 80, 1095, 30, { ink: 'ink-3' });
-        fan(1410, 180);
+        // No covers without watch history: requested titles must not read as watched ones.
         break;
       }
       image(providerLogo, 80, 555, 62, 62);
