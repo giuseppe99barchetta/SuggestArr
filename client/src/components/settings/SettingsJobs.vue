@@ -171,10 +171,12 @@
       v-if="showCreateModal || editingJob"
       ref="jobModal"
       :job="editingJob"
+      :request-approval-default="jobDefaults.requestApproval"
+      :approval-pause-default="jobDefaults.approvalPause"
       @close="closeModal"
       @save="saveJob"
     />
-    <JobModal v-if="showImportModal" one-time @close="showImportModal = false" @save="importListOnce" />
+    <JobModal v-if="showImportModal" one-time :request-approval-default="jobDefaults.requestApproval" @close="showImportModal = false" @save="importListOnce" />
 
     <AppDialog v-if="jobToDelete" labelledby="delete-job-title" @close="jobToDelete = null">
       <div class="flex flex-col gap-4 p-6">
@@ -227,8 +229,6 @@ import { getJobTypeIcon as resolveJobTypeIcon, getJobTypeLabel as resolveJobType
 const JOBS_TOUR_KEY = 'suggestarr_jobs_tour_done';
 // Index of the first step that targets elements inside the job modal
 const MODAL_STEP_START = 7;
-// Index of the first step that requires the advanced section to be expanded
-const ADVANCED_STEP_START = 11;
 
 export default {
   name: 'SettingsJobs',
@@ -244,6 +244,8 @@ export default {
   data() {
     return {
       jobs: [],
+      // Global settings that jobs set to "inherit" follow, shown inside the job modal.
+      jobDefaults: { requestApproval: null, approvalPause: null },
       recentHistory: [],
       allHistory: [],
       isLoading: false,
@@ -318,37 +320,37 @@ export default {
         {
           targetId: 'job-modal-type-selector',
           title: 'Job Type',
-          description: 'Choose Discover for TMDb filter searches, Recommendation for watch-history suggestions, or Trakt for linked-account recommendations.',
+          description: 'Import a public list, Discover titles with TMDb filters, get Recommendations from watch history, or use a linked Trakt account. The type is fixed once the job exists.',
           position: 'bottom'
         },
         {
           targetId: 'job-modal-basic-info',
-          title: 'Name & Media Type',
-          description: 'Give your job a descriptive name and pick whether it should target Movies, TV Shows, or both.',
-          position: 'bottom'
-        },
-        {
-          targetId: 'job-modal-schedule',
-          title: 'Schedule',
-          description: 'Pick a preset interval (hourly, daily, weekly…) or enter a custom cron expression for full control over when the job fires.',
-          position: 'top'
-        },
-        {
-          targetId: 'job-modal-advanced-toggle',
-          title: 'Advanced Settings',
-          description: 'Expand this section to configure quality filters, rating thresholds, language restrictions, and the maximum number of results per run.',
-          position: 'top'
-        },
-        {
-          targetId: 'job-modal-max-results',
-          title: 'Max Results',
-          description: 'Controls how many items the job processes per run. For Discover jobs this is the total titles found; for Recommendation jobs it is the limit per watched item.',
+          title: 'Media Type & Name',
+          description: 'Pick Movies, TV shows or both. The name is optional: leave it empty to use the suggested one.',
           position: 'bottom'
         },
         {
           targetId: 'job-modal-filters',
           title: 'Filters',
-          description: 'Narrow down what gets requested: minimum TMDb rating, minimum vote count, original language, year range, and genre exclusions. Only content matching all active filters will be sent to Seer.',
+          description: 'Narrow down what gets requested: rating, votes, language, release dates, genres and more. Discover jobs show them right away; other jobs keep them under Quality filters.',
+          position: 'top'
+        },
+        {
+          targetId: 'job-modal-schedule',
+          title: 'Schedule',
+          description: 'Pick how often the job runs, or a custom cron expression, plus the rules that skip a scheduled run.',
+          position: 'top'
+        },
+        {
+          targetId: 'job-modal-requests',
+          title: 'Requests',
+          description: 'Choose whether suggestions go straight to Seer or wait for your approval, and which Seer user they are credited to.',
+          position: 'top'
+        },
+        {
+          targetId: 'job-modal-max-results',
+          title: 'Limits',
+          description: 'Cap how many titles each run requests, and optionally how many one user can receive within a time window.',
           position: 'top'
         },
       ]
@@ -425,6 +427,10 @@ export default {
         const response = await jobsApi.getJobs();
         if (response.status === 'success') {
           this.jobs = response.jobs;
+          this.jobDefaults = {
+            requestApproval: response.request_approval_default ?? null,
+            approvalPause: typeof response.approval_pause_default === 'boolean' ? response.approval_pause_default : null,
+          };
         }
       } catch (error) {
         console.error('Failed to load jobs:', error);
@@ -662,13 +668,8 @@ export default {
             this.showCreateModal = true;
           }
         }
-        // Expand the advanced section one step early (at the toggle button, step 10)
-        // so that the advanced-section DOM elements are rendered before scrollAndUpdate()
-        // fires for the first advanced step (step 11). Calling this synchronously ensures
-        // Vue batches the DOM update together with the currentIndex change.
-        if (index >= ADVANCED_STEP_START - 1) {
-          this.$refs.jobModal?.openAdvanced();
-        }
+        // Expand the collapsed parts so every highlighted element is rendered.
+        this.$refs.jobModal?.expandAll();
       } else {
         // Going back to main-page steps — close the modal if the tour opened it
         if (this.editingJob || this.showCreateModal) {

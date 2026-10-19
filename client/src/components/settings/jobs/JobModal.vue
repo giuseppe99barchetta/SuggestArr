@@ -7,7 +7,7 @@
         <span aria-hidden="true" class="grid h-9 w-9 shrink-0 place-items-center rounded-ctl bg-brand-soft text-sm text-brand-ink"><i aria-hidden="true" :class="jobTypeInfoIcon"></i></span>
         <div class="min-w-0 flex-1 self-center">
           <h2 id="job-modal-title" class="m-0 text-base font-bold text-ink">{{ oneTime ? 'Import list once' : isEditing ? 'Edit job' : 'New job' }}</h2>
-          <p class="m-0 mt-0.5 text-[13px] text-ink-3">{{ oneTime ? 'Import all matching titles without creating a scheduled job.' : isEditing ? form.name : 'Pick what to look for, when, and how it reaches Seer.' }}</p>
+          <p class="m-0 mt-0.5 truncate text-[13px] text-ink-3">{{ oneTime ? 'Import all matching titles without creating a scheduled job.' : isEditing ? form.name : 'Pick what to look for, when, and how it reaches Seer.' }}</p>
         </div>
         <button type="button" class="-mr-2 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" aria-label="Close" @click="requestClose">
           <i aria-hidden="true" class="fas fa-times"></i>
@@ -15,222 +15,315 @@
       </header>
 
       <form @submit.prevent="handleSubmit" class="flex min-h-0 flex-1 flex-col">
-        <div class="min-h-0 flex-1 overflow-y-auto p-6 max-sm:p-4 [&_h4]:m-0 [&_h4]:mb-3 [&_h4]:text-[11px] [&_h4]:font-bold [&_h4]:uppercase [&_h4]:tracking-[0.08em] [&_h4]:text-ink-4">
-          <!-- Job Type Selector -->
-          <div v-if="!oneTime" class="mb-7" data-tour-id="job-modal-type-selector">
-            <h4>Job type</h4>
-            <div class="grid gap-2 md:grid-cols-2">
-              <button
-                v-for="type in jobTypes"
-                :key="type.value"
-                type="button"
-                :class="choiceClass(form.job_type === type.value)"
-                :disabled="type.value === 'trakt_recommendations' && !traktJobAvailable"
-                :title="type.value === 'trakt_recommendations' ? traktJobUnavailableReason : null"
-                @click="setJobType(type.value)"
-              >
-                <i aria-hidden="true" :class="type.icon" class="w-5 text-center"></i>
-                <span class="flex min-w-0 flex-col gap-0.5">
-                  <span>{{ type.label }}</span>
-                  <span class="text-[0.72rem] font-normal text-ink-3">{{ type.description }}</span>
-                </span>
-              </button>
-            </div>
-            <div v-if="!traktJobAvailable" class="mt-3 flex items-start gap-2 rounded-ctl border border-dashed border-edge-strong p-3 text-[0.8rem] text-ink-3" role="status">
-              <i aria-hidden="true" class="fas fa-circle-info mt-0.5 text-brand-ink"></i>
-              <span>{{ traktJobUnavailableReason }}</span>
-            </div>
-          </div>
+        <div class="flex min-h-0 flex-1">
+          <!-- Section index with a one-line summary of each step (desktop only). -->
+          <nav aria-label="Job sections" class="hidden w-56 shrink-0 flex-col gap-1 border-r border-edge bg-panel-2/40 p-3 md:flex">
+            <button
+              v-for="(section, index) in sections"
+              :key="section.id"
+              type="button"
+              class="flex cursor-pointer items-start gap-3 rounded-ctl border-0 px-3 py-2.5 text-left transition-colors"
+              :class="activeSection === section.id ? 'bg-brand-soft' : 'bg-transparent hover:bg-raised'"
+              :aria-current="activeSection === section.id ? 'step' : null"
+              @click="scrollToSection(section.id)"
+            >
+              <span class="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold" :class="activeSection === section.id ? 'bg-brand text-white' : 'bg-raised text-ink-3'">{{ index + 1 }}</span>
+              <span class="flex min-w-0 flex-col">
+                <span class="text-[13px] font-semibold" :class="activeSection === section.id ? 'text-ink' : 'text-ink-2'">{{ section.title }}</span>
+                <span class="truncate text-xs text-ink-4">{{ section.summary }}</span>
+              </span>
+            </button>
+          </nav>
 
-          <!-- Info Note based on job type -->
-          <div class="mb-6 flex items-start gap-3 rounded-ctl border border-edge bg-panel-2 px-4 py-3 text-[0.8rem] leading-normal text-ink-3">
-            <i aria-hidden="true" :class="jobTypeInfoIcon" class="mt-0.5 shrink-0 text-brand-ink"></i>
-            <span>{{ jobTypeInfoText }}</span>
-          </div>
+          <div ref="body" class="min-h-0 flex-1 overflow-y-auto px-6 pb-8 max-sm:px-4" @scroll="updateActiveSection">
+            <!-- 1. Source -->
+            <section data-section="source" :class="sectionClass">
+              <h3 :class="sectionTitleClass"><span :class="sectionNumberClass">1</span>{{ oneTime ? 'List' : 'What to look for' }}</h3>
 
-          <!-- Basic Info -->
-          <div class="mb-7 flex flex-col gap-4" data-tour-id="job-modal-basic-info">
-            <h4 class="mb-0!">Basics</h4>
-
-            <label v-if="!oneTime" class="ui-label" for="jobName">
-              Name
-              <input
-                id="jobName"
-                v-model="form.name"
-                type="text"
-                :placeholder="jobNamePlaceholder"
-                class="ui-input"
-                required
-              />
-            </label>
-
-            <div class="ui-label">
-              <span>Media Type</span>
-              <div class="flex gap-2 max-[600px]:flex-col">
-                <button
-                  v-for="type in mediaTypes"
-                  v-show="type.value !== 'both' || form.job_type !== 'discover'"
-                  :key="type.value"
-                  type="button"
-                  :class="[choiceClass(form.media_type === type.value), 'flex-1 justify-center']"
-                  @click="form.media_type = type.value"
-                >
-                  <i aria-hidden="true" :class="type.icon"></i>
-                  {{ type.label }}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- User Selection (only for recommendation jobs) -->
-          <div v-if="form.job_type === 'recommendation'" class="mb-7">
-            <h4>Users to monitor</h4>
-            <RecommendationFilters v-model="form" :show-advanced="showAdvanced" :llm-configured="llmConfigured" />
-          </div>
-
-          <div v-if="form.job_type === 'trakt_recommendations'" class="mb-7">
-            <h4>Trakt user</h4>
-            <TraktRecommendationFilters
-              v-model="form"
-              :show-advanced="showAdvanced"
-              :trakt-configured="traktConfigured"
-              :connected-users="connectedUsers"
-              :is-loading="traktLoading"
-            />
-          </div>
-
-          <!-- Seer delivery -->
-          <div v-if="form.job_type === 'list_import'" class="mb-7 grid gap-3" data-testid="public-list-source">
-            <h4>Public list</h4>
-            <BaseDropdown v-model="form.filters.list_provider" :options="listProviders" label="Provider" placeholder="Select provider" @update:model-value="listCheckMessage = ''" />
-            <label class="ui-label" for="listUrl">List URL
-              <input id="listUrl" v-model="form.filters.list_url" type="url" required class="ui-input" placeholder="https://mdblist.com/lists/username/list-name" @input="listCheckMessage = ''" />
-            </label>
-            <p class="m-0 text-xs text-ink-3">{{ oneTime ? 'All matching titles are checked and queued in the background. Titles already in your library, requested or queued are skipped.' : 'Public lists only. Existing list entries are imported gradually; requests are credited to this job’s owner when using a mapped Seer user.' }}</p>
-            <div class="flex flex-wrap items-center gap-3">
-              <button type="button" class="ui-btn" :disabled="listChecking || !form.filters.list_provider || !form.filters.list_url" @click="verifyList">{{ listChecking ? 'Checking…' : 'Verify list' }}</button>
-              <button type="button" class="ui-btn" :disabled="listPreviewLoading || !form.filters.list_provider || !form.filters.list_url" @click="previewList()"><i aria-hidden="true" :class="listPreviewLoading ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>{{ listPreviewLoading ? 'Loading…' : 'Preview list' }}</button>
-              <span v-if="listCheckMessage" role="status" class="min-w-0 break-words text-sm" :class="listCheckSuccess ? 'text-good' : 'text-bad'">{{ listCheckMessage }}</span>
-            </div>
-          </div>
-
-          <div class="mb-7">
-            <h4>Seer delivery</h4>
-            <div class="mb-4 grid gap-2 md:grid-cols-3">
-              <button v-for="mode in deliveryModes" :key="mode.value" type="button" :class="choiceClass(form.delivery_mode === mode.value)" @click="form.delivery_mode = mode.value">
-                <i aria-hidden="true" :class="mode.icon" class="w-4 shrink-0 text-center"></i><span class="grid flex-1 gap-0.5"><strong>{{ mode.label }}</strong><small class="text-[0.72rem] font-normal text-ink-3">{{ mode.hint }}</small></span>
-              </button>
-            </div>
-            <BaseDropdown
-              v-model="form.seer_identity_mode"
-              :options="seerIdentityOptions"
-              label="Request as"
-              placeholder="Select Seer identity"
-              help-text="Choose who Seer credits for these requests. Mapped users fall back to the technical user configured in Connections."
-            />
-            <div class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
-              <div v-for="type in visibleProfileTypes" :key="type" class="grid gap-2 rounded-ctl border border-edge bg-panel-2 p-4">
-                <div class="flex items-center gap-2 text-[0.85rem] font-semibold text-ink"><i aria-hidden="true" :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'" class="text-ink-4"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
-                <BaseDropdown :model-value="form.request_profiles[type].serverId || ''" :options="serverOptions(type)" label="Server" placeholder="Use Seer default" @update:model-value="setRequestServer(type, $event)" />
-                <template v-if="form.request_profiles[type].serverId">
-                  <BaseDropdown v-model="form.request_profiles[type].profileId" :options="profileOptions(type)" label="Quality profile" placeholder="Select quality profile" />
-                  <BaseDropdown v-model="form.request_profiles[type].rootFolder" :options="rootFolderOptions(type)" label="Root folder" placeholder="Select root folder" />
-                  <BaseDropdown v-if="type === 'tv' && languageProfileOptions(type).length" v-model="form.request_profiles[type].languageProfileId" :options="languageProfileOptions(type)" label="Language profile" placeholder="Use Sonarr default" />
+              <div v-if="!oneTime" class="mb-6" data-tour-id="job-modal-type-selector">
+                <div :class="fieldLabelClass">
+                  <span>Job type</span>
+                  <InfoTip v-if="isEditing" text="The type sets how the job finds titles, so it can't be changed later. Create a new job to use a different type." />
+                </div>
+                <div v-if="isEditing" class="flex items-center gap-3 rounded-ctl border border-edge-strong bg-panel-2 px-3.5 py-3">
+                  <i aria-hidden="true" :class="jobTypeInfoIcon" class="w-5 text-center text-brand-ink"></i>
+                  <span class="flex min-w-0 flex-col gap-0.5">
+                    <span class="text-[0.85rem] font-semibold text-ink">{{ currentJobType.label }}</span>
+                    <span class="text-xs text-ink-3">{{ jobTypeInfoText }}</span>
+                  </span>
+                </div>
+                <template v-else>
+                  <div class="grid gap-2 sm:grid-cols-2">
+                    <button
+                      v-for="type in jobTypes"
+                      :key="type.value"
+                      type="button"
+                      :class="choiceClass(form.job_type === type.value)"
+                      :disabled="type.value === 'trakt_recommendations' && !traktJobAvailable"
+                      :title="type.value === 'trakt_recommendations' ? traktJobUnavailableReason : null"
+                      :aria-pressed="form.job_type === type.value ? 'true' : 'false'"
+                      @click="setJobType(type.value)"
+                    >
+                      <i aria-hidden="true" :class="type.icon" class="w-5 text-center"></i>
+                      <span class="flex min-w-0 flex-col gap-0.5">
+                        <span>{{ type.label }}</span>
+                        <span class="text-[0.72rem] font-normal text-ink-3">{{ type.description }}</span>
+                      </span>
+                    </button>
+                  </div>
+                  <p class="m-0 mt-2 text-xs text-ink-4">{{ jobTypeInfoText }}</p>
+                  <p v-if="!traktJobAvailable" class="m-0 mt-1 flex items-start gap-1.5 text-xs text-ink-4" role="status">
+                    <i aria-hidden="true" class="fas fa-circle-info mt-0.5 text-brand-ink"></i>
+                    <span>{{ traktJobUnavailableReason }}</span>
+                  </p>
                 </template>
               </div>
-            </div>
-          </div>
 
-          <div v-if="!oneTime" class="mb-7" data-tour-id="job-modal-schedule">
-            <h4>Schedule</h4>
-            <SchedulePicker v-model="schedule" />
-            <div class="mt-4 grid gap-4">
-              <BaseCheckbox
-                v-model="form.pause_if_pending_requests"
-                label="Pause while Seer requests are pending"
-                description="Skip this job when Seer still has requests awaiting approval or denial."
-              />
-              <div class="ui-label">
-                <span>Pause while this job has SuggestArr approvals pending</span>
-                <div class="grid gap-2 md:grid-cols-3">
-                  <button v-for="mode in approvalPauseModes" :key="mode.value" type="button" :class="choiceClass(form.approval_pause_mode === mode.value)" @click="form.approval_pause_mode = mode.value">
+              <!-- Where titles come from, per job type -->
+              <div v-if="form.job_type === 'list_import'" class="mb-6 grid gap-3" data-testid="public-list-source">
+                <div class="grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)]">
+                  <BaseDropdown v-model="form.filters.list_provider" :options="listProviders" label="Provider" placeholder="Select provider" @update:model-value="listCheckMessage = ''" />
+                  <label class="ui-label" for="listUrl">List URL
+                    <input id="listUrl" v-model="form.filters.list_url" type="url" required class="ui-input" placeholder="https://mdblist.com/lists/username/list-name" @input="listCheckMessage = ''" />
+                  </label>
+                </div>
+                <p class="m-0 text-xs text-ink-4">{{ oneTime ? 'All matching titles are checked and queued in the background. Titles already in your library, requested or queued are skipped.' : 'Public lists only. Titles are imported gradually, in list order, skipping what you already have or requested.' }}</p>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button type="button" class="ui-btn" :disabled="listChecking || !form.filters.list_provider || !form.filters.list_url" @click="verifyList">{{ listChecking ? 'Checking…' : 'Verify list' }}</button>
+                  <button type="button" class="ui-btn" :disabled="listPreviewLoading || !form.filters.list_provider || !form.filters.list_url" @click="previewList()"><i aria-hidden="true" :class="listPreviewLoading ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>{{ listPreviewLoading ? 'Loading…' : 'Preview list' }}</button>
+                  <span v-if="listCheckMessage" role="status" class="min-w-0 break-words text-sm" :class="listCheckSuccess ? 'text-good' : 'text-bad'">{{ listCheckMessage }}</span>
+                </div>
+              </div>
+
+              <div v-if="form.job_type === 'recommendation'" class="mb-6">
+                <div :class="fieldLabelClass">
+                  <span>Users to monitor</span>
+                  <InfoTip text="Suggestions are based on what these users watched on your media server." />
+                </div>
+                <RecommendationUsers v-model="form" />
+              </div>
+
+              <div v-if="form.job_type === 'trakt_recommendations'" class="mb-6">
+                <div :class="fieldLabelClass">
+                  <span>Trakt account</span>
+                  <InfoTip text="The media user whose linked Trakt recommendations this job fetches." />
+                </div>
+                <TraktRecommendationFilters
+                  v-model="form"
+                  :trakt-configured="traktConfigured"
+                  :connected-users="connectedUsers"
+                  :is-loading="traktLoading"
+                />
+              </div>
+
+              <div class="grid gap-4 sm:grid-cols-2" data-tour-id="job-modal-basic-info">
+                <div class="ui-label">
+                  <span>Media type</span>
+                  <div role="group" aria-label="Media type" class="flex rounded-ctl border border-edge-strong bg-canvas p-1">
+                    <button
+                      v-for="type in visibleMediaTypes"
+                      :key="type.value"
+                      type="button"
+                      class="flex h-[32px] flex-1 cursor-pointer items-center justify-center gap-2 rounded-[8px] border-0 px-2 text-[13px] font-semibold transition-colors"
+                      :class="form.media_type === type.value ? 'bg-brand text-white' : 'bg-transparent text-ink-3 hover:text-ink'"
+                      :aria-pressed="form.media_type === type.value ? 'true' : 'false'"
+                      @click="form.media_type = type.value"
+                    >
+                      <i aria-hidden="true" :class="type.icon"></i>
+                      {{ type.label }}
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="!oneTime" class="flex flex-col gap-1.5">
+                  <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                    <label for="jobName">Name</label>
+                    <InfoTip text="Shown in the job list and history. Leave it empty to use the suggested name." />
+                  </div>
+                  <input
+                    id="jobName"
+                    v-model="form.name"
+                    type="text"
+                    :placeholder="autoName"
+                    class="ui-input"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <!-- 2. Filters -->
+            <section data-section="filters" :class="sectionClass" data-tour-id="job-modal-filters">
+              <h3 :class="sectionTitleClass"><span :class="sectionNumberClass">2</span>Filters</h3>
+
+              <div v-if="usesExclusions" class="mb-6">
+                <div :class="fieldLabelClass">
+                  <span>Skip titles that are</span>
+                </div>
+                <div class="flex flex-wrap gap-x-6 gap-y-2">
+                  <div class="flex items-center gap-1.5">
+                    <BaseCheckbox v-model="excludeDownloaded" label="Already in your library" />
+                    <InfoTip text="Titles your media server already has are never requested again." />
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <BaseCheckbox v-model="excludeRequested" label="Already requested in Seer" />
+                    <InfoTip text="Titles with an existing Seer request, from anyone, are skipped." />
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="form.job_type === 'recommendation'" class="mb-6">
+                <div :class="fieldLabelClass"><span>Recommendation tuning</span></div>
+                <RecommendationFilters v-model="form" :llm-configured="llmConfigured" />
+              </div>
+
+              <!-- Filters: own stacking context so its dropdowns overlap what follows -->
+              <div v-if="form.job_type === 'discover'" class="relative z-50">
+                <JobFilters v-model="form.filters" :media-type="form.media_type" :job-type="form.job_type" />
+              </div>
+              <template v-else>
+                <button type="button" :class="disclosureClass" :aria-expanded="qualityOpen.toString()" aria-controls="job-quality-filters" @click="qualityOpen = !qualityOpen">
+                  <span class="flex min-w-0 flex-col items-start gap-0.5">
+                    <span class="text-[13px] font-semibold text-ink">Quality filters</span>
+                    <span class="text-xs font-normal text-ink-4">Rating, votes, runtime, release date, language, genres and streaming services.</span>
+                  </span>
+                  <i aria-hidden="true" class="fas fa-chevron-down ml-auto text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': qualityOpen }"></i>
+                </button>
+                <div v-if="qualityOpen" id="job-quality-filters" class="relative z-50 mt-4">
+                  <JobFilters v-model="form.filters" :media-type="form.media_type" :job-type="form.job_type" />
+                </div>
+              </template>
+            </section>
+
+            <!-- 3. Schedule -->
+            <section v-if="!oneTime" data-section="schedule" :class="sectionClass" data-tour-id="job-modal-schedule">
+              <h3 :class="sectionTitleClass"><span :class="sectionNumberClass">3</span>Schedule</h3>
+              <SchedulePicker v-model="schedule" />
+
+              <div class="mt-6">
+                <div :class="fieldLabelClass">
+                  <span>Skip a scheduled run when…</span>
+                  <InfoTip text="Pause rules only affect scheduled runs. “Run now” always works." />
+                </div>
+                <div class="flex flex-col divide-y divide-edge rounded-ctl border border-edge">
+                  <div class="flex items-center gap-1.5 px-4 py-3">
+                    <BaseCheckbox v-model="form.pause_if_pending_requests" label="Seer still has requests waiting for approval" />
+                    <InfoTip text="Avoids piling up new requests while Seer admins haven't reviewed the previous ones." />
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                    <div class="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-ink">
+                      <span id="approval-pause-label">This job has suggestions waiting in Requests</span>
+                      <InfoTip text="Suggestions held for your approval in SuggestArr's Requests page (when delivery is “Approve first”)." />
+                    </div>
+                    <div role="radiogroup" aria-labelledby="approval-pause-label" class="flex rounded-ctl border border-edge-strong bg-canvas p-1">
+                      <button
+                        v-for="mode in approvalPauseModes"
+                        :key="mode.value"
+                        type="button"
+                        role="radio"
+                        :aria-checked="form.approval_pause_mode === mode.value"
+                        :title="mode.hint"
+                        class="cursor-pointer rounded-[8px] border-0 px-3 py-1.5 text-xs font-semibold transition-colors"
+                        :class="form.approval_pause_mode === mode.value ? 'bg-brand text-white' : 'bg-transparent text-ink-3 hover:text-ink'"
+                        @click="form.approval_pause_mode = mode.value"
+                      >{{ mode.label }}</button>
+                    </div>
+                  </div>
+
+                  <div v-if="!['discover', 'list_import'].includes(form.job_type)" class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                    <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                      <BaseCheckbox v-model="form.prevent_suggestions_if_unwatched" label="Pause if suggestions remain unwatched" />
+                      <InfoTip text="Waits until people actually watch what was suggested before adding more." />
+                    </div>
+                    <label v-if="form.prevent_suggestions_if_unwatched" class="flex items-center gap-2 text-[13px] text-ink-3" for="unwatchedDays">
+                      for
+                      <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days" class="ui-input h-9! w-20" type="number" min="1" required />
+                      days
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- 4. Requests -->
+            <section data-section="requests" :class="sectionClass" data-tour-id="job-modal-requests">
+              <h3 :class="sectionTitleClass"><span :class="sectionNumberClass">{{ oneTime ? 3 : 4 }}</span>Requests</h3>
+
+              <div class="mb-6">
+                <div :class="fieldLabelClass">
+                  <span>Delivery</span>
+                  <InfoTip text="“Approve first” holds suggestions in the Requests page until you accept them. “Send automatically” requests them in Seer straight away." />
+                </div>
+                <div class="grid gap-2 sm:grid-cols-3">
+                  <button v-for="mode in deliveryModes" :key="mode.value" type="button" :class="choiceClass(form.delivery_mode === mode.value)" :aria-pressed="form.delivery_mode === mode.value ? 'true' : 'false'" @click="form.delivery_mode = mode.value">
                     <i aria-hidden="true" :class="mode.icon" class="w-4 shrink-0 text-center"></i><span class="grid flex-1 gap-0.5"><strong>{{ mode.label }}</strong><small class="text-[0.72rem] font-normal text-ink-3">{{ mode.hint }}</small></span>
                   </button>
                 </div>
               </div>
-              <BaseCheckbox
-                v-if="!['discover', 'list_import'].includes(form.job_type)"
-                v-model="form.prevent_suggestions_if_unwatched"
-                label="Pause if suggestions remain unwatched"
-                description="Scheduled runs only. Manual Run now remains available."
-              />
-              <label v-if="!['discover', 'list_import'].includes(form.job_type) && form.prevent_suggestions_if_unwatched" class="ui-label" for="unwatchedDays">
-                Days before pausing
-                <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days"
-                  class="ui-input" type="number" min="1" required />
-              </label>
-              <label class="ui-label" for="maxRequestsPerUser">
-                Automatic requests per user
-                <input id="maxRequestsPerUser" v-model.number="form.max_requests_per_user"
-                  class="ui-input" type="number" min="0" max="1000" required />
-                <small class="text-xs font-normal text-ink-4">Set 0 for no extra limit. Max Results still caps each run.</small>
-              </label>
-              <label v-if="form.max_requests_per_user > 0" class="ui-label" for="requestLimitWindowHours">
-                Rolling window (hours)
-                <input id="requestLimitWindowHours" v-model.number="form.request_limit_window_hours"
-                  class="ui-input" type="number" min="1" max="8760" required />
-              </label>
-            </div>
-          </div>
 
-          <!-- Advanced Settings Toggle -->
-          <button type="button" class="mt-7 mb-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-ctl border border-dashed border-edge-strong bg-transparent px-4 py-3 text-[0.85rem] font-semibold text-ink-3 hover:border-brand-ink hover:text-brand-ink" data-tour-id="job-modal-advanced-toggle" :aria-expanded="showAdvanced.toString()" @click="showAdvanced = !showAdvanced">
-            <i aria-hidden="true" :class="showAdvanced ? 'fas fa-chevron-up' : 'fas fa-chevron-down'" class="text-xs"></i>
-            {{ showAdvanced ? 'Hide advanced settings' : 'Show advanced settings' }}
-          </button>
-
-          <!-- Advanced Settings (collapsible) -->
-          <transition
-            enter-active-class="transition-opacity duration-300"
-            leave-active-class="transition-opacity duration-300"
-            enter-from-class="opacity-0"
-            leave-to-class="opacity-0"
-          >
-            <div v-if="showAdvanced" class="border-t border-edge pt-5 pb-4">
-              <!-- Max Results -->
-              <div v-if="!oneTime && form.job_type !== 'recommendation'" class="mb-7" data-tour-id="job-modal-max-results">
-                <h4>Results</h4>
-                <label class="ui-label" for="maxResults">
-                  Max results: {{ form.max_results }}
-                  <input
-                    id="maxResults"
-                    v-model.number="form.max_results"
-                    type="range"
-                    :min="form.job_type === 'list_import' ? 1 : 5"
-                    :max="form.job_type === 'list_import' ? 1000 : 100"
-                    :step="form.job_type === 'list_import' ? 1 : 5"
-                    class="mt-2 w-full accent-brand"
-                  />
-                  <small class="text-xs font-normal text-ink-4">
-                    {{ form.job_type === 'list_import' ? 'Maximum new requests per run' : 'Maximum content to discover per run' }}
-                  </small>
-                </label>
-              </div>
-
-              <!-- Filters: own stacking context so its dropdowns overlap what follows -->
-              <div class="relative z-50" data-tour-id="job-modal-filters">
-                <h4>{{ form.job_type === 'discover' ? 'Discovery filters' : 'Quality filters' }}</h4>
-                <JobFilters
-                  v-model="form.filters"
-                  :media-type="form.media_type"
-                  :job-type="form.job_type"
+              <div class="mb-6">
+                <BaseDropdown
+                  v-model="form.seer_identity_mode"
+                  :options="seerIdentityOptions"
+                  label="Request as"
+                  placeholder="Select Seer identity"
+                  :help-text="seerIdentityHelp"
                 />
               </div>
-            </div>
-          </transition>
+
+              <div v-if="!oneTime" class="mb-6" data-tour-id="job-modal-max-results">
+                <div :class="fieldLabelClass"><span>Limits</span></div>
+                <div class="grid gap-4 sm:grid-cols-3">
+                  <div class="flex flex-col gap-1.5">
+                    <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                      <label for="maxResults">Per run</label>
+                      <InfoTip :text="maxResultsHelp" />
+                    </div>
+                    <input id="maxResults" v-model.number="form.max_results" class="ui-input" type="number" min="1" :max="maxResultsLimit" required />
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                      <label for="maxRequestsPerUser">Per user</label>
+                      <InfoTip text="Most automatic requests credited to one Seer user within the window. 0 means no extra limit; the per-run limit still applies." />
+                    </div>
+                    <input id="maxRequestsPerUser" v-model.number="form.max_requests_per_user" class="ui-input" type="number" min="0" max="1000" required />
+                  </div>
+                  <div v-if="form.max_requests_per_user > 0" class="flex flex-col gap-1.5">
+                    <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                      <label for="requestLimitWindowHours">Window (hours)</label>
+                      <InfoTip text="The per-user limit counts requests made in this many past hours, e.g. 24 for a daily cap or 168 for a weekly one." />
+                    </div>
+                    <input id="requestLimitWindowHours" v-model.number="form.request_limit_window_hours" class="ui-input" type="number" min="1" max="8760" required />
+                  </div>
+                </div>
+              </div>
+
+              <button type="button" :class="disclosureClass" :aria-expanded="profilesOpen.toString()" aria-controls="job-request-profiles" @click="profilesOpen = !profilesOpen">
+                <span class="flex min-w-0 flex-col items-start gap-0.5">
+                  <span class="text-[13px] font-semibold text-ink">Radarr / Sonarr overrides</span>
+                  <span class="text-xs font-normal text-ink-4">{{ profilesSummary }}</span>
+                </span>
+                <i aria-hidden="true" class="fas fa-chevron-down ml-auto text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': profilesOpen }"></i>
+              </button>
+              <div v-if="profilesOpen" id="job-request-profiles" class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
+                <div v-for="type in visibleProfileTypes" :key="type" class="grid gap-2 rounded-ctl border border-edge bg-panel-2 p-4">
+                  <div class="flex items-center gap-2 text-[0.85rem] font-semibold text-ink"><i aria-hidden="true" :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'" class="text-ink-4"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
+                  <BaseDropdown :model-value="form.request_profiles[type].serverId || ''" :options="serverOptions(type)" label="Server" placeholder="Use Seer default" @update:model-value="setRequestServer(type, $event)" />
+                  <template v-if="form.request_profiles[type].serverId">
+                    <BaseDropdown v-model="form.request_profiles[type].profileId" :options="profileOptions(type)" label="Quality profile" placeholder="Select quality profile" />
+                    <BaseDropdown v-model="form.request_profiles[type].rootFolder" :options="rootFolderOptions(type)" label="Root folder" placeholder="Select root folder" />
+                    <BaseDropdown v-if="type === 'tv' && languageProfileOptions(type).length" v-model="form.request_profiles[type].languageProfileId" :options="languageProfileOptions(type)" label="Language profile" placeholder="Use Sonarr default" />
+                  </template>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
 
         <footer class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-edge bg-panel-2/50 px-6 py-3 max-sm:px-4">
+          <p v-if="validationMessage" class="m-0 mr-auto flex min-w-0 items-center gap-1.5 text-xs text-caution" role="status">
+            <i aria-hidden="true" class="fas fa-circle-exclamation"></i>{{ validationMessage }}
+          </p>
           <button type="button" class="ui-btn" @click="requestClose">Cancel</button>
           <button type="submit" class="ui-btn-primary" :disabled="!isValid || isSaving">
             <i v-if="isSaving" aria-hidden="true" class="fas fa-spinner fa-spin"></i>
@@ -247,35 +340,44 @@
 <script>
 import JobFilters from './JobFilters.vue';
 import RecommendationFilters from './RecommendationFilters.vue';
+import RecommendationUsers from './RecommendationUsers.vue';
 import TraktRecommendationFilters from './TraktRecommendationFilters.vue';
 import SchedulePicker from './SchedulePicker.vue';
 import DryRunResultModal from './DryRunResultModal.vue';
 import { jobsApi } from '@/api/jobsApi';
 import { listTraktJobUsers } from '@/api/api';
 import { waitForAuthReady, useAuth } from '@/composables/useAuth';
-import { getJobTypeIcon } from '@/utils/jobTypeVisuals.js';
+import { getJobTypeIcon, formatJobSchedule } from '@/utils/jobTypeVisuals.js';
+import { jobRequiresApproval } from '@/utils/requestApproval.js';
 import axios from 'axios';
 import { confirmDialog } from '@/utils/confirmDialog';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import InfoTip from '@/components/ui/InfoTip.vue';
 
 export default {
   name: 'JobModal',
   components: {
     JobFilters,
     RecommendationFilters,
+    RecommendationUsers,
     TraktRecommendationFilters,
     SchedulePicker,
     DryRunResultModal,
     BaseCheckbox,
-    BaseDropdown
+    BaseDropdown,
+    InfoTip
   },
   props: {
     oneTime: { type: Boolean, default: false },
     job: {
       type: Object,
       default: null
-    }
+    },
+    /** Global REQUIRE_REQUEST_APPROVAL, shown on the "Use global setting" delivery option; null when unknown. */
+    requestApprovalDefault: { type: [Boolean, String], default: null },
+    /** Global PAUSE_JOBS_WITH_PENDING_APPROVALS, shown on the "Global" pause option; null when unknown. */
+    approvalPauseDefault: { type: Boolean, default: null }
   },
   emits: ['close', 'save'],
   setup() { const { currentUser } = useAuth(); return { currentUser }; },
@@ -294,9 +396,12 @@ export default {
         enabled: true,
         pause_if_pending_requests: false,
         prevent_suggestions_if_unwatched: false,
-        unwatched_suggestion_days: 7
-        , max_requests_per_user: 0, request_limit_window_hours: 24
-        , delivery_mode: 'inherit', approval_pause_mode: 'inherit', seer_identity_mode: 'technical_user',
+        unwatched_suggestion_days: 7,
+        max_requests_per_user: 0,
+        request_limit_window_hours: 24,
+        delivery_mode: 'inherit',
+        approval_pause_mode: 'inherit',
+        seer_identity_mode: 'technical_user',
         request_profiles: { movie: {}, tv: {} }
       },
       schedule: {
@@ -304,7 +409,14 @@ export default {
         value: 'daily'
       },
       isSaving: false,
-      showAdvanced: false,
+      qualityOpen: false,
+      profilesOpen: false,
+      activeSection: 'source',
+      sectionClass: 'scroll-mt-2 border-b border-edge py-7 last:border-b-0',
+      sectionTitleClass: 'm-0 mb-5 flex items-center gap-2.5 text-[15px] font-bold text-ink',
+      sectionNumberClass: 'grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-soft text-xs font-bold text-brand-ink',
+      fieldLabelClass: 'mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-2',
+      disclosureClass: 'flex w-full cursor-pointer items-center gap-3 rounded-ctl border border-edge-strong bg-panel-2 px-4 py-3 text-left hover:border-ink-4',
       jobTypes: [
         { value: 'list_import', label: 'Import list', description: 'Public MDBList or Trakt list', icon: 'fas fa-list' },
         { value: 'discover', label: 'Discover', description: 'Find content using TMDb filters', icon: 'fas fa-search' },
@@ -316,16 +428,6 @@ export default {
         { value: 'tv', label: 'TV shows', icon: 'fas fa-tv' },
         { value: 'both', label: 'Both', icon: 'fas fa-layer-group' },
       ],
-      deliveryModes: [
-        { value: 'inherit', label: 'Use global setting', hint: 'Follow Advanced settings', icon: 'fas fa-sliders' },
-        { value: 'automatic', label: 'Send automatically', hint: 'Queue for Seer immediately', icon: 'fas fa-paper-plane' },
-        { value: 'manual', label: 'Approve first', hint: 'Review in Requests', icon: 'fas fa-user-check' },
-      ],
-      approvalPauseModes: [
-        { value: 'inherit', label: 'Use global setting', hint: 'Follow Advanced settings', icon: 'fas fa-sliders' },
-        { value: 'always', label: 'Always pause', hint: "Wait for this job's approvals", icon: 'fas fa-pause' },
-        { value: 'never', label: 'Never pause', hint: 'Ignore pending approvals', icon: 'fas fa-play' },
-      ],
       llmConfigured: false,
       listProviders: [{ value: 'mdblist', label: 'MDBList' }, { value: 'trakt', label: 'Trakt' }],
       listChecking: false,
@@ -334,18 +436,93 @@ export default {
       listCheckMessage: '',
       listCheckSuccess: false,
       traktConfigured: false,
-      traktLoading: false
-      , radarrServers: [], sonarrServers: []
+      traktLoading: false,
+      radarrServers: [],
+      sonarrServers: []
     };
   },
   computed: {
     seerIdentityOptions() {
       const options = [
-        { value: 'technical_user', label: 'Technical user configured in Connections' },
-        { value: 'matching_user', label: 'Mapped Seer user (fallback to technical)' }
+        { value: 'technical_user', label: 'Technical user' },
+        { value: 'matching_user', label: 'Matching Seer user' }
       ];
-      if (this.currentUser?.role === 'admin') options.push({ value: 'admin_user', label: 'Mapped Seer admin' });
+      if (this.currentUser?.role === 'admin') options.push({ value: 'admin_user', label: 'Seer admin' });
       return options;
+    },
+    seerIdentityHelp() {
+      if (this.form.seer_identity_mode === 'matching_user') {
+        return 'Each request is credited to the Seer account linked to the user it is for. Users without one fall back to the technical user.';
+      }
+      if (this.form.seer_identity_mode === 'admin_user') {
+        return 'Requests are made as your linked Seer admin account.';
+      }
+      return 'Requests are made as the Seer user configured in Connections.';
+    },
+    deliveryModes() {
+      const global = this.requestApprovalDefault === null ? null : jobRequiresApproval({ delivery_mode: 'inherit' }, this.requestApprovalDefault);
+      return [
+        { value: 'inherit', label: 'Use global setting', hint: global === null ? 'Follow Advanced settings' : global ? 'Currently: approval required' : 'Currently: sent automatically', icon: 'fas fa-sliders' },
+        { value: 'automatic', label: 'Send automatically', hint: 'Request in Seer right away', icon: 'fas fa-paper-plane' },
+        { value: 'manual', label: 'Approve first', hint: 'Review in Requests', icon: 'fas fa-user-check' },
+      ];
+    },
+    approvalPauseModes() {
+      const global = this.approvalPauseDefault === null ? '' : ` (${this.approvalPauseDefault ? 'on' : 'off'})`;
+      return [
+        { value: 'inherit', label: `Global${global}`, hint: 'Follow the setting in Advanced' },
+        { value: 'always', label: 'Always', hint: "Wait until this job's suggestions are reviewed" },
+        { value: 'never', label: 'Never', hint: 'Ignore pending approvals' },
+      ];
+    },
+    currentJobType() {
+      return this.jobTypes.find(type => type.value === this.form.job_type) || this.jobTypes[0];
+    },
+    visibleMediaTypes() {
+      return this.mediaTypes.filter(type => type.value !== 'both' || this.form.job_type !== 'discover');
+    },
+    mediaLabel() {
+      return this.mediaTypes.find(type => type.value === this.form.media_type)?.label || '';
+    },
+    autoName() {
+      return `${this.currentJobType.label} · ${this.mediaLabel}`;
+    },
+    usesExclusions() {
+      return ['recommendation', 'trakt_recommendations'].includes(this.form.job_type);
+    },
+    // Unset means the job follows the global EXCLUDE_* settings, which default to on.
+    excludeDownloaded: {
+      get() { return this.form.filters.exclude_downloaded ?? true; },
+      set(value) { this.form.filters = { ...this.form.filters, exclude_downloaded: value }; }
+    },
+    excludeRequested: {
+      get() { return this.form.filters.exclude_requested ?? true; },
+      set(value) { this.form.filters = { ...this.form.filters, exclude_requested: value }; }
+    },
+    maxResultsLimit() {
+      return this.form.job_type === 'list_import' ? 1000 : 100;
+    },
+    maxResultsHelp() {
+      if (this.form.job_type === 'list_import') return 'Most new titles requested from the list each run (1–1000).';
+      if (this.form.job_type === 'discover') return 'Most titles discovered and requested each run (1–100).';
+      return 'Most suggestions requested each run, across all monitored users (1–100).';
+    },
+    profilesSummary() {
+      const set = this.visibleProfileTypes.filter(type => this.form.request_profiles[type]?.serverId);
+      if (!set.length) return "Using Seer's default server, quality profile and root folder.";
+      return `Custom ${set.map(type => (type === 'movie' ? 'Radarr' : 'Sonarr')).join(' and ')} profile.`;
+    },
+    sections() {
+      const delivery = { inherit: 'Global delivery', automatic: 'Automatic', manual: 'Approve first' }[this.form.delivery_mode] || '';
+      const sections = [
+        { id: 'source', title: this.oneTime ? 'List' : 'What to look for', summary: this.oneTime ? this.mediaLabel : this.autoName },
+        { id: 'filters', title: 'Filters', summary: this.form.job_type === 'discover' ? 'TMDb discovery filters' : this.form.job_type === 'recommendation' ? 'Tuning and quality' : 'Quality filters' },
+      ];
+      if (!this.oneTime) {
+        sections.push({ id: 'schedule', title: 'Schedule', summary: formatJobSchedule({ schedule_type: this.schedule.type, schedule_value: this.schedule.value }) });
+      }
+      sections.push({ id: 'requests', title: 'Requests', summary: this.oneTime ? delivery : `${delivery} · ${this.form.max_results || 0} per run` });
+      return sections;
     },
     visibleProfileTypes() {
       return this.form.media_type === 'both' ? ['movie', 'tv'] : [this.form.media_type];
@@ -386,21 +563,19 @@ export default {
       if (this.form.job_type === 'trakt_recommendations') return 'e.g., Weekly Trakt Picks';
       return 'e.g., Weekly Recommendations';
     },
+    validationMessage() {
+      if (this.form.job_type === 'list_import' && !this.form.filters.list_provider) return 'Choose a list provider.';
+      if (this.form.job_type === 'list_import' && !this.form.filters.list_url?.trim()) return 'Enter the URL of the public list.';
+      if (this.form.job_type === 'trakt_recommendations' && (this.form.user_ids || []).length !== 1) return 'Choose the Trakt account to use.';
+      if (!this.form.media_type) return 'Choose a media type.';
+      if (!this.oneTime && !(this.form.max_results >= 1 && this.form.max_results <= this.maxResultsLimit)) return `Requests per run must be between 1 and ${this.maxResultsLimit}.`;
+      if (this.form.prevent_suggestions_if_unwatched && !(this.form.unwatched_suggestion_days >= 1)) return 'Days before pausing must be at least 1.';
+      if (!(this.form.max_requests_per_user >= 0 && this.form.max_requests_per_user <= 1000)) return 'Per-user limit must be between 0 and 1000.';
+      if (!(this.form.request_limit_window_hours >= 1 && this.form.request_limit_window_hours <= 8760)) return 'Limit window must be between 1 and 8760 hours.';
+      return '';
+    },
     isValid() {
-      if (this.form.job_type === 'list_import' && (!this.form.filters.list_provider || !this.form.filters.list_url?.trim())) return false;
-      if (!this.form.name.trim().length || !this.form.media_type) {
-        return false;
-      }
-      if (this.form.prevent_suggestions_if_unwatched && this.form.unwatched_suggestion_days < 1) {
-        return false;
-      }
-      if (this.form.max_requests_per_user < 0 || this.form.max_requests_per_user > 1000 || this.form.request_limit_window_hours < 1 || this.form.request_limit_window_hours > 8760) {
-        return false;
-      }
-      if (this.form.job_type === 'trakt_recommendations') {
-        return (this.form.user_ids || []).length === 1;
-      }
-      return true;
+      return !this.validationMessage;
     }
   },
   async mounted() {
@@ -415,10 +590,10 @@ export default {
         enabled: this.job.enabled !== false,
         pause_if_pending_requests: this.job.pause_if_pending_requests === true,
         prevent_suggestions_if_unwatched: this.job.prevent_suggestions_if_unwatched === true,
-        unwatched_suggestion_days: this.job.unwatched_suggestion_days || 7
-        , max_requests_per_user: this.job.max_requests_per_user || 0,
-        request_limit_window_hours: this.job.request_limit_window_hours || 24
-        , delivery_mode: this.job.delivery_mode || 'automatic',
+        unwatched_suggestion_days: this.job.unwatched_suggestion_days || 7,
+        max_requests_per_user: this.job.max_requests_per_user || 0,
+        request_limit_window_hours: this.job.request_limit_window_hours || 24,
+        delivery_mode: this.job.delivery_mode || 'automatic',
         approval_pause_mode: this.job.approval_pause_mode || 'inherit',
         seer_identity_mode: this.job.seer_identity_mode || 'technical_user',
         request_profiles: {
@@ -430,6 +605,7 @@ export default {
         type: this.job.schedule_type || 'preset',
         value: this.job.schedule_value || 'daily'
       };
+      this.profilesOpen = Object.values(this.form.request_profiles).some(profile => profile.serverId);
     }
     // For new jobs, pre-populate filters with global config defaults
     if (!this.isEditing) {
@@ -564,8 +740,25 @@ export default {
       const server = this.serversFor(type).find(item => String(item.id) === String(serverId));
       this.form.request_profiles[type] = { serverId, profileId: '', rootFolder: '', is4k: server?.is4k === true, languageProfileId: server?.activeLanguageProfileId ?? '' };
     },
-    openAdvanced() {
-      this.showAdvanced = true;
+    scrollToSection(id) {
+      this.$refs.body?.querySelector(`[data-section="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+
+    // Highlights the last section whose heading has scrolled past the top of the body.
+    updateActiveSection() {
+      const body = this.$refs.body;
+      if (!body) return;
+      const nodes = [...body.querySelectorAll('[data-section]')];
+      const atBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 4;
+      const top = body.getBoundingClientRect().top + 80;
+      const current = atBottom ? nodes[nodes.length - 1] : nodes.filter(node => node.getBoundingClientRect().top <= top).pop();
+      this.activeSection = (current || nodes[0])?.dataset.section || 'source';
+    },
+
+    // Used by the jobs tour so its steps can point at collapsed parts.
+    expandAll() {
+      this.qualityOpen = true;
+      this.profilesOpen = true;
     },
 
     async refreshTraktSetup() {
@@ -610,6 +803,7 @@ export default {
         this.$emit('save', this.listConfig());
         return;
       }
+      if (!this.form.name.trim()) this.form.name = this.autoName;
 
       this.isSaving = true;
       try {

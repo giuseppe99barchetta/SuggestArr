@@ -1,45 +1,36 @@
 <template>
-  <div class="flex flex-col gap-4">
-    <!-- Schedule Type Toggle -->
-    <div class="flex rounded-ctl border border-edge bg-panel-2 p-1">
-      <button
-        v-for="opt in typeOptions"
-        :key="opt.value"
-        type="button"
-        class="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-[8px] border-0 px-4 py-3 font-medium transition"
-        :class="localValue.type === opt.value ? 'bg-brand text-white' : 'bg-transparent text-ink-3 hover:text-ink'"
-        @click="setType(opt.value)"
-      >
-        <i aria-hidden="true" :class="opt.icon"></i>
-        {{ opt.label }}
-      </button>
-    </div>
-
-    <!-- Preset Options -->
-    <div v-if="localValue.type === 'preset'" class="flex flex-col gap-2">
+  <div class="flex flex-col gap-3">
+    <div role="radiogroup" aria-label="Run frequency" class="grid grid-cols-2 gap-2 sm:grid-cols-5">
       <button
         v-for="preset in presets"
         :key="preset.value"
         type="button"
-        class="flex cursor-pointer items-center gap-3 rounded-ctl border px-4 py-3 text-left transition"
-        :class="localValue.value === preset.value ? 'border-brand bg-brand/10' : 'border-edge bg-panel-2 hover:border-ink-4'"
+        role="radio"
+        :aria-checked="localValue.type === 'preset' && localValue.value === preset.value"
+        :class="chipClass(localValue.type === 'preset' && localValue.value === preset.value)"
         @click="selectPreset(preset.value)"
       >
-        <span class="flex h-8 w-8 items-center justify-center rounded-[8px]" :class="localValue.value === preset.value ? 'bg-brand text-white' : 'bg-white/5 text-ink-3'">
-          <i aria-hidden="true" :class="preset.icon"></i>
-        </span>
-        <span class="flex flex-1 flex-col gap-0.5">
-          <span class="font-medium text-ink">{{ preset.label }}</span>
-          <span class="text-sm text-ink-4">{{ preset.description }}</span>
-        </span>
-        <i aria-hidden="true" v-if="localValue.value === preset.value" class="fas fa-check text-brand-ink"></i>
+        <i aria-hidden="true" :class="preset.icon"></i>
+        {{ preset.label }}
+      </button>
+      <button
+        type="button"
+        role="radio"
+        :aria-checked="localValue.type === 'cron'"
+        :class="chipClass(localValue.type === 'cron')"
+        @click="setType('cron')"
+      >
+        <i aria-hidden="true" class="fas fa-code"></i>
+        Custom
       </button>
     </div>
 
+    <p v-if="localValue.type === 'preset'" class="m-0 text-xs text-ink-4">{{ presetDescription }}</p>
+
     <!-- Custom Cron Input -->
-    <div v-else class="flex flex-col gap-3">
+    <div v-else class="flex flex-col gap-2">
       <label class="ui-label" for="cronExpression">
-        Cron Expression
+        Cron expression
         <input
           id="cronExpression"
           v-model="localValue.value"
@@ -48,30 +39,23 @@
           class="ui-input font-mono"
           @input="validateCron"
         />
-        <small v-if="cronError" class="text-sm font-normal text-bad">{{ cronError }}</small>
-        <small v-else class="text-sm font-normal text-ink-4">Format: minute hour day month day_of_week</small>
       </label>
-
-      <!-- Cron Examples -->
-      <div class="flex flex-wrap items-center gap-2">
-        <span class="text-sm text-ink-4">Examples:</span>
-        <div class="flex flex-wrap gap-1.5">
-          <button
-            v-for="example in cronExamples"
-            :key="example"
-            type="button"
-            class="cursor-pointer rounded-[8px] border border-edge bg-panel-2 px-2 py-1.5 font-mono text-xs text-ink-3 transition hover:border-ink-4 hover:text-ink"
-            @click="setCronExample(example)"
-          >
-            {{ example }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Cron Preview -->
-      <div v-if="cronPreview && !cronError" class="flex items-center gap-2 rounded-[8px] border-l-[3px] border-notice bg-notice/10 px-4 py-3 text-sm text-notice">
-        <i aria-hidden="true" class="fas fa-info-circle"></i>
-        {{ cronPreview }}
+      <small v-if="cronError" class="text-xs text-bad">{{ cronError }}</small>
+      <small v-else-if="cronPreview" class="flex items-center gap-1.5 text-xs text-notice">
+        <i aria-hidden="true" class="fas fa-clock"></i>{{ cronPreview }}
+      </small>
+      <small v-else class="text-xs text-ink-4">Format: minute hour day month day_of_week</small>
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="text-xs text-ink-4">Examples:</span>
+        <button
+          v-for="example in cronExamples"
+          :key="example"
+          type="button"
+          class="cursor-pointer rounded-[8px] border border-edge bg-panel-2 px-2 py-1 font-mono text-xs text-ink-3 transition hover:border-ink-4 hover:text-ink"
+          @click="setCronExample(example)"
+        >
+          {{ example }}
+        </button>
       </div>
     </div>
   </div>
@@ -107,25 +91,24 @@ export default {
         },
         {
           value: 'every_12h',
-          label: 'Every 12 Hours',
+          label: 'Every 12h',
           description: 'Runs at noon and midnight',
           icon: 'fas fa-sync'
         },
         {
           value: 'every_6h',
-          label: 'Every 6 Hours',
+          label: 'Every 6h',
           description: 'Runs 4 times a day',
           icon: 'fas fa-bolt'
         }
-      ],
-      typeOptions: [
-        { value: 'preset', label: 'Preset', icon: 'fas fa-clock' },
-        { value: 'cron', label: 'Custom Cron', icon: 'fas fa-code' }
       ],
       cronExamples: ['0 0 * * *', '0 */6 * * *', '30 2 * * 0', '0 0 1 * *']
     };
   },
   computed: {
+    presetDescription() {
+      return this.presets.find(p => p.value === this.localValue.value)?.description || '';
+    },
     cronPreview() {
       if (this.localValue.type !== 'cron' || !this.localValue.value) return null;
       return this.describeCron(this.localValue.value);
@@ -166,7 +149,16 @@ export default {
     },
 
     selectPreset(value) {
+      this.localValue.type = 'preset';
       this.localValue.value = value;
+      this.cronError = null;
+    },
+
+    chipClass(active) {
+      return [
+        'flex cursor-pointer items-center justify-center gap-2 rounded-ctl border px-3 py-2 text-[13px] font-semibold transition-colors',
+        active ? 'border-brand bg-brand-soft text-ink [&>i]:text-brand-ink' : 'border-edge-strong bg-panel-2 text-ink-2 hover:border-ink-4 hover:text-ink [&>i]:text-ink-4',
+      ];
     },
 
     setCronExample(value) {

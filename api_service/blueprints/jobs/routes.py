@@ -227,10 +227,12 @@ def get_jobs():
             scheduler_id = f"discover_job_{job['id']}"
             job['next_run'] = scheduled.get(scheduler_id)
 
+        env_vars = load_env_vars()
         return jsonify({
             'status': 'success',
             'jobs': jobs,
-            'request_approval_default': load_env_vars().get('REQUIRE_REQUEST_APPROVAL', False),
+            'request_approval_default': env_vars.get('REQUIRE_REQUEST_APPROVAL', False),
+            'approval_pause_default': env_vars.get('PAUSE_JOBS_WITH_PENDING_APPROVALS', False) is True,
         }), 200
     except Exception as e:
         logger.error(f"Error retrieving jobs: {e}", exc_info=True)
