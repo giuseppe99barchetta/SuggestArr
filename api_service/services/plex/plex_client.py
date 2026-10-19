@@ -7,6 +7,7 @@ Classes:
 """
 import asyncio
 import json
+import xml.etree.ElementTree as ElementTree
 import aiohttp
 from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
@@ -32,6 +33,8 @@ class PlexClient(BaseHTTPClient):
     and libraries.
     """
 
+    FRIENDS_URL = 'https://plex.tv/api/users/'
+
     def __init__(self, token, api_url=None, max_content=10, library_ids=None, client_id=None, user_ids=None):
         """
         Initializes the PlexClient with the provided API URL and token.
@@ -52,6 +55,33 @@ class PlexClient(BaseHTTPClient):
         
         if client_id:
             self.headers['X-Plex-Client-Identifier'] = client_id
+
+    @staticmethod
+    def _parse_friends(xml_text):
+        """
+        Parse the plex.tv /api/users/ XML into SuggestArr's user shape.
+
+        Users without a username (managed users that are not real accounts) are
+        skipped, as they were with the old JSON endpoint. Numeric ids are returned
+        as integers so they deduplicate against the server's local accounts.
+        :param xml_text: Response body from /api/users/.
+        :return: A list of {'id', 'name'} dicts.
+        :raises PlexClientError: If the body is not valid XML.
+        """
+        try:
+            root = ElementTree.fromstring(xml_text or '<MediaContainer/>')
+        except ElementTree.ParseError as e:
+            raise PlexClientError(f"Failed to parse Plex friends: {str(e)}")
+        friends = []
+        for user in root.iter('User'):
+            user_id, username = user.get('id'), user.get('username')
+            if not user_id or not username:
+                continue
+            friends.append({
+                'id': int(user_id) if user_id.isdigit() else user_id,
+                'name': user.get('title') or username,
+            })
+        return friends
 
     async def _safe_json_decode(self, response):
         """
@@ -79,20 +109,20 @@ class PlexClient(BaseHTTPClient):
         :return: A list of users with 'id' and 'name' if successful, otherwise an empty list.
         """
         self.logger.info("Fetching all users from Plex server")
-        friends_url = f"{self.base_url}/friends"
         accounts_url = f"{self.api_url}/accounts"
         users = []
 
         try:
             session = await self._get_session()
-            # Request for friends
-            self.logger.debug(f"Fetching friends from: {friends_url}")
-            async with session.get(friends_url, headers=self.headers, timeout=self.REQUEST_TIMEOUT) as friends_response:
+            # Request for friends. plex.tv retired /api/v2/friends (it answers 410 Gone);
+            # /api/users/ is what python-plexapi's MyPlexAccount.users() uses, and it only
+            # speaks XML.
+            self.logger.debug(f"Fetching friends from: {self.FRIENDS_URL}")
+            async with session.get(self.FRIENDS_URL, headers=self.headers, timeout=self.REQUEST_TIMEOUT) as friends_response:
                 if friends_response.status == 200:
-                    friends = await self._safe_json_decode(friends_response)
+                    friends = self._parse_friends(await friends_response.text())
                     self.logger.debug(f"Retrieved {len(friends)} friends from Plex")
-                    # Extract 'id' and 'name' from each friend (skip users without username)
-                    users.extend({'id': friend['id'], 'name': friend['title']} for friend in friends if friend.get('username'))
+                    users.extend(friends)
                 else:
                     self.logger.error("Failed to retrieve friends: HTTP %d", friends_response.status)
 

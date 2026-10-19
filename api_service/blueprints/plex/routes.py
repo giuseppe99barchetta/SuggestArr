@@ -6,9 +6,26 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.utils.error_handling import handle_api_errors, validate_request_data, success_response
 from api_service.utils.ssrf_guard import validate_url
 from api_service.services.config_service import ConfigService
+from api_service.services.config_secrets import REDACTED
 
 logger = LoggerManager.get_logger("PlexRoute")
 plex_bp = Blueprint('plex', __name__)
+
+
+def _resolve_plex_token(token):
+    """
+    Swap the redacted-secret sentinel for the stored Plex token.
+
+    The settings UI sends '***' for a secret it did not change, and that value can
+    reach these routes from a form loaded before the save. Sent to Plex as-is it is
+    simply an invalid token (HTTP 401), so resolve it to the saved one instead.
+
+    :param token: Token from the request body.
+    :return: The token to use with Plex.
+    """
+    if token == REDACTED:
+        return ConfigService.get_runtime_config().get('PLEX_TOKEN') or None
+    return token
 
 @plex_bp.route('/libraries', methods=['POST'])
 async def get_plex_libraries():
@@ -19,7 +36,7 @@ async def get_plex_libraries():
     try:
         config_data = request.json
         api_url = config_data.get('PLEX_API_URL')
-        api_token = config_data.get('PLEX_TOKEN')
+        api_token = _resolve_plex_token(config_data.get('PLEX_TOKEN'))
 
         if not api_url or not api_token:
             logger.warning("Missing API URL or token in Plex libraries request")
@@ -120,7 +137,7 @@ async def test_plex_connection():
     logger.info("Received request to test Plex connection")
     try:
         config_data = request.json
-        api_token = config_data.get('token')
+        api_token = _resolve_plex_token(config_data.get('token'))
         api_url = config_data.get('api_url')
 
         if not api_token or not api_url:
@@ -184,7 +201,7 @@ async def get_plex_users():
     """
     try:
         config_data = request.get_json(silent=True) or {}
-        api_token = config_data.get('PLEX_TOKEN')
+        api_token = _resolve_plex_token(config_data.get('PLEX_TOKEN'))
         api_url = config_data.get('PLEX_API_URL')
 
         if not api_token:

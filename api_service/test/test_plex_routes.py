@@ -55,6 +55,29 @@ class TestPlexUsersRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("message", resp.get_json())
 
+    def test_redacted_token_is_replaced_by_the_stored_one(self):
+        # The settings UI sends '***' for an unchanged secret; Plex would answer 401 to it.
+        seen = []
+
+        class Recording(_FakePlexClient):
+            def __init__(self, *args, **kwargs):
+                super().__init__()
+                seen.append(kwargs.get("token"))
+
+        with patch("api_service.blueprints.plex.routes.PlexClient", Recording),                 patch("api_service.blueprints.plex.routes.validate_url", return_value=None),                 patch("api_service.blueprints.plex.routes.ConfigService.get_runtime_config",
+                      return_value={"PLEX_TOKEN": "stored-token"}):
+            resp = self.client.post("/api/plex/users",
+                                    json={"PLEX_TOKEN": "***", "PLEX_API_URL": "https://plex.direct:32400"})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(seen, ["stored-token"])
+
+    def test_redacted_token_without_a_stored_one_returns_400(self):
+        with patch("api_service.blueprints.plex.routes.ConfigService.get_runtime_config", return_value={}):
+            resp = self.client.post("/api/plex/users",
+                                    json={"PLEX_TOKEN": "***", "PLEX_API_URL": "https://plex.direct:32400"})
+        self.assertEqual(resp.status_code, 400)
+
     def test_users_get_not_allowed(self):
         resp = self.client.get(
             "/api/plex/users?PLEX_TOKEN=secret-token&PLEX_API_URL=https://plex.example:32400"
