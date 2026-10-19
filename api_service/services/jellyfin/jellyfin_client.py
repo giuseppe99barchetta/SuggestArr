@@ -39,6 +39,7 @@ class JellyfinClient(BaseHTTPClient):
         }
         self.existing_content = {}
         self._series_provider_ids_cache = {}
+        self._library_user_id = None
 
     async def init_existing_content(self):
         self.logger.info('Initializing existing content.')
@@ -89,18 +90,60 @@ class JellyfinClient(BaseHTTPClient):
             self.logger.error("No libraries found.")
             return None
 
+        # Resolve the user context once, before the concurrent per-library fetches.
+        user_id = await self._get_library_user_id()
+
         session = await self._get_session()
         tasks = [
-            self._fetch_library_items(session, library, results_by_library)
+            self._fetch_library_items(session, library, results_by_library, user_id)
             for library in libraries
         ]
         await asyncio.gather(*tasks)
 
         return results_by_library
 
-    async def _fetch_library_items(self, session, library, results_by_library):
+    async def _get_library_user_id(self):
+        """
+        Resolves the user ID used to scope full-library queries.
+
+        Without a userId, Jellyfin's /Items endpoint can return only a subset of a
+        library's items, causing content already on the server to be treated as
+        missing. An administrator is preferred since it can see every library;
+        otherwise the first available user is used. The result is cached.
+        :return: The user ID, or None if no user could be retrieved.
+        """
+        if self._library_user_id:
+            return self._library_user_id
+
+        users = await self.get_all_users()
+        if not users:
+            self.logger.warning(
+                "No Jellyfin users found; library items will be queried without a userId "
+                "and may be incomplete."
+            )
+            return None
+
+        admin = next(
+            (u for u in users if (u.get('policy') or {}).get('IsAdministrator')),
+            None
+        )
+        chosen = admin or users[0]
+        self._library_user_id = chosen['id']
+        self.logger.debug(
+            "Using Jellyfin user %s (id=%s, admin=%s) to scope library queries.",
+            chosen.get('name'), chosen['id'], admin is not None
+        )
+        return self._library_user_id
+
+    async def _fetch_library_items(self, session, library, results_by_library, user_id=None):
         """
         Fetch items for a single library and update results_by_library.
+        :param session: The aiohttp session to use.
+        :param library: Dict with 'id' and 'name' keys for the library.
+        :param results_by_library: Dict with 'movie' and 'tv' lists to populate.
+        :param user_id: Optional Jellyfin user ID to scope the query; without it
+            Jellyfin may return only part of the library.
+        :return: The updated results_by_library dict.
         """
         library_id = library.get('id') if isinstance(library, dict) else None
         library_name = library.get('name') if isinstance(library, dict) else None
@@ -115,6 +158,8 @@ class JellyfinClient(BaseHTTPClient):
             "Fields": "ProviderIds",
             "ParentID": library_id
         }
+        if user_id:
+            params["userId"] = user_id
 
         self.logger.debug(f"Requesting items for library {library_name} with params: {params}")
 
