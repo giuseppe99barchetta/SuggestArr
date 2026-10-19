@@ -26,7 +26,7 @@
 
                 <!-- Coming Soon Overlay -->
                 <div v-if="service.comingSoon" class="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl bg-black/85 text-xl font-bold text-gray-400 backdrop-blur-xs">
-                    <i class="fas fa-lock mb-2"></i>
+                    <i aria-hidden="true" class="fas fa-lock mb-2"></i>
                     <p>Coming Soon</p>
                 </div>
 
@@ -38,7 +38,7 @@
                 <!-- Selected Checkmark -->
                 <div v-if="config.SELECTED_SERVICE === service.value && !service.comingSoon"
                      class="absolute top-3 left-3 z-[15] flex h-8 w-8 items-center justify-center rounded-full bg-good text-base text-white shadow-[0_2px_8px] shadow-good/40">
-                    <i class="fas fa-check-circle"></i>
+                    <i aria-hidden="true" class="fas fa-check-circle"></i>
                 </div>
 
             </div>

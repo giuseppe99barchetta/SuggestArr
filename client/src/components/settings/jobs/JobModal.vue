@@ -1,15 +1,15 @@
 <template>
   <!-- Not AppDialog: a native modal <dialog> would make the jobs tour, which highlights fields in here, inert. -->
   <Teleport to="body">
-    <div class="fixed inset-0 z-[1050] flex bg-black/70 p-4 backdrop-blur-sm max-sm:p-2" @click.self="$emit('close')">
+    <div class="fixed inset-0 z-[1050] flex bg-black/70 p-4 backdrop-blur-sm max-sm:p-2" @click.self="requestClose">
       <div role="dialog" aria-modal="true" aria-labelledby="job-modal-title" class="m-auto flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-card border border-edge bg-panel text-ink shadow-2xl">
       <header class="flex shrink-0 items-start gap-3 border-b border-edge px-6 py-4 max-sm:px-4">
-        <span aria-hidden="true" class="grid h-9 w-9 shrink-0 place-items-center rounded-ctl bg-brand-soft text-sm text-brand-ink"><i :class="jobTypeInfoIcon"></i></span>
+        <span aria-hidden="true" class="grid h-9 w-9 shrink-0 place-items-center rounded-ctl bg-brand-soft text-sm text-brand-ink"><i aria-hidden="true" :class="jobTypeInfoIcon"></i></span>
         <div class="min-w-0 flex-1 self-center">
           <h2 id="job-modal-title" class="m-0 text-base font-bold text-ink">{{ oneTime ? 'Import list once' : isEditing ? 'Edit job' : 'New job' }}</h2>
           <p class="m-0 mt-0.5 text-[13px] text-ink-3">{{ oneTime ? 'Import all matching titles without creating a scheduled job.' : isEditing ? form.name : 'Pick what to look for, when, and how it reaches Seer.' }}</p>
         </div>
-        <button type="button" class="-mr-2 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" aria-label="Close" @click="$emit('close')">
+        <button type="button" class="-mr-2 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" aria-label="Close" @click="requestClose">
           <i aria-hidden="true" class="fas fa-times"></i>
         </button>
       </header>
@@ -29,7 +29,7 @@
                 :title="type.value === 'trakt_recommendations' ? traktJobUnavailableReason : null"
                 @click="setJobType(type.value)"
               >
-                <i :class="type.icon" class="w-5 text-center"></i>
+                <i aria-hidden="true" :class="type.icon" class="w-5 text-center"></i>
                 <span class="flex min-w-0 flex-col gap-0.5">
                   <span>{{ type.label }}</span>
                   <span class="text-[0.72rem] font-normal text-ink-3">{{ type.description }}</span>
@@ -37,14 +37,14 @@
               </button>
             </div>
             <div v-if="!traktJobAvailable" class="mt-3 flex items-start gap-2 rounded-ctl border border-dashed border-edge-strong p-3 text-[0.8rem] text-ink-3" role="status">
-              <i class="fas fa-circle-info mt-0.5 text-brand-ink"></i>
+              <i aria-hidden="true" class="fas fa-circle-info mt-0.5 text-brand-ink"></i>
               <span>{{ traktJobUnavailableReason }}</span>
             </div>
           </div>
 
           <!-- Info Note based on job type -->
           <div class="mb-6 flex items-start gap-3 rounded-ctl border border-edge bg-panel-2 px-4 py-3 text-[0.8rem] leading-normal text-ink-3">
-            <i :class="jobTypeInfoIcon" class="mt-0.5 shrink-0 text-brand-ink"></i>
+            <i aria-hidden="true" :class="jobTypeInfoIcon" class="mt-0.5 shrink-0 text-brand-ink"></i>
             <span>{{ jobTypeInfoText }}</span>
           </div>
 
@@ -75,7 +75,7 @@
                   :class="[choiceClass(form.media_type === type.value), 'flex-1 justify-center']"
                   @click="form.media_type = type.value"
                 >
-                  <i :class="type.icon"></i>
+                  <i aria-hidden="true" :class="type.icon"></i>
                   {{ type.label }}
                 </button>
               </div>
@@ -118,7 +118,7 @@
             <h4>Seer delivery</h4>
             <div class="mb-4 grid gap-2 md:grid-cols-3">
               <button v-for="mode in deliveryModes" :key="mode.value" type="button" :class="choiceClass(form.delivery_mode === mode.value)" @click="form.delivery_mode = mode.value">
-                <i :class="mode.icon" class="w-4 shrink-0 text-center"></i><span class="grid flex-1 gap-0.5"><strong>{{ mode.label }}</strong><small class="text-[0.72rem] font-normal text-ink-3">{{ mode.hint }}</small></span>
+                <i aria-hidden="true" :class="mode.icon" class="w-4 shrink-0 text-center"></i><span class="grid flex-1 gap-0.5"><strong>{{ mode.label }}</strong><small class="text-[0.72rem] font-normal text-ink-3">{{ mode.hint }}</small></span>
               </button>
             </div>
             <BaseDropdown
@@ -130,7 +130,7 @@
             />
             <div class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
               <div v-for="type in visibleProfileTypes" :key="type" class="grid gap-2 rounded-ctl border border-edge bg-panel-2 p-4">
-                <div class="flex items-center gap-2 text-[0.85rem] font-semibold text-ink"><i :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'" class="text-ink-4"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
+                <div class="flex items-center gap-2 text-[0.85rem] font-semibold text-ink"><i aria-hidden="true" :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'" class="text-ink-4"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
                 <BaseDropdown :model-value="form.request_profiles[type].serverId || ''" :options="serverOptions(type)" label="Server" placeholder="Use Seer default" @update:model-value="setRequestServer(type, $event)" />
                 <template v-if="form.request_profiles[type].serverId">
                   <BaseDropdown v-model="form.request_profiles[type].profileId" :options="profileOptions(type)" label="Quality profile" placeholder="Select quality profile" />
@@ -154,7 +154,7 @@
                 <span>Pause while this job has SuggestArr approvals pending</span>
                 <div class="grid gap-2 md:grid-cols-3">
                   <button v-for="mode in approvalPauseModes" :key="mode.value" type="button" :class="choiceClass(form.approval_pause_mode === mode.value)" @click="form.approval_pause_mode = mode.value">
-                    <i :class="mode.icon" class="w-4 shrink-0 text-center"></i><span class="grid flex-1 gap-0.5"><strong>{{ mode.label }}</strong><small class="text-[0.72rem] font-normal text-ink-3">{{ mode.hint }}</small></span>
+                    <i aria-hidden="true" :class="mode.icon" class="w-4 shrink-0 text-center"></i><span class="grid flex-1 gap-0.5"><strong>{{ mode.label }}</strong><small class="text-[0.72rem] font-normal text-ink-3">{{ mode.hint }}</small></span>
                   </button>
                 </div>
               </div>
@@ -185,7 +185,7 @@
 
           <!-- Advanced Settings Toggle -->
           <button type="button" class="mt-7 mb-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-ctl border border-dashed border-edge-strong bg-transparent px-4 py-3 text-[0.85rem] font-semibold text-ink-3 hover:border-brand-ink hover:text-brand-ink" data-tour-id="job-modal-advanced-toggle" :aria-expanded="showAdvanced.toString()" @click="showAdvanced = !showAdvanced">
-            <i :class="showAdvanced ? 'fas fa-chevron-up' : 'fas fa-chevron-down'" class="text-xs"></i>
+            <i aria-hidden="true" :class="showAdvanced ? 'fas fa-chevron-up' : 'fas fa-chevron-down'" class="text-xs"></i>
             {{ showAdvanced ? 'Hide advanced settings' : 'Show advanced settings' }}
           </button>
 
@@ -231,7 +231,7 @@
         </div>
 
         <footer class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-edge bg-panel-2/50 px-6 py-3 max-sm:px-4">
-          <button type="button" class="ui-btn" @click="$emit('close')">Cancel</button>
+          <button type="button" class="ui-btn" @click="requestClose">Cancel</button>
           <button type="submit" class="ui-btn-primary" :disabled="!isValid || isSaving">
             <i v-if="isSaving" aria-hidden="true" class="fas fa-spinner fa-spin"></i>
             {{ oneTime ? 'Import entire list' : isEditing ? 'Save job' : 'Create job' }}
@@ -255,6 +255,7 @@ import { listTraktJobUsers } from '@/api/api';
 import { waitForAuthReady, useAuth } from '@/composables/useAuth';
 import { getJobTypeIcon } from '@/utils/jobTypeVisuals.js';
 import axios from 'axios';
+import { confirmDialog } from '@/utils/confirmDialog';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 
@@ -280,6 +281,8 @@ export default {
   setup() { const { currentUser } = useAuth(); return { currentUser }; },
   data() {
     return {
+      // JSON of form + schedule once loading settles; edits are compared against it.
+      pristine: null,
       connectedUsers: [],
       form: {
         name: this.oneTime ? 'One-time list import' : '',
@@ -461,8 +464,37 @@ export default {
       this.radarrServers = radarr.data.servers || [];
       this.sonarrServers = sonarr.data.servers || [];
     } catch { /* Seer defaults remain available. */ }
+    this.pristine = this.snapshot();
+    document.addEventListener('keydown', this.onKeydown);
+  },
+  beforeUnmount() {
+    document.removeEventListener('keydown', this.onKeydown);
   },
   methods: {
+    snapshot() {
+      return JSON.stringify({ form: this.form, schedule: this.schedule });
+    },
+
+    // Backdrop, Escape, the close button and Cancel all ask before throwing away edits.
+    async requestClose() {
+      const dirty = this.pristine !== null && this.snapshot() !== this.pristine;
+      if (dirty && !(await confirmDialog({
+        title: 'Discard your changes?',
+        message: 'This job has unsaved changes.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        danger: true,
+      }))) return;
+      this.$emit('close');
+    },
+
+    onKeydown(event) {
+      // A native dialog on top (list preview, confirmation) handles its own Escape.
+      if (event.key !== 'Escape' || document.querySelector('dialog[open]')) return;
+      event.preventDefault();
+      this.requestClose();
+    },
+
     listConfig() {
       return {
         filters: this.form.filters,

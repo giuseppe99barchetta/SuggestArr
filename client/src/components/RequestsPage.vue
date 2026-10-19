@@ -66,38 +66,63 @@
       <section
         v-for="source in filteredAndSortedSources"
         :key="source.id"
-        class="flex flex-wrap gap-5 rounded-card border border-edge bg-panel p-4 sm:p-5"
+        class="relative isolate overflow-hidden rounded-card border border-white/10 bg-panel"
       >
-        <button type="button" class="relative aspect-[2/3] w-24 shrink-0 cursor-pointer overflow-hidden rounded-ctl border-0 p-0 sm:w-28" :style="source.visual ? { background: source.visual.gradient } : null" :aria-label="`Details for ${source.title}`" @click="openModal(source)">
-          <img v-if="source.poster_path && !source.visual" :src="source.poster_path" alt="" class="absolute inset-0 h-full w-full object-cover" />
-          <img v-else-if="source.backdrop_path && !source.visual" :src="source.backdrop_path" alt="" class="absolute inset-0 h-full w-full object-cover" />
-          <i aria-hidden="true" v-else-if="source.visual" :class="source.visual.icon" class="text-2xl text-white/90"></i>
-        </button>
-        <div class="flex min-w-0 flex-[1_1_380px] flex-col gap-3">
-          <div class="flex flex-col gap-1">
-            <span class="text-xs font-semibold uppercase tracking-wider text-ink-4">{{ source.visual ? 'Suggested by' : 'Because you watched' }}</span>
-            <h2 class="m-0 text-xl font-extrabold text-ink">{{ source.title }}</h2>
-            <span class="text-[13px] text-ink-4">
-              {{ source.requests.length }} {{ source.requests.length === 1 ? 'suggestion' : 'suggestions' }}
-              <template v-if="!source.visual && source.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(source.rating) }}</template>
-              <template v-if="!source.visual && source.release_date"> · {{ source.release_date }}</template>
+        <!-- Apple Music style ambience: the backdrop tints the whole box and blurs more the further down it goes. -->
+        <div v-if="sourceAmbience(source)" aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">
+          <img :src="tmdbImageSize(sourceAmbience(source), 'w300')" alt="" loading="lazy" class="absolute inset-0 h-full w-full scale-150 object-cover blur-3xl saturate-150" />
+          <img :src="tmdbImageSize(sourceAmbience(source), 'w780')" alt="" loading="lazy" class="absolute inset-x-0 top-0 h-[340px] w-full object-cover blur-md [mask-image:linear-gradient(to_bottom,black_25%,transparent_100%)]" />
+          <img :src="sourceAmbience(source)" alt="" loading="lazy" class="absolute inset-x-0 top-0 h-[340px] w-full object-cover [mask-image:linear-gradient(to_bottom,black_0%,transparent_45%)]" />
+          <div class="absolute inset-0 bg-gradient-to-b from-black/40 via-black/50 to-black/65"></div>
+          <div class="absolute inset-0 bg-gradient-to-r from-black/45 to-transparent"></div>
+        </div>
+        <div v-else-if="source.visual" aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 opacity-25" :style="{ background: source.visual.gradient }"></div>
+        <header class="relative flex items-center gap-4 px-4 pb-4 pt-6 [text-shadow:0_1px_8px_rgba(0,0,0,0.5)] sm:px-5">
+          <button
+            type="button"
+            class="relative flex aspect-[2/3] w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-[8px] border-0 bg-raised p-0 shadow-[0_4px_16px_rgba(0,0,0,0.5)] ring-1 ring-white/15 sm:w-20"
+            :style="source.visual ? { background: source.visual.gradient } : null"
+            :aria-label="`Details for ${source.title}`"
+            @click="openModal(source)"
+          >
+            <img v-if="source.poster_path && !source.visual" :src="source.poster_path" alt="" class="absolute inset-0 h-full w-full object-cover" />
+            <i aria-hidden="true" v-else-if="source.visual" :class="source.visual.icon" class="text-xl text-white/90"></i>
+          </button>
+          <div class="relative flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-white/65">{{ source.visual ? 'Suggested by' : 'Because you watched' }}</span>
+            <h2 class="m-0 truncate text-xl font-extrabold text-white" :title="source.title">{{ source.title }}</h2>
+            <span v-if="!source.visual && (source.rating || source.release_date)" class="text-[13px] text-white/80">
+              <template v-if="source.release_date">{{ releaseYear(source.release_date) }}</template>
+              <template v-if="source.rating && source.release_date"> · </template>
+              <template v-if="source.rating"><i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(source.rating) }}</template>
             </span>
           </div>
-          <div class="flex gap-3 overflow-x-auto pb-1">
-            <button
-              v-for="request in source.requests"
-              :key="request.request_id"
-              type="button"
-              class="flex w-[104px] shrink-0 cursor-pointer flex-col gap-1.5 border-0 bg-transparent p-0 text-left"
-              @click="openModal(request)"
-            >
-              <span class="relative block aspect-[2/3] w-full overflow-hidden rounded-[8px] bg-raised">
-                <img v-if="request.poster_path" :src="request.poster_path" alt="" loading="lazy" class="absolute inset-0 h-full w-full object-cover" />
-              </span>
-              <span class="line-clamp-2 text-xs font-semibold leading-snug text-ink">{{ request.title }}</span>
-              <span v-if="request.user_name || request.user_id" class="text-[11px] text-ink-4">For {{ request.user_name || request.user_id }}</span>
-            </button>
+          <div class="relative hidden shrink-0 flex-col items-end gap-0.5 text-right sm:flex">
+            <span class="text-sm font-bold text-white">{{ source.requests.length }} {{ source.requests.length === 1 ? 'suggestion' : 'suggestions' }}</span>
+            <span v-if="latestRequestDate(source)" class="text-xs text-white/65">Last {{ formatDate(latestRequestDate(source)) }}</span>
           </div>
+        </header>
+        <div class="flex snap-x gap-3 overflow-x-auto px-4 pb-4 sm:px-5">
+          <button
+            v-for="request in source.requests"
+            :key="`${request.request_id}:${request.user_id || ''}`"
+            type="button"
+            class="group flex w-[120px] shrink-0 snap-start cursor-pointer flex-col gap-1.5 border-0 bg-transparent p-0 text-left sm:w-[132px]"
+            @click="openModal(request)"
+          >
+            <span class="relative block aspect-[2/3] w-full overflow-hidden rounded-[8px] bg-black/30 ring-1 ring-white/10 shadow-[0_6px_20px_rgba(0,0,0,0.35)] transition group-hover:ring-2 group-hover:ring-white/70">
+              <img v-if="request.poster_path" :src="request.poster_path" alt="" loading="lazy" class="absolute inset-0 h-full w-full object-cover" />
+              <span v-else class="absolute inset-0 flex items-center justify-center text-2xl text-white/40"><i aria-hidden="true" class="fas fa-film"></i></span>
+              <span v-if="request.media_type === 'tv'" class="absolute left-1.5 top-1.5 rounded-md bg-canvas/80 px-1.5 py-0.5 text-[10px] font-bold text-ink">TV</span>
+            </span>
+            <span class="line-clamp-2 text-[13px] font-semibold leading-snug text-white" :title="request.title">{{ request.title }}</span>
+            <span class="text-[11px] text-white/60">
+              <template v-if="request.release_date">{{ releaseYear(request.release_date) }}</template>
+              <template v-if="request.rating && request.release_date"> · </template>
+              <template v-if="request.rating"><i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(request.rating) }}</template>
+              <template v-if="showRequestUser && (request.user_name || request.user_id)"><br />For {{ request.user_name || request.user_id }}</template>
+            </span>
+          </button>
         </div>
       </section>
     </div>
@@ -160,7 +185,7 @@
     </div>
 
     <div
-      v-if="hasMoreData && viewMode !== 'ai-requests' && (viewMode !== 'all-requests' || requestStatusFilter === 'all' || requestStatusFilter === 'sent')"
+      v-if="hasMoreData && showsLoadMoreTrigger"
       :ref="viewMode === 'by-content' ? 'loadMoreTrigger' : 'loadMoreTriggerRequests'"
       class="py-8 text-center text-sm text-ink-4"
     >
@@ -188,7 +213,6 @@
     <MediaDetailsModal
       v-if="showModal"
       :item="selectedSource"
-      :trailer-url="trailerUrl"
       :placeholder-icon="getSourceVisual(selectedSource)?.icon || 'fas fa-image'"
       :placeholder-background="getSourceVisual(selectedSource)?.gradient || 'var(--color-raised)'"
       :rationale-title="selectedSource._isAiRequest ? 'Search query' : 'Why it was suggested'"
@@ -271,7 +295,7 @@ import { formatDate } from '@/utils/dateUtils.js';
 import { getRequestSourceVisual } from '@/utils/jobTypeVisuals.js';
 import { getAiSearchRequests } from '@/api/api.js';
 import RequestWorkflowPanel from './RequestWorkflowPanel.vue';
-import { loadTrailerUrl } from '@/utils/trailer.js';
+import { approvalEnabled } from '@/utils/requestApproval.js';
 
 // Shown up front in the details modal; the other answers sit behind "More".
 const PRIMARY_FEEDBACK = ['interested', 'not_interested', 'already_seen'];
@@ -296,7 +320,6 @@ export default {
       requestUsers: [],
       showModal: false,
       selectedSource: null,
-      trailerUrl: null,
       loading: false,
       currentPage: 1,
       totalPages: 1,
@@ -415,6 +438,11 @@ export default {
       return [{ value: 'all', label: 'All accounts' }, ...this.requestUsers.map(user => ({ value: String(user.id), label: user.name }))];
     },
 
+    /** Who a suggestion is for only matters when several accounts are mixed together. */
+    showRequestUser() {
+      return this.requestUserFilter === 'all' && this.requestUsers.length > 1;
+    },
+
     allRequestsFlat() {
       return this.sources.flatMap(source => 
         source.requests.map(req => ({
@@ -491,6 +519,12 @@ export default {
       return this.currentPage < this.totalPages;
     },
 
+    /** Whether the current view lists sent requests, and so has their infinite-scroll trigger. */
+    showsLoadMoreTrigger() {
+      if (this.viewMode === 'ai-requests') return false;
+      return this.viewMode !== 'all-requests' || this.requestStatusFilter === 'all' || this.requestStatusFilter === 'sent';
+    },
+
     aiRequestsHasMore() {
       return this.aiRequestsPage < this.aiRequestsTotalPages;
     },
@@ -502,6 +536,7 @@ export default {
     requestStatusFilter() {
       this.workflowBulkMode = false;
       this.workflowTotal = null;
+      this.$nextTick(() => this.initObserver());
     },
     viewMode(newMode) {
       if (newMode === 'ai-requests') return;
@@ -542,7 +577,7 @@ export default {
     async loadApprovalState() {
       try {
         const { data } = await axios.get('/api/jobs');
-        this.approvalEnabled = (data.jobs || []).some(job => job.delivery_mode === 'manual');
+        this.approvalEnabled = approvalEnabled(data);
         if (!this.approvalEnabled) {
           this.requestStatusFilter = 'sent';
           this.workflowTotal = 0;
@@ -642,34 +677,38 @@ export default {
       return Number.isFinite(rating) ? rating.toFixed(1) : 'N/A';
     },
 
+    /** Image a watched-title box takes its colours from: the backdrop, else the poster. */
+    sourceAmbience(source) {
+      if (source.visual) return null;
+      return source.backdrop_path || source.poster_path || null;
+    },
+
+    /** Swaps the size segment of a TMDB image URL, so blurred layers load a small file. */
+    tmdbImageSize(url, size) {
+      return url.replace(/\/t\/p\/(w\d+|original)\//, `/t/p/${size}/`);
+    },
+
+    releaseYear(date) {
+      return String(date).slice(0, 4);
+    },
+
+    /** Most recent request date among a watched title's suggestions. */
+    latestRequestDate(source) {
+      return source.requests.reduce((latest, request) => (
+        request.requested_at && (!latest || request.requested_at > latest) ? request.requested_at : latest
+      ), null);
+    },
+
     getSourceVisual(source) {
       return source?.visual ?? getRequestSourceVisual(source);
     },
 
-    shouldShowSourceMediaBadge(source) {
-      if (!source?.media_type) {
-        return false;
-      }
-      if (source.visual && this.sourceHasMixedMediaTypes(source)) {
-        return false;
-      }
-      return true;
-    },
-
-    sourceHasMixedMediaTypes(source) {
-      const types = new Set((source?.requests || []).map((request) => request.media_type));
-      return types.size > 1;
-    },
-
     resetAndReload() {
-      console.log('🔄 Sorting changed, reloading data...');
-
       this.cleanupObserver();
 
       this.sources = [];
       this.currentPage = 0;
       this.totalPages = 1;
-      this.retryCount = 0;
 
       this.fetchRequests(1);
     },
@@ -721,17 +760,14 @@ export default {
           setTimeout(() => this.initAiObserver(), 150);
         });
       } catch (error) {
-        console.error('❌ Failed to fetch AI search requests:', error);
+        console.error('Failed to fetch AI search requests:', error);
       } finally {
         this.loading = false;
       }
     },
 
     initAiObserver() {
-      if (this.aiObserver) {
-        this.aiObserver.disconnect();
-        this.aiObserver = null;
-      }
+      this.cleanupAiObserver();
       if (!this.aiRequestsHasMore) return;
       this.$nextTick(() => {
         const trigger = this.$refs.loadMoreTriggerAi;
@@ -753,31 +789,17 @@ export default {
       this.searchQuery = '';
     },
 
-
-
     async observeIntersection(entries) {
       if (entries[0].isIntersecting && !this.loading) {
-        console.log('🔄 Lazy loading triggered for:', this.viewMode);
         await this.fetchRequests(this.currentPage + 1);
       }
-    },
-
-    reinitObserverAfterFilter() {
-      this.$nextTick(() => {
-        setTimeout(() => {
-          this.initObserver();
-        }, 100);
-      });
     },
 
     initObserver() {
       // Cleanup existing observer
       this.cleanupObserver();
 
-      if (!this.hasMoreData) {
-        console.log('❌ No more data to load');
-        return;
-      }
+      if (!this.hasMoreData || !this.showsLoadMoreTrigger) return;
 
       this.$nextTick(() => {
         const triggerRef = this.viewMode === 'by-content' 
@@ -792,12 +814,19 @@ export default {
           });
           this.observer.observe(triggerRef);
         } else {
-          console.warn('⚠️ Trigger ref not found, retrying...');
+          // The trigger renders after the next update; try again shortly.
           this.retryTimeout = setTimeout(() => {
             this.initObserver();
           }, 200);
         }
       });
+    },
+
+    cleanupAiObserver() {
+      if (this.aiObserver) {
+        this.aiObserver.disconnect();
+        this.aiObserver = null;
+      }
     },
 
     cleanupObserver() {
@@ -813,7 +842,6 @@ export default {
 
     async fetchRequests(page = 1) {
       if (page > this.totalPages || this.loading) {
-        console.log('⛔ Fetch blocked - page:', page, 'loading:', this.loading);
         return;
       }
       
@@ -843,7 +871,6 @@ export default {
           poster_path: sourceData.source_poster_path,
           rating: sourceData.rating,
           media_type: sourceData.media_type,
-          showRequests: false,
           logo_path: sourceData.logo_path,
           backdrop_path: sourceData.backdrop_path,
           visual: getRequestSourceVisual({
@@ -880,9 +907,9 @@ export default {
         });
 
       } catch (error) {
-        console.error("❌ Failed to fetch requests:", error);
+        console.error("Failed to fetch requests:", error);
         this.$toast.open({
-          message: '❌ Failed to load requests',
+          message: 'Failed to load requests',
           type: 'error',
           duration: 5000,
           position: 'top-right'
@@ -897,14 +924,6 @@ export default {
       this.feedbackExpanded = false;
       this.showModal = true;
       document.body.style.overflow = 'hidden';
-      this.loadTrailer();
-    },
-    async loadTrailer() {
-      this.trailerUrl = null;
-      const shown = this.selectedSource;
-      const url = await loadTrailerUrl(axios, shown);
-      // The modal may show another title by the time the answer arrives.
-      if (this.selectedSource === shown) this.trailerUrl = url;
     },
     openWorkflowModal(item) {
       this.openModal({
@@ -920,7 +939,6 @@ export default {
     closeModal() {
       this.showModal = false;
       this.selectedSource = null;
-      this.trailerUrl = null;
       document.body.style.overflow = 'auto';
     },
   },
@@ -941,6 +959,7 @@ export default {
 
   beforeUnmount() {
     this.cleanupObserver();
+    this.cleanupAiObserver();
     document.body.style.overflow = 'auto';
   },
 };

@@ -1,7 +1,7 @@
 <template>
     <div class="flex flex-col gap-5">
         <p class="m-0 flex items-start gap-2 text-[0.85rem] leading-normal text-ink-4">
-            <i class="fas fa-info-circle mt-0.5 shrink-0 opacity-70"></i>
+            <i aria-hidden="true" class="fas fa-info-circle mt-0.5 shrink-0 opacity-70"></i>
             <span>All settings below are optional and use sensible defaults. You can fine-tune everything anytime from <strong>Settings → Jobs</strong>.</span>
         </p>
 
@@ -19,7 +19,7 @@
                 </label>
             </div>
             <p class="m-0 mt-2 flex items-center gap-2 text-[0.8rem] text-ink-4">
-                <i class="fas fa-info-circle"></i>
+                <i aria-hidden="true" class="fas fa-info-circle"></i>
                 Based on TMDB community ratings. Leave empty to include all content regardless of rating.
             </p>
         </section>
@@ -47,7 +47,7 @@
         </section>
 
         <p class="m-0 flex items-start gap-2 rounded-lg border border-white/7 bg-white/3 px-4 py-3 text-[0.85rem] leading-normal text-ink-4">
-            <i class="fas fa-sliders-h mt-0.5 shrink-0 opacity-70"></i>
+            <i aria-hidden="true" class="fas fa-sliders-h mt-0.5 shrink-0 opacity-70"></i>
             <span>More advanced filters (genres, language, streaming services, runtime) are available in <strong>Settings → Jobs</strong> after setup.</span>
         </p>
     </div>

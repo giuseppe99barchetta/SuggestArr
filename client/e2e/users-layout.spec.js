@@ -37,10 +37,10 @@ async function openPreview(page, component) {
   await page.goto("/users-layout-preview");
 }
 
-const cardGeometry = page => page.locator("#preview > .settings-users > .settings-grid > .settings-group").evaluateAll(cards =>
+const cardGeometry = page => page.locator("[data-users-page] [data-users-cards] > section").evaluateAll(cards =>
   cards.map(card => {
     const rect = card.getBoundingClientRect();
-    const title = card.querySelector("h3").getBoundingClientRect();
+    const title = card.querySelector("h2").getBoundingClientRect();
     return { x: rect.x, y: rect.y, bottom: rect.bottom, width: rect.width, height: rect.height, inset: title.x - rect.x, overflow: card.scrollWidth > card.clientWidth + 1 };
   }));
 

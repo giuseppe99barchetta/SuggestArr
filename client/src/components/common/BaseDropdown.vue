@@ -26,7 +26,7 @@
       >
         <span v-if="selectedLabel" class="block truncate text-ink">{{ selectedLabel }}</span>
         <span v-else class="block truncate text-ink-4">{{ placeholder || 'Select an option' }}</span>
-        <i
+        <i aria-hidden="true"
           class="fas fa-chevron-down absolute top-1/2 right-4 -translate-y-1/2 text-xs transition-transform duration-300"
           :class="isOpen ? 'rotate-180 text-ink' : 'text-ink-3 group-hover:text-ink-2'"
         ></i>
@@ -34,7 +34,7 @@
     </div>
 
     <div v-if="helpText" class="mt-2 flex items-center gap-2 rounded-lg border-l-[3px] border-ink-3 bg-white/5 px-4 py-2.5 text-[0.8125rem] text-ink-2">
-      <i class="fas fa-info-circle"></i>
+      <i aria-hidden="true" class="fas fa-info-circle"></i>
       <span>{{ helpText }}</span>
     </div>
   </div>
@@ -75,11 +75,11 @@
             @mouseenter="highlightedIndex = index"
           >
             <span>{{ getOptionLabel(option) }}</span>
-            <i v-if="isSelected(option)" class="fas fa-check text-brand-ink"></i>
+            <i aria-hidden="true" v-if="isSelected(option)" class="fas fa-check text-brand-ink"></i>
           </div>
 
           <div v-if="options.length === 0" class="flex flex-col items-center gap-2 px-4 py-8 text-center text-ink-3">
-            <i class="fas fa-inbox text-[2rem] opacity-50"></i>
+            <i aria-hidden="true" class="fas fa-inbox text-[2rem] opacity-50"></i>
             <span>No options available</span>
           </div>
         </div>

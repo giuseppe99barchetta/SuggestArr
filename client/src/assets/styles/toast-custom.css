@@ -1,12 +1,12 @@
 /* src/assets/styles/toast-custom.css */
 
-/* Container principale dei toast */
+/* Toast container */
 .v-toast__container {
   top: 80px !important;
   z-index: 9999 !important;
 }
 
-/* Singolo toast - Minimal style */
+/* Single toast, minimal style */
 .v-toast__item {
   border-radius: 8px !important;
   padding: 12px 16px !important;
@@ -74,14 +74,14 @@
   color: var(--color-ink-3) !important;
 }
 
-/* Icona */
+/* Icon */
 .v-toast__icon {
   margin-right: 10px !important;
   font-size: 1rem !important;
   flex-shrink: 0 !important;
 }
 
-/* Testo */
+/* Text */
 .v-toast__text {
   font-weight: 400 !important;
   line-height: 1.4 !important;
@@ -89,7 +89,7 @@
   color: inherit !important;
 }
 
-/* Pulsante di chiusura */
+/* Close button */
 .v-toast__item .v-toast__item__close {
   opacity: 0.5 !important;
   transition: opacity 200ms ease !important;
@@ -106,7 +106,7 @@
   opacity: 0.8 !important;
 }
 
-/* Animazioni */
+/* Animations */
 .v-toast__item.v-toast--fade-enter-active,
 .v-toast__item.v-toast--fade-leave-active {
   transition: all 200ms ease !important;

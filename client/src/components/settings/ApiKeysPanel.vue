@@ -45,7 +45,7 @@
         </div>
         <div class="flex justify-end gap-2">
           <button type="button" class="ui-btn" :disabled="revoking === keyToRevoke.id" @click="keyToRevoke = null">Cancel</button>
-          <button type="button" class="ui-btn-primary bg-bad text-[#2a0c0b]" :disabled="revoking === keyToRevoke.id" @click="revoke">
+          <button type="button" class="ui-btn-danger" :disabled="revoking === keyToRevoke.id" @click="revoke">
             <i aria-hidden="true" :class="revoking === keyToRevoke.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash'"></i>Revoke key
           </button>
         </div>

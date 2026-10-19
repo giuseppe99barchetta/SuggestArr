@@ -16,14 +16,14 @@
         @click="select(opt.value)"
       >
         <div v-if="opt.recommended" class="absolute -top-[9px] -right-[9px] whitespace-nowrap rounded-full bg-brand px-[7px] py-0.5 text-[0.6rem] font-bold uppercase tracking-wider text-white">Recommended</div>
-        <i :class="[opt.icon, 'mb-0.5 text-[1.4rem]', { 'text-brand-ink': currentValue === opt.value }]"></i>
+        <i aria-hidden="true" :class="[opt.icon, 'mb-0.5 text-[1.4rem]', { 'text-brand-ink': currentValue === opt.value }]"></i>
         <span class="text-[0.88rem] font-semibold">{{ opt.label }}</span>
         <span class="text-[0.71rem] leading-tight text-ink-4">{{ opt.description }}</span>
       </button>
     </div>
 
     <p class="m-0 flex items-center gap-1.5 text-[0.8rem] text-ink-4">
-      <i class="fas fa-info-circle shrink-0 opacity-60"></i>
+      <i aria-hidden="true" class="fas fa-info-circle shrink-0 opacity-60"></i>
       You can change the schedule or add more jobs anytime from <strong>Settings → Jobs</strong>.
     </p>
   </div>

@@ -25,21 +25,21 @@
               class="ui-btn w-full border-[#e5a00d] bg-[#e5a00d] font-bold text-[#1a1a1a] hover:bg-[#cc8f0b]"
               :disabled="plexOAuthLoading"
             >
-              <i v-if="plexOAuthLoading" class="fas fa-spinner fa-spin"></i>
+              <i aria-hidden="true" v-if="plexOAuthLoading" class="fas fa-spinner fa-spin"></i>
               <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="width:18px;height:18px;fill:currentColor;flex-shrink:0">
                 <path d="M18 18h12v12H18z"/><path d="M6 6h12v12H6zM30 6h12v12H30zM6 30h12v12H6zM30 30h12v12H30z"/>
               </svg>
               {{ plexOAuthLoading ? 'Waiting for Plex authorisation…' : 'Sign in with Plex' }}
             </button>
             <small class="block text-center text-xs leading-normal text-ink-4">
-              <i class="fas fa-lock"></i> Opens Plex.tv in a new window for secure authentication.
+              <i aria-hidden="true" class="fas fa-lock"></i> Opens Plex.tv in a new window for secure authentication.
             </small>
             <!-- Manual token fallback toggle -->
             <button
               @click="plexOAuthManualMode = !plexOAuthManualMode"
               class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50 mt-2"
             >
-              <i class="fas fa-keyboard"></i>
+              <i aria-hidden="true" class="fas fa-keyboard"></i>
               {{ plexOAuthManualMode ? 'Use Plex login instead' : 'Enter token manually' }}
             </button>
           </div>
@@ -57,8 +57,8 @@
                   class="ui-input"
                   :disabled="isLoading"
                 />
-                <button @click="showPlexToken = !showPlexToken" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
-                  <i :class="showPlexToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                <button @click="showPlexToken = !showPlexToken" type="button" :aria-label="showPlexToken ? 'Hide Plex token' : 'Show Plex token'" :aria-pressed="showPlexToken.toString()" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+                  <i aria-hidden="true" :class="showPlexToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
                 </button>
               </div>
             </div>
@@ -71,9 +71,9 @@
               class="ui-btn mt-4"
               :disabled="!localConfig.PLEX_TOKEN || !localConfig.PLEX_API_URL || plexFetching"
             >
-              <i v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
-              <i v-else-if="plexConnected" class="fas fa-check"></i>
-              <i v-else class="fas fa-plug"></i>
+              <i aria-hidden="true" v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
+              <i aria-hidden="true" v-else-if="plexConnected" class="fas fa-check"></i>
+              <i aria-hidden="true" v-else class="fas fa-plug"></i>
               {{ plexFetching ? 'Connecting…' : (plexConnected ? 'Connected' : 'Test & load') }}
             </button>
           </template>
@@ -82,7 +82,7 @@
           <template v-if="plexOAuthLoggedIn && !plexOAuthManualMode">
             <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
               <div class="mt-3 flex items-center gap-2 text-[13px] font-semibold text-good">
-                <i class="fas fa-check-circle"></i> Authenticated with Plex
+                <i aria-hidden="true" class="fas fa-check-circle"></i> Authenticated with Plex
               </div>
             </div>
             <!-- Multiple servers: dropdown -->
@@ -98,12 +98,15 @@
               <div class="flex gap-2">
                 <input v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="ui-input" />
                 <button
+                  type="button"
+                  aria-label="Test connection and load libraries"
+                  title="Test connection and load libraries"
                   @click="testAndFetchPlex"
                   class="ui-btn w-[42px] shrink-0 px-0"
                   :disabled="!localConfig.PLEX_API_URL || plexFetching"
                 >
-                  <i v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
-                  <i v-else class="fas fa-plug"></i>
+                  <i aria-hidden="true" v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
+                  <i aria-hidden="true" v-else class="fas fa-plug"></i>
                 </button>
               </div>
             </div>
@@ -128,8 +131,8 @@
                 class="ui-input"
                 :disabled="isLoading"
               />
-              <button @click="showJellyfinToken = !showJellyfinToken" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
-                <i :class="showJellyfinToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+              <button @click="showJellyfinToken = !showJellyfinToken" type="button" :aria-label="showJellyfinToken ? 'Hide token' : 'Show token'" :aria-pressed="showJellyfinToken.toString()" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+                <i aria-hidden="true" :class="showJellyfinToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
               </button>
             </div>
           </div>
@@ -138,9 +141,9 @@
             class="ui-btn mt-4"
             :disabled="isLoading || !localConfig.JELLYFIN_API_URL || !localConfig.JELLYFIN_TOKEN || jellyfinFetching"
           >
-            <i v-if="jellyfinFetching" class="fas fa-spinner fa-spin"></i>
-            <i v-else-if="jellyfinConnected" class="fas fa-check"></i>
-            <i v-else class="fas fa-plug"></i>
+            <i aria-hidden="true" v-if="jellyfinFetching" class="fas fa-spinner fa-spin"></i>
+            <i aria-hidden="true" v-else-if="jellyfinConnected" class="fas fa-check"></i>
+            <i aria-hidden="true" v-else class="fas fa-plug"></i>
             {{ jellyfinFetching ? 'Connecting…' : (jellyfinConnected ? 'Connected' : 'Test & load') }}
           </button>
         </template>
@@ -161,7 +164,7 @@
                 <h4 class="m-0 text-[13px] font-bold text-ink">Libraries</h4>
                 <button v-if="currentSelectedLibraries.length > 0" type="button" class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50" @click="clearCurrentLibraries">Clear</button>
               </div>
-              <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Libraries to monitor. Mark anime libraries with <span class="rounded bg-[#e74c9c]/20 px-1.5 py-px text-[11px] font-bold text-[#e74c9c]">Anime</span> to send them to the anime profiles.</p>
+              <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Libraries to monitor. Mark anime libraries with <span class="rounded bg-anime/20 px-1.5 py-px text-[11px] font-bold text-anime">Anime</span> to send them to the anime profiles.</p>
               <div v-if="currentLibraries.length > 0" class="flex flex-wrap gap-2">
                 <div
                   v-for="lib in currentLibraries"
@@ -180,7 +183,7 @@
                     v-if="isLibSelected(lib._id)"
                     type="button"
                     class="cursor-pointer rounded border-0 px-1.5 py-px text-[10px] font-bold"
-                    :class="isAnimeLibrary(localConfig.SELECTED_SERVICE, lib._id) ? 'bg-[#e74c9c] text-white' : 'bg-raised text-ink-3'"
+                    :class="isAnimeLibrary(localConfig.SELECTED_SERVICE, lib._id) ? 'bg-anime text-white' : 'bg-raised text-ink-3'"
                     :aria-pressed="String(isAnimeLibrary(localConfig.SELECTED_SERVICE, lib._id))"
                     title="Mark as anime"
                     @click.stop="toggleAnimeFlag(localConfig.SELECTED_SERVICE, lib._id)"
@@ -239,8 +242,8 @@
               :disabled="isLoading"
               @input="onSeerConfigChange"
             />
-            <button @click="showSeerToken = !showSeerToken" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
-              <i :class="showSeerToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+            <button @click="showSeerToken = !showSeerToken" type="button" :aria-label="showSeerToken ? 'Hide Seer token' : 'Show Seer token'" :aria-pressed="showSeerToken.toString()" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+              <i aria-hidden="true" :class="showSeerToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
             </button>
           </div>
         </div>
@@ -250,9 +253,9 @@
           class="ui-btn mt-4"
           :disabled="isLoading || !localConfig.SEER_API_URL || !localConfig.SEER_TOKEN || seerTesting"
         >
-          <i v-if="seerTesting" class="fas fa-spinner fa-spin"></i>
-          <i v-else-if="seerConnected" class="fas fa-check"></i>
-          <i v-else class="fas fa-plug"></i>
+          <i aria-hidden="true" v-if="seerTesting" class="fas fa-spinner fa-spin"></i>
+          <i aria-hidden="true" v-else-if="seerConnected" class="fas fa-check"></i>
+          <i aria-hidden="true" v-else class="fas fa-plug"></i>
           {{ seerTesting ? 'Testing…' : (seerConnected ? 'Connected' : 'Test connection') }}
         </button>
 
@@ -310,8 +313,8 @@
               <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Default Radarr and Sonarr server, quality profile and root folder for automatic requests. Jobs can override them.</p>
 
               <div v-if="profileCards.length > 0" class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-3">
-                <fieldset v-for="card in profileCards" :key="card.key" class="m-0 flex min-w-0 flex-col gap-3 rounded-ctl border bg-canvas p-3.5" :class="card.anime ? 'border-[#e74c9c]/30' : 'border-edge'">
-                  <legend class="flex items-center gap-1.5 p-0 text-[13px] font-bold" :class="card.anime ? 'text-[#e74c9c]' : 'text-ink [&>i]:text-ink-4'"><i aria-hidden="true" :class="card.icon"></i>{{ card.title }}</legend>
+                <fieldset v-for="card in profileCards" :key="card.key" class="m-0 flex min-w-0 flex-col gap-3 rounded-ctl border bg-canvas p-3.5" :class="card.anime ? 'border-anime/30' : 'border-edge'">
+                  <legend class="flex items-center gap-1.5 p-0 text-[13px] font-bold" :class="card.anime ? 'text-anime' : 'text-ink [&>i]:text-ink-4'"><i aria-hidden="true" :class="card.icon"></i>{{ card.title }}</legend>
                   <label class="ui-label">Server
                     <select :value="$data[card.key + 'ServerId'] ?? ''" class="ui-input" :disabled="isLoading" @change="card.onServer($event.target.value || null)">
                       <option value="">Seer default</option>
@@ -356,7 +359,7 @@
               :disabled="isLoading"
             />
             <button @click="showTmdbKey = !showTmdbKey" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading" :aria-label="showTmdbKey ? 'Hide TMDB API key' : 'Show TMDB API key'">
-              <i :class="showTmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+              <i aria-hidden="true" :class="showTmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
             </button>
           </div>
           <small class="text-xs leading-normal text-ink-4">
@@ -369,9 +372,9 @@
           class="ui-btn mt-auto self-start"
           :disabled="isLoading || !localConfig.TMDB_API_KEY || isTmdbTesting"
         >
-          <i v-if="isTmdbTesting" class="fas fa-spinner fa-spin"></i>
-          <i v-else-if="wizardMode && wizardTmdbConnected" class="fas fa-check"></i>
-          <i v-else class="fas fa-plug"></i>
+          <i aria-hidden="true" v-if="isTmdbTesting" class="fas fa-spinner fa-spin"></i>
+          <i aria-hidden="true" v-else-if="wizardMode && wizardTmdbConnected" class="fas fa-check"></i>
+          <i aria-hidden="true" v-else class="fas fa-plug"></i>
           {{ isTmdbTesting ? 'Testing…' : (wizardMode && wizardTmdbConnected ? 'Connected ✓' : 'Test connection') }}
         </button>
         </div>
@@ -417,8 +420,8 @@
                   class="ui-input"
                   :disabled="isLoading"
                 />
-                <button @click="showOmdbKey = !showOmdbKey" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
-                  <i :class="showOmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                <button @click="showOmdbKey = !showOmdbKey" type="button" :aria-label="showOmdbKey ? 'Hide OMDb API key' : 'Show OMDb API key'" :aria-pressed="showOmdbKey.toString()" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+                  <i aria-hidden="true" :class="showOmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
                 </button>
               </div>
               <small class="text-xs leading-normal text-ink-4">
@@ -443,9 +446,9 @@
               class="ui-btn mt-4"
               :disabled="isLoading || !localConfig.OMDB_API_KEY || omdbTesting"
             >
-              <i v-if="omdbTesting" class="fas fa-spinner fa-spin"></i>
-              <i v-else-if="omdbConnected" class="fas fa-check"></i>
-              <i v-else class="fas fa-plug"></i>
+              <i aria-hidden="true" v-if="omdbTesting" class="fas fa-spinner fa-spin"></i>
+              <i aria-hidden="true" v-else-if="omdbConnected" class="fas fa-check"></i>
+              <i aria-hidden="true" v-else class="fas fa-plug"></i>
               {{ omdbTesting ? 'Testing…' : (omdbConnected ? 'Connected' : 'Test connection') }}
             </button>
           </div>
@@ -479,8 +482,8 @@
                   class="ui-input"
                   :disabled="isLoading"
                 />
-                <button @click="showTraktClientSecret = !showTraktClientSecret" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
-                  <i :class="showTraktClientSecret ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+                <button @click="showTraktClientSecret = !showTraktClientSecret" type="button" :aria-label="showTraktClientSecret ? 'Hide Trakt client secret' : 'Show Trakt client secret'" :aria-pressed="showTraktClientSecret.toString()" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+                  <i aria-hidden="true" :class="showTraktClientSecret ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
                 </button>
               </div>
               <small class="text-xs leading-normal text-ink-4">
@@ -488,7 +491,7 @@
               </small>
             </div>
             <div class="mt-3 flex items-center gap-2 text-[13px] font-semibold text-good" v-if="isTraktAppConfigured">
-              <i class="fas fa-check-circle"></i>
+              <i aria-hidden="true" class="fas fa-check-circle"></i>
               Trakt app credentials configured. Users can link their own Trakt accounts from their profile.
             </div>
           </div>
@@ -496,7 +499,7 @@
       </div>
     </div>
 
-    <div v-if="!wizardMode" class="flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-[#18162b] max-lg:bottom-24' : 'border-edge bg-panel'">
+    <div v-if="!wizardMode" class="flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-panel max-lg:bottom-24' : 'border-edge bg-panel'">
       <span class="flex-[1_1_200px] text-sm" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
       <button type="button" class="ui-btn border-0 bg-transparent text-ink-3 hover:text-ink" :disabled="isLoading" @click="resetToDefaults">Reset</button>
       <button type="button" class="ui-btn-primary" :disabled="isLoading || !hasChanges" @click="saveSettings">{{ isLoading ? 'Saving…' : 'Save changes' }}</button>
@@ -508,6 +511,8 @@
 import PageHeader from '@/components/ui/PageHeader.vue';
 import ServiceCardHeader from './ServiceCardHeader.vue';
 import axios from 'axios';
+import { confirmDialog } from '@/utils/confirmDialog';
+import unsavedChangesGuard from './mixins/unsavedChangesGuard';
 import {
   testSeerApi, authenticateUser, fetchRadarrServers, fetchSonarrServers,
   fetchJellyfinLibraries, fetchJellyfinUsers, fetchPlexLibraries, fetchPlexUsers,
@@ -516,6 +521,7 @@ import {
 
 export default {
   name: 'SettingsServices',
+  mixins: [unsavedChangesGuard],
   components: { PageHeader, ServiceCardHeader },
   props: {
     config: {
@@ -871,13 +877,7 @@ export default {
   },
   methods: {
     _notifyError(message, opts = { position: 'top-right', duration: 5000 }) {
-      if (this.$toast) {
-        this.$toast.error(message, opts);
-        return;
-      }
-      if (this.wizardMode && typeof window !== 'undefined' && typeof window.alert === 'function') {
-        window.alert(message);
-      }
+      this.$toast.error(message, opts);
     },
 
     // Runs all silent connection tests in parallel on mount so they don't block each other.
@@ -1469,7 +1469,7 @@ export default {
         SEER_API_URL: '', SEER_TOKEN: '', SEER_USER_NAME: null, SEER_USER_PSW: null,
         SEER_SESSION_TOKEN: null, SEER_ANIME_PROFILE_CONFIG: {}, SEER_REQUEST_DELAY: 2, SELECTED_USERS: [],
       };
-      if (confirm('Are you sure you want to reset all service settings to their defaults?')) {
+      if (await confirmDialog({ title: 'Reset service settings?', message: 'All connections are cleared and saved: TMDb, your media server, Seer, Trakt, OMDb and MDBList.', confirmLabel: 'Reset', danger: true })) {
         this.localConfig = { ...this.localConfig, ...defaults };
         this.seerConnected = false; this.seerAuthenticated = false; this.seerUsers = [];
         this.omdbConnected = false;

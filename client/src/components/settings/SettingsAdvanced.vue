@@ -155,7 +155,7 @@
 
           <div role="tabpanel" v-if="activeAiGuideTab === 'openai'">
             <div class="rounded-ctl border border-edge bg-panel-2 px-4 py-3.5">
-              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i class="fas fa-cloud"></i> OpenAI</div>
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i aria-hidden="true" class="fas fa-cloud"></i> OpenAI</div>
               <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
                 <li>Create an API key in your OpenAI account.</li>
                 <li>Use a model that supports chat completions, such as <code>gpt-4o-mini</code>.</li>
@@ -169,7 +169,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 
           <div role="tabpanel" v-else-if="activeAiGuideTab === 'ollama'">
             <div class="rounded-ctl border border-brand/40 bg-panel-2 px-4 py-3.5">
-              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i class="fas fa-server"></i> Ollama <span class="rounded-lg bg-brand-soft px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-brand-ink">Local</span></div>
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i aria-hidden="true" class="fas fa-server"></i> Ollama <span class="rounded-lg bg-brand-soft px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-brand-ink">Local</span></div>
               <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
                 <li>Install and run Ollama on your machine.</li>
                 <li>Pull a model (example: <code>ollama pull llama3.1</code>).</li>
@@ -187,7 +187,7 @@ LLM_MODEL=llama3.1</code></pre>
 
           <div role="tabpanel" v-else-if="activeAiGuideTab === 'lmstudio'">
             <div class="rounded-ctl border border-brand/40 bg-panel-2 px-4 py-3.5">
-              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i class="fas fa-laptop-code"></i> LM Studio <span class="rounded-lg bg-brand-soft px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-brand-ink">Local</span></div>
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i aria-hidden="true" class="fas fa-laptop-code"></i> LM Studio <span class="rounded-lg bg-brand-soft px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-brand-ink">Local</span></div>
               <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
                 <li>Run LM Studio.</li>
                 <li>Start the OpenAI-compatible server from LM Studio.</li>
@@ -206,7 +206,7 @@ LLM_MODEL=your-loaded-model</code></pre>
 
           <div role="tabpanel" v-else-if="activeAiGuideTab === 'gemini'">
             <div class="rounded-ctl border border-edge bg-panel-2 px-4 py-3.5">
-              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i class="fas fa-gem"></i> Google Gemini</div>
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i aria-hidden="true" class="fas fa-gem"></i> Google Gemini</div>
               <p class="mb-3 text-sm text-ink-2">
                 Use Google's Gemini API through its OpenAI-compatible endpoint.
               </p>
@@ -224,7 +224,7 @@ LLM_MODEL=gemini-2.0-flash</code></pre>
 
           <div role="tabpanel" v-else>
             <div class="rounded-ctl border border-edge bg-panel-2 px-4 py-3.5">
-              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i class="fas fa-exchange-alt"></i> LiteLLM Proxy <span class="rounded-lg bg-caution/15 px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-caution">Advanced</span></div>
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i aria-hidden="true" class="fas fa-exchange-alt"></i> LiteLLM Proxy <span class="rounded-lg bg-caution/15 px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-caution">Advanced</span></div>
               <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
                 <li>Run LiteLLM proxy with your provider mappings.</li>
                 <li>Set SuggestArr Base URL to the proxy endpoint.</li>
@@ -461,6 +461,8 @@ import PageHeader from '@/components/ui/PageHeader.vue';
 import SectionCard from '@/components/ui/SectionCard.vue';
 import AppDialog from '@/components/ui/AppDialog.vue';
 import axios from 'axios';
+import { confirmDialog } from '@/utils/confirmDialog';
+import unsavedChangesGuard from './mixins/unsavedChangesGuard';
 import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import { languageOptions } from '@/utils/titleLanguage.js';
@@ -469,6 +471,7 @@ import RequestReplacementControls from './RequestReplacementControls.vue';
 
 export default {
   name: 'SettingsAdvanced',
+  mixins: [unsavedChangesGuard],
   components: { AppDialog, PageHeader, SectionCard,
     BaseDropdown,
     BaseCheckbox,
@@ -504,7 +507,6 @@ export default {
       activeAiGuideTab: 'openai',
       isTestingLlm: false,
       llmStatus: null, // null | 'ok' | 'error', result of the last connection test
-      removeLeaveGuard: null,
       logLevelOptions: [
         { value: 'ERROR', label: 'Error' },
         { value: 'WARNING', label: 'Warning' },
@@ -631,20 +633,8 @@ export default {
   mounted() {
     this.loadUsers();
     this.loadTmdbLanguages();
-    // Tabs are switched by changing the route param, so guard route changes plus tab close.
-    this.removeLeaveGuard = this.$router.beforeEach(() => {
-      if (this.hasChanges && !window.confirm('You have unsaved changes. Leave without saving?')) return false;
-    });
-    window.addEventListener('beforeunload', this.warnBeforeUnload);
-  },
-  beforeUnmount() {
-    if (this.removeLeaveGuard) this.removeLeaveGuard();
-    window.removeEventListener('beforeunload', this.warnBeforeUnload);
   },
   methods: {
-    warnBeforeUnload(event) {
-      if (this.hasChanges) event.preventDefault();
-    },
     async loadTmdbLanguages() {
       try {
         const { data } = await axios.get('/api/tmdb/languages', { timeout: 10000 });
@@ -752,7 +742,7 @@ export default {
     },
 
     async clearCache() {
-      if (confirm('Are you sure you want to clear cached TMDb data? This may temporarily slow down metadata requests.')) {
+      if (await confirmDialog({ title: 'Clear the TMDb cache?', message: 'Cached TMDb data is deleted. Metadata requests may be slower for a while.', confirmLabel: 'Clear cache', danger: true })) {
         try {
           await axios.post('/api/tmdb/cache/clear');
           this.$toast.success('Cache cleared successfully!');
@@ -889,7 +879,7 @@ export default {
         SUBPATH: null,
       };
 
-      if (confirm('Are you sure you want to reset all advanced settings to their defaults?')) {
+      if (await confirmDialog({ title: 'Reset advanced settings?', message: 'AI, diagnostics, cache and access settings go back to their defaults and are saved.', confirmLabel: 'Reset', danger: true })) {
         this.localConfig = { ...this.localConfig, ...defaults };
         await this.saveSettings();
       }

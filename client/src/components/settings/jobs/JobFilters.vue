@@ -74,7 +74,7 @@
         <span>10</span>
       </div>
       <small class="mt-2 text-sm text-ink-4">
-        <i class="fas fa-star text-[#f5c518]"></i>
+        <i aria-hidden="true" class="fas fa-star text-[#f5c518]"></i>
         Filter by IMDB community rating — requires OMDb API key configured in Connections
       </small>
     </div>
@@ -96,7 +96,7 @@
 
     <!-- "Both must pass" notice -->
     <div v-if="localFilters.rating_source === 'both'" class="flex items-center gap-2 rounded-ctl border border-[#f5c518]/25 bg-[#f5c518]/8 px-3.5 py-2.5 text-sm text-ink-2 [&>i]:shrink-0 [&>i]:text-[#f5c518]">
-      <i class="fas fa-info-circle"></i>
+      <i aria-hidden="true" class="fas fa-info-circle"></i>
       Content must pass <strong>both</strong> TMDB and IMDB thresholds to be recommended.
     </div>
 
@@ -210,7 +210,7 @@
         </button>
       </div>
       <p v-else-if="localFilters.watch_region && watchProviders.length === 0" class="flex items-center gap-2 p-4 text-sm text-ink-4">
-        <i class="fas fa-spinner fa-spin"></i> Loading providers...
+        <i aria-hidden="true" class="fas fa-spinner fa-spin"></i> Loading providers...
       </p>
       <p v-else class="m-0 rounded-ctl border border-edge bg-white/3 px-4 py-3 text-sm text-ink-4">
         Select a region above to choose which streaming services to exclude
@@ -244,7 +244,7 @@
         </button>
       </div>
       <p v-else class="flex items-center gap-2 p-4 text-sm text-ink-4">
-        <i class="fas fa-spinner fa-spin"></i> Loading genres...
+        <i aria-hidden="true" class="fas fa-spinner fa-spin"></i> Loading genres...
       </p>
       <small class="mt-2 text-sm text-ink-4">Content must match at least one selected genre</small>
     </div>
@@ -264,7 +264,7 @@
         </button>
       </div>
       <p v-else class="flex items-center gap-2 p-4 text-sm text-ink-4">
-        <i class="fas fa-spinner fa-spin"></i> Loading genres...
+        <i aria-hidden="true" class="fas fa-spinner fa-spin"></i> Loading genres...
       </p>
     </div>
 
@@ -291,7 +291,7 @@
           class="cursor-pointer rounded-[8px] border px-3 py-2 text-sm transition border-bad bg-bad/10 text-bad"
           @click="toggleKeyword(keyword)"
         >
-          {{ keyword.name }} <i class="fas fa-times"></i>
+          {{ keyword.name }} <i aria-hidden="true" class="fas fa-times"></i>
         </button>
       </div>
       <div v-if="keywordResults.length" class="flex max-h-[200px] flex-wrap gap-2 overflow-y-auto rounded-ctl border border-edge bg-white/3 p-4">

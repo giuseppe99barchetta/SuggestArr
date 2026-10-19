@@ -1,7 +1,7 @@
 <template>
   <div class="mx-auto my-8 box-border max-w-[600px] rounded-2xl border border-white/8 bg-[rgba(15,20,30,0.82)] p-8 text-center backdrop-blur-md">
     <div class="mb-6 text-[5rem] text-good">
-      <i class="fas fa-check-circle inline-block animate-pop"></i>
+      <i aria-hidden="true" class="fas fa-check-circle inline-block animate-pop"></i>
     </div>
 
     <h1 class="mb-2 text-[2rem] font-extrabold text-ink md:text-[2.5rem]">Setup Complete!</h1>
@@ -20,11 +20,11 @@
 
     <div class="flex flex-col-reverse items-center justify-center gap-3 md:flex-row md:gap-4">
       <button @click="$emit('go-settings')" class="inline-flex flex-1 cursor-pointer items-center justify-center gap-2.5 rounded-lg px-7 py-3.5 text-[0.95rem] font-semibold transition max-md:w-full md:max-w-[220px] border border-edge-strong bg-transparent text-ink hover:border-ink-4 hover:bg-panel-2">
-        <i class="fas fa-cog"></i>
+        <i aria-hidden="true" class="fas fa-cog"></i>
         Go to Settings
       </button>
       <button @click="$emit('go-requests')" class="inline-flex flex-1 cursor-pointer items-center justify-center gap-2.5 rounded-lg px-7 py-3.5 text-[0.95rem] font-semibold transition max-md:w-full md:max-w-[220px] border-0 bg-good text-white hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(16,185,129,0.2)] hover:brightness-110">
-        <i class="fas fa-list-alt"></i>
+        <i aria-hidden="true" class="fas fa-list-alt"></i>
         View Suggestions
       </button>
     </div>

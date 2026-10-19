@@ -74,7 +74,7 @@
     <section v-if="hasDbTypeChanged && localConfig.DB_TYPE !== 'sqlite'" role="note" class="rounded-card border border-caution/40 bg-caution/10 p-5">
       <h2 class="m-0 mb-2 text-[15px] font-bold text-ink"><i aria-hidden="true" class="fas fa-exclamation-triangle mr-2 text-caution"></i>Your data does not move by itself</h2>
       <ol class="m-0 flex flex-col gap-1 pl-5 text-sm leading-relaxed text-ink-2">
-        <li>Export your current configuration (Advanced → Application &amp; Maintenance).</li>
+        <li>Export your current configuration (System → Export a backup).</li>
         <li>Back up your SQLite database file.</li>
         <li>Create the new database in your chosen engine.</li>
         <li>Import your configuration.</li>
@@ -82,16 +82,18 @@
       </ol>
     </section>
 
-    <div v-if="!wizardMode" class="flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-[#18162b] max-lg:bottom-24' : 'border-edge bg-panel'">
+    <div v-if="!wizardMode" class="flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-panel max-lg:bottom-24' : 'border-edge bg-panel'">
       <span class="flex-[1_1_200px] text-sm" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
-      <button type="button" class="h-10 cursor-pointer rounded-ctl border-0 bg-transparent px-4 text-sm font-semibold text-ink-3 hover:text-ink disabled:opacity-50" :disabled="isLoading" @click="resetToDefaults">Reset to defaults</button>
-      <button type="button" class="h-10 cursor-pointer rounded-ctl border-0 bg-brand px-[18px] text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="isLoading || !hasChanges" @click="saveSettings">{{ isLoading ? 'Saving…' : 'Save changes' }}</button>
+      <button type="button" class="ui-btn border-0 bg-transparent text-ink-3 hover:text-ink" :disabled="isLoading" @click="resetToDefaults">Reset to defaults</button>
+      <button type="button" class="ui-btn-primary" :disabled="isLoading || !hasChanges" @click="saveSettings">{{ isLoading ? 'Saving…' : 'Save changes' }}</button>
     </div>
   </div>
 </template>
 
 <script>
 import PageHeader from '@/components/ui/PageHeader.vue';
+import { confirmDialog } from '@/utils/confirmDialog';
+import unsavedChangesGuard from './mixins/unsavedChangesGuard';
 
 const ENGINES = [
   { value: 'sqlite', label: 'SQLite', description: 'Default. A single file next to the config, no server needed.', port: '' },
@@ -101,6 +103,7 @@ const ENGINES = [
 
 export default {
   name: 'SettingsDatabase',
+  mixins: [unsavedChangesGuard],
   components: { PageHeader },
   // The dashboard shell passes props this page does not declare.
   inheritAttrs: false,
@@ -284,7 +287,7 @@ export default {
         DB_NAME: null,
       };
 
-      if (confirm('Are you sure you want to reset all database settings to their defaults?')) {
+      if (await confirmDialog({ title: 'Reset database settings?', message: 'SuggestArr switches back to the built-in SQLite database.', confirmLabel: 'Reset', danger: true })) {
         this.localConfig = { ...this.localConfig, ...defaults };
         await this.saveSettings();
       }

@@ -11,32 +11,23 @@
         :title="link.title"
         class="flex h-12 w-12 items-center justify-center rounded-ctl border border-edge bg-panel-2 text-xl text-ink-4 transition hover:-translate-y-0.5 hover:border-edge-strong hover:bg-raised hover:text-ink max-md:h-11 max-md:w-11 max-md:text-lg max-[480px]:h-10 max-[480px]:w-10 max-[480px]:text-base"
       >
-        <font-awesome-icon :icon="link.icon" />
+        <i aria-hidden="true" :class="link.icon"></i>
       </a>
     </div>
   </footer>
 </template>
 
 <script>
-import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
-import { faGithub, faDocker, faDiscord } from '@fortawesome/free-brands-svg-icons';
-import { faHeart, faMugHot } from '@fortawesome/free-solid-svg-icons';
-import { library } from '@fortawesome/fontawesome-svg-core';
-
-library.add(faGithub, faDocker, faDiscord, faHeart, faMugHot);
-
 export default {
-  components: {
-    FontAwesomeIcon,
-  },
+  name: 'AppFooter',
   data() {
     return {
       links: [
-        { href: 'https://github.com/giuseppe99barchetta/SuggestArr', label: 'GitHub', icon: ['fab', 'github'] },
-        { href: 'https://hub.docker.com/repository/docker/ciuse99/suggestarr/', label: 'Docker', icon: ['fab', 'docker'] },
-        { href: 'https://discord.gg/JXwFd3PnXY', label: 'Discord', icon: ['fab', 'discord'] },
-        { href: 'https://ko-fi.com/ciuse99', label: 'Support SuggestArr on Ko-fi', title: 'Support SuggestArr on Ko-fi', icon: ['fas', 'heart'] },
-        { href: 'https://buymeacoffee.com/suggestarr', label: 'Support SuggestArr on Buy Me a Coffee', title: 'Support SuggestArr on Buy Me a Coffee', icon: ['fas', 'mug-hot'] },
+        { href: 'https://github.com/giuseppe99barchetta/SuggestArr', label: 'GitHub', icon: 'fab fa-github' },
+        { href: 'https://hub.docker.com/repository/docker/ciuse99/suggestarr/', label: 'Docker', icon: 'fab fa-docker' },
+        { href: 'https://discord.gg/JXwFd3PnXY', label: 'Discord', icon: 'fab fa-discord' },
+        { href: 'https://ko-fi.com/ciuse99', label: 'Support SuggestArr on Ko-fi', title: 'Support SuggestArr on Ko-fi', icon: 'fas fa-heart' },
+        { href: 'https://buymeacoffee.com/suggestarr', label: 'Support SuggestArr on Buy Me a Coffee', title: 'Support SuggestArr on Buy Me a Coffee', icon: 'fas fa-mug-hot' },
       ],
     };
   },

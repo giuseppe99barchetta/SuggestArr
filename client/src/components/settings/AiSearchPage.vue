@@ -5,7 +5,7 @@
     <div v-if="!llmAvailable" role="alert" class="flex flex-wrap items-center gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
       <i aria-hidden="true" class="fas fa-exclamation-triangle text-caution"></i>
       <p class="m-0 flex-[1_1_280px] text-sm text-ink-2"><strong class="text-ink">No AI provider configured.</strong> Add one in the AI provider settings to use AI Search.</p>
-      <router-link :to="{ name: 'DashboardTab', params: { tab: 'ai_provider' } }" class="inline-flex h-9 items-center rounded-[8px] bg-caution px-3.5 text-[13px] font-bold text-[#1a1405] no-underline hover:text-[#1a1405]">Set up AI provider</router-link>
+      <router-link :to="{ name: 'DashboardTab', params: { tab: 'ai_provider' } }" class="inline-flex h-9 items-center rounded-[8px] bg-caution px-3.5 text-[13px] font-bold text-on-caution no-underline hover:text-on-caution">Set up AI provider</router-link>
     </div>
 
     <form class="flex flex-col gap-4 rounded-card border border-edge bg-panel p-4 sm:p-5" :class="{ 'opacity-60': !llmAvailable }" @submit.prevent="runSearch">
@@ -162,7 +162,6 @@
     <MediaDetailsModal
       v-if="selectedItem"
       :item="selectedItem"
-      :trailer-url="trailerUrl"
       :placeholder-icon="selectedItem.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"
       rationale-title="Why the AI picked this"
       @close="closeModal"
@@ -194,9 +193,7 @@
 import PageHeader from '@/components/ui/PageHeader.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
-import axios from 'axios';
 import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear } from '@/api/api.js';
-import { loadTrailerUrl } from '@/utils/trailer.js';
 
 const MEDIA_TYPE_OPTIONS = [
   { value: 'movie', label: 'Movies', icon: 'fas fa-film' },
@@ -239,7 +236,6 @@ export default {
       requestingIds: new Set(),
       // Item detail modal
       selectedItem: null,
-      trailerUrl: null,
       // Advanced options
       showAdvanced: false,
       useHistory: true,
@@ -451,17 +447,12 @@ export default {
       this[key] = !this[key];
     },
 
-    async openModal(item) {
+    openModal(item) {
       this.selectedItem = item;
-      this.trailerUrl = null;
-      const url = await loadTrailerUrl(axios, item);
-      // The modal may show another title by the time the answer arrives.
-      if (this.selectedItem === item) this.trailerUrl = url;
     },
 
     closeModal() {
       this.selectedItem = null;
-      this.trailerUrl = null;
     },
 
     releaseYear(item) {

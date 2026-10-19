@@ -23,6 +23,12 @@
   --color-caution: #f2b84b;
   --color-bad: #f07067;
   --color-notice: #5aa9f0;
+  --color-anime: #e74c9c;
+  /* Text on a solid status colour. */
+  --color-on-good: #05180e;
+  --color-on-caution: #1a1405;
+  --color-on-bad: #2a0c0b;
+  --color-on-notice: #06131f;
 
   --radius-ctl: 10px;
   --radius-card: 14px;
@@ -56,7 +62,7 @@
   h5 { @apply mb-2 text-lg; }
   h6 { @apply mb-2 text-base; }
   p { @apply mb-4 text-ink-2; }
-  a { @apply text-brand-ink no-underline transition-colors hover:text-[#7b6cf0]; }
+  a { @apply text-brand-ink no-underline transition-colors hover:text-brand; }
   strong { @apply font-semibold text-ink; }
   code { @apply rounded-[6px] bg-panel-2 px-1.5 py-0.5 font-mono text-sm text-brand-ink; }
   select, select option { @apply border-edge-strong bg-panel-2 text-ink; }
@@ -87,7 +93,7 @@
     @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border-0 bg-brand px-4 text-sm font-bold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .ui-btn-danger {
-    @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border-0 bg-bad px-4 text-sm font-bold text-[#2a0c0b] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border-0 bg-bad px-4 text-sm font-bold text-on-bad hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .ui-btn-icon-danger {
     @apply inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-bad/15 hover:text-bad disabled:opacity-50;

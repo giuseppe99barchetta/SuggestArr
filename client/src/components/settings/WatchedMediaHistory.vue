@@ -70,6 +70,7 @@ import {
   searchMyWatchedMedia,
 } from '@/api/api';
 import SectionCard from '@/components/ui/SectionCard.vue';
+import { confirmDialog } from '@/utils/confirmDialog';
 
 export default {
   name: 'WatchedMediaHistory',
@@ -126,7 +127,7 @@ export default {
       finally { this.addingKey = ''; }
     },
     async remove(item) {
-      if (!confirm(`Remove ${item.title} from your recommendation history?`)) return;
+      if (!(await confirmDialog({ title: `Remove ${item.title}?`, message: 'It no longer shapes your recommendations.', confirmLabel: 'Remove', danger: true }))) return;
       try { await deleteMyWatchedMedia(item.id); this.items = this.items.filter(entry => entry.id !== item.id); }
       catch (error) { this.$toast.error(error.response?.data?.message || 'Could not remove title'); }
     },

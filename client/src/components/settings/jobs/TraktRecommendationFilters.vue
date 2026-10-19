@@ -7,17 +7,17 @@
       </p>
 
       <div v-if="isLoading" class="flex items-center gap-2 rounded-ctl border border-dashed border-edge p-3 text-[0.8rem] text-ink-4">
-        <i class="fas fa-spinner fa-spin"></i>
+        <i aria-hidden="true" class="fas fa-spinner fa-spin"></i>
         <span>Loading Trakt users...</span>
       </div>
 
       <div v-else-if="!traktConfigured" class="flex items-center gap-2 rounded-ctl border border-dashed border-edge p-3 text-[0.8rem] text-ink-4">
-        <i class="fas fa-link-slash"></i>
+        <i aria-hidden="true" class="fas fa-link-slash"></i>
         <span>Configure Trakt app credentials in Connections first.</span>
       </div>
 
       <div v-else-if="connectedUsers.length === 0" class="flex items-center gap-2 rounded-ctl border border-dashed border-edge p-3 text-[0.8rem] text-ink-4">
-        <i class="fas fa-user-slash"></i>
+        <i aria-hidden="true" class="fas fa-user-slash"></i>
         <span>No media users have a linked Trakt account yet.</span>
       </div>
 
@@ -38,13 +38,13 @@
           @click="selectUser(user.external_user_id)"
         >
           <div class="flex h-8 w-8 items-center justify-center rounded-full bg-panel-2 text-ink-4">
-            <i class="fas fa-user"></i>
+            <i aria-hidden="true" class="fas fa-user"></i>
           </div>
           <div class="flex flex-1 flex-col gap-0.5">
             <span class="text-[0.85rem] text-ink">{{ user.external_username || user.external_user_id }}</span>
             <span class="text-[0.7rem] text-ink-4">Trakt connected</span>
           </div>
-          <i v-if="selectedUserId === user.external_user_id" class="fas fa-check text-brand-ink"></i>
+          <i aria-hidden="true" v-if="selectedUserId === user.external_user_id" class="fas fa-check text-brand-ink"></i>
         </button>
       </div>
     </div>
@@ -55,7 +55,7 @@
         <div class="flex items-center gap-3">
           <BaseCheckbox v-model="localFilters.exclude_downloaded">
             <span class="inline-flex items-center gap-2 font-medium text-ink">
-              <i class="fas fa-download"></i>
+              <i aria-hidden="true" class="fas fa-download"></i>
               Exclude downloaded content
             </span>
           </BaseCheckbox>
@@ -65,7 +65,7 @@
         <div class="flex items-center gap-3">
           <BaseCheckbox v-model="localFilters.exclude_requested">
             <span class="inline-flex items-center gap-2 font-medium text-ink">
-              <i class="fas fa-clock"></i>
+              <i aria-hidden="true" class="fas fa-clock"></i>
               Exclude requested content
             </span>
           </BaseCheckbox>

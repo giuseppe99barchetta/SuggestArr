@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 // Deliberately unsigned fixture token. Every API request is intercepted below.
 const token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIiwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiJ9.";
 
-async function mockApi(page, { subpath = "", setupCompleted = true, radarrServers = null } = {}) {
+async function mockApi(page, { subpath = "", setupCompleted = true, radarrServers = null, deliveryMode = "manual", approvalDefault = false } = {}) {
   let approved = false;
   let approveCalls = 0;
   let approveBody = null;
@@ -41,8 +41,8 @@ async function mockApi(page, { subpath = "", setupCompleted = true, radarrServer
       return json({ status: "success", jobs: [{
         id: 7, name: "Manual job", job_type: "discover", media_type: "movie", enabled: true,
         max_results: 5, filters: {}, schedule_type: "preset", schedule_value: "daily",
-        delivery_mode: "manual",
-      }] });
+        delivery_mode: deliveryMode,
+      }], request_approval_default: approvalDefault });
     }
     if (apiPath === "/api/jobs/history") return json({ status: "success", history: [] });
     if (apiPath === "/api/jobs/queue-status") return json({ status: "success", queued: 0, submitting: 0, submitted: 0, failed: 0, total_pending: 0 });
@@ -229,4 +229,120 @@ test("a job preview and simulated request run without external providers", async
 
   await page.getByRole("button", { name: "Run job now" }).click();
   await expect.poll(api.runCalls).toBe(1);
+});
+
+async function signIn(page, landing = /\/dashboard$/) {
+  await page.goto("/login");
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill("e2e-password");
+  await page.getByRole("button", { name: "Sign In" }).click();
+  await expect(page).toHaveURL(landing);
+}
+
+test("a signed-in administrator can log out", async ({ page }) => {
+  await mockApi(page);
+  await signIn(page);
+
+  await page.getByRole("button", { name: "Log out" }).click();
+  await expect(page).toHaveURL(/\/login/);
+});
+
+test("an unknown path lands on the dashboard", async ({ page }) => {
+  await mockApi(page);
+  await signIn(page);
+
+  await page.goto("/no-such-page");
+  await expect(page).toHaveURL(/\/dashboard$/);
+});
+
+test("jobs that inherit a global approval requirement show the approval queue everywhere", async ({ page }) => {
+  await mockApi(page, { deliveryMode: "inherit", approvalDefault: true });
+  await signIn(page);
+
+  // Sidebar badge, Home queue and the Requests tab all agree.
+  await expect(page.getByRole("link", { name: /Requests\s*1/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Waiting for your approval" })).toBeVisible();
+  await page.getByRole("link", { name: /^Requests/ }).first().click();
+  await expect(page.getByRole("tab", { name: /Needs approval/ })).toBeVisible();
+  await expect(page.getByText("Smoke title")).toBeVisible();
+});
+
+test("leaving Connections asks only when something was changed", async ({ page }) => {
+  await mockApi(page);
+  await signIn(page);
+
+  await page.getByRole("link", { name: "Connections", exact: true }).click();
+  await expect(page.locator("#tmdbApiKey")).toBeVisible();
+  // Untouched: no question.
+  await page.getByRole("link", { name: "Jobs", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Manual job" })).toBeVisible();
+
+  await page.getByRole("link", { name: "Connections", exact: true }).click();
+  await page.locator("#tmdbApiKey").fill("edited-key");
+  await page.getByRole("link", { name: "Jobs", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Leave without saving?" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Keep editing" }).click();
+  await expect(page.locator("#tmdbApiKey")).toHaveValue("edited-key");
+
+  await page.getByRole("link", { name: "Jobs", exact: true }).click();
+  await page.getByRole("dialog", { name: "Leave without saving?" }).getByRole("button", { name: "Discard changes" }).click();
+  await expect(page.getByRole("heading", { name: "Manual job" })).toBeVisible();
+});
+
+test("the job dialog closes on Escape and asks before discarding edits", async ({ page }) => {
+  await mockApi(page);
+  await signIn(page);
+
+  await page.getByRole("link", { name: "Jobs", exact: true }).click();
+  await page.getByRole("button", { name: "New job" }).click();
+  const jobDialog = page.getByRole("dialog", { name: "New job" });
+  await expect(jobDialog.locator("#jobName")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(jobDialog).toBeHidden();
+
+  await page.getByRole("button", { name: "New job" }).click();
+  await jobDialog.locator("#jobName").fill("Draft job");
+  await page.keyboard.press("Escape");
+  const confirm = page.getByRole("dialog", { name: "Discard your changes?" });
+  await confirm.getByRole("button", { name: "Keep editing" }).click();
+  await expect(jobDialog.locator("#jobName")).toHaveValue("Draft job");
+
+  await jobDialog.getByRole("button", { name: "Cancel" }).click();
+  await confirm.getByRole("button", { name: "Discard" }).click();
+  await expect(jobDialog).toBeHidden();
+});
+
+test("the setup wizard reports an import it cannot read", async ({ page }) => {
+  await mockApi(page, { setupCompleted: false });
+  await signIn(page, /\/setup$/);
+
+  await page.locator('input[type="file"]').setInputFiles({ name: "broken.json", mimeType: "application/json", buffer: Buffer.from("not json") });
+  await expect(page.getByText("Failed to import: Invalid file format")).toBeVisible();
+});
+
+test("the trailer button does not move the details when it arrives", async ({ page }) => {
+  await mockApi(page);
+  let answerTrailer;
+  const trailerAnswered = new Promise(resolve => { answerTrailer = resolve; });
+  // Registered after mockApi, so it wins for this path; held until the layout is measured.
+  await page.route("http://localhost:5000/api/tmdb/trailer/**", async (route) => {
+    await trailerAnswered;
+    await route.fulfill({
+      contentType: "application/json",
+      headers: { "access-control-allow-origin": "http://127.0.0.1:5173", "access-control-allow-credentials": "true" },
+      body: JSON.stringify({ url: "https://www.youtube.com/watch?v=e2e" }),
+    });
+  });
+  await signIn(page);
+
+  await page.getByRole("button", { name: /Smoke title/ }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Smoke title" });
+  const heading = dialog.getByRole("heading", { name: "Smoke title" });
+  await expect(heading).toBeVisible();
+  const before = await heading.boundingBox();
+
+  answerTrailer();
+  await expect(dialog.getByRole("link", { name: "Watch trailer" })).toHaveAttribute("href", "https://www.youtube.com/watch?v=e2e");
+  expect(await heading.boundingBox()).toEqual(before);
 });

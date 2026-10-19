@@ -10,7 +10,7 @@
         :class="localValue.type === opt.value ? 'bg-brand text-white' : 'bg-transparent text-ink-3 hover:text-ink'"
         @click="setType(opt.value)"
       >
-        <i :class="opt.icon"></i>
+        <i aria-hidden="true" :class="opt.icon"></i>
         {{ opt.label }}
       </button>
     </div>
@@ -26,13 +26,13 @@
         @click="selectPreset(preset.value)"
       >
         <span class="flex h-8 w-8 items-center justify-center rounded-[8px]" :class="localValue.value === preset.value ? 'bg-brand text-white' : 'bg-white/5 text-ink-3'">
-          <i :class="preset.icon"></i>
+          <i aria-hidden="true" :class="preset.icon"></i>
         </span>
         <span class="flex flex-1 flex-col gap-0.5">
           <span class="font-medium text-ink">{{ preset.label }}</span>
           <span class="text-sm text-ink-4">{{ preset.description }}</span>
         </span>
-        <i v-if="localValue.value === preset.value" class="fas fa-check text-brand-ink"></i>
+        <i aria-hidden="true" v-if="localValue.value === preset.value" class="fas fa-check text-brand-ink"></i>
       </button>
     </div>
 
@@ -70,7 +70,7 @@
 
       <!-- Cron Preview -->
       <div v-if="cronPreview && !cronError" class="flex items-center gap-2 rounded-[8px] border-l-[3px] border-notice bg-notice/10 px-4 py-3 text-sm text-notice">
-        <i class="fas fa-info-circle"></i>
+        <i aria-hidden="true" class="fas fa-info-circle"></i>
         {{ cronPreview }}
       </div>
     </div>

@@ -8,7 +8,7 @@
       </div>
     </div>
 
-    <div v-if="bulkMode" class="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-card border border-brand-soft bg-[#18162b]/95 px-4 py-3 backdrop-blur lg:top-4">
+    <div v-if="bulkMode" class="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-card border border-brand-soft bg-panel/95 px-4 py-3 backdrop-blur lg:top-4">
       <span class="mr-auto text-sm font-semibold text-ink"><i aria-hidden="true" class="fas fa-check-double mr-1.5 text-brand-ink"></i>{{ selected.length }} selected</span>
       <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[13px] font-bold text-white" @click="confirmAction('approve')">Approve</button>
       <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[13px] font-semibold text-ink-2" @click="confirmAction('reject')">Reject</button>
@@ -33,7 +33,7 @@
       >
         <template v-if="bulkMode" #overlay>
           <label class="absolute right-2.5 top-2.5 z-10 flex h-7 w-7 items-center justify-center rounded-md bg-canvas/80" @click.stop>
-            <input v-model="selected" type="checkbox" :value="item.id" class="h-4 w-4 accent-[#6a5ae0]" />
+            <input v-model="selected" type="checkbox" :value="item.id" class="h-4 w-4 accent-brand" />
             <span class="sr-only">Select {{ item.title }}</span>
           </label>
         </template>
@@ -79,7 +79,7 @@
         <ApprovalProfileChoice v-if="confirmation.action === 'approve'" ref="profileChoice" :servers="servers" :media-types="confirmationMediaTypes" />
         <div class="mt-2 flex justify-end gap-2">
           <button type="button" class="h-10 cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink" @click="confirmation = null">Cancel</button>
-          <button type="button" class="h-10 cursor-pointer rounded-ctl border-0 px-4 text-sm font-bold disabled:opacity-50" :class="confirmation.action === 'reject' || confirmation.action === 'blacklist' ? 'bg-bad text-[#2a0c0b]' : 'bg-brand text-white'" :disabled="actionLoading" @click="decide">{{ confirmation.confirmLabel }}</button>
+          <button type="button" class="h-10 cursor-pointer rounded-ctl border-0 px-4 text-sm font-bold disabled:opacity-50" :class="confirmation.action === 'reject' || confirmation.action === 'blacklist' ? 'bg-bad text-on-bad' : 'bg-brand text-white'" :disabled="actionLoading" @click="decide">{{ confirmation.confirmLabel }}</button>
         </div>
       </div>
     </AppDialog>

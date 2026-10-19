@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
 import axios from "axios";
-import "vue-toast-notification/dist/theme-bootstrap.css";
 import { useAuth, setAuthRouter, initializeAuthReady, markAuthReady, waitForAuthReady } from "@/composables/useAuth";
 
 // Lazy load components for code splitting
@@ -259,6 +258,11 @@ export async function createAppRouter() {
     {
       path: `/wizard`,
       redirect: "/setup",
+    },
+    // Unknown paths land on the dashboard instead of an empty page.
+    {
+      path: "/:pathMatch(.*)*",
+      redirect: "/dashboard",
     },
   ];
 

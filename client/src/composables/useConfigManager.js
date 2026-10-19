@@ -52,12 +52,11 @@ export function useConfigManager() {
     try {
       let configToSave = { ...config.value };
       
-      // Applica i defaults per quick setup
+      // Apply the quick-setup defaults
       if (setupMode === 'quick') {
         configToSave = { ...quickDefaults, ...configToSave };
       }
 
-      console.log('Saving config:', configToSave); // Debug
 
       await axios.post('/api/config/save', configToSave);
       await axios.post('/api/config/complete-setup');

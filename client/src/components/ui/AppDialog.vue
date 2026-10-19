@@ -15,7 +15,7 @@
         aria-hidden="true"
         class="grid h-9 w-9 shrink-0 place-items-center rounded-ctl text-sm"
         :class="tone === 'danger' ? 'bg-bad/15 text-bad' : 'bg-brand-soft text-brand-ink'"
-      ><i :class="icon"></i></span>
+      ><i aria-hidden="true" :class="icon"></i></span>
       <div class="min-w-0 flex-1 self-center">
         <h2 :id="titleId" class="m-0 text-base font-bold text-ink">{{ title }}</h2>
         <p v-if="subtitle || $slots.subtitle" class="m-0 mt-0.5 text-[13px] text-ink-3"><slot name="subtitle">{{ subtitle }}</slot></p>

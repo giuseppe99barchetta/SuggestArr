@@ -5,6 +5,7 @@ import "vue-toast-notification/dist/theme-bootstrap.css";
 import "@/assets/styles/toast-custom.css";
 import axios from "axios";
 import { createAppRouter } from "./router";
+import { TOAST_OPTIONS } from "./toastOptions";
 import "@/assets/main.css";
 
 async function initApp() {
@@ -25,17 +26,8 @@ async function initApp() {
 
   const app = createApp(App);
 
-  // Standard toast options
-  const options = {
-    position: "top-right",
-    duration: 5000,
-    dismissible: true,
-    pauseOnHover: true,
-    queue: true,
-  };
-
   app.use(router);
-  app.use(ToastPlugin, options);
+  app.use(ToastPlugin, TOAST_OPTIONS);
 
   app.mount("#app");
 }

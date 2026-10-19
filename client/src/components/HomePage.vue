@@ -39,7 +39,7 @@
         >
           <template #actions>
             <template v-if="confirmRejectId === request.id">
-              <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-bad text-[13px] font-bold text-[#2a0c0b] disabled:opacity-50" :disabled="actionLoadingId === request.id" @click="decidePending('reject', request.id)">Reject</button>
+              <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-bad text-[13px] font-bold text-on-bad disabled:opacity-50" :disabled="actionLoadingId === request.id" @click="decidePending('reject', request.id)">Reject</button>
               <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Cancel rejection" @click="confirmRejectId = null"><i aria-hidden="true" class="fas fa-undo"></i></button>
             </template>
             <template v-else-if="seenMenuId === request.id">
@@ -125,7 +125,7 @@
       </div>
     </AppDialog>
 
-    <MediaDetailsModal v-if="selectedRequest" :item="selectedRequest" :trailer-url="trailerUrl" @close="selectedRequest = null" />
+    <MediaDetailsModal v-if="selectedRequest" :item="selectedRequest" @close="selectedRequest = null" />
   </div>
 </template>
 
@@ -139,7 +139,7 @@ import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
 import { approvalNeedsDialog, loadSeerServers } from '@/utils/requestProfiles.js';
 import { SEEN_OPTIONS, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
-import { loadTrailerUrl } from '@/utils/trailer.js';
+import { approvalEnabled } from '@/utils/requestApproval.js';
 
 /**
  * Dashboard home: request stats, the approval queue, recent requests and job activity.
@@ -168,7 +168,6 @@ export default {
       actionLoadingId: null,
       approvalEnabled: false,
       selectedRequest: null,
-      trailerUrl: null,
       loading: false,
     };
   },
@@ -306,10 +305,7 @@ export default {
         const { data } = await axios.get('/api/jobs');
         this.jobs = data.jobs || [];
         await this.loadPendingRequests();
-        this.approvalEnabled = this.pendingTotal > 0 || this.jobs.some(job =>
-          job.delivery_mode === 'manual' ||
-          ((job.delivery_mode || 'inherit') === 'inherit' && data.request_approval_default !== false)
-        );
+        this.approvalEnabled = this.pendingTotal > 0 || approvalEnabled(data);
       } catch (error) {
         console.error('Error loading approval jobs:', error);
       }
@@ -364,12 +360,8 @@ export default {
       }
     },
 
-    async openDetails(request) {
+    openDetails(request) {
       this.selectedRequest = request;
-      this.trailerUrl = null;
-      const url = await loadTrailerUrl(axios, request);
-      // The modal may show another title by the time the answer arrives.
-      if (this.selectedRequest === request) this.trailerUrl = url;
     }
   }
 };

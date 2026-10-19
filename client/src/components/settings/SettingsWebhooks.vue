@@ -163,6 +163,7 @@
 import PageHeader from '@/components/ui/PageHeader.vue';
 import SectionCard from '@/components/ui/SectionCard.vue';
 import AppDialog from '@/components/ui/AppDialog.vue';
+import { confirmDialog } from '@/utils/confirmDialog';
 import {
   createWebhook, deleteWebhook, getWebhookDeliveries, getWebhookSettings,
   getWebhooks, retryWebhookDelivery, updateWebhookSettings,
@@ -254,7 +255,7 @@ export default {
       finally { this.creating = false; }
     },
     async remove(webhook) {
-      if (!window.confirm(`Delete webhook “${webhook.name}”?`)) return;
+      if (!(await confirmDialog({ title: `Delete webhook “${webhook.name}”?`, confirmLabel: 'Delete', danger: true }))) return;
       try { await deleteWebhook(webhook.id); this.$toast.success('Webhook deleted.'); await this.load(); }
       catch (error) { this.$toast.error(error.response?.data?.error?.message || 'Unable to delete webhook.'); }
     },

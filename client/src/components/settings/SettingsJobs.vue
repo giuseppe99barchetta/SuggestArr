@@ -9,7 +9,7 @@
         <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Replay the Jobs tour" aria-label="Replay the Jobs tour" @click="restartJobsTour"><i aria-hidden="true" class="fas fa-question-circle"></i></button>
         <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink disabled:opacity-50" :disabled="isLoading" title="Refresh" aria-label="Refresh" @click="loadJobs"><i aria-hidden="true" :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i></button>
         <button type="button" class="ui-btn" :disabled="importStarting || ['queued', 'running'].includes(listImport?.status)" @click="showImportModal = true"><i aria-hidden="true" class="fas fa-list"></i>Import list once</button>
-        <button type="button" class="inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-ctl border-0 bg-brand px-[18px] text-sm font-bold text-white" data-tour-id="jobs-new-btn" @click="showCreateModal = true"><i aria-hidden="true" class="fas fa-plus"></i>New job</button>
+        <button type="button" class="ui-btn-primary h-[42px] px-[18px]" data-tour-id="jobs-new-btn" @click="showCreateModal = true"><i aria-hidden="true" class="fas fa-plus"></i>New job</button>
       </div>
     </header>
 
@@ -182,7 +182,7 @@
         <p class="m-0 text-sm leading-relaxed text-ink-2">Delete <strong class="text-ink">{{ jobToDelete.name }}</strong>? Its execution history is deleted too.</p>
         <div class="flex justify-end gap-2">
           <button type="button" class="h-10 cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink" @click="jobToDelete = null">Cancel</button>
-          <button type="button" class="h-10 cursor-pointer rounded-ctl border-0 bg-bad px-4 text-sm font-bold text-[#2a0c0b] disabled:opacity-50" :disabled="isDeleting" @click="deleteJob"><i aria-hidden="true" v-if="isDeleting" class="fas fa-spinner fa-spin mr-1"></i>Delete</button>
+          <button type="button" class="ui-btn-danger" :disabled="isDeleting" @click="deleteJob"><i aria-hidden="true" v-if="isDeleting" class="fas fa-spinner fa-spin mr-1"></i>Delete</button>
         </div>
       </div>
     </AppDialog>

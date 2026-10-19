@@ -206,7 +206,7 @@ export default {
     getServerConnections() {
       return this.servers.reduce((connections, server) => {
         if (server.connections) {
-          // Filtra e ordina le connessioni per priorità
+          // Filter and sort connections by priority
           const filteredConnections = server.connections
             .filter(conn => {
               // Escludi connessioni relay (troppo lente)
@@ -214,7 +214,7 @@ export default {
               return true;
             })
             .sort((a, b) => {
-              // Priorità: locale HTTPS > locale HTTP > remota HTTPS > remota HTTP
+              // Priority: local HTTPS > local HTTP > remote HTTPS > remote HTTP
               const aLocal = a.local === true || a.local === 1;
               const bLocal = b.local === true || b.local === 1;
               const aHttps = a.protocol === 'https';

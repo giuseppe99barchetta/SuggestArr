@@ -1,9 +1,9 @@
 <template>
-  <div class="text-ink">
+  <div class="text-ink" data-users-page>
 
     <PageHeader title="Users" subtitle="SuggestArr accounts, their roles and who can sign up. Your own settings are under Profile." />
 
-    <div class="mb-8 grid items-stretch gap-5 min-[1001px]:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+    <div data-users-cards class="mb-8 grid items-stretch gap-5 min-[1001px]:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
 
       <SectionCard icon="fas fa-users" title="Accounts">
         <template #actions>
@@ -15,13 +15,13 @@
 
         <!-- Loading -->
         <p v-if="isLoadingUsers" :class="emptyClass">
-          <i class="fas fa-spinner fa-spin"></i>
+          <i aria-hidden="true" class="fas fa-spinner fa-spin"></i>
           Loading users…
         </p>
 
         <!-- Empty -->
         <p v-else-if="users.length === 0" :class="emptyClass">
-          <i class="fas fa-users"></i>
+          <i aria-hidden="true" class="fas fa-users"></i>
           No accounts found.
         </p>
 
@@ -36,7 +36,7 @@
             <!-- Avatar + name -->
             <div class="flex min-w-0 flex-1 items-center gap-3 max-[700px]:col-span-full">
               <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-edge-strong bg-raised text-sm text-ink-4">
-                <i class="fas fa-user"></i>
+                <i aria-hidden="true" class="fas fa-user"></i>
               </div>
               <div class="flex min-w-0 flex-col gap-0.5">
                 <span class="flex items-center gap-1.5 truncate text-[0.95rem] font-semibold text-ink">
@@ -57,7 +57,7 @@
               :class="user.is_active ? 'border-good bg-good/10 text-good hover:enabled:bg-good/20' : 'border-edge-strong bg-panel-2 text-ink-4 hover:enabled:bg-raised'"
               @click="toggleActive(user)"
             >
-              <i :class="user.is_active ? 'fas fa-circle' : 'far fa-circle'"></i>
+              <i aria-hidden="true" :class="user.is_active ? 'fas fa-circle' : 'far fa-circle'"></i>
               {{ user.is_active ? 'Active' : 'Inactive' }}
             </button>
 
@@ -80,7 +80,7 @@
               aria-label="Edit permissions"
               @click="openEditPermissionsModal(user)"
             >
-              <i class="fas fa-pencil-alt"></i>
+              <i aria-hidden="true" class="fas fa-pencil-alt"></i>
             </button>
 
             <button
@@ -91,7 +91,7 @@
               aria-label="Assign media account"
               @click="openMediaLinkModal(user)"
             >
-              <i class="fas fa-link"></i>
+              <i aria-hidden="true" class="fas fa-link"></i>
             </button>
 
             <!-- Delete -->
@@ -103,7 +103,7 @@
               aria-label="Delete user"
               @click="confirmDelete(user)"
             >
-              <i class="fas fa-trash"></i>
+              <i aria-hidden="true" class="fas fa-trash"></i>
             </button>
           </div>
         </div>

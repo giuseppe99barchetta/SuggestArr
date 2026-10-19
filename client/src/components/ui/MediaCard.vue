@@ -26,10 +26,10 @@
 
 <script>
 const TONES = {
-  caution: 'bg-caution text-[#1a1405]',
-  notice: 'bg-notice text-[#06131f]',
-  good: 'bg-good text-[#05180e]',
-  bad: 'bg-bad text-[#2a0c0b]',
+  caution: 'bg-caution text-on-caution',
+  notice: 'bg-notice text-on-notice',
+  good: 'bg-good text-on-good',
+  bad: 'bg-bad text-on-bad',
   neutral: 'bg-canvas/80 text-ink',
   brand: 'bg-brand text-white',
 };

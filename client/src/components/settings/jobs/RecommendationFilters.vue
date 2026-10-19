@@ -12,7 +12,7 @@
           :class="userMode === mode.value ? 'border-brand bg-brand text-white' : 'border-edge bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
           @click="setUserMode(mode.value)"
         >
-          <i :class="mode.icon"></i>
+          <i aria-hidden="true" :class="mode.icon"></i>
           {{ mode.label }}
         </button>
       </div>
@@ -22,7 +22,7 @@
     <div v-if="!isTraktSource && userMode === 'specific'">
       <label class="mb-2 block text-sm font-medium text-ink-2">Select Users</label>
       <div v-if="usersUnavailable" :class="emptyClass">
-        <i class="fas fa-lock"></i>
+        <i aria-hidden="true" class="fas fa-lock"></i>
         <span>User selection is only available to administrators.</span>
       </div>
       <div v-else-if="availableUsers.length > 0" class="flex max-h-[200px] flex-col gap-2 overflow-y-auto rounded-ctl border border-edge bg-white/3 p-2">
@@ -36,18 +36,18 @@
           @click="toggleUser(user.id)"
         >
           <span class="flex h-8 w-8 items-center justify-center rounded-full" :class="isUserSelected(user.id) ? 'bg-brand text-white' : 'bg-white/5 text-ink-4'">
-            <i class="fas fa-user"></i>
+            <i aria-hidden="true" class="fas fa-user"></i>
           </span>
           <span class="flex-1 font-medium text-ink">{{ user.name || user.id }}</span>
-          <i v-if="isUserSelected(user.id)" class="fas fa-check text-brand-ink"></i>
+          <i aria-hidden="true" v-if="isUserSelected(user.id)" class="fas fa-check text-brand-ink"></i>
         </button>
       </div>
       <div v-else-if="isLoading" :class="emptyClass">
-        <i class="fas fa-spinner fa-spin"></i>
+        <i aria-hidden="true" class="fas fa-spinner fa-spin"></i>
         <span>Loading users...</span>
       </div>
       <div v-else :class="emptyClass">
-        <i class="fas fa-user-slash"></i>
+        <i aria-hidden="true" class="fas fa-user-slash"></i>
         <span>No users found. Configure SELECTED_USERS in settings.</span>
       </div>
     </div>
@@ -55,7 +55,7 @@
     <div v-if="isTraktSource">
       <label class="mb-2 block text-sm font-medium text-ink-2">Trakt Account</label>
       <div :class="emptyClass">
-        <i class="fas fa-tv"></i>
+        <i aria-hidden="true" class="fas fa-tv"></i>
         <span>This job uses the owner's linked Trakt account.</span>
       </div>
     </div>
@@ -63,7 +63,7 @@
     <!-- AI Enhancement (shown when LLM is configured) -->
     <div v-if="llmConfigured" class="rounded-ctl border border-brand bg-brand/10 px-4 py-3">
       <label class="mb-3 flex items-center gap-2 text-sm font-medium text-brand-ink">
-        <i class="fas fa-robot"></i>
+        <i aria-hidden="true" class="fas fa-robot"></i>
         AI Enhancement
       </label>
       <div class="py-1">
@@ -72,13 +72,13 @@
           @change="updateFilters(localFilters)"
         >
           <span class="flex items-center gap-2 font-medium text-ink">
-            <i class="fas fa-brain w-4 text-ink-4"></i>
+            <i aria-hidden="true" class="fas fa-brain w-4 text-ink-4"></i>
             Enable AI-powered recommendations
           </span>
         </BaseCheckbox>
       </div>
       <small v-if="localFilters.use_llm" class="mt-2 flex items-start gap-1.5 text-sm text-brand-ink opacity-85">
-        <i class="fas fa-info-circle mt-0.5"></i>
+        <i aria-hidden="true" class="fas fa-info-circle mt-0.5"></i>
         The AI will analyze the full watch history to generate personalized recommendations, replacing the standard TMDb similarity search.
       </small>
       <small v-else class="mt-2 block text-sm text-ink-4">
@@ -125,13 +125,13 @@
             <div class="flex items-center gap-3 rounded-[8px] p-2 transition hover:bg-panel-2">
               <BaseCheckbox v-model="localFilters[toggle.key]" :disabled="toggle.trakt && !traktUsable">
                 <span class="flex items-center gap-2 font-medium text-ink" :class="{ 'opacity-50': toggle.trakt && !traktUsable }">
-                  <i :class="[toggle.icon, 'w-4 text-ink-4']"></i>
+                  <i aria-hidden="true" :class="[toggle.icon, 'w-4 text-ink-4']"></i>
                   {{ toggle.label }}
                 </span>
               </BaseCheckbox>
             </div>
             <small v-if="toggle.trakt && traktWarning" class="mb-2 ml-10 text-xs text-caution">
-              <i class="fas fa-exclamation-triangle"></i>
+              <i aria-hidden="true" class="fas fa-exclamation-triangle"></i>
               {{ traktWarning }}
             </small>
             <small v-else class="mb-2 ml-10 text-xs text-ink-4">{{ toggle.help }}</small>

@@ -67,7 +67,7 @@
             <button type="button" class="ml-auto w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="Replay the onboarding tour" title="Replay the onboarding tour" @click="restartTour">
               <i aria-hidden="true" class="fas fa-question-circle"></i>
             </button>
-            <button v-if="authSetupComplete && authBypass" type="button" class="w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="Log out" title="Log out" @click="handleLogout">
+            <button v-if="authSetupComplete && !authBypass" type="button" class="w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="Log out" title="Log out" @click="handleLogout">
               <i aria-hidden="true" class="fas fa-sign-out-alt"></i>
             </button>
           </div>
@@ -87,8 +87,6 @@
               :section="activeTabSection"
               :isLoading="isLoading"
               :testingConnections="testingConnections"
-              :getServiceStatus="getServiceStatus"
-              :getServiceIcon="getServiceIcon"
               @save-section="saveSection"
               @test-connection="testConnection"
               @export-config="showExportModal = true"
@@ -200,7 +198,7 @@
     <!-- Onboarding Tour -->
     <OnboardingTour
       :active="showTour"
-      :steps="tourSteps"
+      :steps="visibleTourSteps"
       @done="showTour = false"
     />
   </div>
@@ -213,7 +211,8 @@ import AppDialog from './ui/AppDialog.vue';
 import OnboardingTour from './OnboardingTour.vue';
 import { useVersionCheck } from '@/composables/useVersionCheck';
 import { useAuth } from '@/composables/useAuth';
-// ponytail: legacy sheets still styling the job dialogs; drop once those are rebuilt.
+import { approvalEnabled } from '@/utils/requestApproval';
+import { releaseNotesToHtml } from '@/utils/markdown';
 
 // Import tab components
 import SettingsServices from './settings/SettingsServices.vue';
@@ -283,7 +282,6 @@ export default {
       requestCount: 0,
       showMobileNav: false,
       showTour: false,
-      // Cache per migliorare performance
       testingConnections: {
         tmdb: false,
         plex: false,
@@ -416,6 +414,11 @@ export default {
         { label: 'Settings', tabs: this.visibleTabs.filter(tab => tab.group === 'settings') },
         { label: 'System', tabs: this.visibleTabs.filter(tab => tab.group === 'system') },
       ].filter(group => group.tabs.length);
+    },
+    // Steps for tabs this user cannot see would point at nothing.
+    visibleTourSteps() {
+      const visibleTourIds = new Set(this.visibleTabs.map(tab => tab.tourId).filter(Boolean));
+      return this.tourSteps.filter(step => step.targetId === 'nav-tabs' || visibleTourIds.has(step.targetId));
     },
     quickTabs() {
       return this.visibleTabs.filter(tab => tab.group === 'main');
@@ -554,7 +557,7 @@ export default {
     async loadRequestCount() {
       try {
         const jobs = await axios.get('/api/jobs', { timeout: 5000 });
-        if (!(jobs.data.jobs || []).some(job => job.delivery_mode === 'manual')) {
+        if (!approvalEnabled(jobs.data)) {
           this.requestCount = 0;
           return;
         }
@@ -579,8 +582,7 @@ export default {
           const response = await getReleaseByTag(this.currentVersion);
           
           if (response.data && response.data.body) {
-            // Convert markdown to basic HTML
-            this.changelogData = this.parseMarkdown(response.data.body);
+            this.changelogData = releaseNotesToHtml(response.data.body);
           } else {
             this.changelogData = null;
           }
@@ -591,35 +593,6 @@ export default {
           this.isLoadingChangelog = false;
         }
       }
-    },
-
-    parseMarkdown(markdown) {
-      if (!markdown) return '';
-
-      // Escape HTML entities first to prevent XSS
-      const escaped = markdown
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-
-      // Basic markdown to HTML conversion (on escaped input)
-      return escaped
-        // Headers
-        .replace(/^### (.*$)/gim, '<h4>$1</h4>')
-        .replace(/^## (.*$)/gim, '<h3>$1</h3>')
-        .replace(/^# (.*$)/gim, '<h2>$1</h2>')
-        // Bold
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        // Italic
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        // Links (href is already entity-encoded from the escape step)
-        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-        // Line breaks
-        .replace(/\n/g, '<br>')
-        // Lists (basic)
-        .replace(/^- (.+)$/gim, '<li>$1</li>')
-        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
     },
 
     async saveSection({ section, data }) {
@@ -725,17 +698,13 @@ export default {
       
         const response = await axios.post(endpoint, payload);
       
-        if (this.$toast) {
-          this.$toast.success(
-            response.data.message || `${service.toUpperCase()} connection successful!`,
-            {
-              position: 'top-right',
-              duration: 3000
-            }
-          );
-        } else {
-          alert(response.data.message || `${service.toUpperCase()} connection successful!`);
-        }
+        this.$toast.success(
+          response.data.message || `${service.toUpperCase()} connection successful!`,
+          {
+            position: 'top-right',
+            duration: 3000
+          }
+        );
       
         return response.data;
       
@@ -767,14 +736,10 @@ export default {
           errorMessage = error.message || 'Request configuration error';
         }
       
-        if (this.$toast) {
-          this.$toast.error(errorMessage, {
-            position: 'top-right',
-            duration: 5000
-          });
-        } else {
-          alert(`Error: ${errorMessage}`);
-        }
+        this.$toast.error(errorMessage, {
+          position: 'top-right',
+          duration: 5000
+        });
       
         return {
           status: 'error',
@@ -785,29 +750,6 @@ export default {
         this.testingConnections[service] = false;
       }
     },
-    getServiceStatus() {
-      const service = this.config.SELECTED_SERVICE;
-      if (!service) return 'status-disconnected';
-      
-      if (service === 'plex' && this.config.PLEX_TOKEN) return 'status-connected';
-      if ((service === 'jellyfin' || service === 'emby') && this.config.JELLYFIN_TOKEN) return 'status-connected';
-      
-      return 'status-warning';
-    },
-
-    getServiceIcon() {
-      const icons = {
-        plex: 'fas fa-play-circle',
-        jellyfin: 'fas fa-server',
-        emby: 'fas fa-server',
-      };
-      return icons[this.config.SELECTED_SERVICE] || 'fas fa-question-circle';
-    },
-
-    goToDashboard() {
-      this.$router.push({ name: 'Home' });
-    },
-
     async confirmExportConfig() {
       const includeSecrets = this.exportIncludeSecrets;
       this.showExportModal = false;

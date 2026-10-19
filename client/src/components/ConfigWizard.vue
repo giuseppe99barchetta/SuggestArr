@@ -35,18 +35,18 @@
 
         <div class="mb-3 flex flex-col gap-3.5">
           <button type="button" @click="startSetup" class="ui-btn-primary h-auto py-3.5 text-[1.05rem] font-semibold">
-            <i class="fas fa-rocket"></i>
+            <i aria-hidden="true" class="fas fa-rocket"></i>
             Start Setup
           </button>
           <button type="button" @click="importConfig" class="ui-btn" :disabled="isImporting">
-            <i :class="isImporting ? 'fas fa-spinner fa-spin' : 'fas fa-file-import'"></i>
+            <i aria-hidden="true" :class="isImporting ? 'fas fa-spinner fa-spin' : 'fas fa-file-import'"></i>
             {{ isImporting ? 'Importing...' : 'Import Configuration' }}
           </button>
         </div>
         <p class="mb-6 text-[0.8rem] text-ink-4">Already have a configuration file? Import it to restore all settings.</p>
 
         <div v-if="hasExistingConfig" class="flex flex-wrap items-center justify-center gap-2 rounded-ctl border border-notice/30 bg-notice/12 px-5 py-3.5 text-[0.9rem] text-ink">
-          <i class="fas fa-info-circle"></i>
+          <i aria-hidden="true" class="fas fa-info-circle"></i>
           Existing configuration detected.
           <router-link to="/" class="font-semibold text-brand-ink no-underline hover:underline">Go to Dashboard →</router-link>
         </div>
@@ -69,7 +69,7 @@
               Optional {{ currentOptionalIndex + 1 }} of {{ optionalSteps.length }}
             </span>
             <button type="button" @click="showLogs = true" class="cursor-pointer rounded-lg border border-white/12 bg-transparent px-2.5 py-1.5 text-[0.8rem] text-ink-4 transition hover:border-white/22 hover:bg-white/7 hover:text-ink" title="View Logs" aria-label="View Logs">
-              <i class="fas fa-clipboard-list"></i>
+              <i aria-hidden="true" class="fas fa-clipboard-list"></i>
             </button>
           </div>
         </div>
@@ -82,14 +82,14 @@
               :title="step.optional ? `${step.label} (optional)` : step.label"
               :class="[stepCircleClass(step, i), { 'scale-80 border-dashed': step.optional }]"
             >
-              <i v-if="i < currentStepIndex" class="fas fa-check"></i>
+              <i aria-hidden="true" v-if="i < currentStepIndex" class="fas fa-check"></i>
               <!-- Only required steps are numbered, matching "Step N of M" in the header. -->
               <span v-else-if="!step.optional">{{ requiredSteps.indexOf(step) + 1 }}</span>
             </div>
             <div
               v-if="i < allSteps.length - 1"
               class="mx-[3px] h-0.5 flex-1 transition-colors duration-300"
-              :class="i < currentStepIndex ? 'bg-[#10b981]/40' : 'bg-white/10'"
+              :class="i < currentStepIndex ? 'bg-good/40' : 'bg-white/10'"
             ></div>
           </template>
         </div>
@@ -98,7 +98,7 @@
         <div :class="[sectionClass, 'pt-4 pb-2 md:pt-5']">
           <div class="mb-1 flex items-center gap-3">
             <h2 class="m-0 text-[1.3rem] font-bold text-ink">{{ currentStep.label }}</h2>
-            <div v-if="currentStep.optional" class="shrink-0 rounded-full border border-[#f59e0b]/35 bg-[#f59e0b]/15 px-2 py-0.5 text-[0.68rem] font-bold uppercase tracking-[0.08em] text-[#f59e0b]">Optional</div>
+            <div v-if="currentStep.optional" class="shrink-0 rounded-full border border-caution/35 bg-caution/15 px-2 py-0.5 text-[0.68rem] font-bold uppercase tracking-[0.08em] text-caution">Optional</div>
           </div>
           <p class="m-0 text-[0.9rem] leading-normal text-ink-4">{{ currentStep.description }}</p>
         </div>
@@ -149,9 +149,9 @@
         <transition enter-active-class="transition-opacity duration-300" leave-active-class="transition-opacity duration-300" enter-from-class="opacity-0" leave-to-class="opacity-0">
           <div
             v-if="!isCurrentStepValid && !currentStep.optional && currentStepHint"
-            :class="[sectionClass, 'flex items-center gap-2 border-t border-[#f59e0b]/18 bg-[#f59e0b]/8 py-2.5 text-[0.82rem] text-[#f59e0b]']"
+            :class="[sectionClass, 'flex items-center gap-2 border-t border-caution/18 bg-caution/8 py-2.5 text-[0.82rem] text-caution']"
           >
-            <i class="fas fa-info-circle shrink-0 text-[0.8rem]"></i>
+            <i aria-hidden="true" class="fas fa-info-circle shrink-0 text-[0.8rem]"></i>
             {{ currentStepHint }}
           </div>
         </transition>
@@ -159,7 +159,7 @@
         <!-- Navigation footer -->
         <div :class="[sectionClass, 'flex items-center justify-between border-t border-white/7 bg-black/15 py-3.5 md:py-4']">
           <button type="button" @click="goBack" class="ui-btn">
-            <i class="fas fa-arrow-left"></i>
+            <i aria-hidden="true" class="fas fa-arrow-left"></i>
             {{ currentStepIndex === 0 ? 'Welcome' : 'Back' }}
           </button>
           <div class="flex items-center gap-3">
@@ -169,7 +169,7 @@
               @click="skipStep"
               class="ui-btn"
             >
-              Skip <i class="fas fa-forward"></i>
+              Skip <i aria-hidden="true" class="fas fa-forward"></i>
             </button>
             <button
               type="button"
@@ -177,11 +177,11 @@
               class="ui-btn-primary"
               :disabled="!isCurrentStepValid && !isSaving"
             >
-              <i v-if="isSaving" class="fas fa-spinner fa-spin"></i>
+              <i aria-hidden="true" v-if="isSaving" class="fas fa-spinner fa-spin"></i>
               <template v-else>
                 {{ isLastStep ? 'Complete Setup' : 'Continue' }}
-                <i v-if="!isLastStep" class="fas fa-arrow-right"></i>
-                <i v-else class="fas fa-check"></i>
+                <i aria-hidden="true" v-if="!isLastStep" class="fas fa-arrow-right"></i>
+                <i aria-hidden="true" v-else class="fas fa-check"></i>
               </template>
             </button>
           </div>
@@ -218,7 +218,8 @@
 import { ref, computed, watch } from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
-import { useToast } from 'vue-toastification';
+import { useToast } from 'vue-toast-notification';
+import { TOAST_OPTIONS } from '@/toastOptions';
 
 import AppFooter from './AppFooter.vue';
 import LogsComponent from './LogsComponent.vue';
@@ -263,7 +264,7 @@ export default {
   },
   setup() {
     const router = useRouter();
-    const toast = useToast();
+    const toast = useToast(TOAST_OPTIONS);
 
     const screen = ref('welcome'); // 'welcome' | 'wizard' | 'complete'
     const showLogs = ref(false);
@@ -285,7 +286,7 @@ export default {
     // Config management
     const { config, hasExistingConfig, fetchConfig, saveConfig: saveConfigFn } = useConfigManager();
     const { isImporting, fileInput, importConfig: importConfigFn, handleFileImport: handleFileImportFn } = useConfigImport(fetchConfig);
-    const { bg1Url, bg2Url, activeBg, isTransitioning, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
+    const { bg1Url, bg2Url, activeBg, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
 
     // ─── Step Definitions ────────────────────────────────────────────────────
     const allSteps = computed(() => {
@@ -539,32 +540,6 @@ export default {
     function goToSettings() { router.push('/dashboard?tour=1'); }
     function goToRequests() { router.push('/dashboard?tour=1'); }
 
-    // ─── Step Class Helpers ───────────────────────────────────────────────────
-    function getStepItemClass(absoluteIndex) {
-      const isCompleted = absoluteIndex < currentStepIndex.value;
-      const isCurrent = absoluteIndex === currentStepIndex.value;
-      return {
-        'is-completed': isCompleted,
-        'is-current': isCurrent,
-        'is-pending': !isCompleted && !isCurrent,
-      };
-    }
-
-    function isRequiredStepDone(requiredIndex) {
-      // A required step is "done" if its validity is true AND we're past it
-      const step = requiredSteps.value[requiredIndex];
-      return requiredIndex < currentStepIndex.value && stepValidity.value[step.id];
-    }
-
-    function isOptionalStepDone(optionalIndex) {
-      const absoluteIndex = requiredSteps.value.length + optionalIndex;
-      return absoluteIndex < currentStepIndex.value;
-    }
-
-    function isOptionalStepSkipped() {
-      return false; // simplified
-    }
-
     // ─── Initialization ───────────────────────────────────────────────────────
     fetchConfig().then(() => {
       if (!config.value.ENABLE_STATIC_BACKGROUND) {
@@ -578,7 +553,7 @@ export default {
     const sectionClass = 'shrink-0 px-5 md:px-7';
 
     const stepCircleClass = (step, i) => {
-      if (i < currentStepIndex.value) return 'border-[#10b981]/40 bg-[#10b981]/18 text-[#10b981]';
+      if (i < currentStepIndex.value) return 'border-good/40 bg-good/18 text-good';
       if (i === currentStepIndex.value) {
         return step.optional
           ? 'border-transparent bg-caution text-white shadow-[0_0_0_4px] shadow-caution/20'
@@ -602,7 +577,6 @@ export default {
       bg1Url,
       bg2Url,
       activeBg,
-      isTransitioning,
       allSteps,
       requiredSteps,
       optionalSteps,
@@ -625,10 +599,6 @@ export default {
       skipStep,
       goToSettings,
       goToRequests,
-      getStepItemClass,
-      isRequiredStepDone,
-      isOptionalStepDone,
-      isOptionalStepSkipped,
     };
   },
 };

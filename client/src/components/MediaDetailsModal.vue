@@ -31,7 +31,7 @@
           class="flex aspect-[2/3] w-44 items-center justify-center rounded-ctl text-5xl text-white/90 shadow-2xl shadow-black/60 ring-1 ring-white/10 sm:row-span-2 max-sm:w-24 max-sm:text-2xl"
           :style="{ background: placeholderBackground }"
         >
-          <i :class="placeholderIcon"></i>
+          <i aria-hidden="true" :class="placeholderIcon"></i>
         </div>
 
         <div class="flex min-w-0 flex-col justify-end gap-2 pr-8 sm:self-end">
@@ -63,10 +63,11 @@
               {{ overviewExpanded ? 'Show less' : 'Show more' }}
             </button>
           </div>
-          <div v-if="trailerUrl || $slots.actions" class="flex flex-wrap items-center gap-2">
+          <!-- The trailer slot is reserved while the lookup runs, so nothing moves when it answers. -->
+          <div v-if="hasTrailerSlot || $slots.actions" class="flex flex-wrap items-center gap-2">
             <slot name="actions" />
             <a
-              v-if="trailerUrl"
+              v-if="trailerState === 'ready'"
               :href="trailerUrl"
               target="_blank"
               rel="noopener noreferrer"
@@ -74,6 +75,14 @@
             >
               <i aria-hidden="true" class="fas fa-play text-xs"></i> Watch trailer
             </a>
+            <span
+              v-else-if="hasTrailerSlot"
+              class="inline-flex h-10 cursor-default items-center gap-2 rounded-ctl border border-edge-strong px-4 text-sm font-bold text-ink-4"
+              :aria-busy="(trailerState === 'loading').toString()"
+            >
+              <template v-if="trailerState === 'loading'"><i aria-hidden="true" class="fas fa-spinner fa-spin text-xs"></i> Watch trailer</template>
+              <template v-else><i aria-hidden="true" class="fas fa-video-slash text-xs"></i> No trailer</template>
+            </span>
           </div>
         </div>
       </div>
@@ -97,7 +106,9 @@
 </template>
 
 <script>
+import axios from 'axios';
 import AppDialog from '@/components/ui/AppDialog.vue';
+import { loadTrailerUrl, trailerTarget } from '@/utils/trailer.js';
 
 /**
  * Detail view for one title (request, suggestion or AI result).
@@ -109,16 +120,24 @@ export default {
   components: { AppDialog },
   props: {
     item: { type: Object, required: true },
-    trailerUrl: { type: String, default: null },
     rationaleTitle: { type: String, default: 'Why it was suggested' },
     placeholderIcon: { type: String, default: 'fas fa-image' },
     placeholderBackground: { type: String, default: 'var(--color-raised)' },
   },
   emits: ['close'],
   data() {
-    return { overviewExpanded: false, overviewClamped: false };
+    return {
+      overviewExpanded: false,
+      overviewClamped: false,
+      trailerUrl: null,
+      trailerState: 'loading', // 'loading' | 'ready' | 'none'
+    };
   },
   computed: {
+    // Known before the lookup: only a single movie or TV show can have a trailer.
+    hasTrailerSlot() {
+      return trailerTarget(this.item) !== null;
+    },
     backdrop() {
       const path = this.item.backdrop_path;
       if (!path) return '';
@@ -145,15 +164,28 @@ export default {
   },
   watch: {
     // Related titles open in the same modal, so a new item starts collapsed again.
-    item() {
-      this.overviewExpanded = false;
-      this.$nextTick(this.measureOverview);
+    item: {
+      immediate: true,
+      handler() {
+        this.overviewExpanded = false;
+        this.$nextTick(this.measureOverview);
+        this.loadTrailer();
+      },
     },
   },
-  mounted() {
-    this.measureOverview();
-  },
   methods: {
+    async loadTrailer() {
+      const shown = this.item;
+      this.trailerUrl = null;
+      this.trailerState = 'loading';
+      if (!this.hasTrailerSlot) return;
+      const url = await loadTrailerUrl(axios, shown);
+      // Another title may be open by the time the answer arrives.
+      if (this.item !== shown) return;
+      this.trailerUrl = url;
+      this.trailerState = url ? 'ready' : 'none';
+    },
+
     /** "Show more" only when the four-line clamp actually hides text. */
     measureOverview() {
       const el = this.$refs.overview;

@@ -6,29 +6,29 @@
 
     <!-- App credentials not configured -->
     <p v-if="!traktAppConfigured" :class="emptyClass">
-      <i class="fas fa-info-circle"></i>
+      <i aria-hidden="true" class="fas fa-info-circle"></i>
       {{ credentialsMissingMessage }}
     </p>
 
     <template v-else>
       <p v-if="loadError" class="ui-alert-bad flex items-center gap-2" role="alert">
-        <i class="fas fa-exclamation-triangle text-bad"></i>
+        <i aria-hidden="true" class="fas fa-exclamation-triangle text-bad"></i>
         {{ loadError }}
       </p>
 
       <p v-if="isLoadingUsers" :class="emptyClass">
-        <i class="fas fa-spinner fa-spin"></i> Loading media users…
+        <i aria-hidden="true" class="fas fa-spinner fa-spin"></i> Loading media users…
       </p>
 
       <p v-else-if="mediaUsers.length === 0" :class="emptyClass">
-        <i class="fas fa-users-slash"></i>
+        <i aria-hidden="true" class="fas fa-users-slash"></i>
         {{ emptyUsersMessage }}
       </p>
 
       <ul v-else class="m-0 flex list-none flex-col gap-2 p-0">
         <li v-for="user in mediaUsers" :key="rowKey(user)" class="flex flex-wrap items-center justify-between gap-3 rounded-ctl border border-edge bg-white/3 px-4 py-3 transition-colors hover:border-edge-strong max-md:flex-col max-md:items-start">
           <div class="flex min-w-0 flex-1 items-center gap-2.5">
-            <i class="fas fa-user text-[0.9rem] text-ink-3 opacity-60"></i>
+            <i aria-hidden="true" class="fas fa-user text-[0.9rem] text-ink-3 opacity-60"></i>
             <div class="flex min-w-0 flex-col">
               <span class="truncate text-[0.9rem] font-semibold text-ink">{{ user.external_username || user.external_user_id }}</span>
               <span class="text-xs text-ink-4">{{ statusLabel(user) }}</span>
@@ -45,7 +45,7 @@
               aria-label="Unlink Trakt"
               @click="unlinkUser(user)"
             >
-              <i :class="isUnlinking[rowKey(user)] ? 'fas fa-spinner fa-spin' : 'fas fa-unlink'"></i>
+              <i aria-hidden="true" :class="isUnlinking[rowKey(user)] ? 'fas fa-spinner fa-spin' : 'fas fa-unlink'"></i>
             </button>
             <button
               type="button"
@@ -53,7 +53,7 @@
               :disabled="isBusy(user)"
               @click="connectUser(user)"
             >
-              <i :class="isBusy(user) ? 'fas fa-spinner fa-spin' : 'fas fa-link'"></i>
+              <i aria-hidden="true" :class="isBusy(user) ? 'fas fa-spinner fa-spin' : 'fas fa-link'"></i>
               {{ connectLabel(user) }}
             </button>
           </div>
@@ -67,9 +67,9 @@
           :aria-expanded="previewExpanded.toString()"
           @click="togglePreviewPanel"
         >
-          <i class="fas fa-chevron-right text-ink-4 transition-transform" :class="{ 'rotate-90': previewExpanded }"></i>
+          <i aria-hidden="true" class="fas fa-chevron-right text-ink-4 transition-transform" :class="{ 'rotate-90': previewExpanded }"></i>
           <span>Recent Trakt Preview</span>
-          <i v-if="previewLoading" class="fas fa-spinner fa-spin ml-auto text-ink-4"></i>
+          <i aria-hidden="true" v-if="previewLoading" class="fas fa-spinner fa-spin ml-auto text-ink-4"></i>
         </button>
 
         <div v-show="previewExpanded" class="flex flex-col gap-4 px-4 pb-4">
@@ -90,24 +90,24 @@
           </select>
 
           <p v-if="previewLoading" :class="emptyClass">
-            <i class="fas fa-spinner fa-spin"></i>
+            <i aria-hidden="true" class="fas fa-spinner fa-spin"></i>
             Loading recent Trakt items...
           </p>
 
           <p v-else-if="previewError" class="ui-alert-bad flex items-center gap-2" role="alert">
-            <i class="fas fa-exclamation-triangle text-bad"></i>
+            <i aria-hidden="true" class="fas fa-exclamation-triangle text-bad"></i>
             {{ previewError }}
           </p>
 
           <p v-else-if="previewItems.length === 0 && previewFetched" :class="emptyClass">
-            <i class="fas fa-inbox"></i>
+            <i aria-hidden="true" class="fas fa-inbox"></i>
             No recent Trakt items returned.
           </p>
 
           <ul v-else-if="previewItems.length > 0" class="m-0 flex list-none flex-col gap-2 p-0">
             <li v-for="item in previewItems" :key="previewItemKey(item)" class="rounded-ctl border border-edge bg-white/3 px-4 py-2">
               <div class="flex min-w-0 items-center gap-2 text-sm font-semibold text-ink">
-                <i :class="item.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
+                <i aria-hidden="true" :class="item.media_type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i>
                 <span class="min-w-0">{{ item.title || 'Untitled' }}</span>
                 <span v-if="item.year" class="text-xs font-normal text-ink-4">({{ item.year }})</span>
               </div>
@@ -123,16 +123,16 @@
 
       <!-- Active device-code prompt -->
       <div v-if="traktUserCode" class="break-all rounded-ctl border border-good/20 bg-good/10 px-4 py-3 text-[0.9rem] leading-relaxed text-good">
-        <i class="fas fa-key mr-1.5"></i>
+        <i aria-hidden="true" class="fas fa-key mr-1.5"></i>
         Enter <strong>{{ traktUserCode }}</strong> at
         <a :href="traktVerificationUrl" target="_blank" rel="noopener noreferrer" class="text-brand-ink no-underline hover:underline">{{ traktVerificationUrl }}</a>
         <p v-if="traktPopupBlocked" :class="[emptyClass, 'mt-3']">
-          <i class="fas fa-exclamation-circle"></i>
+          <i aria-hidden="true" class="fas fa-exclamation-circle"></i>
           Pop-up blocked. Open the link above manually to authorize.
         </p>
       </div>
       <p v-if="actionError" class="ui-alert-bad flex items-center gap-2" role="alert">
-        <i class="fas fa-exclamation-triangle text-bad"></i>
+        <i aria-hidden="true" class="fas fa-exclamation-triangle text-bad"></i>
         {{ actionError }}
       </p>
     </template>

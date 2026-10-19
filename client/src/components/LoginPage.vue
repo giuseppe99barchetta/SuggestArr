@@ -1,6 +1,6 @@
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-[linear-gradient(135deg,#0f0c29,#302b63,#24243e)]">
-    <div class="w-full max-w-[380px] rounded-card border border-white/12 bg-black/75 px-8 py-10 text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md">
+  <div class="flex min-h-screen items-center justify-center bg-canvas bg-[radial-gradient(ellipse_at_top,var(--color-brand-soft),transparent_65%)]">
+    <div class="w-full max-w-[380px] rounded-card border border-white/12 bg-panel/90 px-8 py-10 text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md">
       <img src="@/assets/logo.png" alt="SuggestArr" class="mx-auto mb-5 h-[60px]" />
 
       <h1 class="m-0 mb-1.5 text-2xl text-ink">{{ cardTitle }}</h1>
@@ -51,15 +51,15 @@
         </label>
 
         <p v-if="error" class="m-0 text-[0.85rem] text-bad">
-          <i class="fas fa-exclamation-circle"></i> {{ error }}
+          <i aria-hidden="true" class="fas fa-exclamation-circle"></i> {{ error }}
         </p>
 
         <p v-if="successMsg" class="m-0 text-[0.85rem] text-good">
-          <i class="fas fa-check-circle"></i> {{ successMsg }}
+          <i aria-hidden="true" class="fas fa-check-circle"></i> {{ successMsg }}
         </p>
 
         <button type="submit" class="ui-btn-primary mt-2 w-full" :disabled="loading">
-          <i :class="submitIcon"></i>
+          <i aria-hidden="true" :class="submitIcon"></i>
           {{ submitLabel }}
         </button>
       </form>
@@ -68,11 +68,11 @@
       <div v-if="!isSetupMode && allowRegistration" class="mt-5 text-center text-[0.85rem] text-ink-4">
         <span v-if="!isRegisterMode">
           Don't have an account?
-          <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline underline-offset-2 hover:text-[#c4b5fd]" @click="switchToRegister">Create one</button>
+          <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline underline-offset-2 hover:text-ink" @click="switchToRegister">Create one</button>
         </span>
         <span v-else>
           Already have an account?
-          <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline underline-offset-2 hover:text-[#c4b5fd]" @click="switchToLogin">Sign in</button>
+          <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline underline-offset-2 hover:text-ink" @click="switchToLogin">Sign in</button>
         </span>
       </div>
     </div>
