@@ -1,4 +1,6 @@
 /** One local renderer for the preview and the exported PNG. */
+import { drawCinemaPattern } from './cinemaIcons.js';
+
 export const PROJECT_URL = 'https://github.com/giuseppe99barchetta/SuggestArr';
 
 export function recapShareTargets(recap, options = {}) {
@@ -119,6 +121,11 @@ export async function renderRecap(canvas, recap, { logoUrl, includePosters = tru
   glow.addColorStop(1, color('canvas'));
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, 1080, 1350);
+  ctx.save();
+  ctx.globalAlpha = 0.05;
+  ctx.strokeStyle = color('ink');
+  drawCinemaPattern(ctx, 7, { x: 70, y: 150, width: 940, height: 1130, count: 12 });
+  ctx.restore();
   ctx.strokeStyle = color('edge-strong');
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -129,13 +136,12 @@ export async function renderRecap(canvas, recap, { logoUrl, includePosters = tru
     ctx.drawImage(logo, rect.x, rect.y, rect.width, rect.height);
   }
   text('SuggestArr', logo ? 194 : 72, 114, 38, 800);
-  ctx.textAlign = 'right';
-  text('LESS SEARCHING. MORE WATCHING.', 1008, 109, 17, 700, 'ink-3', 420);
   ctx.textAlign = 'center';
-  text(recap.scope === 'installation' ? 'OUR DISCOVERY RECAP' : 'MY DISCOVERY RECAP', 540, 203, 20, 700, 'brand-ink');
-  text(recap.total.toLocaleString('en-US'), 540, 354, 150, 800);
-  text('titles requested with SuggestArr', 540, 405, 30, 500, 'ink-2');
-  text(`${recap.movies.toLocaleString('en-US')} movies   ·   ${recap.tv.toLocaleString('en-US')} TV series`, 540, 468, 29, 700);
+  // The logo already names the project: no slogan, URL or repeated "with SuggestArr".
+  text(recap.scope === 'installation' ? 'OUR DISCOVERY RECAP' : 'MY DISCOVERY RECAP', 540, 228, 20, 700, 'brand-ink');
+  text(recap.total.toLocaleString('en-US'), 540, 384, 150, 800);
+  text('titles requested', 540, 436, 30, 500, 'ink-2');
+  text(`${recap.movies.toLocaleString('en-US')} movies   ·   ${recap.tv.toLocaleString('en-US')} TV series`, 540, 499, 29, 700);
 
   // Fixed 2:3 portrait cards; never expand a lone cover into a wide banner.
   const cards = featured.length ? featured : Array.from({ length: 4 }, (_, index) => ({ title: ['DISCOVER', 'YOUR NEXT', 'FAVORITE', 'WITH SUGGESTARR'][index] }));
@@ -143,7 +149,7 @@ export async function renderRecap(canvas, recap, { logoUrl, includePosters = tru
     const img = images[slot.index];
     const card = cards[slot.index];
     ctx.save();
-    ctx.translate(540 + slot.x, 753 + slot.y);
+    ctx.translate(540 + slot.x, 800 + slot.y);
     ctx.rotate(slot.angle * Math.PI / 180);
     ctx.shadowColor = color('canvas');
     ctx.shadowBlur = 42;
@@ -197,15 +203,10 @@ export async function renderRecap(canvas, recap, { logoUrl, includePosters = tru
     ctx.stroke();
     ctx.restore();
   });
-  text(featured.length ? 'TOP-RATED PICKS FROM YOUR REQUESTS' : 'YOUR NEXT FAVORITE IS OUT THERE', 540, 1030, 18, 700, 'brand-ink');
-  text('Good taste. On autopilot.', 540, 1101, 43, 800);
+  text('Good taste. On autopilot.', 540, 1150, 43, 800);
   const unlocked = recap.badges.filter(badge => badge.unlocked);
   const highest = unlocked.filter(badge => badge.kind === 'titles').at(-1) || unlocked.at(-1);
-  if (highest) text(`★  ${highest.label}`, 540, 1155, 25, 700, 'brand-ink');
-  if (recap.first_requested_at) {
-    text(`Recorded since ${new Date(recap.first_requested_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}`, 540, 1202, 20, 500, 'ink-3');
-  }
-  text('github.com/giuseppe99barchetta/SuggestArr', 540, 1274, 24, 600, 'brand-ink');
+  if (highest) text(`★  ${highest.label}`, 540, 1215, 26, 700, 'brand-ink');
   return { missingPosters: includePosters && images.some(img => !img) };
 }
 

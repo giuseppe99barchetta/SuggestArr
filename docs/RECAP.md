@@ -40,7 +40,7 @@ Badges unlock at 10, 100, 500, 1,000, 5,000 and 10,000 titles, plus 365 days aft
 
 ## Sharing and privacy
 
-The preview and PNG are rendered locally in your browser. By default, the image contains aggregate statistics, a badge, the project logo and its GitHub address. Usernames, server names and installation URLs are excluded. No telemetry or automatic publishing is added.
+The preview and PNG are rendered locally in your browser. By default, the image contains aggregate statistics, a badge and the project logo; the GitHub address appears only in the editable caption, not in the image. Images are decorated with line-art cinema and TV icons (clapperboard, ticket, TV, popcorn, theatre masks, film reel, star) drawn locally, with no external artwork. Usernames, server names and installation URLs are excluded. No telemetry or automatic publishing is added.
 
 Cover artwork is shown by default: up to four requested titles with the highest available metadata ratings appear as overlapping, rotated portrait cards in the preview. Turn off **Show top-title covers** to hide your picks. Review the preview before sharing: covers can reveal viewing interests. Images are loaded directly from TMDb's image host; missing or non-exportable images use illustrated cards. Without artwork the image keeps its fan layout. The logo and 2:3 cover cards preserve their proportions, and the PNG preview maintains its 4:5 aspect ratio.
 

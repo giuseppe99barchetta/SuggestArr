@@ -1,5 +1,6 @@
 /** One final-frame renderer for annual story previews and 1080×1920 PNGs. */
 import { containRect, fanLayout, loadImage } from './recapCanvas.js';
+import { drawCinemaIcon, drawCinemaPattern } from './cinemaIcons.js';
 
 const logoUrl = new URL('../assets/logo.png', import.meta.url).href;
 const providerLogos = {
@@ -16,6 +17,8 @@ const number = value => value == null ? '—' : value.toLocaleString('en-US');
 const percent = (part, total) => total ? Math.round(part / total * 100) : 0;
 // Title cards stand in for covers that could not be loaded; each gets its own tint.
 const CARD_TINTS = ['brand', 'anime', 'notice', 'good'];
+// Each story's signature icon, drawn in its accent colour beside the headline.
+const STORY_ICONS = { intro: 'clapper', discovery: 'ticket', watched: 'tv', time: 'popcorn', genres: 'masks', titles: 'reel', summary: 'star' };
 
 export async function renderYearStory(canvas, data, story) {
   await document.fonts?.ready;
@@ -137,7 +140,12 @@ export async function renderYearStory(canvas, data, story) {
   ctx.globalAlpha = 0.32;
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, 1080, 1920);
+  ctx.globalAlpha = 0.06;
+  ctx.strokeStyle = color('ink');
+  drawCinemaPattern(ctx, [...story.id].reduce((sum, char) => sum + char.charCodeAt(0), 0), { x: 80, y: 170, width: 920, height: 1600 });
   ctx.restore();
+  ctx.strokeStyle = color(story.accent);
+  drawCinemaIcon(ctx, STORY_ICONS[story.id], 920, 375, 160, 8);
   ctx.strokeStyle = color('edge-strong');
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -256,14 +264,13 @@ export async function renderYearStory(canvas, data, story) {
         const wide = i === stats.length - 1 && stats.length % 2;
         tile(value, label, i % 2 ? 565 : 80, 580 + Math.floor(i / 2) * 215, wide ? { w: 920 } : undefined);
       });
-      posterRow(1250, 190);
-      text('Here’s to more good stories.', 540, 1590, 44, { align: 'center', ink: 'brand-ink' });
+      posterRow(1300, 190);
+      text('Here’s to more good stories.', 540, 1650, 44, { align: 'center', ink: 'brand-ink' });
       break;
     }
   }
   const meta = [data.isDemo ? 'Sample data' : null, data.scope === 'server' ? 'Server recap' : 'Personal recap',
     data.providerLabel, !data.isDemo && data.isYearToDate ? 'Year to date' : null].filter(Boolean).join(' · ');
-  text(meta, 540, 1790, 25, { align: 'center', ink: data.isDemo ? 'brand-ink' : 'ink-3' });
-  text('github.com/giuseppe99barchetta/SuggestArr', 540, 1845, 24, { align: 'center', ink: 'ink-2' });
+  text(meta, 540, 1830, 25, { align: 'center', ink: data.isDemo ? 'brand-ink' : 'ink-3' });
   return { missingPosters: posters.filter((poster, i) => data.titles[i].artwork && !poster).length };
 }
