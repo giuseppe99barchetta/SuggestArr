@@ -1,32 +1,38 @@
 <template>
   <section v-if="recap || error" aria-labelledby="journey-title" class="overflow-hidden rounded-card border border-edge bg-panel">
-    <div class="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-center lg:gap-8">
-      <div class="min-w-0">
-        <h2 id="journey-title" class="m-0 text-[13px] font-semibold text-ink-3">Your SuggestArr journey</h2>
-        <template v-if="recap">
-          <p class="m-0 mt-2 flex items-center gap-2.5 text-lg font-bold leading-snug text-ink"><i aria-hidden="true" class="fas fa-award shrink-0 text-brand-ink"></i>{{ latestBadge?.label || 'Discover your next milestone' }}</p>
-          <p class="m-0 mt-1 text-xs text-ink-4">{{ recap.scope === 'installation' ? 'This installation' : 'Your linked profiles' }}</p>
-        </template>
+    <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-5 bg-linear-to-r from-brand-soft/25 via-panel to-panel p-5 sm:gap-x-6 sm:p-6 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:gap-x-8">
+      <div v-if="recap" aria-hidden="true" class="relative grid h-16 w-16 place-items-center rounded-full border border-brand-ink/25 bg-linear-to-br from-brand-soft to-panel shadow-sm ring-4 ring-brand-soft/20 sm:row-span-2 sm:h-20 sm:w-20">
+        <div class="text-center">
+          <template v-if="latestBadge?.kind === 'titles'">
+            <span class="block text-2xl font-extrabold leading-none tracking-tight text-brand-ink sm:text-[28px]">{{ latestBadge.threshold.toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 0 }) }}</span>
+            <span class="mt-1 block text-[9px] font-semibold uppercase tracking-widest text-brand-ink/80">titles</span>
+          </template>
+          <span v-else class="text-sm font-bold text-brand-ink">{{ latestBadge ? '1 year' : 'Start' }}</span>
+        </div>
+        <span v-if="latestBadge" class="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border border-brand-ink/25 bg-brand-soft text-[11px] text-brand-ink"><i class="fas fa-award"></i></span>
+      </div>
+      <div class="min-w-0" :class="!recap ? 'col-span-2' : ''">
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <h2 id="journey-title" class="m-0 text-xs font-medium text-ink-3">Your SuggestArr journey</h2>
+          <span v-if="recap" class="order-3 basis-full text-[11px] text-ink-4 sm:order-none sm:basis-auto"><span class="mr-2 hidden text-edge-strong sm:inline" aria-hidden="true">/</span>{{ recap.scope === 'installation' ? 'This installation' : 'Your linked profiles' }}</span>
+          <p v-if="recap" class="order-2 m-0 basis-full text-lg font-bold leading-snug tracking-tight text-ink sm:order-3 sm:text-xl">{{ latestBadge?.label || 'Discover your next milestone' }}</p>
+        </div>
         <p v-if="error" role="alert" class="m-0 mt-2 text-sm text-bad">{{ error }} <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline" @click="load">Try again</button></p>
       </div>
-      <div v-if="recap" class="min-w-0 border-t border-edge pt-4 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+      <div v-if="recap" class="col-span-2 min-w-0 sm:col-span-1 sm:col-start-2 lg:row-start-2 lg:-mt-2">
         <p v-if="!recap.has_linked_profiles" class="m-0 text-sm leading-relaxed text-ink-3"><router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }">Link your media account</router-link> to start your personal recap.</p>
         <p v-else-if="!recap.total" class="m-0 text-sm leading-relaxed text-ink-3">Your journey starts with the first successful title request.</p>
-        <template v-else>
-          <template v-if="recap.next_badge">
-            <p class="m-0 mb-2 text-[11px] font-semibold uppercase tracking-wider text-brand-ink">Next milestone</p>
-            <div class="mb-2 flex items-baseline justify-between gap-3 text-xs">
-              <span class="min-w-0 text-ink-2">{{ recap.next_badge.label }}</span>
-              <span class="shrink-0 text-ink-4 tabular-nums">{{ recap.next_badge.threshold.toLocaleString('en-US') }} titles</span>
-            </div>
-            <progress class="block h-1.5 w-full appearance-none overflow-hidden rounded-full border-0 bg-raised [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-raised [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-brand [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-brand" :value="recap.total" :max="recap.next_badge.threshold" :aria-label="`Progress toward ${recap.next_badge.label}`"></progress>
-            <p class="m-0 mt-2 text-[11px] text-ink-4">{{ Math.max(0, recap.next_badge.threshold - recap.total).toLocaleString('en-US') }} more titles to unlock</p>
-          </template>
-          <p v-else class="m-0 mt-2 text-xs text-ink-3">Every title milestone unlocked.</p>
+        <template v-else-if="recap.next_badge">
+          <progress class="block h-1.5 w-full max-w-xl appearance-none overflow-hidden rounded-full border-0 bg-raised [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-raised [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-brand [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-brand" :value="recap.total" :max="recap.next_badge.threshold" :aria-label="`Progress toward ${recap.next_badge.label}`"></progress>
+          <div class="mt-2 flex max-w-xl flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[11px]">
+            <span class="text-ink-3">{{ Math.max(0, recap.next_badge.threshold - recap.total).toLocaleString('en-US') }} more titles to unlock</span>
+            <span class="text-ink-4">Next: {{ recap.next_badge.label }}</span>
+          </div>
         </template>
+        <p v-else class="m-0 text-xs text-ink-3">Every title milestone unlocked.</p>
       </div>
-      <div class="flex min-w-0 flex-col gap-1.5">
-        <button v-if="recap" type="button" class="ui-btn w-full" @click="showRecap = true"><i aria-hidden="true" class="fas fa-image"></i>Create your recap</button>
+      <div class="col-span-2 flex min-w-0 flex-col gap-1.5 sm:col-span-1 sm:col-start-2 lg:col-start-3 lg:row-span-2 lg:row-start-1 lg:min-w-48">
+        <button v-if="recap" type="button" class="ui-btn w-full border-brand-ink/25 bg-brand-soft/40 text-brand-ink hover:border-brand-ink/60 hover:bg-brand-soft/60" @click="showRecap = true">Create your recap<i aria-hidden="true" class="fas fa-arrow-right ml-1 text-xs"></i></button>
         <button v-if="yearSeason.available" type="button" class="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border-0 bg-transparent px-3 text-xs font-medium text-ink-3 hover:bg-raised hover:text-brand-ink" @click="showYearRecap = true"><i aria-hidden="true" class="fas fa-film"></i>Year recap</button>
       </div>
     </div>

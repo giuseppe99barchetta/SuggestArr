@@ -79,6 +79,7 @@ for (const width of [1280, 768, 390, 320]) {
     await page.setViewportSize({ width, height: width <= 390 ? 640 : 900 });
     const journey = page.getByRole('region', { name: 'Your SuggestArr journey' });
     await expect(journey.getByText('597', { exact: true })).toHaveCount(0);
+    await expect(journey.getByText('500', { exact: true })).toBeVisible();
     await expect(journey.getByText('Discovery enthusiast', { exact: true })).toBeVisible();
     await expect(journey.getByRole('button', { name: 'Create your recap', exact: true })).toHaveCount(1);
     await expect(journey.getByRole('button', { name: 'Remind me in 30 days' })).toBeHidden();
@@ -241,12 +242,13 @@ test('support dialog offers both providers and honors already supported', async 
   expect(actions).toEqual(['supported']);
 });
 
-test('dismissing the invitation preserves the journey and recap action', async ({ page }) => {
-  const { actions } = await openJourney(page);
+test('dismissing the invitation preserves the journey and recap action', async ({ page }, testInfo) => {
+  const { actions } = await openJourney(page, { total: 597 });
   await page.getByRole('button', { name: 'Dismiss support reminder' }).click();
   await expect(page.getByRole('heading', { name: '100 titles requested with SuggestArr' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Your SuggestArr journey' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Create your recap' })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('journey-without-reminder.png'), animations: 'disabled' });
   expect(actions).toEqual(['dismiss']);
 });
 
