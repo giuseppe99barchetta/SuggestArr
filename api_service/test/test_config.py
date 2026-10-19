@@ -113,6 +113,7 @@ class TestConfig(unittest.TestCase):
         "ALLOW_REGISTRATION": False,
         "AUTH_MODE": "enabled",
         "AUTH_TRUSTED_CIDRS": "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7",
+        "AUTH_TRUSTED_PROXY_CIDRS": "",
         "AUTH_BYPASS_USERNAME": "local_admin",
         "AUTH_TRUSTED_HEADER": "X-Forwarded-User",
         "AUTH_TRUSTED_HEADER_AUTO_CREATE": True,
@@ -548,13 +549,13 @@ class TestConfig(unittest.TestCase):
         config_service.ConfigService.import_config({
             'version': config_service.CURRENT_VERSION,
             'integrations': {
-                'plex': {'api_url': 'http://new-plex', 'api_key': '***'},
+                'plex': {'api_url': 'http://plex', 'api_key': '***'},
             },
             'settings': {'PLEX_TOKEN': '***'},
         })
 
         written = self._db_manager_cls.return_value.set_integration.call_args.args[1]
-        self.assertEqual(written['api_url'], 'http://new-plex')
+        self.assertEqual(written['api_url'], 'http://plex')
         self.assertEqual(written['api_key'], 'live-token')
 
     def test_config_import_preserves_oauth_tokens_when_snapshot_is_redacted(self):

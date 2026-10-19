@@ -7,6 +7,8 @@ from typing import Optional, Dict, Any
 
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.api_exceptions import PlexConnectionError
+from api_service.services.http.guarded_session import GuardedSession
+from api_service.utils.ssrf_guard import normalize_base_url
 
 
 class PlexBaseClient:
@@ -26,7 +28,7 @@ class PlexBaseClient:
         """
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.token = token
-        self.api_url = api_url
+        self.api_url = normalize_base_url(api_url) if api_url else None
         self.request_timeout = request_timeout
         self.session = None
     
@@ -38,7 +40,9 @@ class PlexBaseClient:
                 'Accept': 'application/json'
             }
             timeout = aiohttp.ClientTimeout(total=self.request_timeout)
-            self.session = aiohttp.ClientSession(headers=headers, timeout=timeout)
+            private = (self.api_url,) if self.api_url else ()
+            self.session = GuardedSession(headers=headers, timeout=timeout,
+                                          private_urls=private, allowed_urls=(*private, 'https://plex.tv'))
         return self.session
     
     async def _make_request(self, url: str) -> Dict[str, Any]:

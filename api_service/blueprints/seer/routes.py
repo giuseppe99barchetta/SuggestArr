@@ -1,12 +1,31 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 import aiohttp
 from api_service.services.seer.seer_client import SeerClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
-from api_service.utils.ssrf_guard import validate_url
+from api_service.utils.ssrf_guard import validate_base_url as validate_url
+from api_service.auth.middleware import require_role
+from api_service.services.integration_security import select_credentials, public_arr_servers
+from api_service.services.http.guarded_session import GuardedSession
 
 logger = LoggerManager().get_logger("SeerRoute")
 seer_bp = Blueprint('seer', __name__)
+
+
+@seer_bp.before_request
+def check_integration_access():
+    if request.method == 'GET' and request.endpoint in ('seer.get_radarr_servers', 'seer.get_sonarr_servers'):
+        if not getattr(g, 'current_user', None):
+            return jsonify({'error': 'Authentication required'}), 401
+        if request.args or request.get_data():
+            return jsonify({'message': 'GET consultations do not accept overrides', 'type': 'error'}), 400
+        return None
+    return require_role('admin')(lambda: None)()
+
+
+def _request_credentials(data):
+    return select_credentials(data, ('SEER_API_URL', 'SEER_TOKEN'), _load_seer_config,
+                              optional=('SEER_SESSION_TOKEN',))
 
 
 def _load_seer_config():
@@ -34,15 +53,10 @@ async def get_users():
     """
     try:
         config_data = request.get_json(silent=True) or {}
-        api_url = config_data.get('SEER_API_URL')
-        api_key = config_data.get('SEER_TOKEN')
-        session_token = config_data.get('SEER_SESSION_TOKEN')
-
-        # Fallback to database config if not provided in request
-        if not api_url or not api_key:
-            api_url, api_key, db_session_token = _load_seer_config()
-            if not session_token:
-                session_token = db_session_token
+        try:
+            api_url, api_key, session_token = _request_credentials(config_data)
+        except ValueError:
+            return jsonify({'message': 'A complete explicit URL and token are required', 'type': 'error'}), 400
 
         if not api_key or not api_url:
             return jsonify({'message': 'Seer API URL and token are not configured', 'type': 'error'}), 400
@@ -78,7 +92,7 @@ async def _simple_seer_http_test(api_url, api_key):
         }
 
         timeout = aiohttp.ClientTimeout(total=10)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with GuardedSession(timeout=timeout, private_urls=(api_url,), allowed_urls=(api_url,)) as session:
             async with session.get(test_url, headers=headers) as response:
                 if response.status == 200:
                     return True, "HTTP connection successful", {"http_status": 200}
@@ -96,7 +110,7 @@ async def _simple_seer_http_test(api_url, api_key):
                 else:
                     return False, f"HTTP error {response.status}", {"http_status": response.status}
 
-    except aiohttp.ClientTimeout:
+    except TimeoutError:
         return False, "Connection timeout", {}
     except aiohttp.ClientError as e:
         logger.error("Seer HTTP connection error: %s", e)
@@ -113,12 +127,10 @@ async def test_seer_connection():
     """
     try:
         config_data = request.get_json(silent=True) or {}
-        api_url = config_data.get('SEER_API_URL')
-        api_key = config_data.get('SEER_TOKEN')
-        session_token = config_data.get('SEER_SESSION_TOKEN')
-
-        if not api_url or not api_key:
-            api_url, api_key, session_token = _load_seer_config()
+        try:
+            api_url, api_key, session_token = _request_credentials(config_data)
+        except ValueError:
+            return jsonify({'message': 'A complete explicit URL and token are required', 'type': 'error'}), 400
 
         if not api_key or not api_url:
             return jsonify({
@@ -235,12 +247,10 @@ async def get_radarr_servers():
     """
     try:
         config_data = request.get_json(silent=True) or {}
-        api_url = config_data.get('SEER_API_URL')
-        api_key = config_data.get('SEER_TOKEN')
-        session_token = config_data.get('SEER_SESSION_TOKEN')
-
-        if not api_url or not api_key:
-            api_url, api_key, session_token = _load_seer_config()
+        try:
+            api_url, api_key, session_token = _request_credentials(config_data)
+        except ValueError:
+            return jsonify({'message': 'A complete explicit URL and token are required', 'type': 'error'}), 400
 
         if not api_key or not api_url:
             return jsonify({'message': 'Seer API URL and token are not configured', 'type': 'error'}), 400
@@ -252,7 +262,7 @@ async def get_radarr_servers():
 
         async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as seer_client:
             servers = await seer_client.get_radarr_servers()
-            return jsonify({'servers': servers or []}), 200
+            return jsonify({'servers': public_arr_servers(servers)}), 200
     except Exception as e:
         logger.error(f'Error fetching Radarr servers: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error fetching Radarr servers', 'type': 'error'}), 500
@@ -266,12 +276,10 @@ async def get_sonarr_servers():
     """
     try:
         config_data = request.get_json(silent=True) or {}
-        api_url = config_data.get('SEER_API_URL')
-        api_key = config_data.get('SEER_TOKEN')
-        session_token = config_data.get('SEER_SESSION_TOKEN')
-
-        if not api_url or not api_key:
-            api_url, api_key, session_token = _load_seer_config()
+        try:
+            api_url, api_key, session_token = _request_credentials(config_data)
+        except ValueError:
+            return jsonify({'message': 'A complete explicit URL and token are required', 'type': 'error'}), 400
 
         if not api_key or not api_url:
             return jsonify({'message': 'Seer API URL and token are not configured', 'type': 'error'}), 400
@@ -284,7 +292,7 @@ async def get_sonarr_servers():
 
         async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as seer_client:
             servers = await seer_client.get_sonarr_servers()
-            return jsonify({'servers': servers or []}), 200
+            return jsonify({'servers': public_arr_servers(servers)}), 200
     except Exception as e:
         logger.error(f'Error fetching Sonarr servers: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error fetching Sonarr servers', 'type': 'error'}), 500

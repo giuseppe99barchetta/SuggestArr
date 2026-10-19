@@ -11,6 +11,7 @@ import aiohttp
 from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.api_exceptions import PlexConnectionError, PlexClientError
+from api_service.utils.ssrf_guard import normalize_base_url
 
 
 def normalize_guid_provider_id(guid_id, provider='tmdb'):
@@ -41,7 +42,10 @@ class PlexClient(BaseHTTPClient):
         """
         super().__init__()
         self.max_content_fetch = max_content
-        self.api_url = api_url
+        self.api_url = normalize_base_url(api_url) if api_url else None
+        self.guard_outbound = True
+        self.private_urls = (self.api_url,) if self.api_url else ()
+        self.allowed_urls = (*self.private_urls, 'https://plex.tv')
         self.library_ids = library_ids
         self.user_ids = user_ids
         self.base_url = 'https://plex.tv/api/v2'

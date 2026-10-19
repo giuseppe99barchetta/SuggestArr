@@ -254,6 +254,7 @@ def get_default_values():
         'ALLOW_REGISTRATION': lambda: False,
         'AUTH_MODE': lambda: 'enabled',
         'AUTH_TRUSTED_CIDRS': lambda: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7',
+        'AUTH_TRUSTED_PROXY_CIDRS': lambda: '',
         'AUTH_BYPASS_USERNAME': lambda: 'local_admin',
         'AUTH_TRUSTED_HEADER': lambda: 'X-Forwarded-User',
         'AUTH_TRUSTED_HEADER_AUTO_CREATE': lambda: True,
@@ -285,6 +286,11 @@ def save_env_vars(config_data):
     Also validates cron times and updates them if needed.
     """
     validate_seer_expiry_settings(config_data)
+    from api_service.utils.ssrf_guard import normalize_base_url
+    config_data = dict(config_data)
+    for key in ('PLEX_API_URL', 'JELLYFIN_API_URL', 'SEER_API_URL'):
+        if config_data.get(key):
+            config_data[key] = normalize_base_url(config_data[key])
     logger.debug("Saving environment variables to config.yaml")
     cron_times = config_data.get('CRON_TIMES', '0 0 * * *')
 
@@ -298,7 +304,7 @@ def save_env_vars(config_data):
         env_vars = {
             key: value for key, value in {
                 key: config_data.get(key, default_value()) for key, default_value in get_default_values().items()
-            }.items() if value not in [None, '']
+            }.items() if value not in [None, ''] or key in ('AUTH_TRUSTED_CIDRS', 'AUTH_TRUSTED_PROXY_CIDRS')
         }
 
         # Create config.yaml file if it does not exist
@@ -377,7 +383,7 @@ def get_config_sections():
                      'OPENAI_API_KEY', 'OPENAI_BASE_URL',
                      'LLM_MODEL', 'LLM_TEMPERATURE', 'LLM_REASONING_EFFORT', 'SEARXNG_BASE_URL',
                      'SUBPATH', 'ALLOW_REGISTRATION',
-                     'AUTH_MODE', 'AUTH_TRUSTED_CIDRS', 'AUTH_BYPASS_USERNAME',
+                     'AUTH_MODE', 'AUTH_TRUSTED_CIDRS', 'AUTH_TRUSTED_PROXY_CIDRS', 'AUTH_BYPASS_USERNAME',
                      'AUTH_TRUSTED_HEADER', 'AUTH_TRUSTED_HEADER_AUTO_CREATE']
     }
 

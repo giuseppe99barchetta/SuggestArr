@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from flask import Flask
+from flask import Flask, g
 
 from api_service.blueprints.plex.routes import plex_bp
 
@@ -27,6 +27,9 @@ class TestPlexUsersRoute(unittest.TestCase):
     def setUp(self):
         app = Flask(__name__)
         app.config["TESTING"] = True
+        @app.before_request
+        def admin_identity():
+            g.current_user = {'id': '1', 'role': 'admin'}
         app.register_blueprint(plex_bp, url_prefix="/api/plex")
         self.client = app.test_client()
 

@@ -33,7 +33,8 @@ from flask import Blueprint, request, jsonify, make_response, g
 from api_service.auth.auth_service import AuthService, MIN_PASSWORD_LENGTH, REFRESH_TOKEN_EXPIRE_DAYS
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import (
-    _is_trusted_local_ip,
+    _local_bypass_allowed,
+    _resolve_auth_mode,
     _load_bypass_user_context,
     invalidate_setup_cache,
     require_interactive_auth,
@@ -141,11 +142,7 @@ def auth_status():
         app_done = bool(config.get('SETUP_COMPLETED', False))
         allow_registration = bool(config.get('ALLOW_REGISTRATION', False))
 
-        auth_mode = (os.environ.get("AUTH_MODE") or "").strip().lower()
-        if not auth_mode:
-            auth_mode = str(load_env_vars().get("AUTH_MODE", "enabled")).strip().lower()
-        if os.environ.get("SUGGESTARR_AUTH_DISABLED", "").lower() == "true":
-            auth_mode = "disabled"
+        auth_mode = _resolve_auth_mode()
 
         current_user = getattr(g, "current_user", None)
         bypass = False
@@ -161,15 +158,10 @@ def auth_status():
         # /api/auth/status is public, so middleware returns before injecting
         # bypass context. Recreate equivalent bypass checks here.
         if not current_user:
-            client_ip = (
-                request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-                or request.remote_addr
-                or ""
-            )
             if auth_mode == "disabled":
                 current_user = _load_bypass_user_context()
                 bypass = True
-            elif auth_mode == "local_bypass" and _is_trusted_local_ip(client_ip):
+            elif auth_mode == "local_bypass" and _local_bypass_allowed():
                 current_user = _load_bypass_user_context()
                 bypass = True
 
@@ -190,13 +182,7 @@ def auth_status():
         return jsonify(response), 200
     except Exception as exc:
         logger.error("Error reading auth status: %s", exc)
-        # Fail open so the frontend can still reach the wizard.
-        return jsonify({
-            "auth_setup_complete": False,
-            "app_setup_complete": False,
-            "allow_registration": False,
-            "authenticated": False,
-        }), 200
+        return jsonify({"error": "Authentication service unavailable"}), 503
 
 
 # ---------------------------------------------------------------------------

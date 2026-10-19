@@ -1,6 +1,7 @@
 """Credential-based media account linking for the authenticated user."""
 
-import requests as http_requests
+from api_service.services.http import sync_client as http_requests
+from api_service.utils.ssrf_guard import normalize_base_url
 
 from flask import Blueprint, g, jsonify, request
 
@@ -53,9 +54,13 @@ def _link_jellyfin_like(provider: str):
         return jsonify({"error": "username and password are required"}), 400
 
     config = ConfigService.get_runtime_config()
-    server_url = (config.get("JELLYFIN_API_URL") or "").rstrip("/")
+    server_url = config.get("JELLYFIN_API_URL") or ""
     if not server_url:
         return jsonify({"error": f"{provider.capitalize()} server not configured"}), 503
+    try:
+        server_url = normalize_base_url(server_url)
+    except ValueError:
+        return jsonify({"error": "Media server configuration is invalid"}), 503
 
     auth_url = f"{server_url}/Users/AuthenticateByName"
     payload_candidates = [
@@ -71,6 +76,7 @@ def _link_jellyfin_like(provider: str):
                 json=payload,
                 headers=_jellyfin_auth_headers(),
                 timeout=10,
+                allow_private=True,
             )
         except Exception as exc:
             logger.error("Failed %s auth request: %s", provider, exc)

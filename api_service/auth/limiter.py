@@ -12,7 +12,6 @@ acceptable here because login brute-force protection is the primary concern
 and the instance count is small.
 """
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from flask import g
 
 
@@ -21,11 +20,10 @@ def suggestarr_rate_limit_key():
         return f"api-key:{g.api_key_id}"
     if getattr(g, 'current_user', None):
         return f"user:{g.current_user['id']}"
-    return get_remote_address()
+    from api_service.auth.middleware import _resolve_client_address
+    return _resolve_client_address()[0]
 
-# key_func=get_remote_address uses X-Forwarded-For when available so that
-# rate-limiting works correctly behind a reverse proxy.
-# app.py applies ProxyFix to trust the first X-Forwarded-For hop.
+# Anonymous clients use forwarded addresses only from explicitly trusted peers.
 limiter = Limiter(
     key_func=suggestarr_rate_limit_key,
     # Global fallback applied to every route that has no explicit @limiter.limit.

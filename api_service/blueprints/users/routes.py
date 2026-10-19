@@ -27,7 +27,8 @@ Security decisions
 - Plex tokens are stored to allow future server-side API calls on behalf of
   the user (e.g. personalised recommendations).
 """
-import requests as http_requests
+from api_service.services.http import sync_client as http_requests
+from api_service.utils.ssrf_guard import normalize_base_url
 
 from flask import Blueprint, jsonify, request, g
 
@@ -531,6 +532,7 @@ def list_provider_users(provider: str):
         return jsonify({"error": "Media server not configured"}), 503
 
     try:
+        server_url = normalize_base_url(server_url)
         resp = http_requests.get(
             f"{server_url}/Users",
             headers={
@@ -538,6 +540,7 @@ def list_provider_users(provider: str):
                 "Authorization": f'MediaBrowser Token="{api_key}"'
                 },
             timeout=10,
+            allow_private=True,
         )
         resp.raise_for_status()
         users_data = resp.json()

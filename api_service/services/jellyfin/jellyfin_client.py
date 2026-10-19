@@ -7,6 +7,7 @@ Classes:
 """
 import aiohttp
 import asyncio
+from api_service.utils.ssrf_guard import normalize_base_url
 from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 
@@ -29,7 +30,9 @@ class JellyfinClient(BaseHTTPClient):
         super().__init__()
         self.max_content_fetch = int(max_content)
         # Strip trailing slash and whitespace so URL joins never produce double-slash paths.
-        self.api_url = api_url.rstrip('/').strip() if api_url else api_url
+        self.api_url = normalize_base_url(api_url.strip())
+        self.guard_outbound = True
+        self.private_urls = self.allowed_urls = (self.api_url,)
         self.libraries = library_ids
         # Strip whitespace from token to avoid 401s from copy-paste artefacts.
         self.api_token = token.strip() if token else token

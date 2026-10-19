@@ -8,6 +8,7 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.config.config import load_env_vars
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.request_sources import is_tmdb_metadata_source_id
+from api_service.utils.ssrf_guard import normalize_base_url
 
 BATCH_SIZE = 20  # Number of requests fetched per batch
 HTTP_OK = {200, 201, 202}  # Include 202 Accepted for async operations
@@ -21,7 +22,7 @@ AVAILABLE_MEDIA_STATUSES = {4, 5}
 
 def normalize_seer_url(url):
     """Bind remote request IDs to the configured instance, without credentials."""
-    parts = urlsplit(url.strip())
+    parts = urlsplit(normalize_base_url(url.strip()))
     if parts.scheme.lower() not in ('http', 'https') or not parts.hostname or parts.username or parts.password:
         raise ValueError('Invalid Seer base URL')
     host = parts.hostname.lower()
@@ -85,7 +86,9 @@ class SeerClient(BaseHTTPClient):
             Each value is a dict with optional keys: serverId, profileId, rootFolder, tags, languageProfileId.
         """
         super().__init__()
-        self.api_url = api_url.rstrip('/')
+        self.api_url = normalize_base_url(api_url)
+        self.guard_outbound = True
+        self.private_urls = self.allowed_urls = (self.api_url,)
         self.api_key = api_key
         self.username = seer_user_name
         self.password = seer_password

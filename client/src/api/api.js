@@ -18,12 +18,7 @@ export const testMdblistApi = (apiKey) => {
 
 // Function to test Jellyfin configuration
 export const testJellyfinApi = (url, token) => {
-    const jellyfinApiUrl = `${url}/Users`; // Endpoint to retrieve Jellyfin users
-    return axios.get(jellyfinApiUrl, {
-        headers: {
-            'X-Emby-Token': token // Send Jellyfin API token in the header
-        }
-    });
+    return axios.post('/api/jellyfin/test', { JELLYFIN_API_URL: url, JELLYFIN_TOKEN: token });
 };
 
 // Function to test the Seer configuration and fetch users
