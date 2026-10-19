@@ -8,6 +8,7 @@ from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
+from api_service.services.trakt.feedback_sync import is_sync_enabled
 from api_service.services.trakt.trakt_client import (
     TraktClient,
     TraktDeviceDenied,
@@ -227,7 +228,13 @@ def get_my_trakt_status():
         profile.get("external_username"),
     )
     link = _link_status_for_identity(db, identity["id"])
-    return jsonify({"media_user": _media_user_payload(profile, link)}), 200
+    # Tells the pending-request UI to ask for a 1-10 rating on "Seen it", since that
+    # rating will actually reach this user's Trakt account.
+    sync_seen_feedback = bool(link.get("connected")) and is_sync_enabled(load_env_vars())
+    return jsonify({
+        "media_user": _media_user_payload(profile, link),
+        "sync_seen_feedback": sync_seen_feedback,
+    }), 200
 
 
 @trakt_bp.route("/me/device/code", methods=["POST"])

@@ -20,6 +20,42 @@ export const SEEN_OPTIONS = [
 ]
 
 /**
+ * The verdict a 1-10 star rating stands for.
+ *
+ * Used when "Seen it" is also written to Trakt: the user picks an exact rating for
+ * Trakt, and SuggestArr keeps its own coarser verdict so the recommender learns the
+ * same way it does from the three icons. No rating means plain "seen".
+ *
+ * @param {number|null} rating Stars from 1 to 10, or null.
+ * @returns {object} The SEEN_OPTIONS-shaped option to save.
+ */
+export function ratedSeenOption (rating) {
+  if (!rating) return SEEN_OPTIONS.find(option => option.value === 'seen')
+  let feedback = 'already_seen'
+  if (rating >= 7) feedback = 'seen_liked'
+  else if (rating <= 4) feedback = 'seen_disliked'
+  return { value: 'rated', label: `Seen it, rated ${rating}/10`, icon: 'fas fa-star', feedback }
+}
+
+/**
+ * Whether "Seen it" should ask for a star rating for the current user.
+ *
+ * True only when the admin enabled the Trakt write-back and this user's Trakt account
+ * is linked, so the rating has somewhere to go. Any error falls back to the icons.
+ *
+ * @param {object} http Axios instance to send with.
+ * @returns {Promise<boolean>}
+ */
+export async function loadSeenRatingMode (http) {
+  try {
+    const response = await http.get('/api/trakt/me')
+    return response?.data?.sync_seen_feedback === true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Save a rating for one pending suggestion.
  *
  * The title and year travel with the rating so the next recommendation prompt can name
@@ -27,19 +63,25 @@ export const SEEN_OPTIONS = [
  *
  * @param {object} http Axios instance to send with.
  * @param {number} suggestionId Pending suggestion id.
- * @param {object} option One entry from SEEN_OPTIONS.
+ * @param {object} option One entry from SEEN_OPTIONS, or from ratedSeenOption().
  * @param {object} item The suggestion being rated.
+ * @param {object} [trakt] Optional Trakt details: { rating, markWatched }.
  * @returns {Promise} Resolves when the rating is stored.
  */
-export function saveSeenFeedback (http, suggestionId, option, item) {
+export function saveSeenFeedback (http, suggestionId, option, item, trakt = null) {
   // Number('') is 0, not NaN, so an absent date has to be excluded before parsing.
   const released = String(item.release_date || '').slice(0, 4)
   const year = released ? Number(released) : NaN
-  return http.put(`/api/automation/requests/workflow/${suggestionId}/feedback`, {
+  const body = {
     feedback: option.feedback,
     reason_type: 'content',
     reason_text: option.label,
     title: item.title || null,
     year: Number.isFinite(year) ? year : null
-  })
+  }
+  if (trakt) {
+    body.rating = trakt.rating || null
+    body.mark_watched = trakt.markWatched !== false
+  }
+  return http.put(`/api/automation/requests/workflow/${suggestionId}/feedback`, body)
 }

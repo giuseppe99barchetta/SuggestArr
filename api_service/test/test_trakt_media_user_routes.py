@@ -271,6 +271,22 @@ def test_my_trakt_status_uses_current_users_media_profile():
     body = resp.get_json()["media_user"]
     assert body["external_user_id"] == "jf-1"
     assert body["trakt"]["trakt_username"] == "alice_t"
+    assert resp.get_json()["sync_seen_feedback"] is False
+
+
+def test_my_trakt_status_reports_seen_feedback_sync_when_enabled_and_linked():
+    app, _ = make_app(caller={"id": "7", "username": "alice", "role": "user"})
+    db = MagicMock()
+    db.get_user_media_profiles.return_value = [{"provider": "jellyfin", "external_user_id": "jf-1"}]
+    db.upsert_media_user_identity.return_value = {"id": 1}
+    db.get_enabled_trakt_sources.return_value = []
+    enabled = {**SELECTED, "TRAKT_SYNC_SEEN_FEEDBACK": True, "TRAKT_CLIENT_ID": "cid"}
+    p1, p2, _, p4 = _patches(db)
+    with p1, p2, p4, patch("api_service.blueprints.trakt.routes.load_env_vars", return_value=enabled):
+        db.get_trakt_account_link.return_value = {"id": 5, "connected": True}
+        assert app.test_client().get("/api/trakt/me").get_json()["sync_seen_feedback"] is True
+        db.get_trakt_account_link.return_value = None
+        assert app.test_client().get("/api/trakt/me").get_json()["sync_seen_feedback"] is False
 
 
 def test_my_device_token_persists_against_current_users_media_profile():

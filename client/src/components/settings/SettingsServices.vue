@@ -494,6 +494,14 @@
               <i aria-hidden="true" class="fas fa-check-circle"></i>
               Trakt app credentials configured. Users can link their own Trakt accounts from their profile.
             </div>
+            <BaseCheckbox
+              v-if="!wizardMode"
+              v-model="localConfig.TRAKT_SYNC_SEEN_FEEDBACK"
+              class="mt-4"
+              label="Send &quot;Seen it&quot; to Trakt"
+              description="Users with a linked Trakt account rate titles they have seen with 1 to 10 stars, and the rating and play are added to their Trakt account."
+              :disabled="isLoading || !localConfig.TRAKT_CLIENT_ID"
+            />
           </div>
         </div>
       </div>
@@ -510,6 +518,7 @@
 <script>
 import PageHeader from '@/components/ui/PageHeader.vue';
 import ServiceCardHeader from './ServiceCardHeader.vue';
+import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import axios from 'axios';
 import { confirmDialog } from '@/utils/confirmDialog';
 import unsavedChangesGuard from './mixins/unsavedChangesGuard';
@@ -522,7 +531,7 @@ import {
 export default {
   name: 'SettingsServices',
   mixins: [unsavedChangesGuard],
-  components: { PageHeader, ServiceCardHeader },
+  components: { PageHeader, ServiceCardHeader, BaseCheckbox },
   props: {
     config: {
       type: Object,
@@ -1430,6 +1439,7 @@ export default {
           SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE,
           TRAKT_CLIENT_ID: this.localConfig.TRAKT_CLIENT_ID || '',
           TRAKT_CLIENT_SECRET: traktClientSecret,
+          TRAKT_SYNC_SEEN_FEEDBACK: this.localConfig.TRAKT_SYNC_SEEN_FEEDBACK === true,
         };
         if (this.localConfig.SELECTED_SERVICE === 'plex') {
           Object.assign(dataToSave, {
@@ -1465,7 +1475,7 @@ export default {
       const defaults = {
         TMDB_API_KEY: '', OMDB_API_KEY: '', MDBLIST_API_KEY: '', SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
         JELLYFIN_API_URL: '', JELLYFIN_TOKEN: '', JELLYFIN_LIBRARIES: [],
-        TRAKT_CLIENT_ID: '', TRAKT_CLIENT_SECRET: '',
+        TRAKT_CLIENT_ID: '', TRAKT_CLIENT_SECRET: '', TRAKT_SYNC_SEEN_FEEDBACK: false,
         SEER_API_URL: '', SEER_TOKEN: '', SEER_USER_NAME: null, SEER_USER_PSW: null,
         SEER_SESSION_TOKEN: null, SEER_ANIME_PROFILE_CONFIG: {}, SEER_REQUEST_DELAY: 2, SELECTED_USERS: [],
       };

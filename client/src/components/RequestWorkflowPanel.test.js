@@ -11,7 +11,14 @@ const markSeen = source.slice(source.indexOf('async markSeen('), source.indexOf(
 
 test('pending cards here offer the same already-seen action as the other UI', () => {
   assert.match(source, /aria-label="Already seen it"/);
-  assert.match(source, /@click\.stop="seenMenuId = item\.id"/);
+  assert.match(source, /@click\.stop="openSeen\(item\)"/);
+});
+
+test('already-seen opens the star picker only when the rating reaches Trakt', () => {
+  const method = source.slice(source.indexOf('openSeen(item) {'), source.indexOf('async saveSeenRating('));
+  assert.match(method, /if \(this\.seenRatingMode\) this\.seenRatingItem = item;/);
+  assert.match(method, /else this\.seenMenuId = item\.id;/);
+  assert.match(source, /<SeenRatingDialog v-if="seenRatingItem"/);
 });
 
 test('both pending UIs read their options from the shared module', () => {
@@ -43,4 +50,5 @@ test('a failed feedback save leaves the suggestion in the queue', () => {
 
 test('switching to bulk mode closes an open rating row', () => {
   assert.match(source, /bulkMode\(value\) \{[^}]*this\.seenMenuId = null;[^}]*\}/);
+  assert.match(source, /bulkMode\(value\) \{[^}]*this\.seenRatingItem = null;[^}]*\}/);
 });

@@ -383,6 +383,27 @@ Recommendation jobs can use linked Trakt accounts:
 
 If no linked Trakt accounts exist, job filters will warn that Trakt is not usable yet. Media-server history still works without Trakt.
 
+### Send "Seen it" to Trakt
+
+Enable **Send "Seen it" to Trakt** in Services > Trakt (`TRAKT_SYNC_SEEN_FEEDBACK`, default `false`) to copy a user's "Seen it" answers to their own linked Trakt account.
+
+When the option is on and the user has linked Trakt, the eye button on a pending suggestion opens a rating dialog instead of the three icons:
+
+- Pick **1 to 10 stars** (Trakt's scale) and **Save rating**, or choose **Seen it, no rating**.
+- The rating is sent to Trakt as given. SuggestArr keeps its own verdict for future suggestions: 7-10 counts as liked, 1-4 as did not like, 5-6 and no rating as plain seen.
+- Movies are always added to the user's Trakt watch history.
+- For a show, **Mark all episodes as watched** is off by default, because adding a show to Trakt history marks every aired episode. Leave it off for a partly watched series and the show is only rated.
+
+Users without a linked Trakt account, and everyone while the option is off, keep the three icons. Feedback on requests already sent to Seer follows the same rules without the dialog: liked and did not like are rated 8 and 3.
+
+- The Trakt account used is the one linked to the media profile of the user who clicked, not the media user the suggestion was made for.
+- A play is recorded at the time of the click, because SuggestArr does not know when the title was actually watched.
+- Other feedback (interested, not interested, too similar, save for later) is never sent.
+- The write happens in the background after the feedback is saved. A Trakt failure is logged and never blocks the feedback or the rejection that follows it.
+- Removing feedback in SuggestArr does not remove the play or rating from Trakt.
+
+The feedback endpoints (`PUT /api/automation/requests/workflow/<id>/feedback` and `PUT /api/automation/requests/media/<type>/<tmdb_id>/feedback`) accept two optional fields for this: `rating` (integer 1-10) and `mark_watched` (boolean, default `true`). `GET /api/trakt/me` reports `sync_seen_feedback: true` when the option is on and the caller's Trakt account is linked.
+
 ## Auto-decline pending Seerr requests
 
 Open **Approvals -> Seerr pending requests**:

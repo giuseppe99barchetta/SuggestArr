@@ -182,6 +182,8 @@ class SuggestionFeedbackMixin:
             'reason_type': reason_type,
             'reason_text': reason_text,
             'media_user_id': media_user_id,
+            'tmdb_id': str(tmdb_id),
+            'media_type': media_type,
         }
 
     def clear_suggestion_feedback(self, suggestion_id, owner_id, user_id, media_user_ids=None,

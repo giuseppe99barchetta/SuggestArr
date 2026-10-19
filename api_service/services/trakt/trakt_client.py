@@ -188,6 +188,52 @@ class TraktClient(BaseHTTPClient):
         )
         return self._normalize_recent_items(payload)
 
+    async def add_to_history(self, media_type: str, tmdb_id: str) -> dict[str, Any]:
+        """Mark a movie or a whole show as watched in the user's Trakt history.
+
+        No ``watched_at`` is sent, so Trakt records the play at the current time.
+        For a show, Trakt marks every aired episode as watched.
+
+        Args:
+            media_type: ``movie`` or ``tv``.
+            tmdb_id: TMDb id of the title.
+
+        Returns:
+            dict[str, Any]: Trakt's sync response (``added``, ``not_found``, ...).
+        """
+        return await self._request("POST", "/sync/history", json=self._sync_body(media_type, tmdb_id),
+                                   authenticated=True)
+
+    async def add_rating(self, media_type: str, tmdb_id: str, rating: int) -> dict[str, Any]:
+        """Rate a movie or show on Trakt.
+
+        Args:
+            media_type: ``movie`` or ``tv``.
+            tmdb_id: TMDb id of the title.
+            rating: Trakt rating from 1 to 10.
+
+        Returns:
+            dict[str, Any]: Trakt's sync response (``added``, ``not_found``, ...).
+        """
+        rating = int(rating)
+        if not 1 <= rating <= 10:
+            raise ValueError("rating must be between 1 and 10")
+        return await self._request("POST", "/sync/ratings",
+                                   json=self._sync_body(media_type, tmdb_id, rating=rating),
+                                   authenticated=True)
+
+    @staticmethod
+    def _sync_body(media_type: str, tmdb_id: str, **fields: Any) -> dict[str, Any]:
+        """Build a single-item ``/sync/*`` payload keyed by TMDb id."""
+        if media_type not in ("movie", "tv"):
+            raise ValueError("media_type must be 'movie' or 'tv'")
+        try:
+            tmdb = int(tmdb_id)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("tmdb_id must be numeric") from exc
+        key = "movies" if media_type == "movie" else "shows"
+        return {key: [{"ids": {"tmdb": tmdb}, **fields}]}
+
     async def get_user_settings(self) -> dict[str, Any]:
         """Fetch and normalize the authenticated Trakt user's settings."""
         payload = await self._request("GET", "/users/settings", authenticated=True)

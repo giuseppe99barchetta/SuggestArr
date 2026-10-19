@@ -14,6 +14,7 @@ from api_service.utils.request_profiles import (
 )
 from api_service.utils import request_scope
 from api_service.services.tmdb.localization import display_language, localize_groups
+from api_service.services.trakt.feedback_sync import schedule_seen_feedback_sync
 from api_service.jobs.request_expiry import execute_request_expiry
 from api_service.jobs.request_replacement import execute_request_replacements
 from api_service.utils.asyncio_loop import run_coroutine_sync
@@ -115,7 +116,34 @@ def _feedback_payload():
             year = int(year)
         except (TypeError, ValueError):
             return None, (jsonify({'status': 'error', 'message': 'year must be an integer'}), 400)
-    return (feedback, reason_type, reason_text, data.get('media_user_id'), title, year), None
+    # Optional Trakt write-back details. They only steer the sync of a "seen" verdict
+    # and are not stored: SuggestArr keeps its own coarser liked/disliked feedback.
+    rating = data.get('rating')
+    if rating is not None and (isinstance(rating, bool) or not isinstance(rating, int) or not 1 <= rating <= 10):
+        return None, (jsonify({'status': 'error', 'message': 'rating must be an integer from 1 to 10'}), 400)
+    mark_watched = data.get('mark_watched', True)
+    if not isinstance(mark_watched, bool):
+        return None, (jsonify({'status': 'error', 'message': 'mark_watched must be a boolean'}), 400)
+    trakt = {'rating': rating, 'mark_watched': mark_watched}
+    return (feedback, reason_type, reason_text, data.get('media_user_id'), title, year, trakt), None
+
+
+def _sync_seen_feedback(saved, trakt):
+    """
+    Hand a saved "seen it" verdict to the optional Trakt write-back.
+
+    Never affects the response: the sync runs in the background and any error in
+    scheduling it is logged and swallowed.
+
+    Args:
+        saved: The feedback dict returned by the database layer.
+        trakt: ``{'rating': int|None, 'mark_watched': bool}`` from the request.
+    """
+    try:
+        schedule_seen_feedback_sync(int(g.current_user['id']), saved,
+                                    rating=trakt['rating'], mark_watched=trakt['mark_watched'])
+    except Exception:
+        logger.warning("Could not schedule Trakt feedback sync", exc_info=True)
 
 
 def _workflow_ids():
@@ -274,7 +302,7 @@ def set_request_feedback(suggestion_id):
     parsed, error = _feedback_payload()
     if error:
         return error
-    feedback, reason_type, reason_text, _, title, year = parsed
+    feedback, reason_type, reason_text, _, title, year, trakt = parsed
     db = DatabaseManager()
     scope = _suggestion_scope(db)
     result = db.set_suggestion_feedback(
@@ -284,6 +312,7 @@ def set_request_feedback(suggestion_id):
     )
     if result is None:
         return jsonify({'status': 'error', 'message': 'Suggestion not found'}), 404
+    _sync_seen_feedback(result, trakt)
     return jsonify({'status': 'success', 'feedback': result}), 200
 
 
@@ -308,7 +337,7 @@ def set_sent_request_feedback(media_type, tmdb_id):
     parsed, error = _feedback_payload()
     if error:
         return error
-    feedback, reason_type, reason_text, media_user_id, title, year = parsed
+    feedback, reason_type, reason_text, media_user_id, title, year, trakt = parsed
     db = DatabaseManager()
     visible_user_ids = _visible_request_user_ids(db)
     if not db.has_visible_suggestarr_request(tmdb_id, media_type, media_user_id, visible_user_ids):
@@ -317,6 +346,7 @@ def set_sent_request_feedback(media_type, tmdb_id):
         int(g.current_user['id']), media_user_id, tmdb_id, media_type,
         feedback, reason_type, reason_text, title, year,
     )
+    _sync_seen_feedback(result, trakt)
     return jsonify({'status': 'success', 'feedback': result}), 200
 
 
