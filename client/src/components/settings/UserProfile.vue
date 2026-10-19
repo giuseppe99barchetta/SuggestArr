@@ -4,10 +4,17 @@
 
     <div class="grid items-start gap-5 lg:grid-cols-2">
       <SectionCard icon="fas fa-user-circle" title="Account" description="The name you sign in with and your password.">
+        <div class="mb-5 flex items-center gap-3 border-b border-edge pb-5">
+          <UserAvatar :user="profileUser" class="h-16 w-16 text-[64px]" />
+          <div class="min-w-0">
+            <p class="m-0 truncate font-semibold text-ink">{{ profileUser?.username }}</p>
+            <p class="m-0 mt-1 text-xs leading-relaxed text-ink-3">Your linked account photo, or a cinema avatar picked for you.</p>
+          </div>
+        </div>
         <form class="flex flex-col gap-3" @submit.prevent="saveUsername">
           <label class="ui-label" for="newUsername">New username</label>
           <div class="flex gap-2">
-            <input id="newUsername" v-model="usernameForm.value" type="text" class="ui-input" :placeholder="currentUser?.username || 'Current username'" maxlength="64" :disabled="isSavingUsername" />
+            <input id="newUsername" v-model="usernameForm.value" type="text" class="ui-input" :placeholder="profileUser?.username || 'Current username'" maxlength="64" :disabled="isSavingUsername" />
             <button type="submit" class="ui-btn shrink-0" :disabled="isSavingUsername || !usernameForm.value.trim()">
               <i v-if="isSavingUsername" aria-hidden="true" class="fas fa-spinner fa-spin"></i>{{ isSavingUsername ? 'Saving…' : 'Rename' }}
             </button>
@@ -53,7 +60,7 @@
       </div>
     </div>
 
-    <RecapPreferences v-if="currentUser?.role === 'admin'" />
+    <RecapPreferences v-if="profileUser?.role === 'admin'" />
 
     <SectionCard v-if="isLinkableService" icon="fas fa-link" title="Linked accounts" description="SuggestArr reads your watch history from these accounts to personalise suggestions.">
       <div class="grid items-start gap-5 md:grid-cols-2">
@@ -136,6 +143,8 @@ import SectionCard from '@/components/ui/SectionCard.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
 import WatchedMediaHistory from './WatchedMediaHistory.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
+import UserAvatar from '@/components/ui/UserAvatar.vue';
+import { refreshUserAvatar } from '@/composables/useUserAvatar';
 import { languageOptions, languagePayload } from '@/utils/titleLanguage.js';
 
 const PROVIDER_META = {
@@ -146,20 +155,22 @@ const PROVIDER_META = {
 
 export default {
   name: 'UserProfile',
+  emits: ['profile-updated'],
 
-  components: { PageHeader, SectionCard, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel, RecapPreferences },
+  components: { PageHeader, SectionCard, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel, RecapPreferences, UserAvatar },
 
   // The dashboard shell passes props this page does not declare.
   inheritAttrs: false,
 
   props: {
+    currentUser: Object,
     config: Object,
     isLoading: Boolean,
   },
 
   setup() {
-    const { currentUser, accessToken } = useAuth();
-    return { currentUser, accessToken };
+    const { currentUser: authUser, accessToken } = useAuth();
+    return { authUser, accessToken };
   },
 
   data() {
@@ -208,6 +219,9 @@ export default {
   },
 
   computed: {
+    profileUser() {
+      return this.currentUser || this.authUser;
+    },
     languageChoices() {
       return languageOptions(this.languages);
     },
@@ -356,10 +370,11 @@ export default {
       }
     },
 
-    async loadLinks() {
+    async loadLinks(refreshAvatar = false) {
       try {
         const res = await getMyLinks();
         this.links = res.data;
+        if (refreshAvatar) refreshUserAvatar(this.profileUser?.id);
       } catch (err) {
         console.error('Failed to load media links', err);
       }
@@ -409,7 +424,7 @@ export default {
         this.linkForm.username = '';
         this.linkForm.password = '';
         this.selectedServerUserId = '';
-        await this.loadLinks();
+        await this.loadLinks(true);
       } catch (err) {
         this.linkError = err.response?.data?.error || `Failed to link ${this.providerLabel} account`;
       } finally {
@@ -435,7 +450,7 @@ export default {
           if (poll.data?.status === 'linked') {
             const linkedName = poll.data.external_username || 'Plex';
             this.$toast.success(`${this.providerLabel} account linked as ${linkedName}`);
-            await this.loadLinks();
+            await this.loadLinks(true);
             return;
           }
         }
@@ -453,7 +468,7 @@ export default {
       try {
         await unlinkProvider(this.selectedService);
         this.$toast.success(`${this.providerLabel} account unlinked`);
-        await this.loadLinks();
+        await this.loadLinks(true);
       } catch (err) {
         this.$toast.error(err.response?.data?.error || `Failed to unlink ${this.providerLabel}`);
       } finally {
@@ -472,8 +487,9 @@ export default {
       try {
         const res = await updateMyProfile({ username: newName });
         // Update singleton auth state so the header reflects the new name immediately.
-        if (this.currentUser) this.currentUser.username = newName;
+        if (this.authUser) this.authUser.username = newName;
         if (res.data.access_token) this.accessToken = res.data.access_token;
+        this.$emit('profile-updated');
         this.usernameSuccess = 'Username updated.';
         this.usernameForm.value = '';
       } catch (err) {

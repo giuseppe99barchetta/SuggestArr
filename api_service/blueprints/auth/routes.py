@@ -45,6 +45,8 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
 from api_service.services.tmdb.localization import display_language, normalize_language
+from api_service.services.user_avatar import UserAvatarService
+from api_service.utils.asyncio_loop import run_coroutine_sync
 
 logger = LoggerManager.get_logger("AuthRoute")
 
@@ -494,6 +496,39 @@ def me():
     body["language"] = own
     body["display_language"] = display_language(own, load_env_vars())
     return jsonify(body), 200
+
+
+# ---------------------------------------------------------------------------
+# Protected: own profile image
+# ---------------------------------------------------------------------------
+
+@auth_bp.route('/me/avatar', methods=['GET'])
+@limiter.limit("30 per minute")
+def get_my_avatar():
+    """Proxy only the caller's linked avatar; 204 selects the local fallback."""
+    async def fetch_avatar(config, user, links):
+        async with UserAvatarService() as service:
+            return await service.resolve(config, user, links)
+
+    try:
+        user_id = int(g.current_user['id'])
+        db = DatabaseManager()
+        user = db.get_auth_user_by_id(user_id) or {}
+        links = db.get_user_media_profiles(user_id)
+        avatar = run_coroutine_sync(fetch_avatar(ConfigService.get_runtime_config(), user, links), logger)
+    except Exception:
+        logger.debug('Profile image unavailable')
+        avatar = None
+    if avatar:
+        content, mime_type, source = avatar
+        response = make_response(content, 200)
+        response.headers['Content-Type'] = mime_type
+        response.headers['X-Avatar-Source'] = source
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+    else:
+        response = make_response('', 204)
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
 
 
 # ---------------------------------------------------------------------------

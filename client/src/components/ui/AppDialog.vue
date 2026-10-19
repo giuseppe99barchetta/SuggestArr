@@ -3,8 +3,8 @@
   <dialog
     ref="dialog"
     autofocus
-    class="m-auto w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] sm:max-h-[min(80dvh,52rem)] overflow-hidden rounded-card border border-edge bg-panel p-0 text-ink shadow-2xl outline-none backdrop:bg-black/70 backdrop:backdrop-blur-sm open:flex open:flex-col"
-    :class="width"
+    class="m-auto overflow-hidden rounded-card border border-edge bg-panel p-0 text-ink shadow-2xl outline-none backdrop:bg-black/70 backdrop:backdrop-blur-sm open:flex open:flex-col"
+    :class="[width, immersive ? 'h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)]' : 'w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] sm:max-h-[min(80dvh,52rem)]']"
     :aria-labelledby="title ? titleId : (labelledby || null)"
     @close="$emit('close')"
     @click.self="close"
@@ -25,7 +25,7 @@
       </button>
     </header>
 
-    <div class="min-h-0 flex-1 overflow-y-auto" :class="title ? bodyClass : ''">
+    <div class="min-h-0 flex-1" :class="[immersive ? 'overflow-hidden' : 'overflow-y-auto', title ? bodyClass : '']">
       <slot />
     </div>
 
@@ -47,6 +47,7 @@ export default {
   name: 'AppDialog',
   props: {
     width: { type: String, default: 'max-w-xl' },
+    immersive: { type: Boolean, default: false },
     labelledby: { type: String, default: '' },
     title: { type: String, default: '' },
     subtitle: { type: String, default: '' },

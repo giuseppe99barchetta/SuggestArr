@@ -1,57 +1,81 @@
 <template>
-  <AppDialog title="Your SuggestArr recap" subtitle="Celebrate your discoveries and share the journey." icon="fas fa-wand-magic-sparkles" width="max-w-4xl" @close="$emit('close')">
-    <div class="grid items-start gap-6 md:grid-cols-2">
-      <div class="relative aspect-[4/5] overflow-hidden rounded-card border border-edge bg-canvas" :aria-busy="rendering">
-        <canvas ref="canvas" width="1080" height="1350" role="img" :aria-label="caption" class="block aspect-[4/5] h-auto w-full"></canvas>
-        <span v-if="rendering" role="status" class="absolute inset-0 grid place-items-center bg-canvas/90 text-sm text-ink-3">Creating your recap…</span>
+  <AppDialog title="Your SuggestArr recap" icon="fas fa-image" width="max-w-3xl" class="h-[calc(100dvh-2rem)] sm:h-[min(80dvh,52rem)] sm:w-[calc(100%-4rem)]" body-class="flex min-h-0 flex-col p-0" @close="$emit('close')">
+    <div role="tablist" aria-label="Recap views" class="grid shrink-0 grid-cols-3 gap-1 border-b border-edge px-4 pt-2 sm:px-6">
+      <button
+        v-for="(tab, index) in tabs"
+        :id="`${tabId}-${tab.id}-tab`"
+        :key="tab.id"
+        type="button"
+        role="tab"
+        :aria-selected="activeTab === tab.id"
+        :aria-controls="`${tabId}-${tab.id}-panel`"
+        :tabindex="activeTab === tab.id ? 0 : -1"
+        class="flex h-11 min-w-0 cursor-pointer items-center justify-center gap-2 border-0 border-b-2 bg-transparent px-2 text-[13px] font-semibold transition-colors"
+        :class="activeTab === tab.id ? 'border-brand-ink text-brand-ink' : 'border-transparent text-ink-3 hover:text-ink'"
+        @click="activeTab = tab.id"
+        @keydown.right.prevent="selectTab((index + 1) % tabs.length)"
+        @keydown.left.prevent="selectTab((index + tabs.length - 1) % tabs.length)"
+        @keydown.home.prevent="selectTab(0)"
+        @keydown.end.prevent="selectTab(tabs.length - 1)"
+      ><i aria-hidden="true" :class="tab.icon" class="hidden sm:inline"></i>{{ tab.label }}</button>
+    </div>
+
+    <div class="flex min-h-0 flex-1 flex-col">
+      <p v-if="warning" role="status" class="mx-4 mb-0 mt-3 shrink-0 rounded-ctl border border-caution/30 bg-caution/10 px-3 py-2 text-xs leading-relaxed text-ink-2 sm:mx-6">{{ warning }}</p>
+      <p v-if="error" role="alert" class="ui-alert-bad mx-4 mt-3 shrink-0 sm:mx-6">{{ error }}</p>
+      <p v-if="shareNotice" role="status" class="mx-4 mb-0 mt-3 shrink-0 text-xs leading-relaxed text-brand-ink sm:mx-6">{{ shareNotice }}</p>
+
+      <div v-show="activeTab === 'preview'" :id="`${tabId}-preview-panel`" role="tabpanel" :aria-labelledby="`${tabId}-preview-tab`" tabindex="0" class="flex min-h-0 flex-1 flex-col">
+        <div class="relative flex min-h-0 flex-1 items-center justify-center bg-canvas/60 p-3 sm:p-4" :aria-busy="rendering">
+          <canvas ref="canvas" width="1080" height="1350" role="img" :aria-label="caption" class="block h-auto max-h-full w-auto max-w-full rounded-ctl object-contain shadow-lg ring-1 ring-edge"></canvas>
+          <span v-if="rendering" role="status" class="absolute inset-0 grid place-items-center bg-canvas/90 text-sm text-ink-3">Creating your recap…</span>
+        </div>
+        <div class="shrink-0 border-t border-edge px-4 py-3 sm:px-6">
+          <BaseCheckbox v-model="includePosters" :disabled="rendering" label="Show top-title covers" />
+        </div>
       </div>
-      <div class="flex min-w-0 flex-col gap-4">
-        <div>
-          <h3 class="m-0 text-sm font-bold text-ink">Your top picks, in the spotlight</h3>
-          <p class="m-0 mt-1 text-xs leading-relaxed text-ink-3">Up to four of your highest-rated requested titles, arranged as a cinematic fan.</p>
+
+      <div v-show="activeTab === 'share'" :id="`${tabId}-share-panel`" role="tabpanel" :aria-labelledby="`${tabId}-share-tab`" tabindex="0" class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <h3 class="m-0 text-base font-bold text-ink">Share your discoveries</h3>
+        <p class="m-0 mt-2 text-xs leading-relaxed text-ink-3">Choose a platform, then attach the saved image. Discord copies it when supported.</p>
+        <div class="mt-4 grid grid-cols-2 gap-2">
+          <a v-for="target in shareTargets" :key="target.id" :href="target.url" target="_blank" rel="noopener noreferrer" class="ui-btn no-underline" :class="target.id === 'reddit' ? 'border-brand bg-brand-soft text-brand-ink' : ''" :aria-disabled="rendering || !ready || exporting ? 'true' : 'false'" @click="preparePlatform($event, target)"><i aria-hidden="true" :class="target.icon"></i>{{ target.label }}</a>
         </div>
-        <BaseCheckbox v-model="includePosters" :disabled="rendering" label="Show top-title covers" description="Turn off to keep your movie and TV picks private." />
-        <div v-if="includePosters && featuredPosters.length" aria-label="Featured covers" class="grid grid-cols-4 gap-2">
-          <div v-for="poster in featuredPosters" :key="poster.poster_path" class="min-w-0">
-            <div class="aspect-[2/3] overflow-hidden rounded-ctl border border-edge bg-panel-2">
-              <img v-if="artworkUrl(poster.poster_path) && !failedPosters.includes(poster.poster_path)" :src="artworkUrl(poster.poster_path)" alt="" crossorigin="anonymous" class="h-full w-full object-cover" @error="failedPosters.push(poster.poster_path)" />
-              <span v-else class="grid h-full place-items-center text-ink-4"><i aria-hidden="true" class="fas fa-film"></i><span class="sr-only">Artwork unavailable</span></span>
-            </div>
-            <p class="m-0 mt-1 truncate text-[11px] font-semibold text-ink-2" :title="poster.title">{{ poster.title || 'Requested title' }}</p>
-            <span v-if="poster.rating" class="text-[10px] text-caution">★ {{ Number(poster.rating).toFixed(1) }}</span>
+        <button v-if="canShare" type="button" class="ui-btn mt-3 w-full" :disabled="rendering || !ready || exporting" @click="share"><i aria-hidden="true" class="fas fa-share-alt"></i>Share</button>
+        <div class="mt-5 border-t border-edge pt-4">
+          <div class="flex items-center justify-between gap-3">
+            <h4 class="m-0 text-xs font-semibold text-ink-3">Caption</h4>
+            <button type="button" class="inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-ctl border-0 bg-transparent px-2 text-xs font-semibold text-brand-ink hover:bg-raised" @click="copyCaption"><i aria-hidden="true" class="fas fa-copy"></i>Copy caption</button>
           </div>
+          <p class="m-0 mt-2 select-text break-words rounded-ctl border border-edge bg-canvas/50 p-3 text-xs leading-relaxed text-ink-2">{{ caption }}</p>
         </div>
-        <p class="m-0 text-xs leading-relaxed text-ink-3">Review your covers before sharing. Account names, server names and installation addresses stay private.</p>
-        <p v-if="warning" role="status" class="rounded-ctl border border-caution/30 bg-caution/10 p-3 text-sm text-ink-2">{{ warning }}</p>
-        <p v-if="error" role="alert" class="ui-alert-bad">{{ error }}</p>
-        <div class="flex flex-wrap gap-2">
-          <button type="button" class="ui-btn-primary" :disabled="rendering || !ready || exporting" @click="download"><i aria-hidden="true" class="fas fa-download"></i>Download PNG</button>
-          <button v-if="canCopyImage" type="button" class="ui-btn" :disabled="rendering || !ready || exporting" @click="copyImage"><i aria-hidden="true" class="fas fa-image"></i>Copy image</button>
-          <button type="button" class="ui-btn" @click="copyCaption"><i aria-hidden="true" class="fas fa-copy"></i>Copy caption</button>
-          <button v-if="canShare" type="button" class="ui-btn" :disabled="rendering || !ready || exporting" @click="share"><i aria-hidden="true" class="fas fa-share-alt"></i>Share</button>
+        <p class="m-0 mt-4 text-[11px] leading-relaxed text-ink-4">Created on your device. Account and server details stay private.</p>
+      </div>
+
+      <div v-show="activeTab === 'badges'" :id="`${tabId}-badges-panel`" role="tabpanel" :aria-labelledby="`${tabId}-badges-tab`" tabindex="0" class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <div class="mb-4 flex items-baseline justify-between gap-3">
+          <h3 class="m-0 text-base font-bold text-ink">Your badges</h3>
+          <span class="text-xs text-ink-3">{{ recap.badges.filter(badge => badge.unlocked).length }} / {{ recap.badges.length }} unlocked</span>
         </div>
-        <div class="border-t border-edge pt-4">
-          <h3 class="m-0 mb-2 text-sm font-bold text-ink">Share your discoveries</h3>
-          <div class="grid grid-cols-2 gap-2">
-            <a v-for="target in shareTargets" :key="target.id" :href="target.url" target="_blank" rel="noopener noreferrer" class="ui-btn justify-center no-underline" :class="target.id === 'reddit' ? 'border-brand bg-brand-soft text-brand-ink' : ''" :aria-disabled="rendering || !ready || exporting ? 'true' : 'false'" @click="preparePlatform($event, target)"><i aria-hidden="true" :class="target.icon"></i>{{ target.label }}</a>
-          </div>
-          <p class="m-0 mt-2 text-xs leading-relaxed text-ink-3">Reddit and social buttons save the PNG for you to attach. Discord copies the image when supported, or saves it to attach.</p>
-          <p v-if="shareNotice" role="status" class="mt-2 text-xs text-brand-ink">{{ shareNotice }}</p>
-        </div>
-        <p class="m-0 text-xs text-ink-4">1080 × 1350 PNG · Created on your device</p>
-        <p class="m-0 break-words text-xs leading-relaxed text-ink-3">{{ caption }}</p>
-        <div class="mt-2 border-t border-edge pt-4">
-          <h3 class="m-0 mb-3 text-sm font-bold text-ink">Your badges</h3>
-          <div class="grid grid-cols-2 gap-2">
-            <div v-for="badge in recap.badges" :key="badge.id" class="flex flex-col gap-1 rounded-ctl border p-3" :class="badge.unlocked ? 'border-brand-soft bg-brand-soft/30' : 'border-edge bg-panel-2'">
-              <i aria-hidden="true" :class="badge.unlocked ? 'fas fa-award text-brand-ink' : 'fas fa-lock text-ink-4'"></i>
-              <span class="text-xs font-bold text-ink">{{ badge.label }}</span>
-              <span class="text-[11px] text-ink-3">{{ badge.unlocked ? 'Unlocked · ' : '' }}{{ badge.kind === 'days' ? '365 days since your first recorded request' : `${badge.threshold.toLocaleString('en-US')} titles requested` }}</span>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div v-for="badge in recap.badges" :key="badge.id" class="flex items-start gap-3 rounded-ctl border p-3" :class="badge.unlocked ? 'border-brand-soft bg-brand-soft/25' : 'border-edge bg-canvas/30'">
+            <i aria-hidden="true" class="mt-0.5 w-4 shrink-0 text-center" :class="badge.unlocked ? 'fas fa-award text-brand-ink' : 'fas fa-lock text-ink-4'"></i>
+            <div class="min-w-0">
+              <p class="m-0 text-xs font-semibold" :class="badge.unlocked ? 'text-ink' : 'text-ink-3'">{{ badge.label }}</p>
+              <p class="m-0 mt-1 text-[11px] leading-relaxed text-ink-4">{{ badge.kind === 'days' ? 'One year of discoveries' : `${badge.threshold.toLocaleString('en-US')} titles requested` }}</p>
+              <span class="sr-only">{{ badge.unlocked ? 'Unlocked' : 'Locked' }}</span>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <template #footer>
+      <div class="grid w-full gap-2" :class="canCopyImage ? 'grid-cols-2' : 'grid-cols-1'">
+        <button v-if="canCopyImage" type="button" class="ui-btn min-w-0 px-2 text-xs sm:px-4 sm:text-sm" :disabled="rendering || !ready || exporting" @click="copyImage"><i aria-hidden="true" class="fas fa-image"></i>Copy image</button>
+        <button type="button" class="ui-btn-primary min-w-0 px-2 text-xs sm:px-4 sm:text-sm" :disabled="rendering || !ready || exporting" @click="download"><i aria-hidden="true" class="fas fa-download"></i>Download PNG</button>
+      </div>
+    </template>
   </AppDialog>
 </template>
 
@@ -60,14 +84,24 @@ import AppDialog from '@/components/ui/AppDialog.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import logoUrl from '@/assets/logo.png';
 import { getRecap } from '@/api/recapApi.js';
-import { canvasBlob, posterUrl, recapCaption, recapShareTargets, renderRecap } from '@/utils/recapCanvas.js';
+import { canvasBlob, recapCaption, recapShareTargets, renderRecap } from '@/utils/recapCanvas.js';
+
+let nextTabId = 0;
 
 export default {
   name: 'RecapDialog',
   components: { AppDialog, BaseCheckbox },
   props: { recap: { type: Object, required: true } },
   emits: ['close'],
-  data: () => ({ includePosters: true, rendering: true, ready: false, exporting: false, warning: '', error: '', blob: null, active: true, featuredPosters: [], postersLoaded: false, failedPosters: [], shareNotice: '' }),
+  data: () => ({
+    tabId: `recap-${++nextTabId}`, activeTab: 'preview',
+    tabs: [
+      { id: 'preview', label: 'Preview', icon: 'fas fa-image' },
+      { id: 'share', label: 'Share', icon: 'fas fa-share-alt' },
+      { id: 'badges', label: 'Badges', icon: 'fas fa-award' },
+    ],
+    includePosters: true, rendering: true, ready: false, exporting: false, warning: '', error: '', blob: null, active: true, featuredPosters: [], postersLoaded: false, shareNotice: '',
+  }),
   computed: {
     caption() { return recapCaption(this.recap); },
     shareTargets() { return recapShareTargets(this.recap); },
@@ -80,7 +114,10 @@ export default {
   mounted() { this.render(); },
   beforeUnmount() { this.active = false; },
   methods: {
-    artworkUrl: posterUrl,
+    selectTab(index) {
+      this.activeTab = this.tabs[index].id;
+      this.$nextTick(() => document.getElementById(`${this.tabId}-${this.tabs[index].id}-tab`)?.focus());
+    },
     async render() {
       this.rendering = true;
       this.ready = false;

@@ -333,6 +333,8 @@ usage details.
 ## Support SuggestArr ❤️
 
 Celebrate your discoveries with milestone badges and a shareable recap in Home. Recaps include your recorded title count, movie/TV breakdown and a fan of your top-rated requested titles, rendered locally in your browser. Share shortcuts put Reddit first, alongside Discord, X and Bluesky; cover artwork can be hidden before sharing. Administrators can manage occasional support invitations in **My profile → Support reminders**. See [Your SuggestArr journey](docs/RECAP.md) for counting rules, privacy and reminder preferences.
+
+**Year recap**, shown in Home from December 15 through January 31, turns recorded annual requests into seven downloadable stories, with monthly discoveries, genres and recent covers. January opens the year just completed. Load available Plex/Jellyfin watch activity explicitly; partial history is labelled, and unavailable watch hours are never estimated from runtime. A separate 2026 sample-data mode remains available within the seasonal recap to preview the complete visual experience.
 If you enjoy SuggestArr, consider making a donation to support its continued development and help keep the project running at its best:
 
 - ☕ [Ko-fi](https://ko-fi.com/ciuse99)

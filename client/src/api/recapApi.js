@@ -1,8 +1,20 @@
 import axios from 'axios';
 
+export async function getYearRecap(year, scope = 'personal', includePlayback = false, signal) {
+  const { data } = await axios.get('/api/recap/year', {
+    params: { year, scope, include_playback: String(includePlayback) }, signal, timeout: 35000,
+  });
+  return data.data;
+}
+
 export async function getRecap(includePosters = false) {
   const { data } = await axios.get('/api/recap', { params: includePosters ? { include_posters: 'true' } : {} });
-  return data.data;
+  const recap = data.data;
+  if (!Number.isFinite(recap?.total) || !Number.isFinite(recap.movies) || !Number.isFinite(recap.tv)
+      || !Array.isArray(recap.badges) || !recap.preferences) {
+    throw new Error('Incomplete recap response');
+  }
+  return recap;
 }
 
 export async function claimRecapPrompt() {

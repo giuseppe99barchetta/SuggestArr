@@ -836,6 +836,12 @@ Do not use `localhost` for services outside the SuggestArr container. Use:
 
 Make sure `config_files/secret.key` persists. If the key changes, active sessions become invalid and users must log in again.
 
+### Profile pictures
+
+SuggestArr uses the avatar of your assigned Seer account when available, then tries your verified linked account on the selected Plex, Jellyfin or Emby server. Link your media account under **My profile**; an administrator can assign your Seer account under **Users**. Accounts are matched by their linked IDs, never by username. Images are fetched through the authenticated SuggestArr backend, keeping service credentials out of the browser.
+
+If no image is available or a service is offline, a local cinema/TV avatar is assigned automatically. Its symbol and theme colours stay consistent for your account across sessions and username changes. No external avatar service or image upload is required.
+
 ### Configuration resets after update
 
 Your volume is probably wrong. The host folder must map to:

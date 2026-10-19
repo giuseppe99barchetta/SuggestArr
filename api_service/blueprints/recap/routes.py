@@ -1,4 +1,6 @@
 """Authenticated recap data and administrator support reminders."""
+from datetime import datetime, timezone
+
 from flask import Blueprint, g, jsonify, request
 
 from api_service.auth.middleware import require_role
@@ -6,9 +8,40 @@ from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.db.recap_repository import RecapRepository
+from api_service.db.year_recap_repository import YearRecapRepository
+from api_service.services.year_recap import YearWatchActivity
+from api_service.utils.asyncio_loop import run_coroutine_sync
+from api_service.auth.limiter import limiter
 
 recap_bp = Blueprint('recap', __name__)
 logger = LoggerManager.get_logger('RecapRoute')
+
+
+@recap_bp.route('/year', methods=['GET'])
+@require_role('admin', 'user')
+@limiter.limit('10 per minute')
+def get_year_recap():
+    year = request.args.get('year', str(datetime.now(timezone.utc).year))
+    scope = request.args.get('scope', 'personal')
+    if (set(request.args) - {'year', 'scope', 'include_playback'} or len(year) != 4
+            or not year.isascii() or not year.isdecimal()
+            or not 2000 <= int(year) <= datetime.now(timezone.utc).year
+            or scope not in ('personal', 'server')
+            or request.args.get('include_playback', 'false') not in ('true', 'false')
+            or any(len(request.args.getlist(key)) != 1 for key in request.args)):
+        return jsonify({'status': 'error', 'message': 'Provide a valid year and recap scope'}), 400
+    try:
+        db, env = DatabaseManager(), load_env_vars()
+        data = YearRecapRepository(db).summary(g.current_user, env, int(year), scope)
+        if request.args.get('include_playback') == 'true':
+            profiles = db.get_user_media_profiles(int(g.current_user['id'])) if scope == 'personal' else []
+            data.update(run_coroutine_sync(YearWatchActivity().load(data, profiles, env), logger))
+        return jsonify({'status': 'success', 'data': data})
+    except PermissionError:
+        return jsonify({'status': 'error', 'message': 'Server recap is unavailable for this account'}), 403
+    except Exception:
+        logger.error('Unable to load annual recap', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Unable to load your annual recap'}), 500
 
 
 @recap_bp.route('', methods=['GET'])

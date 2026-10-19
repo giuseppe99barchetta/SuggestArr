@@ -1,14 +1,15 @@
 /** One local renderer for the preview and the exported PNG. */
 export const PROJECT_URL = 'https://github.com/giuseppe99barchetta/SuggestArr';
 
-export function recapShareTargets(recap) {
-  const title = `${recap.total.toLocaleString('en-US')} titles requested with SuggestArr`;
+export function recapShareTargets(recap, options = {}) {
+  const title = options.title ?? `${recap.total.toLocaleString('en-US')} titles requested with SuggestArr`;
+  const caption = options.caption ?? recapCaption(recap);
   const query = values => new URLSearchParams(values).toString();
   return [
     { id: 'reddit', label: 'Reddit', icon: 'fab fa-reddit-alien', url: `https://www.reddit.com/submit?${query({ title, type: 'IMAGE' })}` },
     { id: 'discord', label: 'Discord', icon: 'fab fa-discord', url: 'https://discord.com/channels/@me' },
-    { id: 'x', label: 'X', icon: 'fab fa-x-twitter', url: `https://twitter.com/intent/tweet?${query({ text: recapCaption(recap) })}` },
-    { id: 'bluesky', label: 'Bluesky', icon: 'fab fa-bluesky', url: `https://bsky.app/intent/compose?${query({ text: recapCaption(recap) })}` },
+    { id: 'x', label: 'X', icon: 'fab fa-x-twitter', url: `https://twitter.com/intent/tweet?${query({ text: caption })}` },
+    { id: 'bluesky', label: 'Bluesky', icon: 'fab fa-bluesky', url: `https://bsky.app/intent/compose?${query({ text: caption })}` },
   ];
 }
 
@@ -208,8 +209,25 @@ export async function renderRecap(canvas, recap, { logoUrl, includePosters = tru
   return { missingPosters: includePosters && images.some(img => !img) };
 }
 
-export function canvasBlob(canvas) {
+export function canvasBlob(canvas, timeout = 1500) {
   return new Promise((resolve, reject) => {
-    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Unable to generate PNG')), 'image/png');
+    // Some browsers leave concurrent offscreen encodes pending indefinitely.
+    // Keep the complete rendered frame exportable with a synchronous fallback.
+    let settled = false;
+    const finish = blob => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (blob) resolve(blob);
+      else reject(new Error('Unable to generate PNG'));
+    };
+    const timer = setTimeout(() => {
+      try {
+        const bytes = Uint8Array.from(atob(canvas.toDataURL('image/png').split(',')[1]), c => c.charCodeAt(0));
+        finish(new Blob([bytes], { type: 'image/png' }));
+      } catch { finish(null); }
+    }, timeout);
+    try { canvas.toBlob(finish, 'image/png'); }
+    catch { finish(null); }
   });
 }

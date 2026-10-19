@@ -57,7 +57,7 @@
             <i aria-hidden="true" class="fas fa-arrow-up"></i> Update available
           </a>
           <div class="flex items-center gap-2.5 p-2">
-            <span class="w-8 h-8 shrink-0 rounded-full bg-raised flex items-center justify-center text-[13px] font-bold uppercase">{{ (currentUser.username || '?').charAt(0) }}</span>
+            <UserAvatar :user="currentUser" class="h-8 w-8 text-[32px]" />
             <div class="flex flex-col min-w-0">
               <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }" class="text-[13px] font-semibold truncate text-ink no-underline hover:text-white" title="Your profile" @click="showMobileNav = false">{{ currentUser.username }}</router-link>
               <button type="button" class="text-left text-xs text-ink-4 hover:text-ink-2 bg-transparent border-0 p-0 cursor-pointer" title="View changelog" @click="showChangelog">
@@ -92,6 +92,7 @@
               @export-config="showExportModal = true"
               @import-config="importConfig"
               @reset-config="showResetModal = true"
+              @profile-updated="fetchMe"
             />
           </transition>
           <AppFooter :is-admin="currentUser?.role === 'admin'" />
@@ -218,6 +219,7 @@
 import axios from 'axios';
 import AppFooter from './AppFooter.vue';
 import AppDialog from './ui/AppDialog.vue';
+import UserAvatar from './ui/UserAvatar.vue';
 import OnboardingTour from './OnboardingTour.vue';
 import { useVersionCheck } from '@/composables/useVersionCheck';
 import { useAuth } from '@/composables/useAuth';
@@ -245,6 +247,7 @@ const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
 export default {
   name: 'SettingsPage',
   components: {
+    UserAvatar,
     AppDialog,
     AppFooter,
     OnboardingTour,
