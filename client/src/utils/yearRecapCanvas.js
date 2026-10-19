@@ -122,7 +122,7 @@ export async function renderYearStory(canvas, data, story, index) {
         text('Watch activity', 80, 800, 76);
         text('not available yet.', 80, 895, 76);
         text('Your discoveries are already here.', 80, 1030, 37, { ink: 'ink-2' });
-        text('Load watch activity to check your linked server.', 80, 1095, 30, { ink: 'ink-3' });
+        text(data.watchStatus === 'unavailable' ? 'Your media server could not be reached.' : 'Link your media server to include it.', 80, 1095, 30, { ink: 'ink-3' });
         // No covers without watch history: requested titles must not read as watched ones.
         break;
       }

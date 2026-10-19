@@ -1,31 +1,59 @@
 <template>
-  <AppDialog :title="`${displayYear} Year recap`" :subtitle="mode === 'demo' ? 'Preview · Sample data' : 'Recorded progress · Real data'" immersive width="max-w-7xl" body-class="p-0" @close="$emit('close')">
-    <div class="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_minmax(0,28dvh)] bg-canvas md:grid-cols-[minmax(0,1fr)_360px] md:grid-rows-1">
-      <div class="grid min-h-0 min-w-0 grid-rows-[8px_minmax(0,1fr)_36px] justify-items-center gap-3 bg-radial-[at_50%_35%] from-brand-soft/30 via-canvas/60 to-canvas p-3 sm:p-4">
-        <div class="flex min-w-32 max-w-full gap-1" :style="{ width: frameStyle.width }" aria-label="Story progress">
-          <button v-for="(item, i) in stories" :key="item.id" type="button" class="h-2 min-w-0 flex-1 cursor-pointer overflow-hidden rounded-full border-0 bg-raised p-0" :aria-label="`Go to story ${i + 1}: ${item.title}`" :aria-current="i === index ? 'step' : null" @click="go(i)">
-            <span class="block h-full bg-brand-ink" :style="{ width: `${i < index ? 100 : i === index ? progress : 0}%` }"></span>
-          </button>
+  <!-- Full-viewport story viewer: the page stays visible behind a blurred backdrop.
+       Native <dialog> keeps focus trapping, Escape and top-layer stacking. -->
+  <dialog ref="dialog" :aria-labelledby="titleId" class="m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-transparent p-0 text-white outline-none backdrop:bg-black/75 backdrop:backdrop-blur-xl open:flex" @cancel="onCancel" @close="$emit('close')">
+    <div class="relative flex min-h-0 min-w-0 flex-1 flex-col items-center gap-3 px-4 pb-4 pt-3" @click.self="dismiss">
+      <header class="flex w-full items-center justify-between gap-3">
+        <div class="min-w-0">
+          <h2 :id="titleId" class="m-0 truncate text-sm font-bold">{{ displayYear }} Year recap</h2>
+          <p class="m-0 text-xs text-white/60">{{ mode === 'demo' ? 'Sample data' : 'Recorded progress' }}</p>
         </div>
-        <div ref="stage" class="grid h-full min-h-0 w-full min-w-0 place-items-center">
-          <!-- Tap the left third to go back and the rest to advance; press and hold to pause. -->
-          <div class="group relative cursor-pointer touch-pan-y select-none overflow-hidden rounded-card bg-panel shadow-2xl shadow-black/40" :style="frameStyle" :aria-busy="rendering" @click="tap" @pointerdown="holdStart" @pointerup="holdEnd" @pointercancel="holdCancel" @pointerleave="holdCancel" @contextmenu.prevent @touchstart.passive="touchStart" @touchend.passive="touchEnd">
-            <canvas ref="canvas" width="1080" height="1920" tabindex="0" role="img" :aria-label="description" class="block h-full w-full"></canvas>
-            <span aria-hidden="true" class="pointer-events-none absolute inset-y-0 left-0 hidden w-1/3 items-center pl-3 text-white/80 opacity-0 transition-opacity group-hover:opacity-100 md:flex" :class="index === 0 ? 'invisible' : ''"><i class="fas fa-chevron-left drop-shadow"></i></span>
-            <span aria-hidden="true" class="pointer-events-none absolute inset-y-0 right-0 hidden w-1/3 items-center justify-end pr-3 text-white/80 opacity-0 transition-opacity group-hover:opacity-100 md:flex" :class="index === stories.length - 1 ? 'invisible' : ''"><i class="fas fa-chevron-right drop-shadow"></i></span>
-            <div v-if="rendering || loading || !data" class="absolute inset-0 grid place-items-center bg-canvas/90 p-3 text-center text-sm text-ink-3" role="status">{{ loading ? 'Loading recorded progress…' : !data ? 'Choose sample data or try again.' : 'Creating your story…' }}</div>
-          </div>
-        </div>
-        <div class="flex w-full max-w-sm items-center justify-between gap-2">
-          <button type="button" class="ui-btn h-9 px-3" :disabled="index === 0" aria-label="Previous story" @click="go(index - 1)"><i aria-hidden="true" class="fas fa-chevron-left"></i></button>
-          <button type="button" class="ui-btn h-9 px-3" :aria-label="paused ? 'Play stories' : 'Pause stories'" @click="togglePlayback"><i aria-hidden="true" :class="paused ? 'fas fa-play' : 'fas fa-pause'"></i>{{ paused ? 'Play' : 'Pause' }}</button>
-          <span class="text-xs text-ink-3" aria-live="polite">{{ index + 1 }} / {{ stories.length }}</span>
-          <button type="button" class="ui-btn h-9 px-3" :disabled="index === stories.length - 1" aria-label="Next story" @click="go(index + 1)"><i aria-hidden="true" class="fas fa-chevron-right"></i></button>
+        <button type="button" :class="glassButton" aria-label="Close" @click="close"><i aria-hidden="true" class="fas fa-times"></i></button>
+      </header>
+
+      <div class="flex h-2 min-w-32 max-w-full shrink-0 gap-1" :style="{ width: frameStyle.width }" aria-label="Story progress">
+        <button v-for="(item, i) in stories" :key="item.id" type="button" class="h-1 min-w-0 flex-1 cursor-pointer self-center overflow-hidden rounded-full border-0 bg-white/25 p-0" :aria-label="`Go to story ${i + 1}: ${item.title}`" :aria-current="i === index ? 'step' : null" @click="go(i)">
+          <span class="block h-full bg-white" :style="{ width: `${i < index ? 100 : i === index ? progress : 0}%` }"></span>
+        </button>
+      </div>
+
+      <div ref="stage" class="relative grid min-h-0 w-full min-w-0 flex-1 place-items-center" @click.self="dismiss">
+        <!-- Tap the left third to go back and the rest to advance; press and hold to pause. -->
+        <div class="group relative cursor-pointer touch-pan-y select-none overflow-hidden rounded-card bg-panel shadow-2xl shadow-black/50" :style="frameStyle" :aria-busy="rendering" @click="tap" @pointerdown="holdStart" @pointerup="holdEnd" @pointercancel="holdCancel" @pointerleave="holdCancel" @contextmenu.prevent @touchstart.passive="touchStart" @touchend.passive="touchEnd">
+          <canvas ref="canvas" width="1080" height="1920" tabindex="0" role="img" :aria-label="description" class="block h-full w-full"></canvas>
+          <div v-if="rendering || loading || !data" class="absolute inset-0 grid place-items-center bg-canvas/90 p-3 text-center text-sm text-ink-3" role="status">{{ loading ? 'Loading recorded progress…' : !data ? 'Choose sample data or try again.' : 'Creating your story…' }}</div>
         </div>
       </div>
 
-      <div class="flex min-h-0 min-w-0 flex-col gap-5 overflow-y-auto overscroll-contain border-t border-edge bg-panel p-4 sm:p-5 md:border-l md:border-t-0">
-        <section aria-label="Recap settings" class="flex flex-col gap-3 max-md:order-3 max-md:border-t max-md:border-edge max-md:pt-4">
+      <h3 class="sr-only">{{ story.title }}</h3>
+      <span class="sr-only" aria-live="polite">Story {{ index + 1 }} of {{ stories.length }}</span>
+      <p v-if="notice" role="status" class="m-0 max-w-full text-center text-xs text-white/70" :style="{ width: frameStyle.width }">{{ notice }}</p>
+      <p v-if="error" role="alert" class="m-0 max-w-full rounded-ctl bg-bad/20 px-3 py-2 text-center text-xs" :style="{ width: frameStyle.width }">{{ error }} <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-white underline" @click="retry">Try again</button></p>
+
+      <div class="flex min-w-72 max-w-full shrink-0 items-center justify-between gap-2" :style="{ width: frameStyle.width }">
+        <button type="button" :class="[glassButton, panel === 'options' ? 'bg-white/25' : '']" aria-label="Recap options" :aria-expanded="panel === 'options'" @click="toggle('options')"><i aria-hidden="true" class="fas fa-sliders-h"></i></button>
+        <div class="flex items-center gap-2">
+          <button type="button" :class="glassButton" :disabled="index === 0" aria-label="Previous story" @click="go(index - 1)"><i aria-hidden="true" class="fas fa-chevron-left"></i></button>
+          <button type="button" :class="glassButton" :aria-label="paused ? 'Play stories' : 'Pause stories'" @click="togglePlayback"><i aria-hidden="true" :class="paused ? 'fas fa-play' : 'fas fa-pause'"></i></button>
+          <button type="button" :class="glassButton" :disabled="index === stories.length - 1" aria-label="Next story" @click="go(index + 1)"><i aria-hidden="true" class="fas fa-chevron-right"></i></button>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" :class="glassButton" :disabled="!ready || rendering || !blob" aria-label="Download this story" @click="download"><i aria-hidden="true" class="fas fa-download"></i></button>
+          <button type="button" :class="[glassButton, panel === 'share' ? 'bg-white/25' : '']" aria-label="Share this story" :aria-expanded="panel === 'share'" @click="toggle('share')"><i aria-hidden="true" class="fas fa-share-alt"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <Transition enter-from-class="max-md:translate-y-full md:translate-x-full" leave-to-class="max-md:translate-y-full md:translate-x-full" enter-active-class="transition-transform duration-200 ease-out motion-reduce:transition-none" leave-active-class="transition-transform duration-150 ease-in motion-reduce:transition-none">
+      <aside v-if="panel" :aria-label="panel === 'share' ? 'Share' : 'Recap options'" class="flex min-h-0 flex-col overflow-hidden bg-panel text-ink shadow-2xl max-md:absolute max-md:inset-x-0 max-md:bottom-0 max-md:max-h-[75dvh] max-md:rounded-t-card md:w-[360px] md:shrink-0 md:border-l md:border-edge">
+        <header class="flex shrink-0 items-center justify-between gap-3 px-5 pb-2 pt-4">
+          <h3 class="m-0 text-base font-bold">{{ panel === 'share' ? 'Share' : 'Options' }}</h3>
+          <button type="button" class="-mr-2 grid h-9 w-9 cursor-pointer place-items-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" :aria-label="`Close ${panel === 'share' ? 'share' : 'options'}`" @click="panel = null"><i aria-hidden="true" class="fas fa-times"></i></button>
+        </header>
+        <div class="flex min-h-0 flex-col gap-5 overflow-y-auto overscroll-contain px-5 pb-5 pt-2">
+          <RecapShareActions v-if="panel === 'share'" :blob="blob" :filename="filename" :caption="caption" :share-title="shareTitle" :disabled="!ready || rendering" download-label="Download PNG" @before-action="pause" />
+          <template v-else>
+        <section aria-label="Recap settings" class="flex flex-col gap-3">
           <div class="grid grid-cols-2 gap-2">
             <label class="ui-label">Data source<select v-model="mode" class="ui-input"><option value="real">My activity</option><option value="demo">Sample data</option></select></label>
             <label v-if="mode === 'real'" class="ui-label">Year<select v-model.number="year" aria-label="Year" class="ui-input"><option v-for="value in availableYears" :key="value" :value="value">{{ value }}</option></select></label>
@@ -36,21 +64,11 @@
           <template v-else-if="data">
             <p v-if="!data.hasLinkedProfiles" class="m-0 text-sm text-ink-2"><router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }">Link your media account</router-link> in My profile to build your personal recap.</p>
             <p v-else-if="!data.requested.total" class="m-0 text-sm text-ink-3">No title requests recorded for {{ year }} in this scope.</p>
-            <button v-if="data.provider && data.hasLinkedProfiles" type="button" class="ui-btn justify-center" :disabled="loading" @click="loadWatchActivity"><i aria-hidden="true" class="fas fa-play-circle"></i>{{ includePlayback ? 'Refresh watch activity' : `Load ${data.providerLabel} watch activity` }}</button>
+            <button v-if="data.watchStatus === 'unavailable'" type="button" class="ui-btn justify-center" :disabled="loading" @click="load(true)"><i aria-hidden="true" class="fas fa-redo"></i>Retry {{ data.providerLabel }} watch activity</button>
           </template>
         </section>
 
-        <section class="max-md:order-1">
-          <p class="m-0 text-[11px] font-bold uppercase tracking-wider text-brand-ink">Story {{ index + 1 }} of {{ stories.length }} · {{ displayYear }}</p>
-          <h3 class="m-0 mt-1 text-lg font-extrabold text-ink">{{ story.title }}</h3>
-          <p v-if="detail" class="m-0 mt-2 hidden text-sm leading-relaxed text-ink-3 md:block">{{ detail }}</p>
-          <p v-if="notice" role="status" class="m-0 mt-3 rounded-ctl border border-caution/30 bg-caution/10 px-3 py-2 text-xs leading-relaxed text-ink-2">{{ notice }}</p>
-          <p v-if="error" role="alert" class="ui-alert-bad m-0 mt-3">{{ error }} <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline" @click="retry">Try again</button></p>
-        </section>
-
-        <RecapShareActions class="max-md:order-2" :blob="blob" :filename="filename" :caption="caption" :share-title="shareTitle" :disabled="!ready || rendering" download-label="Download this story" @before-action="pause" />
-
-        <details class="group text-xs max-md:order-4">
+        <details class="group text-xs">
           <summary class="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-ink-3 hover:text-ink [&::-webkit-details-marker]:hidden">
             <span><i aria-hidden="true" class="fas fa-info-circle mr-2"></i>About these numbers</span>
             <i aria-hidden="true" class="fas fa-chevron-down text-[10px] transition-transform group-open:rotate-180"></i>
@@ -64,27 +82,31 @@
             <p class="m-0 mt-2 text-ink-4">Images are created on your device as 1080 × 1920 PNGs.</p>
           </div>
         </details>
-      </div>
-    </div>
-  </AppDialog>
+          </template>
+        </div>
+      </aside>
+    </Transition>
+  </dialog>
 </template>
 
 <script>
-import AppDialog from '@/components/ui/AppDialog.vue';
 import RecapShareActions from './RecapShareActions.vue';
 import { getYearRecap } from '@/api/recapApi.js';
 import { canvasBlob } from '@/utils/recapCanvas.js';
 import { createYearRecapDemo } from '@/utils/yearRecapDemo.js';
-import { prepareYearRecap, yearStories, yearCaption, yearDescription, yearStoryDetail } from '@/utils/yearRecapData.js';
+import { prepareYearRecap, yearStories, yearCaption, yearDescription } from '@/utils/yearRecapData.js';
 import { yearRecapSeason } from '@/utils/yearRecapSeason.js';
 import { renderYearStory } from '@/utils/yearRecapCanvas.js';
 
 const STORY_DURATION = 8000;
 const HOLD_DELAY = 250;
+const GLASS_BUTTON = 'grid h-10 w-10 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-white/10 text-white transition-colors hover:bg-white/20 disabled:cursor-default disabled:opacity-35 disabled:hover:bg-white/10';
+
+let nextId = 0;
 
 export default {
   name: 'YearRecapStories',
-  components: { AppDialog, RecapShareActions },
+  components: { RecapShareActions },
   props: { isAdmin: { type: Boolean, default: false }, initialMode: { type: String, default: 'real' }, initialYear: { type: Number, default: null } },
   emits: ['close'],
   data() { return { index: 0, scope: 'personal', provider: 'jellyfin', paused: false, holding: false, holdTimer: null, suppressTap: false,
@@ -92,7 +114,8 @@ export default {
     generation: 0, active: true, timer: null, lastTick: 0, touch: null, animation: null, motionQuery: null,
     stageWidth: 0, stageHeight: 0, resizeObserver: null,
     mode: this.initialMode, year: this.initialYear ?? yearRecapSeason().year, realData: null, loading: false,
-    includePlayback: false, requestVersion: 0, controller: null }; },
+    requestVersion: 0, controller: null,
+    panel: null, titleId: `year-recap-title-${++nextId}`, glassButton: GLASS_BUTTON }; },
   computed: {
     frameStyle() {
       const width = Math.max(0, Math.min(this.stageWidth, this.stageHeight * 9 / 16) - 2);
@@ -104,7 +127,6 @@ export default {
     availableYears() { return [...new Set([this.year, ...(this.realData?.availableYears || [this.year - 1])])].sort((a, b) => b - a); },
     story() { return this.stories[this.index]; },
     description() { return this.data ? yearDescription(this.data, this.story) : 'Recorded progress is not available yet.'; },
-    detail() { return this.data ? yearStoryDetail(this.data, this.story) : ''; },
     caption() { return this.data ? yearCaption(this.data, this.story) : ''; },
     shareTitle() { return `${this.displayYear} Year Recap${this.mode === 'demo' ? ' · Preview · Sample data' : ' · Recorded progress'}`; },
     filename() { return this.data ? `suggestarr-${this.data.year}-${this.story.id}-${this.data.isDemo ? 'preview' : 'recorded'}.png` : 'suggestarr-year-recap.png'; },
@@ -122,6 +144,7 @@ export default {
     this.storyCache = new WeakMap();
   },
   mounted() {
+    this.$refs.dialog.showModal();
     this.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     this.reducedMotion = this.motionQuery.matches;
     this.paused = this.reducedMotion;
@@ -168,7 +191,8 @@ export default {
       this.realData = null;
       this.controller = new AbortController();
       try {
-        const data = await getYearRecap(this.year, this.isAdmin ? this.scope : 'personal', this.includePlayback, this.controller.signal);
+        // Watch activity is always fetched with the recap; the server skips it when no media server is linked.
+        const data = await getYearRecap(this.year, this.isAdmin ? this.scope : 'personal', true, this.controller.signal);
         if (!this.active || version !== this.requestVersion) return;
         this.realData = prepareYearRecap(data);
         if (keepStory) this.go(Math.min(this.index, this.stories.length - 1));
@@ -177,7 +201,30 @@ export default {
         if (this.active && version === this.requestVersion) this.error = 'Unable to load recorded progress. Try again or select sample data.';
       } finally { if (version === this.requestVersion) this.loading = false; }
     },
-    loadWatchActivity() { this.includePlayback = true; this.load(true); },
+    close() { this.$refs.dialog.close(); },
+    /** Toggle the options or share panel; opening one pauses the stories so they stay put. */
+    toggle(panel) {
+      this.panel = this.panel === panel ? null : panel;
+      if (this.panel) this.pause();
+    },
+    /** Clicking the backdrop closes an open panel first, then the viewer. */
+    dismiss() { if (this.panel) this.panel = null; else this.close(); },
+    onCancel(event) {
+      // Escape closes an open panel before closing the viewer.
+      if (!this.panel) return;
+      event.preventDefault();
+      this.panel = null;
+    },
+    download() {
+      if (!this.blob) return;
+      this.pause();
+      const url = URL.createObjectURL(this.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = this.filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    },
     retry() { if (!this.data) this.load(); else this.render(); },
     pause() { this.paused = true; },
     pauseWhenHidden() { if (document.hidden) this.pause(); },

@@ -25,6 +25,14 @@ async function openPreview(page, { admin = true, journey = false, width = 1280, 
   return { errors, apiCalls, remoteArtwork };
 }
 
+/** Open the options or share panel of the story viewer (no-op when it is already open). */
+async function openPanel(page, name) {
+  const toggle = page.getByRole('button', { name, exact: true });
+  if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+}
+const openOptions = page => openPanel(page, 'Recap options');
+const openShare = page => openPanel(page, 'Share this story');
+
 async function go(page, index) {
   await page.getByRole('button', { name: `Go to story ${index + 1}: ${storyTitles[index]}`, exact: true }).click();
   await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
@@ -34,6 +42,7 @@ async function go(page, index) {
 test('all seven personal stories export distinct, complete 1080×1920 PNGs offline', async ({ page }, testInfo) => {
   const { errors, apiCalls, remoteArtwork } = await openPreview(page);
   const pngSizes = [];
+  await openShare(page);
   for (let index = 0; index < 7; index += 1) {
     await go(page, index);
     await expect(page.getByRole('img')).toHaveAttribute('aria-label', /Fictional sample data for 2026/);
@@ -101,7 +110,7 @@ function recordedFixture(year = 2026, scope = 'personal', playback = false) {
     titles: [{ title: 'A recorded title', detail: 'Movie · 2026', poster_path: '/missing-test-cover.jpg' }] };
 }
 
-test('real yearly activity, explicit watch loading, scope and year changes export actual aggregates', async ({ page }, testInfo) => {
+test('real yearly activity loads watch data automatically and follows scope and year changes', async ({ page }, testInfo) => {
   const { errors } = await openPreview(page);
   const calls = [];
   await page.route('**/api/recap/year?*', route => {
@@ -109,16 +118,15 @@ test('real yearly activity, explicit watch loading, scope and year changes expor
     calls.push(Object.fromEntries(url.searchParams));
     return route.fulfill({ json: { status: 'success', data: recordedFixture(Number(url.searchParams.get('year')), url.searchParams.get('scope'), url.searchParams.get('include_playback') === 'true') } });
   });
+  await openOptions(page);
   await page.getByLabel('Data source').selectOption('real');
   await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
-  expect(calls[0].include_playback).toBe('false');
+  // Watch activity comes with the recap; there is no manual loading step.
+  expect(calls[0].include_playback).toBe('true');
+  await expect(page.getByRole('button', { name: /watch activity/ })).toHaveCount(0);
   await page.getByRole('button', { name: /Go to story 2:/ }).click();
   await expect(page.getByRole('img')).toHaveAttribute('aria-label', /7 titles first recorded this year: 5 movies and 2 TV series/);
   await expect(page.getByRole('status')).toContainText('Some covers could not be loaded');
-  await page.getByRole('button', { name: 'Load Jellyfin watch activity', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
-  expect(calls.at(-1).include_playback).toBe('true');
-  await expect(page.getByRole('heading', { name: 'Discovery, on autopilot', exact: true })).toBeVisible();
   await page.getByRole('button', { name: /Go to story 3:/ }).click();
   await expect(page.getByRole('img')).toHaveAttribute('aria-label', /2 movies, 6 episodes and 1 TV series/);
   await page.getByRole('button', { name: /Go to story 4:/ }).click();
@@ -136,6 +144,7 @@ test('real yearly activity, explicit watch loading, scope and year changes expor
   const file = await downloaded;
   expect(file.suggestedFilename()).toBe('suggestarr-2025-summary-recorded.png');
   await file.saveAs(testInfo.outputPath('recorded-summary.png'));
+  await openShare(page);
   const caption = new URL(await page.getByRole('link', { name: 'X', exact: true }).getAttribute('href')).searchParams.get('text');
   expect(caption).toContain('7 recorded titles');
   expect(caption).not.toContain('Sample');
@@ -150,6 +159,7 @@ test('missing profiles and empty years never substitute sample statistics', asyn
     data.monthly.forEach(month => { month.requests = 0; });
     return route.fulfill({ json: { status: 'success', data } });
   });
+  await openOptions(page);
   await page.getByLabel('Data source').selectOption('real');
   await expect(page.getByRole('link', { name: 'Link your media account', exact: true })).toBeVisible();
   await expect(page.getByLabel('Recap scope')).toHaveCount(0);
@@ -171,6 +181,7 @@ test('annual API respects the configured subpath', async ({ page }) => {
     requested = true;
     return route.fulfill({ json: { status: 'success', data: recordedFixture() } });
   });
+  await openOptions(page);
   await page.getByLabel('Data source').selectOption('real');
   await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
   expect(requested).toBeTruthy();
@@ -179,6 +190,7 @@ test('annual API respects the configured subpath', async ({ page }) => {
 test('admin scope and provider changes reset the story and update the sample numbers', async ({ page }) => {
   await openPreview(page);
   await go(page, 2);
+  await openOptions(page);
   await page.getByLabel('Media server').selectOption('plex');
   await expect(page.getByRole('heading', { name: storyTitles[0], exact: true })).toBeVisible();
   await page.getByLabel('Recap scope').selectOption('server');
@@ -192,7 +204,9 @@ test('admin scope and provider changes reset the story and update the sample num
 
 test('regular users have a personal preview without a server-scope selector', async ({ page }) => {
   const { apiCalls } = await openPreview(page, { admin: false });
+  await openOptions(page);
   await expect(page.getByLabel('Recap scope')).toHaveCount(0);
+  await openOptions(page);
   await page.getByLabel('Media server').selectOption('plex');
   await go(page, 1);
   await expect(page.getByRole('img')).toHaveAttribute('aria-label', /248 titles requested/);
@@ -203,6 +217,7 @@ test('every story renders in all four provider and scope combinations', async ({
   const { errors, apiCalls } = await openPreview(page);
   for (const provider of ['jellyfin', 'plex']) {
     for (const scope of ['personal', 'server']) {
+      await openOptions(page);
       await page.getByLabel('Media server').selectOption(provider);
       await page.getByLabel('Recap scope').selectOption(scope);
       for (let index = 0; index < 7; index += 1) {
@@ -218,12 +233,17 @@ test('every story renders in all four provider and scope combinations', async ({
 test('Home opens the preview even when recap API and linked profiles are unavailable', async ({ page }) => {
   const { apiCalls, remoteArtwork } = await openPreview(page, { journey: true, admin: false, date: '2026-12-20T12:00:00Z' });
   await page.getByRole('button', { name: 'Year recap', exact: true }).click();
+  await openOptions(page);
   await page.getByLabel('Data source').selectOption('demo');
   const initialCalls = apiCalls.length;
   await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
   await go(page, 3);
   expect(apiCalls.length).toBe(initialCalls);
   expect(remoteArtwork).toEqual([]);
+  // Escape closes the open options panel first, then the viewer.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('complementary', { name: 'Recap options' })).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
@@ -337,6 +357,7 @@ test('summary Reddit shortcut exports a clearly marked demo and opens only a com
   await page.context().route('https://www.reddit.com/submit*', route => route.fulfill({ contentType: 'text/html', body: 'Composer fixture' }));
   await openPreview(page);
   await go(page, 6);
+  await openShare(page);
   const link = page.getByRole('link', { name: 'Reddit', exact: true });
   expect(new URL(await link.getAttribute('href')).searchParams.get('title')).toContain('Preview · Sample data');
   const popup = page.waitForEvent('popup');
@@ -358,6 +379,7 @@ test('native sharing and clipboard preserve PNG type, year and sample-data discl
     navigator.clipboard.writeText = async text => { window.copiedYearCaption = text; };
   });
   await openPreview(page);
+  await openShare(page);
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   const share = await page.evaluate(() => window.sharedYear);
   expect(share.text).toContain('Preview / Sample data');
@@ -397,6 +419,7 @@ test('tapping the story navigates by side and holding pauses autoplay', async ({
 
 test('captions can be edited per story and feed the composers', async ({ page }) => {
   await openPreview(page);
+  await openShare(page);
   const caption = page.getByLabel('Caption');
   await expect(caption).toHaveValue(/Preview \/ Sample data/);
   await caption.fill('Our server year in one picture');
