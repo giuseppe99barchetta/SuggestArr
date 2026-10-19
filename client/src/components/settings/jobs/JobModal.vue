@@ -2,7 +2,7 @@
   <!-- Not AppDialog: a native modal <dialog> would make the jobs tour, which highlights fields in here, inert. -->
   <Teleport to="body">
     <div class="fixed inset-0 z-[1050] flex bg-black/70 p-4 backdrop-blur-sm max-sm:p-2" @click.self="requestClose">
-      <div role="dialog" aria-modal="true" aria-labelledby="job-modal-title" class="m-auto flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-card border border-edge bg-panel text-ink shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-labelledby="job-modal-title" class="m-auto flex max-h-full sm:max-h-[min(80dvh,52rem)] w-full max-w-4xl flex-col overflow-hidden rounded-card border border-edge bg-panel text-ink shadow-2xl">
       <header class="flex shrink-0 items-start gap-3 border-b border-edge px-6 py-4 max-sm:px-4">
         <span aria-hidden="true" class="grid h-9 w-9 shrink-0 place-items-center rounded-ctl bg-brand-soft text-sm text-brand-ink"><i aria-hidden="true" :class="jobTypeInfoIcon"></i></span>
         <div class="min-w-0 flex-1 self-center">

@@ -60,7 +60,7 @@
     </div>
     <div v-if="page < pages" ref="loadMoreTrigger" class="py-8 text-center text-sm text-ink-4">Loading more requests…</div>
 
-    <AppDialog v-if="confirmation" width="max-w-xl" labelledby="confirm-title" @close="confirmation = null">
+    <AppDialog v-if="confirmation" width="max-w-2xl" labelledby="confirm-title" @close="confirmation = null">
       <div class="flex flex-col gap-4 p-6">
         <div class="flex flex-col gap-1">
           <h3 id="confirm-title" class="m-0 text-lg font-bold" :class="confirmation.action === 'reject' || confirmation.action === 'blacklist' ? 'text-bad' : 'text-ink'"><i aria-hidden="true" :class="confirmation.icon" class="mr-2"></i>{{ confirmation.title }}</h3>

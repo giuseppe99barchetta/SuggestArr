@@ -105,6 +105,33 @@
     @apply m-0 rounded-[8px] border border-good/40 bg-good/10 px-3 py-2 text-[13px] text-ink-2;
   }
 
+  /* GitHub release notes rendered by utils/markdown.js inside the changelog dialog. */
+  .release-notes {
+    @apply text-sm leading-relaxed text-ink-2;
+  }
+  .release-notes > :first-child { @apply mt-0; }
+  .release-notes > :last-child { @apply mb-0; }
+  .release-notes p { @apply my-3 text-ink-2; }
+  .release-notes h2 { @apply mt-7 mb-3 text-lg font-bold text-ink; }
+  .release-notes h3 {
+    @apply mt-7 mb-3 flex items-center gap-2 text-base font-bold text-ink;
+  }
+  .release-notes h4 { @apply mt-5 mb-2 text-sm font-semibold uppercase tracking-wide text-ink-3; }
+  .release-notes hr { @apply my-6 h-px border-0 bg-edge; }
+  .release-notes ul,
+  .release-notes ol { @apply my-2 space-y-1.5 pl-5; }
+  .release-notes ul { @apply list-disc; }
+  .release-notes ol { @apply list-decimal; }
+  .release-notes li { @apply pl-1 marker:text-ink-4; }
+  .release-notes li > ul,
+  .release-notes li > ol { @apply mt-1.5 mb-0; }
+  .release-notes strong { @apply text-ink; }
+  .release-notes code { @apply text-[12.5px]; }
+  .release-notes pre { @apply my-3 overflow-x-auto rounded-ctl border border-edge bg-canvas p-3 font-mono text-[12.5px] text-ink-2; }
+  .release-notes pre code { @apply bg-transparent p-0 text-inherit; }
+  .release-notes blockquote { @apply my-3 rounded-r-[8px] border-l-2 border-brand bg-brand-soft/30 px-3 py-2 text-ink-2; }
+  .release-notes a { @apply font-medium text-brand-ink hover:text-ink hover:underline; }
+
   /* Trakt brand mark from Simple Icons (CC0-1.0), drawn in currentColor like the Font Awesome icons. */
   .icon-trakt {
     display: inline-block;

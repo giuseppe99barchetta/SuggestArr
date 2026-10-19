@@ -99,7 +99,7 @@
         </SectionCard>
       </div>
 
-      <AppDialog v-if="showAiInfoModal" width="max-w-2xl" title="Set up an AI provider" subtitle="Any OpenAI-compatible API works, in the cloud or on your machine." icon="fas fa-robot" @close="showAiInfoModal = false">
+      <AppDialog v-if="showAiInfoModal" width="max-w-3xl" title="Set up an AI provider" subtitle="Any OpenAI-compatible API works, in the cloud or on your machine." icon="fas fa-robot" @close="showAiInfoModal = false">
         <div class="flex flex-col gap-5">
           <p class="m-0 text-sm leading-relaxed text-ink-2">
             SuggestArr uses any <strong>OpenAI-compatible API</strong> to generate personalized recommendations based on your watch history. You can use a cloud provider or a local LLM running on your machine.

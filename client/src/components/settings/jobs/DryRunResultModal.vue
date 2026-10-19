@@ -1,5 +1,5 @@
 <template>
-  <AppDialog width="max-w-3xl" title="Dry run preview" icon="fas fa-eye" @close="$emit('close')">
+  <AppDialog width="max-w-4xl" title="Dry run preview" icon="fas fa-eye" @close="$emit('close')">
     <template #subtitle>
       {{ job.name }}<template v-if="cachedAt"> · from {{ formatCachedAt(cachedAt) }}</template> · nothing was requested
     </template>

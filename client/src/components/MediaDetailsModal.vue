@@ -1,5 +1,5 @@
 <template>
-  <AppDialog width="max-w-3xl" labelledby="media-details-title" @close="$emit('close')">
+  <AppDialog width="max-w-4xl" labelledby="media-details-title" @close="$emit('close')">
     <header class="relative isolate overflow-hidden">
       <!-- Without a backdrop the blurred poster stands in for one. -->
       <div aria-hidden="true" class="absolute inset-0 -z-10">

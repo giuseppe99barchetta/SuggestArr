@@ -108,7 +108,7 @@
       </div>
     </div>
 
-    <AppDialog v-if="showCreate" ref="createDialog" width="max-w-2xl" labelledby="webhook-create-title" @close="showCreate = false">
+    <AppDialog v-if="showCreate" ref="createDialog" width="max-w-3xl" labelledby="webhook-create-title" @close="showCreate = false">
       <form class="flex flex-col gap-5 p-6" @submit.prevent="create">
         <header>
           <h2 id="webhook-create-title" class="m-0 text-lg font-bold text-ink">Add destination</h2>

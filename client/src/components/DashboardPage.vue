@@ -127,18 +127,28 @@
         </div>
       </transition>
 
-      <AppDialog v-if="showChangelogModal" width="max-w-3xl" :title="`What's new in ${currentVersion}`" icon="fab fa-github" @close="showChangelogModal = false">
-        <div v-if="isLoadingChangelog" class="flex items-center justify-center gap-2 py-10 text-sm text-ink-3">
-          <i aria-hidden="true" class="fas fa-spinner fa-spin"></i>Loading changelog…
+      <AppDialog v-if="showChangelogModal" width="max-w-3xl" :title="`What's new in ${currentVersion}`" :subtitle="changelogSubtitle" icon="fas fa-gift" @close="showChangelogModal = false">
+        <div v-if="isLoadingChangelog" class="flex flex-col gap-3 py-2" aria-busy="true" aria-label="Loading changelog">
+          <div class="h-3 w-4/5 animate-pulse rounded bg-panel-2"></div>
+          <div class="h-3 w-3/5 animate-pulse rounded bg-panel-2"></div>
+          <div class="mt-4 h-4 w-2/5 animate-pulse rounded bg-panel-2"></div>
+          <div class="h-3 w-11/12 animate-pulse rounded bg-panel-2"></div>
+          <div class="h-3 w-3/4 animate-pulse rounded bg-panel-2"></div>
+          <div class="h-3 w-5/6 animate-pulse rounded bg-panel-2"></div>
         </div>
         <div v-else-if="changelogError" class="flex flex-col items-center gap-3 py-10 text-center">
           <p class="ui-alert-bad">{{ changelogError }}</p>
-          <button type="button" class="ui-btn" @click="showChangelog">Retry</button>
+          <button type="button" class="ui-btn" @click="showChangelog">
+            <i aria-hidden="true" class="fas fa-redo"></i>Retry
+          </button>
         </div>
-        <div v-else-if="changelogData" class="leading-relaxed text-ink [&_a]:border-b [&_a]:border-dotted [&_a]:border-brand [&_a]:text-brand-ink [&_a:hover]:border-solid [&_h2]:mt-6 [&_h2]:mb-4 [&_h2]:border-b-2 [&_h2]:border-edge-strong [&_h2]:pb-2 [&_h3]:mt-5 [&_h3]:mb-3 [&_h4]:mt-4 [&_h4]:mb-2 [&_li]:my-2 [&_li]:text-ink-2 [&_strong]:font-semibold [&_ul]:mt-2 [&_ul]:mb-4 [&_ul]:list-disc [&_ul]:pl-6" v-html="changelogData"></div>
-        <p v-else class="m-0 py-10 text-center text-sm text-ink-3">No changelog available for this version.</p>
+        <div v-else-if="changelogData" class="release-notes" v-html="changelogData"></div>
+        <div v-else class="flex flex-col items-center gap-2 py-10 text-center text-sm text-ink-3">
+          <i aria-hidden="true" class="fas fa-file-alt text-2xl text-ink-4"></i>
+          No changelog available for this version.
+        </div>
         <template #footer>
-          <a v-if="changelogData" :href="`https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${currentVersion}`" target="_blank" rel="noopener" class="ui-btn mr-auto no-underline">
+          <a :href="changelogUrl" target="_blank" rel="noopener" class="ui-btn mr-auto no-underline">
             <i aria-hidden="true" class="fas fa-external-link-alt"></i>View on GitHub
           </a>
           <button type="button" class="ui-btn-primary" @click="showChangelogModal = false">Close</button>
@@ -277,6 +287,7 @@ export default {
       exportIncludeSecrets: false,
       showChangelogModal: false,
       changelogData: null,
+      changelogRelease: null,
       isLoadingChangelog: false,
       changelogError: null,
       requestCount: 0,
@@ -358,6 +369,17 @@ export default {
     };
   },
   computed: {
+    changelogUrl() {
+      return this.changelogRelease?.html_url
+        || `https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${this.currentVersion}`;
+    },
+    changelogSubtitle() {
+      const release = this.changelogRelease;
+      if (!release?.published_at) return '';
+      const date = new Date(release.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+      const name = release.name && release.name !== release.tag_name ? `${release.name} · ` : '';
+      return `${name}Released ${date}${release.prerelease ? ' · Pre-release' : ''}`;
+    },
     visibleTabs() {
       if (!this.currentUser) {
         return [];
@@ -581,6 +603,7 @@ export default {
           // Get release info from GitHub API
           const response = await getReleaseByTag(this.currentVersion);
           
+          this.changelogRelease = response.data || null;
           if (response.data && response.data.body) {
             this.changelogData = releaseNotesToHtml(response.data.body);
           } else {

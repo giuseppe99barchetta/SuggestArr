@@ -111,7 +111,7 @@
       </section>
     </div>
 
-    <AppDialog v-if="approveItem" width="max-w-xl" labelledby="approve-title" @close="approveItem = null">
+    <AppDialog v-if="approveItem" width="max-w-2xl" labelledby="approve-title" @close="approveItem = null">
       <div class="flex flex-col gap-4 p-6">
         <div>
           <h3 id="approve-title" class="m-0 text-lg font-bold text-ink"><i aria-hidden="true" class="fas fa-paper-plane mr-2"></i>Send to Seer</h3>

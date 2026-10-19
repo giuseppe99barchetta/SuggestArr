@@ -3,7 +3,7 @@
   <dialog
     ref="dialog"
     autofocus
-    class="m-auto w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-card border border-edge bg-panel p-0 text-ink shadow-2xl outline-none backdrop:bg-black/70 backdrop:backdrop-blur-sm open:flex open:flex-col"
+    class="m-auto w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] sm:max-h-[min(80dvh,52rem)] overflow-hidden rounded-card border border-edge bg-panel p-0 text-ink shadow-2xl outline-none backdrop:bg-black/70 backdrop:backdrop-blur-sm open:flex open:flex-col"
     :class="width"
     :aria-labelledby="title ? titleId : (labelledby || null)"
     @close="$emit('close')"
@@ -46,7 +46,7 @@ let nextId = 0;
 export default {
   name: 'AppDialog',
   props: {
-    width: { type: String, default: 'max-w-lg' },
+    width: { type: String, default: 'max-w-xl' },
     labelledby: { type: String, default: '' },
     title: { type: String, default: '' },
     subtitle: { type: String, default: '' },

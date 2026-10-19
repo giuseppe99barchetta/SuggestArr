@@ -18,14 +18,14 @@
       </button>
     </header>
 
-    <div role="tablist" aria-label="Request views" class="-mb-2 flex gap-1 overflow-x-auto border-b border-edge">
+    <div role="tablist" aria-label="Request views" class="-mb-2 flex gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_var(--color-edge)]">
       <button
         v-for="tab in viewTabs"
         :key="tab.id"
         type="button"
         role="tab"
         :aria-selected="tab.active ? 'true' : 'false'"
-        class="-mb-px inline-flex h-12 shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3.5 text-sm font-semibold"
+        class="inline-flex h-12 shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3.5 text-sm font-semibold"
         :class="tab.active ? 'border-brand-ink text-white' : 'border-transparent text-ink-3 hover:text-ink'"
         @click="selectTab(tab.id)"
       >

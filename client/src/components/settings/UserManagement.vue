@@ -122,7 +122,7 @@
 
     </div>
 
-    <AppDialog v-if="showCreateModal" width="max-w-xl" title="Create account" subtitle="A new SuggestArr login. Share the password with the person securely." icon="fas fa-user-plus" @close="showCreateModal = false">
+    <AppDialog v-if="showCreateModal" width="max-w-2xl" title="Create account" subtitle="A new SuggestArr login. Share the password with the person securely." icon="fas fa-user-plus" @close="showCreateModal = false">
       <form id="create-user-form" class="flex flex-col gap-4" @submit.prevent="submitCreate">
         <label class="ui-label">Username
           <input v-model="newUser.username" type="text" class="ui-input" placeholder="e.g. alex" maxlength="64" autocomplete="off" :disabled="isCreating" />
@@ -166,7 +166,7 @@
       </template>
     </AppDialog>
 
-    <AppDialog v-if="showPermissionsModal" width="max-w-2xl" title="Permissions" icon="fas fa-user-shield" @close="showPermissionsModal = false">
+    <AppDialog v-if="showPermissionsModal" width="max-w-3xl" title="Permissions" icon="fas fa-user-shield" @close="showPermissionsModal = false">
       <template #subtitle>
         {{ permissionsTarget?.username }} · <span class="capitalize">{{ permissionsTarget?.role }}</span>
       </template>
