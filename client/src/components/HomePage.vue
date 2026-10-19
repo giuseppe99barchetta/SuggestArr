@@ -23,6 +23,8 @@
       </div>
     </div>
 
+    <JourneyPanel :current-user="currentUser" />
+
     <section v-if="pendingRequests.length" class="flex flex-col gap-4">
       <div class="flex items-baseline justify-between gap-3">
         <h2 class="m-0 text-[19px] font-bold text-ink">Waiting for your approval</h2>
@@ -140,13 +142,14 @@ import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
 import { approvalNeedsDialog, loadSeerServers } from '@/utils/requestProfiles.js';
 import { SEEN_OPTIONS, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
 import { approvalEnabled } from '@/utils/requestApproval.js';
+import JourneyPanel from '@/components/recap/JourneyPanel.vue';
 
 /**
  * Dashboard home: request stats, the approval queue, recent requests and job activity.
  */
 export default {
   name: 'HomePage',
-  components: { AppDialog, MediaCard, MediaDetailsModal, ApprovalProfileChoice },
+  components: { AppDialog, MediaCard, MediaDetailsModal, ApprovalProfileChoice, JourneyPanel },
   // The dashboard shell passes settings props to every tab; only currentUser is used here.
   inheritAttrs: false,
   props: {

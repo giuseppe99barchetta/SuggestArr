@@ -14,14 +14,21 @@
         <i aria-hidden="true" :class="link.icon"></i>
       </a>
     </div>
+    <button v-if="isAdmin" type="button" class="mt-4 cursor-pointer border-0 bg-transparent p-0 text-sm font-semibold text-ink-3 hover:text-brand-ink" @click="showSupport = true">Support SuggestArr</button>
+    <SupportDialog v-if="showSupport" @close="showSupport = false" @preferences-changed="preferencesChanged" />
   </footer>
 </template>
 
 <script>
+import SupportDialog from '@/components/recap/SupportDialog.vue';
+
 export default {
   name: 'AppFooter',
+  components: { SupportDialog },
+  props: { isAdmin: { type: Boolean, default: false } },
   data() {
     return {
+      showSupport: false,
       links: [
         { href: 'https://github.com/giuseppe99barchetta/SuggestArr', label: 'GitHub', icon: 'fab fa-github' },
         { href: 'https://hub.docker.com/repository/docker/ciuse99/suggestarr/', label: 'Docker', icon: 'fab fa-docker' },
@@ -30,6 +37,9 @@ export default {
         { href: 'https://buymeacoffee.com/suggestarr', label: 'Support SuggestArr on Buy Me a Coffee', title: 'Support SuggestArr on Buy Me a Coffee', icon: 'fas fa-mug-hot' },
       ],
     };
+  },
+  methods: {
+    preferencesChanged() { window.dispatchEvent(new Event('suggestarr-recap-preferences')); },
   },
 };
 </script>

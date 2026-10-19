@@ -94,7 +94,7 @@
               @reset-config="showResetModal = true"
             />
           </transition>
-          <AppFooter />
+          <AppFooter :is-admin="currentUser?.role === 'admin'" />
         </div>
       </main>
 

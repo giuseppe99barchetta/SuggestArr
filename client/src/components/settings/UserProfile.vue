@@ -53,6 +53,8 @@
       </div>
     </div>
 
+    <RecapPreferences v-if="currentUser?.role === 'admin'" />
+
     <SectionCard v-if="isLinkableService" icon="fas fa-link" title="Linked accounts" description="SuggestArr reads your watch history from these accounts to personalise suggestions.">
       <div class="grid items-start gap-5 md:grid-cols-2">
         <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
@@ -116,6 +118,7 @@
 </template>
 
 <script>
+import RecapPreferences from '@/components/recap/RecapPreferences.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import axios from 'axios';
 import { useAuth } from '@/composables/useAuth';
@@ -144,7 +147,7 @@ const PROVIDER_META = {
 export default {
   name: 'UserProfile',
 
-  components: { PageHeader, SectionCard, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel },
+  components: { PageHeader, SectionCard, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel, RecapPreferences },
 
   // The dashboard shell passes props this page does not declare.
   inheritAttrs: false,

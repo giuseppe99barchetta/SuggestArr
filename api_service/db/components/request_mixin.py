@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from api_service.exceptions.database_exceptions import DatabaseError
+from api_service.db.recap_repository import record_requested_title
 
 class RequestMixin:
     def has_visible_suggestarr_request(self, tmdb_id: str, media_type: str,
@@ -37,7 +38,7 @@ class RequestMixin:
             cursor = conn.cursor()
             
             # Database-specific query modifications
-            if self.db_type == 'mysql':
+            if self.db_type in ('mysql', 'mariadb'):
                 query = query.replace("INSERT OR IGNORE", "INSERT IGNORE")
                 query = query.replace("?", "%s")
             elif self.db_type == 'postgres':
@@ -46,6 +47,7 @@ class RequestMixin:
                 query = query.replace("?", "%s")
             
             cursor.execute(query, params)
+            record_requested_title(cursor, self.db_type, media_type, media_id)
             conn.commit()
     
     def save_user(self, user: Dict[str, Any]) -> None:

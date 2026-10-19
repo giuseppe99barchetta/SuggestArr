@@ -464,6 +464,8 @@ class SchemaManager:
 
         # Add missing columns
         self.add_missing_columns()
+        from api_service.db.recap_repository import initialize_recap_schema
+        initialize_recap_schema(self._database)
         self._migrate_execution_history()
         self._migrate_request_expiry()
         self._migrate_suggestion_feedback()

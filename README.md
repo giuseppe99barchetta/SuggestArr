@@ -331,6 +331,8 @@ See the [Public API v1 guide](/docs/API.md) for authentication, addresses, and
 usage details.
 
 ## Support SuggestArr ❤️
+
+Celebrate your discoveries with milestone badges and a shareable recap in Home. Recaps include your recorded title count, movie/TV breakdown and a fan of your top-rated requested titles, rendered locally in your browser. Share shortcuts put Reddit first, alongside Discord, X and Bluesky; cover artwork can be hidden before sharing. Administrators can manage occasional support invitations in **My profile → Support reminders**. See [Your SuggestArr journey](docs/RECAP.md) for counting rules, privacy and reminder preferences.
 If you enjoy SuggestArr, consider making a donation to support its continued development and help keep the project running at its best:
 
 - ☕ [Ko-fi](https://ko-fi.com/ciuse99)
