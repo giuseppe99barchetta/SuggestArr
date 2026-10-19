@@ -1060,9 +1060,12 @@ export default {
         await testOmdbApi(this.localConfig.OMDB_API_KEY.trim());
         this.omdbConnected = true;
         if (!silent && this.$toast) this.$toast.success('OMDb API key validated!', { position: 'top-right', duration: 3000 });
-      } catch {
+      } catch (error) {
         this.omdbConnected = false;
-        if (!silent) this._notifyError('Invalid OMDb API key. Please check and try again.');
+        if (!silent) {
+          const serverMsg = error?.response?.data?.message;
+          this._notifyError(serverMsg || 'Invalid OMDb API key. Please check and try again.');
+        }
       } finally {
         this.omdbTesting = false;
       }
