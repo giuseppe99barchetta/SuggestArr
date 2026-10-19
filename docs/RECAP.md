@@ -52,4 +52,4 @@ Administrators receive dismissible support cards in Home starting at 100 recorde
 
 Closing a card archives that invitation. Expand **Reminder options** on the card to postpone or stop invitations. **Remind me in 30 days** explicitly postpones the same invitation for 30 days, overriding the usual 90-day gap. **I already supported** and **Don't show these reminders** stop invitations for your administrator account, across browsers; these two choices are also available under **Reminder options** in the support dialog. These choices do not affect other administrators. Change them under **My profile → Support reminders**; no payment verification is required. Progress and recap sharing remain available.
 
-The footer's **Support SuggestArr** link opens Ko-fi, Buy Me a Coffee and GitHub support options at any time.
+The footer's **Support SuggestArr** button opens Ko-fi, Buy Me a Coffee, GitHub and Discord options at any time, for every user. Only admins also see the reminder options there.

@@ -44,7 +44,8 @@ export function yearRecapCaption(data, story) {
   return `${data.year} Year Recap · Preview / Sample data. ${story.title}. ${data.requested.total.toLocaleString('en-US')} requested · ${data.watched.movies.toLocaleString('en-US')} movies · ${data.watched.episodes.toLocaleString('en-US')} episodes · ${hours.toLocaleString('en-US')}h on ${data.providerLabel}. https://github.com/giuseppe99barchetta/SuggestArr`;
 }
 
-export function storyDescription(data, story) {
+/** Story text without its title, for the side panel next to the rendered image. */
+export function storyDetail(data, story) {
   const descriptions = {
     intro: `${data.scope === 'server' ? `Server recap for ${data.activeUsers} active viewers` : 'Your personal recap'} on ${data.providerLabel}.`,
     discovery: `${data.requested.total} titles requested: ${data.requested.movies} movies and ${data.requested.series} TV series.`,
@@ -54,5 +55,9 @@ export function storyDescription(data, story) {
     titles: data.titles.map(title => `${title.title}, ${title.detail}`).join('; '),
     summary: `${data.requested.total} titles requested, ${data.watched.movies} movies and ${data.watched.episodes} episodes watched. Leading genre: ${data.genres[0].label}.`,
   };
-  return `${story.title}. ${descriptions[story.id]} Preview. Fictional sample data for ${data.year}.`;
+  return descriptions[story.id];
+}
+
+export function storyDescription(data, story) {
+  return `${story.title}. ${storyDetail(data, story)} Preview. Fictional sample data for ${data.year}.`;
 }

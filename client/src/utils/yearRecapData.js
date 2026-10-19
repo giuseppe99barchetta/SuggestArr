@@ -1,6 +1,6 @@
 /** Adapt actual aggregates without filling gaps with fictional viewing activity. */
 import { posterUrl, PROJECT_URL } from './recapCanvas.js';
-import { YEAR_RECAP_STORIES, yearRecapCaption as demoCaption, storyDescription as demoDescription } from './yearRecapDemo.js';
+import { YEAR_RECAP_STORIES, yearRecapCaption as demoCaption, storyDescription as demoDescription, storyDetail as demoDetail } from './yearRecapDemo.js';
 
 export function prepareYearRecap(data) {
   return { ...data, titles: data.titles.map(title => ({ ...title, artwork: posterUrl(title.poster_path) })) };
@@ -22,8 +22,9 @@ export function yearCaption(data, story) {
   return `${data.year} Year Recap${data.isYearToDate ? ' · Year to date' : ''}. ${data.requested.total} recorded titles requested with SuggestArr.${viewing} ${PROJECT_URL}`;
 }
 
-export function yearDescription(data, story) {
-  if (data.isDemo) return demoDescription(data, story);
+/** Story text without its title; coverage caveats live once in the dialog's "About these numbers". */
+export function yearStoryDetail(data, story) {
+  if (data.isDemo) return demoDetail(data, story);
   const descriptions = {
     intro: `${data.scope === 'server' ? 'Server' : 'Personal'} recorded progress${data.isYearToDate ? ' · Year to date' : ''}.`,
     discovery: `${data.requested.total} titles first recorded this year: ${data.requested.movies} movies and ${data.requested.series} TV series.`,
@@ -33,5 +34,10 @@ export function yearDescription(data, story) {
     titles: data.titles.length ? `${data.titles.map(title => `${title.title}, ${title.detail}`).join('; ')}. Most recently requested titles with available metadata.` : 'No title metadata is available for this year yet.',
     summary: `${data.requested.total} recorded titles requested: ${data.requested.movies} movies and ${data.requested.series} TV series.${data.watched ? ` Partial ${data.providerLabel} activity: ${data.watched.movies} movies and ${data.watched.episodes} episodes.` : ''}`,
   };
-  return `${story.title}. ${descriptions[story.id]} ${data.year}. Recorded history may not cover the entire year.`;
+  return descriptions[story.id];
+}
+
+export function yearDescription(data, story) {
+  if (data.isDemo) return demoDescription(data, story);
+  return `${story.title}. ${yearStoryDetail(data, story)}`;
 }

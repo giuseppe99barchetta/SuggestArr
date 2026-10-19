@@ -2,7 +2,7 @@
   <div class="flex flex-col gap-5" data-profile-page>
     <PageHeader title="My profile" subtitle="Your account, preferences, API keys and the accounts SuggestArr learns from." />
 
-    <div class="grid items-start gap-5 lg:grid-cols-2">
+    <div class="grid gap-5 lg:grid-cols-2">
       <SectionCard icon="fas fa-user-circle" title="Account" description="The name you sign in with and your password.">
         <div class="mb-5 flex items-center gap-3 border-b border-edge pb-5">
           <UserAvatar :user="profileUser" class="h-16 w-16 text-[64px]" />
@@ -56,7 +56,7 @@
           </form>
         </SectionCard>
 
-        <ApiKeysPanel />
+        <ApiKeysPanel class="flex-1" />
       </div>
     </div>
 

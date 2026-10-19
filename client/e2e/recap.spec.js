@@ -97,7 +97,7 @@ for (const width of [1280, 768, 390, 320]) {
     expect(layout.left).toBeGreaterThanOrEqual(0);
     expect(layout.right).toBeLessThanOrEqual(width);
     expect(layout.overflow).toBeFalsy();
-    await dialog.locator('summary').focus();
+    await dialog.getByRole('button', { name: 'Reminder options' }).focus();
     await page.keyboard.press('Enter');
     await expect(dialog.getByRole('button', { name: 'I already supported' })).toBeVisible();
     await expect(dialog.getByRole('button', { name: "Don't show these reminders" })).toBeVisible();
@@ -115,7 +115,6 @@ for (const width of [1280, 390]) {
     await expect(page.getByRole('heading', { name: 'Your SuggestArr journey' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '100 titles requested with SuggestArr' })).toBeVisible();
     await page.getByRole('button', { name: 'Create your recap', exact: true }).first().click();
-    await expect(page.getByRole('tab', { name: 'Preview', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('heading', { name: 'Your badges' })).toBeHidden();
     const downloadButton = page.getByRole('button', { name: 'Download PNG' });
     await expect(downloadButton).toBeEnabled();
@@ -141,7 +140,7 @@ for (const width of [1280, 390]) {
 }
 
 for (const { width, height } of [{ width: 1280, height: 720 }, { width: 768, height: 720 }, { width: 390, height: 640 }, { width: 320, height: 568 }, { width: 844, height: 480 }]) {
-  test(`recap fits the viewport and separates its views at ${width}x${height}`, async ({ page }, testInfo) => {
+  test(`recap fits the viewport with preview and actions together at ${width}x${height}`, async ({ page }, testInfo) => {
     const { errors } = await openJourney(page, { width, total: 597 });
     await page.setViewportSize({ width, height });
     await expect(page.getByText('403 more titles to unlock')).toBeVisible();
@@ -149,36 +148,29 @@ for (const { width, height } of [{ width: 1280, height: 720 }, { width: 768, hei
     const dialog = page.getByRole('dialog', { name: 'Your SuggestArr recap' });
     const download = dialog.getByRole('button', { name: 'Download PNG' });
     await expect(download).toBeEnabled();
+    await expect(dialog.getByRole('tab')).toHaveCount(0);
     const bounds = await dialog.boundingBox();
     const minimumMargin = width >= 640 ? 32 : 16;
-    expect(bounds.width).toBeLessThanOrEqual(768);
+    expect(bounds.width).toBeLessThanOrEqual(896);
     expect(bounds.x).toBeGreaterThanOrEqual(minimumMargin);
     expect(width - bounds.x - bounds.width).toBeGreaterThanOrEqual(minimumMargin);
     expect(bounds.y).toBeGreaterThanOrEqual(width >= 640 ? height * 0.1 - 1 : 16);
     expect(height - bounds.y - bounds.height).toBeGreaterThanOrEqual(width >= 640 ? height * 0.1 - 1 : 16);
-    await expect(dialog.getByRole('tabpanel', { name: 'Preview' })).toBeVisible();
-    await expect(dialog.getByRole('tabpanel', { name: 'Share', exact: true })).toBeHidden();
     await page.screenshot({ path: testInfo.outputPath('recap-preview.png'), animations: 'disabled' });
     const image = await page.locator('canvas').boundingBox();
     const button = await download.boundingBox();
     expect(image.y).toBeGreaterThanOrEqual(0);
-    expect(image.y + image.height).toBeLessThan(button.y);
+    // Side by side from 640px, stacked below that: the image never covers the actions.
+    if (width >= 640) expect(image.x + image.width).toBeLessThan(button.x);
+    else expect(image.y + image.height).toBeLessThan(button.y);
     expect(image.width / image.height).toBeCloseTo(4 / 5, 2);
     expect(button.y + button.height).toBeLessThanOrEqual(height);
-    await dialog.getByRole('tab', { name: 'Preview', exact: true }).focus();
-    await page.keyboard.press('ArrowRight');
-    await expect(dialog.getByRole('tab', { name: 'Share', exact: true })).toBeFocused();
-    await expect(dialog.getByRole('tabpanel', { name: 'Share', exact: true })).toBeVisible();
-    await expect(dialog.getByRole('link', { name: 'Reddit', exact: true })).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath('recap-share.png'), animations: 'disabled' });
-    await page.keyboard.press('End');
-    await expect(dialog.getByRole('tab', { name: 'Badges', exact: true })).toBeFocused();
+    await expect(dialog.getByRole('link', { name: 'Reddit', exact: true })).toBeAttached();
+    await expect(dialog.getByLabel('Caption')).toBeAttached();
+    await dialog.getByText(/^Badges · 4 \/ 7 unlocked$/).click();
     await expect(dialog.getByRole('heading', { name: 'Your badges' })).toBeVisible();
-    await expect(download).toBeInViewport();
-    await page.screenshot({ path: testInfo.outputPath('recap-badges.png'), animations: 'disabled' });
-    await page.keyboard.press('Home');
-    await expect(dialog.getByRole('tab', { name: 'Preview', exact: true })).toBeFocused();
     await expect(page.getByLabel('Show top-title covers')).toBeChecked();
+    await page.screenshot({ path: testInfo.outputPath('recap-badges.png'), animations: 'disabled' });
     const overflow = await dialog.evaluate(element => {
       const body = element.querySelector(':scope > div');
       return { outer: element.scrollHeight - element.clientHeight, body: body.scrollHeight - body.clientHeight, horizontal: element.scrollWidth - element.clientWidth };
@@ -210,7 +202,10 @@ test('poster API failure keeps the aggregate recap usable', async ({ page }) => 
 test('regular users get personal badges without support prompts or mutations', async ({ page }) => {
   const { requests } = await openJourney(page, { role: 'user' });
   await expect(page.getByText('Your linked profiles')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Support SuggestArr', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Your SuggestArr journey' }).getByRole('button', { name: 'Support SuggestArr', exact: true })).toHaveCount(0);
+  await page.locator('footer').getByRole('button', { name: 'Support SuggestArr', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Support SuggestArr' }).getByRole('link', { name: 'Support on Ko-fi' })).toBeVisible();
+  await expect(page.getByRole('dialog').getByText('Reminder options')).toHaveCount(0);
   expect(requests.some(request => request.method !== 'GET')).toBeFalsy();
 });
 
@@ -224,7 +219,7 @@ test('unlinked users and zero progress show helpful empty states', async ({ page
 
 test('snooze persists a preference action and removes the invitation', async ({ page }) => {
   const { actions } = await openJourney(page);
-  await page.getByRole('region', { name: 'Your SuggestArr journey' }).locator('summary').click();
+  await page.getByRole('region', { name: 'Your SuggestArr journey' }).getByRole('button', { name: 'Reminder options' }).click();
   await page.getByRole('button', { name: 'Remind me in 30 days' }).click();
   await expect(page.getByRole('heading', { name: '100 titles requested with SuggestArr' })).toHaveCount(0);
   expect(actions).toEqual(['remind_later']);
@@ -235,7 +230,7 @@ test('support dialog offers both providers and honors already supported', async 
   await page.getByRole('button', { name: 'Support SuggestArr', exact: true }).first().click();
   await expect(page.getByRole('link', { name: 'Support on Ko-fi' })).toHaveAttribute('href', 'https://ko-fi.com/ciuse99');
   await expect(page.getByRole('link', { name: 'Buy Me a Coffee', exact: true })).toHaveAttribute('href', 'https://buymeacoffee.com/suggestarr');
-  await page.getByRole('dialog').locator('summary').click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Reminder options' }).click();
   await page.getByRole('button', { name: 'I already supported', exact: true }).last().click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: '100 titles requested with SuggestArr' })).toHaveCount(0);
@@ -256,7 +251,7 @@ test('support preference errors keep the dialog open and allow retry', async ({ 
   const { actions } = await openJourney(page);
   await page.getByRole('button', { name: 'Support SuggestArr', exact: true }).first().click();
   const dialog = page.getByRole('dialog');
-  await dialog.locator('summary').click();
+  await dialog.getByRole('button', { name: 'Reminder options' }).click();
   await page.route('**/api/recap/preferences', route => route.fulfill({ status: 500, json: { status: 'error' } }), { times: 1 });
   await dialog.getByRole('button', { name: "Don't show these reminders" }).click();
   await expect(dialog.getByRole('alert')).toContainText('Unable to save your preferences');
@@ -269,16 +264,15 @@ test('support preference errors keep the dialog open and allow retry', async ({ 
 
 test('profile preferences survive reload and can be re-enabled', async ({ page }) => {
   const { actions } = await openJourney(page, { profile: true });
-  const select = page.getByLabel('Reminders in Home');
-  await expect(select).toBeEnabled();
-  await select.selectOption('disabled');
-  await page.getByRole('button', { name: 'Save preferences' }).click();
-  await expect(page.getByRole('button', { name: 'Save preferences' })).toBeEnabled();
+  const disabled = page.getByRole('radio', { name: /Don't show support reminders/ });
+  const enabled = page.getByRole('radio', { name: /Show occasional reminders/ });
+  await expect(enabled).toBeChecked();
+  await disabled.check({ force: true });
+  await expect.poll(() => actions).toEqual(['disable']);
   await page.reload();
-  await expect(select).toHaveValue('disabled');
-  await select.selectOption('enabled');
-  await page.getByRole('button', { name: 'Save preferences' }).click();
-  await expect(page.getByRole('button', { name: 'Save preferences' })).toBeEnabled();
+  await expect(disabled).toBeChecked();
+  await enabled.check({ force: true });
+  await expect.poll(() => actions).toEqual(['disable', 'enable']);
   expect(actions).toEqual(['disable', 'enable']);
 });
 
@@ -300,7 +294,6 @@ test('journey respects reduced motion', async ({ page }) => {
 test('native sharing receives the rendered PNG and aggregate caption', async ({ page }) => {
   const { errors } = await openJourney(page, { nativeShare: true });
   await page.getByRole('button', { name: 'Create your recap', exact: true }).first().click();
-  await page.getByRole('tab', { name: 'Share', exact: true }).click();
   const share = page.getByRole('button', { name: 'Share', exact: true });
   await expect(share).toBeEnabled();
   await share.click();
@@ -320,8 +313,6 @@ test('covers can be hidden without changing the recap aspect ratio', async ({ pa
   await page.getByLabel('Show top-title covers').uncheck();
   await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
   expect(await page.locator('canvas').evaluate(canvas => canvas.toDataURL())).not.toBe(original);
-  await page.getByRole('tab', { name: 'Share', exact: true }).click();
-  await page.getByRole('tab', { name: 'Preview', exact: true }).click();
   await expect(page.getByLabel('Show top-title covers')).not.toBeChecked();
   expect(await page.locator('canvas').evaluate(canvas => canvas.width / canvas.height)).toBe(4 / 5);
 });
@@ -332,7 +323,6 @@ test('Reddit comes first and saves an image before opening the post composer', a
   await openJourney(page);
   await page.getByRole('button', { name: 'Create your recap', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
-  await page.getByRole('tab', { name: 'Share', exact: true }).click();
   const shortcuts = page.getByRole('dialog').locator('a');
   await expect(shortcuts.first()).toHaveText('Reddit');
   for (const platform of ['Discord', 'X', 'Bluesky']) await expect(page.getByRole('dialog').getByRole('link', { name: platform, exact: true })).toBeVisible();
@@ -357,7 +347,6 @@ test('Discord shortcut copies the PNG for the selected conversation', async ({ p
   await openJourney(page);
   await page.getByRole('button', { name: 'Create your recap', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
-  await page.getByRole('tab', { name: 'Share', exact: true }).click();
   const popup = page.waitForEvent('popup');
   await page.getByRole('dialog').getByRole('link', { name: 'Discord', exact: true }).click();
   const discord = await popup;
@@ -372,7 +361,6 @@ test('Discord falls back to a PNG download when clipboard access is unavailable'
   const { errors } = await openJourney(page);
   await page.getByRole('button', { name: 'Create your recap', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
-  await page.getByRole('tab', { name: 'Share', exact: true }).click();
   const downloaded = page.waitForEvent('download');
   const popup = page.waitForEvent('popup');
   await page.getByRole('dialog').getByRole('link', { name: 'Discord', exact: true }).click();
@@ -409,8 +397,7 @@ for (const platform of [{ name: 'X', url: 'https://twitter.com/intent/tweet*' },
     await openJourney(page);
     await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
-    await page.getByRole('tab', { name: 'Share', exact: true }).click();
-    const popup = page.waitForEvent('popup');
+      const popup = page.waitForEvent('popup');
     await page.getByRole('link', { name: platform.name, exact: true }).click();
     const composer = await popup;
     await expect(page.getByRole('status')).toContainText(`Paste it into your ${platform.name} post.`);
@@ -427,7 +414,6 @@ test('denied image clipboard downloads a PNG and sharing feedback expires', asyn
   await openJourney(page);
   await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
-  await page.getByRole('tab', { name: 'Share', exact: true }).click();
   const popup = page.waitForEvent('popup');
   const download = page.waitForEvent('download');
   await page.getByRole('dialog').getByRole('link', { name: 'Discord', exact: true }).click();
@@ -439,39 +425,45 @@ test('denied image clipboard downloads a PNG and sharing feedback expires', asyn
   await composer.close();
 });
 
-for (const reducedMotion of [false, true]) {
-  test(`tabs adapt dialog height and show badge states with reduced motion ${reducedMotion}`, async ({ page }, testInfo) => {
-    await page.emulateMedia({ reducedMotion: reducedMotion ? 'reduce' : 'no-preference' });
-    await openJourney(page, { total: 597 });
-    await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Your SuggestArr recap' });
-    await expect(dialog.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
-    await expect.poll(() => dialog.evaluate(element => element.getAnimations().length)).toBe(0);
-    const previewHeight = (await dialog.boundingBox()).height;
-    await dialog.getByRole('tab', { name: 'Share', exact: true }).click();
-    await expect.poll(async () => (await dialog.boundingBox()).height).toBeLessThan(previewHeight - 40);
-    await expect(dialog.getByRole('img', { name: 'Your recap PNG' })).toBeVisible();
-    await dialog.getByRole('tab', { name: 'Badges', exact: true }).click();
-    await expect.poll(() => dialog.evaluate(element => element.getAnimations().length)).toBe(0);
-    expect((await dialog.boundingBox()).height).toBeLessThan(previewHeight - 40);
-    const badges = dialog.getByRole('tabpanel', { name: 'Badges' });
-    await expect(badges.getByText('4 / 7 unlocked')).toBeVisible();
-    await expect(badges.getByRole('listitem')).toHaveCount(6);
-    await expect(badges.getByText('Next milestone', { exact: true })).toHaveCount(1);
-    await expect(badges.getByRole('progressbar')).toHaveAttribute('value', '597');
-    await expect(badges.getByText('365 days since your first recorded request')).toBeVisible();
-    await dialog.screenshot({ path: testInfo.outputPath('badge-gallery.png'), animations: 'disabled' });
-    if (reducedMotion) expect(await dialog.evaluate(element => getComputedStyle(element).transitionDuration)).toBe('0s');
-    await dialog.getByRole('tab', { name: 'Preview', exact: true }).click();
-    await expect.poll(async () => (await dialog.boundingBox()).height).toBeCloseTo(previewHeight, 0);
-  });
-}
+test('badges expand inside the actions panel without resizing the dialog', async ({ page }, testInfo) => {
+  await openJourney(page, { total: 597 });
+  await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Your SuggestArr recap' });
+  await expect(dialog.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  const height = (await dialog.boundingBox()).height;
+  const badges = dialog.locator('details');
+  await expect(badges.getByRole('heading', { name: 'Your badges' })).toBeHidden();
+  await badges.locator('summary').click();
+  await expect(badges.getByText('4 / 7 unlocked', { exact: true })).toBeVisible();
+  await expect(badges.getByRole('listitem')).toHaveCount(6);
+  await expect(badges.getByText('Next milestone', { exact: true })).toHaveCount(1);
+  await expect(badges.getByRole('progressbar')).toHaveAttribute('value', '597');
+  await expect(badges.getByText('365 days since your first recorded request')).toBeVisible();
+  await dialog.screenshot({ path: testInfo.outputPath('badge-gallery.png'), animations: 'disabled' });
+  expect((await dialog.boundingBox()).height).toBeCloseTo(height, 0);
+});
+
+test('edited captions feed the composers and can be reset', async ({ page }) => {
+  await openJourney(page);
+  await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Your SuggestArr recap' });
+  const caption = dialog.getByLabel('Caption');
+  await expect(caption).toHaveValue(/100 titles requested with SuggestArr/);
+  await caption.fill('My own words about SuggestArr');
+  const text = async name => new URL(await dialog.getByRole('link', { name, exact: true }).getAttribute('href')).searchParams.get('text');
+  expect(await text('X')).toBe('My own words about SuggestArr');
+  expect(await text('Bluesky')).toBe('My own words about SuggestArr');
+  await caption.fill('x'.repeat(301));
+  await expect(dialog.getByText('Too long for Bluesky · 301 / 300')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(caption).toHaveValue(/100 titles requested with SuggestArr/);
+  await expect(dialog.getByRole('button', { name: 'Reset', exact: true })).toHaveCount(0);
+});
 
 test('native sharing failure saves the image while cancelling leaves the dialog alone', async ({ page }) => {
   await openJourney(page, { nativeShare: true });
   await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
-  await page.getByRole('tab', { name: 'Share', exact: true }).click();
   const downloads = [];
   page.on('download', file => downloads.push(file.suggestedFilename()));
   await page.evaluate(() => { Object.defineProperty(navigator, 'share', { value: async () => { throw new DOMException('Cancelled', 'AbortError'); }, configurable: true }); });

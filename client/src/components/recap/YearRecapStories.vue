@@ -1,17 +1,20 @@
 <template>
-  <AppDialog :title="`${mode === 'demo' ? 2026 : year} Year recap`" :subtitle="mode === 'demo' ? 'Preview · Sample data' : 'Recorded progress · Real data'" immersive width="max-w-7xl" body-class="p-0" @close="$emit('close')">
+  <AppDialog :title="`${displayYear} Year recap`" :subtitle="mode === 'demo' ? 'Preview · Sample data' : 'Recorded progress · Real data'" immersive width="max-w-7xl" body-class="p-0" @close="$emit('close')">
     <div class="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_minmax(0,28dvh)] bg-canvas md:grid-cols-[minmax(0,1fr)_360px] md:grid-rows-1">
-      <div class="grid min-h-0 min-w-0 grid-rows-[8px_minmax(0,1fr)_36px] justify-items-center gap-3 p-3 sm:p-4">
-        <div class="flex w-full max-w-sm gap-1" aria-label="Story progress">
+      <div class="grid min-h-0 min-w-0 grid-rows-[8px_minmax(0,1fr)_36px] justify-items-center gap-3 bg-radial-[at_50%_35%] from-brand-soft/30 via-canvas/60 to-canvas p-3 sm:p-4">
+        <div class="flex min-w-32 max-w-full gap-1" :style="{ width: frameStyle.width }" aria-label="Story progress">
           <button v-for="(item, i) in stories" :key="item.id" type="button" class="h-2 min-w-0 flex-1 cursor-pointer overflow-hidden rounded-full border-0 bg-raised p-0" :aria-label="`Go to story ${i + 1}: ${item.title}`" :aria-current="i === index ? 'step' : null" @click="go(i)">
             <span class="block h-full bg-brand-ink" :style="{ width: `${i < index ? 100 : i === index ? progress : 0}%` }"></span>
           </button>
         </div>
         <div ref="stage" class="grid h-full min-h-0 w-full min-w-0 place-items-center">
-        <div class="relative overflow-hidden rounded-card bg-panel ring-1 ring-edge" :style="frameStyle" :aria-busy="rendering" @touchstart.passive="touchStart" @touchend.passive="touchEnd">
-          <canvas ref="canvas" width="1080" height="1920" tabindex="0" role="img" :aria-label="description" class="block h-full w-full"></canvas>
-          <div v-if="rendering || loading || !data" class="absolute inset-0 grid place-items-center bg-canvas/90 p-3 text-center text-sm text-ink-3" role="status">{{ loading ? 'Loading recorded progress…' : !data ? 'Choose sample data or try again.' : 'Creating your story…' }}</div>
-        </div>
+          <!-- Tap the left third to go back and the rest to advance; press and hold to pause. -->
+          <div class="group relative cursor-pointer touch-pan-y select-none overflow-hidden rounded-card bg-panel shadow-2xl shadow-black/40" :style="frameStyle" :aria-busy="rendering" @click="tap" @pointerdown="holdStart" @pointerup="holdEnd" @pointercancel="holdCancel" @pointerleave="holdCancel" @contextmenu.prevent @touchstart.passive="touchStart" @touchend.passive="touchEnd">
+            <canvas ref="canvas" width="1080" height="1920" tabindex="0" role="img" :aria-label="description" class="block h-full w-full"></canvas>
+            <span aria-hidden="true" class="pointer-events-none absolute inset-y-0 left-0 hidden w-1/3 items-center pl-3 text-white/80 opacity-0 transition-opacity group-hover:opacity-100 md:flex" :class="index === 0 ? 'invisible' : ''"><i class="fas fa-chevron-left drop-shadow"></i></span>
+            <span aria-hidden="true" class="pointer-events-none absolute inset-y-0 right-0 hidden w-1/3 items-center justify-end pr-3 text-white/80 opacity-0 transition-opacity group-hover:opacity-100 md:flex" :class="index === stories.length - 1 ? 'invisible' : ''"><i class="fas fa-chevron-right drop-shadow"></i></span>
+            <div v-if="rendering || loading || !data" class="absolute inset-0 grid place-items-center bg-canvas/90 p-3 text-center text-sm text-ink-3" role="status">{{ loading ? 'Loading recorded progress…' : !data ? 'Choose sample data or try again.' : 'Creating your story…' }}</div>
+          </div>
         </div>
         <div class="flex w-full max-w-sm items-center justify-between gap-2">
           <button type="button" class="ui-btn h-9 px-3" :disabled="index === 0" aria-label="Previous story" @click="go(index - 1)"><i aria-hidden="true" class="fas fa-chevron-left"></i></button>
@@ -20,47 +23,47 @@
           <button type="button" class="ui-btn h-9 px-3" :disabled="index === stories.length - 1" aria-label="Next story" @click="go(index + 1)"><i aria-hidden="true" class="fas fa-chevron-right"></i></button>
         </div>
       </div>
-      <div class="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto overscroll-contain border-t border-edge bg-panel p-4 sm:p-5 md:border-l md:border-t-0">
-        <div class="grid grid-cols-2 gap-2">
-          <label class="ui-label">Data source<select v-model="mode" class="ui-input"><option value="real">My activity</option><option value="demo">Preview · Sample data</option></select></label>
-          <label v-if="mode === 'real'" class="ui-label">Year<select v-model.number="year" aria-label="Year" class="ui-input"><option v-for="value in availableYears" :key="value" :value="value">{{ value }}</option></select></label>
-          <label v-else class="ui-label">Media server<select v-model="provider" class="ui-input"><option value="jellyfin">Jellyfin</option><option value="plex">Plex</option></select></label>
-          <label v-if="isAdmin && (mode === 'demo' || realData?.allowedScopes.includes('server'))" class="ui-label">Recap scope<select v-model="scope" class="ui-input"><option value="personal">Personal recap</option><option value="server">Server recap</option></select></label>
-          <p v-else class="m-0 self-end pb-2 text-xs text-ink-3">Personal recap</p>
-        </div>
-        <template v-if="mode === 'real' && data">
-          <p v-if="!data.hasLinkedProfiles" class="m-0 text-sm text-ink-2"><router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }">Link your media account</router-link> in My profile to build your personal recap.</p>
-          <p v-else-if="!data.requested.total" class="m-0 text-sm text-ink-3">No title requests recorded for {{ year }} in this scope.</p>
-          <button v-if="data.provider && data.hasLinkedProfiles" type="button" class="ui-btn justify-center" :disabled="loading" @click="loadWatchActivity">{{ includePlayback ? 'Refresh watch activity' : `Load ${data.providerLabel} watch activity` }}</button>
-        </template>
-        <div aria-live="polite">
-          <p class="m-0 text-[11px] font-bold uppercase tracking-wider text-brand-ink">Story {{ index + 1 }} · {{ mode === 'demo' ? 2026 : year }}</p>
-          <h3 class="m-0 mt-1 text-lg font-extrabold text-ink">{{ story.title }}</h3>
-          <p class="m-0 mt-2 text-sm leading-relaxed text-ink-3">{{ description }}</p>
-        </div>
-        <p v-if="mode === 'demo'" class="m-0 rounded-ctl border border-brand-soft bg-brand-soft/25 p-3 text-xs leading-relaxed text-ink-2">Preview · Sample data. These numbers and titles are fictional. Your Plex, Jellyfin and SuggestArr activity is not being read.</p>
-        <div v-else class="rounded-ctl border border-edge bg-panel-2 p-3 text-xs leading-relaxed text-ink-3">
-          <p class="m-0">{{ data?.isYearToDate ? 'Year to date. ' : '' }}Counts reflect the first recorded request for each title. Previously deleted history cannot be recovered. Genres and covers describe requested titles.</p>
-          <p v-if="data" class="m-0 mt-2">{{ data.watchNote }}</p>
-        </div>
-        <button type="button" class="ui-btn-primary justify-center" :disabled="!ready || rendering" @click="download"><i aria-hidden="true" class="fas fa-download"></i>Download this story</button>
-        <button v-if="story.id === 'summary'" type="button" class="ui-btn justify-center" :disabled="!ready || rendering" @click="download">Download summary</button>
-        <div class="flex flex-wrap gap-2">
-          <button v-if="canCopyImage" type="button" class="ui-btn px-3 text-xs" :class="imageCopied ? 'border-good/40 text-good' : ''" :disabled="!ready || rendering" @click="copyImage"><span aria-live="polite">{{ imageCopied ? 'Copied!' : 'Copy image' }}</span></button>
-          <button type="button" class="ui-btn px-3 text-xs" @click="copyCaption"><span aria-live="polite">{{ captionCopied ? 'Copied!' : 'Copy caption' }}</span></button>
-          <button v-if="canShare" type="button" class="ui-btn px-3 text-xs" :disabled="!ready || rendering" @click="share">Share</button>
-        </div>
-        <template v-if="story.id === 'summary'">
-          <h4 class="m-0 text-sm font-bold text-ink">Share your year</h4>
+
+      <div class="flex min-h-0 min-w-0 flex-col gap-5 overflow-y-auto overscroll-contain border-t border-edge bg-panel p-4 sm:p-5 md:border-l md:border-t-0">
+        <section aria-label="Recap settings" class="flex flex-col gap-3 max-md:order-3 max-md:border-t max-md:border-edge max-md:pt-4">
           <div class="grid grid-cols-2 gap-2">
-            <a v-for="target in targets" :key="target.id" :href="target.url" target="_blank" rel="noopener noreferrer" class="ui-btn justify-center no-underline" :class="target.id === 'reddit' ? 'border-brand bg-brand-soft text-brand-ink' : ''" :aria-disabled="!ready || rendering ? 'true' : 'false'" @click="preparePlatform($event, target)"><i aria-hidden="true" :class="target.icon"></i>{{ target.label }}</a>
+            <label class="ui-label">Data source<select v-model="mode" class="ui-input"><option value="real">My activity</option><option value="demo">Sample data</option></select></label>
+            <label v-if="mode === 'real'" class="ui-label">Year<select v-model.number="year" aria-label="Year" class="ui-input"><option v-for="value in availableYears" :key="value" :value="value">{{ value }}</option></select></label>
+            <label v-else class="ui-label">Media server<select v-model="provider" class="ui-input"><option value="jellyfin">Jellyfin</option><option value="plex">Plex</option></select></label>
+            <label v-if="isAdmin && (mode === 'demo' || realData?.allowedScopes.includes('server'))" class="ui-label col-span-2">Recap scope<select v-model="scope" class="ui-input"><option value="personal">Personal recap</option><option value="server">Server recap</option></select></label>
           </div>
-          <p class="m-0 text-xs leading-relaxed text-ink-4">Platform shortcuts copy the PNG for pasting, or save it to attach. Share includes the image when supported.</p>
-        </template>
-        <p v-if="shareNotice" role="status" class="m-0 rounded-ctl border border-brand-ink/15 bg-brand-soft/25 p-3 text-xs leading-relaxed text-brand-ink">{{ shareNotice }}</p>
-        <p v-if="notice" role="status" class="m-0 text-xs text-brand-ink">{{ notice }}</p>
-        <p v-if="error" role="alert" class="ui-alert-bad">{{ error }} <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline" @click="retry">Try again</button></p>
-        <details class="text-xs text-ink-4"><summary class="cursor-pointer">Caption · 1080 × 1920 PNG</summary><p class="m-0 mt-2 break-words leading-relaxed">{{ caption }}</p></details>
+          <p v-if="mode === 'demo'" class="m-0 rounded-ctl border border-brand-soft bg-brand-soft/25 px-3 py-2 text-xs leading-relaxed text-ink-2">Fictional numbers and titles. Your Plex, Jellyfin and SuggestArr activity is not read.</p>
+          <template v-else-if="data">
+            <p v-if="!data.hasLinkedProfiles" class="m-0 text-sm text-ink-2"><router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }">Link your media account</router-link> in My profile to build your personal recap.</p>
+            <p v-else-if="!data.requested.total" class="m-0 text-sm text-ink-3">No title requests recorded for {{ year }} in this scope.</p>
+            <button v-if="data.provider && data.hasLinkedProfiles" type="button" class="ui-btn justify-center" :disabled="loading" @click="loadWatchActivity"><i aria-hidden="true" class="fas fa-play-circle"></i>{{ includePlayback ? 'Refresh watch activity' : `Load ${data.providerLabel} watch activity` }}</button>
+          </template>
+        </section>
+
+        <section class="max-md:order-1">
+          <p class="m-0 text-[11px] font-bold uppercase tracking-wider text-brand-ink">Story {{ index + 1 }} of {{ stories.length }} · {{ displayYear }}</p>
+          <h3 class="m-0 mt-1 text-lg font-extrabold text-ink">{{ story.title }}</h3>
+          <p v-if="detail" class="m-0 mt-2 hidden text-sm leading-relaxed text-ink-3 md:block">{{ detail }}</p>
+          <p v-if="notice" role="status" class="m-0 mt-3 rounded-ctl border border-caution/30 bg-caution/10 px-3 py-2 text-xs leading-relaxed text-ink-2">{{ notice }}</p>
+          <p v-if="error" role="alert" class="ui-alert-bad m-0 mt-3">{{ error }} <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline" @click="retry">Try again</button></p>
+        </section>
+
+        <RecapShareActions class="max-md:order-2" :blob="blob" :filename="filename" :caption="caption" :share-title="shareTitle" :disabled="!ready || rendering" download-label="Download this story" @before-action="pause" />
+
+        <details class="group text-xs max-md:order-4">
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-ink-3 hover:text-ink [&::-webkit-details-marker]:hidden">
+            <span><i aria-hidden="true" class="fas fa-info-circle mr-2"></i>About these numbers</span>
+            <i aria-hidden="true" class="fas fa-chevron-down text-[10px] transition-transform group-open:rotate-180"></i>
+          </summary>
+          <div class="mt-2 leading-relaxed text-ink-3">
+            <p v-if="mode === 'demo'" class="m-0">Every number, title and cover in this preview is sample data, so you can see the stories before your own year is recorded. Shared images and captions are labelled as sample data.</p>
+            <template v-else>
+              <p class="m-0">{{ data?.isYearToDate ? 'Year to date. ' : '' }}Counts reflect the first recorded request for each title, and recorded history may not cover the entire year. Previously deleted history cannot be recovered. Genres and covers describe requested titles.</p>
+              <p v-if="data" class="m-0 mt-2">{{ data.watchNote }}</p>
+            </template>
+            <p class="m-0 mt-2 text-ink-4">Images are created on your device as 1080 × 1920 PNGs.</p>
+          </div>
+        </details>
       </div>
     </div>
   </AppDialog>
@@ -68,24 +71,26 @@
 
 <script>
 import AppDialog from '@/components/ui/AppDialog.vue';
+import RecapShareActions from './RecapShareActions.vue';
 import { getYearRecap } from '@/api/recapApi.js';
-import { canvasBlob, recapShareTargets } from '@/utils/recapCanvas.js';
+import { canvasBlob } from '@/utils/recapCanvas.js';
 import { createYearRecapDemo } from '@/utils/yearRecapDemo.js';
-import { prepareYearRecap, yearStories, yearCaption, yearDescription } from '@/utils/yearRecapData.js';
+import { prepareYearRecap, yearStories, yearCaption, yearDescription, yearStoryDetail } from '@/utils/yearRecapData.js';
 import { yearRecapSeason } from '@/utils/yearRecapSeason.js';
 import { renderYearStory } from '@/utils/yearRecapCanvas.js';
-import { canCopyRecapImage, canShareRecapImage, copyRecapImage, prepareRecapImage } from '@/utils/recapSharing.js';
+
+const STORY_DURATION = 8000;
+const HOLD_DELAY = 250;
 
 export default {
   name: 'YearRecapStories',
-  components: { AppDialog },
+  components: { AppDialog, RecapShareActions },
   props: { isAdmin: { type: Boolean, default: false }, initialMode: { type: String, default: 'real' }, initialYear: { type: Number, default: null } },
   emits: ['close'],
-  data() { return { index: 0, scope: 'personal', provider: 'jellyfin', paused: false,
+  data() { return { index: 0, scope: 'personal', provider: 'jellyfin', paused: false, holding: false, holdTimer: null, suppressTap: false,
     elapsed: 0, rendering: true, ready: false, blob: null, error: '', notice: '', reducedMotion: false,
     generation: 0, active: true, timer: null, lastTick: 0, touch: null, animation: null, motionQuery: null,
     stageWidth: 0, stageHeight: 0, resizeObserver: null,
-    imageCopied: false, captionCopied: false, imageTimer: null, captionTimer: null, noticeTimer: null, shareNotice: '',
     mode: this.initialMode, year: this.initialYear ?? yearRecapSeason().year, realData: null, loading: false,
     includePlayback: false, requestVersion: 0, controller: null }; },
   computed: {
@@ -94,16 +99,16 @@ export default {
       return { width: `${width}px`, height: `${width * 16 / 9}px` };
     },
     data() { return this.mode === 'demo' ? createYearRecapDemo(this.isAdmin ? this.scope : 'personal', this.provider) : this.realData; },
+    displayYear() { return this.data?.year ?? this.year; },
     stories() { return yearStories(this.data || { year: this.year, isDemo: false }); },
     availableYears() { return [...new Set([this.year, ...(this.realData?.availableYears || [this.year - 1])])].sort((a, b) => b - a); },
     story() { return this.stories[this.index]; },
     description() { return this.data ? yearDescription(this.data, this.story) : 'Recorded progress is not available yet.'; },
+    detail() { return this.data ? yearStoryDetail(this.data, this.story) : ''; },
     caption() { return this.data ? yearCaption(this.data, this.story) : ''; },
-    shareTitle() { return `${this.data?.year || this.year} Year Recap${this.mode === 'demo' ? ' · Preview · Sample data' : ' · Recorded progress'}`; },
-    progress() { return this.index === this.stories.length - 1 ? 100 : this.elapsed / 80; },
-    targets() { return recapShareTargets(null, { title: this.shareTitle, caption: this.caption }); },
-    canCopyImage() { return canCopyRecapImage(); },
-    canShare() { return canShareRecapImage(this.blob); },
+    shareTitle() { return `${this.displayYear} Year Recap${this.mode === 'demo' ? ' · Preview · Sample data' : ' · Recorded progress'}`; },
+    filename() { return this.data ? `suggestarr-${this.data.year}-${this.story.id}-${this.data.isDemo ? 'preview' : 'recorded'}.png` : 'suggestarr-year-recap.png'; },
+    progress() { return this.index === this.stories.length - 1 ? 100 : this.elapsed / (STORY_DURATION / 100); },
   },
   watch: {
     scope() { this.load(); },
@@ -111,6 +116,10 @@ export default {
     year() { if (this.mode === 'real') this.load(); },
     mode() { this.load(); },
     isAdmin() { this.scope = 'personal'; this.load(); },
+  },
+  created() {
+    // Rendered PNGs per data snapshot and story index; not reactive on purpose.
+    this.storyCache = new WeakMap();
   },
   mounted() {
     this.motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -133,7 +142,7 @@ export default {
     this.active = false;
     this.generation += 1;
     clearInterval(this.timer);
-    for (const timer of [this.imageTimer, this.captionTimer, this.noticeTimer]) clearTimeout(timer);
+    clearTimeout(this.holdTimer);
     this.resizeObserver?.disconnect();
     this.controller?.abort();
     this.animation?.cancel();
@@ -143,7 +152,11 @@ export default {
     window.removeEventListener('blur', this.pause);
   },
   methods: {
-    async load() {
+    /**
+     * Fetch recorded progress (or switch to sample data) and show a story.
+     * @param {boolean} keepStory - Stay on the current story instead of restarting from the intro.
+     */
+    async load(keepStory = false) {
       const version = ++this.requestVersion;
       this.controller?.abort();
       this.generation += 1;
@@ -158,12 +171,13 @@ export default {
         const data = await getYearRecap(this.year, this.isAdmin ? this.scope : 'personal', this.includePlayback, this.controller.signal);
         if (!this.active || version !== this.requestVersion) return;
         this.realData = prepareYearRecap(data);
-        this.reset();
+        if (keepStory) this.go(Math.min(this.index, this.stories.length - 1));
+        else this.reset();
       } catch {
         if (this.active && version === this.requestVersion) this.error = 'Unable to load recorded progress. Try again or select sample data.';
       } finally { if (version === this.requestVersion) this.loading = false; }
     },
-    loadWatchActivity() { this.includePlayback = true; this.load(); },
+    loadWatchActivity() { this.includePlayback = true; this.load(true); },
     retry() { if (!this.data) this.load(); else this.render(); },
     pause() { this.paused = true; },
     pauseWhenHidden() { if (document.hidden) this.pause(); },
@@ -177,10 +191,10 @@ export default {
       const now = performance.now();
       const delta = now - this.lastTick;
       this.lastTick = now;
-      if (this.paused || this.loading || this.rendering || !this.ready || document.hidden) return;
+      if (this.paused || this.holding || this.loading || this.rendering || !this.ready || document.hidden) return;
       if (this.index === this.stories.length - 1) { this.pause(); return; }
-      this.elapsed = Math.min(8000, this.elapsed + delta);
-      if (this.elapsed >= 8000) this.go(this.index + 1);
+      this.elapsed = Math.min(STORY_DURATION, this.elapsed + delta);
+      if (this.elapsed >= STORY_DURATION) this.go(this.index + 1);
     },
     go(index) {
       if (index < 0 || index >= this.stories.length) return;
@@ -192,10 +206,34 @@ export default {
     },
     reset() { this.go(0); },
     onKey(event) {
-      if (event.target.closest('select,input,textarea,a') || (event.code === 'Space' && event.target.closest('button'))) return;
+      if (event.target.closest('select,input,textarea,a,summary') || (event.code === 'Space' && event.target.closest('button'))) return;
       if (event.key === 'ArrowRight') { event.preventDefault(); this.go(this.index + 1); }
       else if (event.key === 'ArrowLeft') { event.preventDefault(); this.go(this.index - 1); }
       else if (event.code === 'Space') { event.preventDefault(); this.togglePlayback(); }
+    },
+    tap(event) {
+      if (this.suppressTap) { this.suppressTap = false; return; }
+      if (this.loading || !this.data) return;
+      const bounds = event.currentTarget.getBoundingClientRect();
+      this.go(this.index + (event.clientX - bounds.left < bounds.width / 3 ? -1 : 1));
+    },
+    holdStart(event) {
+      if (event.button !== 0) return;
+      this.suppressTap = false;
+      clearTimeout(this.holdTimer);
+      this.holdTimer = setTimeout(() => { this.holding = true; }, HOLD_DELAY);
+    },
+    holdEnd() {
+      clearTimeout(this.holdTimer);
+      if (!this.holding) return;
+      // Releasing a hold resumes the story instead of counting as a tap.
+      this.holding = false;
+      this.suppressTap = true;
+      this.lastTick = performance.now();
+    },
+    holdCancel() {
+      clearTimeout(this.holdTimer);
+      this.holding = false;
     },
     touchStart(event) { this.touch = { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY }; },
     touchEnd(event) {
@@ -205,84 +243,51 @@ export default {
       if (Math.abs(dx) >= 40 && Math.abs(dx) > Math.abs(dy)) this.go(this.index + (dx < 0 ? 1 : -1));
       this.touch = null;
     },
+    /** Render a story PNG once per data snapshot; later visits and preloads reuse it. */
+    storyImage(data, index) {
+      let images = this.storyCache.get(data);
+      if (!images) { images = new Map(); this.storyCache.set(data, images); }
+      if (!images.has(index)) {
+        const image = (async () => {
+          const frame = document.createElement('canvas');
+          const result = await renderYearStory(frame, data, yearStories(data)[index], index);
+          return { blob: await canvasBlob(frame), missingPosters: result.missingPosters };
+        })();
+        images.set(index, image);
+        image.catch(() => images.delete(index));
+      }
+      return images.get(index);
+    },
+    preload(data, index) {
+      if (index >= this.stories.length) return;
+      setTimeout(() => { if (this.active && this.data === data) this.storyImage(data, index).catch(() => {}); }, 0);
+    },
     async render() {
       if (!this.data) return;
       const generation = ++this.generation;
+      const { data, index } = this;
       this.rendering = true;
       this.ready = false;
       this.error = this.notice = '';
-      this.shareNotice = '';
-      this.imageCopied = this.captionCopied = false;
-      for (const timer of [this.imageTimer, this.captionTimer, this.noticeTimer]) clearTimeout(timer);
       try {
-        const frame = document.createElement('canvas');
-        const result = await renderYearStory(frame, this.data, this.story, this.index);
+        const image = await this.storyImage(data, index);
         if (!this.active || generation !== this.generation) return;
-        const blob = await canvasBlob(frame);
-        if (!this.active || generation !== this.generation) return;
+        const bitmap = await createImageBitmap(image.blob);
+        if (!this.active || generation !== this.generation) { bitmap.close(); return; }
         const canvas = this.$refs.canvas;
-        canvas.width = frame.width;
-        canvas.height = frame.height;
-        canvas.getContext('2d').drawImage(frame, 0, 0);
-        this.blob = blob;
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0);
+        bitmap.close();
+        this.blob = image.blob;
         this.ready = true;
-        if (result.missingPosters) this.notice = 'Some covers could not be loaded. Title cards are used in the preview and PNG.';
+        if (image.missingPosters) this.notice = 'Some covers could not be loaded. Title cards are used in the preview and PNG.';
         this.lastTick = performance.now();
         this.animation?.cancel();
         if (!this.reducedMotion) this.animation = canvas.animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 260, easing: 'ease-out' });
+        this.preload(data, index + 1);
       } catch { if (generation === this.generation) this.error = 'Unable to render this story.'; }
       finally { if (generation === this.generation) this.rendering = false; }
-    },
-    filename() { return `suggestarr-${this.data.year}-${this.story.id}-${this.data.isDemo ? 'preview' : 'recorded'}.png`; },
-    download() {
-      this.pause();
-      const url = URL.createObjectURL(this.blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = this.filename();
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    },
-    async copyImage() {
-      this.pause();
-      try {
-        await copyRecapImage(this.blob);
-        this.copied('image');
-      } catch { this.error = 'Image copying is unavailable. Download the PNG instead.'; }
-    },
-    async copyCaption() {
-      this.pause();
-      try { await navigator.clipboard.writeText(this.caption); this.copied('caption'); }
-      catch { this.error = 'Clipboard unavailable. Open the caption below to copy it.'; }
-    },
-    async share() {
-      this.pause();
-      try { await navigator.share({ files: [new File([this.blob], this.filename(), { type: 'image/png' })], title: this.shareTitle, text: this.caption }); }
-      catch (error) {
-        if (error.name !== 'AbortError') {
-          this.download();
-          this.showShareNotice('Sharing is unavailable here. Story PNG saved so you can attach it.');
-        }
-      }
-    },
-    copied(kind) {
-      if (!this.active) return;
-      clearTimeout(this[`${kind}Timer`]);
-      this[`${kind}Copied`] = true;
-      this[`${kind}Timer`] = setTimeout(() => { this[`${kind}Copied`] = false; }, 2500);
-    },
-    showShareNotice(message) {
-      if (!this.active) return;
-      clearTimeout(this.noticeTimer);
-      this.shareNotice = message;
-      this.noticeTimer = setTimeout(() => { this.shareNotice = ''; }, 5000);
-    },
-    preparePlatform(event, target) {
-      if (!this.ready || this.rendering) { event.preventDefault(); return; }
-      this.pause();
-      prepareRecapImage({ blob: this.blob, download: this.download, save: target.id === 'reddit' }).then(result => {
-        this.showShareNotice(result === 'copied' ? `Story image copied. Paste it into your ${target.label} ${target.id === 'discord' ? 'conversation' : 'post'}.${target.id === 'reddit' ? ' PNG also saved for upload.' : ''}` : `Story PNG saved. Attach it to your ${target.label} post.`);
-      });
     },
   },
 };

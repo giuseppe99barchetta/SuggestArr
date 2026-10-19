@@ -78,6 +78,80 @@
   body.no-blur * { backdrop-filter: none !important; }
 }
 
+/*
+ * Dropdowns. Unlayered on purpose: only appearance, chevron and end padding are set, so they beat per-select
+ * utilities like px-2.5 without touching size or colours. Browsers with customizable selects
+ * (appearance: base-select) also get a themed popup; the rest keep the native list behind the same trigger.
+ */
+select {
+  appearance: none;
+  cursor: pointer;
+  padding-inline-end: 2.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%239aa3b5' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  background-size: 0.75rem;
+  transition: border-color 0.15s;
+}
+select:hover:not(:disabled) { border-color: var(--color-ink-4); }
+select:disabled { cursor: not-allowed; }
+
+@supports (appearance: base-select) {
+  select,
+  select::picker(select) {
+    appearance: base-select;
+  }
+  select {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-block: 0;
+    background-image: none;
+    padding-inline-end: 0.75rem;
+  }
+  select::picker-icon {
+    content: "";
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-inline-start: auto;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%239aa3b5' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: rotate 0.2s;
+  }
+  select:open::picker-icon { rotate: 180deg; }
+  select::picker(select) {
+    margin-block: 4px;
+    padding: 4px;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-ctl);
+    background: var(--color-panel-2);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.15s, transform 0.15s, display 0.15s allow-discrete, overlay 0.15s allow-discrete;
+  }
+  select::picker(select):popover-open { opacity: 1; transform: none; }
+  @starting-style {
+    select::picker(select):popover-open { opacity: 0; transform: translateY(-4px); }
+  }
+  select option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    color: var(--color-ink-2);
+    cursor: pointer;
+  }
+  select option:hover,
+  select option:focus-visible { background: var(--color-raised); color: var(--color-ink); outline: none; }
+  select option:checked { background: var(--color-brand-soft); color: var(--color-brand-ink); font-weight: 600; }
+  select option::checkmark { content: "\2713"; margin-inline-start: auto; order: 2; color: var(--color-brand-ink); }
+  @media (prefers-reduced-motion: reduce) {
+    select::picker(select), select::picker-icon { transition: none; }
+  }
+}
+
 /* Form controls shared by the settings screens. */
 @layer components {
   .ui-input {

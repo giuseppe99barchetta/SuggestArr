@@ -47,9 +47,11 @@ test('all seven personal stories export distinct, complete 1080×1920 PNGs offli
     expect(png.readUInt32BE(16)).toBe(1080);
     expect(png.readUInt32BE(20)).toBe(1920);
     pngSizes.push(png.length);
+    // Every story offers the same sharing options, not only the summary.
+    await expect(page.getByRole('link', { name: 'Reddit', exact: true })).toBeAttached();
   }
   expect(new Set(pngSizes).size).toBe(7);
-  await expect(page.getByRole('button', { name: 'Download summary', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Download summary', exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('desktop-player.png'), animations: 'disabled' });
   expect(errors).toEqual([]);
   expect(apiCalls).toEqual([]);
@@ -66,7 +68,7 @@ for (const width of [390, 320]) {
     await expect(page.getByRole('heading', { name: storyTitles[1], exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('mobile-player.png'), animations: 'disabled' });
     await go(page, 6);
-    await expect(page.getByRole('button', { name: 'Download summary', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeAttached();
     expect(await page.getByRole('dialog').evaluate(dialog => dialog.scrollWidth <= dialog.clientWidth + 1)).toBeTruthy();
     expect(errors).toEqual([]);
   });
@@ -116,6 +118,7 @@ test('real yearly activity, explicit watch loading, scope and year changes expor
   await page.getByRole('button', { name: 'Load Jellyfin watch activity', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
   expect(calls.at(-1).include_playback).toBe('true');
+  await expect(page.getByRole('heading', { name: 'Discovery, on autopilot', exact: true })).toBeVisible();
   await page.getByRole('button', { name: /Go to story 3:/ }).click();
   await expect(page.getByRole('img')).toHaveAttribute('aria-label', /2 movies, 6 episodes and 1 TV series/);
   await page.getByRole('button', { name: /Go to story 4:/ }).click();
@@ -127,9 +130,9 @@ test('real yearly activity, explicit watch loading, scope and year changes expor
   await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
   expect(calls.at(-1).scope).toBe('server');
   await page.getByRole('button', { name: /Go to story 7:/ }).click();
-  await expect(page.getByRole('button', { name: 'Download summary', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
   const downloaded = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download summary', exact: true }).click();
+  await page.getByRole('button', { name: 'Download this story', exact: true }).click();
   const file = await downloaded;
   expect(file.suggestedFilename()).toBe('suggestarr-2025-summary-recorded.png');
   await file.saveAs(testInfo.outputPath('recorded-summary.png'));
@@ -367,4 +370,36 @@ test('native sharing and clipboard preserve PNG type, year and sample-data discl
   await page.clock.fastForward(2600);
   await expect(page.getByRole('button', { name: 'Copy image', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Copy caption', exact: true })).toBeVisible();
+});
+
+test('tapping the story navigates by side and holding pauses autoplay', async ({ page }) => {
+  await page.clock.install();
+  await openPreview(page, { reducedMotion: false });
+  const frame = page.getByRole('img');
+  const box = await frame.boundingBox();
+  await page.mouse.click(box.x + box.width * 0.8, box.y + box.height / 2);
+  await expect(page.getByRole('heading', { name: storyTitles[1], exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
+  await page.mouse.click(box.x + box.width * 0.1, box.y + box.height / 2);
+  await expect(page.getByRole('heading', { name: storyTitles[0], exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
+  await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.clock.runFor(10000);
+  await expect(page.getByRole('heading', { name: storyTitles[0], exact: true })).toBeVisible();
+  await page.mouse.up();
+  // Releasing a hold resumes playback instead of skipping ahead.
+  await expect(page.getByRole('heading', { name: storyTitles[0], exact: true })).toBeVisible();
+  await page.clock.runFor(8100);
+  await expect(page.getByRole('heading', { name: storyTitles[1], exact: true })).toBeVisible();
+});
+
+test('captions can be edited per story and feed the composers', async ({ page }) => {
+  await openPreview(page);
+  const caption = page.getByLabel('Caption');
+  await expect(caption).toHaveValue(/Preview \/ Sample data/);
+  await caption.fill('Our server year in one picture');
+  expect(new URL(await page.getByRole('link', { name: 'X', exact: true }).getAttribute('href')).searchParams.get('text')).toBe('Our server year in one picture');
+  await go(page, 1);
+  await expect(caption).toHaveValue(/Discovery, on autopilot/);
 });
