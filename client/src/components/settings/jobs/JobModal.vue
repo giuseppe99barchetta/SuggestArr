@@ -124,7 +124,7 @@
                       v-for="type in visibleMediaTypes"
                       :key="type.value"
                       type="button"
-                      class="flex h-[32px] flex-1 cursor-pointer items-center justify-center gap-2 rounded-[8px] border-0 px-2 text-[13px] font-semibold transition-colors"
+                      class="flex h-[32px] flex-1 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border-0 px-2 text-[13px] font-semibold transition-colors"
                       :class="form.media_type === type.value ? 'bg-brand text-white' : 'bg-transparent text-ink-3 hover:text-ink'"
                       :aria-pressed="form.media_type === type.value ? 'true' : 'false'"
                       @click="form.media_type = type.value"
@@ -425,7 +425,7 @@ export default {
       ],
       mediaTypes: [
         { value: 'movie', label: 'Movies', icon: 'fas fa-film' },
-        { value: 'tv', label: 'TV shows', icon: 'fas fa-tv' },
+        { value: 'tv', label: 'TV', icon: 'fas fa-tv' },
         { value: 'both', label: 'Both', icon: 'fas fa-layer-group' },
       ],
       llmConfigured: false,

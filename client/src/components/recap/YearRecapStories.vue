@@ -46,8 +46,8 @@
         <button type="button" class="ui-btn-primary justify-center" :disabled="!ready || rendering" @click="download"><i aria-hidden="true" class="fas fa-download"></i>Download this story</button>
         <button v-if="story.id === 'summary'" type="button" class="ui-btn justify-center" :disabled="!ready || rendering" @click="download">Download summary</button>
         <div class="flex flex-wrap gap-2">
-          <button v-if="canCopyImage" type="button" class="ui-btn px-3 text-xs" :disabled="!ready || rendering" @click="copyImage">Copy image</button>
-          <button type="button" class="ui-btn px-3 text-xs" @click="copyCaption">Copy caption</button>
+          <button v-if="canCopyImage" type="button" class="ui-btn px-3 text-xs" :class="imageCopied ? 'border-good/40 text-good' : ''" :disabled="!ready || rendering" @click="copyImage"><span aria-live="polite">{{ imageCopied ? 'Copied!' : 'Copy image' }}</span></button>
+          <button type="button" class="ui-btn px-3 text-xs" @click="copyCaption"><span aria-live="polite">{{ captionCopied ? 'Copied!' : 'Copy caption' }}</span></button>
           <button v-if="canShare" type="button" class="ui-btn px-3 text-xs" :disabled="!ready || rendering" @click="share">Share</button>
         </div>
         <template v-if="story.id === 'summary'">
@@ -55,8 +55,9 @@
           <div class="grid grid-cols-2 gap-2">
             <a v-for="target in targets" :key="target.id" :href="target.url" target="_blank" rel="noopener noreferrer" class="ui-btn justify-center no-underline" :class="target.id === 'reddit' ? 'border-brand bg-brand-soft text-brand-ink' : ''" :aria-disabled="!ready || rendering ? 'true' : 'false'" @click="preparePlatform($event, target)"><i aria-hidden="true" :class="target.icon"></i>{{ target.label }}</a>
           </div>
-          <p class="m-0 text-xs leading-relaxed text-ink-4">Attach the saved PNG to your post, or paste the copied image into Discord. Publishing is your choice.</p>
+          <p class="m-0 text-xs leading-relaxed text-ink-4">Platform shortcuts copy the PNG for pasting, or save it to attach. Share includes the image when supported.</p>
         </template>
+        <p v-if="shareNotice" role="status" class="m-0 rounded-ctl border border-brand-ink/15 bg-brand-soft/25 p-3 text-xs leading-relaxed text-brand-ink">{{ shareNotice }}</p>
         <p v-if="notice" role="status" class="m-0 text-xs text-brand-ink">{{ notice }}</p>
         <p v-if="error" role="alert" class="ui-alert-bad">{{ error }} <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline" @click="retry">Try again</button></p>
         <details class="text-xs text-ink-4"><summary class="cursor-pointer">Caption · 1080 × 1920 PNG</summary><p class="m-0 mt-2 break-words leading-relaxed">{{ caption }}</p></details>
@@ -73,6 +74,7 @@ import { createYearRecapDemo } from '@/utils/yearRecapDemo.js';
 import { prepareYearRecap, yearStories, yearCaption, yearDescription } from '@/utils/yearRecapData.js';
 import { yearRecapSeason } from '@/utils/yearRecapSeason.js';
 import { renderYearStory } from '@/utils/yearRecapCanvas.js';
+import { canCopyRecapImage, canShareRecapImage, copyRecapImage, prepareRecapImage } from '@/utils/recapSharing.js';
 
 export default {
   name: 'YearRecapStories',
@@ -83,6 +85,7 @@ export default {
     elapsed: 0, rendering: true, ready: false, blob: null, error: '', notice: '', reducedMotion: false,
     generation: 0, active: true, timer: null, lastTick: 0, touch: null, animation: null, motionQuery: null,
     stageWidth: 0, stageHeight: 0, resizeObserver: null,
+    imageCopied: false, captionCopied: false, imageTimer: null, captionTimer: null, noticeTimer: null, shareNotice: '',
     mode: this.initialMode, year: this.initialYear ?? yearRecapSeason().year, realData: null, loading: false,
     includePlayback: false, requestVersion: 0, controller: null }; },
   computed: {
@@ -99,8 +102,8 @@ export default {
     shareTitle() { return `${this.data?.year || this.year} Year Recap${this.mode === 'demo' ? ' · Preview · Sample data' : ' · Recorded progress'}`; },
     progress() { return this.index === this.stories.length - 1 ? 100 : this.elapsed / 80; },
     targets() { return recapShareTargets(null, { title: this.shareTitle, caption: this.caption }); },
-    canCopyImage() { return typeof ClipboardItem !== 'undefined' && typeof navigator.clipboard?.write === 'function'; },
-    canShare() { return typeof navigator.canShare === 'function' && navigator.canShare({ files: [new File([''], 'year-recap.png', { type: 'image/png' })] }); },
+    canCopyImage() { return canCopyRecapImage(); },
+    canShare() { return canShareRecapImage(this.blob); },
   },
   watch: {
     scope() { this.load(); },
@@ -130,6 +133,7 @@ export default {
     this.active = false;
     this.generation += 1;
     clearInterval(this.timer);
+    for (const timer of [this.imageTimer, this.captionTimer, this.noticeTimer]) clearTimeout(timer);
     this.resizeObserver?.disconnect();
     this.controller?.abort();
     this.animation?.cancel();
@@ -207,6 +211,9 @@ export default {
       this.rendering = true;
       this.ready = false;
       this.error = this.notice = '';
+      this.shareNotice = '';
+      this.imageCopied = this.captionCopied = false;
+      for (const timer of [this.imageTimer, this.captionTimer, this.noticeTimer]) clearTimeout(timer);
       try {
         const frame = document.createElement('canvas');
         const result = await renderYearStory(frame, this.data, this.story, this.index);
@@ -239,32 +246,43 @@ export default {
     async copyImage() {
       this.pause();
       try {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': this.blob })]);
-        this.notice = 'Story image copied. Paste it into your post or conversation.';
+        await copyRecapImage(this.blob);
+        this.copied('image');
       } catch { this.error = 'Image copying is unavailable. Download the PNG instead.'; }
     },
     async copyCaption() {
       this.pause();
-      try { await navigator.clipboard.writeText(this.caption); this.notice = 'Story caption copied.'; }
+      try { await navigator.clipboard.writeText(this.caption); this.copied('caption'); }
       catch { this.error = 'Clipboard unavailable. Open the caption below to copy it.'; }
     },
     async share() {
       this.pause();
       try { await navigator.share({ files: [new File([this.blob], this.filename(), { type: 'image/png' })], title: this.shareTitle, text: this.caption }); }
-      catch (error) { if (error.name !== 'AbortError') this.error = 'Sharing unavailable. Download the PNG instead.'; }
+      catch (error) {
+        if (error.name !== 'AbortError') {
+          this.download();
+          this.showShareNotice('Sharing is unavailable here. Story PNG saved so you can attach it.');
+        }
+      }
+    },
+    copied(kind) {
+      if (!this.active) return;
+      clearTimeout(this[`${kind}Timer`]);
+      this[`${kind}Copied`] = true;
+      this[`${kind}Timer`] = setTimeout(() => { this[`${kind}Copied`] = false; }, 2500);
+    },
+    showShareNotice(message) {
+      if (!this.active) return;
+      clearTimeout(this.noticeTimer);
+      this.shareNotice = message;
+      this.noticeTimer = setTimeout(() => { this.shareNotice = ''; }, 5000);
     },
     preparePlatform(event, target) {
       if (!this.ready || this.rendering) { event.preventDefault(); return; }
       this.pause();
-      if (target.id === 'discord' && this.canCopyImage) {
-        navigator.clipboard.write([new ClipboardItem({ 'image/png': this.blob })]).then(() => {
-          this.notice = 'Story image copied. Choose a Discord conversation and paste it there.';
-        }).catch(() => { this.download(); this.notice = 'Story PNG saved. Attach it in Discord.'; });
-      } else {
-        this.download();
-        this.notice = `Story PNG saved. Attach it to your ${target.label} post.`;
-        navigator.clipboard?.writeText(this.caption).catch(() => { /* Caption remains visible below. */ });
-      }
+      prepareRecapImage({ blob: this.blob, download: this.download, save: target.id === 'reddit' }).then(result => {
+        this.showShareNotice(result === 'copied' ? `Story image copied. Paste it into your ${target.label} ${target.id === 'discord' ? 'conversation' : 'post'}.${target.id === 'reddit' ? ' PNG also saved for upload.' : ''}` : `Story PNG saved. Attach it to your ${target.label} post.`);
+      });
     },
   },
 };

@@ -346,6 +346,7 @@ test('summary Reddit shortcut exports a clearly marked demo and opens only a com
 });
 
 test('native sharing and clipboard preserve PNG type, year and sample-data disclosure', async ({ page }) => {
+  await page.clock.install();
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'canShare', { value: () => true, configurable: true });
     Object.defineProperty(navigator, 'share', { value: async data => { window.sharedYear = { title: data.title, text: data.text, name: data.files[0].name, type: data.files[0].type }; }, configurable: true });
@@ -362,4 +363,8 @@ test('native sharing and clipboard preserve PNG type, year and sample-data discl
   expect(await page.evaluate(() => window.copiedYearType)).toBe('image/png');
   await page.getByRole('button', { name: 'Copy caption', exact: true }).click();
   expect(await page.evaluate(() => window.copiedYearCaption)).toContain('Preview / Sample data');
+  await expect(page.getByRole('button', { name: 'Copied!', exact: true })).toHaveCount(2);
+  await page.clock.fastForward(2600);
+  await expect(page.getByRole('button', { name: 'Copy image', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Copy caption', exact: true })).toBeVisible();
 });

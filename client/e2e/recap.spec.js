@@ -327,6 +327,7 @@ test('covers can be hidden without changing the recap aspect ratio', async ({ pa
 });
 
 test('Reddit comes first and saves an image before opening the post composer', async ({ page }) => {
+  await page.addInitScript(() => { navigator.clipboard.write = async items => { window.copiedImageType = items[0].types[0]; }; });
   await page.context().route('https://www.reddit.com/submit*', route => route.fulfill({ contentType: 'text/html', body: '<h1>Reddit composer fixture</h1>' }));
   await openJourney(page);
   await page.getByRole('button', { name: 'Create your recap', exact: true }).first().click();
@@ -343,7 +344,8 @@ test('Reddit comes first and saves an image before opening the post composer', a
   await composer.waitForLoadState();
   expect(new URL(composer.url()).hostname).toBe('www.reddit.com');
   expect(new URL(composer.url()).searchParams.get('type')).toBe('IMAGE');
-  await expect(page.getByRole('status')).toContainText('PNG saved. Attach it to your Reddit post.');
+  await expect(page.getByRole('status')).toContainText('PNG also saved for upload.');
+  expect(await page.evaluate(() => window.copiedImageType)).toBe('image/png');
   await composer.close();
 });
 
@@ -359,7 +361,7 @@ test('Discord shortcut copies the PNG for the selected conversation', async ({ p
   const popup = page.waitForEvent('popup');
   await page.getByRole('dialog').getByRole('link', { name: 'Discord', exact: true }).click();
   const discord = await popup;
-  await expect(page.getByRole('status')).toContainText('Image copied. Choose a Discord conversation');
+  await expect(page.getByRole('status')).toContainText('Image copied. Paste it into your Discord conversation.');
   expect(await page.evaluate(() => window.copiedImageType)).toBe('image/png');
   await discord.close();
 });
@@ -378,4 +380,108 @@ test('Discord falls back to a PNG download when clipboard access is unavailable'
   await expect(page.getByRole('status')).toContainText('PNG saved. Attach it to your Discord post.');
   await (await popup).close();
   expect(errors).toEqual([]);
+});
+
+test('copy image confirms on its button and resets without shifting the preview', async ({ page }) => {
+  await page.clock.install();
+  await page.addInitScript(() => { navigator.clipboard.write = async items => { window.copiedImageType = items[0].types[0]; }; });
+  await openJourney(page);
+  await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Your SuggestArr recap' });
+  await expect(dialog.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  const before = await dialog.boundingBox();
+  await dialog.getByRole('button', { name: 'Copy image', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Copied!', exact: true })).toBeVisible();
+  await expect(dialog.getByText('Image copied. Paste it into your post or Discord conversation.')).toHaveCount(0);
+  expect((await dialog.boundingBox()).height).toBeCloseTo(before.height, 0);
+  expect(await page.evaluate(() => window.copiedImageType)).toBe('image/png');
+  await page.clock.fastForward(2600);
+  await expect(dialog.getByRole('button', { name: 'Copy image', exact: true })).toBeVisible();
+});
+
+for (const platform of [{ name: 'X', url: 'https://twitter.com/intent/tweet*' }, { name: 'Bluesky', url: 'https://bsky.app/intent/compose*' }]) {
+  test(`${platform.name} carries the PNG in the clipboard without overwriting it with text`, async ({ page }) => {
+    await page.addInitScript(() => {
+      navigator.clipboard.write = async items => { window.copiedImageType = items[0].types[0]; };
+      navigator.clipboard.writeText = async () => { window.textOverwroteImage = true; };
+    });
+    await page.context().route(platform.url, route => route.fulfill({ contentType: 'text/html', body: 'Composer fixture' }));
+    await openJourney(page);
+    await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+    await page.getByRole('tab', { name: 'Share', exact: true }).click();
+    const popup = page.waitForEvent('popup');
+    await page.getByRole('link', { name: platform.name, exact: true }).click();
+    const composer = await popup;
+    await expect(page.getByRole('status')).toContainText(`Paste it into your ${platform.name} post.`);
+    expect(await page.evaluate(() => window.copiedImageType)).toBe('image/png');
+    expect(await page.evaluate(() => window.textOverwroteImage)).toBeUndefined();
+    await composer.close();
+  });
+}
+
+test('denied image clipboard downloads a PNG and sharing feedback expires', async ({ page }) => {
+  await page.clock.install();
+  await page.addInitScript(() => { navigator.clipboard.write = async () => { throw new DOMException('Denied', 'NotAllowedError'); }; });
+  await page.context().route('https://discord.com/channels/@me', route => route.fulfill({ contentType: 'text/html', body: 'Discord fixture' }));
+  await openJourney(page);
+  await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  await page.getByRole('tab', { name: 'Share', exact: true }).click();
+  const popup = page.waitForEvent('popup');
+  const download = page.waitForEvent('download');
+  await page.getByRole('dialog').getByRole('link', { name: 'Discord', exact: true }).click();
+  const composer = await popup;
+  expect((await download).suggestedFilename()).toBe('suggestarr-recap.png');
+  await expect(page.getByRole('status')).toContainText('PNG saved. Attach it to your Discord post.');
+  await page.clock.fastForward(5100);
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await composer.close();
+});
+
+for (const reducedMotion of [false, true]) {
+  test(`tabs adapt dialog height and show badge states with reduced motion ${reducedMotion}`, async ({ page }, testInfo) => {
+    await page.emulateMedia({ reducedMotion: reducedMotion ? 'reduce' : 'no-preference' });
+    await openJourney(page, { total: 597 });
+    await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Your SuggestArr recap' });
+    await expect(dialog.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+    await expect.poll(() => dialog.evaluate(element => element.getAnimations().length)).toBe(0);
+    const previewHeight = (await dialog.boundingBox()).height;
+    await dialog.getByRole('tab', { name: 'Share', exact: true }).click();
+    await expect.poll(async () => (await dialog.boundingBox()).height).toBeLessThan(previewHeight - 40);
+    await expect(dialog.getByRole('img', { name: 'Your recap PNG' })).toBeVisible();
+    await dialog.getByRole('tab', { name: 'Badges', exact: true }).click();
+    await expect.poll(() => dialog.evaluate(element => element.getAnimations().length)).toBe(0);
+    expect((await dialog.boundingBox()).height).toBeLessThan(previewHeight - 40);
+    const badges = dialog.getByRole('tabpanel', { name: 'Badges' });
+    await expect(badges.getByText('4 / 7 unlocked')).toBeVisible();
+    await expect(badges.getByRole('listitem')).toHaveCount(6);
+    await expect(badges.getByText('Next milestone', { exact: true })).toHaveCount(1);
+    await expect(badges.getByRole('progressbar')).toHaveAttribute('value', '597');
+    await expect(badges.getByText('365 days since your first recorded request')).toBeVisible();
+    await dialog.screenshot({ path: testInfo.outputPath('badge-gallery.png'), animations: 'disabled' });
+    if (reducedMotion) expect(await dialog.evaluate(element => getComputedStyle(element).transitionDuration)).toBe('0s');
+    await dialog.getByRole('tab', { name: 'Preview', exact: true }).click();
+    await expect.poll(async () => (await dialog.boundingBox()).height).toBeCloseTo(previewHeight, 0);
+  });
+}
+
+test('native sharing failure saves the image while cancelling leaves the dialog alone', async ({ page }) => {
+  await openJourney(page, { nativeShare: true });
+  await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  await page.getByRole('tab', { name: 'Share', exact: true }).click();
+  const downloads = [];
+  page.on('download', file => downloads.push(file.suggestedFilename()));
+  await page.evaluate(() => { Object.defineProperty(navigator, 'share', { value: async () => { throw new DOMException('Cancelled', 'AbortError'); }, configurable: true }); });
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+  expect(downloads).toEqual([]);
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await page.evaluate(() => { Object.defineProperty(navigator, 'share', { value: async () => { throw new DOMException('Unsupported', 'DataError'); }, configurable: true }); });
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  expect((await download).suggestedFilename()).toBe('suggestarr-recap.png');
+  await expect(page.getByRole('status')).toContainText('PNG saved so you can attach it.');
 });
