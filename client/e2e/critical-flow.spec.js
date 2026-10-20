@@ -231,6 +231,29 @@ test("a job preview and simulated request run without external providers", async
   await expect.poll(api.runCalls).toBe(1);
 });
 
+test("secondary job actions sit in a keyboard-friendly menu", async ({ page }) => {
+  await mockApi(page);
+  await signIn(page);
+  await page.getByRole("link", { name: "Jobs", exact: true }).click();
+
+  const more = page.getByRole("button", { name: "More actions for Manual job" });
+  await more.click();
+  const menu = page.getByRole("menu", { name: "More actions for Manual job" });
+  await expect(menu.getByRole("menuitem")).toHaveText(["Edit", "Duplicate", "Delete"]);
+  await expect(menu.getByRole("menuitem", { name: "Edit" })).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(menu.getByRole("menuitem", { name: "Delete" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(more).toBeFocused();
+
+  await more.click();
+  await page.getByRole("menuitem", { name: "Duplicate" }).click();
+  const dialog = page.getByRole("dialog", { name: "New job" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("textbox", { name: /name/i }).first()).toHaveValue("Manual job (copy)");
+});
+
 async function signIn(page, landing = /\/dashboard$/) {
   await page.goto("/login");
   await page.getByLabel("Username").fill("admin");

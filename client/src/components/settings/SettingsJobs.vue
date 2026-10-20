@@ -69,7 +69,7 @@
 
     <div v-else class="flex flex-col gap-3">
       <!-- Which kind of job sends titles people actually watch. -->
-      <section v-if="sourceHitRates.length" aria-labelledby="hit-rate-title" class="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-card border border-edge bg-panel px-5 py-4">
+      <section v-if="sourceHitRates.length > 1" aria-labelledby="hit-rate-title" class="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-card border border-edge bg-panel px-5 py-4">
         <h2 id="hit-rate-title" class="m-0 text-sm font-bold text-ink">Watched after request</h2>
         <dl class="m-0 flex flex-wrap gap-x-6 gap-y-2">
           <div v-for="source in sourceHitRates" :key="source.label" class="flex items-baseline gap-2" :title="`${source.watched} of ${source.requested} requested titles watched`">
@@ -145,16 +145,13 @@
             <span class="relative inline-block h-[22px] w-10 rounded-full transition-colors" :class="job.enabled ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="job.enabled ? 'left-[21px]' : 'left-[3px]'"></span></span>
             {{ job.enabled ? 'On' : 'Paused' }}
           </button>
-          <button type="button" class="h-[38px] cursor-pointer rounded-[8px] border border-edge-strong bg-panel-2 px-3.5 text-[13px] font-semibold text-ink disabled:opacity-50" :disabled="isDryRunning[job.id] || isRunning[job.id]" title="Preview what this job would request" @click="dryRunJob(job)">
-            <i aria-hidden="true" v-if="isDryRunning[job.id]" class="fas fa-spinner fa-spin mr-1"></i>Preview
+          <button type="button" class="ui-btn" :disabled="isDryRunning[job.id] || isRunning[job.id]" title="Preview what this job would request" @click="dryRunJob(job)">
+            <i aria-hidden="true" :class="isDryRunning[job.id] ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>Preview
           </button>
-          <button v-if="lastDryRunCache[job.id]" type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Re-open last preview" aria-label="Re-open last preview" @click="reopenDryRun(job)"><i aria-hidden="true" class="fas fa-history"></i></button>
-          <button type="button" class="h-[38px] cursor-pointer rounded-[8px] border-0 bg-brand-soft px-3.5 text-[13px] font-bold text-brand-ink disabled:opacity-50" :disabled="isRunning[job.id] || isDryRunning[job.id]" @click="runJob(job)">
-            <i aria-hidden="true" v-if="isRunning[job.id]" class="fas fa-spinner fa-spin mr-1"></i>Run now
+          <button type="button" class="ui-btn" :disabled="isRunning[job.id] || isDryRunning[job.id]" @click="runJob(job)">
+            <i aria-hidden="true" :class="isRunning[job.id] ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>Run now
           </button>
-          <button type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" :aria-label="`Edit ${job.name}`" title="Edit" @click="editJob(job)"><i aria-hidden="true" class="fas fa-pen"></i></button>
-          <button type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" :aria-label="`Duplicate ${job.name}`" title="Duplicate" @click="duplicateJob(job)"><i aria-hidden="true" class="fas fa-clone"></i></button>
-          <button type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-bad/15 hover:text-bad" :aria-label="`Delete ${job.name}`" title="Delete" @click="confirmDeleteJob(job)"><i aria-hidden="true" class="fas fa-trash"></i></button>
+          <ActionMenu :label="`More actions for ${job.name}`" :items="jobMenuItems(job)" />
         </div>
       </article>
     </div>
@@ -243,6 +240,7 @@ import JobHistoryModal from './jobs/JobHistoryModal.vue';
 import DryRunResultModal from './jobs/DryRunResultModal.vue';
 import OnboardingTour from '@/components/OnboardingTour.vue';
 import AppDialog from '@/components/ui/AppDialog.vue';
+import ActionMenu from '@/components/ui/ActionMenu.vue';
 import { timeFromNow } from '@/utils/dateUtils.js';
 import { hitRate, hitRatesBySource } from '@/utils/jobHitRates.js';
 import { getJobTypeIcon as resolveJobTypeIcon, getJobTypeLabel as resolveJobTypeLabel, formatJobSchedule } from '@/utils/jobTypeVisuals.js';
@@ -258,7 +256,8 @@ export default {
     JobHistoryModal,
     DryRunResultModal,
     OnboardingTour,
-    AppDialog
+    AppDialog,
+    ActionMenu
   },
   // The dashboard shell passes settings props to every tab; this page does not use them.
   inheritAttrs: false,
@@ -329,7 +328,7 @@ export default {
         {
           targetId: 'jobs-first-card-actions',
           title: 'Job Controls',
-          description: 'Enable or disable a job without deleting it, trigger an immediate run, open the editor, or remove the job entirely.',
+          description: 'Pause a job without deleting it, preview what it would request, or run it now. Edit, duplicate and delete are under the ⋯ menu.',
           position: 'top'
         },
         {
@@ -598,6 +597,16 @@ export default {
 
     editJob(job) {
       this.editingJob = { ...job, filters: { ...job.filters } };
+    },
+
+    // Secondary actions live in the card's "more" menu, so the card shows only the two everyday ones.
+    jobMenuItems(job) {
+      return [
+        { label: 'Edit', icon: 'fas fa-pen', onSelect: () => this.editJob(job) },
+        { label: 'Duplicate', icon: 'fas fa-clone', onSelect: () => this.duplicateJob(job) },
+        ...(this.lastDryRunCache[job.id] ? [{ label: 'Last preview', icon: 'fas fa-history', onSelect: () => this.reopenDryRun(job) }] : []),
+        { label: 'Delete', icon: 'fas fa-trash', danger: true, onSelect: () => this.confirmDeleteJob(job) },
+      ];
     },
 
     // Opens the create form prefilled; without an id it saves as a new job. Paused so the
