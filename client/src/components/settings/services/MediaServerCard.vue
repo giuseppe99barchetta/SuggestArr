@@ -115,6 +115,11 @@
           <input id="jellyfinApiUrl" v-model="localConfig.JELLYFIN_API_URL" type="url" placeholder="http://localhost:8096" class="ui-input" :disabled="isLoading" />
         </div>
         <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+          <label for="jellyfinExternalUrl">External URL</label>
+          <input id="jellyfinExternalUrl" v-model="localConfig.JELLYFIN_EXTERNAL_URL" type="url" placeholder="https://media.example.com" class="ui-input" :disabled="isLoading" />
+          <span class="text-xs text-ink-4">Optional. The address your browser uses, for links in SuggestArr, when the URL above is internal (e.g. a Docker name).</span>
+        </div>
+        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
           <label for="jellyfinToken">API token</label>
           <div class="flex gap-2">
             <input

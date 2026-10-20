@@ -157,12 +157,14 @@ export default {
         } else if (this.localConfig.SELECTED_SERVICE === 'jellyfin' || this.localConfig.SELECTED_SERVICE === 'emby') {
           Object.assign(dataToSave, {
             JELLYFIN_API_URL: this.localConfig.JELLYFIN_API_URL,
+            JELLYFIN_EXTERNAL_URL: this.localConfig.JELLYFIN_EXTERNAL_URL || '',
             JELLYFIN_TOKEN: this._secretValue('JELLYFIN_TOKEN'),
             JELLYFIN_LIBRARIES: this.localConfig.JELLYFIN_LIBRARIES || [],
           });
         }
         Object.assign(dataToSave, {
           SEER_API_URL: this.localConfig.SEER_API_URL,
+          SEER_EXTERNAL_URL: this.localConfig.SEER_EXTERNAL_URL || '',
           SEER_TOKEN: this._secretValue('SEER_TOKEN'),
           SEER_USER_NAME: this.localConfig.SEER_USER_NAME || null,
           SEER_USER_PSW: this._secretValue('SEER_USER_PSW') || null,
@@ -181,9 +183,9 @@ export default {
     async resetToDefaults() {
       const defaults = {
         TMDB_API_KEY: '', OMDB_API_KEY: '', MDBLIST_API_KEY: '', SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
-        JELLYFIN_API_URL: '', JELLYFIN_TOKEN: '', JELLYFIN_LIBRARIES: [],
+        JELLYFIN_API_URL: '', JELLYFIN_EXTERNAL_URL: '', JELLYFIN_TOKEN: '', JELLYFIN_LIBRARIES: [],
         TRAKT_CLIENT_ID: '', TRAKT_CLIENT_SECRET: '', TRAKT_SYNC_SEEN_FEEDBACK: false,
-        SEER_API_URL: '', SEER_TOKEN: '', SEER_USER_NAME: null, SEER_USER_PSW: null,
+        SEER_API_URL: '', SEER_EXTERNAL_URL: '', SEER_TOKEN: '', SEER_USER_NAME: null, SEER_USER_PSW: null,
         SEER_SESSION_TOKEN: null, SEER_ANIME_PROFILE_CONFIG: {}, SEER_REQUEST_DELAY: 2, SELECTED_USERS: [],
       };
       if (await confirmDialog({ title: 'Reset service settings?', message: 'All connections are cleared and saved: TMDb, your media server, Seer, Trakt, OMDb and MDBList.', confirmLabel: 'Reset', danger: true })) {

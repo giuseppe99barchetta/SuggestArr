@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from api_service.db import database_manager as dm_mod
 from api_service.db.database_manager import DatabaseManager
 from api_service.jobs import availability_sync
-from api_service.jobs.availability_sync import plan_availability_changes
+from api_service.jobs.availability_sync import external_media_url, plan_availability_changes
 from api_service.services.request_sources import DISCOVER_SOURCE
 from api_service.services.seer.seer_client import SeerClient, media_play_url
 
@@ -37,6 +37,15 @@ def test_statuses_take_the_further_of_regular_and_4k_and_skip_unknown():
     assert asyncio.run(client.get_media_statuses()) == {
         ('movie', '1'): st('available'), ('tv', '2'): st('partial'), ('tv', '4'): st('pending'),
     }
+
+
+def test_play_links_move_to_the_external_media_server_address():
+    lan = 'http://jellyfin:8096/web/index.html#!/details?id=abc'
+    assert external_media_url(lan, 'https://media.example.com/') == 'https://media.example.com/web/index.html#!/details?id=abc'
+    assert external_media_url('http://jf/jellyfin/web/#!/x', 'https://m.example') == 'https://m.example/web/#!/x'
+    assert external_media_url('https://app.plex.tv/desktop#!/x', 'https://m.example') == 'https://app.plex.tv/desktop#!/x'
+    assert external_media_url(lan, '') == lan
+    assert external_media_url(None, 'https://m.example') is None
 
 
 def test_play_links_come_from_the_available_copy_and_only_web_links_pass():

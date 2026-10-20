@@ -4,6 +4,7 @@ from urllib.parse import urlsplit
 from flask import Blueprint, request, jsonify, g
 import aiohttp
 from api_service.services.seer.seer_client import SeerClient
+from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.utils.ssrf_guard import validate_base_url as validate_url
@@ -311,12 +312,16 @@ async def get_seer_web_url():
     """
     Address to open Seer in the browser, for "Open in Seer" links.
 
-    Prefers the Application URL set in Seer, since the configured API URL is often an
-    internal Docker address the browser cannot reach; falls back to that API URL.
+    Prefers the External URL set in SuggestArr, then the Application URL set in Seer,
+    since the configured API URL is often an internal Docker address the browser
+    cannot reach; falls back to that API URL.
 
     Returns:
         200 with { url } — url is None when Seer is not configured.
     """
+    external_url = load_env_vars().get('SEER_EXTERNAL_URL')
+    if external_url:
+        return jsonify({'url': external_url.rstrip('/')}), 200
     if _web_url_cache['url'] and time.time() - _web_url_cache['at'] < _WEB_URL_TTL:
         return jsonify({'url': _web_url_cache['url']}), 200
     api_url, api_key, session_token = _load_seer_config()
