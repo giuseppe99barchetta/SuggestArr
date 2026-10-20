@@ -22,7 +22,7 @@
         </template>
 
         <!-- Loading -->
-        <p v-if="isLoadingUsers" :class="emptyClass">
+        <p v-if="isLoadingUsers && !users.length" :class="emptyClass">
           <i aria-hidden="true" class="fas fa-spinner fa-spin"></i>
           Loading users…
         </p>
