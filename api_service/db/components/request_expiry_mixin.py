@@ -13,9 +13,13 @@ class RequestExpiryMixin:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                'SELECT id, seer_request_id, seer_created_at, tmdb_id, media_type FROM pending_requests '
+                'SELECT id, seer_request_id, seer_created_at, tmdb_id, media_type FROM pending_requests p '
                 f"WHERE status='submitted' AND seer_instance={ph} AND seer_created_at < {ph} "
-                'AND seer_request_id IS NOT NULL ORDER BY seer_created_at', (instance, cutoff),
+                'AND seer_request_id IS NOT NULL '
+                # Declined or skipped (gone, decided, not ours) is final; errors and interrupted declines retry.
+                'AND NOT EXISTS (SELECT 1 FROM request_expiry_log l WHERE l.delivery_id = p.id '
+                "AND l.seer_request_id = p.seer_request_id AND l.action IN ('declined', 'skipped')) "
+                'ORDER BY seer_created_at', (instance, cutoff),
             )
             return [dict(zip(('delivery_id', 'seer_request_id', 'seer_created_at', 'tmdb_id', 'media_type'), row))
                     for row in cursor.fetchall()]

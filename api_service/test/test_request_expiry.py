@@ -108,13 +108,42 @@ def test_lookup_failure_never_declines(db, status, key):
     assert calls.await_count == 1
 
 
-@pytest.mark.parametrize('status,key', [(404, 'skipped'), (409, 'skipped'), (403, 'errors'), (503, 'errors')])
-def test_decline_failure_is_logged_and_can_be_retried(db, status, key):
+@pytest.mark.parametrize('status', [403, 503])
+def test_decline_failure_is_logged_and_can_be_retried(db, status):
     remote = add_delivery(db)
     result, _ = run_expiry(db, remote, dry_run=False, post_status=status)
-    assert result[key] == 1
+    assert result['errors'] == 1
     result, _ = run_expiry(db, remote, dry_run=False)
     assert result['declined'] == 1
+
+
+@pytest.mark.parametrize('dry_run,overrides', [
+    (False, {}),                               # declined
+    (False, {'post_status': 404}),             # removed during expiry
+    (False, {'post_status': 409}),             # decided during expiry
+    (False, {'get_status': 404}),              # already gone
+    (True, {'get_status': 404}),               # a dry run sees the same final state
+])
+def test_finished_requests_are_never_checked_again(db, dry_run, overrides):
+    remote = add_delivery(db)
+    run_expiry(db, remote, dry_run=dry_run, **overrides)
+    logged = len(db.get_request_expiry_log())
+    result, calls = run_expiry(db, remote, dry_run=False)
+    assert result['candidates'] == 0
+    calls.assert_not_awaited()
+    assert len(db.get_request_expiry_log()) == logged
+
+
+def test_already_decided_in_seer_is_checked_only_once(db):
+    remote = {**add_delivery(db), 'status': 2}
+    assert run_expiry(db, remote, dry_run=False)[0]['skipped'] == 1
+    assert run_expiry(db, remote, dry_run=False)[0]['candidates'] == 0
+
+
+def test_a_simulated_decline_is_evaluated_again(db):
+    remote = add_delivery(db)
+    assert run_expiry(db, remote, dry_run=True)[0]['simulated'] == 1
+    assert run_expiry(db, remote, dry_run=True)[0]['simulated'] == 1
 
 
 def test_disabled_gate_and_shared_run_lock(db):
