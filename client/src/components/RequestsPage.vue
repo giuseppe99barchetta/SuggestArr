@@ -210,9 +210,10 @@
       <p class="m-0 text-sm text-ink-3">Describe what you feel like watching in <router-link :to="{ name: 'DashboardTab', params: { tab: 'ai_search' } }">AI Search</router-link>.</p>
     </div>
 
-    <div v-if="loading && sources.length === 0" class="py-14 text-center text-sm text-ink-3">
-      <i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Loading your requests…
-    </div>
+    <MediaGridSkeleton
+      v-if="loading && (viewMode === 'ai-requests' ? aiRequests : sources).length === 0"
+      label="Loading your requests…"
+    />
 
     <MediaDetailsModal
       v-if="showModal"
@@ -294,6 +295,7 @@
 <script>
 import axios from "axios";
 import MediaCard from '@/components/ui/MediaCard.vue';
+import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import MediaDetailsModal from './MediaDetailsModal.vue';
 import { formatDate } from '@/utils/dateUtils.js';
 import { getRequestSourceVisual } from '@/utils/jobTypeVisuals.js';
@@ -308,6 +310,7 @@ export default {
   name: "RequestsPage",
   components: {
     MediaCard,
+    MediaGridSkeleton,
     MediaDetailsModal,
     RequestWorkflowPanel,
   },

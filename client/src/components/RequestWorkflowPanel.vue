@@ -18,7 +18,7 @@
       <span v-if="!selected.length" class="text-[13px] text-ink-4">Click cards to select them</span>
     </div>
 
-    <div v-if="loading && !items.length" class="py-10 text-center text-sm text-ink-3"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Loading…</div>
+    <MediaGridSkeleton v-if="loading && !items.length" :count="6" label="Loading requests…" />
     <div v-else-if="!items.length && showEmpty" class="py-10 text-center text-sm text-ink-3">No requests in this state.</div>
     <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
       <MediaCard
@@ -90,11 +90,12 @@
 import axios from 'axios';
 import AppDialog from '@/components/ui/AppDialog.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
+import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
 import { approvalNeedsDialog, loadSeerServers, mediaTypesOf } from '@/utils/requestProfiles.js';
 import { SEEN_OPTIONS, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
 export default {
-  name: 'RequestWorkflowPanel', components: { AppDialog, MediaCard, ApprovalProfileChoice },
+  name: 'RequestWorkflowPanel', components: { AppDialog, MediaCard, MediaGridSkeleton, ApprovalProfileChoice },
   emits: ['open', 'update:total'],
   props: { statusFilter: { type: String, default: 'all' }, searchQuery: { type: String, default: '' }, mediaType: { type: String, default: 'all' }, requestedFor: { type: String, default: 'all' }, showHeader: { type: Boolean, default: true }, showEmpty: { type: Boolean, default: true }, bulkMode: { type: Boolean, default: false } },
   data() { return { items: [], selected: [], actionLoading: false, seenMenuId: null, seenOptions: SEEN_OPTIONS, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,

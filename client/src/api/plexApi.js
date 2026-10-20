@@ -209,7 +209,7 @@ export default {
           // Filter and sort connections by priority
           const filteredConnections = server.connections
             .filter(conn => {
-              // Escludi connessioni relay (troppo lente)
+              // Exclude relay connections (too slow)
               if (conn.relay === true || conn.relay === 1) return false;
               return true;
             })
@@ -220,12 +220,12 @@ export default {
               const aHttps = a.protocol === 'https';
               const bHttps = b.protocol === 'https';
 
-              if (aLocal !== bLocal) return bLocal - aLocal; // locali prima
-              if (aHttps !== bHttps) return bHttps - aHttps; // HTTPS prima
+              if (aLocal !== bLocal) return bLocal - aLocal; // Local connections first
+              if (aHttps !== bHttps) return bHttps - aHttps; // HTTPS first
               return 0;
             });
 
-          // Prendi solo le prime 3 connessioni migliori per server
+          // Take only the top 3 connections per server
           filteredConnections.slice(0, 3).forEach(connection => {
             const localLabel = (connection.local === true || connection.local === 1) ? ' [Local]' : ' [Remote]';
             connections.push({

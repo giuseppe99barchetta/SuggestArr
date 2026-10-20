@@ -279,7 +279,7 @@ class PlexClient(BaseHTTPClient):
     async def get_servers(self):
         """
         obtain available Plex server for current user
-        :return: Lista di server Plex se trovati, altrimenti None.
+        :return: List of Plex servers if found, otherwise None.
         """
         url = f"{self.base_url}/resources"
         try:

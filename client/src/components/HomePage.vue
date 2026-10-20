@@ -65,9 +65,7 @@
         <h2 class="m-0 text-[19px] font-bold text-ink">Recently requested</h2>
         <router-link v-if="recentRequests.length" :to="tabLink('requests')" class="text-sm font-semibold no-underline">See all {{ stats.total || '' }} →</router-link>
       </div>
-      <div v-if="loading" class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
-        <div v-for="i in 6" :key="i" class="aspect-[2/3] animate-pulse rounded-card bg-panel"></div>
-      </div>
+      <MediaGridSkeleton v-if="loading" :count="6" label="Loading recent requests…" />
       <p v-else-if="!recentRequests.length" class="m-0 rounded-card border border-dashed border-edge-strong px-6 py-10 text-center text-sm text-ink-3">
         Nothing requested yet. Requests appear here once a job has run.
       </p>
@@ -137,6 +135,7 @@ import { formatDate, timeFromNow } from '@/utils/dateUtils.js';
 import { formatJobSchedule, getJobTypeIcon } from '@/utils/jobTypeVisuals.js';
 import AppDialog from '@/components/ui/AppDialog.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
+import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
 import { approvalNeedsDialog, loadSeerServers } from '@/utils/requestProfiles.js';
@@ -149,7 +148,7 @@ import JourneyPanel from '@/components/recap/JourneyPanel.vue';
  */
 export default {
   name: 'HomePage',
-  components: { AppDialog, MediaCard, MediaDetailsModal, ApprovalProfileChoice, JourneyPanel },
+  components: { AppDialog, MediaCard, MediaGridSkeleton, MediaDetailsModal, ApprovalProfileChoice, JourneyPanel },
   // The dashboard shell passes settings props to every tab; only currentUser is used here.
   inheritAttrs: false,
   props: {

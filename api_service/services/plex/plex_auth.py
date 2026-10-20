@@ -12,14 +12,14 @@ class PlexAuth:
         }
 
     def get_authentication_pin(self):
-        """Genera un nuovo pin di autenticazione."""
+        """Generate a new authentication PIN."""
         response = requests.post(f"{self.base_url}/pins?strong=true", headers=self.headers)
         data = response.json()
         auth_url = f"https://app.plex.tv/auth#?clientID={self.client_id}&code={data['code']}"
         return data['id'], auth_url
     
     def check_authentication(self, pin_id):
-        """Verifica se l'utente ha completato l'autenticazione."""
+        """Check whether the user has completed authentication."""
         response = requests.get(f"{self.base_url}/pins/{pin_id}", headers=self.headers)
         data = response.json()
         if 'authToken' in data:

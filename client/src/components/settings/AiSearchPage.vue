@@ -91,9 +91,7 @@
 
     <p v-if="errorMessage" role="alert" class="m-0 rounded-card border border-bad/40 bg-bad/10 px-4 py-3 text-sm text-ink-2"><i aria-hidden="true" class="fas fa-exclamation-circle mr-2 text-bad"></i>{{ errorMessage }}</p>
 
-    <div v-if="isSearching" class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
-      <div v-for="i in Math.min(maxResults, 12)" :key="i" class="aspect-[2/3] animate-pulse rounded-card bg-panel"></div>
-    </div>
+    <MediaGridSkeleton v-if="isSearching" :count="Math.min(maxResults, 12)" label="Searching…" />
 
     <section v-else-if="results.length > 0" class="flex flex-col gap-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -234,6 +232,7 @@
 <script>
 import PageHeader from '@/components/ui/PageHeader.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
+import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
 import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchInspiration, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear } from '@/api/api.js';
 import { useAuth } from '@/composables/useAuth.js';
@@ -269,7 +268,7 @@ function readRecentSearches(key) {
 
 export default {
   name: 'AiSearchPage',
-  components: { PageHeader, MediaCard, MediaDetailsModal },
+  components: { PageHeader, MediaCard, MediaGridSkeleton, MediaDetailsModal },
   // The dashboard shell passes settings props to every tab; this page does not use them.
   inheritAttrs: false,
 
