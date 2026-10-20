@@ -48,18 +48,28 @@
         </div>
 
         <div class="flex min-w-0 flex-col justify-end gap-2 pr-8 sm:self-end">
-          <p class="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] font-semibold text-ink-3">
+          <!-- Always one line: details that arrive later are cut, never wrapped, so the title stays put. -->
+          <p class="m-0 flex min-w-0 items-center gap-x-2 overflow-hidden whitespace-nowrap text-[13px] font-semibold text-ink-3 *:shrink-0" :title="genreLabel || null">
             <span v-if="mediaLabel"><i aria-hidden="true" :class="item.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'" class="mr-1.5"></i>{{ mediaLabel }}</span>
             <span v-if="year" aria-hidden="true">·</span>
             <span v-if="year">{{ year }}</span>
+            <template v-if="runtimeLabel">
+              <span aria-hidden="true">·</span>
+              <span>{{ runtimeLabel }}</span>
+            </template>
             <template v-if="rating">
               <span aria-hidden="true">·</span>
               <span class="text-caution"><i aria-hidden="true" class="fas fa-star mr-1"></i>{{ rating }}</span>
             </template>
+            <template v-if="genreLabel">
+              <span aria-hidden="true">·</span>
+              <span class="!shrink truncate font-medium">{{ genreLabel }}</span>
+            </template>
           </p>
           <h2 id="media-details-title" class="m-0 text-3xl font-extrabold leading-tight tracking-tight text-ink max-sm:text-xl">{{ item.title }}</h2>
-          <div v-if="$slots.badges" class="flex flex-wrap gap-2 text-xs font-semibold *:inline-flex *:items-center *:gap-1.5">
+          <div v-if="$slots.badges || status" class="flex flex-wrap gap-2 text-xs font-semibold *:inline-flex *:items-center *:gap-1.5">
             <slot name="badges" />
+            <span v-if="status" class="rounded-md bg-raised px-2 py-1" :class="statusText"><i aria-hidden="true" :class="status.icon"></i> {{ status.label }}</span>
           </div>
         </div>
 
@@ -77,8 +87,17 @@
             </button>
           </div>
           <!-- The trailer slot is reserved while the lookup runs, so nothing moves when it answers. -->
-          <div v-if="hasTrailerSlot || $slots.actions" class="flex flex-wrap items-center gap-2">
+          <div v-if="hasTrailerSlot || $slots.actions || playUrl" class="flex flex-wrap items-center gap-2">
             <slot name="actions" />
+            <a
+              v-if="playUrl"
+              :href="playUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex h-10 items-center gap-2 rounded-ctl bg-brand px-4 text-sm font-bold text-white no-underline hover:text-white hover:brightness-110"
+            >
+              <i aria-hidden="true" class="fas fa-play text-xs"></i> Watch now
+            </a>
             <a
               v-if="trailerState === 'ready'"
               :href="trailerUrl"
@@ -86,7 +105,7 @@
               rel="noopener noreferrer"
               class="inline-flex h-10 items-center gap-2 rounded-ctl bg-ink px-4 text-sm font-bold text-canvas no-underline hover:bg-ink-2"
             >
-              <i aria-hidden="true" class="fas fa-play text-xs"></i> Watch trailer
+              <i aria-hidden="true" class="fas fa-film text-xs"></i> Watch trailer
             </a>
             <span
               v-else-if="hasTrailerSlot"
@@ -96,28 +115,46 @@
               <template v-if="trailerState === 'loading'"><i aria-hidden="true" class="fas fa-spinner fa-spin text-xs"></i> Watch trailer</template>
               <template v-else><i aria-hidden="true" class="fas fa-video-slash text-xs"></i> No trailer</template>
             </span>
+            <a
+              v-if="seerUrl"
+              :href="seerUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex h-10 items-center gap-2 rounded-ctl border border-edge-strong bg-panel-2/80 px-3.5 text-sm font-semibold text-ink-2 no-underline hover:text-ink"
+              title="Open in Seer"
+            >
+              <i aria-hidden="true" class="fas fa-external-link-alt text-xs"></i> Seer
+            </a>
           </div>
         </div>
       </div>
     </header>
 
-    <div v-if="item.rationale || hasExtraDetails || origin.length || $slots.default" class="flex flex-col gap-5 border-t border-edge p-7 max-sm:p-4">
+    <div v-if="item.rationale || hasExtraDetails || hasOrigin || $slots.default" class="flex flex-col gap-4 border-t border-edge p-7 max-sm:p-4">
       <section v-if="item.rationale" class="rounded-ctl border border-brand-ink/25 bg-brand-soft/40 p-4">
         <h3 class="m-0 mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-ink">
           <i aria-hidden="true" class="fas fa-lightbulb"></i> {{ rationaleTitle }}
         </h3>
         <p class="m-0 whitespace-pre-wrap leading-relaxed text-ink-2">{{ item.rationale }}</p>
+        <p v-if="hasOrigin" class="m-0 mt-3 border-t border-brand-ink/15 pt-2.5 text-xs text-ink-3"><template v-if="item.source_title">From <strong class="font-semibold text-ink-2">{{ item.source_title }}</strong></template><template v-if="item.source_title && requestedFor"> · </template><template v-if="requestedFor">for <strong class="font-semibold text-ink-2">{{ requestedFor }}</strong></template></p>
       </section>
+      <p v-else-if="hasOrigin" class="m-0 text-sm text-ink-3"><template v-if="item.source_title">From <strong class="font-semibold text-ink-2">{{ item.source_title }}</strong></template><template v-if="item.source_title && requestedFor"> · </template><template v-if="requestedFor">for <strong class="font-semibold text-ink-2">{{ requestedFor }}</strong></template></p>
 
-      <!-- One label/value list, so title facts and where the suggestion came from read the same way. -->
-      <dl v-if="hasExtraDetails || origin.length" class="m-0 grid grid-cols-[max-content_1fr] items-baseline gap-x-6 gap-y-2.5 text-sm">
-        <template v-if="details?.genres.length || runtimeLabel">
-          <dt class="text-ink-4">Genre</dt>
-          <dd class="m-0 text-ink-2">{{ details.genres.join(', ') }}<span v-if="runtimeLabel" class="text-ink-4"><template v-if="details.genres.length"> · </template>{{ runtimeLabel }}</span></dd>
-        </template>
-        <template v-if="details?.cast.length">
+      <dl v-if="hasExtraDetails" class="m-0 grid grid-cols-[max-content_1fr] items-center gap-x-6 gap-y-2.5 text-sm">
+        <template v-if="details.cast.length">
           <dt class="text-ink-4">Cast</dt>
-          <dd class="m-0 flex flex-wrap gap-x-4 gap-y-1.5">
+          <!-- One line with a few faces; the rest on request. -->
+          <dd v-if="!castExpanded" class="m-0 flex min-w-0 items-center gap-2.5">
+            <span class="flex shrink-0 -space-x-2">
+              <template v-for="person in details.cast.slice(0, 4)" :key="person.name">
+                <img v-if="person.profile_path" :src="`https://image.tmdb.org/t/p/w45${person.profile_path}`" alt="" loading="lazy" class="h-7 w-7 rounded-full object-cover ring-2 ring-panel" />
+                <span v-else aria-hidden="true" class="grid h-7 w-7 place-items-center rounded-full bg-raised text-[11px] font-bold text-ink-3 ring-2 ring-panel">{{ person.name.charAt(0) }}</span>
+              </template>
+            </span>
+            <span class="min-w-0 truncate text-ink-2">{{ castPreview }}</span>
+            <button v-if="details.cast.length > 2" type="button" class="shrink-0 cursor-pointer rounded-full border-0 bg-raised px-2 py-0.5 text-xs font-semibold text-ink-3 hover:text-ink" :aria-label="`Show all ${details.cast.length} cast members`" @click="castExpanded = true">+{{ details.cast.length - 2 }}</button>
+          </dd>
+          <dd v-else class="m-0 flex flex-wrap gap-x-4 gap-y-1.5">
             <span v-for="person in details.cast" :key="person.name" class="inline-flex items-center gap-1.5 text-ink-2" :title="person.character ? `${person.name} as ${person.character}` : person.name">
               <img v-if="person.profile_path" :src="`https://image.tmdb.org/t/p/w45${person.profile_path}`" alt="" loading="lazy" class="h-6 w-6 rounded-full object-cover" />
               <span v-else aria-hidden="true" class="grid h-6 w-6 place-items-center rounded-full bg-raised text-[10px] font-bold text-ink-3">{{ initials(person.name) }}</span>
@@ -125,21 +162,15 @@
             </span>
           </dd>
         </template>
-        <template v-if="details?.providers.length">
+        <template v-if="streamLogos.length">
           <dt class="text-ink-4">Stream on<template v-if="details.region"> ({{ details.region }})</template></dt>
-          <dd class="m-0 flex flex-wrap gap-x-4 gap-y-1.5">
-            <span v-for="provider in details.providers" :key="provider.name" class="inline-flex items-center gap-1.5 text-ink-2">
-              <img v-if="provider.logo_path" :src="`https://image.tmdb.org/t/p/w45${provider.logo_path}`" alt="" loading="lazy" class="h-6 w-6 rounded-md" />{{ provider.name }}
-            </span>
+          <dd class="m-0 flex flex-wrap items-center gap-1.5">
+            <img v-for="provider in streamLogos" :key="provider.name" :src="`https://image.tmdb.org/t/p/w45${provider.logo_path}`" :alt="provider.name" :title="provider.name" loading="lazy" class="h-7 w-7 rounded-md" />
           </dd>
-        </template>
-        <template v-for="part in origin" :key="part.label">
-          <dt class="text-ink-4">{{ part.label }}</dt>
-          <dd class="m-0 font-semibold text-ink">{{ part.value }}</dd>
         </template>
       </dl>
 
-      <div v-if="$slots.default" :class="{ 'border-t border-edge pt-5': item.rationale || hasExtraDetails || origin.length }">
+      <div v-if="$slots.default" :class="{ 'border-t border-edge pt-4': item.rationale || hasExtraDetails || hasOrigin }">
         <slot />
       </div>
     </div>
@@ -150,6 +181,8 @@
 import axios from 'axios';
 import AppDialog from '@/components/ui/AppDialog.vue';
 import { loadTitleDetails, trailerTarget } from '@/utils/trailer.js';
+import { mediaStatus } from '@/utils/mediaStatus.js';
+import { loadSeerWebUrl, seerTitleUrl } from '@/utils/seerLink.js';
 
 /**
  * Detail view for one title (request, suggestion or AI result).
@@ -174,6 +207,8 @@ export default {
       trailerUrl: null,
       trailerState: 'loading', // 'loading' | 'ready' | 'none'
       details: null,
+      castExpanded: false,
+      seerBase: null,
     };
   },
   computed: {
@@ -200,22 +235,43 @@ export default {
       const year = String(this.item.release_date || '').slice(0, 4);
       return /^\d{4}$/.test(year) ? year : '';
     },
+    // Seer's link to the title on Jellyfin, Emby or Plex; only http(s) links reach the client.
+    playUrl() {
+      return ['available', 'partial'].includes(this.item.availability) ? this.item.media_url || '' : '';
+    },
     hasExtraDetails() {
-      const d = this.details;
-      return Boolean(d && (d.genres.length || d.runtime || d.cast.length || d.providers.length));
+      return Boolean(this.details && (this.details.cast.length || this.streamLogos.length));
+    },
+    streamLogos() {
+      return (this.details?.providers || []).filter(provider => provider.logo_path);
+    },
+    castPreview() {
+      return this.details.cast.slice(0, 2).map(person => person.name).join(', ');
+    },
+    genreLabel() {
+      return this.details?.genres.join(', ') || '';
+    },
+    seerUrl() {
+      return seerTitleUrl(this.seerBase, this.item);
+    },
+    // Only sent requests carry `availability`; suggestions and AI results have no Seer progress.
+    status() {
+      return 'availability' in this.item ? mediaStatus(this.item.watched_at, this.item.availability) : null;
+    },
+    statusText() {
+      return { watched: 'text-good', available: 'text-brand-ink', partial: 'text-brand-ink' }[this.status?.key] || 'text-ink-2';
+    },
+    requestedFor() {
+      return this.item.user_name || this.item.user_id || '';
+    },
+    hasOrigin() {
+      return Boolean(this.item.source_title || this.requestedFor);
     },
     runtimeLabel() {
       const minutes = Number(this.details?.runtime) || 0;
       if (!minutes) return '';
       const text = minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
       return this.item.media_type === 'tv' ? `${text} per episode` : text;
-    },
-    origin() {
-      const { source_title: source, user_name: userName, user_id: userId } = this.item;
-      return [
-        { label: 'Suggested from', value: source },
-        { label: 'Requested for', value: userName || userId },
-      ].filter((part) => part.value);
     },
   },
   watch: {
@@ -227,10 +283,14 @@ export default {
       immediate: true,
       handler() {
         this.overviewExpanded = false;
+        this.castExpanded = false;
         this.$nextTick(this.measureOverview);
         this.loadDetails();
       },
     },
+  },
+  async mounted() {
+    this.seerBase = await loadSeerWebUrl(axios);
   },
   methods: {
     async loadDetails() {

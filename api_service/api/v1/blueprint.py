@@ -76,7 +76,7 @@ def metrics():
 
 _WEBHOOK_EVENTS = {
     'suggestion.created', 'suggestion.awaiting_approval', 'suggestion.approved',
-    'suggestion.rejected', 'request.submitted', 'request.failed', 'run.failed',
+    'suggestion.rejected', 'request.submitted', 'request.failed', 'request.available', 'run.failed',
     'job.completed', 'job.skipped',
 }
 

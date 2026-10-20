@@ -17,6 +17,7 @@ _TITLE_EVENTS = {
     'suggestion.rejected': 'Rejected: {title}',
     'request.submitted': 'Requested in Seer: {title}',
     'request.failed': 'Request failed: {title}',
+    'request.available': 'Now available: {title}',
 }
 _JOB_EVENTS = {
     'job.completed': 'Job finished: {job}',

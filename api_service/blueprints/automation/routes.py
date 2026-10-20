@@ -429,6 +429,10 @@ def get_requests():
         if sort_by not in valid_sorts:
             sort_by = 'date-desc'
         
+        progress = request.args.get('progress')
+        if progress not in ('requested', 'processing', 'available', 'watched'):
+            progress = None
+
         db_manager = DatabaseManager()
         result = db_manager.get_all_requests_grouped_by_source(
             page=page, 
@@ -436,6 +440,7 @@ def get_requests():
             sort_by=sort_by,
             user_ids=_visible_request_user_ids(db_manager),
             feedback_user_id=int(g.current_user['id']),
+            progress=progress,
         )
         sources = result.get('data') or []
         _localize(db_manager,

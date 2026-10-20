@@ -183,7 +183,7 @@ import {
 
 const EVENT_GROUPS = [
   { label: 'Suggestions', events: ['suggestion.created', 'suggestion.awaiting_approval', 'suggestion.approved', 'suggestion.rejected'] },
-  { label: 'Requests', events: ['request.submitted', 'request.failed'] },
+  { label: 'Requests', events: ['request.submitted', 'request.failed', 'request.available'] },
   { label: 'Automation', events: ['run.failed', 'job.completed', 'job.skipped'] },
 ];
 

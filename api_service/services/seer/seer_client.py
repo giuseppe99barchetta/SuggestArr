@@ -17,6 +17,32 @@ MEDIA_PAGE_SIZE = 100  # Number of media items fetched per page when loading ava
 # 4 = PARTIALLY_AVAILABLE, 5 = AVAILABLE (same values in Overseerr and Jellyseerr).
 # Seer tracks regular and 4K availability separately (status / status4k).
 AVAILABLE_MEDIA_STATUSES = {4, 5}
+# How far along a title is, by Seer MediaStatus (2 pending, 3 processing, 4 partial, 5 available).
+MEDIA_STATUS_ORDER = {1: 'pending', 2: 'processing', 3: 'partial', 4: 'available'}
+MEDIA_STATUS_RANK = {2: 1, 3: 2, 4: 3, 5: 4}
+
+
+def media_play_url(media):
+    """Seer's link to play a title on the media server, when it is in the library.
+
+    Jellyseerr/Seerr call it ``mediaUrl`` (Jellyfin, Emby or Plex), Overseerr
+    ``plexUrl``; the 4K copy's link is used when only that copy is available.
+    Only http(s) links are returned, as the value ends up in a page link.
+
+    :param media: One item of Seer's media list.
+    :return: The URL, or None.
+    """
+    candidates = []
+    if media.get('status') in AVAILABLE_MEDIA_STATUSES:
+        candidates += [media.get('mediaUrl'), media.get('plexUrl')]
+    if media.get('status4k') in AVAILABLE_MEDIA_STATUSES:
+        candidates += [media.get('mediaUrl4k'), media.get('plexUrl4k')]
+    for url in candidates:
+        if isinstance(url, str) and urlsplit(url.strip()).scheme.lower() in ('http', 'https'):
+            url = url.strip()
+            # Longer would not fit the stored column; a cut link would not play anything.
+            return url if len(url) <= 500 else None
+    return None
 
 
 def normalize_seer_url(url):
@@ -700,6 +726,24 @@ class SeerClient(BaseHTTPClient):
             self.logger.error("Error in bulk check requests: %s", e)
             return set()
 
+    async def _load_media_pages(self):
+        """Read every page of Seer's media list (all statuses).
+
+        :return: List of decoded pages (a page that failed is None), or None when
+            the first page could not be read at all.
+        """
+        first_page = await self._fetch_available_media_page(0)
+        if first_page is None:
+            return None
+        total = (first_page.get('pageInfo') or {}).get('results') or 0
+        pages = [first_page]
+        if total > MEDIA_PAGE_SIZE:
+            pages.extend(await asyncio.gather(*[
+                self._fetch_available_media_page(skip)
+                for skip in range(MEDIA_PAGE_SIZE, total, MEDIA_PAGE_SIZE)
+            ]))
+        return pages
+
     async def get_available_tmdb_ids(self) -> Dict[str, Set[str]]:
         """Fetch the TMDB IDs that Seer reports as available or partially available.
 
@@ -717,21 +761,13 @@ class SeerClient(BaseHTTPClient):
         """
         available = {'movie': set(), 'tv': set()}
 
-        first_page = await self._fetch_available_media_page(0)
-        if first_page is None:
+        pages = await self._load_media_pages()
+        if pages is None:
             self.logger.warning(
                 "Could not load available media from Seer; "
                 "already-in-library checks will use the media server library only."
             )
             return available
-
-        total = (first_page.get('pageInfo') or {}).get('results') or 0
-        pages = [first_page]
-        if total > MEDIA_PAGE_SIZE:
-            pages.extend(await asyncio.gather(*[
-                self._fetch_available_media_page(skip)
-                for skip in range(MEDIA_PAGE_SIZE, total, MEDIA_PAGE_SIZE)
-            ]))
 
         for page in pages:
             if page is None:
@@ -752,6 +788,45 @@ class SeerClient(BaseHTTPClient):
             len(available['movie']), len(available['tv']),
         )
         return available
+
+    async def get_application_url(self):
+        """Seer's public address ("Application URL" in its settings), when set.
+
+        :return: An http(s) URL without trailing slash, or None.
+        """
+        data = await self._make_request("GET", "api/v1/settings/main", retries=1)
+        url = (data or {}).get('applicationUrl') if isinstance(data, dict) else None
+        if isinstance(url, str) and urlsplit(url.strip()).scheme.lower() in ('http', 'https'):
+            return url.strip().rstrip('/')
+        return None
+
+    async def get_media_statuses(self):
+        """Where each title Seer knows about stands, from requested to in the library.
+
+        The regular and 4K copies are tracked separately; the further along of the
+        two wins, so a title available in either counts as available. Available
+        titles also carry Seer's link to play them on the media server.
+
+        :return: Dict mapping ``(media_type, tmdb_id)`` to ``{'status', 'url'}``, where
+            status is one of MEDIA_STATUS_ORDER's values and url is an http(s) link or
+            None; or None when Seer could not be read completely (a partial read must
+            not make titles look as if they had left Seer).
+        """
+        pages = await self._load_media_pages()
+        if pages is None or any(page is None for page in pages):
+            self.logger.warning("Could not read Seer's media list completely; availability not updated.")
+            return None
+        statuses = {}
+        for page in pages:
+            for media in page.get('results') or []:
+                media_type, tmdb_id = media.get('mediaType'), media.get('tmdbId')
+                ranks = [MEDIA_STATUS_RANK.get(media.get(key), 0) for key in ('status', 'status4k')]
+                best = max(ranks)
+                if media_type in ('movie', 'tv') and tmdb_id and best:
+                    statuses[(media_type, str(tmdb_id))] = {
+                        'status': MEDIA_STATUS_ORDER[best], 'url': media_play_url(media),
+                    }
+        return statuses
 
     async def _fetch_available_media_page(self, skip):
         """Fetch one page of Seer's media list (all statuses; filtered by the caller).

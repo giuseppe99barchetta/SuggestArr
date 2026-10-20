@@ -90,6 +90,7 @@
           <div class="flex min-w-0 flex-col gap-1.5">
             <div class="flex flex-wrap items-center gap-2">
               <h2 class="m-0 text-base font-bold text-ink">{{ job.name }}</h2>
+              <span v-if="!job.enabled" class="rounded-md bg-caution/15 px-2 py-0.5 text-[11px] font-bold text-caution"><i aria-hidden="true" class="fas fa-pause mr-1 text-[9px]"></i>Paused</span>
               <span class="rounded-md bg-raised px-2 py-0.5 text-[11px] font-bold text-ink-2">{{ getJobTypeLabel(job.job_type) }}</span>
               <span class="rounded-md bg-raised px-2 py-0.5 text-[11px] font-bold text-ink-2"><i aria-hidden="true" :class="getMediaTypeIcon(job.media_type)" class="mr-1"></i>{{ getMediaTypeLabel(job.media_type) }}</span>
             </div>
@@ -133,18 +134,6 @@
         </div>
 
         <div class="ml-auto flex flex-wrap items-center gap-2" :data-tour-id="index === 0 ? 'jobs-first-card-actions' : null">
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="job.enabled ? 'true' : 'false'"
-            :aria-label="`${job.name} enabled`"
-            class="flex min-h-[44px] cursor-pointer items-center gap-2.5 border-0 bg-transparent px-1 text-[13px] text-ink-2 disabled:opacity-50"
-            :disabled="isToggling[job.id]"
-            @click="toggleJob(job)"
-          >
-            <span class="relative inline-block h-[22px] w-10 rounded-full transition-colors" :class="job.enabled ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="job.enabled ? 'left-[21px]' : 'left-[3px]'"></span></span>
-            {{ job.enabled ? 'On' : 'Paused' }}
-          </button>
           <button type="button" class="ui-btn" :disabled="isDryRunning[job.id] || isRunning[job.id]" title="Preview what this job would request" @click="dryRunJob(job)">
             <i aria-hidden="true" :class="isDryRunning[job.id] ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>Preview
           </button>
@@ -328,7 +317,7 @@ export default {
         {
           targetId: 'jobs-first-card-actions',
           title: 'Job Controls',
-          description: 'Pause a job without deleting it, preview what it would request, or run it now. Edit, duplicate and delete are under the ⋯ menu.',
+          description: 'Preview what a job would request or run it now. Pause, edit, duplicate and delete are under the ⋯ menu.',
           position: 'top'
         },
         {
@@ -479,6 +468,7 @@ export default {
     },
 
     async toggleJob(job) {
+      if (this.isToggling[job.id]) return;
       this.isToggling[job.id] = true;
       try {
         const response = await jobsApi.toggleJob(job.id);
@@ -602,6 +592,9 @@ export default {
     // Secondary actions live in the card's "more" menu, so the card shows only the two everyday ones.
     jobMenuItems(job) {
       return [
+        job.enabled
+          ? { label: 'Pause', icon: 'fas fa-pause', onSelect: () => this.toggleJob(job) }
+          : { label: 'Resume', icon: 'fas fa-play-circle', onSelect: () => this.toggleJob(job) },
         { label: 'Edit', icon: 'fas fa-pen', onSelect: () => this.editJob(job) },
         { label: 'Duplicate', icon: 'fas fa-clone', onSelect: () => this.duplicateJob(job) },
         ...(this.lastDryRunCache[job.id] ? [{ label: 'Last preview', icon: 'fas fa-history', onSelect: () => this.reopenDryRun(job) }] : []),

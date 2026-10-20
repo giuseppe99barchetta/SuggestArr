@@ -52,7 +52,7 @@
         </select>
       </label>
       <button
-        v-if="sortBy !== 'date-desc' || mediaTypeFilter !== 'all' || requestUserFilter !== 'all' || searchQuery"
+        v-if="sortBy !== 'date-desc' || mediaTypeFilter !== 'all' || requestUserFilter !== 'all' || progressFilter !== 'all' || searchQuery"
         type="button"
         class="h-[42px] cursor-pointer rounded-ctl border-0 bg-transparent px-3 text-sm font-semibold text-ink-3 hover:text-ink"
         @click="clearFilters"
@@ -113,7 +113,7 @@
             <span class="relative block aspect-[2/3] w-full overflow-hidden rounded-[8px] bg-black/30 ring-1 ring-white/10 shadow-[0_6px_20px_rgba(0,0,0,0.35)] transition group-hover:ring-2 group-hover:ring-white/70">
               <img v-if="request.poster_path" :src="request.poster_path" alt="" loading="lazy" class="absolute inset-0 h-full w-full object-cover" />
               <span v-else class="absolute inset-0 flex items-center justify-center text-2xl text-white/40"><i aria-hidden="true" class="fas fa-film"></i></span>
-              <span v-if="request.watched_at" class="absolute right-1.5 top-1.5 rounded-md bg-good px-1.5 py-0.5 text-[10px] font-bold text-on-good" title="Watched"><i aria-hidden="true" class="fas fa-check"></i><span class="sr-only">Watched</span></span>
+              <MediaStatusBadge small :watched-at="request.watched_at" :availability="request.availability" class="absolute right-1.5 top-1.5" />
               <span v-if="request.media_type === 'tv'" class="absolute left-1.5 top-1.5 rounded-md bg-canvas/80 px-1.5 py-0.5 text-[10px] font-bold text-ink">TV</span>
             </span>
             <span class="block w-full truncate text-[13px] font-semibold leading-snug text-white" :title="request.title">{{ request.title }}</span>
@@ -178,10 +178,11 @@
           :key="request.request_id"
           :title="request.title"
           :poster="request.poster_path || ''"
-          badge="Requested"
-          tone="notice"
           @open="openModal(request)"
         >
+          <template #overlay>
+            <MediaStatusBadge :watched-at="request.watched_at" :availability="request.availability" class="absolute right-2.5 top-2.5" />
+          </template>
           <span class="text-xs font-semibold text-ink-2">{{ request.media_type === 'movie' ? 'Movie' : 'TV' }}<template v-if="request.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(request.rating) }}</template></span>
           <span class="line-clamp-2 text-xs leading-snug text-ink-3">From {{ request.source_title }}</span>
           <span class="flex min-w-0 text-xs text-ink-4"><span v-if="request.user_name || request.user_id" class="truncate" :title="`For ${request.user_name || request.user_id}`">For {{ request.user_name || request.user_id }}</span><span class="shrink-0 whitespace-pre"><template v-if="request.user_name || request.user_id"> · </template>{{ formatDate(request.requested_at) }}</span></span>
@@ -297,11 +298,13 @@
 <script>
 import axios from "axios";
 import MediaCard from '@/components/ui/MediaCard.vue';
+import MediaStatusBadge from '@/components/ui/MediaStatusBadge.vue';
 import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import MediaDetailsModal from './MediaDetailsModal.vue';
 import { formatDate } from '@/utils/dateUtils.js';
 import { getRequestSourceVisual } from '@/utils/jobTypeVisuals.js';
 import { getAiSearchRequests } from '@/api/api.js';
+import { PROGRESS_OPTIONS } from '@/utils/mediaStatus.js';
 import RequestWorkflowPanel from './RequestWorkflowPanel.vue';
 import { approvalEnabled } from '@/utils/requestApproval.js';
 
@@ -312,6 +315,7 @@ export default {
   name: "RequestsPage",
   components: {
     MediaCard,
+    MediaStatusBadge,
     MediaGridSkeleton,
     MediaDetailsModal,
     RequestWorkflowPanel,
@@ -326,6 +330,8 @@ export default {
       sortBy: 'date-desc',
       mediaTypeFilter: 'all',
       requestUserFilter: 'all',
+      progressFilter: 'all',
+      progressOptions: PROGRESS_OPTIONS,
       requestUsers: [],
       showModal: false,
       selectedSource: null,
@@ -422,6 +428,10 @@ export default {
       ];
       if (this.requestUserOptions.length > 1) {
         controls.push({ key: 'requestUserFilter', label: 'Requested for', value: this.requestUserFilter, options: this.requestUserOptions });
+      }
+      // Seer progress only applies to sent requests, so it hides for workflow-only status views.
+      if (this.viewMode === 'by-content' || (this.viewMode === 'all-requests' && ['all', 'sent'].includes(this.requestStatusFilter))) {
+        controls.push({ key: 'progressFilter', label: 'Progress', value: this.progressFilter, options: this.progressOptions });
       }
       if (this.viewMode === 'all-requests' && this.approvalEnabled && !this.isApprovalTab) {
         controls.push({ key: 'requestStatusFilter', label: 'Status', value: this.requestStatusFilter, options: this.requestStatusOptions });
@@ -573,6 +583,9 @@ export default {
     },
 
     requestUserFilter() {
+      this.resetAndReload();
+    },
+    progressFilter() {
       this.resetAndReload();
     },
     
@@ -795,6 +808,7 @@ export default {
       this.sortBy = 'date-desc';
       this.mediaTypeFilter = 'all';
       this.requestUserFilter = 'all';
+      this.progressFilter = 'all';
       this.searchQuery = '';
     },
 
@@ -862,6 +876,7 @@ export default {
           sort_by: this.sortBy,
         };
         if (this.requestUserFilter !== 'all') params.user_id = this.requestUserFilter;
+        if (this.progressFilter !== 'all') params.progress = this.progressFilter;
 
         const response = await axios.get('/api/automation/requests', { params });
         const { data, total_pages, total_sources, total_requests, request_users } = response.data;
@@ -903,6 +918,8 @@ export default {
             source_origin: request.source_origin,
             feedback: request.feedback || null,
             watched_at: request.watched_at || null,
+            availability: request.availability || null,
+            media_url: request.media_url || null,
           })),
         }));
 

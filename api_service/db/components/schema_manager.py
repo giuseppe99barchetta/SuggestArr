@@ -282,6 +282,16 @@ class SchemaManager:
                     PRIMARY KEY (tmdb_id, media_type)
                 )
             """,
+            'media_availability': """
+                CREATE TABLE IF NOT EXISTS media_availability (
+                    media_type VARCHAR(16) NOT NULL,
+                    tmdb_id VARCHAR(64) NOT NULL,
+                    status VARCHAR(16) NOT NULL,
+                    url VARCHAR(512),
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (media_type, tmdb_id)
+                )
+            """,
             'ai_search_history': """
                 CREATE TABLE IF NOT EXISTS ai_search_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -477,6 +487,7 @@ class SchemaManager:
         initialize_recap_schema(self._database)
         self._migrate_execution_history()
         self._migrate_request_expiry()
+        self._migrate_media_availability()
         self._migrate_suggestion_feedback()
         self._widen_mysql_overview_columns()
         self._create_api_key_indexes()
@@ -524,6 +535,23 @@ class SchemaManager:
                 conn.commit()
         except Exception as exc:
             raise DatabaseError(error=f"Execution-history migration failed: {exc}", db_type=self.db_type) from exc
+
+    def _migrate_media_availability(self):
+        """Add the play-link column to availability tables created before it existed."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type == 'sqlite':
+                cursor.execute('PRAGMA table_info(media_availability)')
+                existing = {row[1] for row in cursor.fetchall()}
+            elif self.db_type == 'postgres':
+                cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='media_availability'")
+                existing = {row[0] for row in cursor.fetchall()}
+            else:
+                cursor.execute('SHOW COLUMNS FROM media_availability')
+                existing = {row[0] for row in cursor.fetchall()}
+            if 'url' not in existing:
+                cursor.execute('ALTER TABLE media_availability ADD COLUMN url VARCHAR(512)')
+            conn.commit()
 
     def _migrate_request_expiry(self):
         """Older deliveries remain untracked; never infer their remote identity."""

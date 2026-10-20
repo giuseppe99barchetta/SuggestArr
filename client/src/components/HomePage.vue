@@ -90,8 +90,8 @@
           :badge="request.media_type === 'movie' ? 'Movie' : 'TV'"
           @open="openDetails(request)"
         >
-          <template v-if="request.watched_at" #overlay>
-            <span class="absolute right-2.5 top-2.5 rounded-md bg-good px-2 py-0.5 text-[11px] font-bold text-on-good"><i aria-hidden="true" class="fas fa-check mr-1"></i>Watched</span>
+          <template #overlay>
+            <MediaStatusBadge :watched-at="request.watched_at" :availability="request.availability" class="absolute right-2.5 top-2.5" />
           </template>
           <span class="truncate text-xs text-ink-4" :title="request.user_name || request.user_id ? `for ${request.user_name || request.user_id}` : null">{{ formatDate(request.requested_at) }}<template v-if="request.user_name || request.user_id"> · for {{ request.user_name || request.user_id }}</template></span>
         </MediaCard>
@@ -160,6 +160,7 @@ import { SEEN_OPTIONS, loadSeenRatingMode, ratedSeenOption, saveSeenFeedback } f
 import SeenRatingDialog from '@/components/SeenRatingDialog.vue';
 import { approvalEnabled } from '@/utils/requestApproval.js';
 import JourneyPanel from '@/components/recap/JourneyPanel.vue';
+import MediaStatusBadge from '@/components/ui/MediaStatusBadge.vue';
 import { notifyRequestsChanged } from '@/utils/requestEvents.js';
 import { keyDecision, swipeDecision, touchPoint } from '@/utils/quickDecision.js';
 
@@ -168,7 +169,7 @@ import { keyDecision, swipeDecision, touchPoint } from '@/utils/quickDecision.js
  */
 export default {
   name: 'HomePage',
-  components: { AppDialog, MediaCard, MediaGridSkeleton, MediaDetailsModal, ApprovalProfileChoice, JourneyPanel, SeenRatingDialog },
+  components: { AppDialog, MediaCard, MediaGridSkeleton, MediaDetailsModal, ApprovalProfileChoice, JourneyPanel, SeenRatingDialog, MediaStatusBadge },
   // The dashboard shell passes settings props to every tab; only currentUser is used here.
   inheritAttrs: false,
   props: {

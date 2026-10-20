@@ -1,3 +1,6 @@
+import time
+from urllib.parse import urlsplit
+
 from flask import Blueprint, request, jsonify
 import aiohttp
 from api_service.services.seer.seer_client import SeerClient
@@ -7,6 +10,10 @@ from api_service.utils.ssrf_guard import validate_url
 
 logger = LoggerManager().get_logger("SeerRoute")
 seer_bp = Blueprint('seer', __name__)
+
+# Seer's browser address rarely changes; asked again at most once an hour.
+_WEB_URL_TTL = 3600
+_web_url_cache = {'url': None, 'at': 0.0}
 
 
 def _load_seer_config():
@@ -288,3 +295,30 @@ async def get_sonarr_servers():
     except Exception as e:
         logger.error(f'Error fetching Sonarr servers: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error fetching Sonarr servers', 'type': 'error'}), 500
+
+
+@seer_bp.route('/web-url', methods=['GET'])
+async def get_seer_web_url():
+    """
+    Address to open Seer in the browser, for "Open in Seer" links.
+
+    Prefers the Application URL set in Seer, since the configured API URL is often an
+    internal Docker address the browser cannot reach; falls back to that API URL.
+
+    Returns:
+        200 with { url } — url is None when Seer is not configured.
+    """
+    if _web_url_cache['url'] and time.time() - _web_url_cache['at'] < _WEB_URL_TTL:
+        return jsonify({'url': _web_url_cache['url']}), 200
+    api_url, api_key, session_token = _load_seer_config()
+    if not api_url or urlsplit(api_url).scheme.lower() not in ('http', 'https'):
+        return jsonify({'url': None}), 200
+    url = None
+    try:
+        async with SeerClient(api_url=api_url, api_key=api_key, session_token=session_token) as seer_client:
+            url = await seer_client.get_application_url()
+    except Exception as exc:
+        logger.warning("Could not read Seer's application URL: %s", exc)
+    url = url or api_url.rstrip('/')
+    _web_url_cache.update(url=url, at=time.time())
+    return jsonify({'url': url}), 200

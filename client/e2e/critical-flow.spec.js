@@ -239,8 +239,8 @@ test("secondary job actions sit in a keyboard-friendly menu", async ({ page }) =
   const more = page.getByRole("button", { name: "More actions for Manual job" });
   await more.click();
   const menu = page.getByRole("menu", { name: "More actions for Manual job" });
-  await expect(menu.getByRole("menuitem")).toHaveText(["Edit", "Duplicate", "Delete"]);
-  await expect(menu.getByRole("menuitem", { name: "Edit" })).toBeFocused();
+  await expect(menu.getByRole("menuitem")).toHaveText(["Pause", "Edit", "Duplicate", "Delete"]);
+  await expect(menu.getByRole("menuitem", { name: "Pause" })).toBeFocused();
   await page.keyboard.press("ArrowUp");
   await expect(menu.getByRole("menuitem", { name: "Delete" })).toBeFocused();
   await page.keyboard.press("Escape");
@@ -368,4 +368,42 @@ test("the trailer button does not move the details when it arrives", async ({ pa
   answerTrailer();
   await expect(dialog.getByRole("link", { name: "Watch trailer" })).toHaveAttribute("href", "https://www.youtube.com/watch?v=e2e");
   expect(await heading.boundingBox()).toEqual(before);
+});
+
+test("a fully detailed request fits its dialog without scrolling and links to the library and Seer", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockApi(page);
+  const cors = { "access-control-allow-origin": "http://127.0.0.1:5173", "access-control-allow-credentials": "true" };
+  const fulfill = (route, body) => route.fulfill({ contentType: "application/json", headers: cors, body: JSON.stringify(body) });
+  await page.route("http://localhost:5000/api/automation/requests?**", route => fulfill(route, {
+    data: [{
+      source_id: "100", source_title: "Fantastic Beasts: The Crimes of Grindelwald", media_type: "movie",
+      requests: [{
+        request_id: "155", title: "The Dark Knight", media_type: "movie", requested_at: "2030-01-01T10:00:00Z",
+        overview: "Batman raises the stakes in his war on crime. With the help of Lt. Jim Gordon and District Attorney Harvey Dent, Batman sets out to dismantle the remaining criminal organizations that plague the streets. The partnership proves to be effective, but they soon find themselves prey to a reign of chaos.",
+        release_date: "2008-07-16", rating: 8.5, user_id: "u1", user_name: "giuseppe",
+        rationale: "Given your interest in Spider-Man and 2001: A Space Odyssey, you seem to appreciate well-crafted superhero films with darker themes and strong visuals. The Dark Knight boasts a TMDB rating of 9.0 and aligns with the action and adventure genres.",
+        availability: "available", media_url: "http://192.168.1.20:8096/web/index.html#!/details?id=abc",
+      }],
+    }],
+    total_pages: 1, total_sources: 1, total_requests: 1, request_users: [],
+  }));
+  await page.route("http://localhost:5000/api/tmdb/details/**", route => fulfill(route, {
+    trailer_url: "https://www.youtube.com/watch?v=e2e", genres: ["Action", "Thriller", "Crime"], runtime: 152, region: "IT",
+    cast: ["Christian Bale", "Heath Ledger", "Aaron Eckhart", "Michael Caine", "Maggie Gyllenhaal", "Gary Oldman"].map(name => ({ name, character: "Role", profile_path: null })),
+    providers: [{ name: "Netflix", logo_path: "/netflix.png" }],
+  }));
+  await page.route("http://localhost:5000/api/seer/web-url", route => fulfill(route, { url: "http://192.168.1.5:5055" }));
+  await signIn(page);
+  await page.getByRole("button", { name: "Show details for The Dark Knight" }).click();
+  const dialog = page.getByRole("dialog", { name: "The Dark Knight" });
+  await expect(dialog.getByRole("link", { name: "Watch now" })).toHaveAttribute("href", "http://192.168.1.20:8096/web/index.html#!/details?id=abc");
+  await expect(dialog.getByRole("link", { name: "Seer" })).toHaveAttribute("href", "http://192.168.1.5:5055/movie/155");
+  await expect(dialog.getByText("Available to watch")).toBeVisible();
+  await expect(dialog.getByText("Action, Thriller, Crime")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Show all 6 cast members" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("details-modal.png") });
+
+  const scroller = dialog.locator(".overflow-y-auto").first();
+  expect(await scroller.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
 });
