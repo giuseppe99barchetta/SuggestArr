@@ -354,7 +354,7 @@ test("the trailer button does not move the details when it arrives", async ({ pa
     await route.fulfill({
       contentType: "application/json",
       headers: { "access-control-allow-origin": "http://127.0.0.1:5173", "access-control-allow-credentials": "true" },
-      body: JSON.stringify({ trailer_url: "https://www.youtube.com/watch?v=e2e" }),
+      body: JSON.stringify({ trailer_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }),
     });
   });
   await signIn(page);
@@ -393,7 +393,7 @@ test("a fully detailed request fits its dialog without scrolling and links to th
     total_pages: 1, total_sources: 1, total_requests: 1, request_users: [],
   }));
   await page.route("http://localhost:5000/api/tmdb/details/**", route => fulfill(route, {
-    trailer_url: "https://www.youtube.com/watch?v=e2e", genres: ["Action", "Thriller", "Crime"], runtime: 152, region: "IT",
+    trailer_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", genres: ["Action", "Thriller", "Crime"], runtime: 152, region: "IT",
     cast: ["Christian Bale", "Heath Ledger", "Aaron Eckhart", "Michael Caine", "Maggie Gyllenhaal", "Gary Oldman"].map(name => ({ name, character: "Role", profile_path: null })),
     providers: [{ name: "Netflix", logo_path: "/netflix.png" }],
   }));
