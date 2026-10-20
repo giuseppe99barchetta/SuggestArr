@@ -94,6 +94,7 @@ import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
 import { approvalNeedsDialog, loadSeerServers, mediaTypesOf } from '@/utils/requestProfiles.js';
 import { SEEN_OPTIONS, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
+import { notifyRequestsChanged } from '@/utils/requestEvents.js';
 export default {
   name: 'RequestWorkflowPanel', components: { AppDialog, MediaCard, MediaGridSkeleton, ApprovalProfileChoice },
   emits: ['open', 'update:total'],
@@ -172,6 +173,7 @@ export default {
       this.actionLoading = true;
       try {
         await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] });
+        notifyRequestsChanged();
         await this.load();
         this.$toast.open({ message: action === 'approve' ? 'Request queued for Seer' : 'Request updated', type: 'success' });
       } finally { this.actionLoading = false; }
@@ -190,6 +192,7 @@ export default {
       this.actionLoading = true;
       try {
         await axios.post(`/api/automation/requests/workflow/${action}`, { ids, remove_blacklist: removeBlacklist, ...(profile ? { profile } : {}) });
+        notifyRequestsChanged();
         this.confirmation = null;
         await this.load();
         this.$toast.open({ message: 'Requests updated', type: 'success' });

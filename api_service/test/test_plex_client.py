@@ -66,56 +66,93 @@ class TestNormalizeGuidProviderId(unittest.TestCase):
 # get_all_users
 # ---------------------------------------------------------------------------
 
+def _xml_response(status, users):
+    """Build a mock plex.tv /api/users/ response: XML only, read via .text()."""
+    body = '<MediaContainer>' + ''.join(
+        '<User ' + ' '.join(f'{k}="{v}"' for k, v in user.items()) + ' />' for user in users
+    ) + '</MediaContainer>'
+    resp = AsyncMock()
+    resp.status = status
+    resp.text = AsyncMock(return_value=body)
+    resp.__aenter__ = AsyncMock(return_value=resp)
+    resp.__aexit__ = AsyncMock(return_value=False)
+    return resp
+
+
 class TestGetAllUsers(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.client = _make_client()
 
     async def test_merges_friends_and_local_accounts(self):
-        friends = [
-            {'id': 1, 'title': 'Alice', 'username': 'alice'},
-        ]
+        friends = [{'id': '1', 'title': 'Alice', 'username': 'alice'}]
         accounts = {
             'MediaContainer': {
                 'Account': [{'id': 2, 'name': 'Bob'}]
             }
         }
-        friends_resp = _text_response(200, friends)
-        accounts_resp = _text_response(200, accounts)
         session = MagicMock()
-        session.get = MagicMock(side_effect=[friends_resp, accounts_resp])
+        session.get = MagicMock(side_effect=[_xml_response(200, friends), _text_response(200, accounts)])
         with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
             result = await self.client.get_all_users()
 
-        ids = [u['id'] for u in result]
-        self.assertIn(1, ids)
-        self.assertIn(2, ids)
+        self.assertEqual(result, [{'id': 1, 'name': 'Alice'}, {'id': 2, 'name': 'Bob'}])
+
+    async def test_reads_friends_from_the_v1_users_endpoint(self):
+        # plex.tv answers 410 Gone on /api/v2/friends; /api/users/ is the live endpoint.
+        session = MagicMock()
+        session.get = MagicMock(side_effect=[_xml_response(200, []), _text_response(200, {'MediaContainer': {}})])
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            await self.client.get_all_users()
+        self.assertEqual(session.get.call_args_list[0].args[0], 'https://plex.tv/api/users/')
 
     async def test_excludes_friends_without_username(self):
         friends = [
-            {'id': 1, 'title': 'Alice', 'username': 'alice'},
-            {'id': 2, 'title': 'NoUser'},              # no 'username' key
+            {'id': '1', 'title': 'Alice', 'username': 'alice'},
+            {'id': '2', 'title': 'NoUser'},              # no username attribute
         ]
-        accounts_resp = _text_response(200, {'MediaContainer': {'Account': []}})
-        friends_resp = _text_response(200, friends)
         session = MagicMock()
-        session.get = MagicMock(side_effect=[friends_resp, accounts_resp])
+        session.get = MagicMock(side_effect=[_xml_response(200, friends),
+                                             _text_response(200, {'MediaContainer': {'Account': []}})])
         with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
             result = await self.client.get_all_users()
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['id'], 1)
 
     async def test_deduplicates_by_id(self):
-        friends = [{'id': 1, 'title': 'Alice', 'username': 'alice'}]
+        friends = [{'id': '1', 'title': 'Alice', 'username': 'alice'}]
         accounts = {'MediaContainer': {'Account': [{'id': 1, 'name': 'Alice'}]}}
-        friends_resp = _text_response(200, friends)
-        accounts_resp = _text_response(200, accounts)
         session = MagicMock()
-        session.get = MagicMock(side_effect=[friends_resp, accounts_resp])
+        session.get = MagicMock(side_effect=[_xml_response(200, friends), _text_response(200, accounts)])
         with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
             result = await self.client.get_all_users()
         ids = [u['id'] for u in result]
-        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(ids, [1])
+
+    async def test_failed_friends_request_still_returns_local_accounts(self):
+        accounts = {'MediaContainer': {'Account': [{'id': 2, 'name': 'Bob'}]}}
+        session = MagicMock()
+        session.get = MagicMock(side_effect=[_error_response(410), _text_response(200, accounts)])
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            result = await self.client.get_all_users()
+        self.assertEqual(result, [{'id': 2, 'name': 'Bob'}])
+
+    async def test_mixed_numeric_and_text_ids_sort_without_error(self):
+        friends = [{'id': 'abc', 'title': 'Text', 'username': 'text'}, {'id': '10', 'title': 'Ten', 'username': 'ten'}]
+        accounts = {'MediaContainer': {'Account': [{'id': 2, 'name': 'Bob'}]}}
+        session = MagicMock()
+        session.get = MagicMock(side_effect=[_xml_response(200, friends), _text_response(200, accounts)])
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            result = await self.client.get_all_users()
+        self.assertEqual([u['id'] for u in result], [2, 10, 'abc'])
+
+    async def test_falls_back_to_username_when_title_is_missing(self):
+        self.assertEqual(PlexClient._parse_friends('<MediaContainer><User id="5" username="carol" /></MediaContainer>'),
+                         [{'id': 5, 'name': 'carol'}])
+
+    async def test_invalid_friends_xml_raises(self):
+        with self.assertRaises(PlexClientError):
+            PlexClient._parse_friends('{"not": "xml"}')
 
     async def test_raises_plex_connection_error_on_client_error(self):
         session = MagicMock()

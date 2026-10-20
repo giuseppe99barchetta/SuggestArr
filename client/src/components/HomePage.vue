@@ -142,6 +142,7 @@ import { approvalNeedsDialog, loadSeerServers } from '@/utils/requestProfiles.js
 import { SEEN_OPTIONS, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
 import { approvalEnabled } from '@/utils/requestApproval.js';
 import JourneyPanel from '@/components/recap/JourneyPanel.vue';
+import { notifyRequestsChanged } from '@/utils/requestEvents.js';
 
 /**
  * Dashboard home: request stats, the approval queue, recent requests and job activity.
@@ -348,6 +349,7 @@ export default {
       this.actionLoadingId = id;
       try {
         await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id], ...(profile ? { profile } : {}) });
+        notifyRequestsChanged();
         this.confirmRejectId = null;
         await this.loadPendingRequests();
         this.$toast.open({ message: action === 'approve' ? 'Request queued for Seer' : 'Request rejected', type: 'success' });
