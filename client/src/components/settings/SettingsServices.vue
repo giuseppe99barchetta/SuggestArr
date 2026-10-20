@@ -1,27 +1,30 @@
 <template>
   <div>
     <!-- Section header hidden in wizard mode (wizard shell provides its own header) -->
-    <PageHeader v-if="!wizardMode" title="Connections" subtitle="The services SuggestArr reads from and sends requests to. Test each one after changing it, then save." />
+    <PageHeader v-if="!wizardMode" title="Connections" subtitle="The services SuggestArr reads from and sends requests to. Working ones are folded: open one to change it, test it, then save." />
 
     <div class="mb-5 flex flex-col gap-5">
-      <MediaServerCard v-if="showSection('media-server')" />
-      <SeerCard v-if="showSection('seer')" />
+      <section :class="wizardMode ? '' : 'flex flex-col gap-2'">
+        <h3 v-if="!wizardMode" class="m-0 text-xs font-bold tracking-wider text-ink-4 uppercase">Required</h3>
+        <div :class="listClass">
+          <MediaServerCard v-if="showSection('media-server')" />
+          <SeerCard v-if="showSection('seer')" />
+          <TmdbCard v-if="showSection('tmdb')" />
+        </div>
+      </section>
 
-      <!-- Metadata and public lists -->
-      <div v-if="showSection('tmdb') || (!wizardMode && showSection('mdblist'))" :class="wizardMode ? '' : 'grid gap-5 lg:grid-cols-2'">
-        <TmdbCard v-if="showSection('tmdb')" />
-        <MdblistCard v-if="!wizardMode && showSection('mdblist')" />
-      </div>
-
-      <!-- Optional services: side by side in the dashboard -->
-      <div v-if="showSection('omdb') || showSection('trakt')" :class="wizardMode ? '' : 'grid gap-5 lg:grid-cols-2'">
-        <OmdbCard v-if="showSection('omdb')" />
-        <TraktCard v-if="showSection('trakt')" />
-      </div>
+      <section v-if="showSection('omdb') || showSection('trakt') || (!wizardMode && showSection('mdblist'))" :class="wizardMode ? '' : 'flex flex-col gap-2'">
+        <h3 v-if="!wizardMode" class="m-0 text-xs font-bold tracking-wider text-ink-4 uppercase">Optional extras</h3>
+        <div :class="listClass">
+          <MdblistCard v-if="!wizardMode && showSection('mdblist')" />
+          <OmdbCard v-if="showSection('omdb')" />
+          <TraktCard v-if="showSection('trakt')" />
+        </div>
+      </section>
     </div>
 
-    <div v-if="!wizardMode" class="flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-panel max-lg:bottom-24' : 'border-edge bg-panel'">
-      <span class="flex-[1_1_200px] text-sm" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
+    <div v-if="!wizardMode" class="flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-panel max-lg:bottom-24' : 'border-transparent px-0'">
+      <span class="flex-[1_1_200px] text-sm" :class="hasChanges ? 'text-brand-ink' : 'text-ink-4'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
       <button type="button" class="ui-btn border-0 bg-transparent text-ink-3 hover:text-ink" :disabled="isLoading" @click="resetToDefaults">Reset</button>
       <button type="button" class="ui-btn-primary" :disabled="isLoading || !hasChanges" @click="saveSettings">{{ isLoading ? 'Saving…' : 'Save changes' }}</button>
     </div>
@@ -85,6 +88,10 @@ export default {
     };
   },
   computed: {
+    // Dashboard: each group is one panel with a row per service.
+    listClass() {
+      return this.wizardMode ? '' : 'flex flex-col divide-y divide-edge rounded-card border border-edge bg-panel';
+    },
     hasChanges() {
       return JSON.stringify(this.localConfig) !== JSON.stringify(this.originalConfig);
     },

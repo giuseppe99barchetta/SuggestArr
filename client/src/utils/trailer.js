@@ -38,27 +38,19 @@ export async function loadTrailerUrl(http, item) {
 }
 
 /**
- * Look a trailer up only once it is asked for, and open it in a new tab.
- * For lists too long to look every title up in advance.
- *
- * @param {{ get: Function }} http - axios, or anything with the same `get`.
- * @param {object|null} item - The listed title.
- * @param {Function} [openTab] - Opens a blank tab and returns its window.
- * @returns {Promise<'opened'|'blocked'|'none'>} 'none' when the title has no trailer,
- *   'blocked' when it has one but the browser refused to open a tab for it.
+ * @param {string} url - A YouTube watch URL, as the API returns it.
+ * @returns {string|null} The privacy-enhanced embed URL that autoplays it; null when it is not a YouTube video.
  */
-export async function openTrailer(http, item, openTab = () => window.open('', '_blank')) {
-  // Opened before the lookup: a tab opened after waiting is blocked as a popup.
-  const tab = openTab();
-  const url = await loadTrailerUrl(http, item);
-  if (!url) {
-    tab?.close();
-    return 'none';
+export function trailerEmbedUrl(url) {
+  let id;
+  try {
+    const parsed = new URL(url);
+    id = parsed.hostname === 'youtu.be' ? parsed.pathname.slice(1) : parsed.searchParams.get('v');
+  } catch {
+    return null;
   }
-  if (!tab) return 'blocked';
-  tab.opener = null;
-  tab.location.replace(url);
-  return 'opened';
+  if (!/^[A-Za-z0-9_-]{6,20}$/.test(id || '')) return null;
+  return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`;
 }
 
 /**

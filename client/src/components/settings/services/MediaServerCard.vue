@@ -1,216 +1,217 @@
 <template>
-  <div :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4'">
-    <ServiceCardHeader v-if="!wizardMode" icon="fas fa-server" title="Media server" description="Where SuggestArr reads users, libraries and watch history from." required :status="getMediaServerStatus" :status-text="getMediaServerStatusText" />
-
-    <div v-if="!wizardMode" class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-      <label for="selectedService">Service</label>
-      <select id="selectedService" v-model="localConfig.SELECTED_SERVICE" class="ui-input" :disabled="isLoading">
-        <option value="" disabled>Select a service</option>
-        <option v-for="option in serviceOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-      </select>
-    </div>
-
-    <!-- Plex: OAuth flow (both wizard and dashboard) -->
-    <template v-if="localConfig.SELECTED_SERVICE === 'plex'">
-      <!-- Step 1: not yet logged in → show Sign in button -->
-      <div v-if="!plexOAuthLoggedIn" class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-        <button
-          @click="loginWithPlexOAuth"
-          class="ui-btn w-full border-[#e5a00d] bg-[#e5a00d] font-bold text-[#1a1a1a] hover:bg-[#cc8f0b]"
-          :disabled="plexOAuthLoading"
-        >
-          <i aria-hidden="true" v-if="plexOAuthLoading" class="fas fa-spinner fa-spin"></i>
-          <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="width:18px;height:18px;fill:currentColor;flex-shrink:0">
-            <path d="M18 18h12v12H18z"/><path d="M6 6h12v12H6zM30 6h12v12H30zM6 30h12v12H6zM30 30h12v12H30z"/>
-          </svg>
-          {{ plexOAuthLoading ? 'Waiting for Plex authorisation…' : 'Sign in with Plex' }}
-        </button>
-        <small class="block text-center text-xs leading-normal text-ink-4">
-          <i aria-hidden="true" class="fas fa-lock"></i> Opens Plex.tv in a new window for secure authentication.
-        </small>
-        <!-- Manual token fallback toggle -->
-        <button
-          @click="plexOAuthManualMode = !plexOAuthManualMode"
-          class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50 mt-2"
-        >
-          <i aria-hidden="true" class="fas fa-keyboard"></i>
-          {{ plexOAuthManualMode ? 'Use Plex login instead' : 'Enter token manually' }}
-        </button>
+  <div :class="wizardMode ? '' : 'min-w-0 px-5 py-4 max-sm:px-4'">
+    <ServiceCardHeader v-if="!wizardMode" icon="fas fa-server" title="Media server" description="Where SuggestArr reads users, libraries and watch history from." :status="getMediaServerStatus" :status-text="getMediaServerStatusText" :folded="isFolded(getMediaServerStatus)" :summary="foldSummary" @toggle="editing = !editing" />
+    <div v-show="!isFolded(getMediaServerStatus)">
+      <div v-if="!wizardMode" class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+        <label for="selectedService">Service</label>
+        <select id="selectedService" v-model="localConfig.SELECTED_SERVICE" class="ui-input" :disabled="isLoading">
+          <option value="" disabled>Select a service</option>
+          <option v-for="option in serviceOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
       </div>
 
-      <!-- Manual token fallback (also shown when user toggles it) -->
-      <template v-if="plexOAuthManualMode">
+      <!-- Plex: OAuth flow (both wizard and dashboard) -->
+      <template v-if="localConfig.SELECTED_SERVICE === 'plex'">
+        <!-- Step 1: not yet logged in → show Sign in button -->
+        <div v-if="!plexOAuthLoggedIn" class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+          <button
+            @click="loginWithPlexOAuth"
+            class="ui-btn w-full border-[#e5a00d] bg-[#e5a00d] font-bold text-[#1a1a1a] hover:bg-[#cc8f0b]"
+            :disabled="plexOAuthLoading"
+          >
+            <i aria-hidden="true" v-if="plexOAuthLoading" class="fas fa-spinner fa-spin"></i>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="width:18px;height:18px;fill:currentColor;flex-shrink:0">
+              <path d="M18 18h12v12H18z"/><path d="M6 6h12v12H6zM30 6h12v12H30zM6 30h12v12H6zM30 30h12v12H30z"/>
+            </svg>
+            {{ plexOAuthLoading ? 'Waiting for Plex authorisation…' : 'Sign in with Plex' }}
+          </button>
+          <small class="block text-center text-xs leading-normal text-ink-4">
+            <i aria-hidden="true" class="fas fa-lock"></i> Opens Plex.tv in a new window for secure authentication.
+          </small>
+          <!-- Manual token fallback toggle -->
+          <button
+            @click="plexOAuthManualMode = !plexOAuthManualMode"
+            class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50 mt-2"
+          >
+            <i aria-hidden="true" class="fas fa-keyboard"></i>
+            {{ plexOAuthManualMode ? 'Use Plex login instead' : 'Enter token manually' }}
+          </button>
+        </div>
+
+        <!-- Manual token fallback (also shown when user toggles it) -->
+        <template v-if="plexOAuthManualMode">
+          <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+            <label for="plexTokenWizard">Plex token</label>
+            <div class="flex gap-2">
+              <input
+                id="plexTokenManual"
+                v-model="localConfig.PLEX_TOKEN"
+                :type="showPlexToken ? 'text' : 'password'"
+                placeholder="Enter your Plex token"
+                class="ui-input"
+                :disabled="isLoading"
+              />
+              <button @click="showPlexToken = !showPlexToken" type="button" :aria-label="showPlexToken ? 'Hide Plex token' : 'Show Plex token'" :aria-pressed="showPlexToken.toString()" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+                <i aria-hidden="true" :class="showPlexToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+              </button>
+            </div>
+          </div>
+          <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+            <label for="plexApiUrlManual">API URL</label>
+            <input id="plexApiUrlManual" v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="ui-input" :disabled="isLoading" />
+          </div>
+          <button
+            @click="testAndFetchPlex"
+            class="ui-btn mt-4"
+            :disabled="!localConfig.PLEX_TOKEN || !localConfig.PLEX_API_URL || plexFetching"
+          >
+            <i aria-hidden="true" v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
+            <i aria-hidden="true" v-else-if="wizardMode && plexConnected" class="fas fa-check"></i>
+            <i aria-hidden="true" v-else class="fas fa-plug"></i>
+            {{ plexFetching ? 'Connecting…' : (wizardMode && plexConnected ? 'Connected' : 'Test & load') }}
+          </button>
+        </template>
+
+        <!-- Step 2: logged in via OAuth → server selection -->
+        <template v-if="plexOAuthLoggedIn && !plexOAuthManualMode">
+          <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+            <div class="mt-3 flex items-center gap-2 text-[13px] font-semibold text-good">
+              <i aria-hidden="true" class="fas fa-check-circle"></i> Authenticated with Plex
+            </div>
+          </div>
+          <!-- Multiple servers: dropdown -->
+          <div v-if="plexOAuthConnectionOptions.length > 1" class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+            <label>Server connection</label>
+            <select v-model="plexOAuthSelectedConnIdx" class="ui-input" @change="onPlexOAuthServerSelect(plexOAuthSelectedConnIdx)">
+              <option :value="null" disabled>Choose a server connection…</option>
+              <option v-for="option in plexOAuthConnectionOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </div>
+          <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+            <label>Or enter URL manually</label>
+            <div class="flex gap-2">
+              <input v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="ui-input" />
+              <button
+                type="button"
+                aria-label="Test connection and load libraries"
+                title="Test connection and load libraries"
+                @click="testAndFetchPlex"
+                class="ui-btn w-[42px] shrink-0 px-0"
+                :disabled="!localConfig.PLEX_API_URL || plexFetching"
+              >
+                <i aria-hidden="true" v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
+                <i aria-hidden="true" v-else class="fas fa-plug"></i>
+              </button>
+            </div>
+          </div>
+        </template>
+      </template>
+
+
+      <!-- Jellyfin / Emby fields -->
+      <template v-if="localConfig.SELECTED_SERVICE === 'jellyfin' || localConfig.SELECTED_SERVICE === 'emby'">
         <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-          <label for="plexTokenWizard">Plex token</label>
+          <label for="jellyfinApiUrl">{{ localConfig.SELECTED_SERVICE === 'emby' ? 'Emby' : 'Jellyfin' }} URL</label>
+          <input id="jellyfinApiUrl" v-model="localConfig.JELLYFIN_API_URL" type="url" placeholder="http://localhost:8096" class="ui-input" :disabled="isLoading" />
+        </div>
+        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+          <label for="jellyfinToken">API token</label>
           <div class="flex gap-2">
             <input
-              id="plexTokenManual"
-              v-model="localConfig.PLEX_TOKEN"
-              :type="showPlexToken ? 'text' : 'password'"
-              placeholder="Enter your Plex token"
+              id="jellyfinToken"
+              v-model="localConfig.JELLYFIN_TOKEN"
+              :type="showJellyfinToken ? 'text' : 'password'"
+              placeholder="Enter your API token"
               class="ui-input"
               :disabled="isLoading"
             />
-            <button @click="showPlexToken = !showPlexToken" type="button" :aria-label="showPlexToken ? 'Hide Plex token' : 'Show Plex token'" :aria-pressed="showPlexToken.toString()" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
-              <i aria-hidden="true" :class="showPlexToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+            <button @click="showJellyfinToken = !showJellyfinToken" type="button" :aria-label="showJellyfinToken ? 'Hide token' : 'Show token'" :aria-pressed="showJellyfinToken.toString()" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
+              <i aria-hidden="true" :class="showJellyfinToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
             </button>
           </div>
         </div>
-        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-          <label for="plexApiUrlManual">API URL</label>
-          <input id="plexApiUrlManual" v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="ui-input" :disabled="isLoading" />
-        </div>
         <button
-          @click="testAndFetchPlex"
+          @click="testAndFetchJellyfin"
           class="ui-btn mt-4"
-          :disabled="!localConfig.PLEX_TOKEN || !localConfig.PLEX_API_URL || plexFetching"
+          :disabled="isLoading || !localConfig.JELLYFIN_API_URL || !localConfig.JELLYFIN_TOKEN || jellyfinFetching"
         >
-          <i aria-hidden="true" v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
-          <i aria-hidden="true" v-else-if="plexConnected" class="fas fa-check"></i>
+          <i aria-hidden="true" v-if="jellyfinFetching" class="fas fa-spinner fa-spin"></i>
+          <i aria-hidden="true" v-else-if="wizardMode && jellyfinConnected" class="fas fa-check"></i>
           <i aria-hidden="true" v-else class="fas fa-plug"></i>
-          {{ plexFetching ? 'Connecting…' : (plexConnected ? 'Connected' : 'Test & load') }}
+          {{ jellyfinFetching ? 'Connecting…' : (wizardMode && jellyfinConnected ? 'Connected' : 'Test & load') }}
         </button>
       </template>
 
-      <!-- Step 2: logged in via OAuth → server selection -->
-      <template v-if="plexOAuthLoggedIn && !plexOAuthManualMode">
-        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-          <div class="mt-3 flex items-center gap-2 text-[13px] font-semibold text-good">
-            <i aria-hidden="true" class="fas fa-check-circle"></i> Authenticated with Plex
-          </div>
-        </div>
-        <!-- Multiple servers: dropdown -->
-        <div v-if="plexOAuthConnectionOptions.length > 1" class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-          <label>Server connection</label>
-          <select v-model="plexOAuthSelectedConnIdx" class="ui-input" @change="onPlexOAuthServerSelect(plexOAuthSelectedConnIdx)">
-            <option :value="null" disabled>Choose a server connection…</option>
-            <option v-for="option in plexOAuthConnectionOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          </select>
-        </div>
-        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-          <label>Or enter URL manually</label>
-          <div class="flex gap-2">
-            <input v-model="localConfig.PLEX_API_URL" type="url" placeholder="http://localhost:32400" class="ui-input" />
-            <button
-              type="button"
-              aria-label="Test connection and load libraries"
-              title="Test connection and load libraries"
-              @click="testAndFetchPlex"
-              class="ui-btn w-[42px] shrink-0 px-0"
-              :disabled="!localConfig.PLEX_API_URL || plexFetching"
-            >
-              <i aria-hidden="true" v-if="plexFetching" class="fas fa-spinner fa-spin"></i>
-              <i aria-hidden="true" v-else class="fas fa-plug"></i>
-            </button>
-          </div>
-        </div>
-      </template>
-    </template>
-
-
-    <!-- Jellyfin / Emby fields -->
-    <template v-if="localConfig.SELECTED_SERVICE === 'jellyfin' || localConfig.SELECTED_SERVICE === 'emby'">
-      <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-        <label for="jellyfinApiUrl">{{ localConfig.SELECTED_SERVICE === 'emby' ? 'Emby' : 'Jellyfin' }} URL</label>
-        <input id="jellyfinApiUrl" v-model="localConfig.JELLYFIN_API_URL" type="url" placeholder="http://localhost:8096" class="ui-input" :disabled="isLoading" />
-      </div>
-      <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-        <label for="jellyfinToken">API token</label>
-        <div class="flex gap-2">
-          <input
-            id="jellyfinToken"
-            v-model="localConfig.JELLYFIN_TOKEN"
-            :type="showJellyfinToken ? 'text' : 'password'"
-            placeholder="Enter your API token"
-            class="ui-input"
-            :disabled="isLoading"
-          />
-          <button @click="showJellyfinToken = !showJellyfinToken" type="button" :aria-label="showJellyfinToken ? 'Hide token' : 'Show token'" :aria-pressed="showJellyfinToken.toString()" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading">
-            <i aria-hidden="true" :class="showJellyfinToken ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-          </button>
-        </div>
-      </div>
-      <button
-        @click="testAndFetchJellyfin"
-        class="ui-btn mt-4"
-        :disabled="isLoading || !localConfig.JELLYFIN_API_URL || !localConfig.JELLYFIN_TOKEN || jellyfinFetching"
-      >
-        <i aria-hidden="true" v-if="jellyfinFetching" class="fas fa-spinner fa-spin"></i>
-        <i aria-hidden="true" v-else-if="jellyfinConnected" class="fas fa-check"></i>
-        <i aria-hidden="true" v-else class="fas fa-plug"></i>
-        {{ jellyfinFetching ? 'Connecting…' : (jellyfinConnected ? 'Connected' : 'Test & load') }}
-      </button>
-    </template>
-
-    <!-- Libraries & users -->
-    <div v-if="mediaServerConnected" class="mt-5 overflow-hidden rounded-ctl border border-edge bg-panel-2">
-      <button type="button" class="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 py-3 text-left text-inherit hover:bg-raised" :aria-expanded="String(mediaServerAdvancedExpanded)" @click="mediaServerAdvancedExpanded = !mediaServerAdvancedExpanded">
-        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-raised text-[13px] text-ink-3"><i aria-hidden="true" class="fas fa-photo-video"></i></span>
-        <span class="min-w-0 flex-1">
-          <span class="block text-sm font-semibold text-ink">Libraries and users</span>
-          <span class="block text-xs text-ink-4">{{ currentSelectedLibraries.length }} libraries · {{ currentSelectedUsers.length }} users selected</span>
-        </span>
-        <i aria-hidden="true" class="fas fa-chevron-down text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': mediaServerAdvancedExpanded }"></i>
-      </button>
-      <div v-show="mediaServerAdvancedExpanded" class="divide-y divide-edge border-t border-edge bg-panel">
-        <section class="p-4">
-          <div class="flex items-baseline justify-between gap-3">
-            <h4 class="m-0 text-[13px] font-bold text-ink">Libraries</h4>
-            <button v-if="currentSelectedLibraries.length > 0" type="button" class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50" @click="clearCurrentLibraries">Clear</button>
-          </div>
-          <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Libraries to monitor. Mark anime libraries with <span class="rounded bg-anime/20 px-1.5 py-px text-[11px] font-bold text-anime">Anime</span> to send them to the anime profiles.</p>
-          <div v-if="currentLibraries.length > 0" class="flex flex-wrap gap-2">
-            <div
-              v-for="lib in currentLibraries"
-              :key="lib._id"
-              role="checkbox"
-              tabindex="0"
-              :aria-checked="String(isLibSelected(lib._id))"
-              class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] [&>i]:text-[11px] [&>i]:opacity-70"
-              :class="isLibSelected(lib._id) ? 'border-brand-ink bg-brand-soft/60 text-ink' : 'border-edge-strong bg-canvas text-ink-3 hover:border-ink-4 hover:text-ink'"
-              @click="toggleLibrary(lib)"
-              @keydown.space.prevent="toggleLibrary(lib)"
-            >
-              <i aria-hidden="true" :class="isLibSelected(lib._id) ? 'fas fa-check' : getLibraryIcon(lib._type)"></i>
-              <span>{{ lib._name }}</span>
-              <button
-                v-if="isLibSelected(lib._id)"
-                type="button"
-                class="cursor-pointer rounded border-0 px-1.5 py-px text-[10px] font-bold"
-                :class="isAnimeLibrary(localConfig.SELECTED_SERVICE, lib._id) ? 'bg-anime text-white' : 'bg-raised text-ink-3'"
-                :aria-pressed="String(isAnimeLibrary(localConfig.SELECTED_SERVICE, lib._id))"
-                title="Mark as anime"
-                @click.stop="toggleAnimeFlag(localConfig.SELECTED_SERVICE, lib._id)"
-              >Anime</button>
+      <!-- Libraries & users -->
+      <div v-if="mediaServerConnected" class="mt-5 overflow-hidden rounded-ctl border border-edge bg-panel-2">
+        <button type="button" class="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 py-3 text-left text-inherit hover:bg-raised" :aria-expanded="String(mediaServerAdvancedExpanded)" @click="mediaServerAdvancedExpanded = !mediaServerAdvancedExpanded">
+          <span class="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-raised text-[13px] text-ink-3"><i aria-hidden="true" class="fas fa-photo-video"></i></span>
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-semibold text-ink">Libraries and users</span>
+            <span class="block text-xs text-ink-4">{{ currentSelectedLibraries.length }} libraries · {{ currentSelectedUsers.length }} users selected</span>
+          </span>
+          <i aria-hidden="true" class="fas fa-chevron-down text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': mediaServerAdvancedExpanded }"></i>
+        </button>
+        <div v-show="mediaServerAdvancedExpanded" class="divide-y divide-edge border-t border-edge bg-panel">
+          <section class="p-4">
+            <div class="flex items-baseline justify-between gap-3">
+              <h4 class="m-0 text-[13px] font-bold text-ink">Libraries</h4>
+              <button v-if="currentSelectedLibraries.length > 0" type="button" class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50" @click="clearCurrentLibraries">Clear</button>
             </div>
-          </div>
-          <p v-else class="m-0 flex items-center gap-2 text-[13px] text-ink-3">No libraries found.</p>
-        </section>
-
-        <section class="p-4">
-          <div class="flex items-baseline justify-between gap-3">
-            <h4 class="m-0 text-[13px] font-bold text-ink">Users</h4>
-            <button v-if="currentSelectedUsers.length > 0" type="button" class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50" @click="clearCurrentUsers">Clear</button>
-          </div>
-          <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Users whose watch history drives suggestions.</p>
-          <div v-if="currentUsers.length > 0" class="flex flex-wrap gap-2">
-            <div
-              v-for="user in currentUsers"
-              :key="user.id"
-              role="checkbox"
-              tabindex="0"
-              :aria-checked="String(isUserSelected(user.id))"
-              class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] [&>i]:text-[11px] [&>i]:opacity-70"
-              :class="isUserSelected(user.id) ? 'border-brand-ink bg-brand-soft/60 text-ink' : 'border-edge-strong bg-canvas text-ink-3 hover:border-ink-4 hover:text-ink'"
-              @click="toggleUser(user)"
-              @keydown.space.prevent="toggleUser(user)"
-            >
-              <span class="flex h-5 w-5 items-center justify-center rounded-full bg-raised text-[10px] font-bold">{{ (user.name || 'U').charAt(0).toUpperCase() }}</span>
-              <span>{{ user.name }}</span>
+            <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Libraries to monitor. Mark anime libraries with <span class="rounded bg-anime/20 px-1.5 py-px text-[11px] font-bold text-anime">Anime</span> to send them to the anime profiles.</p>
+            <div v-if="currentLibraries.length > 0" class="flex flex-wrap gap-2">
+              <div
+                v-for="lib in currentLibraries"
+                :key="lib._id"
+                role="checkbox"
+                tabindex="0"
+                :aria-checked="String(isLibSelected(lib._id))"
+                class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] [&>i]:text-[11px] [&>i]:opacity-70"
+                :class="isLibSelected(lib._id) ? 'border-brand-ink bg-brand-soft/60 text-ink' : 'border-edge-strong bg-canvas text-ink-3 hover:border-ink-4 hover:text-ink'"
+                @click="toggleLibrary(lib)"
+                @keydown.space.prevent="toggleLibrary(lib)"
+              >
+                <i aria-hidden="true" :class="isLibSelected(lib._id) ? 'fas fa-check' : getLibraryIcon(lib._type)"></i>
+                <span>{{ lib._name }}</span>
+                <button
+                  v-if="isLibSelected(lib._id)"
+                  type="button"
+                  class="cursor-pointer rounded border-0 px-1.5 py-px text-[10px] font-bold"
+                  :class="isAnimeLibrary(localConfig.SELECTED_SERVICE, lib._id) ? 'bg-anime text-white' : 'bg-raised text-ink-3'"
+                  :aria-pressed="String(isAnimeLibrary(localConfig.SELECTED_SERVICE, lib._id))"
+                  title="Mark as anime"
+                  @click.stop="toggleAnimeFlag(localConfig.SELECTED_SERVICE, lib._id)"
+                >Anime</button>
+              </div>
             </div>
-          </div>
-          <p v-else class="m-0 flex items-center gap-2 text-[13px] text-ink-3">No users found.</p>
-        </section>
+            <p v-else class="m-0 flex items-center gap-2 text-[13px] text-ink-3">No libraries found.</p>
+          </section>
+
+          <section class="p-4">
+            <div class="flex items-baseline justify-between gap-3">
+              <h4 class="m-0 text-[13px] font-bold text-ink">Users</h4>
+              <button v-if="currentSelectedUsers.length > 0" type="button" class="flex cursor-pointer items-center gap-1.5 rounded-md border-0 bg-transparent px-2 py-1 text-xs font-semibold text-brand-ink hover:enabled:bg-raised disabled:cursor-not-allowed disabled:opacity-50" @click="clearCurrentUsers">Clear</button>
+            </div>
+            <p class="mt-1 mb-3.5 text-xs leading-normal text-ink-4">Users whose watch history drives suggestions.</p>
+            <div v-if="currentUsers.length > 0" class="flex flex-wrap gap-2">
+              <div
+                v-for="user in currentUsers"
+                :key="user.id"
+                role="checkbox"
+                tabindex="0"
+                :aria-checked="String(isUserSelected(user.id))"
+                class="inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] [&>i]:text-[11px] [&>i]:opacity-70"
+                :class="isUserSelected(user.id) ? 'border-brand-ink bg-brand-soft/60 text-ink' : 'border-edge-strong bg-canvas text-ink-3 hover:border-ink-4 hover:text-ink'"
+                @click="toggleUser(user)"
+                @keydown.space.prevent="toggleUser(user)"
+              >
+                <span class="flex h-5 w-5 items-center justify-center rounded-full bg-raised text-[10px] font-bold">{{ (user.name || 'U').charAt(0).toUpperCase() }}</span>
+                <span>{{ user.name }}</span>
+              </div>
+            </div>
+            <p v-else class="m-0 flex items-center gap-2 text-[13px] text-ink-3">No users found.</p>
+          </section>
+        </div>
       </div>
     </div>
   </div>
@@ -305,6 +306,12 @@ export default {
           });
       });
       return opts;
+    },
+    foldSummary() {
+      const service = this.localConfig.SELECTED_SERVICE;
+      const url = service === 'plex' ? this.localConfig.PLEX_API_URL : this.localConfig.JELLYFIN_API_URL;
+      const label = { plex: 'Plex', emby: 'Emby', jellyfin: 'Jellyfin' }[service] || '';
+      return [label, url].filter(Boolean).join(' · ');
     },
     getMediaServerStatus() {
       const service = this.localConfig.SELECTED_SERVICE;

@@ -87,6 +87,9 @@
         </li>
       </ul>
     </div>
+    <AppDialog v-if="playing" width="max-w-5xl" :title="`${playing.title} · Trailer`" icon="fab fa-youtube" body-class="" @close="playing = null">
+      <TrailerPlayer :url="playing.url" :title="playing.title" />
+    </AppDialog>
 
     <template #footer>
       <button v-if="hasMore" type="button" class="ui-btn" :disabled="loadingMore" @click="$emit('more')">{{ loadingMore ? 'Loading…' : 'Load more titles' }}</button>
@@ -99,11 +102,12 @@
 <script>
 import axios from 'axios';
 import AppDialog from '@/components/ui/AppDialog.vue';
-import { openTrailer, trailerTarget } from '@/utils/trailer.js';
+import TrailerPlayer from '@/components/TrailerPlayer.vue';
+import { loadTrailerUrl, trailerTarget } from '@/utils/trailer.js';
 
 export default {
   name: 'DryRunResultModal',
-  components: { AppDialog },
+  components: { AppDialog, TrailerPlayer },
   props: {
     job: { type: Object, required: true },
     items: { type: Array, default: () => [] },
@@ -114,7 +118,7 @@ export default {
   },
   emits: ['close', 'run', 'more'],
   data() {
-    return { showAll: true, withoutTrailer: [], openingTrailer: [] };
+    return { showAll: true, withoutTrailer: [], openingTrailer: [], playing: null };
   },
   computed: {
     hasFilterData() {
@@ -148,18 +152,14 @@ export default {
     },
     async watchTrailer(item) {
       const key = this.trailerKey(item);
-      // A second click while the lookup is running would open a second blank tab.
       if (this.openingTrailer.includes(key)) return;
       this.openingTrailer = [...this.openingTrailer, key];
       try {
-        const outcome = await openTrailer(axios, item);
-        if (outcome === 'none') {
+        const url = await loadTrailerUrl(axios, item);
+        if (url) {
+          this.playing = { url, title: item.title };
+        } else {
           this.withoutTrailer = [...this.withoutTrailer, key];
-        } else if (outcome === 'blocked') {
-          this.$toast?.open({
-            message: 'Your browser blocked the trailer tab. Allow pop-ups for this site and try again.',
-            type: 'warning',
-          });
         }
       } finally {
         this.openingTrailer = this.openingTrailer.filter(k => k !== key);

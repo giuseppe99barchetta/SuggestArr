@@ -1,38 +1,39 @@
 <template>
-  <div data-testid="tmdb-connection" :class="wizardMode ? '' : 'min-w-0 rounded-card border border-edge bg-panel p-5 max-sm:p-4 lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0'">
-    <ServiceCardHeader v-if="!wizardMode" icon="fas fa-film" title="TMDB" description="Recommendations, posters and metadata." required :status="getTmdbStatus" :status-text="getTmdbStatusText" />
-
-    <div class="flex min-w-0 flex-col">
-    <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
-      <label for="tmdbApiKey">API key</label>
-      <div class="flex gap-2">
-        <input
-          id="tmdbApiKey"
-          v-model="localConfig.TMDB_API_KEY"
-          :type="showTmdbKey ? 'text' : 'password'"
-          placeholder="Enter your TMDB API key"
-          class="ui-input"
-          :disabled="isLoading"
-        />
-        <button @click="showTmdbKey = !showTmdbKey" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading" :aria-label="showTmdbKey ? 'Hide TMDB API key' : 'Show TMDB API key'">
-          <i aria-hidden="true" :class="showTmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-        </button>
+  <div data-testid="tmdb-connection" :class="wizardMode ? '' : 'min-w-0 px-5 py-4 max-sm:px-4'">
+    <ServiceCardHeader v-if="!wizardMode" icon="fas fa-film" title="TMDB" description="Recommendations, posters and metadata." :status="getTmdbStatus" :status-text="getTmdbStatusText" :folded="isFolded(getTmdbStatus)" @toggle="editing = !editing" />
+    <div v-show="!isFolded(getTmdbStatus)">
+      <div class="flex min-w-0 flex-col">
+      <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+        <label for="tmdbApiKey">API key</label>
+        <div class="flex gap-2">
+          <input
+            id="tmdbApiKey"
+            v-model="localConfig.TMDB_API_KEY"
+            :type="showTmdbKey ? 'text' : 'password'"
+            placeholder="Enter your TMDB API key"
+            class="ui-input"
+            :disabled="isLoading"
+          />
+          <button @click="showTmdbKey = !showTmdbKey" type="button" class="ui-btn w-[42px] shrink-0 px-0" :disabled="isLoading" :aria-label="showTmdbKey ? 'Hide TMDB API key' : 'Show TMDB API key'">
+            <i aria-hidden="true" :class="showTmdbKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+          </button>
+        </div>
+        <small class="text-xs leading-normal text-ink-4">
+          Get one from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="text-brand-ink no-underline hover:underline">TMDB Settings</a>
+        </small>
       </div>
-      <small class="text-xs leading-normal text-ink-4">
-        Get one from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="text-brand-ink no-underline hover:underline">TMDB Settings</a>
-      </small>
-    </div>
 
-    <button
-      @click="testTmdbConnection"
-      class="ui-btn mt-auto self-start"
-      :disabled="isLoading || !localConfig.TMDB_API_KEY || isTmdbTesting"
-    >
-      <i aria-hidden="true" v-if="isTmdbTesting" class="fas fa-spinner fa-spin"></i>
-      <i aria-hidden="true" v-else-if="wizardMode && wizardTmdbConnected" class="fas fa-check"></i>
-      <i aria-hidden="true" v-else class="fas fa-plug"></i>
-      {{ isTmdbTesting ? 'Testing…' : (wizardMode && wizardTmdbConnected ? 'Connected ✓' : 'Test connection') }}
-    </button>
+      <button
+        @click="testTmdbConnection"
+        class="ui-btn mt-auto self-start"
+        :disabled="isLoading || !localConfig.TMDB_API_KEY || isTmdbTesting"
+      >
+        <i aria-hidden="true" v-if="isTmdbTesting" class="fas fa-spinner fa-spin"></i>
+        <i aria-hidden="true" v-else-if="wizardMode && wizardTmdbConnected" class="fas fa-check"></i>
+        <i aria-hidden="true" v-else class="fas fa-plug"></i>
+        {{ isTmdbTesting ? 'Testing…' : (wizardMode && wizardTmdbConnected ? 'Connected ✓' : 'Test connection') }}
+      </button>
+      </div>
     </div>
   </div>
 </template>

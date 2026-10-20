@@ -1,5 +1,9 @@
 <template>
-  <AppDialog width="max-w-4xl" labelledby="media-details-title" @close="$emit('close')">
+  <AppDialog
+    :width="playingTrailer ? 'max-w-6xl' : 'max-w-4xl'"
+    labelledby="media-details-title"
+    @close="$emit('close')"
+  >
     <header class="relative isolate overflow-hidden">
       <!-- Without a backdrop the blurred poster stands in for one. -->
       <div aria-hidden="true" class="absolute inset-0 -z-10">
@@ -31,7 +35,20 @@
         <i aria-hidden="true" class="fas fa-times"></i>
       </button>
 
-      <div class="grid grid-cols-[auto_1fr] gap-x-7 gap-y-4 p-7 max-sm:gap-x-4 max-sm:p-4 max-sm:pt-5">
+      <div v-if="playingTrailer" key="trailer" ref="swap" class="flex flex-col gap-3 p-4 max-sm:p-3">
+        <div class="flex min-h-9 items-center gap-3 pr-12">
+          <button
+            type="button"
+            class="inline-flex h-9 shrink-0 cursor-pointer items-center gap-2 rounded-ctl border-0 bg-canvas/60 px-3 text-sm font-semibold text-ink-2 backdrop-blur hover:bg-canvas hover:text-ink"
+            @click="toggleTrailer(false)"
+          >
+            <i aria-hidden="true" class="fas fa-arrow-left text-xs"></i> Details
+          </button>
+          <h2 id="media-details-title" class="m-0 min-w-0 truncate text-lg font-bold text-ink">{{ item.title }}</h2>
+        </div>
+        <TrailerPlayer :url="trailerUrl" :title="item.title" class="rounded-ctl shadow-2xl shadow-black/60 ring-1 ring-white/10" />
+      </div>
+      <div v-else key="details" ref="swap" class="grid grid-cols-[auto_1fr] gap-x-7 gap-y-4 p-7 max-sm:gap-x-4 max-sm:p-4 max-sm:pt-5">
         <img
           v-if="item.poster_path"
           :src="item.poster_path"
@@ -98,15 +115,14 @@
             >
               <i aria-hidden="true" class="fas fa-play text-xs"></i> Watch now
             </a>
-            <a
+            <button
               v-if="trailerState === 'ready'"
-              :href="trailerUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex h-10 items-center gap-2 rounded-ctl bg-ink px-4 text-sm font-bold text-canvas no-underline hover:bg-ink-2"
+              type="button"
+              class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-ctl border-0 bg-ink px-4 text-sm font-bold text-canvas hover:bg-ink-2"
+              @click="toggleTrailer(true)"
             >
               <i aria-hidden="true" class="fas fa-film text-xs"></i> Watch trailer
-            </a>
+            </button>
             <span
               v-else-if="hasTrailerSlot"
               class="inline-flex h-10 cursor-default items-center gap-2 rounded-ctl border border-edge-strong px-4 text-sm font-bold text-ink-4"
@@ -130,7 +146,7 @@
       </div>
     </header>
 
-    <div v-if="item.rationale || hasExtraDetails || hasOrigin || $slots.default" class="flex flex-col gap-4 border-t border-edge p-7 max-sm:p-4">
+    <div v-if="!playingTrailer && (item.rationale || hasExtraDetails || hasOrigin || $slots.default)" class="flex flex-col gap-4 border-t border-edge p-7 max-sm:p-4">
       <section v-if="item.rationale" class="rounded-ctl border border-brand-ink/25 bg-brand-soft/40 p-4">
         <h3 class="m-0 mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-ink">
           <i aria-hidden="true" class="fas fa-lightbulb"></i> {{ rationaleTitle }}
@@ -180,6 +196,7 @@
 <script>
 import axios from 'axios';
 import AppDialog from '@/components/ui/AppDialog.vue';
+import TrailerPlayer from '@/components/TrailerPlayer.vue';
 import { loadTitleDetails, trailerTarget } from '@/utils/trailer.js';
 import { mediaStatus } from '@/utils/mediaStatus.js';
 import { loadSeerWebUrl, seerTitleUrl } from '@/utils/seerLink.js';
@@ -191,7 +208,7 @@ import { loadSeerWebUrl, seerTitleUrl } from '@/utils/seerLink.js';
  */
 export default {
   name: 'MediaDetailsModal',
-  components: { AppDialog },
+  components: { AppDialog, TrailerPlayer },
   props: {
     item: { type: Object, required: true },
     rationaleTitle: { type: String, default: 'Why it was suggested' },
@@ -206,6 +223,9 @@ export default {
       backgroundLoaded: false,
       trailerUrl: null,
       trailerState: 'loading', // 'loading' | 'ready' | 'none'
+      playingTrailer: false,
+      trailerAnimating: false,
+      detailsBox: null, // the details' size, measured when the trailer opens, to shrink back to
       details: null,
       castExpanded: false,
       seerBase: null,
@@ -297,6 +317,7 @@ export default {
       const shown = this.item;
       this.trailerUrl = null;
       this.trailerState = 'loading';
+      this.playingTrailer = false;
       this.details = null;
       if (!this.hasTrailerSlot) return;
       const details = await loadTitleDetails(axios, shown);
@@ -310,6 +331,48 @@ export default {
       };
       this.trailerUrl = details?.trailer_url || null;
       this.trailerState = this.trailerUrl ? 'ready' : 'none';
+    },
+
+    /**
+     * Swap details and trailer, resizing the dialog in one motion (FLIP).
+     * Opening grows the box while the trailer fades in; closing plays the same motion backwards.
+     */
+    async toggleTrailer(on) {
+      if (this.trailerAnimating) return;
+      const dialog = this.$el;
+      const box = (rect) => ({ width: `${rect.width}px`, height: `${rect.height}px` });
+      const timing = { duration: 450, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        this.playingTrailer = on;
+        return;
+      }
+
+      if (on) {
+        const first = dialog.getBoundingClientRect();
+        this.detailsBox = first;
+        this.playingTrailer = true;
+        await this.$nextTick();
+        dialog.animate([box(first), box(dialog.getBoundingClientRect())], timing);
+        // Faded here, not with <Transition>: that keeps the old view in the DOM a frame longer and skews the measure.
+        this.$refs.swap?.animate([{ opacity: 0 }, { opacity: 1 }], timing);
+        return;
+      }
+
+      // Backwards: the live trailer shrinks and fades out, the details return once the box has their size.
+      // shortcut: reuses the size measured on opening, so a window resized meanwhile ends in a small jump.
+      this.trailerAnimating = true;
+      try {
+        // Quicker than opening: the details are what the reader is waiting for.
+        const resize = dialog.animate([box(dialog.getBoundingClientRect()), box(this.detailsBox)], { ...timing, duration: 200, fill: 'forwards' });
+        this.$refs.swap?.animate([{ opacity: 1 }, { opacity: 0 }], { ...timing, duration: 120, fill: 'forwards' });
+        await resize.finished;
+        this.playingTrailer = false;
+        await this.$nextTick();
+        resize.cancel();
+        this.$refs.swap?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 100, easing: 'ease-out' });
+      } finally {
+        this.trailerAnimating = false;
+      }
     },
 
     initials(name) {

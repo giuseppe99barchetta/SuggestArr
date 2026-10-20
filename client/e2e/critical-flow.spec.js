@@ -366,8 +366,12 @@ test("the trailer button does not move the details when it arrives", async ({ pa
   const before = await heading.boundingBox();
 
   answerTrailer();
-  await expect(dialog.getByRole("link", { name: "Watch trailer" })).toHaveAttribute("href", "https://www.youtube.com/watch?v=e2e");
+  const trailerButton = dialog.getByRole("button", { name: "Watch trailer" });
+  await expect(trailerButton).toBeVisible();
   expect(await heading.boundingBox()).toEqual(before);
+
+  await trailerButton.click();
+  await expect(page.locator('iframe[src^="https://www.youtube-nocookie.com/embed/"]')).toBeVisible();
 });
 
 test("a fully detailed request fits its dialog without scrolling and links to the library and Seer", async ({ page }, testInfo) => {

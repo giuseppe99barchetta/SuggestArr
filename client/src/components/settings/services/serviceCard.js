@@ -8,6 +8,9 @@
  */
 export default {
   inject: ['services'],
+  data() {
+    return { editing: false };
+  },
   computed: {
     localConfig() {
       return this.services.localConfig;
@@ -28,6 +31,10 @@ export default {
     },
   },
   methods: {
+    /** Working services fold into their header on the Connections page until the user opens them; the wizard never folds. */
+    isFolded(status) {
+      return !this.wizardMode && !this.editing && status === 'status-connected';
+    },
     _notifyError(message, opts = { position: 'top-right', duration: 5000 }) {
       this.$toast.error(message, opts);
     },
