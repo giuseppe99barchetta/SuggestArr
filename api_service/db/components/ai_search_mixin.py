@@ -4,22 +4,25 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 
-def _naive_utc(value) -> Optional[datetime]:
-    """Read a stored ``requested_at`` (datetime or SQLite text) as naive UTC."""
+def _wall_clock(value) -> Optional[datetime]:
+    """Read a database time (datetime or SQLite text) as a naive wall-clock time.
+
+    The time zone is dropped without converting: ``requested_at`` is written by the
+    database's own CURRENT_TIMESTAMP, so comparing it with that same clock's "now"
+    keeps day, week and month boundaries in the database's time zone on every engine.
+    """
     if isinstance(value, str):
         try:
             value = datetime.fromisoformat(value.strip()[:19])
         except ValueError:
             return None
-    if not isinstance(value, datetime):
-        return None
-    return value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
+    return value.replace(tzinfo=None) if isinstance(value, datetime) else None
 
 
 def period_starts(now: datetime) -> Dict[str, tuple]:
     """Start of the current and the previous day, week (Monday) and month.
 
-    :param now: Current naive UTC time.
+    :param now: Current time on the database clock.
     :return: Dict of stat key to ``(current_start, previous_start)``.
     """
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -33,21 +36,25 @@ def period_starts(now: datetime) -> Dict[str, tuple]:
     }
 
 
-def previous_period_counts(timestamps, now: datetime) -> Dict[str, int]:
-    """Count requests in the previous day, week and month up to the same point in time.
+def period_counts(timestamps, now: datetime) -> Dict[str, Dict[str, int]]:
+    """Count requests in the current day, week and month, and in the previous ones.
 
     Comparing a half-finished week with a whole previous week would always look like a
     drop, so each previous period is cut at the same elapsed time as the current one.
 
-    :param timestamps: Iterable of naive UTC request times.
-    :param now: Current naive UTC time.
-    :return: Dict with 'today', 'this_week' and 'this_month' counts for the previous period.
+    :param timestamps: Request times on the database clock.
+    :param now: Current time on the same clock.
+    :return: ``{'current': {...}, 'previous': {...}}``, each keyed by
+        'today', 'this_week' and 'this_month'.
     """
-    counts = {}
+    current, previous = {}, {}
     for key, (start, previous_start) in period_starts(now).items():
-        end = min(previous_start + (now - start), start)
-        counts[key] = sum(1 for moment in timestamps if previous_start <= moment < end)
-    return counts
+        # Both windows include their "now", so a request exactly one period ago counts.
+        same_point = previous_start + (now - start)
+        current[key] = sum(1 for moment in timestamps if start <= moment <= now)
+        previous[key] = sum(1 for moment in timestamps
+                            if previous_start <= moment < start and moment <= same_point)
+    return {'current': current, 'previous': previous}
 
 
 class AiSearchMixin:
@@ -286,112 +293,24 @@ class AiSearchMixin:
             total_result = cursor.fetchone()
             total = total_result[0] if total_result else 0
 
-            # Today's requests query
-            if self.db_type == 'sqlite':
-                today_query = """
-                    SELECT COUNT(*) FROM requests
-                    WHERE requested_by = 'SuggestArr'
-                    AND DATE(requested_at) = DATE('now')
-                """
-            elif self.db_type == 'postgres':
-                today_query = """
-                    SELECT COUNT(*) FROM requests
-                    WHERE requested_by = 'SuggestArr'
-                    AND DATE(requested_at) = CURRENT_DATE
-                """
-            elif self.db_type in ['mysql', 'mariadb']:
-                today_query = """
-                    SELECT COUNT(*) FROM requests
-                    WHERE requested_by = 'SuggestArr'
-                    AND DATE(requested_at) = CURDATE()
-                """
-            else:
-                today_query = total_query
-
-            if self.db_type in ['mysql', 'postgres']:
-                today_query = today_query.replace("?", "%s")
-
-            cursor.execute(today_query)
-            today_result = cursor.fetchone()
-            today = today_result[0] if today_result else 0
-
-            # This week's requests query (from Monday to today)
-            if self.db_type == 'sqlite':
-                week_query = """
-                    SELECT COUNT(*) FROM requests
-                    WHERE requested_by = 'SuggestArr'
-                    AND DATE(requested_at) >= DATE('now', '-' || ((CAST(strftime('%w', 'now') AS INTEGER) + 6) % 7) || ' days')
-                """
-            elif self.db_type == 'postgres':
-                week_query = """
-                    SELECT COUNT(*) FROM requests
-                    WHERE requested_by = 'SuggestArr'
-                    AND DATE(requested_at) >= DATE_TRUNC('week', CURRENT_DATE)
-                """
-            elif self.db_type in ['mysql', 'mariadb']:
-                week_query = """
-                    SELECT COUNT(*) FROM requests
-                    WHERE requested_by = 'SuggestArr'
-                    AND DATE(requested_at) >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)
-                """
-            else:
-                week_query = total_query
-
-            if self.db_type in ['mysql', 'postgres']:
-                week_query = week_query.replace("?", "%s")
-
-            cursor.execute(week_query)
-            week_result = cursor.fetchone()
-            this_week = week_result[0] if week_result else 0
-
-            # This month's requests query
-            if self.db_type == 'sqlite':
-                month_query = """
-                    SELECT COUNT(*) FROM requests
-                    WHERE requested_by = 'SuggestArr'
-                    AND strftime('%Y-%m', requested_at) = strftime('%Y-%m', 'now')
-                """
-            elif self.db_type == 'postgres':
-                month_query = """
-                    SELECT COUNT(*) FROM requests
-                    WHERE requested_by = 'SuggestArr'
-                    AND DATE_TRUNC('month', requested_at) = DATE_TRUNC('month', CURRENT_DATE)
-                """
-            elif self.db_type in ['mysql', 'mariadb']:
-                month_query = """
-                    SELECT COUNT(*) FROM requests
-                    WHERE requested_by = 'SuggestArr'
-                    AND YEAR(requested_at) = YEAR(CURDATE())
-                    AND MONTH(requested_at) = MONTH(CURDATE())
-                """
-            else:
-                month_query = total_query
-
-            if self.db_type in ['mysql', 'postgres']:
-                month_query = month_query.replace("?", "%s")
-
-            cursor.execute(month_query)
-            month_result = cursor.fetchone()
-            this_month = month_result[0] if month_result else 0
-
-            # Trend baseline, computed here so one query serves every database engine.
-            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            # Period counts and their trend baseline come from one query and one clock,
+            # the database's own, which is also what wrote requested_at.
+            cursor.execute("SELECT CURRENT_TIMESTAMP")
+            now = _wall_clock(cursor.fetchone()[0])
             since = min(previous for _, previous in period_starts(now).values())
             ph = '%s' if self.db_type in ['mysql', 'mariadb', 'postgres'] else '?'
             cursor.execute(
                 f"SELECT requested_at FROM requests WHERE requested_by = 'SuggestArr' AND requested_at >= {ph}",
                 (since.strftime('%Y-%m-%d %H:%M:%S'),),
             )
-            moments = [moment for moment in (_naive_utc(row[0]) for row in cursor.fetchall()) if moment]
-            previous = previous_period_counts(moments, now)
+            moments = [moment for moment in (_wall_clock(row[0]) for row in cursor.fetchall()) if moment]
+            counts = period_counts(moments, now)
 
             return {
                 "total": total,
                 "approved": 0,  # Not handled on your side
                 "pending": 0,   # Not handled on your side
-                "today": today,
-                "this_week": this_week,
-                "this_month": this_month,
-                "previous": previous,
+                **counts['current'],
+                "previous": counts['previous'],
             }
     
