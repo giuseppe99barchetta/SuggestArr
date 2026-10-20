@@ -2,10 +2,10 @@
   <div class="flex flex-col gap-6">
     <div class="flex flex-col gap-2">
       <button v-if="canShare" type="button" class="ui-btn-primary h-11 w-full whitespace-nowrap" :disabled="unavailable" @click="share"><i aria-hidden="true" class="fas fa-share-alt"></i>Share</button>
-      <button v-else type="button" class="ui-btn-primary h-11 w-full whitespace-nowrap" :disabled="unavailable" @click="download"><i aria-hidden="true" class="fas fa-download"></i>{{ downloadLabel }}</button>
+      <button v-else-if="!hideDownload" type="button" class="ui-btn-primary h-11 w-full whitespace-nowrap" :disabled="unavailable" @click="download"><i aria-hidden="true" class="fas fa-download"></i>{{ downloadLabel }}</button>
       <div v-if="canShare || canCopyImage" class="grid grid-cols-2 gap-2">
-        <button v-if="canShare" type="button" class="ui-btn whitespace-nowrap px-3" :class="canCopyImage ? '' : 'col-span-2'" :disabled="unavailable" @click="download"><i aria-hidden="true" class="fas fa-download"></i>{{ downloadLabel }}</button>
-        <button v-if="canCopyImage" type="button" class="ui-btn whitespace-nowrap px-3" :class="[imageCopied ? 'border-good/40 text-good' : '', canShare ? '' : 'col-span-2']" :disabled="unavailable" @click="copyImage"><i aria-hidden="true" :class="imageCopied ? 'fas fa-check' : 'far fa-copy'"></i><span aria-live="polite">{{ imageCopied ? 'Copied!' : 'Copy image' }}</span></button>
+        <button v-if="canShare && !hideDownload" type="button" class="ui-btn whitespace-nowrap px-3" :class="canCopyImage ? '' : 'col-span-2'" :disabled="unavailable" @click="download"><i aria-hidden="true" class="fas fa-download"></i>{{ downloadLabel }}</button>
+        <button v-if="canCopyImage" type="button" class="ui-btn whitespace-nowrap px-3" :class="[imageCopied ? 'border-good/40 text-good' : '', canShare && !hideDownload ? '' : 'col-span-2']" :disabled="unavailable" @click="copyImage"><i aria-hidden="true" :class="imageCopied ? 'fas fa-check' : 'far fa-copy'"></i><span aria-live="polite">{{ imageCopied ? 'Copied!' : 'Copy image' }}</span></button>
       </div>
       <p v-if="error" role="alert" class="ui-alert-bad m-0">{{ error }}</p>
     </div>
@@ -52,6 +52,8 @@ export default {
     shareTitle: { type: String, required: true },
     disabled: { type: Boolean, default: false },
     downloadLabel: { type: String, default: 'Download PNG' },
+    // Hosts with their own download button hide it here to avoid two identical actions.
+    hideDownload: { type: Boolean, default: false },
   },
   emits: ['before-action'],
   data() {

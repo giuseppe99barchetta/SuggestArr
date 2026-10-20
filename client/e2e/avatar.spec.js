@@ -11,7 +11,7 @@ async function preview(page, { width = 1280, subpath = false, photo = false, bro
   await page.route(url => url.pathname.startsWith('/api/') || url.pathname.startsWith('/suggestarr/api/'), async route => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^\/suggestarr/, '');
-    if (path === '/api/auth/me/avatar') {
+    if (/^\/api\/users\/\d+\/avatar$/.test(path)) {
       avatarRequests.push({ path: url.pathname, authorization: route.request().headers().authorization });
       if (offline) return route.fulfill({ status: 503, body: '' });
       if (!photo && !linked) return route.fulfill({ status: 204 });
@@ -76,8 +76,18 @@ test('linking and unlinking refresh both avatars under a subpath', async ({ page
   await page.getByRole('button', { name: 'Unlink', exact: true }).click();
   await expect(page.getByRole('img', { name: 'Cinema fan cinema avatar' })).toHaveCount(2);
   expect(avatarRequests).toHaveLength(3);
-  expect(avatarRequests.every(request => request.path === '/suggestarr/api/auth/me/avatar')).toBe(true);
+    expect(avatarRequests.every(request => request.path === '/suggestarr/api/users/3/avatar')).toBe(true);
   expect(errors).toEqual([]);
+});
+
+test('switching accounts requests the new ID instead of reusing the signed-in user endpoint', async ({ page }) => {
+  const { avatarRequests } = await preview(page, { photo: true, subpath: true });
+  await expect(page.getByRole('img', { name: 'Cinema fan avatar from Jellyfin' })).toHaveCount(2);
+  const originalSource = await page.locator('[role="img"] img').first().getAttribute('src');
+  await page.getByRole('button', { name: 'Switch account' }).click();
+  await expect(page.getByRole('img', { name: 'TV fan avatar from Jellyfin' })).toHaveCount(2);
+  expect(avatarRequests.map(request => request.path)).toEqual(['/suggestarr/api/users/3/avatar', '/suggestarr/api/users/4/avatar']);
+  await expect(page.locator('[role="img"] img').first()).not.toHaveAttribute('src', originalSource);
 });
 
 for (const mode of ['offline', 'broken']) {

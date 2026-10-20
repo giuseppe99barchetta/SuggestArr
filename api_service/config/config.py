@@ -252,6 +252,7 @@ def get_default_values():
         'SEER_ANIME_PROFILE_CONFIG': lambda: {},
         'SEER_REQUEST_DELAY': lambda: 2,
         'ALLOW_REGISTRATION': lambda: False,
+        'REGISTRATION_DEFAULT_TABS': lambda: 'requests,jobs,profile',
         'AUTH_MODE': lambda: 'enabled',
         'AUTH_TRUSTED_CIDRS': lambda: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7',
         'AUTH_BYPASS_USERNAME': lambda: 'local_admin',
@@ -376,7 +377,7 @@ def get_config_sections():
                      'REPLACE_REJECTED_REQUESTS',
                      'OPENAI_API_KEY', 'OPENAI_BASE_URL',
                      'LLM_MODEL', 'LLM_TEMPERATURE', 'LLM_REASONING_EFFORT', 'SEARXNG_BASE_URL',
-                     'SUBPATH', 'ALLOW_REGISTRATION',
+                     'SUBPATH', 'ALLOW_REGISTRATION', 'REGISTRATION_DEFAULT_TABS',
                      'AUTH_MODE', 'AUTH_TRUSTED_CIDRS', 'AUTH_BYPASS_USERNAME',
                      'AUTH_TRUSTED_HEADER', 'AUTH_TRUSTED_HEADER_AUTO_CREATE']
     }

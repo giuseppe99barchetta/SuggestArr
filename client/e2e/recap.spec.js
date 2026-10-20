@@ -21,6 +21,8 @@ function recapBadges(total, { watched = null } = {}) {
   return badges;
 }
 
+const openSharePanel = page => page.getByRole('button', { name: 'Share recap' }).click();
+
 async function openJourney(page, { width = 1280, role = 'admin', total = 100, linked = true, profile = false, subpath = false, failPosters = false, missingPosters = false, nativeShare = false, watched = null } = {}) {
   await page.setViewportSize({ width, height: 1000 });
   const errors = [];
@@ -166,25 +168,27 @@ for (const { width, height } of [{ width: 1280, height: 720 }, { width: 768, hei
     const download = dialog.getByRole('button', { name: 'Download PNG' });
     await expect(download).toBeEnabled();
     await expect(dialog.getByRole('tab')).toHaveCount(0);
+    // A full-viewport player like the year recap: the image leads, controls sit below it.
     const bounds = await dialog.boundingBox();
-    const minimumMargin = width >= 640 ? 32 : 16;
-    expect(bounds.width).toBeLessThanOrEqual(1152);
-    expect(bounds.x).toBeGreaterThanOrEqual(minimumMargin);
-    expect(width - bounds.x - bounds.width).toBeGreaterThanOrEqual(minimumMargin);
-    expect(bounds.y).toBeGreaterThanOrEqual(width >= 640 ? height * 0.1 - 1 : 16);
-    expect(height - bounds.y - bounds.height).toBeGreaterThanOrEqual(width >= 640 ? height * 0.1 - 1 : 16);
+    expect(bounds.width).toBeCloseTo(width, 0);
+    expect(bounds.height).toBeCloseTo(height, 0);
     await page.screenshot({ path: testInfo.outputPath('recap-preview.png'), animations: 'disabled' });
     const image = await page.locator('canvas').boundingBox();
     const button = await download.boundingBox();
     expect(image.y).toBeGreaterThanOrEqual(0);
-    // Side by side from 640px, stacked below that: the image never covers the actions.
-    if (width >= 640) expect(image.x + image.width).toBeLessThan(button.x);
-    else expect(image.y + image.height).toBeLessThan(button.y);
+    expect(image.x).toBeGreaterThanOrEqual(0);
+    expect(image.x + image.width).toBeLessThanOrEqual(width);
+    expect(image.y + image.height).toBeLessThan(button.y);
     expect(image.width / image.height).toBeCloseTo(4 / 5, 2);
     expect(button.y + button.height).toBeLessThanOrEqual(height);
-    await expect(dialog.getByRole('link', { name: 'Reddit', exact: true })).toBeAttached();
+    await openSharePanel(page);
+    await expect(dialog.getByRole('link', { name: 'Reddit', exact: true })).toBeVisible();
     await expect(dialog.getByLabel('Caption')).toBeAttached();
-    await dialog.getByText(/^Badges · 6 \/ 10 unlocked$/).click();
+    await page.screenshot({ path: testInfo.outputPath('recap-share.png'), animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    await expect(dialog.getByRole('complementary', { name: 'Share' })).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Badges · 6 / 10 unlocked' }).click();
     await expect(page.getByRole('dialog', { name: 'Your badges' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByLabel('Show top-title covers')).toBeChecked();
@@ -312,6 +316,8 @@ test('journey respects reduced motion', async ({ page }) => {
 test('native sharing receives the rendered PNG and aggregate caption', async ({ page }) => {
   const { errors } = await openJourney(page, { nativeShare: true });
   await page.getByRole('button', { name: 'Create your recap', exact: true }).first().click();
+  await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  await openSharePanel(page);
   const share = page.getByRole('button', { name: 'Share', exact: true });
   await expect(share).toBeEnabled();
   await share.click();
@@ -341,6 +347,7 @@ test('Reddit comes first and saves an image before opening the post composer', a
   await openJourney(page);
   await page.getByRole('button', { name: 'Create your recap', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  await openSharePanel(page);
   const shortcuts = page.getByRole('dialog').locator('a');
   await expect(shortcuts.first()).toHaveText('Reddit');
   for (const platform of ['Discord', 'X', 'Bluesky']) await expect(page.getByRole('dialog').getByRole('link', { name: platform, exact: true })).toBeVisible();
@@ -365,6 +372,7 @@ test('Discord shortcut copies the PNG for the selected conversation', async ({ p
   await openJourney(page);
   await page.getByRole('button', { name: 'Create your recap', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  await openSharePanel(page);
   const popup = page.waitForEvent('popup');
   await page.getByRole('dialog').getByRole('link', { name: 'Discord', exact: true }).click();
   const discord = await popup;
@@ -379,6 +387,7 @@ test('Discord falls back to a PNG download when clipboard access is unavailable'
   const { errors } = await openJourney(page);
   await page.getByRole('button', { name: 'Create your recap', exact: true }).first().click();
   await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  await openSharePanel(page);
   const downloaded = page.waitForEvent('download');
   const popup = page.waitForEvent('popup');
   await page.getByRole('dialog').getByRole('link', { name: 'Discord', exact: true }).click();
@@ -395,6 +404,7 @@ test('copy image confirms on its button and resets without shifting the preview'
   await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Your SuggestArr recap' });
   await expect(dialog.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  await openSharePanel(page);
   const before = await dialog.boundingBox();
   await dialog.getByRole('button', { name: 'Copy image', exact: true }).click();
   await expect(dialog.getByRole('button', { name: 'Copied!', exact: true })).toBeVisible();
@@ -415,6 +425,7 @@ for (const platform of [{ name: 'X', url: 'https://twitter.com/intent/tweet*' },
     await openJourney(page);
     await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+    await openSharePanel(page);
       const popup = page.waitForEvent('popup');
     await page.getByRole('link', { name: platform.name, exact: true }).click();
     const composer = await popup;
@@ -432,6 +443,7 @@ test('denied image clipboard downloads a PNG and sharing feedback expires', asyn
   await openJourney(page);
   await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  await openSharePanel(page);
   const popup = page.waitForEvent('popup');
   const download = page.waitForEvent('download');
   await page.getByRole('dialog').getByRole('link', { name: 'Discord', exact: true }).click();
@@ -447,7 +459,6 @@ test('the badge collection opens from the recap and Home with up next, details a
   await openJourney(page, { total: 597 });
   await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
   const recapDialog = page.getByRole('dialog', { name: 'Your SuggestArr recap' });
-  await expect(recapDialog.getByText('Latest: Discovery enthusiast')).toBeVisible();
   await recapDialog.getByRole('button', { name: /Badges · 6 \/ 10 unlocked/ }).click();
   const badges = page.getByRole('dialog', { name: 'Your badges' });
   await expect(badges.getByText('6 of 10 unlocked')).toBeVisible();
@@ -488,6 +499,7 @@ test('edited captions feed the composers and can be reset', async ({ page }) => 
   await openJourney(page);
   await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Your SuggestArr recap' });
+  await openSharePanel(page);
   const caption = dialog.getByLabel('Caption');
   await expect(caption).toHaveValue(/100 titles requested with SuggestArr/);
   await caption.fill('My own words about SuggestArr');
@@ -505,6 +517,7 @@ test('native sharing failure saves the image while cancelling leaves the dialog 
   await openJourney(page, { nativeShare: true });
   await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  await openSharePanel(page);
   const downloads = [];
   page.on('download', file => downloads.push(file.suggestedFilename()));
   await page.evaluate(() => { Object.defineProperty(navigator, 'share', { value: async () => { throw new DOMException('Cancelled', 'AbortError'); }, configurable: true }); });

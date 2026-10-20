@@ -10,6 +10,7 @@ Admin endpoints (require role='admin'):
 
 Per-user media profile endpoints (any authenticated user):
   GET    /api/users/me/links                   — list current user's media links
+  GET    /api/users/<id>/avatar                — own image, or any image for admins
   POST   /api/users/me/link/jellyfin           — link a Jellyfin account
   POST   /api/users/me/link/emby               — link an Emby account
   DELETE /api/users/me/link/<provider>         — unlink a media account
@@ -32,7 +33,9 @@ import requests as http_requests
 from flask import Blueprint, jsonify, request, g
 
 from api_service.auth.auth_service import AuthService, MIN_PASSWORD_LENGTH
+from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_role
+from api_service.blueprints.avatar import user_avatar_response
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 
@@ -144,11 +147,32 @@ def list_users():
     """
     Return all SuggestArr accounts (password hashes excluded).
 
-    Response (200): list of { id, username, role, is_active, created_at, last_login }
+    Response (200): account details plus token-free media_profiles.
     """
     db = DatabaseManager()
     users = db.get_all_auth_users()
+    for user in users:
+        user['media_profiles'] = [
+            {key: profile.get(key) for key in ('provider', 'external_user_id', 'external_username', 'verified')}
+            for profile in db.get_user_media_profiles(user['id'])
+        ]
     return jsonify(users), 200
+
+
+# ---------------------------------------------------------------------------
+# Profile image: own account or admin
+# ---------------------------------------------------------------------------
+
+@users_bp.route('/<int:user_id>/avatar', methods=['GET'])
+@limiter.limit('120 per minute')
+def get_user_avatar(user_id: int):
+    """Read your own profile image; admins may read other accounts' images."""
+    caller = getattr(g, 'current_user', None)
+    if not caller:
+        return jsonify({'error': 'Authentication required'}), 401
+    if caller.get('role') != 'admin' and str(caller.get('id')) != str(user_id):
+        return jsonify({'error': 'Insufficient permissions'}), 403
+    return user_avatar_response(user_id)
 
 
 # ---------------------------------------------------------------------------

@@ -45,8 +45,8 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
 from api_service.services.tmdb.localization import display_language, normalize_language
-from api_service.services.user_avatar import UserAvatarService
-from api_service.utils.asyncio_loop import run_coroutine_sync
+from api_service.blueprints.avatar import user_avatar_response
+from api_service.blueprints.users.routes import _normalize_visible_tabs
 
 logger = LoggerManager.get_logger("AuthRoute")
 
@@ -431,7 +431,8 @@ def register():
 
     Gated by the ALLOW_REGISTRATION config flag.  When disabled (the default),
     this endpoint always returns 403 so that only admins can create accounts.
-    When enabled, anyone can create a user-level account with role='user'.
+    When enabled, anyone can create a user-level account with role='user'
+    and the pages listed in REGISTRATION_DEFAULT_TABS.
 
     Rate-limited to 5 attempts per hour per IP to limit abuse.
 
@@ -460,10 +461,19 @@ def register():
         return jsonify({"error": f"Password must be at least {MIN_PASSWORD_LENGTH} characters"}), 400
 
     password_hash = AuthService.hash_password(password)
+    db = DatabaseManager()
     try:
-        DatabaseManager().create_auth_user(username, password_hash, role="user")
+        user_id = db.create_auth_user(username, password_hash, role="user")
     except Exception:
         return jsonify({"error": "Username already taken"}), 409
+
+    try:
+        tabs = _normalize_visible_tabs(config.get('REGISTRATION_DEFAULT_TABS') or '')
+    except ValueError:
+        logger.warning("Ignoring invalid REGISTRATION_DEFAULT_TABS: %r", config.get('REGISTRATION_DEFAULT_TABS'))
+        tabs = []
+    if tabs:
+        db.update_auth_user(user_id, {'visible_tabs': ','.join(sorted(set(tabs) | {'profile'}))})
 
     logger.info("Self-registration: new account created: %r", username)
     return jsonify({"message": "Account created"}), 201
@@ -506,29 +516,7 @@ def me():
 @limiter.limit("30 per minute")
 def get_my_avatar():
     """Proxy only the caller's linked avatar; 204 selects the local fallback."""
-    async def fetch_avatar(config, user, links):
-        async with UserAvatarService() as service:
-            return await service.resolve(config, user, links)
-
-    try:
-        user_id = int(g.current_user['id'])
-        db = DatabaseManager()
-        user = db.get_auth_user_by_id(user_id) or {}
-        links = db.get_user_media_profiles(user_id)
-        avatar = run_coroutine_sync(fetch_avatar(ConfigService.get_runtime_config(), user, links), logger)
-    except Exception:
-        logger.debug('Profile image unavailable')
-        avatar = None
-    if avatar:
-        content, mime_type, source = avatar
-        response = make_response(content, 200)
-        response.headers['Content-Type'] = mime_type
-        response.headers['X-Avatar-Source'] = source
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-    else:
-        response = make_response('', 204)
-    response.headers['Cache-Control'] = 'private, no-store'
-    return response
+    return user_avatar_response((getattr(g, 'current_user', None) or {}).get('id'))
 
 
 # ---------------------------------------------------------------------------

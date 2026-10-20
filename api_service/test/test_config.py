@@ -111,6 +111,7 @@ class TestConfig(unittest.TestCase):
         "SEER_REQUEST_DELAY": 0.5,
         "FILTER_INCLUDE_TVOD": "false",
         "ALLOW_REGISTRATION": False,
+        "REGISTRATION_DEFAULT_TABS": "requests,jobs,profile",
         "AUTH_MODE": "enabled",
         "AUTH_TRUSTED_CIDRS": "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7",
         "AUTH_BYPASS_USERNAME": "local_admin",

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { computed, onScopeDispose, reactive, shallowRef, watch } from 'vue';
 
-// Sidebar and profile share one authenticated request and one blob URL.
+// Sidebar, profile and account cards share one request and blob URL per user.
 const entries = new Map();
 
 function clearImage(entry) {
@@ -16,7 +16,7 @@ async function loadImage(entry) {
   entry.controller = controller;
   clearImage(entry);
   try {
-    const response = await axios.get('/api/auth/me/avatar', {
+    const response = await axios.get(`/api/users/${encodeURIComponent(entry.userId)}/avatar`, {
       responseType: 'blob', timeout: 20000, signal: controller.signal,
     });
     if (controller.signal.aborted || response.status !== 200 || !response.data?.type?.startsWith('image/')) return;
@@ -43,7 +43,7 @@ export function useUserAvatar(user) {
     const key = String(id);
     let entry = entries.get(key);
     if (!entry) {
-      entry = { state: reactive({ url: null, source: null }), users: 0, controller: null };
+      entry = { userId: key, state: reactive({ url: null, source: null }), users: 0, controller: null };
       entries.set(key, entry);
       loadImage(entry);
     }

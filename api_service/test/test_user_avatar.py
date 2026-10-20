@@ -155,6 +155,7 @@ def avatar_client(monkeypatch):
     from api_service.auth.limiter import limiter
     from api_service.auth.middleware import enforce_authentication, invalidate_setup_cache
     from api_service.blueprints.auth.routes import auth_bp
+    from api_service.blueprints.users.routes import users_bp
 
     monkeypatch.setenv('SUGGESTARR_AUTH_DISABLED', 'false')
     monkeypatch.setenv('AUTH_MODE', 'enabled')
@@ -164,8 +165,9 @@ def avatar_client(monkeypatch):
     db.get_user_media_profiles.return_value = [linked()]
     monkeypatch.setattr('api_service.auth.middleware.DatabaseManager', lambda: db)
     monkeypatch.setattr('api_service.blueprints.auth.routes.DatabaseManager', lambda: db)
+    monkeypatch.setattr('api_service.blueprints.avatar.DatabaseManager', lambda: db)
     monkeypatch.setattr('api_service.auth.middleware.load_env_vars', lambda: {'AUTH_MODE': 'enabled'})
-    monkeypatch.setattr('api_service.blueprints.auth.routes.ConfigService.get_runtime_config', lambda: {'SELECTED_SERVICE': 'jellyfin'})
+    monkeypatch.setattr('api_service.blueprints.avatar.ConfigService.get_runtime_config', lambda: {'SELECTED_SERVICE': 'jellyfin'})
     monkeypatch.setattr('api_service.auth.middleware.AuthService.verify_access_token', lambda token: {'sub': '3', 'username': 'alice', 'role': 'user'})
     monkeypatch.setattr(limiter, 'enabled', False)
     invalidate_setup_cache()
@@ -173,21 +175,24 @@ def avatar_client(monkeypatch):
     app.config['TESTING'] = True
     app.before_request(enforce_authentication)
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(users_bp, url_prefix='/api/users')
     yield app.test_client(), db
     invalidate_setup_cache()
 
 
-def test_avatar_requires_authentication(avatar_client):
+@pytest.mark.parametrize('path', ['/api/auth/me/avatar', '/api/users/3/avatar', '/api/users/7/avatar'])
+def test_avatar_requires_authentication(avatar_client, path):
     client, _db = avatar_client
     with patch.object(UserAvatarService, 'resolve', new_callable=AsyncMock) as fetch:
-        assert client.get('/api/auth/me/avatar').status_code == 401
+        assert client.get(path).status_code == 401
     fetch.assert_not_awaited()
 
 
-def test_avatar_only_loads_caller_links_and_returns_private_image(avatar_client):
+@pytest.mark.parametrize('path', ['/api/auth/me/avatar', '/api/users/3/avatar'])
+def test_avatar_only_loads_caller_links_and_returns_private_image(avatar_client, path):
     client, db = avatar_client
     with patch.object(UserAvatarService, 'resolve', new_callable=AsyncMock, return_value=(b'photo', 'image/png', 'seer')) as fetch:
-        response = client.get('/api/auth/me/avatar?user_id=99', headers={'Authorization': 'Bearer test-only'})
+        response = client.get(path + '?user_id=99', headers={'Authorization': 'Bearer test-only'})
     assert response.status_code == 200
     assert response.data == b'photo'
     assert response.content_type == 'image/png'
@@ -199,12 +204,53 @@ def test_avatar_only_loads_caller_links_and_returns_private_image(avatar_client)
 
 
 @pytest.mark.parametrize('failure', [False, True])
-def test_no_photo_or_provider_failure_selects_local_fallback(avatar_client, failure):
+@pytest.mark.parametrize('path', ['/api/auth/me/avatar', '/api/users/3/avatar'])
+def test_no_photo_or_provider_failure_selects_local_fallback(avatar_client, failure, path):
     client, _db = avatar_client
     with patch.object(UserAvatarService, 'resolve', new_callable=AsyncMock, return_value=None) as fetch:
         if failure:
             fetch.side_effect = RuntimeError('private upstream details')
-        response = client.get('/api/auth/me/avatar', headers={'Authorization': 'Bearer test-only'})
+        response = client.get(path, headers={'Authorization': 'Bearer test-only'})
     assert response.status_code == 204
     assert response.data == b''
     assert response.headers['Cache-Control'] == 'private, no-store'
+
+
+@pytest.mark.parametrize('other_id', [7, 999])
+def test_non_admin_cannot_read_another_accounts_avatar(avatar_client, other_id):
+    client, db = avatar_client
+    with patch.object(UserAvatarService, 'resolve', new_callable=AsyncMock) as fetch:
+        response = client.get(f'/api/users/{other_id}/avatar', headers={'Authorization': 'Bearer test-only'})
+    assert response.status_code == 403
+    db.get_auth_user_by_id.assert_not_called()
+    db.get_user_media_profiles.assert_not_called()
+    fetch.assert_not_awaited()
+
+
+def test_admin_resolves_target_accounts_identity_not_callers(avatar_client, monkeypatch):
+    client, db = avatar_client
+    monkeypatch.setattr('api_service.auth.middleware.AuthService.verify_access_token', lambda token: {'sub': '3', 'role': 'admin'})
+    db.get_auth_user_by_id.return_value = {'id': 7, 'username': 'bob', 'seer_user_id': 17}
+    db.get_user_media_profiles.return_value = [linked(external_id='bobs-id')]
+    with patch.object(UserAvatarService, 'resolve', new_callable=AsyncMock, return_value=(b'bobs photo', 'image/png', 'jellyfin')) as fetch:
+        response = client.get('/api/users/7/avatar', headers={'Authorization': 'Bearer test-only'})
+    assert response.status_code == 200
+    assert response.data == b'bobs photo'
+    assert response.headers['Cache-Control'] == 'private, no-store'
+    assert response.headers['X-Avatar-Source'] == 'jellyfin'
+    assert response.headers['X-Content-Type-Options'] == 'nosniff'
+    db.get_auth_user_by_id.assert_called_once_with(7)
+    db.get_user_media_profiles.assert_called_once_with(7)
+    assert fetch.await_args.args[1]['seer_user_id'] == 17
+    assert fetch.await_args.args[2] == [linked(external_id='bobs-id')]
+
+
+def test_deleted_account_selects_fallback_without_provider_call(avatar_client, monkeypatch):
+    client, db = avatar_client
+    monkeypatch.setattr('api_service.auth.middleware.AuthService.verify_access_token', lambda token: {'sub': '3', 'role': 'admin'})
+    db.get_auth_user_by_id.return_value = None
+    with patch.object(UserAvatarService, 'resolve', new_callable=AsyncMock) as fetch:
+        response = client.get('/api/users/7/avatar', headers={'Authorization': 'Bearer test-only'})
+    assert response.status_code == 204
+    db.get_user_media_profiles.assert_not_called()
+    fetch.assert_not_awaited()

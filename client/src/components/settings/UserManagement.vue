@@ -3,6 +3,14 @@
 
     <PageHeader title="Users" subtitle="SuggestArr accounts, their roles and who can sign up. Your own settings are under Profile." />
 
+    <dl aria-label="Account overview" class="m-0 mb-5 flex flex-wrap gap-2">
+      <div v-for="stat in accountStats" :key="stat.key" class="relative flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm" :class="isStatActive(stat) ? 'border-brand bg-brand-soft' : 'border-edge bg-panel hover:border-edge-strong'">
+        <i aria-hidden="true" class="text-xs" :class="[stat.icon, stat.tone]"></i>
+        <dt class="order-last text-ink-3"><button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-inherit after:absolute after:inset-0 after:rounded-full" :aria-pressed="isStatActive(stat) ? 'true' : 'false'" :disabled="isLoadingUsers || usersError" @click="applyStat(stat)">{{ stat.label }}</button></dt>
+        <dd class="m-0 font-extrabold text-ink">{{ isLoadingUsers || usersError ? '—' : stat.value }}</dd>
+      </div>
+    </dl>
+
     <div data-users-cards class="mb-8 grid items-stretch gap-5 min-[1001px]:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
 
       <SectionCard icon="fas fa-users" title="Accounts">
@@ -19,105 +27,117 @@
           Loading users…
         </p>
 
+        <div v-else-if="usersError" role="alert" class="ui-alert-bad flex flex-wrap items-center justify-between gap-3">
+          <span>Could not load accounts. Try again to see the latest account details.</span>
+          <button type="button" class="ui-btn h-9" @click="loadUsers">Try again</button>
+        </div>
+
         <!-- Empty -->
         <p v-else-if="users.length === 0" :class="emptyClass">
           <i aria-hidden="true" class="fas fa-users"></i>
           No accounts found.
         </p>
 
-        <!-- User rows -->
-        <div v-else class="flex flex-col gap-2">
-          <div
-            v-for="user in users"
-            :key="user.id"
-            class="flex items-center gap-4 rounded-ctl border border-edge bg-panel-2 px-4 py-3 transition hover:border-edge-strong hover:bg-raised max-[700px]:grid max-[700px]:grid-cols-3 max-[700px]:gap-2"
-            :class="{ 'opacity-50': !user.is_active }"
-          >
-            <!-- Avatar + name -->
-            <div class="flex min-w-0 flex-1 items-center gap-3 max-[700px]:col-span-full">
-              <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-edge-strong bg-raised text-sm text-ink-4">
-                <i aria-hidden="true" class="fas fa-user"></i>
-              </div>
-              <div class="flex min-w-0 flex-col gap-0.5">
-                <span class="flex items-center gap-1.5 truncate text-[0.95rem] font-semibold text-ink">
-                  {{ user.username }}
-                  <span v-if="user.id === currentUserId" class="shrink-0 rounded-full bg-brand px-1.5 py-px text-[0.65rem] font-bold uppercase tracking-wide text-white">you</span>
-                </span>
-                <span class="text-[0.78rem] text-ink-4">
-                  Last login: {{ formatDate(user.last_login) }}
-                </span>
-              </div>
+        <div v-else class="flex flex-col gap-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <label class="relative min-w-0 flex-[1_1_200px]">
+              <span class="sr-only">Find an account</span>
+              <i aria-hidden="true" class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-4"></i>
+              <input v-model="userQuery" type="search" class="ui-input pl-9" placeholder="Find an account…" />
+            </label>
+            <label class="ui-label flex-[0_1_150px]">
+              <span class="sr-only">Filter accounts by role</span>
+              <select v-model="roleFilter" class="ui-input"><option value="all">All roles</option><option value="admin">Admins</option><option value="user">Users</option></select>
+            </label>
+            <div role="group" aria-label="Account layout" class="flex gap-1">
+              <button v-for="mode in viewModes" :key="mode.value" type="button" class="ui-btn h-[42px] w-[42px] px-0" :class="{ 'border-brand text-brand-ink': viewMode === mode.value }" :aria-label="mode.label" :title="mode.label" :aria-pressed="viewMode === mode.value ? 'true' : 'false'" @click="setViewMode(mode.value)"><i aria-hidden="true" :class="mode.icon"></i></button>
             </div>
+          </div>
+          <p v-if="!filteredUsers.length" role="status" :class="emptyClass">No accounts match your filters.<button type="button" class="cursor-pointer border-0 bg-transparent text-sm font-semibold text-brand-ink" @click="resetFilters">Clear filters</button></p>
 
-            <!-- Status chip -->
-            <button
-              type="button"
-              :disabled="user.id === currentUserId || !!isSaving[user.id]"
-              class="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-[0.78rem] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40"
-              :class="user.is_active ? 'border-good bg-good/10 text-good hover:enabled:bg-good/20' : 'border-edge-strong bg-panel-2 text-ink-4 hover:enabled:bg-raised'"
-              @click="toggleActive(user)"
-            >
-              <i aria-hidden="true" :class="user.is_active ? 'fas fa-circle' : 'far fa-circle'"></i>
-              {{ user.is_active ? 'Active' : 'Inactive' }}
-            </button>
+          <ul v-else-if="viewMode === 'list'" class="m-0 flex list-none flex-col divide-y divide-edge rounded-card border border-edge-strong bg-panel-2 p-0">
+            <li v-for="user in filteredUsers" :key="user.id">
+              <article :aria-label="`Account ${user.username}`" class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5" :class="{ 'opacity-70': !user.is_active }">
+                <div class="flex min-w-0 flex-[1_1_180px] items-center gap-3">
+                  <UserAvatar :user="user" class="h-9 w-9" />
+                  <div class="min-w-0">
+                    <h3 class="m-0 flex items-center gap-1.5 text-sm font-bold text-ink"><span class="truncate" :title="user.username">{{ user.username }}</span><span v-if="isSelf(user)" class="shrink-0 rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">you</span></h3>
+                    <p class="m-0 text-xs text-ink-3">{{ user.role === 'admin' ? 'Administrator' : 'User' }} · <span :title="formatDate(user.last_login)">{{ user.last_login ? `seen ${relativeTime(user.last_login)}` : 'never signed in' }}</span></p>
+                  </div>
+                </div>
+                <span class="text-xs text-ink-3" :title="pagesTitle(user)">{{ pagesSummary(user) }}</span>
+                <div class="flex items-center gap-1">
+                  <button v-if="supportsUserLinks" type="button" :disabled="!!isSaving[user.id]" :aria-label="`Assign ${providerLabel} account to ${user.username}`" :title="`${providerLabel}: ${mediaName(user) || 'not linked'}`" class="ui-btn h-8 w-8 px-0" @click="openMediaLinkModal(user)"><i aria-hidden="true" class="fas fa-link" :class="mediaProfile(user) ? 'text-good' : 'text-ink-4'"></i></button>
+                  <button type="button" :disabled="!!isSaving[user.id]" :aria-label="`Edit Seer identity for ${user.username}`" :title="`Seer: ${seerIdentity(user)}`" class="ui-btn h-8 w-8 px-0" @click="openEditPermissionsModal(user)"><i aria-hidden="true" class="fas fa-ticket-alt" :class="user.seer_user_id != null ? 'text-brand-ink' : 'text-ink-4'"></i></button>
+                </div>
+                <div class="ml-auto flex items-center gap-2">
+                  <button type="button" :disabled="statusLocked(user) || !!isSaving[user.id]" :aria-label="`${user.is_active ? 'Deactivate' : 'Activate'} ${user.username}`" :title="statusTitle(user)" :class="statusClass(user)" @click="toggleActive(user)"><span aria-hidden="true" class="h-1.5 w-1.5 rounded-full" :class="user.is_active ? 'bg-good' : 'bg-ink-4'"></span>{{ user.is_active ? 'Enabled' : 'Disabled' }}</button>
+                  <button type="button" :disabled="!!isSaving[user.id]" class="ui-btn h-8 w-8 px-0" :aria-label="`Edit permissions for ${user.username}`" title="Role & permissions" @click="openEditPermissionsModal(user)"><i aria-hidden="true" class="fas fa-sliders-h"></i></button>
+                  <button type="button" :disabled="statusLocked(user) || !!isSaving[user.id]" class="ui-btn-icon-danger h-8" :aria-label="`Delete ${user.username}`" :title="deleteTitle(user)" @click="confirmDelete(user)"><i aria-hidden="true" class="fas fa-trash"></i></button>
+                </div>
+              </article>
+            </li>
+          </ul>
 
-            <!-- Role select -->
-            <div class="w-[140px] shrink-0 max-[700px]:col-span-2 max-[700px]:w-full">
-              <BaseDropdown
-                v-model="user.role"
-                :options="roleOptions"
-                :disabled="user.id === currentUserId || !!isSaving[user.id]"
-                @change="() => updateUserRole(user)"
-              />
-            </div>
+          <div v-else class="grid gap-4 min-[700px]:grid-cols-2 min-[1001px]:grid-cols-1 min-[1280px]:grid-cols-2">
+            <article v-for="user in filteredUsers" :key="user.id" :aria-label="`Account ${user.username}`" class="flex min-w-0 flex-col rounded-card border border-edge-strong bg-panel-2 p-4" :class="{ 'opacity-70': !user.is_active }">
+              <div class="flex items-start gap-3">
+                <UserAvatar :user="user" class="h-12 w-12" />
+                <div class="min-w-0 flex-1">
+                  <h3 class="m-0 flex items-center gap-1.5 text-base font-bold text-ink"><span class="truncate" :title="user.username">{{ user.username }}</span><span v-if="isSelf(user)" class="shrink-0 rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">you</span></h3>
+                  <p class="m-0 mt-1 text-xs text-ink-3"><i aria-hidden="true" :class="user.role === 'admin' ? 'fas fa-user-shield' : 'fas fa-user'" class="mr-1.5"></i>{{ user.role === 'admin' ? 'Administrator' : 'User' }}</p>
+                </div>
+                <button type="button" :disabled="statusLocked(user) || !!isSaving[user.id]" :aria-label="`${user.is_active ? 'Deactivate' : 'Activate'} ${user.username}`" :title="statusTitle(user)" :class="statusClass(user)" @click="toggleActive(user)"><span aria-hidden="true" class="h-1.5 w-1.5 rounded-full" :class="user.is_active ? 'bg-good' : 'bg-ink-4'"></span>{{ user.is_active ? 'Enabled' : 'Disabled' }}</button>
+              </div>
 
-            <!-- Edit permissions -->
-            <button
-              type="button"
-              :disabled="!!isSaving[user.id]"
-              class="ui-btn h-9 w-9 shrink-0 px-0"
-              title="Edit permissions"
-              aria-label="Edit permissions"
-              @click="openEditPermissionsModal(user)"
-            >
-              <i aria-hidden="true" class="fas fa-pencil-alt"></i>
-            </button>
+              <dl class="m-0 mt-4 grid grid-cols-2 gap-3 border-t border-edge pt-3 text-xs">
+                <div class="min-w-0"><dt class="text-ink-4">Last login</dt><dd class="m-0 mt-1 leading-relaxed text-ink-2" :title="user.last_login ? formatDate(user.last_login) : null">{{ user.last_login ? relativeTime(user.last_login) : 'Never' }}</dd></div>
+                <div class="min-w-0"><dt class="text-ink-4">Member since</dt><dd class="m-0 mt-1 leading-relaxed text-ink-2">{{ user.created_at ? formatDate(user.created_at, false) : 'Not available' }}</dd></div>
+              </dl>
 
-            <button
-              type="button"
-              :disabled="!!isSaving[user.id] || !supportsUserLinks"
-              class="ui-btn h-9 w-9 shrink-0 px-0"
-              title="Assign media account"
-              aria-label="Assign media account"
-              @click="openMediaLinkModal(user)"
-            >
-              <i aria-hidden="true" class="fas fa-link"></i>
-            </button>
+              <div class="mt-4 flex flex-wrap gap-1.5" :aria-label="`Page access for ${user.username}`">
+                <span class="inline-flex items-center gap-1.5 rounded-md bg-canvas/70 px-2 py-1 text-[11px] font-semibold text-ink-2" :title="pagesTitle(user)"><i aria-hidden="true" class="fas fa-layer-group text-ink-4"></i>{{ pagesSummary(user) }}</span>
+                <span v-if="user.role === 'admin' || user.can_manage_ai" class="inline-flex items-center gap-1.5 rounded-md bg-brand-soft/60 px-2 py-1 text-[11px] font-semibold text-brand-ink"><i aria-hidden="true" class="fas fa-robot"></i>AI settings</span>
+              </div>
 
-            <!-- Delete -->
-            <button
-              type="button"
-              :disabled="user.id === currentUserId || !!isSaving[user.id]"
-              class="ui-btn-icon-danger"
-              title="Delete user"
-              aria-label="Delete user"
-              @click="confirmDelete(user)"
-            >
-              <i aria-hidden="true" class="fas fa-trash"></i>
-            </button>
+              <div class="mb-4 mt-3 flex gap-2">
+                <button v-if="supportsUserLinks" type="button" :disabled="!!isSaving[user.id]" :aria-label="`Assign ${providerLabel} account to ${user.username}`" :title="`${providerLabel} account: ${mediaName(user) || 'not linked'}`" class="flex min-w-0 flex-1 basis-0 cursor-pointer items-center gap-2 rounded-ctl border border-edge bg-canvas/50 px-2.5 py-2 text-left hover:border-brand-ink disabled:opacity-50" @click="openMediaLinkModal(user)">
+                  <i aria-hidden="true" class="fas fa-link w-4 shrink-0 text-center" :class="mediaProfile(user) ? 'text-good' : 'text-ink-4'"></i>
+                  <span class="truncate text-xs font-semibold" :class="mediaProfile(user) ? 'text-ink-2' : 'text-ink-4'">{{ mediaName(user) || `Link ${providerLabel}` }}</span>
+                </button>
+                <button type="button" :disabled="!!isSaving[user.id]" :aria-label="`Edit Seer identity for ${user.username}`" :title="`Seer request identity: ${seerIdentity(user)}`" class="flex min-w-0 flex-1 basis-0 cursor-pointer items-center gap-2 rounded-ctl border border-edge bg-canvas/50 px-2.5 py-2 text-left hover:border-brand-ink disabled:opacity-50" @click="openEditPermissionsModal(user)">
+                  <i aria-hidden="true" class="fas fa-ticket-alt w-4 shrink-0 text-center" :class="user.seer_user_id != null ? 'text-brand-ink' : 'text-ink-4'"></i>
+                  <span class="truncate text-xs font-semibold" :class="user.seer_user_id != null ? 'text-ink-2' : 'text-ink-4'">{{ seerIdentity(user) }}</span>
+                </button>
+              </div>
+
+              <div class="mt-auto flex items-center gap-2 border-t border-edge pt-3">
+                <button type="button" :disabled="!!isSaving[user.id]" class="ui-btn h-[42px] flex-1 px-3 text-xs" :aria-label="`Edit permissions for ${user.username}`" @click="openEditPermissionsModal(user)"><i aria-hidden="true" class="fas fa-sliders-h"></i>Role &amp; permissions</button>
+                <button type="button" :disabled="statusLocked(user) || !!isSaving[user.id]" class="ui-btn-icon-danger h-[42px]" :aria-label="`Delete ${user.username}`" :title="deleteTitle(user)" @click="confirmDelete(user)"><i aria-hidden="true" class="fas fa-trash"></i></button>
+              </div>
+            </article>
           </div>
         </div>
       </SectionCard>
 
       <SectionCard icon="fas fa-door-open" title="Self-Registration">
-        <BaseCheckbox
-          v-model="localAllowRegistration"
-          :disabled="isSavingRegistration"
-          class="w-full rounded-ctl border border-edge bg-panel-2 px-4 py-3"
-          label="Allow sign-ups"
-          description="Anyone with access to the login page can create a User account."
-          @change="saveRegistration"
-        />
+        <button type="button" role="switch" :aria-checked="localAllowRegistration ? 'true' : 'false'" :disabled="isSavingRegistration" class="flex w-full cursor-pointer items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 text-left hover:border-edge-strong disabled:cursor-not-allowed disabled:opacity-50" @click="saveRegistration({ localAllowRegistration: !localAllowRegistration })">
+          <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="text-sm font-semibold text-ink">Allow sign-ups</span>
+            <span class="text-xs leading-snug text-ink-4">Anyone who can reach the login page can create a User account.</span>
+          </span>
+          <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="localAllowRegistration ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="localAllowRegistration ? 'left-[21px]' : 'left-[3px]'"></span></span>
+        </button>
+
+        <fieldset v-if="localAllowRegistration" class="m-0 mt-4 flex flex-col gap-2 border-0 p-0" :disabled="isSavingRegistration">
+          <legend class="mb-2 p-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Pages for new accounts</legend>
+          <label v-for="tab in availableTabs" :key="tab.value" class="flex items-center gap-3 rounded-ctl border border-edge bg-panel-2 px-3 py-2 text-sm text-ink-2" :class="tab.required ? 'opacity-60' : 'cursor-pointer hover:border-ink-4'">
+            <input type="checkbox" class="accent-brand" :checked="tab.required || registrationTabs.includes(tab.value)" :disabled="tab.required" @change="toggleRegistrationTab(tab.value)" />
+            <i aria-hidden="true" class="w-4 text-center text-ink-4" :class="tab.icon"></i>
+            <span class="flex-1">{{ tab.label }}</span>
+          </label>
+        </fieldset>
+        <p v-else class="m-0 mt-4 text-xs leading-relaxed text-ink-4"><i aria-hidden="true" class="fas fa-lock mr-1.5"></i>Only admins add accounts, with New User.</p>
       </SectionCard>
 
     </div>
@@ -143,7 +163,7 @@
           <legend class="mb-1.5 p-0 text-[13px] font-semibold text-ink-2">Role</legend>
           <label v-for="role in roleOptions" :key="role.value" class="flex cursor-pointer items-start gap-3 rounded-ctl border p-3" :class="newUser.role === role.value ? 'border-brand bg-brand-soft' : 'border-edge-strong bg-panel-2 hover:border-ink-4'">
             <input v-model="newUser.role" type="radio" name="new-user-role" :value="role.value" class="mt-0.5 accent-brand" :disabled="isCreating" />
-            <span class="text-sm font-semibold text-ink">{{ role.label }}<span class="block text-xs font-normal text-ink-3">{{ role.value === 'admin' ? 'Full access, including settings and other accounts.' : 'Requests and their own profile.' }}</span></span>
+            <span class="text-sm font-semibold text-ink">{{ role.label }}<span class="block text-xs font-normal text-ink-3">{{ role.description }}</span></span>
           </label>
         </fieldset>
         <p v-if="createError" class="ui-alert-bad" role="alert">{{ createError }}</p>
@@ -158,6 +178,7 @@
 
     <AppDialog v-if="showDeleteModal" title="Delete account" icon="fas fa-trash" tone="danger" @close="showDeleteModal = false">
       <p class="m-0 text-sm leading-relaxed text-ink-2">Permanently delete <strong class="text-ink">{{ deleteTarget?.username }}</strong>? They lose access immediately. This cannot be undone.</p>
+      <p v-if="deleteTarget?.is_active" class="m-0 mt-3 text-xs text-ink-3">To keep their history and links, disable the account instead.</p>
       <template #footer>
         <button type="button" class="ui-btn" :disabled="isDeleting" @click="showDeleteModal = false">Cancel</button>
         <button type="button" class="ui-btn-danger" :disabled="isDeleting" @click="submitDelete">
@@ -168,10 +189,23 @@
 
     <AppDialog v-if="showPermissionsModal" width="max-w-3xl" title="Permissions" icon="fas fa-user-shield" @close="showPermissionsModal = false">
       <template #subtitle>
-        {{ permissionsTarget?.username }} · <span class="capitalize">{{ permissionsTarget?.role }}</span>
+        Role, pages and Seer identity for {{ permissionsTarget?.username }}
       </template>
       <div class="flex flex-col gap-6">
-        <section class="flex flex-col gap-3">
+        <fieldset class="m-0 flex flex-col gap-2 border-0 p-0" :disabled="isSavingPermissions || !!roleLockReason(permissionsTarget)">
+          <legend class="mb-2 p-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Role</legend>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <label v-for="role in roleOptions" :key="role.value" class="flex items-start gap-3 rounded-ctl border p-3" :class="[editPermissions.role === role.value ? 'border-brand bg-brand-soft' : 'border-edge-strong bg-panel-2', roleLockReason(permissionsTarget) ? 'opacity-60' : 'cursor-pointer hover:border-ink-4']">
+              <input v-model="editPermissions.role" type="radio" name="edit-user-role" :value="role.value" class="mt-0.5 accent-brand" />
+              <span class="text-sm font-semibold text-ink">{{ role.label }}<span class="block text-xs font-normal text-ink-3">{{ role.description }}</span></span>
+            </label>
+          </div>
+          <p v-if="roleLockReason(permissionsTarget)" class="m-0 text-xs text-ink-4"><i aria-hidden="true" class="fas fa-lock mr-1.5"></i>{{ roleLockReason(permissionsTarget) }}</p>
+        </fieldset>
+
+        <p v-if="editPermissions.role === 'admin'" class="m-0 rounded-ctl border border-edge bg-canvas/50 p-3 text-xs text-ink-3">Admins see every page and can manage AI settings.</p>
+
+        <section v-if="editPermissions.role !== 'admin'" class="flex flex-col gap-3">
           <h3 class="m-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Features</h3>
           <BaseCheckbox
             v-model="editPermissions.can_manage_ai"
@@ -187,7 +221,7 @@
           <BaseDropdown v-model="editPermissions.seer_user_id" :options="seerUserOptions" placeholder="Use technical user fallback" :disabled="isSavingPermissions" />
         </section>
 
-        <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
+        <fieldset v-if="editPermissions.role !== 'admin'" class="m-0 flex flex-col gap-2 border-0 p-0">
           <legend class="mb-2 p-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Visible pages</legend>
           <div class="grid gap-2 sm:grid-cols-2">
             <label
@@ -262,11 +296,24 @@ import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import AppDialog from '@/components/ui/AppDialog.vue';
 import SectionCard from '@/components/ui/SectionCard.vue';
+import UserAvatar from '@/components/ui/UserAvatar.vue';
+import { refreshUserAvatar } from '@/composables/useUserAvatar';
+
+const DEFAULT_TABS = 'requests,jobs,profile';
+const VIEW_MODE_KEY = 'suggestarr.users.view';
+
+function splitTabs(tabs) {
+  return (Array.isArray(tabs) ? tabs : String(tabs || '').split(',')).map(tab => String(tab).trim()).filter(Boolean);
+}
+
+function readViewMode() {
+  try { return localStorage.getItem(VIEW_MODE_KEY) === 'list' ? 'list' : 'cards'; } catch { return 'cards'; }
+}
 
 export default {
   name: 'UserManagement',
 
-  components: { AppDialog, BaseDropdown, BaseCheckbox, PageHeader, SectionCard },
+  components: { AppDialog, BaseDropdown, BaseCheckbox, PageHeader, SectionCard, UserAvatar },
 
   props: {
     config: Object,
@@ -281,10 +328,20 @@ export default {
   data() {
     return {
       users: [],
+      userQuery: '',
+      roleFilter: 'all',
+      quickFilter: '',
+      viewMode: readViewMode(),
+      viewModes: [
+        { value: 'cards', label: 'Card view', icon: 'fas fa-th-large' },
+        { value: 'list', label: 'List view', icon: 'fas fa-list' },
+      ],
+      usersError: false,
       emptyClass: 'm-0 flex items-center justify-center gap-3 rounded-[8px] border border-dashed border-edge-strong px-4 py-8 text-[0.95rem] text-ink-4',
-      isLoadingUsers: false,
+      isLoadingUsers: true,
       isSaving: {},
       localAllowRegistration: false,
+      registrationTabs: [],
       isSavingRegistration: false,
 
       // Create modal
@@ -303,6 +360,7 @@ export default {
       showPermissionsModal: false,
       permissionsTarget: null,
       editPermissions: {
+        role: 'user',
         can_manage_ai: false,
         visible_tabs_array: [],
         seer_user_id: null,
@@ -320,8 +378,8 @@ export default {
       mediaLinkError: null,
 
       roleOptions: [
-        { label: 'Admin', value: 'admin' },
-        { label: 'User', value: 'user' },
+        { label: 'Admin', value: 'admin', description: 'Full access, including settings and other accounts.' },
+        { label: 'User', value: 'user', description: 'Only the pages you enable. Profile is always available.' },
       ],
 
       availableTabs: [
@@ -334,6 +392,26 @@ export default {
   },
 
   computed: {
+    accountStats() {
+      return [
+        { key: 'all', label: 'accounts', value: this.users.length, icon: 'fas fa-users', tone: 'text-brand-ink' },
+        { key: 'enabled', label: 'enabled', value: this.users.filter(user => user.is_active).length, icon: 'fas fa-user-check', tone: 'text-good' },
+        { key: 'admin', label: 'admins', value: this.users.filter(user => user.role === 'admin').length, icon: 'fas fa-user-shield', tone: 'text-notice' },
+        { key: 'linked', label: this.supportsUserLinks ? `linked to ${this.providerLabel}` : 'media accounts linked', value: this.users.filter(user => this.mediaProfile(user)).length, icon: 'fas fa-link', tone: 'text-caution' },
+      ];
+    },
+    filteredUsers() {
+      const query = this.userQuery.trim().toLocaleLowerCase();
+      return this.users.filter(user =>
+        (this.roleFilter === 'all' || user.role === this.roleFilter) &&
+        (!this.quickFilter || (this.quickFilter === 'enabled' ? user.is_active : !!this.mediaProfile(user))) &&
+        (!query || [user.username, ...((user.media_profiles || []).map(profile => profile.external_username))]
+          .some(name => String(name || '').toLocaleLowerCase().includes(query)))
+      );
+    },
+    activeAdminCount() {
+      return this.users.filter(user => user.role === 'admin' && user.is_active).length;
+    },
     currentUserId() {
       if (!this.currentUser) return null;
       return Number(this.currentUser.id ?? this.currentUser.sub ?? null);
@@ -372,6 +450,12 @@ export default {
         this.localAllowRegistration = !!val;
       },
     },
+    'config.REGISTRATION_DEFAULT_TABS': {
+      immediate: true,
+      handler(val) {
+        this.registrationTabs = splitTabs(val ?? DEFAULT_TABS);
+      },
+    },
   },
 
   mounted() {
@@ -380,6 +464,78 @@ export default {
   },
 
   methods: {
+    mediaProfile(user) {
+      return (user.media_profiles || []).find(profile => this.supportsUserLinks ? profile.provider === this.selectedService : ['plex', 'jellyfin', 'emby'].includes(profile.provider));
+    },
+    isSelf(user) {
+      return Number(user.id) === this.currentUserId;
+    },
+    isLastAdmin(user) {
+      return user.role === 'admin' && user.is_active && this.activeAdminCount <= 1;
+    },
+    // Mirrors the API guards so the UI never offers an action the server refuses.
+    statusLocked(user) {
+      return this.isSelf(user) || this.isLastAdmin(user);
+    },
+    roleLockReason(user) {
+      if (!user) return '';
+      if (this.isSelf(user)) return 'You cannot change your own role.';
+      if (this.isLastAdmin(user)) return 'At least one active admin is required.';
+      return '';
+    },
+    statusTitle(user) {
+      if (this.isSelf(user)) return 'You cannot disable your own account';
+      if (this.isLastAdmin(user)) return 'The last active admin cannot be disabled';
+      return user.is_active ? 'Enabled — click to disable sign-in' : 'Disabled — click to enable sign-in';
+    },
+    statusClass(user) {
+      return ['inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-2 text-[11px] font-semibold disabled:cursor-not-allowed',
+        user.is_active ? 'border-good/40 bg-good/10 text-good hover:enabled:bg-good/20' : 'border-edge-strong bg-raised text-ink-3 hover:enabled:text-ink'];
+    },
+    deleteTitle(user) {
+      if (this.isSelf(user)) return 'You cannot delete your own account';
+      if (this.isLastAdmin(user)) return 'The last active admin cannot be deleted';
+      return 'Delete user';
+    },
+    isStatActive(stat) {
+      if (stat.key === 'all') return this.roleFilter === 'all' && !this.quickFilter;
+      return stat.key === 'admin' ? this.roleFilter === 'admin' : this.quickFilter === stat.key;
+    },
+    applyStat(stat) {
+      if (stat.key === 'all') return this.resetFilters();
+      if (stat.key === 'admin') this.roleFilter = this.roleFilter === 'admin' ? 'all' : 'admin';
+      else this.quickFilter = this.quickFilter === stat.key ? '' : stat.key;
+    },
+    setViewMode(mode) {
+      this.viewMode = mode;
+      try { localStorage.setItem(VIEW_MODE_KEY, mode); } catch { /* storage unavailable */ }
+    },
+    mediaName(user) {
+      const profile = this.mediaProfile(user);
+      return profile?.external_username || profile?.external_user_id || '';
+    },
+    pagesSummary(user) {
+      if (user.role === 'admin') return 'All pages';
+      const count = this.userPages(user).length;
+      return `${count} ${count === 1 ? 'page' : 'pages'}`;
+    },
+    pagesTitle(user) {
+      return user.role === 'admin' ? 'Every page' : this.userPages(user).map(tab => tab.label).join(', ');
+    },
+    seerIdentity(user) {
+      if (user.seer_user_id == null) return 'Technical user fallback';
+      const seerUser = this.seerUsers.find(item => Number(item.id) === Number(user.seer_user_id));
+      return seerUser?.displayName || seerUser?.username || seerUser?.email || `Seer user #${user.seer_user_id}`;
+    },
+    userPages(user) {
+      const values = splitTabs(user.visible_tabs ?? DEFAULT_TABS).map(tab => this.normalizeTabValue(tab));
+      return this.availableTabs.filter(tab => tab.required || values.includes(tab.value));
+    },
+    resetFilters() {
+      this.userQuery = '';
+      this.roleFilter = 'all';
+      this.quickFilter = '';
+    },
     normalizeTabValue(tabValue) {
       if (tabValue === 'suggestions') return 'requests';
       if (tabValue === 'ai-search') {
@@ -390,10 +546,12 @@ export default {
 
     async loadUsers() {
       this.isLoadingUsers = true;
+      this.usersError = false;
       try {
         const res = await getUsers();
         this.users = res.data;
       } catch (err) {
+        this.usersError = true;
         this.$toast.error('Failed to load users');
         console.error(err);
       } finally {
@@ -403,19 +561,6 @@ export default {
     async loadSeerUsers() {
       try { this.seerUsers = (await axios.get('/api/seer/get_users')).data.users || []; }
       catch { this.seerUsers = []; }
-    },
-
-    async updateUserRole(user) {
-      this.isSaving[user.id] = true;
-      try {
-        await updateUser(user.id, { role: user.role });
-        this.$toast.success(`Role updated for ${user.username}`);
-      } catch (err) {
-        this.$toast.error(err.response?.data?.error || 'Failed to update role');
-        await this.loadUsers();
-      } finally {
-        this.isSaving[user.id] = false;
-      }
     },
 
     async toggleActive(user) {
@@ -494,6 +639,7 @@ export default {
 
       this.permissionsTarget = user;
       this.editPermissions = {
+        role: user.role,
         can_manage_ai: user.can_manage_ai || false,
         visible_tabs_array: [...new Set(normalizedTabs)],
         seer_user_id: user.seer_user_id ?? null,
@@ -530,6 +676,11 @@ export default {
           allowed_tabs: allowedTabs,
           seer_user_id: this.editPermissions.seer_user_id == null ? null : Number(this.editPermissions.seer_user_id),
         };
+        const avatarChanged = (this.permissionsTarget.seer_user_id ?? null) !== payload.seer_user_id;
+        if (this.editPermissions.role !== this.permissionsTarget.role) {
+          await updateUser(this.permissionsTarget.id, { role: this.editPermissions.role });
+          this.permissionsTarget.role = this.editPermissions.role;
+        }
         const response = await updateUserPermissions(this.permissionsTarget.id, payload);
         if (response?.data?.success !== true) {
           throw new Error('Unexpected permissions response');
@@ -537,6 +688,7 @@ export default {
         this.$toast.success(`Permissions updated for ${this.permissionsTarget.username}`);
         this.showPermissionsModal = false;
         await this.loadUsers();
+        if (avatarChanged) refreshUserAvatar(this.permissionsTarget.id);
       } catch (err) {
         console.error('Failed to update permissions:', err.response?.data || err);
         this.permissionsError = err.response?.data?.error || 'Failed to update permissions';
@@ -549,7 +701,7 @@ export default {
       if (!this.supportsUserLinks) return;
       this.mediaLinkTarget = user;
       this.mediaUsers = [];
-      this.selectedMediaUserId = '';
+      this.selectedMediaUserId = String(this.mediaProfile(user)?.external_user_id || '');
       this.mediaLinkError = null;
       this.showMediaLinkModal = true;
       await this.loadMediaUsers();
@@ -596,6 +748,8 @@ export default {
         });
         this.$toast.success(`${this.providerLabel} account assigned to ${this.mediaLinkTarget.username}`);
         this.showMediaLinkModal = false;
+        await this.loadUsers();
+        refreshUserAvatar(this.mediaLinkTarget.id);
       } catch (err) {
         this.mediaLinkError = err.response?.data?.error || 'Failed to assign media account';
       } finally {
@@ -603,33 +757,48 @@ export default {
       }
     },
 
-    async saveRegistration() {
+    async saveRegistration(changes) {
+      const previous = { localAllowRegistration: this.localAllowRegistration, registrationTabs: this.registrationTabs };
+      Object.assign(this, changes);
       this.isSavingRegistration = true;
       try {
         await axios.post('/api/config/section/advanced', {
           ALLOW_REGISTRATION: this.localAllowRegistration,
+          REGISTRATION_DEFAULT_TABS: [...new Set([...this.registrationTabs, 'profile'])].join(','),
         });
-        this.$toast.success(
-          `Self-registration ${this.localAllowRegistration ? 'enabled' : 'disabled'}`
-        );
+        this.$toast.success('registrationTabs' in changes
+          ? 'Pages for new accounts updated'
+          : `Self-registration ${this.localAllowRegistration ? 'enabled' : 'disabled'}`);
       } catch {
         this.$toast.error('Failed to save registration setting');
-        this.localAllowRegistration = !!this.config.ALLOW_REGISTRATION;
+        Object.assign(this, previous);
       } finally {
         this.isSavingRegistration = false;
       }
     },
 
-    formatDate(ts) {
+    toggleRegistrationTab(value) {
+      const tabs = this.registrationTabs.includes(value)
+        ? this.registrationTabs.filter(tab => tab !== value)
+        : [...this.registrationTabs, value];
+      this.saveRegistration({ registrationTabs: tabs });
+    },
+
+    // The UI is English, so dates follow it instead of the browser locale.
+    formatDate(ts, includeTime = true) {
       if (!ts) return 'Never';
-      try {
-        return new Date(ts).toLocaleString(undefined, {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-        });
-      } catch {
-        return ts;
-      }
+      const date = new Date(ts);
+      if (Number.isNaN(date.getTime())) return 'Not available';
+      return date.toLocaleString('en', { dateStyle: 'medium', ...(includeTime ? { timeStyle: 'short' } : {}) });
+    },
+
+    relativeTime(ts) {
+      const seconds = (new Date(ts).getTime() - Date.now()) / 1000;
+      if (Number.isNaN(seconds)) return 'Not available';
+      const units = [['year', 31536000], ['month', 2592000], ['week', 604800], ['day', 86400], ['hour', 3600], ['minute', 60]];
+      const [unit, size] = units.find(([, unitSize]) => Math.abs(seconds) >= unitSize) || ['second', 1];
+      if (unit === 'second') return 'just now';
+      return new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(Math.round(seconds / size), unit);
     },
   },
 };

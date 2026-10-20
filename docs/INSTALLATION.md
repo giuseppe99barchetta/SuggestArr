@@ -122,6 +122,7 @@ For Trakt, Services stores only the shared app-level OAuth credentials. Individu
 Use this page to manage local accounts, assign media-server accounts, and link personal Trakt accounts.
 
 - Admins use Users to create accounts, control permissions, and assign media accounts.
+- Users shows account totals, enabled sign-ins, administrators, and accounts linked to the selected media server. Search by account or linked media username and filter by role. Each account card shows page access, membership dates, its assigned media account, and the Seer identity used for requests. Enabled means the account can sign in, not that the person is currently online.
 - Each user uses Profile to link their own Plex, Jellyfin, or Emby account.
 - After the media account is linked, the user can link their own Trakt account from Profile > Trakt Account.
 - Opening Recent Trakt Preview automatically fetches recent Trakt items and shows a loading icon while it loads.
@@ -556,6 +557,9 @@ Authentication is enabled by default and should stay enabled.
 Important options:
 
 - `ALLOW_REGISTRATION=false`: default. Only admins create users.
+- `REGISTRATION_DEFAULT_TABS=requests,jobs,profile`: pages a self-registered
+  account can see. Profile is always included. Set it under **Users** when
+  sign-ups are on.
 - `AUTH_MODE=enabled`: normal login required.
 - `AUTH_MODE=local_bypass`: trusted local networks can bypass login.
 - `AUTH_MODE=trusted_header`: a reverse proxy authenticates users and passes
@@ -842,6 +846,8 @@ Make sure `config_files/secret.key` persists. If the key changes, active session
 SuggestArr uses the avatar of your assigned Seer account when available, then tries your verified linked account on the selected Plex, Jellyfin or Emby server. Link your media account under **My profile**; an administrator can assign your Seer account under **Users**. Accounts are matched by their linked IDs, never by username. Images are fetched through the authenticated SuggestArr backend, keeping service credentials out of the browser.
 
 If no image is available or a service is offline, a local cinema/TV avatar is assigned automatically. Its symbol and theme colours stay consistent for your account across sessions and username changes. No external avatar service or image upload is required.
+
+The same avatar component and image resolver are used in the sidebar, Profile and the Users account cards. Assigning a different media account or Seer identity refreshes that user's photo. The authenticated `/api/users/<id>/avatar` endpoint allows users to fetch their own image and administrators to fetch other users' images; `/api/auth/me/avatar` remains available for the current user.
 
 ### Configuration resets after update
 
