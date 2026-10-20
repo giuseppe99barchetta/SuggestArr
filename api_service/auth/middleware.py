@@ -43,7 +43,7 @@ import ipaddress
 from functools import wraps
 from typing import Optional
 
-from flask import request, jsonify, g
+from flask import request, jsonify, g, current_app
 
 from api_service.auth.auth_service import AuthService
 from api_service.auth.api_key_service import ApiKeyService
@@ -84,8 +84,8 @@ PUBLIC_V1_ROUTES = frozenset({"/api/v1/status", "/api/v1/openapi.yaml", "/api/v1
 # ---------------------------------------------------------------------------
 # When no auth_users exist the system is in "setup mode" and all routes are
 # temporarily public so the configuration wizard can run.
-# We cache the result for _SETUP_CACHE_TTL_S seconds to avoid a DB round-trip
-# on every request, while still detecting when setup completes within 5 s.
+# Cache only the denial of setup access. A cached zero-user result must never
+# authorize requests after account creation or a database outage.
 _setup_mode_lock = threading.Lock()
 _setup_mode_cache: dict = {"value": None, "expires_at": 0.0}
 _SETUP_CACHE_TTL_S = 5.0
@@ -146,28 +146,27 @@ def _resolve_auth_mode() -> str:
     return mode
 
 
-def _load_trusted_cidrs() -> list[ipaddress._BaseNetwork]:
-    """Load and parse trusted CIDR ranges for local-bypass mode."""
-    raw = os.environ.get("AUTH_TRUSTED_CIDRS")
+def _load_trusted_cidrs(key="AUTH_TRUSTED_CIDRS") -> list[ipaddress._BaseNetwork]:
+    """An explicit empty/invalid list must never restore permissive defaults."""
+    default = _DEFAULT_AUTH_TRUSTED_CIDRS if key == "AUTH_TRUSTED_CIDRS" else []
+    raw = os.environ.get(key)
     if raw is None:
-        raw = load_env_vars().get("AUTH_TRUSTED_CIDRS", _DEFAULT_AUTH_TRUSTED_CIDRS)
+        raw = load_env_vars().get(key, default)
 
     if isinstance(raw, str):
         cidr_values = [x.strip() for x in raw.split(",") if x.strip()]
     elif isinstance(raw, (list, tuple, set)):
         cidr_values = [str(x).strip() for x in raw if str(x).strip()]
     else:
-        cidr_values = list(_DEFAULT_AUTH_TRUSTED_CIDRS)
+        return []
 
     networks: list[ipaddress._BaseNetwork] = []
     for cidr in cidr_values:
         try:
             networks.append(ipaddress.ip_network(cidr, strict=False))
         except ValueError:
-            logger.warning("Ignoring invalid AUTH_TRUSTED_CIDRS entry: %r", cidr)
-
-    if not networks:
-        networks = [ipaddress.ip_network(c, strict=False) for c in _DEFAULT_AUTH_TRUSTED_CIDRS]
+            logger.warning("Invalid %s configuration; trusting no addresses", key)
+            return []
 
     return networks
 
@@ -177,7 +176,7 @@ def _peer_address() -> str:
     Return the address of the machine that actually opened this connection.
 
     THIS IS NOT request.remote_addr.  app.py wraps the WSGI app in
-    ProxyFix(x_for=1), which REPLACES remote_addr with the first entry of
+    ProxyFix(x_for=1), which REPLACES remote_addr with the last entry of
     X-Forwarded-For — a header the client controls.  Trusting that value for
     an authorization decision means anyone who can reach the port can claim to
     be the proxy: send `X-Forwarded-For: <proxy>` plus the identity header and
@@ -190,8 +189,8 @@ def _peer_address() -> str:
     present (no ProxyFix in the chain) remote_addr is the peer already.
     """
     orig = request.environ.get("werkzeug.proxy_fix.orig")
-    if isinstance(orig, dict) and orig.get("REMOTE_ADDR"):
-        return orig["REMOTE_ADDR"]
+    if isinstance(orig, dict) and "REMOTE_ADDR" in orig:
+        return orig["REMOTE_ADDR"] or ""
     return (
         request.environ.get("werkzeug.proxy_fix.orig_remote_addr")
         or request.remote_addr
@@ -212,6 +211,36 @@ def _is_trusted_local_ip(client_ip: str) -> bool:
         if ip in network:
             return True
     return False
+
+
+def _resolve_client_address() -> tuple[str, bool]:
+    """Return (client IP, eligible for local bypass) independently of ProxyFix."""
+    peer = _peer_address()
+    try:
+        address = ipaddress.ip_address(peer)
+    except ValueError:
+        return peer, False
+    proxies = _load_trusted_cidrs("AUTH_TRUSTED_PROXY_CIDRS")
+    is_proxy = lambda ip: any(ip in network for network in proxies)
+    forwarded = any(name.lower().startswith("x-forwarded-") or name.lower() == "forwarded"
+                    for name in request.headers.keys())
+    if not is_proxy(address):
+        return str(address), not forwarded
+    chain = request.headers.get("X-Forwarded-For", "").split(",")
+    try:
+        # Validate the entire syntax, but never trust claims left of the client.
+        addresses = [ipaddress.ip_address(value.strip()) for value in chain]
+    except ValueError:
+        return peer, False
+    for address in reversed(addresses):
+        if not is_proxy(address):
+            return str(address), True
+    return peer, False
+
+
+def _local_bypass_allowed() -> bool:
+    address, eligible = _resolve_client_address()
+    return eligible and _is_trusted_local_ip(address)
 
 
 def _resolve_trusted_header_name() -> str:
@@ -364,8 +393,7 @@ def _is_setup_mode() -> bool:
     """
     Return True when no SuggestArr auth users exist (first-run wizard mode).
 
-    Result is cached for _SETUP_CACHE_TTL_S seconds so the check is cheap
-    on every request without hammering the database.
+    Only a negative result is reusable for _SETUP_CACHE_TTL_S seconds.
 
     Returns:
         bool: True if the system has not yet had an admin account created.
@@ -375,19 +403,16 @@ def _is_setup_mode() -> bool:
     now = time.monotonic()
     with _setup_mode_lock:
         cached = _setup_mode_cache
-        if cached["value"] is not None and now < cached["expires_at"]:
+        if cached["value"] is False and now < cached["expires_at"]:
             return cached["value"]  # type: ignore[return-value]
 
     try:
         count = _get_database_manager()().get_auth_user_count()
         result = count == 0
-    except Exception:
-        # If the DB is not yet reachable (e.g., first startup), fail open so
-        # the wizard can complete.  This is a conscious trade-off: a transient
-        # DB error temporarily allows unauthenticated access, which is
-        # preferable to locking out the operator entirely.
-        logger.warning("Could not query auth_users count; defaulting to setup mode")
-        result = True
+    except Exception as exc:
+        invalidate_setup_cache()
+        logger.warning("Could not verify authentication setup state")
+        raise RuntimeError("Authentication service unavailable") from exc
 
     with _setup_mode_lock:
         _setup_mode_cache["value"] = result
@@ -494,7 +519,7 @@ def enforce_authentication() -> Optional[tuple]:
 
     auth_mode = _resolve_auth_mode()
 
-    client_ip = request.remote_addr or ""
+    client_ip, _ = _resolve_client_address()
     trusted_cidr_networks = _load_trusted_cidrs()
     trusted_cidrs = [str(network) for network in trusted_cidr_networks]
     is_trusted_ip = _is_trusted_local_ip(client_ip)
@@ -528,7 +553,7 @@ def enforce_authentication() -> Optional[tuple]:
         if getattr(g, "current_user", None) is None:
             _apply_auth_context(_load_bypass_user_context(), "disabled")
         return None
-    if auth_mode == "local_bypass" and is_trusted_ip:
+    if auth_mode == "local_bypass" and _local_bypass_allowed():
         if getattr(g, "current_user", None) is None:
             _apply_auth_context(_load_bypass_user_context(), "local_bypass")
         return None
@@ -555,8 +580,12 @@ def enforce_authentication() -> Optional[tuple]:
                 return jsonify({"error": "Authentication required"}), 401
             _apply_auth_context(trusted_user, "trusted_header")
         return None
-    if not path.startswith('/api/v1/') and _is_setup_mode():
-        return None
+    if not path.startswith('/api/v1/'):
+        try:
+            if _is_setup_mode():
+                return None
+        except RuntimeError:
+            return jsonify({"error": "Authentication service unavailable"}), 503
     return jsonify({"error": "Authentication required"}), 401
 
 
@@ -594,6 +623,6 @@ def require_role(*roles: str):
             if user["role"] not in roles:
                 # Authenticated but not authorised — 403 not 401.
                 return jsonify({"error": "Insufficient permissions"}), 403
-            return f(*args, **kwargs)
+            return current_app.ensure_sync(f)(*args, **kwargs)
         return wrapped
     return decorator

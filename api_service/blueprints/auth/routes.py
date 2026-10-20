@@ -33,7 +33,8 @@ from flask import Blueprint, request, jsonify, make_response, g
 from api_service.auth.auth_service import AuthService, MIN_PASSWORD_LENGTH, REFRESH_TOKEN_EXPIRE_DAYS
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import (
-    _is_trusted_local_ip,
+    _local_bypass_allowed,
+    _resolve_auth_mode,
     _load_bypass_user_context,
     invalidate_setup_cache,
     require_interactive_auth,
@@ -45,6 +46,8 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
 from api_service.services.tmdb.localization import display_language, normalize_language
+from api_service.blueprints.avatar import user_avatar_response
+from api_service.blueprints.users.routes import _normalize_visible_tabs
 
 logger = LoggerManager.get_logger("AuthRoute")
 
@@ -139,11 +142,7 @@ def auth_status():
         app_done = bool(config.get('SETUP_COMPLETED', False))
         allow_registration = bool(config.get('ALLOW_REGISTRATION', False))
 
-        auth_mode = (os.environ.get("AUTH_MODE") or "").strip().lower()
-        if not auth_mode:
-            auth_mode = str(load_env_vars().get("AUTH_MODE", "enabled")).strip().lower()
-        if os.environ.get("SUGGESTARR_AUTH_DISABLED", "").lower() == "true":
-            auth_mode = "disabled"
+        auth_mode = _resolve_auth_mode()
 
         current_user = getattr(g, "current_user", None)
         bypass = False
@@ -159,15 +158,10 @@ def auth_status():
         # /api/auth/status is public, so middleware returns before injecting
         # bypass context. Recreate equivalent bypass checks here.
         if not current_user:
-            client_ip = (
-                request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-                or request.remote_addr
-                or ""
-            )
             if auth_mode == "disabled":
                 current_user = _load_bypass_user_context()
                 bypass = True
-            elif auth_mode == "local_bypass" and _is_trusted_local_ip(client_ip):
+            elif auth_mode == "local_bypass" and _local_bypass_allowed():
                 current_user = _load_bypass_user_context()
                 bypass = True
 
@@ -188,13 +182,7 @@ def auth_status():
         return jsonify(response), 200
     except Exception as exc:
         logger.error("Error reading auth status: %s", exc)
-        # Fail open so the frontend can still reach the wizard.
-        return jsonify({
-            "auth_setup_complete": False,
-            "app_setup_complete": False,
-            "allow_registration": False,
-            "authenticated": False,
-        }), 200
+        return jsonify({"error": "Authentication service unavailable"}), 503
 
 
 # ---------------------------------------------------------------------------
@@ -429,7 +417,8 @@ def register():
 
     Gated by the ALLOW_REGISTRATION config flag.  When disabled (the default),
     this endpoint always returns 403 so that only admins can create accounts.
-    When enabled, anyone can create a user-level account with role='user'.
+    When enabled, anyone can create a user-level account with role='user'
+    and the pages listed in REGISTRATION_DEFAULT_TABS.
 
     Rate-limited to 5 attempts per hour per IP to limit abuse.
 
@@ -458,10 +447,19 @@ def register():
         return jsonify({"error": f"Password must be at least {MIN_PASSWORD_LENGTH} characters"}), 400
 
     password_hash = AuthService.hash_password(password)
+    db = DatabaseManager()
     try:
-        DatabaseManager().create_auth_user(username, password_hash, role="user")
+        user_id = db.create_auth_user(username, password_hash, role="user")
     except Exception:
         return jsonify({"error": "Username already taken"}), 409
+
+    try:
+        tabs = _normalize_visible_tabs(config.get('REGISTRATION_DEFAULT_TABS') or '')
+    except ValueError:
+        logger.warning("Ignoring invalid REGISTRATION_DEFAULT_TABS: %r", config.get('REGISTRATION_DEFAULT_TABS'))
+        tabs = []
+    if tabs:
+        db.update_auth_user(user_id, {'visible_tabs': ','.join(sorted(set(tabs) | {'profile'}))})
 
     logger.info("Self-registration: new account created: %r", username)
     return jsonify({"message": "Account created"}), 201
@@ -494,6 +492,17 @@ def me():
     body["language"] = own
     body["display_language"] = display_language(own, load_env_vars())
     return jsonify(body), 200
+
+
+# ---------------------------------------------------------------------------
+# Protected: own profile image
+# ---------------------------------------------------------------------------
+
+@auth_bp.route('/me/avatar', methods=['GET'])
+@limiter.limit("30 per minute")
+def get_my_avatar():
+    """Proxy only the caller's linked avatar; 204 selects the local fallback."""
+    return user_avatar_response((getattr(g, 'current_user', None) or {}).get('id'))
 
 
 # ---------------------------------------------------------------------------

@@ -1,280 +1,112 @@
 <template>
-  <div class="settings-database">
-    <div v-if="!wizardMode" class="section-header">
-      <h2>Database Configuration</h2>
-      <p>Configure your database connection settings</p>
-    </div>
+  <div class="flex flex-col gap-5">
+    <PageHeader v-if="!wizardMode" title="Database" subtitle="Where SuggestArr keeps requests, jobs and history. SQLite needs no setup; PostgreSQL or MySQL suit larger or shared installs." />
 
-    <div class="settings-grid">
-      <!-- Database Type Selection -->
-      <div class="settings-group">
-        <h3>
-          <i class="fas fa-database"></i>
-          Database Type
-        </h3>
-
-        <BaseDropdown
-          v-model="localConfig.DB_TYPE"
-          :options="databaseOptions"
-          label="Database Type"
-          placeholder="Select database type"
-          :help-text="'SQLite is suitable for most users. PostgreSQL or MySQL recommended for production environments.'"
+    <section class="rounded-card border border-edge bg-panel p-5">
+      <h2 class="m-0 mb-1 text-[17px] font-bold text-ink">Database engine</h2>
+      <p class="m-0 mb-4 text-[13px] text-ink-3">Switching engines does not move existing data.</p>
+      <div role="radiogroup" aria-label="Database engine" class="grid gap-3 sm:grid-cols-3">
+        <button
+          v-for="engine in engines"
+          :key="engine.value"
+          type="button"
+          role="radio"
+          :aria-checked="localConfig.DB_TYPE === engine.value ? 'true' : 'false'"
           :disabled="isLoading"
-          id="dbType"
-          @change="onDbTypeChange"
-        />
-
-        <!-- SQLite Info -->
-        <div v-if="localConfig.DB_TYPE === 'sqlite'" class="db-info">
-          <div class="info-box">
-            <i class="fas fa-info-circle"></i>
-            <div>
-              <strong>SQLite Configuration</strong>
-              <p>
-                Using SQLite for database storage. The database file will be stored at
-                <code>config/config_files/requests.db</code>
-              </p>
-            </div>
-          </div>
-        </div>
+          class="flex cursor-pointer flex-col gap-1.5 rounded-ctl border p-4 text-left disabled:cursor-not-allowed"
+          :class="localConfig.DB_TYPE === engine.value ? 'border-brand-ink bg-brand-soft/50' : 'border-edge-strong bg-canvas hover:border-ink-4'"
+          @click="selectEngine(engine.value)"
+        >
+          <span class="flex items-center gap-2 text-sm font-bold text-ink">
+            <span class="flex h-4 w-4 items-center justify-center rounded-full border-2" :class="localConfig.DB_TYPE === engine.value ? 'border-brand-ink' : 'border-edge-strong'"><span v-if="localConfig.DB_TYPE === engine.value" class="h-1.5 w-1.5 rounded-full bg-brand-ink"></span></span>
+            {{ engine.label }}
+          </span>
+          <span class="text-xs leading-snug text-ink-3">{{ engine.description }}</span>
+        </button>
       </div>
+    </section>
 
-      <!-- PostgreSQL Configuration -->
-      <div v-if="localConfig.DB_TYPE === 'postgres'" class="settings-group">
-        <h3>
-          <i class="fas fa-elephant"></i>
-          PostgreSQL Settings
-        </h3>
+    <section v-if="localConfig.DB_TYPE === 'sqlite'" class="flex items-start gap-3 rounded-card border border-edge bg-panel p-5">
+      <i aria-hidden="true" class="fas fa-check-circle mt-0.5 text-good"></i>
+      <p class="m-0 text-sm leading-relaxed text-ink-2">Nothing to configure. Data is stored in <code>config/config_files/requests.db</code>; back up that file to keep a copy.</p>
+    </section>
 
-        <div class="form-group">
-          <label for="postgresHost">Host</label>
-          <input
-            id="postgresHost"
-            v-model="localConfig.DB_HOST"
-            type="text"
-            placeholder="localhost"
-            class="form-control"
-            :disabled="isLoading"
-          />
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="postgresPort">Port</label>
-            <input
-              id="postgresPort"
-              v-model.number="localConfig.DB_PORT"
-              type="number"
-              placeholder="5432"
-              class="form-control"
-              :disabled="isLoading"
-            />
-          </div>
-          <div class="form-group">
-            <label for="postgresName">Database Name</label>
-            <input
-              id="postgresName"
-              v-model="localConfig.DB_NAME"
-              type="text"
-              placeholder="suggestarr"
-              class="form-control"
-              :disabled="isLoading"
-            />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="postgresUser">Username</label>
-          <input
-            id="postgresUser"
-            v-model="localConfig.DB_USER"
-            type="text"
-            placeholder="postgres"
-            class="form-control"
-            :disabled="isLoading"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="postgresPassword">Password</label>
-          <div class="input-group">
-            <input
-              id="postgresPassword"
-              v-model="localConfig.DB_PASSWORD"
-              :type="showPostgresPassword ? 'text' : 'password'"
-              placeholder="Enter password"
-              class="form-control"
-              :disabled="isLoading"
-            />
-            <button
-              @click="showPostgresPassword = !showPostgresPassword"
-              type="button"
-              class="btn btn-outline btn-sm"
-              :disabled="isLoading"
-            >
-              <i :class="showPostgresPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
+    <section v-else class="rounded-card border border-edge bg-panel p-5">
+      <h2 class="m-0 mb-1 text-[17px] font-bold text-ink">{{ engineLabel }} connection</h2>
+      <p class="m-0 mb-4 text-[13px] text-ink-3">Create the database first; SuggestArr creates its tables on start.</p>
+      <div class="grid gap-4 sm:grid-cols-[2fr_1fr]">
+        <label class="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+          Host
+          <input v-model="localConfig.DB_HOST" type="text" placeholder="localhost" :class="inputClass" :disabled="isLoading" />
+        </label>
+        <label class="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+          Port
+          <input v-model.number="localConfig.DB_PORT" type="number" :placeholder="defaultPort" :class="inputClass" :disabled="isLoading" />
+        </label>
+        <label class="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+          Database name
+          <input v-model="localConfig.DB_NAME" type="text" placeholder="suggestarr" :class="inputClass" :disabled="isLoading" />
+        </label>
+        <label class="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+          Username
+          <input v-model="localConfig.DB_USER" type="text" :placeholder="localConfig.DB_TYPE === 'postgres' ? 'postgres' : 'root'" :class="inputClass" :disabled="isLoading" autocomplete="off" />
+        </label>
+        <label class="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2 sm:col-span-2">
+          Password
+          <span class="flex gap-2">
+            <input v-model="localConfig.DB_PASSWORD" :type="showPassword ? 'text' : 'password'" placeholder="Database password" :class="inputClass" class="flex-1" :disabled="isLoading" autocomplete="new-password" />
+            <button type="button" class="h-[42px] w-[42px] shrink-0 cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" :aria-label="showPassword ? 'Hide password' : 'Show password'" :disabled="isLoading" @click="showPassword = !showPassword">
+              <i aria-hidden="true" :class="showPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
             </button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <button
-            @click="testDatabaseConnection"
-            class="btn btn-outline"
-            :disabled="isLoading || !isPostgresConfigured || isTestingDatabase"
-          >
-            <i v-if="isTestingDatabase" class="fas fa-spinner fa-spin"></i>
-            <i v-else class="fas fa-plug"></i>
-            {{ isTestingDatabase ? 'Testing...' : 'Test Connection' }}
-          </button>
-        </div>
+          </span>
+        </label>
       </div>
-
-      <!-- MySQL Configuration -->
-      <div v-if="localConfig.DB_TYPE === 'mysql'" class="settings-group">
-        <h3>
-          <i class="fas fa-database"></i>
-          MySQL/MariaDB Settings
-        </h3>
-
-        <div class="form-group">
-          <label for="mysqlHost">Host</label>
-          <input
-            id="mysqlHost"
-            v-model="localConfig.DB_HOST"
-            type="text"
-            placeholder="localhost"
-            class="form-control"
-            :disabled="isLoading"
-          />
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="mysqlPort">Port</label>
-            <input
-              id="mysqlPort"
-              v-model.number="localConfig.DB_PORT"
-              type="number"
-              placeholder="3306"
-              class="form-control"
-              :disabled="isLoading"
-            />
-          </div>
-          <div class="form-group">
-            <label for="mysqlName">Database Name</label>
-            <input
-              id="mysqlName"
-              v-model="localConfig.DB_NAME"
-              type="text"
-              placeholder="suggestarr"
-              class="form-control"
-              :disabled="isLoading"
-            />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="mysqlUser">Username</label>
-          <input
-            id="mysqlUser"
-            v-model="localConfig.DB_USER"
-            type="text"
-            placeholder="root"
-            class="form-control"
-            :disabled="isLoading"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="mysqlPassword">Password</label>
-          <div class="input-group">
-            <input
-              id="mysqlPassword"
-              v-model="localConfig.DB_PASSWORD"
-              :type="showMysqlPassword ? 'text' : 'password'"
-              placeholder="Enter password"
-              class="form-control"
-              :disabled="isLoading"
-            />
-            <button
-              @click="showMysqlPassword = !showMysqlPassword"
-              type="button"
-              class="btn btn-outline btn-sm"
-              :disabled="isLoading"
-            >
-              <i :class="showMysqlPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-            </button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <button
-            @click="testDatabaseConnection"
-            class="btn btn-outline"
-            :disabled="isLoading || !isMysqlConfigured || isTestingDatabase"
-          >
-            <i v-if="isTestingDatabase" class="fas fa-spinner fa-spin"></i>
-            <i v-else class="fas fa-plug"></i>
-            {{ isTestingDatabase ? 'Testing...' : 'Test Connection' }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Migration Notice -->
-      <div v-if="hasDbTypeChanged && localConfig.DB_TYPE !== 'sqlite'" class="settings-group warning">
-        <h3>
-          <i class="fas fa-exclamation-triangle"></i>
-          Database Migration Notice
-        </h3>
-        <div class="warning-content">
-          <p>
-            <strong>Warning:</strong> Changing the database type will require a manual migration of your existing data.
-            Please backup your current configuration and data before proceeding.
-          </p>
-          <p>Recommended steps:</p>
-          <ol>
-            <li>Export your current configuration</li>
-            <li>Backup your SQLite database file</li>
-            <li>Create the new database in your chosen DBMS</li>
-            <li>Import your configuration</li>
-            <li>Test the new connection</li>
-          </ol>
-        </div>
-      </div>
-    </div>
-
-    <!-- Save Button (hidden in wizard mode) -->
-    <div v-if="!wizardMode" class="settings-actions">
       <button
-        @click="saveSettings"
-        class="btn btn-primary"
-        :disabled="isLoading || !hasChanges"
+        type="button"
+        class="mt-5 inline-flex h-10 cursor-pointer items-center gap-2 rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="isLoading || !isConnectionComplete || isTestingDatabase"
+        @click="testDatabaseConnection"
       >
-        <i class="fas fa-save"></i>
-        {{ isLoading ? 'Saving...' : 'Save Changes' }}
+        <i aria-hidden="true" :class="isTestingDatabase ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>{{ isTestingDatabase ? 'Testing…' : 'Test connection' }}
       </button>
+    </section>
 
-      <button
-        @click="resetToDefaults"
-        class="btn btn-outline"
-        :disabled="isLoading"
-      >
-        <i class="fas fa-undo"></i>
-        Reset to Defaults
-      </button>
+    <section v-if="hasDbTypeChanged && localConfig.DB_TYPE !== 'sqlite'" role="note" class="rounded-card border border-caution/40 bg-caution/10 p-5">
+      <h2 class="m-0 mb-2 text-[15px] font-bold text-ink"><i aria-hidden="true" class="fas fa-exclamation-triangle mr-2 text-caution"></i>Your data does not move by itself</h2>
+      <ol class="m-0 flex flex-col gap-1 pl-5 text-sm leading-relaxed text-ink-2">
+        <li>Export your current configuration (System → Export a backup).</li>
+        <li>Back up your SQLite database file.</li>
+        <li>Create the new database in your chosen engine.</li>
+        <li>Import your configuration.</li>
+        <li>Test the new connection.</li>
+      </ol>
+    </section>
+
+    <div v-if="!wizardMode" class="flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-panel max-lg:bottom-24' : 'border-edge bg-panel'">
+      <span class="flex-[1_1_200px] text-sm" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
+      <button type="button" class="ui-btn border-0 bg-transparent text-ink-3 hover:text-ink" :disabled="isLoading" @click="resetToDefaults">Reset to defaults</button>
+      <button type="button" class="ui-btn-primary" :disabled="isLoading || !hasChanges" @click="saveSettings">{{ isLoading ? 'Saving…' : 'Save changes' }}</button>
     </div>
   </div>
 </template>
 
 <script>
-import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import PageHeader from '@/components/ui/PageHeader.vue';
+import { confirmDialog } from '@/utils/confirmDialog';
+import unsavedChangesGuard from './mixins/unsavedChangesGuard';
+
+const ENGINES = [
+  { value: 'sqlite', label: 'SQLite', description: 'Default. A single file next to the config, no server needed.', port: '' },
+  { value: 'postgres', label: 'PostgreSQL', description: 'A separate database server. Good for large or shared installs.', port: '5432' },
+  { value: 'mysql', label: 'MySQL / MariaDB', description: 'A separate database server, if you already run one.', port: '3306' },
+];
 
 export default {
   name: 'SettingsDatabase',
-  components: {
-    BaseDropdown
-  },
+  mixins: [unsavedChangesGuard],
+  components: { PageHeader },
+  // The dashboard shell passes props this page does not declare.
+  inheritAttrs: false,
   props: {
     config: {
       type: Object,
@@ -301,13 +133,9 @@ export default {
     return {
       localConfig: {},
       originalConfig: {},
-      showPostgresPassword: false,
-      showMysqlPassword: false,
-      databaseOptions: [
-        { value: 'sqlite', label: 'SQLite (Default)' },
-        { value: 'postgres', label: 'PostgreSQL' },
-        { value: 'mysql', label: 'MySQL/MariaDB' }
-      ]
+      showPassword: false,
+      engines: ENGINES,
+      inputClass: 'h-[42px] w-full rounded-ctl border border-edge-strong bg-canvas px-3 text-sm font-normal text-ink outline-none focus:border-brand-ink disabled:opacity-60',
     };
   },
   computed: {
@@ -317,8 +145,8 @@ export default {
     hasDbTypeChanged() {
       return this.localConfig.DB_TYPE !== this.originalConfig.DB_TYPE;
     },
-    isPostgresConfigured() {
-      return (
+    isConnectionComplete() {
+      return Boolean(
         this.localConfig.DB_HOST &&
         this.localConfig.DB_PORT &&
         this.localConfig.DB_NAME &&
@@ -326,14 +154,14 @@ export default {
         this.localConfig.DB_PASSWORD
       );
     },
-    isMysqlConfigured() {
-      return (
-        this.localConfig.DB_HOST &&
-        this.localConfig.DB_PORT &&
-        this.localConfig.DB_NAME &&
-        this.localConfig.DB_USER &&
-        this.localConfig.DB_PASSWORD
-      );
+    currentEngine() {
+      return ENGINES.find(engine => engine.value === this.localConfig.DB_TYPE) || ENGINES[0];
+    },
+    engineLabel() {
+      return this.currentEngine.label;
+    },
+    defaultPort() {
+      return this.currentEngine.port;
     },
     isTestingDatabase() {
       return this.testingConnections?.database || false;
@@ -358,6 +186,12 @@ export default {
     }
   },
   methods: {
+    selectEngine(value) {
+      if (this.localConfig.DB_TYPE === value) return;
+      this.localConfig.DB_TYPE = value;
+      this.onDbTypeChange();
+    },
+
     onDbTypeChange() {
       // Clear database-specific fields when switching types
       if (this.localConfig.DB_TYPE === 'sqlite') {
@@ -453,7 +287,7 @@ export default {
         DB_NAME: null,
       };
 
-      if (confirm('Are you sure you want to reset all database settings to their defaults?')) {
+      if (await confirmDialog({ title: 'Reset database settings?', message: 'SuggestArr switches back to the built-in SQLite database.', confirmLabel: 'Reset', danger: true })) {
         this.localConfig = { ...this.localConfig, ...defaults };
         await this.saveSettings();
       }
@@ -462,290 +296,3 @@ export default {
 };
 </script>
 
-<style scoped>
-.settings-database {
-  color: var(--color-text-primary);
-  padding: var(--spacing-lg);
-}
-
-.section-header {
-  margin-bottom: 2rem;
-}
-
-.section-header h2 {
-  font-size: 1.8rem;
-  margin-bottom: 0.5rem;
-  color: var(--color-text-primary);
-}
-
-.section-header p {
-  color: var(--color-text-muted);
-  font-size: 1rem;
-}
-
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 2rem;
-  margin-bottom: 2rem;
-}
-
-.settings-group {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--border-radius-md);
-  padding: 1.5rem;
-}
-
-.settings-group.warning {
-  border-color: var(--color-warning);
-  background: rgba(245, 158, 11, 0.1);
-}
-
-.settings-group h3 {
-  font-size: 1.2rem;
-  margin-bottom: 1rem;
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.form-group {
-  margin-bottom: 1.5rem;
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-.form-group label {
-  display: block;
-  margin-top: 0.5rem;
-  font-weight: 500;
-  color: #e5e7eb;
-}
-
-.form-control {
-  width: 100%;
-  padding: 0.75rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
-  color: var(--color-text-primary);
-  font-size: 1rem;
-  transition: var(--transition-base);
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  background: var(--color-bg-active);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.form-control:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.select-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.select-wrapper .form-control {
-  padding-right: 2.5rem;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-}
-
-.chevron-indicator {
-  position: absolute;
-  right: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  transition: transform 0.2s ease;
-}
-
-.select-wrapper:focus-within .chevron-indicator {
-  transform: translateY(-50%) rotate(180deg);
-  color: var(--color-primary);
-}
-
-.form-help {
-  display: block;
-  margin-top: 0.25rem;
-  font-size: 0.875rem;
-  color: var(--color-text-muted);
-  line-height: 1.4;
-}
-
-.db-info {
-  margin-top: 1rem;
-}
-
-.info-box {
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: var(--border-radius-sm);
-  padding: 1rem;
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-}
-
-.info-box i {
-  color: var(--color-primary);
-  margin-top: 0.25rem;
-}
-
-.info-box strong {
-  color: var(--color-primary);
-  margin-bottom: 0.5rem;
-  display: block;
-}
-
-.info-box p {
-  color: #e5e7eb;
-  margin: 0;
-  line-height: 1.5;
-}
-
-.info-box code {
-  background: rgba(0, 0, 0, 0.3);
-  padding: 0.2rem 0.4rem;
-  border-radius: var(--radius-sm);
-  font-family: 'Courier New', monospace;
-  font-size: 0.875rem;
-}
-
-.warning-content {
-  color: #e5e7eb;
-}
-
-.warning-content p {
-  margin-bottom: 1rem;
-}
-
-.warning-content ol {
-  margin: 0;
-  padding-left: 1.5rem;
-}
-
-.warning-content li {
-  margin-bottom: 0.5rem;
-}
-
-.btn {
-  padding: 0.5rem 1rem;
-  border-radius: var(--border-radius-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition-base);
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  text-decoration: none;
-  font-size: 0.875rem;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn-outline {
-  background: var(--color-bg-interactive);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border-medium);
-}
-
-.btn-outline:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.5);
-}
-
-.btn-sm {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.8125rem;
-}
-
-.settings-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  padding-top: 2rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-@media (max-width: 768px) {
-  .settings-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-
-  .settings-group {
-    padding: 1rem;
-  }
-
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-
-  .input-group {
-    flex-direction: column;
-  }
-
-  .info-box {
-    flex-direction: column;
-    text-align: center;
-  }
-
-  .settings-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-
-/* Spinner animation */
-.fa-spinner.fa-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Testing state button styling */
-.btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.btn:disabled .fa-spinner {
-  animation: spin 1s linear infinite;
-}
-</style>

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from api_service.exceptions.database_exceptions import DatabaseError
+from api_service.db.recap_repository import record_requested_title
 
 class RequestMixin:
     def has_visible_suggestarr_request(self, tmdb_id: str, media_type: str,
@@ -37,7 +38,7 @@ class RequestMixin:
             cursor = conn.cursor()
             
             # Database-specific query modifications
-            if self.db_type == 'mysql':
+            if self.db_type in ('mysql', 'mariadb'):
                 query = query.replace("INSERT OR IGNORE", "INSERT IGNORE")
                 query = query.replace("?", "%s")
             elif self.db_type == 'postgres':
@@ -46,6 +47,7 @@ class RequestMixin:
                 query = query.replace("?", "%s")
             
             cursor.execute(query, params)
+            record_requested_title(cursor, self.db_type, media_type, media_id)
             conn.commit()
     
     def save_user(self, user: Dict[str, Any]) -> None:
@@ -123,8 +125,39 @@ class RequestMixin:
             results = cursor.fetchall()
             return {str(row[0]) for row in results}
     
-    def get_all_requests_grouped_by_source(self, page: int = 1, per_page: int = 8, sort_by: str = 'date-desc', user_ids: Optional[List[str]] = None, feedback_user_id: Optional[int] = None) -> Dict[str, Any]:
-        """Retrieve all requests grouped by source with dynamic sorting and pagination."""
+    # Where a sent request stands, matching the card badge: watched beats any Seer status.
+    _WATCHED_SQL = ("EXISTS (SELECT 1 FROM recap_titles pw WHERE pw.media_type = r.media_type "
+                    "AND pw.tmdb_id = r.tmdb_request_id AND pw.watched_at IS NOT NULL)")
+
+    @classmethod
+    def _availability_sql(cls, statuses):
+        marks = ", ".join(f"'{status}'" for status in statuses)
+        return ("EXISTS (SELECT 1 FROM media_availability pa WHERE pa.media_type = r.media_type "
+                f"AND pa.tmdb_id = r.tmdb_request_id AND pa.status IN ({marks}))")
+
+    @classmethod
+    def request_progress_clause(cls, progress: Optional[str]) -> str:
+        """SQL condition (on alias ``r``) selecting requests at one progress step.
+
+        :param progress: 'requested', 'processing', 'available', 'watched', or None for all.
+        :return: A condition starting with ' AND ', or '' for no filter.
+        """
+        watched = cls._WATCHED_SQL
+        if progress == 'watched':
+            return f" AND {watched}"
+        if progress == 'available':
+            return f" AND {cls._availability_sql(('available', 'partial'))} AND NOT {watched}"
+        if progress == 'processing':
+            return f" AND {cls._availability_sql(('processing',))} AND NOT {watched}"
+        if progress == 'requested':
+            return f" AND NOT {cls._availability_sql(('processing', 'partial', 'available'))} AND NOT {watched}"
+        return ''
+
+    def get_all_requests_grouped_by_source(self, page: int = 1, per_page: int = 8, sort_by: str = 'date-desc', user_ids: Optional[List[str]] = None, feedback_user_id: Optional[int] = None, progress: Optional[str] = None) -> Dict[str, Any]:
+        """Retrieve all requests grouped by source with dynamic sorting and pagination.
+
+        :param progress: Optional progress step to keep (see request_progress_clause).
+        """
         self.logger.debug(f"Retrieving all requests grouped by source: page={page}, per_page={per_page}, sort_by={sort_by}")
 
         from api_service.services.request_sources import request_source_id_sql, request_source_title_sql
@@ -146,6 +179,7 @@ class RequestMixin:
             placeholders = ','.join(['?' if self.db_type not in ['mysql', 'postgres'] else '%s'] * len(user_ids))
             count_query += f" AND r.user_id IN ({placeholders})" if user_ids else " AND 1=0"
             params.extend(str(user_id) for user_id in user_ids)
+        count_query += self.request_progress_clause(progress)
     
         total_sources = 0
         total_requests = 0
@@ -214,18 +248,21 @@ class RequestMixin:
                     (SELECT ump.external_username FROM user_media_profiles ump
                      WHERE ump.external_user_id = r.user_id AND ump.external_username IS NOT NULL LIMIT 1)
                 ) AS user_name, r.source_origin,
-                {feedback_columns}
+                {feedback_columns}, rt.watched_at, ma.status, ma.url
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id AND r.media_type = m.media_type
             LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id
             LEFT JOIN users u ON r.user_id = u.user_id
             {feedback_join}
+            LEFT JOIN recap_titles rt ON rt.media_type = r.media_type AND rt.tmdb_id = r.tmdb_request_id
+            LEFT JOIN media_availability ma ON ma.media_type = r.media_type AND ma.tmdb_id = r.tmdb_request_id
             WHERE r.requested_by = 'SuggestArr'
             AND COALESCE(r.tmdb_source_id, '') != 'ai_search'
         """
         if user_ids is not None:
             placeholders = ','.join(['?' if self.db_type not in ['mysql', 'postgres'] else '%s'] * len(user_ids))
             query += f" AND r.user_id IN ({placeholders})" if user_ids else " AND 1=0"
+        query += self.request_progress_clause(progress)
         query += f" ORDER BY {order_by_clause}"
         
         if self.db_type in ['mysql', 'postgres']:
@@ -283,6 +320,12 @@ class RequestMixin:
                 "user_name": row[21] if len(row) > 21 else None,
                 "source_origin": row[22] if len(row) > 22 else None,
                 "feedback": feedback,
+                # First play seen by the watch sync (recap ledger), shown as a "Watched" badge.
+                "watched_at": row[26] if len(row) > 26 else None,
+                # Seer progress from the availability sync: requested/pending/processing/partial/available.
+                "availability": row[27] if len(row) > 27 else None,
+                # Seer's link to play the title on Jellyfin, Emby or Plex, once available.
+                "media_url": row[28] if len(row) > 28 else None,
             })
     
         # Sort sources
@@ -328,6 +371,45 @@ class RequestMixin:
             "per_page": per_page
         }
     
+    def get_media_availability(self) -> Dict[tuple, Dict[str, Optional[str]]]:
+        """Last known Seer status, and play link, of every requested title.
+
+        :return: Dict mapping ``(media_type, tmdb_id)`` to ``{'status', 'url'}``; status is
+            'requested', 'pending', 'processing', 'partial' or 'available'.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT media_type, tmdb_id, status, url FROM media_availability")
+            return {(row[0], str(row[1])): {'status': row[2], 'url': row[3]} for row in cursor.fetchall()}
+
+    def get_requested_media_keys(self) -> set:
+        """Every title SuggestArr requested, as ``(media_type, tmdb_id)`` pairs."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT media_type, tmdb_request_id FROM requests WHERE requested_by = 'SuggestArr'")
+            return {(row[0], str(row[1])) for row in cursor.fetchall()}
+
+    def save_media_availability(self, changes: Dict[tuple, Optional[Dict[str, Optional[str]]]]) -> None:
+        """Store new statuses; None forgets the title.
+
+        :param changes: Dict mapping ``(media_type, tmdb_id)`` to ``{'status', 'url'}`` or None.
+        """
+        if not changes:
+            return
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            for (media_type, tmdb_id), state in changes.items():
+                cursor.execute(f"DELETE FROM media_availability WHERE media_type = {ph} AND tmdb_id = {ph}",
+                               (media_type, tmdb_id))
+                if state:
+                    cursor.execute(
+                        f"INSERT INTO media_availability (media_type, tmdb_id, status, url) "
+                        f"VALUES ({ph}, {ph}, {ph}, {ph})",
+                        (media_type, tmdb_id, state['status'], state.get('url')),
+                    )
+            conn.commit()
+
     def get_requested_tmdb_ids(self) -> set:
         """Return the set of TMDB IDs (as strings) that SuggestArr has already requested.
 

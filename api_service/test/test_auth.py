@@ -728,6 +728,13 @@ class _AuthBlueprintBase(unittest.TestCase):
                         return u
                 return None
 
+            def update_auth_user(self_inner, user_id, updates):
+                for u in users.values():
+                    if u["id"] == user_id:
+                        u.update(updates)
+                        return True
+                return False
+
             def update_last_login(self_inner, user_id):
                 for u in users.values():
                     if u["id"] == user_id:
@@ -1129,6 +1136,24 @@ class TestAuthRegisterEndpoint(_AuthBlueprintBase):
                                           "password": "StrongPass1!"})
         self.assertEqual(resp.status_code, 201)
         self.assertIn("message", resp.get_json())
+
+    def test_register_applies_default_pages(self):
+        from unittest.mock import patch as _patch
+        config = {'ALLOW_REGISTRATION': True, 'REGISTRATION_DEFAULT_TABS': 'requests,ai_search'}
+        with _patch('api_service.blueprints.auth.routes.ConfigService.get_runtime_config', return_value=config):
+            resp = self.client.post('/api/auth/register',
+                                    json={"username": "newbie", "password": "StrongPass1!"})
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(self._users["newbie"]["visible_tabs"], "ai_search,profile,requests")
+
+    def test_register_ignores_invalid_default_pages(self):
+        from unittest.mock import patch as _patch
+        config = {'ALLOW_REGISTRATION': True, 'REGISTRATION_DEFAULT_TABS': 'settings'}
+        with _patch('api_service.blueprints.auth.routes.ConfigService.get_runtime_config', return_value=config):
+            resp = self.client.post('/api/auth/register',
+                                    json={"username": "newbie", "password": "StrongPass1!"})
+        self.assertEqual(resp.status_code, 201)
+        self.assertNotIn("visible_tabs", self._users["newbie"])
 
     def test_register_duplicate_username_returns_409(self):
         self._create_user("existing", "StrongPass1!")

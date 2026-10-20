@@ -14,6 +14,11 @@ from api_service.utils.request_profiles import (
 )
 from api_service.utils import request_scope
 from api_service.services.tmdb.localization import display_language, localize_groups
+from api_service.services.tmdb.logos import fill_logos
+from api_service.services.trakt.feedback_sync import schedule_seen_feedback_sync
+from api_service.jobs.request_expiry import execute_request_expiry
+from api_service.jobs.request_replacement import execute_request_replacements
+from api_service.utils.asyncio_loop import run_coroutine_sync
 
 logger = LoggerManager().get_logger("AutomationRoute")
 automation_bp = Blueprint('automation', __name__)
@@ -23,6 +28,69 @@ _force_run_running = False
 _FEEDBACK_VALUES = {'interested', 'not_interested', 'already_seen', 'seen_liked',
                     'seen_disliked', 'too_similar', 'save_for_later'}
 _FEEDBACK_REASONS = {'genre', 'provider', 'content', 'title', 'other'}
+
+
+@automation_bp.route('/requests/expiry/run', methods=['POST'])
+@require_role('admin')
+@limiter.limit('5 per minute')
+def run_request_expiry_now():
+    data = request.get_json(silent=True)
+    if data is None:
+        if request.data:
+            return jsonify({'status': 'error', 'message': 'Expected a JSON object'}), 400
+        data = {}
+    if not isinstance(data, dict) or ('dry_run' in data and not isinstance(data['dry_run'], bool)):
+        return jsonify({'status': 'error', 'message': 'dry_run must be a boolean'}), 400
+    try:
+        result = run_coroutine_sync(execute_request_expiry(dry_run=data.get('dry_run')), logger)
+        if result['status'] == 'already_running':
+            return jsonify({'status': 'error', 'message': 'Request expiry is already running'}), 409
+        return jsonify({'status': 'success', 'result': result}), 200
+    except Exception:
+        logger.error('Manual request expiry failed', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Request expiry failed'}), 500
+
+
+@automation_bp.route('/requests/expiry/log', methods=['GET'])
+@require_role('admin')
+def request_expiry_log():
+    try:
+        limit = max(1, min(500, int(request.args.get('limit', 100))))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'limit must be an integer'}), 400
+    try:
+        return jsonify({'status': 'success', 'log': DatabaseManager().get_request_expiry_log(limit)}), 200
+    except Exception:
+        logger.error('Request expiry log failed', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Unable to fetch request expiry log'}), 500
+
+
+@automation_bp.route('/requests/replacements/run', methods=['POST'])
+@require_role('admin')
+@limiter.limit('5 per minute')
+def run_request_replacements_now():
+    try:
+        result = run_coroutine_sync(execute_request_replacements(), logger)
+        if result['status'] == 'already_running':
+            return jsonify({'status': 'error', 'message': 'A request check is already running'}), 409
+        return jsonify({'status': 'success', 'result': result}), 200
+    except Exception:
+        logger.error('Manual replacement check failed', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Replacement check failed'}), 500
+
+
+@automation_bp.route('/requests/replacements/log', methods=['GET'])
+@require_role('admin')
+def request_replacement_log():
+    try:
+        limit = max(1, min(500, int(request.args.get('limit', 100))))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': 'limit must be an integer'}), 400
+    try:
+        return jsonify({'status': 'success', 'log': DatabaseManager().get_request_replacement_log(limit)}), 200
+    except Exception:
+        logger.error('Request replacement log failed', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Unable to fetch replacement log'}), 500
 
 
 def _feedback_payload():
@@ -49,7 +117,37 @@ def _feedback_payload():
             year = int(year)
         except (TypeError, ValueError):
             return None, (jsonify({'status': 'error', 'message': 'year must be an integer'}), 400)
-    return (feedback, reason_type, reason_text, data.get('media_user_id'), title, year), None
+    # Optional Trakt write-back details. They only steer the sync of a "seen" verdict
+    # and are not stored: SuggestArr keeps its own coarser liked/disliked feedback.
+    rating = data.get('rating')
+    if rating is not None and (isinstance(rating, bool) or not isinstance(rating, int) or not 1 <= rating <= 10):
+        return None, (jsonify({'status': 'error', 'message': 'rating must be an integer from 1 to 10'}), 400)
+    # Omitted means the safe default per media type (plays for a movie, none for a
+    # show), decided by the sync, so a client that never sends it cannot mark a
+    # whole series watched.
+    mark_watched = data.get('mark_watched')
+    if mark_watched is not None and not isinstance(mark_watched, bool):
+        return None, (jsonify({'status': 'error', 'message': 'mark_watched must be a boolean'}), 400)
+    trakt = {'rating': rating, 'mark_watched': mark_watched}
+    return (feedback, reason_type, reason_text, data.get('media_user_id'), title, year, trakt), None
+
+
+def _sync_seen_feedback(saved, trakt):
+    """
+    Hand a saved "seen it" verdict to the optional Trakt write-back.
+
+    Never affects the response: the sync runs in the background and any error in
+    scheduling it is logged and swallowed.
+
+    Args:
+        saved: The feedback dict returned by the database layer.
+        trakt: ``{'rating': int|None, 'mark_watched': bool|None}`` from the request.
+    """
+    try:
+        schedule_seen_feedback_sync(int(g.current_user['id']), saved,
+                                    rating=trakt['rating'], mark_watched=trakt['mark_watched'])
+    except Exception:
+        logger.warning("Could not schedule Trakt feedback sync", exc_info=True)
 
 
 def _workflow_ids():
@@ -81,6 +179,7 @@ def _localize(db, *groups):
     integration = db.get_integration('tmdb') or {}
     api_key = integration.get('api_key') or env.get('TMDB_API_KEY')
     localize_groups(list(groups), language, db, api_key)
+    fill_logos(list(groups), language, db, api_key)
 
 
 def _visible_request_user_ids(db):
@@ -105,7 +204,8 @@ def request_workflow():
     scope = _suggestion_scope(db)
     items, total = db.list_suggestions(
         scope.owner_id, status, request.args.get('search', '').strip()[:100], page, per_page, media_type,
-        scope.media_user_ids, int(g.current_user['id']), scope.include_unassigned)
+        scope.media_user_ids, int(g.current_user['id']), scope.include_unassigned,
+        include_owned_list_imports=scope.include_owned_list_imports)
     _localize(db, (items, [('tmdb_id', 'media_type', 'title', 'overview')]))
     return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
@@ -207,15 +307,17 @@ def set_request_feedback(suggestion_id):
     parsed, error = _feedback_payload()
     if error:
         return error
-    feedback, reason_type, reason_text, _, title, year = parsed
+    feedback, reason_type, reason_text, _, title, year, trakt = parsed
     db = DatabaseManager()
     scope = _suggestion_scope(db)
     result = db.set_suggestion_feedback(
         suggestion_id, scope.owner_id, int(g.current_user['id']), feedback, reason_type, reason_text,
         scope.media_user_ids, scope.include_unassigned, title, year,
+        include_owned_list_imports=scope.include_owned_list_imports,
     )
     if result is None:
         return jsonify({'status': 'error', 'message': 'Suggestion not found'}), 404
+    _sync_seen_feedback(result, trakt)
     return jsonify({'status': 'success', 'feedback': result}), 200
 
 
@@ -226,7 +328,7 @@ def clear_request_feedback(suggestion_id):
     scope = _suggestion_scope(db)
     removed = db.clear_suggestion_feedback(
         suggestion_id, scope.owner_id, int(g.current_user['id']), scope.media_user_ids,
-        scope.include_unassigned,
+        scope.include_unassigned, include_owned_list_imports=scope.include_owned_list_imports,
     )
     return jsonify({'status': 'success', 'removed': removed}), 200
 
@@ -240,7 +342,7 @@ def set_sent_request_feedback(media_type, tmdb_id):
     parsed, error = _feedback_payload()
     if error:
         return error
-    feedback, reason_type, reason_text, media_user_id, title, year = parsed
+    feedback, reason_type, reason_text, media_user_id, title, year, trakt = parsed
     db = DatabaseManager()
     visible_user_ids = _visible_request_user_ids(db)
     if not db.has_visible_suggestarr_request(tmdb_id, media_type, media_user_id, visible_user_ids):
@@ -249,6 +351,7 @@ def set_sent_request_feedback(media_type, tmdb_id):
         int(g.current_user['id']), media_user_id, tmdb_id, media_type,
         feedback, reason_type, reason_text, title, year,
     )
+    _sync_seen_feedback(result, trakt)
     return jsonify({'status': 'success', 'feedback': result}), 200
 
 
@@ -328,6 +431,10 @@ def get_requests():
         if sort_by not in valid_sorts:
             sort_by = 'date-desc'
         
+        progress = request.args.get('progress')
+        if progress not in ('requested', 'processing', 'available', 'watched'):
+            progress = None
+
         db_manager = DatabaseManager()
         result = db_manager.get_all_requests_grouped_by_source(
             page=page, 
@@ -335,6 +442,7 @@ def get_requests():
             sort_by=sort_by,
             user_ids=_visible_request_user_ids(db_manager),
             feedback_user_id=int(g.current_user['id']),
+            progress=progress,
         )
         sources = result.get('data') or []
         _localize(db_manager,

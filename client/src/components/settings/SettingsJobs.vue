@@ -1,264 +1,199 @@
 <template>
-  <div class="settings-jobs">
-    <div class="section-header" data-tour-id="jobs-section-header">
-      <h2>Automation Jobs</h2>
-      <p>Configure automated content discovery and recommendations</p>
+  <div class="flex flex-col gap-7">
+    <header class="flex flex-wrap items-end justify-between gap-4" data-tour-id="jobs-section-header">
+      <div>
+        <h1 class="m-0 text-3xl font-extrabold tracking-tight text-ink">Jobs</h1>
+        <p class="m-0 mt-1.5 max-w-2xl text-[15px] text-ink-3">Discover titles, find recommendations or import a public list. Each job runs on its own schedule and sends requests to Seer.</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Replay the Jobs tour" aria-label="Replay the Jobs tour" @click="restartJobsTour"><i aria-hidden="true" class="fas fa-question-circle"></i></button>
+        <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink disabled:opacity-50" :disabled="isLoading" title="Refresh" aria-label="Refresh" @click="loadJobs"><i aria-hidden="true" :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i></button>
+        <button type="button" class="ui-btn h-[42px]" :disabled="importStarting || ['queued', 'running'].includes(listImport?.status)" @click="showImportModal = true"><i aria-hidden="true" class="fas fa-list"></i>Import list once</button>
+        <button type="button" class="ui-btn-primary h-[42px] px-[18px]" data-tour-id="jobs-new-btn" @click="showCreateModal = true"><i aria-hidden="true" class="fas fa-plus"></i>New job</button>
+      </div>
+    </header>
+
+    <section v-if="listImport" class="flex flex-wrap items-center gap-3 rounded-card border border-edge bg-panel px-4 py-3" aria-label="One-time list import" role="status">
+      <i aria-hidden="true" :class="['queued', 'running'].includes(listImport.status) ? 'fas fa-spinner fa-spin text-notice' : listImport.status === 'completed' ? 'fas fa-check-circle text-good' : 'fas fa-circle-exclamation text-caution'"></i>
+      <div class="min-w-0 flex-1">
+        <strong class="text-sm text-ink">{{ listImport.status === 'completed' ? 'List import complete' : ['failed', 'interrupted'].includes(listImport.status) ? 'List import paused' : 'Importing list…' }}</strong>
+        <p class="m-0 mt-1 truncate text-xs text-ink-3">{{ listImport.list_url }}</p>
+        <p class="m-0 mt-1 text-xs text-ink-2">{{ listImport.scanned_count }} titles checked · {{ listImport.requested_count }} queued for delivery or approval</p>
+        <p v-if="listImport.last_error" class="m-0 mt-1 text-xs text-caution">{{ listImport.last_error }}</p>
+      </div>
+      <button v-if="['failed', 'interrupted'].includes(listImport.status)" type="button" class="ui-btn" :disabled="importStarting" @click="resumeListImport">Resume import</button>
+    </section>
+
+    <!-- Seer delivery queue -->
+    <div v-if="queueStatus.total_pending > 0 && !queueBannerDismissed" role="status" class="flex items-center gap-3 rounded-card border border-notice/40 bg-notice/10 px-4 py-3">
+      <i aria-hidden="true" class="fas fa-circle-notch fa-spin text-notice"></i>
+      <div class="flex flex-1 flex-col text-sm">
+        <strong class="text-ink">Delivering to Seer…</strong>
+        <span class="text-ink-3">
+          {{ queueStatus.total_pending }} item{{ queueStatus.total_pending !== 1 ? 's' : '' }} queued
+          <template v-if="queueStatus.submitting > 0"> · {{ queueStatus.submitting }} sending</template>
+          <template v-if="queueStatus.failed > 0"> · <span class="text-bad">{{ queueStatus.failed }} failed</span></template>
+        </span>
+      </div>
+      <button type="button" class="h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Dismiss" @click="dismissQueueBanner"><i aria-hidden="true" class="fas fa-times"></i></button>
+    </div>
+    <div v-else-if="queueStatus.submitted > 0 && queueStatus.total_pending === 0 && !queueBannerDismissed" role="status" class="flex items-center gap-3 rounded-card border border-good/30 bg-good/10 px-4 py-3">
+      <i aria-hidden="true" class="fas fa-check-circle text-good"></i>
+      <div class="flex flex-1 flex-col text-sm">
+        <strong class="text-ink">All requests delivered</strong>
+        <span class="text-ink-3">{{ queueStatus.submitted }} item{{ queueStatus.submitted !== 1 ? 's' : '' }} sent to Seer successfully</span>
+      </div>
+      <button type="button" class="h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Dismiss" @click="dismissQueueBanner"><i aria-hidden="true" class="fas fa-times"></i></button>
     </div>
 
-    <!-- Seer delivery queue banner -->
-    <transition name="queue-banner">
-      <div v-if="queueStatus.total_pending > 0 && !queueBannerDismissed" class="queue-banner">
-        <div class="queue-banner-icon">
-          <i class="fas fa-circle-notch fa-spin"></i>
+    <!-- Job types explained -->
+    <aside v-if="showInfoBox" class="@container relative rounded-card border border-edge bg-panel p-4 sm:p-5" data-tour-id="jobs-info-box">
+      <h2 class="m-0 mb-4 pr-10 text-sm font-bold uppercase tracking-wider text-ink-4">Job types</h2>
+      <dl class="m-0 grid grid-cols-1 gap-3 @xl:grid-cols-2 @5xl:grid-cols-4">
+        <div v-for="type in jobTypes" :key="type.id" class="flex min-w-0 flex-col gap-2 rounded-ctl border border-edge bg-canvas/40 p-3.5">
+          <dt class="flex items-center gap-2.5 text-sm font-bold" :class="type.text"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-ctl" :class="type.bg"><i aria-hidden="true" :class="type.icon"></i></span>{{ type.label }}</dt>
+          <dd class="m-0 text-[13px] leading-relaxed text-ink-3">{{ type.description }}</dd>
         </div>
-        <div class="queue-banner-body">
-          <strong>Delivering to Seer…</strong>
-          <span>
-            {{ queueStatus.total_pending }} item{{ queueStatus.total_pending !== 1 ? 's' : '' }} queued
-            <template v-if="queueStatus.submitting > 0"> · {{ queueStatus.submitting }} sending</template>
-            <template v-if="queueStatus.failed > 0"> · <span class="queue-failed">{{ queueStatus.failed }} failed</span></template>
-          </span>
-        </div>
-        <div class="queue-banner-spinner">
-          <i class="fas fa-circle-notch fa-spin"></i>
-        </div>
-        <button class="queue-banner-close" @click="dismissQueueBanner" title="Dismiss">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div v-else-if="queueStatus.submitted > 0 && queueStatus.total_pending === 0 && !queueBannerDismissed" class="queue-banner queue-banner--done">
-        <div class="queue-banner-icon">
-          <i class="fas fa-check-circle"></i>
-        </div>
-        <div class="queue-banner-body">
-          <strong>All requests delivered</strong>
-          <span>{{ queueStatus.submitted }} item{{ queueStatus.submitted !== 1 ? 's' : '' }} sent to Seer successfully</span>
-        </div>
-        <button class="queue-banner-close queue-banner-close--done" @click="dismissQueueBanner" title="Dismiss">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-    </transition>
+      </dl>
+      <button type="button" class="absolute right-3 top-3 h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Hide job types" @click="dismissInfoBox"><i aria-hidden="true" class="fas fa-times"></i></button>
+    </aside>
 
-    <!-- Info Box explaining job types -->
-    <div v-if="showInfoBox" class="info-box" data-tour-id="jobs-info-box">
-      <div class="info-icon">
-        <i class="fas fa-info-circle"></i>
-      </div>
-      <div class="info-content">
-        <h4>Job Types</h4>
-        <div class="job-types-explanation">
-          <div class="job-type-item">
-            <span class="job-type-badge discover"><i class="fas fa-search"></i> Discover</span>
-            <span>Find content using TMDb filters (genre, rating, year) - independent from user watch history.</span>
-          </div>
-          <div class="job-type-item">
-            <span class="job-type-badge recommendation"><i class="fas fa-users"></i> Recommendation</span>
-            <span>Find similar content based on what you have watched (on your media server or Trakt.tv) - like the original SuggestArr automation.</span>
-          </div>
-          <div class="job-type-item">
-            <span class="job-type-badge trakt_recommendations"><i class="icon-trakt"></i> Trakt</span>
-            <span>Fetch personalized movie and show recommendations only from a linked Trakt.tv account.</span>
-          </div>
-        </div>
-      </div>
-      <button class="info-box-close" @click="dismissInfoBox" title="Dismiss">
-        <i class="fas fa-times"></i>
-      </button>
+    <div v-if="isLoading && jobs.length === 0" class="py-14 text-center text-sm text-ink-3"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-2"></i>Loading jobs…</div>
+
+    <div v-else-if="jobs.length === 0" class="flex flex-col items-center gap-3 rounded-card border border-dashed border-edge-strong px-6 py-14 text-center">
+      <i aria-hidden="true" class="fas fa-clock text-4xl text-ink-4"></i>
+      <h2 class="m-0 text-lg font-bold text-ink">No jobs yet</h2>
+      <p class="m-0 text-sm text-ink-3">Create your first job to start getting suggestions.</p>
+      <button type="button" class="mt-2 h-10 cursor-pointer rounded-ctl border-0 bg-brand px-4 text-sm font-bold text-white" @click="showCreateModal = true">Create a job</button>
     </div>
 
-    <div class="jobs-container">
-      <!-- Actions Bar -->
-      <div class="jobs-actions">
-        <button @click="showCreateModal = true" class="btn btn-primary" data-tour-id="jobs-new-btn">
-          <i class="fas fa-plus"></i>
-          New Job
-        </button>
-        <button @click="loadJobs" class="btn btn-outline" :disabled="isLoading">
-          <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i>
-          Refresh
-        </button>
-        <button @click="restartJobsTour" class="btn btn-outline btn-tour-hint" title="Replay the Jobs tour">
-          <i class="fas fa-question-circle"></i>
-        </button>
-      </div>
-
-      <!-- Jobs List -->
-      <div v-if="isLoading && jobs.length === 0" class="loading-state">
-        <i class="fas fa-spinner fa-spin"></i>
-        <span>Loading jobs...</span>
-      </div>
-
-      <div v-else-if="jobs.length === 0" class="empty-state">
-        <i class="fas fa-briefcase"></i>
-        <h3>No Jobs Configured</h3>
-        <p>Create your first job to automate content discovery or recommendations.</p>
-        <button @click="showCreateModal = true" class="btn btn-primary">
-          <i class="fas fa-plus"></i>
-          Create First Job
-        </button>
-      </div>
-
-      <div v-else class="jobs-grid">
-        <div
-          v-for="(job, index) in jobs"
-          :key="job.id"
-          class="job-card"
-          :class="{ disabled: !job.enabled }"
-          :data-tour-id="index === 0 ? 'jobs-first-card' : null"
-        >
-          <div class="job-header">
-            <div class="job-info">
-              <h3>{{ job.name }}</h3>
-              <div class="job-badges">
-                <span class="job-type-badge" :class="job.job_type || 'discover'">
-                  <i :class="getJobTypeIcon(job.job_type)"></i>
-                  {{ getJobTypeLabel(job.job_type) }}
-                </span>
-                <span class="media-type-badge" :class="job.media_type">
-                  <i :class="getMediaTypeIcon(job.media_type)"></i>
-                  {{ getMediaTypeLabel(job.media_type) }}
-                </span>
-              </div>
-            </div>
-            <div class="job-status">
-              <span class="status-indicator" :class="{ active: job.enabled }"></span>
-              <span>{{ job.enabled ? 'Active' : 'Disabled' }}</span>
-            </div>
+    <div v-else class="flex flex-col gap-3">
+      <!-- Which kind of job sends titles people actually watch. -->
+      <section v-if="sourceHitRates.length > 1" aria-labelledby="hit-rate-title" class="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-card border border-edge bg-panel px-5 py-4">
+        <h2 id="hit-rate-title" class="m-0 text-sm font-bold text-ink">Watched after request</h2>
+        <dl class="m-0 flex flex-wrap gap-x-6 gap-y-2">
+          <div v-for="source in sourceHitRates" :key="source.label" class="flex items-baseline gap-2" :title="`${source.watched} of ${source.requested} requested titles watched`">
+            <dt class="text-[13px] text-ink-3">{{ source.label }}</dt>
+            <dd class="m-0 text-sm font-bold text-ink">{{ source.rate }}%</dd>
           </div>
-
-          <div class="job-details" :data-tour-id="index === 0 ? 'jobs-first-card-details' : null">
-            <div class="detail-row">
-              <span class="detail-label"><i class="fas fa-clock"></i> Schedule</span>
-              <span class="detail-value">{{ formatSchedule(job) }}</span>
+        </dl>
+      </section>
+      <article
+        v-for="(job, index) in jobs"
+        :key="job.id"
+        class="flex flex-wrap items-center gap-x-6 gap-y-4 rounded-card border border-edge bg-panel px-5 py-[18px] transition-colors hover:border-edge-strong"
+        :class="{ 'opacity-70': !job.enabled }"
+        :data-tour-id="index === 0 ? 'jobs-first-card' : null"
+      >
+        <div class="flex min-w-0 flex-[1_1_260px] items-start gap-3.5">
+          <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" :class="[jobTypeStyle(job.job_type).bg, jobTypeStyle(job.job_type).text]"><i aria-hidden="true" :class="getJobTypeIcon(job.job_type)"></i></span>
+          <div class="flex min-w-0 flex-col gap-1.5">
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="m-0 text-base font-bold text-ink">{{ job.name }}</h2>
+              <span v-if="!job.enabled" class="rounded-md bg-caution/15 px-2 py-0.5 text-[11px] font-bold text-caution"><i aria-hidden="true" class="fas fa-pause mr-1 text-[9px]"></i>Paused</span>
+              <span class="rounded-md bg-raised px-2 py-0.5 text-[11px] font-bold text-ink-2">{{ getJobTypeLabel(job.job_type) }}</span>
+              <span class="rounded-md bg-raised px-2 py-0.5 text-[11px] font-bold text-ink-2"><i aria-hidden="true" :class="getMediaTypeIcon(job.media_type)" class="mr-1"></i>{{ getMediaTypeLabel(job.media_type) }}</span>
             </div>
-            <div class="detail-row">
-              <span class="detail-label"><i class="fas fa-list-ol"></i> Max Results</span>
-              <span class="detail-value">{{ job.max_results }}</span>
+            <div v-if="hasFilters(job)" class="flex flex-wrap gap-1.5 text-xs text-ink-3">
+              <span>Up to {{ job.max_results }} per run</span>
+              <span v-if="job.filters.rating_source !== 'imdb' && job.filters.vote_average_gte">· TMDB Rating &ge; {{ job.filters.vote_average_gte }}</span>
+              <span v-if="job.filters.rating_source !== 'imdb' && job.filters.vote_count_gte">· TMDB Votes &ge; {{ job.filters.vote_count_gte }}</span>
+              <span v-if="job.filters.rating_source !== 'tmdb' && job.filters.imdb_rating_gte">· IMDB Rating &ge; {{ job.filters.imdb_rating_gte }}</span>
+              <span v-if="job.filters.rating_source !== 'tmdb' && job.filters.imdb_min_votes">· IMDB Votes &ge; {{ job.filters.imdb_min_votes }}</span>
+              <span v-if="job.filters.with_original_language">· Lang: {{ job.filters.with_original_language }}</span>
+              <span v-if="job.filters.with_genres && job.filters.with_genres.length">· +{{ job.filters.with_genres.length }} genres included</span>
+              <span v-if="job.filters.without_genres && job.filters.without_genres.length">· -{{ job.filters.without_genres.length }} genres excluded</span>
+              <span v-if="job.filters.without_keywords && job.filters.without_keywords.length">· -{{ job.filters.without_keywords.length }} TMDb keywords</span>
             </div>
-            <div class="detail-row" v-if="job.next_run">
-              <span class="detail-label"><i class="fas fa-calendar"></i> Next Run</span>
-              <span class="detail-value">{{ formatDate(job.next_run) }}</span>
-            </div>
-          </div>
-
-          <!-- Filters Summary -->
-          <div class="job-filters" v-if="hasFilters(job)">
-            <span class="filters-label">Filters:</span>
-            <div class="filter-tags">
-              <span v-if="job.filters.rating_source !== 'imdb' && job.filters.vote_average_gte" class="filter-tag">
-                TMDB Rating &ge; {{ job.filters.vote_average_gte }}
-              </span>
-              <span v-if="job.filters.rating_source !== 'imdb' && job.filters.vote_count_gte" class="filter-tag">
-                TMDB Votes &ge; {{ job.filters.vote_count_gte }}
-              </span>
-              <span v-if="job.filters.rating_source !== 'tmdb' && job.filters.imdb_rating_gte" class="filter-tag">
-                IMDB Rating &ge; {{ job.filters.imdb_rating_gte }}
-              </span>
-              <span v-if="job.filters.rating_source !== 'tmdb' && job.filters.imdb_min_votes" class="filter-tag">
-                IMDB Votes &ge; {{ job.filters.imdb_min_votes }}
-              </span>
-              <span v-if="job.filters.with_original_language" class="filter-tag">
-                Lang: {{ job.filters.with_original_language }}
-              </span>
-              <span v-if="job.filters.without_genres && job.filters.without_genres.length" class="filter-tag exclude">
-                -{{ job.filters.without_genres.length }} genres excluded
-              </span>
-              <span v-if="job.filters.with_genres && job.filters.with_genres.length" class="filter-tag">
-                +{{ job.filters.with_genres.length }} genres included
-              </span>
-              <span v-if="job.filters.without_keywords && job.filters.without_keywords.length" class="filter-tag exclude">
-                -{{ job.filters.without_keywords.length }} TMDb keywords
-              </span>
-            </div>
-          </div>
-
-          <div class="job-actions" :data-tour-id="index === 0 ? 'jobs-first-card-actions' : null">
-            <button @click="toggleJob(job)" class="btn btn-sm" :class="job.enabled ? 'btn-outline' : 'btn-secondary'" :disabled="isToggling[job.id]">
-              <i :class="isToggling[job.id] ? 'fas fa-spinner fa-spin' : (job.enabled ? 'fas fa-pause' : 'fas fa-play')"></i>
-              {{ job.enabled ? 'Disable' : 'Enable' }}
-            </button>
-            <button @click="runJob(job)" class="btn btn-sm btn-outline" :disabled="isRunning[job.id] || isDryRunning[job.id]">
-              <i :class="isRunning[job.id] ? 'fas fa-spinner fa-spin' : 'fas fa-bolt'"></i>
-              Run
-            </button>
-            <button @click="dryRunJob(job)" class="btn btn-sm btn-outline btn-preview" :disabled="isDryRunning[job.id] || isRunning[job.id]" title="Preview what this job would request">
-              <i :class="isDryRunning[job.id] ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>
-              Preview
-            </button>
-            <button
-              v-if="lastDryRunCache[job.id]"
-              @click="reopenDryRun(job)"
-              class="btn btn-sm btn-outline btn-reopen"
-              title="Re-open last preview result"
-            >
-              <i class="fas fa-history"></i>
-            </button>
-            <button @click="editJob(job)" class="btn btn-sm btn-outline" title="Edit job">
-              <i class="fas fa-edit"></i>
-              Edit
-            </button>
-            <button @click="confirmDeleteJob(job)" class="btn btn-sm btn-danger" title="Delete job">
-              <i class="fas fa-trash"></i>
-            </button>
+            <span v-else class="text-xs text-ink-3">Up to {{ job.max_results }} per run</span>
           </div>
         </div>
-      </div>
 
-      <!-- Recent History Preview -->
-      <div v-if="recentHistory.length > 0" class="history-preview" data-tour-id="jobs-history">
-        <div class="history-header">
-          <h3><i class="fas fa-history"></i> Recent Executions</h3>
-          <button @click="showHistoryModal = true" class="text-btn">View All</button>
+        <div class="flex flex-[1_1_130px] flex-col gap-0.5" :data-tour-id="index === 0 ? 'jobs-first-card-details' : null">
+          <span class="text-xs font-semibold text-ink-4">Schedule</span>
+          <span class="text-sm font-semibold text-ink">{{ formatSchedule(job) }}</span>
+          <span class="text-xs text-ink-4">{{ job.enabled && job.next_run ? `Next run ${timeFromNow(job.next_run)}` : 'Paused' }}</span>
         </div>
-        <div class="history-list">
-          <div v-for="exec in recentHistory.slice(0, 5)" :key="exec.id" class="history-item">
-            <span class="history-status" :class="exec.status">
-              <i :class="getStatusIcon(exec.status)"></i>
-            </span>
-            <span class="history-job">{{ exec.job_name }}</span>
-            <span class="history-time">{{ formatDate(exec.started_at) }}</span>
-            <span class="history-result">
-              {{ exec.results_count }} found, {{ exec.requested_count }} requested
-            </span>
-          </div>
+
+        <div class="flex flex-[1_1_130px] flex-col gap-0.5">
+          <span class="text-xs font-semibold text-ink-4">Last run</span>
+          <template v-if="lastRunByJob[job.id]">
+            <span class="text-sm font-semibold" :class="runStatus(lastRunByJob[job.id].status).text">{{ runStatus(lastRunByJob[job.id].status).label }}</span>
+            <span class="truncate text-xs text-ink-4">{{ timeFromNow(lastRunByJob[job.id].started_at) }} · {{ lastRunByJob[job.id].status === 'failed' ? (lastRunByJob[job.id].error_message || 'see logs') : `${lastRunByJob[job.id].results_count} found` }}</span>
+          </template>
+          <span v-else class="text-sm text-ink-3">Never</span>
         </div>
-      </div>
+
+        <div v-if="job.stats" class="flex flex-[1_1_110px] flex-col gap-0.5">
+          <span class="text-xs font-semibold text-ink-4">Watched</span>
+          <template v-if="hitRate(job.stats) !== null">
+            <span class="text-sm font-semibold text-ink">{{ hitRate(job.stats) }}%</span>
+            <span class="text-xs text-ink-4">{{ job.stats.watched }} of {{ job.stats.requested }} requested</span>
+          </template>
+          <span v-else class="text-sm text-ink-3">Nothing sent yet</span>
+        </div>
+
+        <div class="ml-auto flex flex-wrap items-center gap-2" :data-tour-id="index === 0 ? 'jobs-first-card-actions' : null">
+          <button type="button" class="ui-btn" :disabled="isDryRunning[job.id] || isRunning[job.id]" title="Preview what this job would request" @click="dryRunJob(job)">
+            <i aria-hidden="true" :class="isDryRunning[job.id] ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>Preview
+          </button>
+          <button type="button" class="ui-btn" :disabled="isRunning[job.id] || isDryRunning[job.id]" @click="runJob(job)">
+            <i aria-hidden="true" :class="isRunning[job.id] ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>Run now
+          </button>
+          <ActionMenu :label="`More actions for ${job.name}`" :items="jobMenuItems(job)" />
+        </div>
+      </article>
     </div>
+
+    <section v-if="recentHistory.length > 0" class="flex flex-col gap-3.5" data-tour-id="jobs-history">
+      <div class="flex items-baseline justify-between gap-3">
+        <h2 class="m-0 text-[19px] font-bold text-ink">Recent runs</h2>
+        <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-sm font-semibold text-brand-ink hover:text-brand" @click="showHistoryModal = true">Full history →</button>
+      </div>
+      <div class="overflow-x-auto rounded-card border border-edge bg-panel">
+        <table class="w-full min-w-[640px] border-collapse text-sm">
+          <thead>
+            <tr class="text-left text-xs text-ink-4">
+              <th class="px-[18px] py-3 font-semibold">Job</th>
+              <th class="px-[18px] py-3 font-semibold">Started</th>
+              <th class="px-[18px] py-3 font-semibold">Result</th>
+              <th class="px-[18px] py-3 font-semibold">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="exec in recentHistory.slice(0, 5)" :key="exec.id" class="border-t border-edge">
+              <td class="px-[18px] py-3.5 font-semibold text-ink">{{ exec.job_name }}</td>
+              <td class="px-[18px] py-3.5 text-ink-2">{{ formatDate(exec.started_at) }}</td>
+              <td class="px-[18px] py-3.5 text-ink-2">{{ exec.status === 'failed' && exec.error_message ? exec.error_message : `${exec.results_count} found · ${exec.requested_count} requested` }}</td>
+              <td class="px-[18px] py-3.5"><span class="inline-flex items-center gap-1.5 text-[13px] font-semibold" :class="runStatus(exec.status).text"><span class="h-2 w-2 rounded-full" :class="runStatus(exec.status).dot"></span>{{ runStatus(exec.status).label }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <!-- Create/Edit Job Modal -->
     <JobModal
       v-if="showCreateModal || editingJob"
       ref="jobModal"
       :job="editingJob"
+      :request-approval-default="jobDefaults.requestApproval"
+      :approval-pause-default="jobDefaults.approvalPause"
       @close="closeModal"
       @save="saveJob"
     />
+    <JobModal v-if="showImportModal" one-time :request-approval-default="jobDefaults.requestApproval" @close="showImportModal = false" @save="importListOnce" />
 
-    <!-- Delete Confirmation Modal -->
-    <transition name="fade">
-      <div v-if="jobToDelete" class="modal-overlay" @click.self="jobToDelete = null">
-        <div class="modal-content">
-          <div class="modal-header">
-            <i class="fas fa-exclamation-triangle warning-icon"></i>
-            <h3>Delete Job</h3>
-          </div>
-          <p class="modal-body">
-            Are you sure you want to delete <strong>{{ jobToDelete.name }}</strong>?
-            This will also delete all execution history for this job.
-          </p>
-          <div class="modal-actions">
-            <button @click="jobToDelete = null" class="btn btn-secondary">
-              <i class="fas fa-times"></i> Cancel
-            </button>
-            <button @click="deleteJob" class="btn btn-danger" :disabled="isDeleting">
-              <i :class="isDeleting ? 'fas fa-spinner fa-spin' : 'fas fa-trash'"></i>
-              Delete
-            </button>
-          </div>
+    <AppDialog v-if="jobToDelete" labelledby="delete-job-title" @close="jobToDelete = null">
+      <div class="flex flex-col gap-4 p-6">
+        <h3 id="delete-job-title" class="m-0 text-lg font-bold text-bad"><i aria-hidden="true" class="fas fa-trash mr-2"></i>Delete job</h3>
+        <p class="m-0 text-sm leading-relaxed text-ink-2">Delete <strong class="text-ink">{{ jobToDelete.name }}</strong>? Its execution history is deleted too.</p>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="h-10 cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink" @click="jobToDelete = null">Cancel</button>
+          <button type="button" class="ui-btn-danger" :disabled="isDeleting" @click="deleteJob"><i aria-hidden="true" v-if="isDeleting" class="fas fa-spinner fa-spin mr-1"></i>Delete</button>
         </div>
       </div>
-    </transition>
+    </AppDialog>
 
     <!-- History Modal -->
     <JobHistoryModal
@@ -293,13 +228,15 @@ import JobModal from './jobs/JobModal.vue';
 import JobHistoryModal from './jobs/JobHistoryModal.vue';
 import DryRunResultModal from './jobs/DryRunResultModal.vue';
 import OnboardingTour from '@/components/OnboardingTour.vue';
-import { getJobTypeIcon as resolveJobTypeIcon, getJobTypeLabel as resolveJobTypeLabel } from '@/utils/jobTypeVisuals.js';
+import AppDialog from '@/components/ui/AppDialog.vue';
+import ActionMenu from '@/components/ui/ActionMenu.vue';
+import { timeFromNow } from '@/utils/dateUtils.js';
+import { hitRate, hitRatesBySource } from '@/utils/jobHitRates.js';
+import { getJobTypeIcon as resolveJobTypeIcon, getJobTypeLabel as resolveJobTypeLabel, formatJobSchedule } from '@/utils/jobTypeVisuals.js';
 
 const JOBS_TOUR_KEY = 'suggestarr_jobs_tour_done';
 // Index of the first step that targets elements inside the job modal
 const MODAL_STEP_START = 7;
-// Index of the first step that requires the advanced section to be expanded
-const ADVANCED_STEP_START = 11;
 
 export default {
   name: 'SettingsJobs',
@@ -307,11 +244,17 @@ export default {
     JobModal,
     JobHistoryModal,
     DryRunResultModal,
-    OnboardingTour
+    OnboardingTour,
+    AppDialog,
+    ActionMenu
   },
+  // The dashboard shell passes settings props to every tab; this page does not use them.
+  inheritAttrs: false,
   data() {
     return {
       jobs: [],
+      // Global settings that jobs set to "inherit" follow, shown inside the job modal.
+      jobDefaults: { requestApproval: null, approvalPause: null },
       recentHistory: [],
       allHistory: [],
       isLoading: false,
@@ -320,6 +263,10 @@ export default {
       isDryRunning: {},
       isDeleting: false,
       showCreateModal: false,
+      showImportModal: false,
+      listImport: null,
+      importStarting: false,
+      importPollInterval: null,
       showHistoryModal: false,
       dryRunResult: null,
       lastDryRunCache: {},
@@ -330,6 +277,12 @@ export default {
       queueBannerDismissed: localStorage.getItem('sj_queue_banner_dismissed') === '1',
       showInfoBox: localStorage.getItem('sj_info_box_hidden') !== '1',
       showJobsTour: false,
+      jobTypes: [
+        { id: 'discover', label: 'Discover', icon: 'fas fa-search', bg: 'bg-notice/15', text: 'text-notice', description: 'Finds titles with TMDb filters (genre, rating, year), independent of what anyone watched.' },
+        { id: 'recommendation', label: 'Recommendation', icon: 'fas fa-users', bg: 'bg-caution/15', text: 'text-caution', description: 'Finds titles similar to what your users watched on the media server or Trakt.' },
+        { id: 'trakt_recommendations', label: 'Trakt', icon: 'icon-trakt', bg: 'bg-bad/15', text: 'text-bad', description: 'Uses the personal recommendations of a linked Trakt account.' },
+        { id: 'list_import', label: 'Import list', icon: 'fas fa-list', bg: 'bg-notice/15', text: 'text-notice', description: 'Imports missing movies and shows from a public MDBList or Trakt list.' },
+      ],
       jobsTourSteps: [
         {
           targetId: 'jobs-section-header',
@@ -364,7 +317,7 @@ export default {
         {
           targetId: 'jobs-first-card-actions',
           title: 'Job Controls',
-          description: 'Enable or disable a job without deleting it, trigger an immediate run, open the editor, or remove the job entirely.',
+          description: 'Preview what a job would request or run it now. Pause, edit, duplicate and delete are under the ⋯ menu.',
           position: 'top'
         },
         {
@@ -376,63 +329,120 @@ export default {
         {
           targetId: 'job-modal-type-selector',
           title: 'Job Type',
-          description: 'Choose Discover for TMDb filter searches, Recommendation for watch-history suggestions, or Trakt for linked-account recommendations.',
+          description: 'Import a public list, Discover titles with TMDb filters, get Recommendations from watch history, or use a linked Trakt account. The type is fixed once the job exists.',
           position: 'bottom'
         },
         {
           targetId: 'job-modal-basic-info',
-          title: 'Name & Media Type',
-          description: 'Give your job a descriptive name and pick whether it should target Movies, TV Shows, or both.',
-          position: 'bottom'
-        },
-        {
-          targetId: 'job-modal-schedule',
-          title: 'Schedule',
-          description: 'Pick a preset interval (hourly, daily, weekly…) or enter a custom cron expression for full control over when the job fires.',
-          position: 'top'
-        },
-        {
-          targetId: 'job-modal-advanced-toggle',
-          title: 'Advanced Settings',
-          description: 'Expand this section to configure quality filters, rating thresholds, language restrictions, and the maximum number of results per run.',
-          position: 'top'
-        },
-        {
-          targetId: 'job-modal-max-results',
-          title: 'Max Results',
-          description: 'Controls how many items the job processes per run. For Discover jobs this is the total titles found; for Recommendation jobs it is the limit per watched item.',
+          title: 'Media Type & Name',
+          description: 'Pick Movies, TV shows or both. The name is optional: leave it empty to use the suggested one.',
           position: 'bottom'
         },
         {
           targetId: 'job-modal-filters',
           title: 'Filters',
-          description: 'Narrow down what gets requested: minimum TMDb rating, minimum vote count, original language, year range, and genre exclusions. Only content matching all active filters will be sent to Seer.',
+          description: 'Narrow down what gets requested: rating, votes, language, release dates, genres and more. Discover jobs show them right away; other jobs keep them under Quality filters.',
+          position: 'top'
+        },
+        {
+          targetId: 'job-modal-schedule',
+          title: 'Schedule',
+          description: 'Pick how often the job runs, or a custom cron expression, plus the rules that skip a scheduled run.',
+          position: 'top'
+        },
+        {
+          targetId: 'job-modal-requests',
+          title: 'Requests',
+          description: 'Choose whether suggestions go straight to Seer or wait for your approval, and which Seer user they are credited to.',
+          position: 'top'
+        },
+        {
+          targetId: 'job-modal-max-results',
+          title: 'Limits',
+          description: 'Cap how many titles each run requests, and optionally how many one user can receive within a time window.',
           position: 'top'
         },
       ]
     };
   },
+  computed: {
+    sourceHitRates() {
+      return hitRatesBySource(this.jobs);
+    },
+    // Most recent execution of each job; history arrives newest first.
+    lastRunByJob() {
+      const latest = {};
+      for (const run of this.allHistory) {
+        if (!latest[run.job_id]) latest[run.job_id] = run;
+      }
+      return latest;
+    },
+  },
   async mounted() {
     await this.loadJobs();
     await this.loadHistory();
     await this.pollQueueStatus();
+    await this.pollListImport();
 
     if (!localStorage.getItem(JOBS_TOUR_KEY)) {
       setTimeout(() => this.startJobsTour(), 600);
     }
   },
   beforeUnmount() {
+    if (this.importPollInterval) clearInterval(this.importPollInterval);
     if (this.queuePollInterval) {
       clearInterval(this.queuePollInterval);
     }
   },
   methods: {
+    async pollListImport() {
+      try {
+        const response = await jobsApi.getListImport();
+        this.listImport = response.data || null;
+      } catch { /* Keep the last progress visible until the next poll. */ }
+      if (['queued', 'running'].includes(this.listImport?.status)) {
+        if (!this.importPollInterval) this.importPollInterval = setInterval(() => this.pollListImport(), 3000);
+      } else if (this.importPollInterval) {
+        clearInterval(this.importPollInterval);
+        this.importPollInterval = null;
+        await this.pollQueueStatus();
+      }
+    },
+    async importListOnce(config) {
+      if (this.importStarting) return;
+      this.importStarting = true;
+      try {
+        const response = await jobsApi.importListOnce(config);
+        this.listImport = response.data;
+        this.showImportModal = false;
+        await this.pollListImport();
+      } catch (error) {
+        this.$toast.open({ type: 'error', message: error.response?.data?.message || 'Could not start list import.' });
+      } finally {
+        this.importStarting = false;
+      }
+    },
+    async resumeListImport() {
+      this.importStarting = true;
+      try {
+        await jobsApi.resumeListImport(this.listImport.id);
+        await this.pollListImport();
+      } catch (error) {
+        this.$toast.open({ type: 'error', message: error.response?.data?.message || 'Could not resume list import.' });
+      } finally {
+        this.importStarting = false;
+      }
+    },
     async loadJobs() {
       this.isLoading = true;
       try {
         const response = await jobsApi.getJobs();
         if (response.status === 'success') {
           this.jobs = response.jobs;
+          this.jobDefaults = {
+            requestApproval: response.request_approval_default ?? null,
+            approvalPause: typeof response.approval_pause_default === 'boolean' ? response.approval_pause_default : null,
+          };
         }
       } catch (error) {
         console.error('Failed to load jobs:', error);
@@ -458,6 +468,7 @@ export default {
     },
 
     async toggleJob(job) {
+      if (this.isToggling[job.id]) return;
       this.isToggling[job.id] = true;
       try {
         const response = await jobsApi.toggleJob(job.id);
@@ -578,6 +589,31 @@ export default {
       this.editingJob = { ...job, filters: { ...job.filters } };
     },
 
+    // Secondary actions live in the card's "more" menu, so the card shows only the two everyday ones.
+    jobMenuItems(job) {
+      return [
+        job.enabled
+          ? { label: 'Pause', icon: 'fas fa-pause', onSelect: () => this.toggleJob(job) }
+          : { label: 'Resume', icon: 'fas fa-play-circle', onSelect: () => this.toggleJob(job) },
+        { label: 'Edit', icon: 'fas fa-pen', onSelect: () => this.editJob(job) },
+        { label: 'Duplicate', icon: 'fas fa-clone', onSelect: () => this.duplicateJob(job) },
+        ...(this.lastDryRunCache[job.id] ? [{ label: 'Last preview', icon: 'fas fa-history', onSelect: () => this.reopenDryRun(job) }] : []),
+        { label: 'Delete', icon: 'fas fa-trash', danger: true, onSelect: () => this.confirmDeleteJob(job) },
+      ];
+    },
+
+    // Opens the create form prefilled; without an id it saves as a new job. Paused so the
+    // copy does not send the same titles as the original before it is changed.
+    duplicateJob(job) {
+      this.editingJob = {
+        ...job,
+        id: undefined,
+        name: `${job.name} (copy)`,
+        filters: JSON.parse(JSON.stringify(job.filters || {})),
+        enabled: false,
+      };
+    },
+
     confirmDeleteJob(job) {
       this.jobToDelete = job;
     },
@@ -670,13 +706,8 @@ export default {
             this.showCreateModal = true;
           }
         }
-        // Expand the advanced section one step early (at the toggle button, step 10)
-        // so that the advanced-section DOM elements are rendered before scrollAndUpdate()
-        // fires for the first advanced step (step 11). Calling this synchronously ensures
-        // Vue batches the DOM update together with the currentIndex change.
-        if (index >= ADVANCED_STEP_START - 1) {
-          this.$refs.jobModal?.openAdvanced();
-        }
+        // Expand the collapsed parts so every highlighted element is rendered.
+        this.$refs.jobModal?.expandAll();
       } else {
         // Going back to main-page steps — close the modal if the tour opened it
         if (this.editingJob || this.showCreateModal) {
@@ -699,19 +730,8 @@ export default {
       this.editingJob = null;
     },
 
-    formatSchedule(job) {
-      if (job.schedule_type === 'preset') {
-        const presets = {
-          daily: 'Daily at midnight',
-          weekly: 'Weekly on Monday',
-          every_12h: 'Every 12 hours',
-          every_6h: 'Every 6 hours',
-          every_hour: 'Every hour'
-        };
-        return presets[job.schedule_value] || job.schedule_value;
-      }
-      return `Cron: ${job.schedule_value}`;
-    },
+    formatSchedule: formatJobSchedule,
+    hitRate,
 
     formatDate(dateStr) {
       if (!dateStr) return 'N/A';
@@ -724,13 +744,25 @@ export default {
       return Object.keys(filters).some(k => filters[k] !== null && filters[k] !== undefined && filters[k] !== '');
     },
 
-    getStatusIcon(status) {
-      const icons = {
-        running: 'fas fa-spinner fa-spin',
-        completed: 'fas fa-check',
-        failed: 'fas fa-times'
+    timeFromNow,
+
+    runStatus(status) {
+      const statuses = {
+        completed: { label: 'Succeeded', text: 'text-good', dot: 'bg-good' },
+        failed: { label: 'Failed', text: 'text-bad', dot: 'bg-bad' },
+        running: { label: 'Running', text: 'text-notice', dot: 'bg-notice' },
       };
-      return icons[status] || 'fas fa-question';
+      return statuses[status] || { label: status, text: 'text-ink-3', dot: 'bg-ink-4' };
+    },
+
+    jobTypeStyle(jobType) {
+      const styles = {
+        recommendation: { bg: 'bg-caution/15', text: 'text-caution' },
+        trakt_recommendations: { bg: 'bg-bad/15', text: 'text-bad' },
+        list_import: { bg: 'bg-notice/15', text: 'text-notice' },
+        llm_recommendation: { bg: 'bg-brand-soft', text: 'text-brand-ink' },
+      };
+      return styles[jobType] || { bg: 'bg-notice/15', text: 'text-notice' };
     },
 
     getJobTypeIcon(jobType) {
@@ -762,740 +794,3 @@ export default {
 };
 </script>
 
-<style scoped>
-.settings-jobs {
-  padding: 0;
-  padding: var(--spacing-lg);
-}
-
-.section-header {
-  margin-bottom: 2rem;
-}
-
-.section-header h2 {
-  font-size: 1.8rem;
-  margin-bottom: 0.5rem;
-  color: var(--color-text-primary);
-}
-
-.section-header p {
-  color: var(--color-text-muted);
-  font-size: 1rem;
-}
-
-/* Info Box */
-.info-box {
-  display: flex;
-  gap: 1rem;
-  padding: 1.25rem;
-  background: rgba(6, 182, 212, 0.08);
-  border: 1px solid rgba(6, 182, 212, 0.2);
-  border-radius: var(--radius-md, 8px);
-  margin-bottom: 1.5rem;
-  align-items: flex-start;
-}
-
-.info-box-close {
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  color: var(--color-info-light);
-  cursor: pointer;
-  padding: 0.15rem;
-  font-size: 0.8rem;
-  opacity: 0.5;
-  transition: opacity 0.15s ease;
-  margin-left: auto;
-}
-
-.info-box-close:hover {
-  opacity: 1;
-}
-
-.info-icon {
-  flex-shrink: 0;
-  color: var(--color-info-light);
-  font-size: 1.25rem;
-}
-
-.info-content h4 {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--color-text-primary, #fff);
-}
-
-.info-content p {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.85rem;
-  color: var(--color-text-secondary, #aaa);
-  line-height: 1.5;
-}
-
-.info-content p:last-child {
-  margin-bottom: 0;
-}
-
-.info-content strong {
-  color: var(--color-text-primary, #fff);
-}
-
-.info-example {
-  padding: 0.75rem;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius-sm, 6px);
-  margin-top: 0.75rem;
-}
-
-/* Job Types Explanation */
-.job-types-explanation {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-}
-
-.job-type-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 0.85rem;
-  color: var(--color-text-secondary, #aaa);
-}
-
-.job-type-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-sm, 6px);
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-}
-
-.job-type-badge.discover {
-  background: rgba(6, 182, 212, 0.15);
-  color: #22d3ee;
-}
-
-.job-type-badge.recommendation {
-  background: rgba(168, 85, 247, 0.15);
-  color: #c084fc;
-}
-
-.job-type-badge.trakt_recommendations {
-  background: var(--color-error-alpha-10);
-  color: var(--color-error-light);
-}
-
-/* Job Badges Container */
-.job-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.35rem;
-}
-
-/* Media Type Badge */
-.media-type-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-sm, 6px);
-  font-size: 0.7rem;
-  font-weight: 500;
-  background: var(--surface-glass-light);
-  color: var(--color-text-secondary, #aaa);
-}
-
-.media-type-badge.movie {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-}
-
-.media-type-badge.tv {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
-}
-
-.media-type-badge.both {
-  background: rgba(251, 191, 36, 0.15);
-  color: #fbbf24;
-}
-
-.jobs-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.jobs-actions {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.btn-tour-hint {
-  flex-shrink: 0;
-  padding: 0.625rem 0.75rem;
-  color: var(--color-text-muted, #888);
-}
-
-.btn-tour-hint:hover:not(:disabled) {
-  color: var(--color-text-primary, #fff);
-}
-
-.loading-state,
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem;
-  text-align: center;
-  background: var(--surface-glass-subtle);
-  border-radius: var(--radius-md);
-  border: 1px dashed var(--surface-interactive);
-}
-
-.empty-state i,
-.loading-state i {
-  font-size: 3rem;
-  color: var(--color-text-secondary);
-  margin-bottom: 1rem;
-}
-
-.empty-state h3 {
-  margin-bottom: 0.5rem;
-  color: var(--color-text-primary);
-}
-
-.empty-state p {
-  color: var(--color-text-secondary);
-  margin-bottom: 1.5rem;
-  max-width: 400px;
-}
-
-.jobs-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 1rem;
-}
-
-.job-card {
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--surface-interactive);
-  border-radius: var(--radius-md);
-  padding: 1.25rem;
-  transition: all 0.2s ease;
-}
-
-.job-card:hover {
-  border-color: var(--surface-glass-strong);
-}
-
-.job-card.disabled {
-  opacity: 0.6;
-}
-
-.job-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1rem;
-}
-
-.job-info h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0 0 0.5rem 0;
-}
-
-.job-type-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 1rem;
-  background: var(--surface-interactive);
-  color: var(--color-text-secondary);
-}
-
-.job-type-badge.movie {
-  background: rgba(var(--color-primary-rgb), 0.2);
-  color: var(--color-primary);
-}
-
-.job-type-badge.tv {
-  background: rgba(0, 200, 150, 0.2);
-  color: #00c896;
-}
-
-.job-status {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  color: var(--color-text-secondary);
-}
-
-.status-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #666;
-}
-
-.status-indicator.active {
-  background: #00c896;
-  box-shadow: 0 0 6px #00c896;
-}
-
-.job-details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  padding: 0.75rem;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius-sm);
-}
-
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.85rem;
-}
-
-.detail-label {
-  color: var(--color-text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.detail-label i {
-  width: 1rem;
-  text-align: center;
-}
-
-.detail-value {
-  color: var(--color-text-primary);
-}
-
-.job-filters {
-  margin-bottom: 1rem;
-}
-
-.filters-label {
-  font-size: 0.8rem;
-  color: var(--color-text-secondary);
-  display: block;
-  margin-bottom: 0.5rem;
-}
-
-.filter-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.filter-tag {
-  font-size: 0.7rem;
-  padding: 0.2rem 0.5rem;
-  background: rgba(var(--color-primary-rgb), 0.2);
-  color: var(--color-primary);
-  border-radius: 0.25rem;
-}
-
-.filter-tag.exclude {
-  background: rgba(255, 100, 100, 0.2);
-  color: #ff6464;
-}
-
-.job-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.job-actions .btn {
-  flex: 1;
-  min-width: auto;
-}
-
-.job-actions .btn-danger {
-  flex: 0 0 auto;
-  padding: 0.5rem 0.75rem;
-}
-
-.btn-preview {
-  color: #22d3ee;
-  border-color: rgba(6, 182, 212, 0.25);
-}
-
-.btn-preview:hover:not(:disabled) {
-  background: rgba(6, 182, 212, 0.08);
-  border-color: rgba(6, 182, 212, 0.45);
-}
-
-.btn-reopen {
-  color: rgba(34, 211, 238, 0.6);
-  border-color: rgba(6, 182, 212, 0.15);
-  padding-left: 0.55rem;
-  padding-right: 0.55rem;
-}
-
-.btn-reopen:hover {
-  color: #22d3ee;
-  background: rgba(6, 182, 212, 0.08);
-  border-color: rgba(6, 182, 212, 0.35);
-}
-
-/* History Preview */
-.history-preview {
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--surface-glass-light);
-  border-radius: var(--radius-md);
-  padding: 1rem;
-}
-
-.history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-
-.history-header h3 {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.text-btn {
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.text-btn:hover {
-  text-decoration: underline;
-}
-
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.history-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  font-size: 0.85rem;
-}
-
-.history-item:last-child {
-  border-bottom: none;
-}
-
-.history-status {
-  width: 1.5rem;
-  text-align: center;
-}
-
-.history-status.completed {
-  color: #00c896;
-}
-
-.history-status.failed {
-  color: #ff6464;
-}
-
-.history-status.running {
-  color: var(--color-primary);
-}
-
-.history-job {
-  flex: 1;
-  color: var(--color-text-primary);
-  font-weight: 500;
-}
-
-.history-time {
-  color: var(--color-text-secondary);
-  font-size: 0.8rem;
-}
-
-.history-result {
-  color: var(--color-text-secondary);
-  font-size: 0.8rem;
-}
-
-/* Button Styles */
-.btn {
-  padding: 0.625rem 1rem;
-  border-radius: var(--radius-sm, 6px);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: var(--surface-glass-light);
-  color: var(--color-text-primary, #fff);
-  border: 1px solid var(--surface-interactive);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--surface-glass-medium);
-  border-color: var(--surface-hover);
-}
-
-.btn-outline {
-  background: transparent;
-  color: var(--color-text-primary, #fff);
-  border: 1px solid var(--surface-hover);
-}
-
-.btn-outline:hover:not(:disabled) {
-  background: var(--surface-glass-subtle);
-  border-color: var(--surface-glass-strong);
-}
-
-.btn-danger {
-  background: rgba(220, 38, 38, 0.15);
-  color: #f87171;
-  border: 1px solid rgba(220, 38, 38, 0.3);
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: rgba(220, 38, 38, 0.25);
-  border-color: rgba(220, 38, 38, 0.5);
-}
-
-.btn-sm {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
-}
-
-/* Modal styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: var(--color-bg-content, #1a1a1c);
-  border-radius: var(--radius-lg, 12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 1.5rem;
-  max-width: 420px;
-  width: 90%;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  color: var(--color-text-primary, #fff);
-}
-
-.warning-icon {
-  color: #fbbf24;
-  font-size: 1.25rem;
-}
-
-.modal-body {
-  color: var(--color-text-secondary, #aaa);
-  margin-bottom: 1.5rem;
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-.modal-body strong {
-  color: var(--color-text-primary, #fff);
-}
-
-.modal-actions {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: flex-end;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .jobs-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .job-actions {
-    flex-direction: column;
-  }
-
-  .job-actions .btn {
-    flex: none;
-    width: 100%;
-  }
-
-  .history-item {
-    flex-wrap: wrap;
-  }
-
-  .history-result {
-    width: 100%;
-    margin-top: 0.25rem;
-    padding-left: 2.25rem;
-  }
-}
-
-/* Transition */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-/* Queue delivery banner */
-.queue-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.875rem;
-  padding: 0.875rem 1.25rem;
-  background: rgba(234, 179, 8, 0.1);
-  border: 1px solid rgba(234, 179, 8, 0.35);
-  border-radius: var(--radius-md, 8px);
-  margin-bottom: 1.25rem;
-}
-
-.queue-banner--done {
-  background: rgba(34, 197, 94, 0.08);
-  border-color: rgba(34, 197, 94, 0.3);
-}
-
-.queue-banner-icon {
-  flex-shrink: 0;
-  font-size: 1.1rem;
-  color: #eab308;
-}
-
-.queue-banner--done .queue-banner-icon {
-  color: #22c55e;
-}
-
-.queue-banner-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  font-size: 0.875rem;
-}
-
-.queue-banner-body strong {
-  color: var(--color-text-primary, #fff);
-  font-weight: 600;
-}
-
-.queue-banner-body span {
-  color: var(--color-text-secondary);
-}
-
-.queue-failed {
-  color: #f87171;
-  font-weight: 600;
-}
-
-.queue-banner-spinner {
-  flex-shrink: 0;
-  color: #eab308;
-  font-size: 1rem;
-}
-
-.queue-banner-close {
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  color: #eab308;
-  cursor: pointer;
-  padding: 0.25rem;
-  font-size: 0.85rem;
-  opacity: 0.6;
-  transition: opacity 0.15s ease;
-  margin-left: 0.25rem;
-}
-
-.queue-banner-close:hover {
-  opacity: 1;
-}
-
-.queue-banner-close--done {
-  color: #22c55e;
-}
-
-/* Slide-down transition for the queue banner */
-.queue-banner-enter-active,
-.queue-banner-leave-active {
-  transition: all 0.3s ease;
-  overflow: hidden;
-}
-
-.queue-banner-enter-from,
-.queue-banner-leave-to {
-  opacity: 0;
-  max-height: 0;
-  margin-bottom: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-
-.queue-banner-enter-to,
-.queue-banner-leave-from {
-  opacity: 1;
-  max-height: 80px;
-}
-</style>

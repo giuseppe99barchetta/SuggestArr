@@ -38,25 +38,36 @@ export async function loadTrailerUrl(http, item) {
 }
 
 /**
- * Look a trailer up only once it is asked for, and open it in a new tab.
- * For lists too long to look every title up in advance.
+ * @param {string} url - A YouTube watch URL, as the API returns it.
+ * @returns {string|null} The privacy-enhanced embed URL that autoplays it; null when it is not a YouTube video.
+ */
+export function trailerEmbedUrl(url) {
+  let id;
+  try {
+    const parsed = new URL(url);
+    id = parsed.hostname === 'youtu.be' ? parsed.pathname.slice(1) : parsed.searchParams.get('v');
+  } catch {
+    return null;
+  }
+  if (!/^[A-Za-z0-9_-]{6,20}$/.test(id || '')) return null;
+  return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`;
+}
+
+/**
+ * Trailer, genres, runtime, cast and streaming services for the details modal, in one call.
  *
  * @param {{ get: Function }} http - axios, or anything with the same `get`.
- * @param {object|null} item - The listed title.
- * @param {Function} [openTab] - Opens a blank tab and returns its window.
- * @returns {Promise<'opened'|'blocked'|'none'>} 'none' when the title has no trailer,
- *   'blocked' when it has one but the browser refused to open a tab for it.
+ * @param {object|null} item - What the details modal shows.
+ * @returns {Promise<object|null>} The details; null when not applicable or the lookup fails.
  */
-export async function openTrailer(http, item, openTab = () => window.open('', '_blank')) {
-  // Opened before the lookup: a tab opened after waiting is blocked as a popup.
-  const tab = openTab();
-  const url = await loadTrailerUrl(http, item);
-  if (!url) {
-    tab?.close();
-    return 'none';
+export async function loadTitleDetails(http, item) {
+  const target = trailerTarget(item);
+  if (!target) return null;
+  try {
+    const { data } = await http.get(`/api/tmdb/details/${target.mediaType}/${target.tmdbId}`);
+    return data || null;
+  } catch {
+    // The modal still shows what the item itself carries.
+    return null;
   }
-  if (!tab) return 'blocked';
-  tab.opener = null;
-  tab.location.replace(url);
-  return 'opened';
 }

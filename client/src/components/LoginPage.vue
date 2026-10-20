@@ -1,78 +1,82 @@
 <template>
-  <div class="login-container">
-    <div class="login-card">
-      <img src="@/assets/logo.png" alt="SuggestArr" class="login-logo" />
+  <div class="flex min-h-screen items-center justify-center bg-canvas bg-[radial-gradient(ellipse_at_top,var(--color-brand-soft),transparent_65%)]">
+    <div class="w-full max-w-[380px] rounded-card border border-white/12 bg-panel/90 px-8 py-10 text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md">
+      <img src="@/assets/logo.png" alt="SuggestArr" class="mx-auto mb-5 h-[60px]" />
 
-      <h1>{{ cardTitle }}</h1>
-      <p class="login-subtitle">{{ cardSubtitle }}</p>
+      <h1 class="m-0 mb-1.5 text-2xl text-ink">{{ cardTitle }}</h1>
+      <p class="m-0 mb-7 text-sm text-ink-4">{{ cardSubtitle }}</p>
 
       <!-- Login / Setup / Register form -->
-      <form @submit.prevent="handleSubmit" class="login-form">
-        <div class="form-group">
-          <label for="login-username">Username</label>
+      <div v-if="statusUnavailable" class="ui-alert-bad" role="alert">
+        Authentication is temporarily unavailable. Please try again.
+        <button type="button" class="ui-btn-secondary mt-3" @click="loadStatus">Retry</button>
+      </div>
+      <form v-else @submit.prevent="handleSubmit" class="flex flex-col gap-4 text-left">
+        <label class="ui-label" for="login-username">
+          Username
           <input
             id="login-username"
             v-model="username"
             type="text"
-            class="form-input"
+            class="ui-input"
             placeholder="Username"
             autocomplete="username"
             required
             :disabled="loading"
           />
-        </div>
+        </label>
 
-        <div class="form-group">
-          <label for="login-password">Password</label>
+        <label class="ui-label" for="login-password">
+          Password
           <input
             id="login-password"
             v-model="password"
             type="password"
-            class="form-input"
+            class="ui-input"
             placeholder="Password"
             :autocomplete="isRegisterMode ? 'new-password' : 'current-password'"
             required
             :disabled="loading"
           />
-        </div>
+        </label>
 
-        <div v-if="isRegisterMode" class="form-group">
-          <label for="login-confirm-password">Confirm Password</label>
+        <label v-if="isRegisterMode" class="ui-label" for="login-confirm-password">
+          Confirm Password
           <input
             id="login-confirm-password"
             v-model="confirmPassword"
             type="password"
-            class="form-input"
+            class="ui-input"
             placeholder="Repeat password"
             autocomplete="new-password"
             required
             :disabled="loading"
           />
-        </div>
+        </label>
 
-        <p v-if="error" class="login-error">
-          <i class="fas fa-exclamation-circle"></i> {{ error }}
+        <p v-if="error" class="m-0 text-[0.85rem] text-bad">
+          <i aria-hidden="true" class="fas fa-exclamation-circle"></i> {{ error }}
         </p>
 
-        <p v-if="successMsg" class="login-success">
-          <i class="fas fa-check-circle"></i> {{ successMsg }}
+        <p v-if="successMsg" class="m-0 text-[0.85rem] text-good">
+          <i aria-hidden="true" class="fas fa-check-circle"></i> {{ successMsg }}
         </p>
 
-        <button type="submit" class="btn btn-primary login-btn" :disabled="loading">
-          <i :class="submitIcon"></i>
+        <button type="submit" class="ui-btn-primary mt-2 w-full" :disabled="loading">
+          <i aria-hidden="true" :class="submitIcon"></i>
           {{ submitLabel }}
         </button>
       </form>
 
       <!-- Register / Back-to-login toggle -->
-      <div v-if="!isSetupMode && allowRegistration" class="login-toggle">
+      <div v-if="!isSetupMode && allowRegistration" class="mt-5 text-center text-[0.85rem] text-ink-4">
         <span v-if="!isRegisterMode">
           Don't have an account?
-          <button class="toggle-link" @click="switchToRegister">Create one</button>
+          <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline underline-offset-2 hover:text-ink" @click="switchToRegister">Create one</button>
         </span>
         <span v-else>
           Already have an account?
-          <button class="toggle-link" @click="switchToLogin">Sign in</button>
+          <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline underline-offset-2 hover:text-ink" @click="switchToLogin">Sign in</button>
         </span>
       </div>
     </div>
@@ -101,6 +105,7 @@ export default {
     const isSetupMode = ref(false)
     const isRegisterMode = ref(false)
     const allowRegistration = ref(false)
+    const statusUnavailable = ref(true)
 
     const cardTitle = computed(() => {
       if (isSetupMode.value) return 'Create Admin Account'
@@ -127,19 +132,25 @@ export default {
       return 'Sign In'
     })
 
+    async function loadStatus() {
+      statusUnavailable.value = true
+      try {
+        const response = await axios.get('/api/auth/status', { _skipAuth: true })
+        isSetupMode.value = !response.data.auth_setup_complete
+        allowRegistration.value = !!response.data.allow_registration
+        statusUnavailable.value = false
+      } catch {
+        isSetupMode.value = false
+        allowRegistration.value = false
+      }
+    }
+
     onMounted(async () => {
       if (accessToken.value) {
         router.replace(route.query.redirect || '/dashboard')
         return
       }
-      try {
-        const response = await axios.get('/api/auth/status')
-        isSetupMode.value = !response.data.auth_setup_complete
-        allowRegistration.value = !!response.data.allow_registration
-      } catch {
-        isSetupMode.value = false
-        allowRegistration.value = false
-      }
+      await loadStatus()
     })
 
     function switchToRegister() {
@@ -190,7 +201,7 @@ export default {
 
     return {
       username, password, confirmPassword,
-      loading, error, successMsg,
+      loading, error, successMsg, statusUnavailable, loadStatus,
       isSetupMode, isRegisterMode, allowRegistration,
       cardTitle, cardSubtitle, submitIcon, submitLabel,
       handleSubmit, switchToRegister, switchToLogin,
@@ -198,124 +209,3 @@ export default {
   }
 }
 </script>
-
-<style scoped>
-.login-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-bg-primary);
-  background-image: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-}
-
-.login-card {
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: var(--border-radius-lg);
-  padding: 2.5rem 2rem;
-  width: 100%;
-  max-width: 380px;
-  text-align: center;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-}
-
-.login-logo {
-  height: 60px;
-  margin-bottom: 1.25rem;
-  display: initial !important;
-}
-
-h1 {
-  color: var(--color-text-primary);
-  font-size: 1.5rem;
-  margin: 0 0 0.4rem;
-}
-
-.login-subtitle {
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
-  margin: 0 0 1.75rem;
-}
-
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  text-align: left;
-}
-
-.form-control {
-  width: 100%;
-  padding: 0.75rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
-  color: var(--color-text-primary);
-  font-size: 1rem;
-  transition: var(--transition-base);
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  background: var(--color-bg-active);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.form-control:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.form-group label {
-  display: block;
-  color: var(--color-text-secondary);
-  font-size: 0.85rem;
-  margin-bottom: 0.35rem;
-}
-
-.login-error {
-  color: var(--color-danger);
-  font-size: 0.85rem;
-  margin: 0;
-}
-
-.login-btn {
-  width: 100%;
-  margin-top: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.login-success {
-  color: var(--color-success);
-  font-size: 0.85rem;
-  margin: 0;
-}
-
-.login-toggle {
-  margin-top: 1.25rem;
-  text-align: center;
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-}
-
-.toggle-link {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-primary);
-  font-size: inherit;
-  padding: 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.toggle-link:hover {
-  color: #c4b5fd;
-}
-</style>

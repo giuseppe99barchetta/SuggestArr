@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { loadTrailerUrl, openTrailer, trailerEndpoint, trailerTarget } from './trailer.js';
+import { loadTitleDetails, loadTrailerUrl, trailerEmbedUrl, trailerEndpoint, trailerTarget } from './trailer.js';
 
 test('a sent request is looked up by its TMDb id', () => {
   const target = trailerTarget({ request_id: '10950', media_type: 'movie' });
@@ -36,25 +36,21 @@ test('the trailer URL comes from the API, and is null when missing, failing or n
   assert.deepEqual(asked, Array(3).fill('/api/tmdb/trailer/movie/10950'));
 });
 
-test('a trailer asked for from a list opens in the tab prepared for it, which is closed when there is none', async () => {
-  const movie = { tmdb_id: 603, media_type: 'movie' };
-  const newTab = () => ({ opener: {}, closed: false, went: null, close() { this.closed = true; }, location: { replace(url) { tab.went = url; } } });
-
-  let tab = newTab();
-  assert.equal(await openTrailer({ get: async () => ({ data: { url: 'https://www.youtube.com/watch?v=abc' } }) }, movie, () => tab), 'opened');
-  assert.equal(tab.went, 'https://www.youtube.com/watch?v=abc');
-  assert.equal(tab.opener, null);
-  assert.equal(tab.closed, false);
-
-  tab = newTab();
-  assert.equal(await openTrailer({ get: async () => ({ data: { url: null } }) }, movie, () => tab), 'none');
-  assert.equal(tab.closed, true);
-  assert.equal(tab.went, null);
+test('a YouTube trailer plays in place through the privacy-enhanced embed', () => {
+  assert.equal(trailerEmbedUrl('https://www.youtube.com/watch?v=abc123XYZ_-'), 'https://www.youtube-nocookie.com/embed/abc123XYZ_-?autoplay=1&rel=0');
+  assert.equal(trailerEmbedUrl('https://youtu.be/abc123'), 'https://www.youtube-nocookie.com/embed/abc123?autoplay=1&rel=0');
+  assert.equal(trailerEmbedUrl('https://www.youtube.com/watch?v=a"b<c>d'), null);
+  assert.equal(trailerEmbedUrl('https://www.youtube.com/'), null);
+  assert.equal(trailerEmbedUrl('not a url'), null);
 });
 
-test('a trailer the browser refuses to open a tab for is reported as blocked, not as missing', async () => {
-  const movie = { tmdb_id: 603, media_type: 'movie' };
+test('title details come from the details API, and are null when failing or not applicable', async () => {
+  const asked = [];
+  const http = (answer) => ({ get: async (path) => { asked.push(path); return answer(); } });
+  const show = { tmdb_id: 1399, media_type: 'tv' };
 
-  assert.equal(await openTrailer({ get: async () => ({ data: { url: 'https://www.youtube.com/watch?v=abc' } }) }, movie, () => null), 'blocked');
-  assert.equal(await openTrailer({ get: async () => ({ data: { url: null } }) }, movie, () => null), 'none');
+  assert.deepEqual(await loadTitleDetails(http(() => ({ data: { genres: ['Drama'] } })), show), { genres: ['Drama'] });
+  assert.equal(await loadTitleDetails(http(() => { throw new Error('offline'); }), show), null);
+  assert.equal(await loadTitleDetails(http(() => ({ data: {} })), { media_type: 'tv' }), null);
+  assert.deepEqual(asked, Array(2).fill('/api/tmdb/details/tv/1399'));
 });

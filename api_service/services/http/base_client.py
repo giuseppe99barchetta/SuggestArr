@@ -3,6 +3,7 @@ Base HTTP client with shared session management for all API clients.
 """
 import aiohttp
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.http.guarded_session import GuardedSession
 
 
 class BaseHTTPClient:
@@ -24,6 +25,9 @@ class BaseHTTPClient:
         """Initialize base HTTP client with logger and session."""
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.session = None
+        self.private_urls = ()
+        self.allowed_urls = ()
+        self.guard_outbound = False
     
     async def _get_session(self) -> aiohttp.ClientSession:
         """
@@ -34,7 +38,11 @@ class BaseHTTPClient:
         """
         if self.session is None or self.session.closed:
             timeout = aiohttp.ClientTimeout(total=self.REQUEST_TIMEOUT)
-            self.session = aiohttp.ClientSession(timeout=timeout)
+            if self.guard_outbound:
+                self.session = GuardedSession(timeout=timeout, private_urls=self.private_urls,
+                                              allowed_urls=self.allowed_urls)
+            else:
+                self.session = aiohttp.ClientSession(timeout=timeout)
         return self.session
     
     async def close(self):

@@ -1,223 +1,163 @@
 <template>
-  <div class="settings-container" :class="{ 'static-bg-active': config.ENABLE_STATIC_BACKGROUND }">
-    <div class="background-container">
-      <template v-if="!config.ENABLE_STATIC_BACKGROUND">
-          <div
-            class="background-layer"
-            :class="activeBg === 'bg1' ? 'bg-visible' : 'bg-hidden'"
-            :style="{ backgroundImage: 'url(' + bg1Url + ')' }"
-          ></div>
-          <div
-            class="background-layer"
-            :class="activeBg === 'bg2' ? 'bg-visible' : 'bg-hidden'"
-            :style="{ backgroundImage: 'url(' + bg2Url + ')' }"
-          ></div>
-      </template>
-      <div
-        v-if="config.ENABLE_STATIC_BACKGROUND"
-        class="background-layer static-bg"
-        :style="{ backgroundColor: config.STATIC_BACKGROUND_COLOR }"
-      ></div>
-    </div>
-    <div v-if="currentUser" class="settings-content">
-      <!-- Header -->
-      <div class="settings-header">
+  <div class="min-h-screen bg-canvas text-ink font-sans">
+    <div v-if="currentUser" class="lg:flex">
+      <!-- Mobile top bar -->
+      <header class="lg:hidden sticky top-0 z-30 flex items-center gap-3 px-4 h-14 bg-side/95 backdrop-blur border-b border-edge">
+        <img src="@/assets/logo.png" alt="" class="w-8 h-8 object-contain" />
+        <span class="font-extrabold text-lg">SuggestArr</span>
+      </header>
 
-        <div class="header-content">
-          <a href="https://github.com/giuseppe99barchetta/SuggestArr" target="_blank" rel="noopener noreferrer">
-            <img src="@/assets/logo.png" alt="SuggestArr Logo" class="logo">
-          </a>
-          <button
-            v-if="authSetupComplete && !authBypass"
-            @click="handleLogout"
-            class="logout-btn"
-            title="Log out"
-          >
-            <i class="fas fa-sign-out-alt"></i>
-            <span class="logout-label">Log out</span>
-          </button>
-        </div>
-      </div>
+      <!-- Drawer backdrop (mobile) -->
+      <div v-if="showMobileNav" class="lg:hidden fixed inset-0 z-40 bg-black/60" @click="showMobileNav = false"></div>
 
-      <!-- Navigation Tabs -->
-      <!-- Desktop Navigation -->
-      <div class="tabs-navigation desktop-nav" data-tour-id="nav-tabs">
-        <button
-          v-for="tab in visibleTabs"
-          :key="tab.id"
-          :data-tour-id="tab.tourId || null"
-          @click="setActiveTab(tab.id)"
-          :class="['tab-button', { active: activeTab === tab.id }]"
+      <!-- Sidebar -->
+      <nav
+        aria-label="Main"
+        class="fixed inset-y-0 left-0 z-50 w-64 shrink-0 flex flex-col gap-6 px-3.5 py-5 bg-side border-r border-edge overflow-y-auto transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
+        :class="showMobileNav ? 'translate-x-0' : '-translate-x-full'"
+      >
+        <a
+          href="https://github.com/giuseppe99barchetta/SuggestArr"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="flex items-center gap-2.5 px-2 py-1 text-ink no-underline"
         >
-          <i :class="tab.icon"></i>
-          <span>{{ tab.name }}</span>
-          <span v-if="tab.isBeta" class="beta-badge">
-            BETA
-          </span>
-          <!-- Badge per Requests -->
-          <span v-if="tab.id === 'requests' && requestCount > 0" class="tab-badge">
-            {{ requestCount }}
-          </span>
-        </button>
-      </div>
+          <img src="@/assets/logo.png" alt="" class="w-[34px] h-[34px] object-contain" />
+          <span class="font-extrabold text-lg tracking-tight">SuggestArr</span>
+        </a>
 
-      <!-- Mobile Navigation -->
-      <div class="mobile-nav">
-        <div class="mobile-tab-selector">
-          <button 
-            @click="showMobileDropdown = !showMobileDropdown"
-            class="mobile-dropdown-button"
-            :class="{ active: showMobileDropdown }"
+        <div class="flex flex-col gap-0.5" data-tour-id="nav-tabs">
+          <template v-for="group in navGroups" :key="group.label">
+            <div v-if="group.label" class="px-3 pt-4 pb-1.5 text-[11px] font-bold uppercase tracking-widest text-ink-4">{{ group.label }}</div>
+            <router-link
+              v-for="tab in group.tabs"
+              :key="tab.id"
+              :to="{ name: 'DashboardTab', params: { tab: tab.id } }"
+              :data-tour-id="tab.tourId || null"
+              :aria-current="activeTab === tab.id ? 'page' : null"
+              class="flex items-center gap-3 px-3 py-2.5 rounded-ctl text-sm font-medium no-underline transition-colors"
+              :class="activeTab === tab.id ? 'bg-raised text-ink' : 'text-ink-3 hover:bg-panel hover:text-ink'"
+              @click="showMobileNav = false"
+            >
+              <i aria-hidden="true" :class="tab.icon" class="w-[18px] text-center"></i>
+              <span>{{ tab.name }}</span>
+              <span v-if="tab.id === 'requests' && requestCount > 0" class="ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
+            </router-link>
+          </template>
+        </div>
+
+        <div class="mt-auto flex flex-col gap-2.5">
+          <a
+            v-if="updateAvailable"
+            :href="`https://github.com/giuseppe99barchetta/SuggestArr/releases/latest`"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center gap-2 px-3 py-2.5 rounded-ctl bg-brand-soft/60 border border-brand-soft text-brand-ink text-[13px] font-semibold no-underline"
           >
-            <i :class="getCurrentTabIcon()"></i>
-            <span class="current-tab-name">{{ getCurrentTabName() }}</span>
-            <!-- Badge per Requests -->
-            <span v-if="currentTabId === 'requests' && requestCount > 0" class="tab-badge">
-              {{ requestCount }}
-            </span>
-            <i class="fas fa-chevron-down dropdown-arrow" :class="{ rotated: showMobileDropdown }"></i>
-          </button>
-          
-          <transition name="dropdown-slide">
-            <div v-if="showMobileDropdown" class="mobile-dropdown">
-              <button
-                v-for="tab in visibleTabs"
-                :key="tab.id"
-                @click="selectMobileTab(tab.id)"
-                :class="['mobile-dropdown-item', { active: activeTab === tab.id }]"
-              >
-                <i :class="tab.icon"></i>
-                <span>{{ tab.name }}</span>
-                <!-- Badge per Requests -->
-                <span v-if="tab.id === 'requests' && requestCount > 0" class="tab-badge">
-                  {{ requestCount }}
-                </span>
+            <i aria-hidden="true" class="fas fa-arrow-up"></i> Update available
+          </a>
+          <div class="flex items-center gap-2.5 p-2">
+            <UserAvatar :user="currentUser" class="h-8 w-8 text-[32px]" />
+            <div class="flex flex-col min-w-0">
+              <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }" class="text-[13px] font-semibold truncate text-ink no-underline hover:text-brand-ink" title="Your profile" @click="showMobileNav = false">{{ currentUser.username }}</router-link>
+              <button type="button" class="text-left text-xs text-ink-4 hover:text-ink-2 bg-transparent border-0 p-0 cursor-pointer" title="View changelog" @click="showChangelog">
+                {{ currentUser.role === 'admin' ? 'Admin' : 'User' }} · {{ currentVersion }}<span v-if="currentImageTag === 'nightly'"> (nightly)</span>
               </button>
             </div>
-          </transition>
-        </div>
-      </div>
-
-      <!-- Tab Content -->
-      <div class="tab-content">
-        <transition name="fade-slide" mode="out-in">
-          <component
-            v-if="activeTabComponent"
-            :key="activeTab"
-            :is="activeTabComponent"
-            :config="config"
-            :isLoading="isLoading"
-            :testingConnections="testingConnections"
-            :getServiceStatus="getServiceStatus"
-            :getServiceIcon="getServiceIcon"
-            @save-section="saveSection"
-            @test-connection="testConnection"
-            @export-config="showExportModal = true"
-            @import-config="importConfig"
-            @reset-config="showResetModal = true"
-          />
-        </transition>
-      </div>
-
-      <!-- Footer -->
-      <div class="settings-footer">
-        <div class="footer-info">
-          <button
-            @click="restartTour"
-            class="changelog-btn"
-            title="Replay the onboarding tour"
-          >
-            <i class="fas fa-question-circle"></i>
-          </button>
-          <div class="version-info">
-            <button
-              type="button"
-              class="version-text-container"
-              title="View changelog for current version"
-              @click="showChangelog"
-            >
-              <span>SuggestArr {{ currentVersion }}</span>
-              <span 
-                v-if="currentImageTag === 'nightly'" 
-                class="nightly-badge"
-              >
-                ({{ currentImageTag }})
-              </span>
+            <button type="button" class="ml-auto w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="Replay the onboarding tour" title="Replay the onboarding tour" @click="restartTour">
+              <i aria-hidden="true" class="fas fa-question-circle"></i>
             </button>
-            <button 
-              @click="checkForUpdates" 
-              :disabled="updateAvailable === null"
-              class="version-check-btn"
-              :class="{ 'update-available': updateAvailable }"
-              :title="updateAvailable ? `Update available!` : 'Check for updates'"
-            >
-              <i :class="updateAvailable === null ? 'fas fa-spinner fa-spin' : updateAvailable ? 'fas fa-arrow-up' : 'fas fa-sync'"></i>
-              <span v-if="updateAvailable" class="update-indicator">Update</span>
+            <button v-if="authSetupComplete && !authBypass" type="button" class="w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="Log out" title="Log out" @click="handleLogout">
+              <i aria-hidden="true" class="fas fa-sign-out-alt"></i>
             </button>
           </div>
         </div>
+      </nav>
 
-        <AppFooter />
-      </div>
+      <!-- Content -->
+      <main class="flex-1 min-w-0 min-h-screen flex flex-col px-4 sm:px-8 lg:px-12 pt-6 lg:pt-8 pb-28 lg:pb-12">
+        <div class="max-w-[1240px] w-full mx-auto flex-1 flex flex-col">
+          <!-- flex-1 keeps the footer at the bottom while the out-in transition leaves this empty. -->
+          <div class="flex-1">
+          <transition mode="out-in" enter-active-class="transition duration-300" leave-active-class="transition duration-300" enter-from-class="translate-x-5 opacity-0" leave-to-class="-translate-x-5 opacity-0">
+            <component
+              v-if="activeTabComponent"
+              :key="activeTab"
+              :is="activeTabComponent"
+              :config="config"
+              :current-user="currentUser"
+              :section="activeTabSection"
+              :isLoading="isLoading || isSaving"
+              :testingConnections="testingConnections"
+              @save-section="saveSection"
+              @test-connection="testConnection"
+              @export-config="showExportModal = true"
+              @import-config="importConfig"
+              @reset-config="showResetModal = true"
+              @profile-updated="fetchMe"
+            />
+          </transition>
+          </div>
+          <AppFooter :is-admin="currentUser?.role === 'admin'" />
+        </div>
+      </main>
+
+      <!-- Mobile bottom navigation -->
+      <nav aria-label="Quick" class="lg:hidden fixed bottom-0 inset-x-0 z-30 grid grid-flow-col auto-cols-fr px-2 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-side border-t border-edge">
+        <router-link
+          v-for="tab in quickTabs"
+          :key="tab.id"
+          :to="{ name: 'DashboardTab', params: { tab: tab.id } }"
+          class="relative flex flex-col items-center gap-1 py-2 text-[11px] font-semibold no-underline"
+          :class="activeTab === tab.id ? 'text-brand-ink' : 'text-ink-3'"
+        >
+          <i aria-hidden="true" :class="tab.icon" class="text-lg"></i>
+          {{ tab.name }}
+          <span v-if="tab.id === 'requests' && requestCount > 0" class="absolute top-0.5 left-1/2 ml-2 text-[10px] font-bold px-1.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
+        </router-link>
+        <button type="button" class="flex flex-col items-center gap-1 py-2 text-[11px] font-semibold text-ink-3 bg-transparent border-0 cursor-pointer" :aria-expanded="showMobileNav ? 'true' : 'false'" @click="showMobileNav = true">
+          <i aria-hidden="true" class="fas fa-bars text-lg"></i>
+          More
+        </button>
+      </nav>
 
       <!-- Loading Overlay -->
-      <transition name="fade">
-        <div v-if="isLoading" class="loading-overlay">
-          <div class="loading-content">
-            <div class="spinner"></div>
+      <transition enter-active-class="transition-opacity duration-300" leave-active-class="transition-opacity duration-300" enter-from-class="opacity-0" leave-to-class="opacity-0">
+        <div v-if="isLoading" class="fixed inset-0 z-[1000] flex items-center justify-center bg-canvas/90">
+          <div class="text-center text-ink">
+            <div class="mx-auto mb-4 h-11 w-11 animate-spin rounded-full border-4 border-edge-strong border-t-brand"></div>
             <p>{{ loadingMessage }}</p>
           </div>
         </div>
       </transition>
 
-      <!-- Changelog Modal -->
-      <transition name="fade">
-        <div v-if="showChangelogModal" class="modal-overlay" @click.self="showChangelogModal = false">
-          <div class="modal-content changelog-modal">
-            <div class="modal-header">
-              <i class="fab fa-github changelog-icon"></i>
-              <h3>Changelog - {{ currentVersion }}</h3>
-            </div>
-            
-            <div class="modal-body changelog-body">
-              <div v-if="isLoadingChangelog" class="changelog-loading">
-                <i class="fas fa-spinner fa-spin"></i>
-                <span>Loading changelog...</span>
-              </div>
-              
-              <div v-else-if="changelogError" class="changelog-error">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span>{{ changelogError }}</span>
-                <button @click="showChangelog" class="btn btn-secondary btn-sm">Retry</button>
-              </div>
-              
-              <div v-else class="changelog-content">
-                <div v-if="changelogData" v-html="changelogData"></div>
-                <div v-else class="no-changelog">
-                  <i class="fas fa-info-circle"></i>
-                  <span>No changelog available for this version</span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="modal-actions">
-              <a 
-                :href="`https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${currentVersion}`" 
-                target="_blank" 
-                class="btn btn-outline"
-                v-if="changelogData"
-              >
-                <i class="fas fa-external-link-alt"></i>
-                View on GitHub
-              </a>
-              <button @click="showChangelogModal = false" class="btn btn-primary">
-                <i class="fas fa-times"></i>
-                Close
-              </button>
-            </div>
-          </div>
+      <AppDialog v-if="showChangelogModal" width="max-w-3xl" :title="`What's new in ${currentVersion}`" :subtitle="changelogSubtitle" icon="fas fa-gift" @close="showChangelogModal = false">
+        <div v-if="isLoadingChangelog" class="flex flex-col gap-3 py-2" aria-busy="true" aria-label="Loading changelog">
+          <div class="h-3 w-4/5 animate-pulse rounded bg-panel-2"></div>
+          <div class="h-3 w-3/5 animate-pulse rounded bg-panel-2"></div>
+          <div class="mt-4 h-4 w-2/5 animate-pulse rounded bg-panel-2"></div>
+          <div class="h-3 w-11/12 animate-pulse rounded bg-panel-2"></div>
+          <div class="h-3 w-3/4 animate-pulse rounded bg-panel-2"></div>
+          <div class="h-3 w-5/6 animate-pulse rounded bg-panel-2"></div>
         </div>
-      </transition>
+        <div v-else-if="changelogError" class="flex flex-col items-center gap-3 py-10 text-center">
+          <p class="ui-alert-bad">{{ changelogError }}</p>
+          <button type="button" class="ui-btn" @click="showChangelog">
+            <i aria-hidden="true" class="fas fa-redo"></i>Retry
+          </button>
+        </div>
+        <div v-else-if="changelogData" class="release-notes" v-html="changelogData"></div>
+        <div v-else class="flex flex-col items-center gap-2 py-10 text-center text-sm text-ink-3">
+          <i aria-hidden="true" class="fas fa-file-alt text-2xl text-ink-4"></i>
+          No changelog available for this version.
+        </div>
+        <template #footer>
+          <a :href="changelogUrl" target="_blank" rel="noopener" class="ui-btn mr-auto no-underline">
+            <i aria-hidden="true" class="fas fa-external-link-alt"></i>View on GitHub
+          </a>
+          <button type="button" class="ui-btn-primary" @click="showChangelogModal = false">Close</button>
+        </template>
+      </AppDialog>
 
       <!-- Hidden file input for import -->
       <input
@@ -228,94 +168,42 @@
         style="display: none"
       />
 
-      <!-- Export Configuration Modal -->
-      <transition name="fade">
-        <div v-if="showExportModal" class="modal-overlay" @click.self="showExportModal = false">
-          <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
-            <div class="modal-header">
-              <div class="modal-title-wrap">
-                <h3 class="modal-title" id="export-modal-title">
-                  <i class="fas fa-download"></i> Export Configuration
-                </h3>
-                <p class="modal-subtitle">Download a JSON snapshot of your settings.</p>
-              </div>
-              <button type="button" class="modal-close" aria-label="Close export modal" @click="showExportModal = false">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
-
-            <div class="modal-body">
-              <p>Non-secret settings, media user identities, and Trakt account metadata are included by default. Live credentials are redacted unless you opt in below.</p>
-              <label class="export-sensitive-option">
-                <input v-model="exportIncludeSecrets" type="checkbox">
-                Include all secrets (full backup)
-              </label>
-              <p v-if="exportIncludeSecrets" class="export-sensitive-warning">
-                <i class="fas fa-exclamation-triangle"></i>
-                This export will contain API keys, tokens, and passwords. Do not share it for troubleshooting or attach it to public issues.
-              </p>
-            </div>
-
-            <div class="modal-footer">
-              <button @click="showExportModal = false" class="btn btn-outline">
-                <i class="fas fa-times"></i>
-                Cancel
-              </button>
-              <button @click="confirmExportConfig" class="btn btn-primary">
-                <i class="fas fa-download"></i>
-                Export
-              </button>
-            </div>
-          </div>
+      <AppDialog v-if="showExportModal" title="Export configuration" subtitle="Download a JSON snapshot of your settings." icon="fas fa-download" @close="showExportModal = false">
+        <div class="flex flex-col gap-4 text-sm leading-relaxed text-ink-2">
+          <p class="m-0">Settings, media user identities and Trakt account metadata are included. Credentials are redacted unless you include them.</p>
+          <label class="flex cursor-pointer items-start gap-3 rounded-ctl border border-edge-strong bg-panel-2 p-3">
+            <input v-model="exportIncludeSecrets" type="checkbox" class="mt-1 accent-brand">
+            <span class="font-semibold text-ink">Include secrets<span class="block text-xs font-normal text-ink-3">API keys, tokens and passwords, for a full backup.</span></span>
+          </label>
+          <p v-if="exportIncludeSecrets" class="ui-alert-bad" role="alert">
+            <i aria-hidden="true" class="fas fa-exclamation-triangle mr-1 text-bad"></i>Keep this file private. Do not attach it to issues or share it for troubleshooting.
+          </p>
         </div>
-      </transition>
+        <template #footer>
+          <button type="button" class="ui-btn" @click="showExportModal = false">Cancel</button>
+          <button type="button" class="ui-btn-primary" @click="confirmExportConfig"><i aria-hidden="true" class="fas fa-download"></i>Export</button>
+        </template>
+      </AppDialog>
 
-      <!-- Reset Confirmation Modal -->
-      <transition name="fade">
-        <div v-if="showResetModal" class="modal-overlay" @click.self="showResetModal = false">
-          <div class="modal modal--sm" role="dialog" aria-modal="true" aria-labelledby="reset-modal-title">
-            <div class="modal-header modal-header--danger">
-              <div class="modal-title-wrap">
-                <h3 class="modal-title" id="reset-modal-title">
-                  <i class="fas fa-exclamation-triangle"></i> Confirm Reset
-                </h3>
-                <p class="modal-subtitle">This action is permanent and cannot be undone.</p>
-              </div>
-              <button type="button" class="modal-close" aria-label="Close reset modal" @click="showResetModal = false">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
-
-            <div class="modal-body">
-              <p>Are you sure you want to reset all settings to default? This will:</p>
-              <ul class="reset-warning-list">
-                <li><i class="fas fa-times-circle"></i> Clear all service connections</li>
-                <li><i class="fas fa-times-circle"></i> Remove all custom filters</li>
-                <li><i class="fas fa-times-circle"></i> Reset scheduling preferences</li>
-                <li><i class="fas fa-times-circle"></i> Clear database configuration</li>
-              </ul>
-            </div>
-
-            <div class="modal-footer">
-              <button @click="showResetModal = false" class="btn btn-outline">
-                <i class="fas fa-times"></i>
-                Cancel
-              </button>
-              <button @click="confirmReset" class="btn btn-danger">
-                <i class="fas fa-exclamation-triangle"></i>
-                Yes, Reset Everything
-              </button>
-            </div>
-          </div>
-        </div>
-      </transition>
+      <AppDialog v-if="showResetModal" title="Reset all settings?" subtitle="This cannot be undone." icon="fas fa-exclamation-triangle" tone="danger" @close="showResetModal = false">
+        <p class="m-0 mb-3 text-sm text-ink-2">Everything goes back to defaults:</p>
+        <ul class="m-0 flex list-none flex-col gap-2 rounded-ctl border border-bad/30 bg-bad/5 p-4 text-sm text-ink-2">
+          <li v-for="item in ['Service connections', 'Custom filters', 'Schedules', 'Database configuration']" :key="item">
+            <i aria-hidden="true" class="fas fa-times mr-2 w-3 text-bad"></i>{{ item }}
+          </li>
+        </ul>
+        <template #footer>
+          <button type="button" class="ui-btn" @click="showResetModal = false">Cancel</button>
+          <button type="button" class="ui-btn-danger" @click="confirmReset">Reset everything</button>
+        </template>
+      </AppDialog>
 
     </div>
 
-    <div v-else class="settings-content">
-      <div class="loading-overlay">
-        <div class="loading-content">
-          <div class="spinner"></div>
+    <div v-else>
+      <div class="fixed inset-0 z-[1000] flex items-center justify-center bg-canvas/90">
+        <div class="text-center text-ink">
+          <div class="mx-auto mb-4 h-11 w-11 animate-spin rounded-full border-4 border-edge-strong border-t-brand"></div>
           <p>Loading dashboard...</p>
         </div>
       </div>
@@ -324,45 +212,58 @@
     <!-- Onboarding Tour -->
     <OnboardingTour
       :active="showTour"
-      :steps="tourSteps"
+      :steps="visibleTourSteps"
       @done="showTour = false"
     />
   </div>
 </template>
 
 <script>
+import { defineAsyncComponent } from 'vue';
 import axios from 'axios';
 import AppFooter from './AppFooter.vue';
+import AppDialog from './ui/AppDialog.vue';
+import UserAvatar from './ui/UserAvatar.vue';
 import OnboardingTour from './OnboardingTour.vue';
-import { useBackgroundImage } from '@/composables/useBackgroundImage';
 import { useVersionCheck } from '@/composables/useVersionCheck';
 import { useAuth } from '@/composables/useAuth';
-import '@/assets/styles/dashboardPage.css';
+import { approvalEnabled } from '@/utils/requestApproval';
+import { releaseNotesToHtml } from '@/utils/markdown';
 
-// Import tab components
-import SettingsServices from './settings/SettingsServices.vue';
-import SettingsDatabase from './settings/SettingsDatabase.vue';
-import SettingsAdvanced from './settings/SettingsAdvanced.vue';
-import SettingsRequests from './settings/SettingsRequests.vue';
-import SettingsJobs from './settings/SettingsJobs.vue';
-import AiSearchPage from './settings/AiSearchPage.vue';
-import LogsComponent from './LogsComponent.vue';
-import UserManagement from './settings/UserManagement.vue';
-import UserProfile from './settings/UserProfile.vue';
+import HomePage from './HomePage.vue';
 import { exportConfig, importConfig } from '@/api/api';
 import { getReleaseByTag } from '@/api/githubReleasesApi';
+import { REQUESTS_CHANGED } from '@/utils/requestEvents.js';
+
+// Tabs load on first visit to keep the dashboard chunk small.
+const SettingsServices = defineAsyncComponent(() => import('./settings/SettingsServices.vue'));
+const SettingsDatabase = defineAsyncComponent(() => import('./settings/SettingsDatabase.vue'));
+const SettingsAdvanced = defineAsyncComponent(() => import('./settings/SettingsAdvanced.vue'));
+const SettingsWebhooks = defineAsyncComponent(() => import('./settings/SettingsWebhooks.vue'));
+const SettingsCleanup = defineAsyncComponent(() => import('./settings/SettingsCleanup.vue'));
+const RequestsPage = defineAsyncComponent(() => import('./RequestsPage.vue'));
+const SettingsJobs = defineAsyncComponent(() => import('./settings/SettingsJobs.vue'));
+const AiSearchPage = defineAsyncComponent(() => import('./settings/AiSearchPage.vue'));
+const LogsComponent = defineAsyncComponent(() => import('./LogsComponent.vue'));
+const UserManagement = defineAsyncComponent(() => import('./settings/UserManagement.vue'));
+const UserProfile = defineAsyncComponent(() => import('./settings/UserProfile.vue'));
 
 const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
 
 export default {
   name: 'SettingsPage',
   components: {
+    UserAvatar,
+    AppDialog,
     AppFooter,
     OnboardingTour,
     SettingsServices,
     SettingsDatabase,
     SettingsAdvanced,
-    SettingsRequests,
+    SettingsWebhooks,
+    SettingsCleanup,
+    HomePage,
+    RequestsPage,
     SettingsJobs,
     AiSearchPage,
     LogsComponent,
@@ -370,18 +271,10 @@ export default {
     UserProfile,
   },
   setup() {
-    const { bg1Url, bg2Url, activeBg, isTransitioning, startDefaultImageRotation, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
     const { currentVersion, currentImageTag, currentBuildDate, updateAvailable, checkForUpdates } = useVersionCheck();
     const { authSetupComplete, authBypass, logout } = useAuth();
 
     return {
-      bg1Url,
-      bg2Url,
-      activeBg,
-      isTransitioning,
-      startDefaultImageRotation,
-      startBackgroundImageRotation,
-      stopBackgroundImageRotation,
       currentVersion,
       currentImageTag,
       currentBuildDate,
@@ -397,19 +290,21 @@ export default {
       currentUser: null,
       config: {},
       isLoading: false,
+      // Section saves only disable the form; the full-screen overlay is for config-wide loads.
+      isSaving: false,
       loadingMessage: 'Processing...',
-      activeTab: 'requests',
       showResetModal: false,
       showExportModal: false,
       exportIncludeSecrets: false,
       showChangelogModal: false,
       changelogData: null,
+      changelogRelease: null,
       isLoadingChangelog: false,
       changelogError: null,
       requestCount: 0,
-      showMobileDropdown: false,
+      requestCountCall: 0,
+      showMobileNav: false,
       showTour: false,
-      // Cache per migliorare performance
       testingConnections: {
         tmdb: false,
         plex: false,
@@ -418,69 +313,85 @@ export default {
         database: false,
       },
       tabs: [
-        { id: 'requests',  name: 'Requests',  icon: 'fas fa-paper-plane', tourId: 'tab-requests' },
-        { id: 'ai_search', name: 'AI Search', icon: 'fas fa-magic',       isBeta: true,           tourId: 'tab-ai-search' },
-        { id: 'services',  name: 'Services',  icon: 'fas fa-plug',         tourId: 'tab-services', adminOnly: true },
-        { id: 'jobs',      name: 'Jobs',       icon: 'fas fa-briefcase',   tourId: 'tab-jobs' },
-        { id: 'database',  name: 'Database',  icon: 'fas fa-database',     tourId: 'tab-database', adminOnly: true },
-        { id: 'advanced',  name: 'Advanced',  icon: 'fas fa-sliders-h',   tourId: 'tab-advanced', adminOnly: true },
-        { id: 'users',     name: 'Users',      icon: 'fas fa-users',       adminOnly: true },
-        { id: 'profile',   name: 'Profile',    icon: 'fas fa-user-circle', nonAdminOnly: true },
-        { id: 'logs',      name: 'Logs',       icon: 'fas fa-file-alt',    tourId: 'tab-logs', adminOnly: true },
+        { id: 'home',      name: 'Home',        icon: 'fas fa-home',        group: 'main',     permission: 'requests' },
+        { id: 'requests',  name: 'Requests',    icon: 'fas fa-inbox',       group: 'main',     tourId: 'tab-requests' },
+        { id: 'ai_search', name: 'AI Search',   icon: 'fas fa-magic',       group: 'main',     tourId: 'tab-ai-search' },
+        { id: 'jobs',      name: 'Jobs',        icon: 'fas fa-clock',       group: 'main',     tourId: 'tab-jobs' },
+        { id: 'services',    name: 'Connections', icon: 'fas fa-plug',          group: 'settings', tourId: 'tab-services', adminOnly: true },
+        { id: 'ai_provider', name: 'AI provider', icon: 'fas fa-robot',         group: 'settings', tourId: 'tab-advanced', adminOnly: true, section: 'ai' },
+        { id: 'approvals',   name: 'Approvals',   icon: 'fas fa-user-check',    group: 'settings', adminOnly: true, section: 'workflow' },
+        { id: 'users',       name: 'Users',       icon: 'fas fa-users',         group: 'settings', adminOnly: true },
+        { id: 'profile',     name: 'Profile',     icon: 'fas fa-user-circle',   group: 'settings' },
+        { id: 'webhooks',    name: 'Webhooks',    icon: 'fas fa-link',          group: 'system',   adminOnly: true },
+        { id: 'cleanup',     name: 'Cleanup',     icon: 'fas fa-broom',         group: 'system',   adminOnly: true },
+        { id: 'database',    name: 'Database',    icon: 'fas fa-database',      group: 'system',   tourId: 'tab-database', adminOnly: true },
+        { id: 'system',      name: 'System',      icon: 'fas fa-sliders-h',     group: 'system',   adminOnly: true, section: 'system' },
+        { id: 'logs',        name: 'Logs',        icon: 'fas fa-terminal',      group: 'system',   tourId: 'tab-logs', adminOnly: true },
       ],
       tourSteps: [
         {
           targetId: 'nav-tabs',
           title: 'Welcome to SuggestArr!',
-          description: 'These tabs give you access to all features. Let\'s take a quick look at each one.',
-          position: 'bottom',
+          description: 'This menu gives you access to every feature. Let\'s take a quick look at each one.',
+          position: 'right',
         },
         {
           targetId: 'tab-requests',
           title: 'Requests',
           description: 'Every time SuggestArr runs, it submits content requests to Seer. You can track them all here — what was requested, when, and for which user.',
-          position: 'bottom',
+          position: 'right',
         },
         {
           targetId: 'tab-jobs',
           title: 'Jobs',
           description: 'Jobs control when and how SuggestArr runs. You can create multiple jobs with different schedules, filters, media types, and user selections.',
-          position: 'bottom',
+          position: 'right',
         },
         {
           targetId: 'tab-services',
-          title: 'Services',
+          title: 'Connections',
           description: 'Update your API keys and connection settings for TMDB, your media server (Jellyfin, Plex…), and Seer here.',
-          position: 'bottom',
+          position: 'right',
         },
         {
           targetId: 'tab-ai-search',
           title: 'AI Search',
           description: 'Describe what you\'re in the mood for in plain language — "a tense thriller set in space" — and SuggestArr uses an LLM to find and request matching titles for you.',
-          position: 'bottom',
+          position: 'right',
         },
         {
           targetId: 'tab-database',
           title: 'Database',
           description: 'By default SuggestArr uses SQLite (zero setup). Switch here to PostgreSQL, MySQL, or MariaDB if you need a shared or more scalable database.',
-          position: 'bottom',
+          position: 'right',
         },
         {
           targetId: 'tab-advanced',
-          title: 'Advanced',
-          description: 'Fine-tune behaviour: configure an LLM for AI-enhanced recommendations, adjust the recommendation algorithm, set a custom base path, and more.',
-          position: 'bottom',
+          title: 'AI provider',
+          description: 'Connect a language model for AI Search and AI recommendations. Approvals, webhooks, cleanup and system settings each have their own page below.',
+          position: 'right',
         },
         {
           targetId: 'tab-logs',
           title: 'Logs',
           description: 'View real-time application logs to debug issues, monitor job execution, or check why a specific request was skipped.',
-          position: 'bottom',
+          position: 'right',
         },
       ],
     };
   },
   computed: {
+    changelogUrl() {
+      return this.changelogRelease?.html_url
+        || `https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${this.currentVersion}`;
+    },
+    changelogSubtitle() {
+      const release = this.changelogRelease;
+      if (!release?.published_at) return '';
+      const date = new Date(release.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+      const name = release.name && release.name !== release.tag_name ? `${release.name} · ` : '';
+      return `${name}Released ${date}${release.prerelease ? ' · Pre-release' : ''}`;
+    },
     visibleTabs() {
       if (!this.currentUser) {
         return [];
@@ -496,8 +407,7 @@ export default {
 
       return this.tabs.filter(tab => {
         if (tab.adminOnly && !isAdmin) return false;
-        if (tab.nonAdminOnly && isAdmin) return false;
-        if (!isAdmin && allowedTabs.size > 0 && !allowedTabs.has(tab.id)) return false;
+        if (!isAdmin && allowedTabs.size > 0 && !allowedTabs.has(tab.permission || tab.id)) return false;
         return true;
       });
     },
@@ -507,11 +417,16 @@ export default {
         return null;
       }
       const componentMap = {
-        requests: 'SettingsRequests',
+        home: 'HomePage',
+        requests: 'RequestsPage',
         services: 'SettingsServices',
         jobs: 'SettingsJobs',
         database: 'SettingsDatabase',
-        advanced: 'SettingsAdvanced',
+        ai_provider: 'SettingsAdvanced',
+        approvals: 'SettingsAdvanced',
+        system: 'SettingsAdvanced',
+        webhooks: 'SettingsWebhooks',
+        cleanup: 'SettingsCleanup',
         logs: 'LogsComponent',
         ai_search: 'AiSearchPage',
         users: 'UserManagement',
@@ -519,37 +434,35 @@ export default {
       };
       return componentMap[this.activeTab] ?? null;
     },
-    currentTabId() {
-      return this.activeTab;
+    activeTabSection() {
+      return this.tabs.find(tab => tab.id === this.activeTab)?.section;
+    },
+    activeTab() {
+      const requested = this.normalizeTabId(this.$route.params.tab);
+      if (requested && this.visibleTabs.some(tab => tab.id === requested)) return requested;
+      return this.visibleTabs[0]?.id ?? 'requests';
+    },
+    navGroups() {
+      return [
+        { label: '', tabs: this.visibleTabs.filter(tab => tab.group === 'main') },
+        { label: 'Settings', tabs: this.visibleTabs.filter(tab => tab.group === 'settings') },
+        { label: 'System', tabs: this.visibleTabs.filter(tab => tab.group === 'system') },
+      ].filter(group => group.tabs.length);
+    },
+    // Steps for tabs this user cannot see would point at nothing.
+    visibleTourSteps() {
+      const visibleTourIds = new Set(this.visibleTabs.map(tab => tab.tourId).filter(Boolean));
+      return this.tourSteps.filter(step => step.targetId === 'nav-tabs' || visibleTourIds.has(step.targetId));
+    },
+    quickTabs() {
+      return this.visibleTabs.filter(tab => tab.group === 'main');
     },
   },
   watch: {
-    isTransitioning(newValue) {
-      if (newValue) {
-        // Handle background transition state if needed
-      }
-    },
-    currentUser: {
-      // immediate: true ensures the guard runs at mount time even if
-      // currentUser is already populated before the watcher is registered.
-      immediate: true,
-      handler() {
-        this.ensureValidActiveTab();
-      },
-    },
-    activeTab(newTab) {
-      if (!this.visibleTabs.some(tab => tab.id === newTab)) {
-        this.ensureValidActiveTab();
-      }
-    },
-    'config.ENABLE_STATIC_BACKGROUND': {
-      handler(newValue) {
-        if (newValue) {
-          this.stopBackgroundImageRotation();
-        } else {
-          this.startBackgroundImageRotation();
-        }
-      }
+    // The badge was only counted once at load; recount when moving between pages so
+    // suggestions created by a job run in the meantime show up too.
+    activeTab() {
+      this.loadRequestCount();
     },
     'config.ENABLE_VISUAL_EFFECTS': {
       immediate: true,
@@ -562,7 +475,12 @@ export default {
       }
     }
   },
+  beforeUnmount() {
+    window.removeEventListener(REQUESTS_CHANGED, this.loadRequestCount);
+  },
   async mounted() {
+    // Pages fire this after approving, rejecting or marking suggestions seen.
+    window.addEventListener(REQUESTS_CHANGED, this.loadRequestCount);
     try {
       // Ensure auth is fully initialized before making protected API calls
       const { waitForAuthReady } = await import("@/composables/useAuth");
@@ -578,15 +496,7 @@ export default {
         await this.loadConfig();
       }
 
-      // Re-validate after config+auth are settled, in case currentUser
-      // was populated after the initial watcher run.
-      this.ensureValidActiveTab();
-
       this.loadRequestCount();
-
-      if (!this.config.ENABLE_STATIC_BACKGROUND) {
-        this.startBackgroundImageRotation();
-      }
 
       // Auto-start tour on first visit or when ?tour=1 is in the URL
       const tourDone = localStorage.getItem(TOUR_STORAGE_KEY);
@@ -603,7 +513,10 @@ export default {
   },
   methods: {
     normalizeTabId(tabId) {
+      if (!tabId) return '';
       if (tabId === 'suggestions') return 'requests';
+      // The Advanced page was split into its own sections.
+      if (tabId === 'advanced') return 'ai_provider';
       if (tabId === 'ai-search') {
         return 'ai_search';
       }
@@ -653,28 +566,6 @@ export default {
       localStorage.removeItem(TOUR_STORAGE_KEY);
       this.showTour = true;
     },
-    setActiveTab(id) {
-      if (this.visibleTabs.some(tab => tab.id === id)) {
-        this.activeTab = id;
-      }
-    },
-    ensureValidActiveTab() {
-      if (!this.visibleTabs.some(tab => tab.id === this.activeTab)) {
-        this.activeTab = this.visibleTabs[0]?.id ?? 'requests';
-      }
-    },
-    selectMobileTab(tabId) {
-      this.setActiveTab(tabId);
-      this.showMobileDropdown = false;
-    },
-    getCurrentTabName() {
-      const currentTab = this.visibleTabs.find(tab => tab.id === this.activeTab);
-      return currentTab ? currentTab.name : '';
-    },
-    getCurrentTabIcon() {
-      const currentTab = this.visibleTabs.find(tab => tab.id === this.activeTab);
-      return currentTab ? currentTab.icon : 'fas fa-question';
-    },
     async loadConfig() {
       this.loadingMessage = 'Loading configuration...';
       this.isLoading = true;
@@ -708,17 +599,21 @@ export default {
     },
 
     async loadRequestCount() {
+      // Counts can overlap (an approval event and a tab switch at once). Only the
+      // newest call may write the badge, so an older, slower answer cannot put a
+      // stale count back.
+      const call = ++this.requestCountCall;
       try {
         const jobs = await axios.get('/api/jobs', { timeout: 5000 });
-        if (!(jobs.data.jobs || []).some(job => job.delivery_mode === 'manual')) {
-          this.requestCount = 0;
+        if (!approvalEnabled(jobs.data)) {
+          if (call === this.requestCountCall) this.requestCount = 0;
           return;
         }
         const response = await axios.get('/api/automation/requests/workflow', {
           params: { status: 'awaiting_approval', page: 1, per_page: 1 },
           timeout: 5000 // 5 second timeout
         });
-        this.requestCount = response.data.total || 0;
+        if (call === this.requestCountCall) this.requestCount = response.data.total || 0;
       } catch (error) {
         console.error('Error loading request count:', error);
       }
@@ -734,9 +629,9 @@ export default {
           // Get release info from GitHub API
           const response = await getReleaseByTag(this.currentVersion);
           
+          this.changelogRelease = response.data || null;
           if (response.data && response.data.body) {
-            // Convert markdown to basic HTML
-            this.changelogData = this.parseMarkdown(response.data.body);
+            this.changelogData = releaseNotesToHtml(response.data.body);
           } else {
             this.changelogData = null;
           }
@@ -749,42 +644,17 @@ export default {
       }
     },
 
-    parseMarkdown(markdown) {
-      if (!markdown) return '';
-
-      // Escape HTML entities first to prevent XSS
-      const escaped = markdown
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-
-      // Basic markdown to HTML conversion (on escaped input)
-      return escaped
-        // Headers
-        .replace(/^### (.*$)/gim, '<h4>$1</h4>')
-        .replace(/^## (.*$)/gim, '<h3>$1</h3>')
-        .replace(/^# (.*$)/gim, '<h2>$1</h2>')
-        // Bold
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        // Italic
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        // Links (href is already entity-encoded from the escape step)
-        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
-        // Line breaks
-        .replace(/\n/g, '<br>')
-        // Lists (basic)
-        .replace(/^- (.+)$/gim, '<li>$1</li>')
-        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-    },
-
     async saveSection({ section, data }) {
-      this.loadingMessage = `Saving ${section} settings...`;
-      this.isLoading = true;
+      this.isSaving = true;
       const oldSubpath = (this.config.SUBPATH || '').replace(/\/$/, '');
       try {
         await axios.post(`/api/config/section/${section}`, data);
-        Object.assign(this.config, data);
+        // Unchanged secrets are sent as the '***' sentinel. Copying that back would
+        // replace the real value held here, and anything that later reads it from
+        // this config (the Users page loading Plex accounts) would send '***' on.
+        for (const [key, value] of Object.entries(data)) {
+          if (value !== '***') this.config[key] = value;
+        }
 
         // After saving advanced settings, sync use_llm flag on all recommendation jobs
         if (section === 'advanced' && 'ENABLE_ADVANCED_ALGORITHM' in data) {
@@ -824,7 +694,7 @@ export default {
         });
         console.error('Error saving section:', error);
       } finally {
-        this.isLoading = false;
+        this.isSaving = false;
       }
     },
     async testConnection(service, config) {
@@ -846,22 +716,22 @@ export default {
           case 'jellyfin':
             endpoint = '/api/jellyfin/test';
             payload = { 
-              api_url: config.api_url,
-              token: config.token 
+              JELLYFIN_API_URL: config.api_url,
+              JELLYFIN_TOKEN: config.token
             };
             break;
           case 'emby':
             endpoint = '/api/jellyfin/test';
             payload = { 
-              api_url: config.api_url,
-              token: config.token 
+              JELLYFIN_API_URL: config.api_url,
+              JELLYFIN_TOKEN: config.token
             };
             break;
           case 'seer':
             endpoint = '/api/seer/test';
             payload = { 
-              api_url: config.api_url, 
-              token: config.token 
+              SEER_API_URL: config.api_url,
+              SEER_TOKEN: config.token
             };
             break;
           case 'database':
@@ -881,17 +751,13 @@ export default {
       
         const response = await axios.post(endpoint, payload);
       
-        if (this.$toast) {
-          this.$toast.success(
-            response.data.message || `${service.toUpperCase()} connection successful!`,
-            {
-              position: 'top-right',
-              duration: 3000
-            }
-          );
-        } else {
-          alert(response.data.message || `${service.toUpperCase()} connection successful!`);
-        }
+        this.$toast.success(
+          response.data.message || `${service.toUpperCase()} connection successful!`,
+          {
+            position: 'top-right',
+            duration: 3000
+          }
+        );
       
         return response.data;
       
@@ -923,14 +789,10 @@ export default {
           errorMessage = error.message || 'Request configuration error';
         }
       
-        if (this.$toast) {
-          this.$toast.error(errorMessage, {
-            position: 'top-right',
-            duration: 5000
-          });
-        } else {
-          alert(`Error: ${errorMessage}`);
-        }
+        this.$toast.error(errorMessage, {
+          position: 'top-right',
+          duration: 5000
+        });
       
         return {
           status: 'error',
@@ -941,29 +803,6 @@ export default {
         this.testingConnections[service] = false;
       }
     },
-    getServiceStatus() {
-      const service = this.config.SELECTED_SERVICE;
-      if (!service) return 'status-disconnected';
-      
-      if (service === 'plex' && this.config.PLEX_TOKEN) return 'status-connected';
-      if ((service === 'jellyfin' || service === 'emby') && this.config.JELLYFIN_TOKEN) return 'status-connected';
-      
-      return 'status-warning';
-    },
-
-    getServiceIcon() {
-      const icons = {
-        plex: 'fas fa-play-circle',
-        jellyfin: 'fas fa-server',
-        emby: 'fas fa-server',
-      };
-      return icons[this.config.SELECTED_SERVICE] || 'fas fa-question-circle';
-    },
-
-    goToDashboard() {
-      this.$router.push({ name: 'Home' });
-    },
-
     async confirmExportConfig() {
       const includeSecrets = this.exportIncludeSecrets;
       this.showExportModal = false;

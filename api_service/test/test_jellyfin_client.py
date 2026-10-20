@@ -198,6 +198,48 @@ class TestGetAllLibraryItems(unittest.IsolatedAsyncioTestCase):
             {'id': 'lib2', 'name': 'TV'},
         ]
         self.client = _make_client(libraries=self.libraries)
+        users = [
+            {'id': 'u2', 'name': 'Bob',   'policy': {'IsAdministrator': False}},
+            {'id': 'u1', 'name': 'Alice', 'policy': {'IsAdministrator': True}},
+        ]
+        patcher = patch.object(self.client, 'get_all_users', AsyncMock(return_value=users))
+        self.mock_get_all_users = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    async def test_queries_items_scoped_to_admin_user(self):
+        """/Items must include userId, otherwise Jellyfin returns a partial library (#527)."""
+        session = _mock_session(_mock_response(200, {'Items': []}))
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            await self.client.get_all_library_items()
+
+        for call in session.get.call_args_list:
+            self.assertEqual(call.kwargs['params']['userId'], 'u1')
+
+    async def test_falls_back_to_first_user_when_no_admin(self):
+        self.mock_get_all_users.return_value = [
+            {'id': 'u3', 'name': 'Carol', 'policy': {'IsAdministrator': False}},
+        ]
+        session = _mock_session(_mock_response(200, {'Items': []}))
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            await self.client.get_all_library_items()
+
+        self.assertEqual(session.get.call_args.kwargs['params']['userId'], 'u3')
+
+    async def test_omits_user_id_when_no_users_available(self):
+        self.mock_get_all_users.return_value = []
+        session = _mock_session(_mock_response(200, {'Items': []}))
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            await self.client.get_all_library_items()
+
+        self.assertNotIn('userId', session.get.call_args.kwargs['params'])
+
+    async def test_user_lookup_is_cached(self):
+        session = _mock_session(_mock_response(200, {'Items': []}))
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            await self.client.get_all_library_items()
+            await self.client.get_all_library_items()
+
+        self.mock_get_all_users.assert_awaited_once()
 
     async def test_buckets_movies_and_tv_series(self):
         items_payload = {

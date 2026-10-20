@@ -15,6 +15,7 @@ from api_service.jobs.recommendation_automation import (
 )
 from api_service.services.config_service import ConfigService
 from api_service.services.filter_normalization import normalize_filters
+from api_service.services.library_content import load_library_content
 from api_service.services.request_sources import TRAKT_RECOMMENDATIONS_SOURCE
 from api_service.services.seer.seer_client import SeerClient
 from api_service.services.trakt.media_user_augmentor import TraktAccountResolver
@@ -25,6 +26,8 @@ from api_service.utils.tmdb_images import tmdb_image_url
 
 class TraktRecommendationsAutomation:
     """Automates fetching Trakt personalized recommendations and requesting via Seer."""
+
+    JOB_TYPE = 'trakt_recommendations'
 
     def __init__(self):
         """Initialize with logger only. Use create() for full initialization."""
@@ -65,8 +68,8 @@ class TraktRecommendationsAutomation:
             raise ValueError(f"Job not found: {job_id}")
         if overrides:
             instance.job_data.update(overrides)
-        if instance.job_data.get("job_type") != "trakt_recommendations":
-            raise ValueError(f"Job {job_id} is not a trakt_recommendations job")
+        if instance.job_data.get("job_type") != cls.JOB_TYPE:
+            raise ValueError(f"Job {job_id} is not a {cls.JOB_TYPE} job")
 
         instance.logger.info(
             "Initializing TraktRecommendationsAutomation for job: %s",
@@ -238,70 +241,8 @@ class TraktRecommendationsAutomation:
             return set()
 
     async def _load_existing_content(self) -> Dict[str, set[str]]:
-        """Load existing Plex/Jellyfin TMDB IDs for downloaded-content checks."""
-        provider = str(self.env_vars.get("SELECTED_SERVICE") or "").lower()
-        max_content = int(self.env_vars.get("MAX_CONTENT_CHECK") or self.env_vars.get("MAX_CONTENT") or 10)
-
-        if provider == "jellyfin":
-            from api_service.services.jellyfin.jellyfin_client import JellyfinClient
-
-            jellyfin_libraries_raw = self.env_vars.get("JELLYFIN_LIBRARIES")
-            jellyfin_libraries = jellyfin_libraries_raw if isinstance(jellyfin_libraries_raw, list) else []
-            client = JellyfinClient(
-                self.env_vars.get("JELLYFIN_API_URL"),
-                self.env_vars.get("JELLYFIN_TOKEN"),
-                max_content,
-                jellyfin_libraries,
-            )
-            try:
-                await client.init_existing_content()
-                return self._existing_content_to_sets(client.existing_content)
-            finally:
-                await client.close()
-
-        if provider == "plex":
-            from api_service.services.plex.plex_client import PlexClient, normalize_guid_provider_id
-
-            plex_libraries_raw = self.env_vars.get("PLEX_LIBRARIES")
-            plex_libraries = plex_libraries_raw if isinstance(plex_libraries_raw, list) else []
-            client = PlexClient(
-                api_url=self.env_vars.get("PLEX_API_URL"),
-                token=self.env_vars.get("PLEX_TOKEN"),
-                max_content=max_content,
-                library_ids=plex_libraries,
-            )
-            try:
-                await client.init_existing_content()
-                existing = self._existing_content_to_sets(client.existing_content)
-                return {
-                    media_type: {
-                        normalize_guid_provider_id(f"tmdb://{tmdb_id}", "tmdb") or str(tmdb_id)
-                        for tmdb_id in ids
-                    }
-                    for media_type, ids in existing.items()
-                }
-            finally:
-                await client.close()
-
-        return {}
-
-    @staticmethod
-    def _existing_content_to_sets(existing_content: Optional[Dict[str, Any]]) -> Dict[str, set[str]]:
-        """Normalize client existing-content maps into media-type keyed TMDB ID sets."""
-        content_sets: Dict[str, set[str]] = {}
-        if not existing_content:
-            return content_sets
-
-        for media_type, items in existing_content.items():
-            ids = set()
-            for item in items or []:
-                if isinstance(item, dict) and item.get("tmdb_id"):
-                    ids.add(str(item["tmdb_id"]))
-                elif item:
-                    ids.add(str(item))
-            if ids:
-                content_sets[media_type] = ids
-        return content_sets
+        """Load TMDB IDs already in the library (media server plus Seer availability)."""
+        return await load_library_content(self.env_vars, self.seer_client)
 
     def _build_trakt_client(self) -> TraktClient:
         """Resolve the linked Trakt account for the configured media user."""
@@ -424,6 +365,9 @@ class TraktRecommendationsAutomation:
         job_filters = self.job_data.get("filters", {})
         media_type = self.job_data.get("media_type", "movie")
         max_results = int(self.job_data.get("max_results") or 20)
+        if self.job_data.get('_replacement_for') is not None:
+            # shortcut: scan at most 100 candidates; paginate if searches often exhaust.
+            max_results = 100
         fetch_limit = max(max_results * 3, max_results)
 
         ignore_collected = bool(job_filters.get("ignore_collected", True))
@@ -510,7 +454,7 @@ class TraktRecommendationsAutomation:
 
         return details
 
-    async def _fetch_tmdb_details(self, tmdb_id: int, media_type: str) -> Optional[Dict[str, Any]]:
+    async def _fetch_tmdb_details(self, tmdb_id: int, media_type: str, raise_on_error=False) -> Optional[Dict[str, Any]]:
         """Load TMDb details for a recommendation item."""
         url = f"{self.tmdb_client.tmdb_api_url}/{media_type}/{tmdb_id}"
         params = {"api_key": self.tmdb_client.api_key}
@@ -518,9 +462,13 @@ class TraktRecommendationsAutomation:
             session = await self.tmdb_client._get_session()
             async with session.get(url, params=params, timeout=self.tmdb_client.REQUEST_TIMEOUT) as response:
                 if response.status not in {200, 201}:
+                    if raise_on_error and response.status != 404:
+                        raise RuntimeError('TMDb details temporarily unavailable.')
                     return None
                 data = await response.json()
         except Exception as exc:
+            if raise_on_error:
+                raise RuntimeError('TMDb details temporarily unavailable.') from None
             self.logger.debug("TMDb details fetch failed for %s %s: %s", media_type, tmdb_id, exc)
             return None
 
@@ -551,6 +499,8 @@ class TraktRecommendationsAutomation:
         dry_run_items: Optional[List[Dict[str, Any]]] = [] if dry_run else None
 
         for item in results:
+            if self.job_data.get('_replacement_for') is not None and requested_count >= 1:
+                break
             media_type = item.get("media_type") or self.job_data.get("media_type", "movie")
             tmdb_id = item["id"]
             title = item.get("title") or item.get("name") or "Unknown"

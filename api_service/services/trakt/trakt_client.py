@@ -83,6 +83,29 @@ class TraktClient(BaseHTTPClient):
             headers["Authorization"] = f"Bearer {self.access_token}"
         return headers
 
+    async def public_list_info(self, url):
+        from api_service.services.public_lists import PublicListError, parse_list_url, read_list_json
+        user, slug = parse_list_url('trakt', url)
+        data, _ = await read_list_json(self, f'/users/{user}/lists/{slug}', headers=self._headers(False))
+        if not isinstance(data, dict) or data.get('privacy') != 'public':
+            raise PublicListError('Only public Trakt lists are supported.')
+        return {'name': data.get('name') or slug, 'provider': 'trakt'}
+
+    async def public_list_page(self, url, offset, limit=100):
+        from api_service.services.public_lists import PublicListError, parse_list_url, read_list_json
+        user, slug = parse_list_url('trakt', url)
+        # Keep the provider page aligned while resuming partway through a page.
+        page = offset // limit + 1
+        data, headers = await read_list_json(self, f'/users/{user}/lists/{slug}/items',
+            params={'page': page, 'limit': limit}, headers=self._headers(False))
+        if not isinstance(data, list) or len(data) > limit:
+            raise PublicListError('Trakt returned an invalid list page.')
+        try:
+            more = page < int(headers['X-Pagination-Page-Count'])
+        except (KeyError, TypeError, ValueError):
+            more = len(data) == limit
+        return data[offset % limit:], more
+
     async def request_device_code(self) -> dict[str, Any]:
         return await self._request(
             "POST",
@@ -164,6 +187,106 @@ class TraktClient(BaseHTTPClient):
             authenticated=True,
         )
         return self._normalize_recent_items(payload)
+
+    async def add_to_history(self, media_type: str, tmdb_id: str) -> dict[str, Any]:
+        """Mark a movie or a whole show as watched in the user's Trakt history.
+
+        No ``watched_at`` is sent, so Trakt records the play at the current time.
+        For a show, Trakt marks every aired episode as watched.
+
+        Args:
+            media_type: ``movie`` or ``tv``.
+            tmdb_id: TMDb id of the title.
+
+        Returns:
+            dict[str, Any]: Trakt's sync response (``added``, ``not_found``, ...).
+        """
+        return await self._request("POST", "/sync/history", json=self._sync_body(media_type, tmdb_id),
+                                   authenticated=True)
+
+    async def add_rating(self, media_type: str, tmdb_id: str, rating: int) -> dict[str, Any]:
+        """Rate a movie or show on Trakt.
+
+        Args:
+            media_type: ``movie`` or ``tv``.
+            tmdb_id: TMDb id of the title.
+            rating: Trakt rating from 1 to 10.
+
+        Returns:
+            dict[str, Any]: Trakt's sync response (``added``, ``not_found``, ...).
+        """
+        rating = int(rating)
+        if not 1 <= rating <= 10:
+            raise ValueError("rating must be between 1 and 10")
+        return await self._request("POST", "/sync/ratings",
+                                   json=self._sync_body(media_type, tmdb_id, rating=rating),
+                                   authenticated=True)
+
+    async def lookup_trakt_id(self, media_type: str, tmdb_id: str) -> Optional[int]:
+        """Return Trakt's own id for a TMDb title, or None when Trakt does not know it.
+
+        Args:
+            media_type: ``movie`` or ``tv``.
+            tmdb_id: TMDb id of the title.
+        """
+        kind = "movie" if media_type == "movie" else "show"
+        payload = await self._request("GET", f"/search/tmdb/{int(tmdb_id)}", params={"type": kind},
+                                      authenticated=False)
+        for entry in payload or []:
+            trakt_id = ((entry or {}).get(kind) or {}).get("ids", {}).get("trakt")
+            if trakt_id:
+                return int(trakt_id)
+        return None
+
+    async def has_movie_play(self, trakt_id: int) -> bool:
+        """Whether the user's Trakt history already holds at least one play of a movie."""
+        payload = await self._request("GET", f"/sync/history/movies/{int(trakt_id)}",
+                                      params={"limit": 1}, authenticated=True)
+        return bool(payload)
+
+    async def unwatched_episodes(self, trakt_id: int) -> list[dict[str, Any]]:
+        """Return the aired episodes of a show the user has not watched yet.
+
+        Args:
+            trakt_id: Trakt id of the show.
+
+        Returns:
+            list[dict[str, Any]]: ``/sync/history`` season entries
+            (``{"number": s, "episodes": [{"number": e}, ...]}``), empty when
+            every aired episode is already watched.
+        """
+        payload = await self._request("GET", f"/shows/{int(trakt_id)}/progress/watched",
+                                      params={"hidden": "false", "specials": "false"},
+                                      authenticated=True)
+        seasons = []
+        for season in (payload or {}).get("seasons", []):
+            missing = [{"number": ep["number"]} for ep in season.get("episodes", [])
+                       if not ep.get("completed") and ep.get("number") is not None]
+            if missing:
+                seasons.append({"number": season["number"], "episodes": missing})
+        return seasons
+
+    async def add_episodes_to_history(self, trakt_id: int, seasons: list[dict[str, Any]]) -> dict[str, Any]:
+        """Add specific episodes of a show to the user's Trakt history.
+
+        Args:
+            trakt_id: Trakt id of the show.
+            seasons: Season entries as returned by ``unwatched_episodes``.
+        """
+        body = {"shows": [{"ids": {"trakt": int(trakt_id)}, "seasons": seasons}]}
+        return await self._request("POST", "/sync/history", json=body, authenticated=True)
+
+    @staticmethod
+    def _sync_body(media_type: str, tmdb_id: str, **fields: Any) -> dict[str, Any]:
+        """Build a single-item ``/sync/*`` payload keyed by TMDb id."""
+        if media_type not in ("movie", "tv"):
+            raise ValueError("media_type must be 'movie' or 'tv'")
+        try:
+            tmdb = int(tmdb_id)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("tmdb_id must be numeric") from exc
+        key = "movies" if media_type == "movie" else "shows"
+        return {key: [{"ids": {"tmdb": tmdb}, **fields}]}
 
     async def get_user_settings(self) -> dict[str, Any]:
         """Fetch and normalize the authenticated Trakt user's settings."""

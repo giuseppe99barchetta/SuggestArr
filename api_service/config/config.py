@@ -19,6 +19,7 @@ INTEGRATION_TO_FLAT: dict = {
     'seer':     {'api_url': 'SEER_API_URL', 'api_key': 'SEER_TOKEN',
                  'session_token': 'SEER_SESSION_TOKEN'},
     'omdb':     {'api_key': 'OMDB_API_KEY'},
+    'mdblist':  {'api_key': 'MDBLIST_API_KEY'},
     'openai':   {'api_key': 'OPENAI_API_KEY', 'base_url': 'OPENAI_BASE_URL', 'model': 'LLM_MODEL'},
     'trakt':    {'client_id': 'TRAKT_CLIENT_ID', 'client_secret': 'TRAKT_CLIENT_SECRET'},
 }
@@ -203,7 +204,6 @@ def get_default_values():
         'EXCLUDE_REQUESTED': lambda: True,
         'SETUP_COMPLETED': lambda: False,
         'LOG_LEVEL': lambda: 'INFO',
-        'ENABLE_BETA_FEATURES': lambda: False,
         'ENABLE_ADVANCED_ALGORITHM': lambda: False,
         'ENABLE_SOCIAL_FEATURES': lambda: False,
         'ENABLE_DEBUG_MODE': lambda: False,
@@ -212,6 +212,7 @@ def get_default_values():
         'ENABLE_STATIC_BACKGROUND': lambda: False,
         'STATIC_BACKGROUND_COLOR': lambda: '#2E3440',
         'OMDB_API_KEY': lambda: '',
+        'MDBLIST_API_KEY': lambda: '',
         'FILTER_RATING_SOURCE': lambda: 'tmdb',
         'FILTER_IMDB_THRESHOLD': lambda: None,
         'FILTER_IMDB_MIN_VOTES': lambda: None,
@@ -227,6 +228,7 @@ def get_default_values():
         'TRAKT_ACCESS_TOKEN': lambda: '',
         'TRAKT_REFRESH_TOKEN': lambda: '',
         'TRAKT_EXPIRES_AT': lambda: None,
+        'TRAKT_SYNC_SEEN_FEEDBACK': lambda: False,
         'CACHE_TTL': lambda: 24,
         'MAX_CACHE_SIZE': lambda: 100,
         'API_TIMEOUT': lambda: 30,
@@ -237,6 +239,9 @@ def get_default_values():
         'TMDB_LANGUAGE': lambda: 'en',
         'PAUSE_JOBS_WITH_PENDING_APPROVALS': lambda: False,
         'AUTO_REJECT_APPROVAL_DAYS': lambda: 0,
+        'SEER_AUTO_DECLINE_DAYS': lambda: 0,
+        'SEER_AUTO_DECLINE_DRY_RUN': lambda: True,
+        'REPLACE_REJECTED_REQUESTS': lambda: False,
         # Database connection pool settings
         'DB_MIN_CONNECTIONS': lambda: '2',
         'DB_MAX_CONNECTIONS': lambda: '10',
@@ -248,8 +253,10 @@ def get_default_values():
         'SEER_ANIME_PROFILE_CONFIG': lambda: {},
         'SEER_REQUEST_DELAY': lambda: 2,
         'ALLOW_REGISTRATION': lambda: False,
+        'REGISTRATION_DEFAULT_TABS': lambda: 'requests,jobs,profile',
         'AUTH_MODE': lambda: 'enabled',
         'AUTH_TRUSTED_CIDRS': lambda: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7',
+        'AUTH_TRUSTED_PROXY_CIDRS': lambda: '',
         'AUTH_BYPASS_USERNAME': lambda: 'local_admin',
         'AUTH_TRUSTED_HEADER': lambda: 'X-Forwarded-User',
         'AUTH_TRUSTED_HEADER_AUTO_CREATE': lambda: True,
@@ -265,11 +272,27 @@ def get_config_values():
     logger.debug(f"Resolved configuration values: {resolved_values}")
     return resolved_values
 
+def validate_seer_expiry_settings(config_data):
+    days = config_data.get('SEER_AUTO_DECLINE_DAYS', 0)
+    if type(days) is not int or not 0 <= days <= 365:
+        raise ValueError('SEER_AUTO_DECLINE_DAYS must be an integer between 0 and 365')
+    if not isinstance(config_data.get('SEER_AUTO_DECLINE_DRY_RUN', True), bool):
+        raise ValueError('SEER_AUTO_DECLINE_DRY_RUN must be a boolean')
+    if not isinstance(config_data.get('REPLACE_REJECTED_REQUESTS', False), bool):
+        raise ValueError('REPLACE_REJECTED_REQUESTS must be a boolean')
+
+
 def save_env_vars(config_data):
     """
     Save environment variables from the web interface to the config.yaml file.
     Also validates cron times and updates them if needed.
     """
+    validate_seer_expiry_settings(config_data)
+    from api_service.utils.ssrf_guard import normalize_base_url
+    config_data = dict(config_data)
+    for key in ('PLEX_API_URL', 'JELLYFIN_API_URL', 'SEER_API_URL'):
+        if config_data.get(key):
+            config_data[key] = normalize_base_url(config_data[key])
     logger.debug("Saving environment variables to config.yaml")
     cron_times = config_data.get('CRON_TIMES', '0 0 * * *')
 
@@ -283,7 +306,7 @@ def save_env_vars(config_data):
         env_vars = {
             key: value for key, value in {
                 key: config_data.get(key, default_value()) for key, default_value in get_default_values().items()
-            }.items() if value not in [None, '']
+            }.items() if value not in [None, ''] or key in ('AUTH_TRUSTED_CIDRS', 'AUTH_TRUSTED_PROXY_CIDRS')
         }
 
         # Create config.yaml file if it does not exist
@@ -334,12 +357,12 @@ def get_config_sections():
     Returns a dictionary of configuration sections and their associated keys.
     """
     return {
-        'services': ['TMDB_API_KEY', 'OMDB_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL', 'PLEX_CLIENT_ID',
+        'services': ['TMDB_API_KEY', 'OMDB_API_KEY', 'MDBLIST_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL', 'PLEX_CLIENT_ID',
                     'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
                     'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_USER_PSW',
                     'SEER_SESSION_TOKEN', 'SEER_ANIME_PROFILE_CONFIG', 'SEER_REQUEST_DELAY',
                     'TRAKT_CLIENT_ID', 'TRAKT_CLIENT_SECRET', 'TRAKT_ACCESS_TOKEN',
-                    'TRAKT_REFRESH_TOKEN', 'TRAKT_EXPIRES_AT',
+                    'TRAKT_REFRESH_TOKEN', 'TRAKT_EXPIRES_AT', 'TRAKT_SYNC_SEEN_FEEDBACK',
                     'SELECTED_USERS'],
         'database': ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
                     'DB_MIN_CONNECTIONS', 'DB_MAX_CONNECTIONS', 'DB_MAX_IDLE_TIME', 
@@ -350,17 +373,19 @@ def get_config_sections():
                            'FILTER_LANGUAGE', 'FILTER_NUM_SEASONS', 'FILTER_STREAMING_SERVICES',
                            'FILTER_REGION_PROVIDER', 'EXCLUDE_DOWNLOADED', 'EXCLUDE_REQUESTED',
                            'FILTER_MIN_RUNTIME', 'FILTER_INCLUDE_TVOD', 'REQUEST_FIRST_SEASON_ONLY'],
-        'advanced': ['SELECTED_USERS', 'LOG_LEVEL', 'ENABLE_BETA_FEATURES',
+        'advanced': ['SELECTED_USERS', 'LOG_LEVEL',
                      'ENABLE_ADVANCED_ALGORITHM', 'ENABLE_SOCIAL_FEATURES',
                      'ENABLE_DEBUG_MODE', 'ENABLE_PERFORMANCE_MONITORING', 'ENABLE_VISUAL_EFFECTS',
                      'ENABLE_STATIC_BACKGROUND', 'STATIC_BACKGROUND_COLOR',
                      'CACHE_TTL', 'MAX_CACHE_SIZE', 'API_TIMEOUT', 'API_RETRIES',
                      'ENABLE_API_CACHING', 'REQUIRE_REQUEST_APPROVAL', 'REQUEST_VISIBILITY', 'TMDB_LANGUAGE',
                      'PAUSE_JOBS_WITH_PENDING_APPROVALS', 'AUTO_REJECT_APPROVAL_DAYS',
+                     'SEER_AUTO_DECLINE_DAYS', 'SEER_AUTO_DECLINE_DRY_RUN',
+                     'REPLACE_REJECTED_REQUESTS',
                      'OPENAI_API_KEY', 'OPENAI_BASE_URL',
                      'LLM_MODEL', 'LLM_TEMPERATURE', 'LLM_REASONING_EFFORT', 'SEARXNG_BASE_URL',
-                     'SUBPATH', 'ALLOW_REGISTRATION',
-                     'AUTH_MODE', 'AUTH_TRUSTED_CIDRS', 'AUTH_BYPASS_USERNAME',
+                     'SUBPATH', 'ALLOW_REGISTRATION', 'REGISTRATION_DEFAULT_TABS',
+                     'AUTH_MODE', 'AUTH_TRUSTED_CIDRS', 'AUTH_TRUSTED_PROXY_CIDRS', 'AUTH_BYPASS_USERNAME',
                      'AUTH_TRUSTED_HEADER', 'AUTH_TRUSTED_HEADER_AUTO_CREATE']
     }
 

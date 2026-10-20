@@ -82,6 +82,7 @@ def test_feedback_is_scoped_to_internal_user_and_media_profile():
 
     saved = queue.set_suggestion_feedback(1, 7, 7, 'not_interested', 'genre', 'Not horror')
     assert saved['media_user_id'] == 'plex-a'
+    assert (saved['tmdb_id'], saved['media_type']) == ('42', 'movie')
     assert queue.get_suggestion_feedback(connection.cursor(), 7, '42', 'movie', 'plex-a')['feedback'] == 'not_interested'
     assert queue.get_suggestion_feedback(connection.cursor(), 8, '42', 'movie', 'plex-a') is None
     assert queue.get_suggestion_feedback(connection.cursor(), 7, '42', 'movie', 'plex-b') is None
@@ -190,7 +191,7 @@ def test_feedback_route_validates_and_scopes_to_current_user(monkeypatch):
     )
     assert response.status_code == 200
     db.set_suggestion_feedback.assert_called_once_with(5, None, 7, 'too_similar', 'genre', None, None, False,
-                                                       None, None)
+                                                       None, None, include_owned_list_imports=False)
 
     db.has_visible_suggestarr_request.return_value = True
     db.set_media_feedback.return_value = {

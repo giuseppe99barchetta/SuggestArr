@@ -1,83 +1,61 @@
 <template>
-  <div class="schedule-picker">
-    <!-- Schedule Type Toggle -->
-    <div class="toggle-container">
+  <div class="flex flex-col gap-3">
+    <div role="radiogroup" aria-label="Run frequency" class="grid grid-cols-2 gap-2 sm:grid-cols-5">
       <button
-        type="button"
-        class="toggle-btn"
-        :class="{ active: localValue.type === 'preset' }"
-        @click="setType('preset')"
-      >
-        <i class="fas fa-clock"></i>
-        Preset
-      </button>
-      <button
-        type="button"
-        class="toggle-btn"
-        :class="{ active: localValue.type === 'cron' }"
-        @click="setType('cron')"
-      >
-        <i class="fas fa-code"></i>
-        Custom Cron
-      </button>
-    </div>
-
-    <!-- Preset Options -->
-    <div v-if="localValue.type === 'preset'" class="preset-list">
-      <div
         v-for="preset in presets"
         :key="preset.value"
-        class="preset-item"
-        :class="{ active: localValue.value === preset.value }"
+        type="button"
+        role="radio"
+        :aria-checked="localValue.type === 'preset' && localValue.value === preset.value"
+        :class="chipClass(localValue.type === 'preset' && localValue.value === preset.value)"
         @click="selectPreset(preset.value)"
       >
-        <div class="preset-icon">
-          <i :class="preset.icon"></i>
-        </div>
-        <div class="preset-info">
-          <span class="preset-name">{{ preset.label }}</span>
-          <span class="preset-desc">{{ preset.description }}</span>
-        </div>
-        <i v-if="localValue.value === preset.value" class="fas fa-check check-icon"></i>
-      </div>
+        <i aria-hidden="true" :class="preset.icon"></i>
+        {{ preset.label }}
+      </button>
+      <button
+        type="button"
+        role="radio"
+        :aria-checked="localValue.type === 'cron'"
+        :class="chipClass(localValue.type === 'cron')"
+        @click="setType('cron')"
+      >
+        <i aria-hidden="true" class="fas fa-code"></i>
+        Custom
+      </button>
     </div>
 
+    <p v-if="localValue.type === 'preset'" class="m-0 text-xs text-ink-4">{{ presetDescription }}</p>
+
     <!-- Custom Cron Input -->
-    <div v-else class="cron-section">
-      <div class="form-group">
-        <label for="cronExpression">Cron Expression</label>
+    <div v-else class="flex flex-col gap-2">
+      <label class="ui-label" for="cronExpression">
+        Cron expression
         <input
           id="cronExpression"
           v-model="localValue.value"
           type="text"
           placeholder="0 0 * * *"
-          class="form-control mono"
+          class="ui-input font-mono"
           @input="validateCron"
         />
-        <small v-if="cronError" class="form-error">{{ cronError }}</small>
-        <small v-else class="form-help">Format: minute hour day month day_of_week</small>
-      </div>
-
-      <!-- Cron Examples -->
-      <div class="cron-examples">
-        <span class="examples-label">Examples:</span>
-        <div class="example-btns">
-          <button
-            v-for="example in cronExamples"
-            :key="example.value"
-            type="button"
-            class="example-btn"
-            @click="setCronExample(example.value)"
-          >
-            {{ example.label }}
-          </button>
-        </div>
-      </div>
-
-      <!-- Cron Preview -->
-      <div v-if="cronPreview && !cronError" class="cron-preview">
-        <i class="fas fa-info-circle"></i>
-        {{ cronPreview }}
+      </label>
+      <small v-if="cronError" class="text-xs text-bad">{{ cronError }}</small>
+      <small v-else-if="cronPreview" class="flex items-center gap-1.5 text-xs text-notice">
+        <i aria-hidden="true" class="fas fa-clock"></i>{{ cronPreview }}
+      </small>
+      <small v-else class="text-xs text-ink-4">Format: minute hour day month day_of_week</small>
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="text-xs text-ink-4">Examples:</span>
+        <button
+          v-for="example in cronExamples"
+          :key="example"
+          type="button"
+          class="cursor-pointer rounded-[8px] border border-edge bg-panel-2 px-2 py-1 font-mono text-xs text-ink-3 transition hover:border-ink-4 hover:text-ink"
+          @click="setCronExample(example)"
+        >
+          {{ example }}
+        </button>
       </div>
     </div>
   </div>
@@ -113,26 +91,24 @@ export default {
         },
         {
           value: 'every_12h',
-          label: 'Every 12 Hours',
+          label: 'Every 12h',
           description: 'Runs at noon and midnight',
           icon: 'fas fa-sync'
         },
         {
           value: 'every_6h',
-          label: 'Every 6 Hours',
+          label: 'Every 6h',
           description: 'Runs 4 times a day',
           icon: 'fas fa-bolt'
         }
       ],
-      cronExamples: [
-        { label: '0 0 * * *', value: '0 0 * * *' },
-        { label: '0 */6 * * *', value: '0 */6 * * *' },
-        { label: '30 2 * * 0', value: '30 2 * * 0' },
-        { label: '0 0 1 * *', value: '0 0 1 * *' }
-      ]
+      cronExamples: ['0 0 * * *', '0 */6 * * *', '30 2 * * 0', '0 0 1 * *']
     };
   },
   computed: {
+    presetDescription() {
+      return this.presets.find(p => p.value === this.localValue.value)?.description || '';
+    },
     cronPreview() {
       if (this.localValue.type !== 'cron' || !this.localValue.value) return null;
       return this.describeCron(this.localValue.value);
@@ -173,7 +149,16 @@ export default {
     },
 
     selectPreset(value) {
+      this.localValue.type = 'preset';
       this.localValue.value = value;
+      this.cronError = null;
+    },
+
+    chipClass(active) {
+      return [
+        'flex cursor-pointer items-center justify-center gap-2 rounded-ctl border px-3 py-2 text-[13px] font-semibold transition-colors',
+        active ? 'border-brand bg-brand-soft text-ink [&>i]:text-brand-ink' : 'border-edge-strong bg-panel-2 text-ink-2 hover:border-ink-4 hover:text-ink [&>i]:text-ink-4',
+      ];
     },
 
     setCronExample(value) {
@@ -265,202 +250,3 @@ export default {
   }
 };
 </script>
-
-<style scoped>
-.schedule-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.toggle-container {
-  display: flex;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  padding: 0.25rem;
-}
-
-.toggle-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: var(--transition-base);
-  font-weight: var(--font-weight-medium);
-}
-
-.toggle-btn:hover {
-  color: var(--color-text-primary);
-}
-
-.toggle-btn.active {
-  background: var(--color-primary);
-  color: white;
-}
-
-.preset-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.preset-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: var(--transition-base);
-}
-
-.preset-item:hover {
-  border-color: var(--color-border-heavy);
-}
-
-.preset-item.active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-alpha-10);
-}
-
-.preset-icon {
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--color-bg-overlay-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
-}
-
-.preset-item.active .preset-icon {
-  background: var(--color-primary);
-  color: white;
-}
-
-.preset-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.preset-name {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-}
-
-.preset-desc {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-
-.check-icon {
-  color: var(--color-primary);
-}
-
-.cron-section .form-group {
-  margin-bottom: 0.75rem;
-}
-
-.cron-section .form-group label {
-  display: block;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-  margin-bottom: 0.5rem;
-}
-
-.form-control {
-  width: 100%;
-  padding: 0.75rem 1rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  font-size: 1rem;
-  transition: var(--transition-base);
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-glow);
-}
-
-.form-control.mono {
-  font-family: var(--font-family-mono);
-}
-
-.form-error {
-  display: block;
-  font-size: var(--font-size-sm);
-  color: var(--color-error);
-  margin-top: 0.35rem;
-}
-
-.form-help {
-  display: block;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  margin-top: 0.35rem;
-}
-
-.cron-examples {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.examples-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-
-.example-btns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.example-btn {
-  padding: 0.35rem 0.5rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-  transition: var(--transition-base);
-}
-
-.example-btn:hover {
-  border-color: var(--color-border-heavy);
-  color: var(--color-text-primary);
-}
-
-.cron-preview {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: var(--color-info-alpha-10);
-  border-left: 3px solid var(--color-info);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  color: var(--color-info);
-}
-</style>

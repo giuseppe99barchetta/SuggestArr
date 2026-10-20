@@ -151,12 +151,24 @@ class RequestQueueMixin:
                 cursor.execute(query, params)
                 inserted = cursor.rowcount > 0
                 delivery_id = getattr(cursor, 'lastrowid', None) if inserted else None
-                if inserted and delivery_id is None:
+                if inserted and (delivery_id is None or self.db_type == 'postgres'):
                     cursor.execute(
                         f"SELECT id FROM pending_requests WHERE tmdb_id={ph} AND media_type={ph}",
                         (str(tmdb_id), media_type),
                     )
                     delivery_id = cursor.fetchone()[0]
+                replacement_for = payload.get('_replacement_for')
+                if inserted and replacement_for is not None:
+                    # Claim the rejection in the same transaction as the new delivery.
+                    cursor.execute(
+                        f'UPDATE request_replacements SET replacement_delivery_id={ph},'
+                        "status='queued',reason='Alternative queued',checked_at=CURRENT_TIMESTAMP "
+                        f"WHERE delivery_id={ph} AND status='pending' AND replacement_delivery_id IS NULL",
+                        (delivery_id, replacement_for),
+                    )
+                    if cursor.rowcount != 1:
+                        conn.rollback()
+                        return False
                 conn.commit()
             if inserted:
                 self.logger.info(
@@ -236,7 +248,7 @@ class RequestQueueMixin:
 
     def list_suggestions(self, owner_id=None, status='awaiting_approval', search='', page=1, per_page=24,
                          media_type='all', media_user_ids=None, feedback_user_id=None,
-                         include_unassigned=False):
+                         include_unassigned=False, include_owned_list_imports=False):
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.execution_id,p.owner_id,
                           p.retry_count,p.last_attempt_at,p.last_error,p.payload,
@@ -266,8 +278,14 @@ class RequestQueueMixin:
             params.append(media_type)
         if media_user_ids is not None:
             expression = payload_user_expression(self.db_type, 'p.payload')
-            query += f" AND {expression} IN ({','.join([ph] * len(media_user_ids))})" if media_user_ids else " AND 1=0"
+            restriction = f"{expression} IN ({','.join([ph] * len(media_user_ids))})" if media_user_ids else '1=0'
+            if include_owned_list_imports and owner_id is not None:
+                source = payload_user_expression(self.db_type, 'p.payload', '_source_id')
+                restriction = f"({restriction} OR (COALESCE(NULLIF({expression}, 'null'), '')='' AND {source}='list_import' AND p.owner_id={ph}))"
+            query += f' AND {restriction}'
             params.extend(str(user_id) for user_id in media_user_ids)
+            if include_owned_list_imports and owner_id is not None:
+                params.append(owner_id)
         count_query = f"SELECT COUNT(*) FROM ({query}) suggestion_rows"
         query += (" ORDER BY CASE p.status WHEN 'awaiting_approval' THEN 0 WHEN 'queued' THEN 1 "
                   "WHEN 'submitting' THEN 2 WHEN 'failed' THEN 3 WHEN 'rejected' THEN 4 ELSE 5 END, "
@@ -288,6 +306,7 @@ class RequestQueueMixin:
                 item['seer_identity_mode'] = payload.get('_seer_identity_mode', 'technical_user')
                 item['request_profile'] = {key: payload.get(key) for key in ('serverId', 'profileId', 'rootFolder')}
                 item['media_user_id'] = payload.get('_user_id')
+                item['rationale'] = payload.get('_rationale')
                 item['user_name'] = None
                 if item['media_user_id'] is not None:
                     cursor.execute(
@@ -490,6 +509,27 @@ class RequestQueueMixin:
                            tuple(params))
             conn.commit()
             return cursor.rowcount
+
+    def get_job_watch_stats(self):
+        """Count delivered titles per job and how many of them were watched afterwards.
+
+        A title counts as watched once the recap watch sync recorded a play at or
+        after its request (``recap_titles.watched_at``).
+
+        :return: Dict mapping job id to ``{'requested': int, 'watched': int}``.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT p.job_id, COUNT(*), "
+                "SUM(CASE WHEN rt.watched_at IS NOT NULL THEN 1 ELSE 0 END) "
+                "FROM pending_requests p "
+                "LEFT JOIN recap_titles rt ON rt.media_type = p.media_type AND rt.tmdb_id = p.tmdb_id "
+                "WHERE p.status = 'submitted' AND p.job_id IS NOT NULL "
+                "GROUP BY p.job_id"
+            )
+            return {int(row[0]): {'requested': int(row[1]), 'watched': int(row[2] or 0)}
+                    for row in cursor.fetchall()}
 
     def list_blacklist(self):
         with self.get_connection() as conn:

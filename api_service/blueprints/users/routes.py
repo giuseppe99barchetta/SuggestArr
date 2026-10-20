@@ -10,6 +10,7 @@ Admin endpoints (require role='admin'):
 
 Per-user media profile endpoints (any authenticated user):
   GET    /api/users/me/links                   — list current user's media links
+  GET    /api/users/<id>/avatar                — own image, or any image for admins
   POST   /api/users/me/link/jellyfin           — link a Jellyfin account
   POST   /api/users/me/link/emby               — link an Emby account
   DELETE /api/users/me/link/<provider>         — unlink a media account
@@ -27,14 +28,19 @@ Security decisions
 - Plex tokens are stored to allow future server-side API calls on behalf of
   the user (e.g. personalised recommendations).
 """
-import requests as http_requests
+from api_service.services.http import sync_client as http_requests
+from api_service.utils.ssrf_guard import normalize_base_url
 
 from flask import Blueprint, jsonify, request, g
 
 from api_service.auth.auth_service import AuthService, MIN_PASSWORD_LENGTH
+from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_role
+from api_service.blueprints.avatar import user_avatar_response
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.notification_formats import notification_target_error
+from api_service.utils.ssrf_guard import validate_url
 
 logger = LoggerManager.get_logger("UsersRoute")
 
@@ -144,11 +150,32 @@ def list_users():
     """
     Return all SuggestArr accounts (password hashes excluded).
 
-    Response (200): list of { id, username, role, is_active, created_at, last_login }
+    Response (200): account details plus token-free media_profiles.
     """
     db = DatabaseManager()
     users = db.get_all_auth_users()
+    for user in users:
+        user['media_profiles'] = [
+            {key: profile.get(key) for key in ('provider', 'external_user_id', 'external_username', 'verified')}
+            for profile in db.get_user_media_profiles(user['id'])
+        ]
     return jsonify(users), 200
+
+
+# ---------------------------------------------------------------------------
+# Profile image: own account or admin
+# ---------------------------------------------------------------------------
+
+@users_bp.route('/<int:user_id>/avatar', methods=['GET'])
+@limiter.limit('120 per minute')
+def get_user_avatar(user_id: int):
+    """Read your own profile image; admins may read other accounts' images."""
+    caller = getattr(g, 'current_user', None)
+    if not caller:
+        return jsonify({'error': 'Authentication required'}), 401
+    if caller.get('role') != 'admin' and str(caller.get('id')) != str(user_id):
+        return jsonify({'error': 'Insufficient permissions'}), 403
+    return user_avatar_response(user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +433,76 @@ def admin_link_provider(user_id: int, provider: str):
 # List linked profiles
 # ---------------------------------------------------------------------------
 
+# Chat services a user can be told on when their own requests are ready to watch.
+_PERSONAL_FORMATS = ('discord', 'telegram', 'ntfy')
+
+
+@users_bp.route('/me/notifications', methods=['GET'])
+def get_my_notifications():
+    """
+    Return the current user's own notification destination.
+
+    Response (200): { format, url } or { format: null, url: null } when unset.
+    """
+    config = DatabaseManager().get_personal_notification(_current_user_id()) or {}
+    return jsonify({'format': config.get('format'), 'url': config.get('url')}), 200
+
+
+@users_bp.route('/me/notifications', methods=['PUT'])
+@limiter.limit('20 per minute')
+def set_my_notifications():
+    """
+    Set where the current user is told that their requests are ready to watch.
+
+    Request JSON: { format: 'discord'|'telegram'|'ntfy', url: str }
+
+    The same checks as shared webhooks apply (SSRF guard, the administrator's
+    destination allowlist); private-network addresses are accepted only from
+    administrators, since anyone else could otherwise make the server call
+    internal services.
+    """
+    data = request.get_json(silent=True) or {}
+    fmt, url = data.get('format'), data.get('url')
+    if fmt not in _PERSONAL_FORMATS:
+        return jsonify({'error': f"format must be one of {', '.join(_PERSONAL_FORMATS)}"}), 400
+    if not isinstance(url, str) or not url.strip() or len(url) > 500:
+        return jsonify({'error': 'url is required (at most 500 characters)'}), 400
+    url = url.strip()
+    is_admin = g.current_user.get('role') == 'admin'
+    try:
+        validate_url(url, allow_private=is_admin)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    target_error = notification_target_error(fmt, url)
+    if target_error:
+        return jsonify({'error': target_error}), 400
+    db = DatabaseManager()
+    if not db.is_webhook_destination_allowed(url):
+        return jsonify({'error': "This destination is not in the administrator's webhook allowlist."}), 400
+    db.set_personal_notification(_current_user_id(), {'format': fmt, 'url': url, 'allow_private': is_admin})
+    return jsonify({'format': fmt, 'url': url}), 200
+
+
+@users_bp.route('/me/notifications', methods=['DELETE'])
+def delete_my_notifications():
+    """Stop personal notifications for the current user."""
+    DatabaseManager().set_personal_notification(_current_user_id(), None)
+    return '', 204
+
+
+@users_bp.route('/me/notifications/test', methods=['POST'])
+@limiter.limit('5 per minute')
+def test_my_notifications():
+    """Queue a test message to the current user's destination (delivered within a minute)."""
+    queued = DatabaseManager().enqueue_personal_notification(
+        _current_user_id(), 'personal.test',
+        'SuggestArr: notifications for your requests are working.',
+    )
+    if not queued:
+        return jsonify({'error': 'Set a destination first'}), 400
+    return jsonify({'queued': True}), 202
+
+
 @users_bp.route('/me/links', methods=['GET'])
 def get_my_links():
     """
@@ -531,6 +628,7 @@ def list_provider_users(provider: str):
         return jsonify({"error": "Media server not configured"}), 503
 
     try:
+        server_url = normalize_base_url(server_url)
         resp = http_requests.get(
             f"{server_url}/Users",
             headers={
@@ -538,6 +636,7 @@ def list_provider_users(provider: str):
                 "Authorization": f'MediaBrowser Token="{api_key}"'
                 },
             timeout=10,
+            allow_private=True,
         )
         resp.raise_for_status()
         users_data = resp.json()

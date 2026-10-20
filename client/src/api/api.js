@@ -12,14 +12,13 @@ export const testOmdbApi = (apiKey) => {
     return axios.post('/api/omdb/test', { api_key: apiKey });
 };
 
+export const testMdblistApi = (apiKey) => {
+    return axios.post('/api/mdblist/test', { api_key: apiKey });
+};
+
 // Function to test Jellyfin configuration
 export const testJellyfinApi = (url, token) => {
-    const jellyfinApiUrl = `${url}/Users`; // Endpoint to retrieve Jellyfin users
-    return axios.get(jellyfinApiUrl, {
-        headers: {
-            'X-Emby-Token': token // Send Jellyfin API token in the header
-        }
-    });
+    return axios.post('/api/jellyfin/test', { JELLYFIN_API_URL: url, JELLYFIN_TOKEN: token });
 };
 
 // Function to test the Seer configuration and fetch users
@@ -96,6 +95,11 @@ export const aiSearchSeenClear = (mediaType = null) => {
     });
 };
 
+// AI Search: recent searches, kept per account on the server
+export const aiSearchHistory = () => axios.get('/api/ai-search/history');
+export const aiSearchHistoryImport = (queries) => axios.post('/api/ai-search/history', { queries });
+export const aiSearchHistoryClear = () => axios.delete('/api/ai-search/history');
+
 // AI Search: fetch requests made via AI Search
 export const getAiSearchRequests = (page = 1, perPage = 12, sortBy = 'date-desc') => {
     return axios.get('/api/automation/requests/ai-search', {
@@ -139,6 +143,8 @@ export const aiSearchFeedbackDelete = (tmdbId, mediaType) => {
 export const aiSearchStatus = () => {
     return axios.get('/api/ai-search/status');
 };
+
+export const aiSearchInspiration = () => axios.get('/api/ai-search/inspiration');
 
 // Trakt OAuth device flow (admin, media-user scoped). App credentials are admin
 // settings; account tokens are stored per media-server user (provider + id).
@@ -241,8 +247,19 @@ export const revokeApiKey = (id) => axios.delete(`/api/auth/api-keys/${id}`);
 // Outbound webhooks (admin only)
 export const getWebhooks = () => axios.get('/api/v1/webhooks');
 export const createWebhook = (data) => axios.post('/api/v1/webhooks', data);
+// Personal "ready to watch" notifications for the signed-in user
+export const getMyNotifications = () => axios.get('/api/users/me/notifications');
+export const saveMyNotifications = (data) => axios.put('/api/users/me/notifications', data);
+export const deleteMyNotifications = () => axios.delete('/api/users/me/notifications');
+export const testMyNotifications = () => axios.post('/api/users/me/notifications/test');
 export const deleteWebhook = (id) => axios.delete(`/api/v1/webhooks/${id}`);
 export const getWebhookSettings = () => axios.get('/api/v1/webhooks/settings');
 export const updateWebhookSettings = (allowed_hosts) => axios.put('/api/v1/webhooks/settings', { allowed_hosts });
 export const getWebhookDeliveries = () => axios.get('/api/v1/webhooks/deliveries');
 export const retryWebhookDelivery = (id) => axios.post(`/api/v1/webhooks/deliveries/${id}/retry`);
+
+// Seerr pending-request expiry (admin only)
+export const runRequestExpiry = (dry_run) => axios.post('/api/automation/requests/expiry/run', { dry_run });
+export const getRequestExpiryLog = (limit = 100) => axios.get('/api/automation/requests/expiry/log', { params: { limit } });
+export const runRequestReplacements = () => axios.post('/api/automation/requests/replacements/run');
+export const getRequestReplacementLog = () => axios.get('/api/automation/requests/replacements/log');

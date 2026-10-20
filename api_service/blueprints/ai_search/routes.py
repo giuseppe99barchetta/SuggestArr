@@ -5,7 +5,7 @@ AI Search blueprint — semantic movie/TV search powered by LLM + TMDB.
 import asyncio
 
 import aiohttp
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from api_service.auth.limiter import limiter
 from api_service.config.logger_manager import LoggerManager
@@ -16,6 +16,39 @@ from api_service.services.llm.llm_service import get_llm_client
 
 ai_search_bp = Blueprint("ai_search", __name__)
 logger = LoggerManager.get_logger("AiSearchRoute")
+
+
+def _current_user_id():
+    """SuggestArr account id of the caller, or None when the request has none."""
+    user = getattr(g, "current_user", None)
+    try:
+        return int(user["id"]) if user and user.get("id") is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+@ai_search_bp.route("/inspiration", methods=["GET"])
+@limiter.limit("20 per minute")
+async def ai_search_inspiration():
+    """Return viewing-history starters belonging only to the signed-in user."""
+    user = getattr(g, "current_user", None)
+    if not user or not user.get("id"):
+        return jsonify({"status": "success", "items": []}), 200
+    try:
+        service = AiSearchService()
+        provider = str(service.config.get("SELECTED_SERVICE") or "").lower()
+        db = DatabaseManager()
+        profile = next((p for p in db.get_user_media_profiles(int(user["id"]))
+                        if p.get("provider") == provider and p.get("external_user_id")), None)
+        if not profile:
+            return jsonify({"status": "success", "items": []}), 200
+        identity = db.upsert_media_user_identity(provider, str(profile["external_user_id"]), profile.get("external_username"))
+        saved_history = db.list_watched_media(identity["id"], limit=6)
+        items = await service.inspiration(profile, saved_history)
+        return jsonify({"status": "success", "items": items}), 200
+    except Exception:
+        logger.warning("Could not load AI Search inspiration", exc_info=True)
+        return jsonify({"status": "error", "message": "Could not load viewing history"}), 503
 
 
 @ai_search_bp.route("/query", methods=["POST"])
@@ -76,6 +109,14 @@ async def ai_search_query():
             exclude_watched=exclude_watched,
             exclude_seen=exclude_seen,
         )
+
+        user_id = _current_user_id()
+        if user_id is not None:
+            try:
+                DatabaseManager().add_ai_search_history(user_id, query)
+            except Exception as exc:
+                # History is a convenience; a failure to store it must not lose the results.
+                logger.warning("Could not save AI search history: %s", exc)
 
         return jsonify({
             "status": "success",
@@ -307,3 +348,55 @@ def ai_search_seen_clear():
     except Exception as exc:
         logger.error("Failed to clear ai seen: %s", exc)
         return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@ai_search_bp.route("/history", methods=["GET"])
+def ai_search_history_list():
+    """Return the caller's recent AI searches, newest first."""
+    user_id = _current_user_id()
+    if user_id is None:
+        return jsonify({"status": "success", "history": []}), 200
+    try:
+        return jsonify({"status": "success", "history": DatabaseManager().get_ai_search_history(user_id)}), 200
+    except Exception as exc:
+        logger.error("Failed to load AI search history: %s", exc)
+        return jsonify({"status": "error", "message": "Could not load recent searches"}), 500
+
+
+@ai_search_bp.route("/history", methods=["POST"])
+@limiter.limit("10 per minute")
+def ai_search_history_import():
+    """Import searches kept in this browser before history moved to the server.
+
+    Request body:
+        queries (list[str]): Searches newest first; only the newest few are kept.
+    """
+    user_id = _current_user_id()
+    queries = (request.get_json(silent=True) or {}).get("queries")
+    if user_id is None:
+        return jsonify({"status": "error", "message": "Sign in to save recent searches"}), 400
+    if not isinstance(queries, list) or not all(isinstance(item, str) for item in queries):
+        return jsonify({"status": "error", "message": "queries must be a list of strings"}), 400
+    try:
+        db = DatabaseManager()
+        # Oldest first, so the newest ends on top.
+        for query in reversed(queries[:db.AI_SEARCH_HISTORY_LIMIT]):
+            db.add_ai_search_history(user_id, query)
+        return jsonify({"status": "success", "history": db.get_ai_search_history(user_id)}), 200
+    except Exception as exc:
+        logger.error("Failed to import AI search history: %s", exc)
+        return jsonify({"status": "error", "message": "Could not save recent searches"}), 500
+
+
+@ai_search_bp.route("/history", methods=["DELETE"])
+def ai_search_history_clear():
+    """Forget the caller's recent AI searches."""
+    user_id = _current_user_id()
+    if user_id is None:
+        return jsonify({"status": "success"}), 200
+    try:
+        DatabaseManager().clear_ai_search_history(user_id)
+        return jsonify({"status": "success"}), 200
+    except Exception as exc:
+        logger.error("Failed to clear AI search history: %s", exc)
+        return jsonify({"status": "error", "message": "Could not clear recent searches"}), 500

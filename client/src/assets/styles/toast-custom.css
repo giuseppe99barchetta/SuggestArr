@@ -1,87 +1,87 @@
 /* src/assets/styles/toast-custom.css */
 
-/* Container principale dei toast */
+/* Toast container */
 .v-toast__container {
   top: 80px !important;
   z-index: 9999 !important;
 }
 
-/* Singolo toast - Minimal style */
+/* Single toast, minimal style */
 .v-toast__item {
-  border-radius: var(--radius-md) !important;
+  border-radius: 8px !important;
   padding: 12px 16px !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
   backdrop-filter: blur(10px);
   font-family: inherit !important;
-  font-size: var(--font-size-sm) !important;
+  font-size: 0.875rem !important;
   min-width: 280px !important;
   border: 1px solid !important;
-  transition: var(--transition-all) !important;
+  transition: all 200ms ease !important;
 }
 
 /* Toast Success */
 .v-toast__item--success {
-  background: rgba(16, 185, 38, 0.3) !important;
-  border-color: rgba(16, 185, 38, 0.25) !important;
-  color: #e5e7eb !important;
+  background: var(--color-panel) !important;
+  border-color: color-mix(in srgb, var(--color-good) 45%, transparent) !important;
+  color: var(--color-ink) !important;
 }
 
 .v-toast__item--success .v-toast__icon {
-  color: var(--color-success) !important;
+  color: var(--color-good) !important;
 }
 
 /* Toast Error */
 .v-toast__item--error {
-  background: rgba(239, 68, 68, 0.3) !important;
-  border-color: rgba(245, 18, 18, 0.25) !important;
-  color: #e5e7eb !important;
+  background: var(--color-panel) !important;
+  border-color: color-mix(in srgb, var(--color-bad) 45%, transparent) !important;
+  color: var(--color-ink) !important;
 }
 
 .v-toast__item--error .v-toast__icon {
-  color: var(--color-error) !important;
+  color: var(--color-bad) !important;
 }
 
 /* Toast Warning */
 .v-toast__item--warning {
-  background: var(--color-warning-alpha-10) !important;
-  border-color: var(--color-warning-alpha-20) !important;
-  color: #e5e7eb !important;
+  background: var(--color-panel) !important;
+  border-color: color-mix(in srgb, var(--color-caution) 45%, transparent) !important;
+  color: var(--color-ink) !important;
 }
 
 .v-toast__item--warning .v-toast__icon {
-  color: var(--color-warning) !important;
+  color: var(--color-caution) !important;
 }
 
 /* Toast Info */
 .v-toast__item--info {
-  background: var(--color-primary-alpha-10) !important;
-  border-color: var(--color-primary-alpha-20) !important;
-  color: #e5e7eb !important;
+  background: var(--color-panel) !important;
+  border-color: color-mix(in srgb, var(--color-notice) 45%, transparent) !important;
+  color: var(--color-ink) !important;
 }
 
 .v-toast__item--info .v-toast__icon {
-  color: #3b82f6 !important;
+  color: var(--color-notice) !important;
 }
 
 /* Toast Default */
 .v-toast__item--default {
-  background: rgba(255, 255, 255, 0.05) !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-  color: #e5e7eb !important;
+  background: var(--color-panel) !important;
+  border-color: color-mix(in srgb, var(--color-ink-3) 45%, transparent) !important;
+  color: var(--color-ink) !important;
 }
 
 .v-toast__item--default .v-toast__icon {
-  color: #9ca3af !important;
+  color: var(--color-ink-3) !important;
 }
 
-/* Icona */
+/* Icon */
 .v-toast__icon {
   margin-right: 10px !important;
-  font-size: var(--font-size-base) !important;
+  font-size: 1rem !important;
   flex-shrink: 0 !important;
 }
 
-/* Testo */
+/* Text */
 .v-toast__text {
   font-weight: 400 !important;
   line-height: 1.4 !important;
@@ -89,12 +89,12 @@
   color: inherit !important;
 }
 
-/* Pulsante di chiusura */
+/* Close button */
 .v-toast__item .v-toast__item__close {
   opacity: 0.5 !important;
-  transition: opacity var(--transition-base) !important;
+  transition: opacity 200ms ease !important;
   color: currentColor !important;
-  font-size: var(--font-size-sm) !important;
+  font-size: 0.875rem !important;
   cursor: pointer !important;
   background: transparent !important;
   border: none !important;
@@ -106,10 +106,10 @@
   opacity: 0.8 !important;
 }
 
-/* Animazioni */
+/* Animations */
 .v-toast__item.v-toast--fade-enter-active,
 .v-toast__item.v-toast--fade-leave-active {
-  transition: var(--transition-all) !important;
+  transition: all 200ms ease !important;
 }
 
 .v-toast__item.v-toast--fade-enter-from {
@@ -137,6 +137,6 @@
   }
 
   .v-toast__icon {
-    font-size: var(--font-size-sm) !important;
+    font-size: 0.875rem !important;
   }
 }

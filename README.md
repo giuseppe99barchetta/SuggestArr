@@ -11,57 +11,38 @@
 [![](https://dcbadge.limes.pink/api/server/https://discord.com/invite/JXwFd3PnXY?style=flat)](https://discord.com/invite/JXwFd3PnXY)
 </div>
 
-SuggestArr is a project designed to automate media content recommendations and download requests based on user activity in media servers like **Jellyfin**, **Plex**, and now **Emby**. It retrieves recently watched content, searches for similar titles using the TMDb API, and sends automated download requests to **Seer**.
-
-New jobs follow the global **Approve requests before sending them to Seer** setting,
-disabled by default under **Advanced**. Each job can inherit that setting or override
-it to always approve or always send automatically. Held results appear on the
-Requests page, where the job owner or an administrator can send them to Seer,
-reject them, or blacklist them globally.
-
-The global Request Workflow settings can also pause a job while its SuggestArr
-suggestions await review and automatically reject suggestions left pending for a
-configured number of days. The pause behavior can be overridden per job.
+SuggestArr automates media recommendations and download requests based on what your users watch on **Jellyfin**, **Plex** or **Emby**. It takes recently watched content, finds similar titles through TMDb (or an AI model), and sends the requests to **Seer**.
 
 ## Features
-- **Multi-Media Server Support**: Supports Jellyfin, Plex, and Emby for retrieving media content.
-- **TMDb Integration**: Searches for similar movies and TV shows on TMDb.
-- **AI-Powered Recommendations** *(beta)*: Uses any OpenAI-compatible LLM (OpenAI, Ollama, Gemini, LiteLLM…) to generate hyper-personalized suggestions based on watch history, complete with AI reasoning for each pick.
-- **AI Search** *(beta)*: Describe in natural language what you want to watch and let the AI find matching titles, personalised to your viewing history, with one-click request to Seer.
-- **Trakt Watch History**: Let each user link their own Trakt account. SuggestArr can use Trakt recent watches as recommendation seeds and skip content already watched on Trakt.
-- **Imported Watch History**: Add CSV or manually searched TMDb titles with optional 0–10 ratings to personalise recommendations even after media has been removed from a server. See [the import format](docs/WATCH_HISTORY_IMPORT.md).
-- **Automated Requests**: Sends download requests for recommended content to Seer.
-- **Pending-Request Job Pause**: Skip scheduled or manual jobs while Seer still has requests waiting for approval or denial.
-- **Unwatched-Suggestion Pause**: Optionally pause scheduled recommendation jobs when a user has not watched a SuggestArr request within a configurable number of days; manual runs remain available.
-- **Cleanup Automation**: Optionally prune old SuggestArr-originated requests and files when users never favorite them in Plex, Jellyfin, or Emby.
-- **Web Interface**: A user-friendly interface for configuration and management.
-- **Real-Time Logs**: View and filter logs in real time (e.g., `INFO`, `ERROR`, `DEBUG`).
-- **User Selection**: Choose specific users to initiate requests, allowing management and approval of auto-requested content.
-- **Per-User Request Visibility**: Filter requests by media-server account, or let administrators limit regular users to requests for their linked Plex, Jellyfin, or Emby account.
-- **Cron Job Management**: Update the cron job schedule directly from the web interface.
-- **Configuration Pre-testing**: Automatically validates API keys and URLs during setup.
-- **Content Filtering**: Exclude requests for content already available on streaming platforms in your country.
-- **External Database Support**: Use external databases (PostgreSQL, MySQL) in addition to SQLite for improved scalability and performance.
 
-## Prerequisites
-- **Python 3.x** or **Docker**
-- **[TMDb API Key](https://www.themoviedb.org/documentation/api)**
-- Configured **[Jellyfin](https://jellyfin.org/)**, **[Plex](https://www.plex.tv/)**, or **[Emby](https://emby.media/)**
-- Configured **[Seer](https://github.com/seerr-team/seerr)**
-- (Optional) External database (PostgreSQL or MySQL) for improved performance
-- (Optional) **[Trakt application](https://app.trakt.tv/settings/apps)** for per-user Trakt watch-history integration
+- **Jellyfin, Plex and Emby** as watch-history sources, plus optional per-user **Trakt** history and [imported watch history](docs/WATCH_HISTORY_IMPORT.md) (CSV or manual TMDb titles with ratings).
+- **Recommendations** from TMDb, or from any OpenAI-compatible LLM (OpenAI, Ollama, OpenRouter, LiteLLM…) with a short reason for each pick.
+- **AI Search**: describe what you want to watch in plain language and request results in one click.
+- **Public list import** from MDBList or Trakt, as a scheduled job or a single import.
+- **Request control**: optional approval before sending to Seer, pause jobs while Seer requests are pending or suggestions are still unwatched, auto-decline stale Seerr requests.
+- **Cleanup automation**: remove old SuggestArr requests that nobody added to favorites (dry-run by default).
+- **Filters**: skip content already on streaming services in your country, plus quality and per-user filters.
+- **Web interface** for setup, scheduling, users, requests and live logs, with connection tests during setup.
+- **Recaps and milestones** you can share ([details](docs/RECAP.md)).
+- **SQLite, PostgreSQL or MySQL** database.
+- **Public REST API** with Swagger UI.
 
-## Docker Usage
+See the [Feature Guide](docs/FEATURES.md) for how each feature works.
 
-You can run the project using Docker Compose for easy setup and execution.
-Images are also available from GitHub Container Registry as `ghcr.io/giuseppe99barchetta/suggestarr:latest`.
+## Requirements
 
-### Docker Compose Example
+- **Docker** (recommended) or Python 3
+- A **[TMDb API key](https://www.themoviedb.org/documentation/api)**
+- **[Jellyfin](https://jellyfin.org/)**, **[Plex](https://www.plex.tv/)** or **[Emby](https://emby.media/)**
+- **[Seer](https://github.com/seerr-team/seerr)**
+- Optional: PostgreSQL/MySQL, an OpenAI-compatible LLM, a [Trakt app](https://developer.trakt.tv/apps/new)
+
+## Quick start
 
 ```yaml
 services:
   suggestarr:
-    image: ciuse99/suggestarr:latest
+    image: ciuse99/suggestarr:latest   # also ghcr.io/giuseppe99barchetta/suggestarr:latest
     container_name: SuggestArr
     restart: always
     ports:
@@ -69,228 +50,35 @@ services:
     volumes:
       - ./config_files:/app/config/config_files
     environment:
-      # Optional: Only needed if something goes wrong and you need to inspect deeper
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      # Optional: Customize the port (defaults to 5000 if not set)
-      - SUGGESTARR_PORT=${SUGGESTARR_PORT:-5000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}           # optional
+      - SUGGESTARR_PORT=${SUGGESTARR_PORT:-5000} # optional
 ```
-To start the container with Docker Compose:
 
 ```bash
-docker-compose up
+docker compose up -d
 ```
 
-## Web Interface
+Then open http://localhost:5000 and follow the setup wizard.
 
-Access the web interface at: http://localhost:5000 (or your custom port if configured with SUGGESTARR_PORT). Use this interface to configure the application, select your media service, and manage cron schedules.
+For Unraid, source install, reverse proxy, authentication, backups and recommended settings, see the [Installation Guide](docs/INSTALLATION.md).
 
-Make sure your environment is set up correctly and that the application is running to access the web interface.
+## Public API
 
-### Using a Specific Seer User for Requests
-If you'd like to use a specific Seer user to make media requests, follow these steps:
-
-1. In the web interface, enable the user selection option by checking the corresponding box.
-2. Select the desired user from the dropdown list.
-3. Enter the password for the selected user.
-4. The system will now use this user to make media requests, rather than using the admin or default profile.
-
-Password-based selection supports local Seer users. For Jellyfin/Emby recommendation jobs,
-**Mapped Seer user (fallback to technical)** matches the user whose watch history is being
-processed to Seerr's `jellyfinUserId`, then submits with the configured API key and that
-user's Seerr ID. This also supports Jellyfin-authenticated Seerr accounts without a local
-password. If no match can be resolved, the configured technical Seer identity is used.
-
-## Trakt Watch History Integration
-
-SuggestArr can enrich recommendations with each user's own Trakt watch history. Trakt is optional: media-server history still works without it.
-
-### What Trakt adds
-
-- Recent Trakt watches can be used as recommendation seeds.
-- Fully watched Trakt items can be added to the skip-watched set.
-- Each SuggestArr user links their own Trakt account from their profile.
-- Admins configure only the shared Trakt app credentials.
-- A collapsible **Recent Trakt Preview** panel shows the latest items fetched from Trakt when opened.
-
-### How to enable
-
-1. Create a Trakt app at <https://app.trakt.tv/settings/apps>.
-2. In SuggestArr, go to **Services -> Trakt**.
-3. Enter the Trakt **Client ID**, then save. New Trakt apps no longer receive a Client Secret; existing apps may keep their secret configured.
-4. Each user goes to **Profile -> Trakt Account** and clicks **Link Trakt**.
-5. Enter the Trakt device code shown by SuggestArr at the Trakt activation URL.
-6. Open **Recent Trakt Preview** to verify the latest Trakt history is being read.
-
-For admins, the same profile panel is available under **Users**. Trakt links are tied to the user's linked Plex, Jellyfin, or Emby media profile, so users should link their media-server account first.
-
-SuggestArr uses Trakt's device-code flow. For token refresh, add `urn:ietf:wg:oauth:2.0:oob` as a redirect URI in the Trakt app. Trakt may warn that it is not HTTPS, but it still allows the URI to be saved.
-
-## Job Pause and Cleanup Automation
-
-SuggestArr includes two safety tools for running automation without flooding Seer or keeping unwanted media forever.
-
-### Pause jobs while Seer has pending requests
-
-Each job has a **Pause while Seer requests are pending** option in its schedule settings.
-
-When enabled, SuggestArr checks Seer before running that job. If Seer has requests still awaiting approval or denial, the job is skipped and logged as paused/skipped. This applies to scheduled runs, single job runs, and force-run-all.
-
-Recommendation and Trakt Recommendation jobs can also enable **Pause if suggestions remain unwatched**. Movie and TV activity is tracked separately per linked media user. Watching a requested movie or one episode of a requested show starts a fresh cycle; only scheduled runs are paused.
-
-Use this when Seer approvals are part of your workflow and you want new automation runs to wait until the previous batch has been reviewed.
-
-### Cleanup Automation
-
-Cleanup Automation is available under **Advanced -> Cleanup Automation**.
-
-It looks at requests created by SuggestArr, waits for the configured grace period, checks whether the item is favorited in Plex, Jellyfin, or Emby, and then:
-
-- keeps favorited items
-- skips items no longer present in the media library
-- logs what would be deleted in dry-run mode
-- asks Seer to delete matching media files when real mode is enabled
-
-Cleanup is off by default and starts safely in dry-run mode. Always run dry-run first and review the audit log before enabling real deletions.
-
-## AI-Powered Recommendations (Beta)
-
-SuggestArr includes an optional AI recommendation engine that analyzes your watch history and suggests titles that match your taste, with a short explanation for each pick.
-
-Recent watches are treated as neutral viewing context, not automatic proof that a user liked them. When TMDb metadata is available, the AI also receives each item's media type and genres.
-
-The engine works with **any OpenAI-compatible API**, so you can use a cloud provider or a local model running on your own machine.
-
-### How to enable
-
-1. Open the web interface and go to **Settings → Advanced**.
-2. Check **Enable beta features**.
-3. Check **Use advanced suggestion algorithm**.
-4. Fill in the **AI Provider Configuration** fields that appear (click the **ⓘ** button next to the section title for an in-app guide).
-5. Save. The AI engine will be used automatically on the next automation run.
-
-> If the LLM is unavailable or returns no results, SuggestArr falls back to the standard TMDb-based recommendation algorithm transparently.
-
-### Supported providers
-
-| Provider | API Key | Base URL | Example model |
-|---|---|---|---|
-| **OpenAI** | Required (`sk-proj-...`) | *(leave blank)* | `gpt-4o-mini` |
-| **Ollama** (local) | Not required | `http://localhost:11434/v1` | `mistral`, `llama3` |
-| **OpenRouter** | Required (`sk-or-v1-...`) | `https://openrouter.ai/api/v1` | `meta-llama/llama-3-8b-instruct` |
-| **OrcaRouter** | Required (`sk-orca-...`) | `https://api.orcarouter.ai/v1` | `openai/gpt-5.5` |
-| **LiteLLM Proxy** | Depends on config | `http://<your-proxy>:4000` | Depends on config |
-
-**Note for Ollama users:** make sure Ollama is running and the model is pulled (`ollama pull mistral`) before saving. The API Key field can be left blank — SuggestArr will use a placeholder automatically.
-
-### Generation settings
-
-The **Temperature** field defaults to `legacy`, preserving the existing values: `0.7` for scheduled recommendations and `0.8` for AI Search. Clear the field and save to omit `temperature` from LLM requests, which is useful for models that reject it; enter a value from `0` to `2` to override both flows.
-
-**Reasoning effort** is optional (`low`, `medium`, or `high`) and is sent only for direct OpenAI GPT-5 and o-series models. It is provider/model dependent, so other OpenAI-compatible endpoints leave it out.
-
-### Docker Compose with Ollama (example)
-
-```yaml
-services:
-  suggestarr:
-    image: ciuse99/suggestarr:latest
-    container_name: SuggestArr
-    restart: always
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./config_files:/app/config/config_files
-
-  ollama:
-    image: ollama/ollama
-    container_name: ollama
-    restart: always
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-
-volumes:
-  ollama_data:
-```
-
-After starting both containers, pull your preferred model:
-
-```bash
-docker exec -it ollama ollama pull mistral
-```
-
-Then in SuggestArr Advanced settings set:
-- **Base URL** → `http://ollama:11434/v1`
-- **Model** → `mistral`
-- **API Key** → *(leave blank)*
-
----
-
-## 🔍 AI Search (Beta)
-
-SuggestArr includes an **AI Search** tab in the dashboard that lets you find movies and TV shows using plain text, no browsing required.
-
-### How it works
-
-Type a natural-language description of what you feel like watching. The LLM interprets your query (genres, era, language, rating threshold, mood…) and translates it into structured TMDB filters. Results are ranked and enriched with an AI-generated rationale explaining why each title was picked for you.
-
-**Examples of queries you can use:**
-- *"A psychological thriller from the 90s with a twist ending"*
-- *"Feel-good anime with strong friendships"*
-- *"80s sci-fi movies with practical effects"*
-- *"A dark comedy series like Breaking Bad"*
-
-### Key capabilities
-
-- **Natural language queries** — describe mood, genre, decade, language, or specific themes
-- **Viewing-history personalisation** — the AI tailors results based on what you (or your users) have already watched
-- **Exclude already-watched titles** — hide content you've already seen
-- **One-click requesting** — send results directly to Seer without leaving the page
-- **Query interpretation badge** — see how the AI parsed your query (genres, year range, language, min rating)
-
-### How to enable
-
-AI Search requires an LLM to be configured (same setup as AI-Powered Recommendations):
-
-1. Open the web interface → **Settings → Advanced**.
-2. Check **Enable beta features**.
-3. Fill in the **AI Provider Configuration** fields (API key, base URL, model).
-4. Save. The **AI Search** tab will become active in the dashboard.
-
-> AI Search is independent of the automated recommendations run — it is triggered manually from the dashboard and does not affect cron-based automation.
-
----
-
-## Installation
-For Docker, Unraid, source install, reverse proxy, backup, and recommended configuration instructions, see the [Installation Guide](/docs/INSTALLATION.md).
-
-## Public API and Swagger
-
-External integrations use the stable public API at `/api/v1`; dashboard
-endpoints under `/api/*` are internal. The interactive Swagger UI is served by
-the backend at `http://localhost:5000/docs` (or
-`http://localhost:5000/<SUBPATH>/docs` when `SUBPATH` is configured). The
-OpenAPI document is also available as
-`/api/v1/openapi.json` and `/api/v1/openapi.yaml`.
-
-See the [Public API v1 guide](/docs/API.md) for authentication, addresses, and
-usage details.
+External integrations use the stable API at `/api/v1` (endpoints under `/api/*` are internal). Swagger UI is at `http://localhost:5000/docs` (or `/<SUBPATH>/docs`), and the OpenAPI document at `/api/v1/openapi.json` and `/api/v1/openapi.yaml`. See the [API guide](docs/API.md).
 
 ## Support SuggestArr ❤️
-If you enjoy SuggestArr, consider making a donation to support its continued development and help keep the project running at its best:
 
-- ☕ [Ko-fi](https://ko-fi.com/ciuse99)
-- 💛 [Buy Me a Coffee](https://buymeacoffee.com/suggestarr)
+SuggestArr is free, open source and built in my spare time. If it saves you time or helps you find something great to watch, a small donation helps me keep improving it.
 
-Every contribution, no matter the size, is greatly appreciated. Thank you for supporting SuggestArr!
+<a href="https://ko-fi.com/ciuse99"><img src="https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=ko-fi&logoColor=white&style=for-the-badge" alt="Support on Ko-fi"></a>
+<a href="https://buymeacoffee.com/suggestarr"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-FFDD00?logo=buy-me-a-coffee&logoColor=black&style=for-the-badge" alt="Buy Me a Coffee"></a>
 
-## Join Our Discord Community
-Feel free to join our Discord community to share ideas, ask questions, or get help with SuggestArr: [Join here](https://discord.gg/JXwFd3PnXY).
+You can also help without donating: star the repo ⭐, report bugs, or share SuggestArr with other Plex, Jellyfin and Emby users.
 
-## Contribute
-Contributions are highly welcome! Feel free to open issues, submit pull requests, or provide any feedback that can improve the project. Whether you're fixing bugs, improving documentation, or adding new features, all contributions are greatly appreciated.
+## Community and contributing
+
+Questions, ideas and help on [Discord](https://discord.gg/JXwFd3PnXY). Issues and pull requests are welcome.
 
 ## License
-This project is licensed under the MIT License.
 
+MIT

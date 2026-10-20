@@ -11,6 +11,7 @@ from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
 from api_service.db.job_repository import JobRepository
 from api_service.services.filter_normalization import normalize_filters
+from api_service.services.library_content import load_library_content
 from api_service.services.seer.seer_client import SeerClient
 from api_service.services.request_sources import DISCOVER_SOURCE
 from api_service.services.tmdb.tmdb_discover import TMDbDiscover
@@ -41,9 +42,11 @@ class DiscoverAutomation:
         self.tmdb_discover: Optional[TMDbDiscover] = None
         self.repository: Optional[JobRepository] = None
         self.db_manager: Optional[DatabaseManager] = None
+        self.env_vars: Dict[str, Any] = {}
+        self.local_content: Dict[str, set[str]] = {}
 
     @classmethod
-    async def create(cls, job_id: int) -> 'DiscoverAutomation':
+    async def create(cls, job_id: int, overrides=None) -> 'DiscoverAutomation':
         """
         Async factory method to create and initialize DiscoverAutomation.
 
@@ -65,11 +68,14 @@ class DiscoverAutomation:
         instance.job_data = instance.repository.get_job(job_id)
         if not instance.job_data:
             raise ValueError(f"Job not found: {job_id}")
+        if overrides:
+            instance.job_data.update(overrides)
 
         instance.logger.info(f"Initializing DiscoverAutomation for job: {instance.job_data['name']}")
 
         # Load environment variables (merges DB integration keys on top of YAML)
         env_vars = ConfigService.get_runtime_config()
+        instance.env_vars = env_vars
 
         # Initialize Seer client
         number_of_seasons = env_vars.get('FILTER_NUM_SEASONS') or "all"
@@ -150,6 +156,9 @@ class DiscoverAutomation:
 
                 # Fetch discover results
                 results = await self.fetch_discover_results()
+
+                # Load what is already in the library so owned titles are skipped
+                self.local_content = await load_library_content(self.env_vars, self.seer_client)
             results_count = len(results)
 
             self.logger.info(f"Discovered {results_count} items")
@@ -210,6 +219,9 @@ class DiscoverAutomation:
         filters = {**raw_filters, **normalized_filters}
         media_type = self.job_data.get('media_type', 'movie')
         max_results = self.job_data.get('max_results', 20)
+        if self.job_data.get('_replacement_for') is not None:
+            # shortcut: scan at most 100 candidates; paginate if searches often exhaust.
+            max_results = 100
 
         raw_language_filter = normalized_filters.get('language') or filters.get('with_original_language')
         normalized_language_filter = self.tmdb_discover._normalize_language_code(raw_language_filter)
@@ -247,6 +259,8 @@ class DiscoverAutomation:
         media_type = self.job_data.get('media_type', 'movie')
 
         for item in results:
+            if self.job_data.get('_replacement_for') is not None and requested_count >= 1:
+                break
             tmdb_id = item['id']
             title = item.get('title', 'Unknown')
 
@@ -256,9 +270,9 @@ class DiscoverAutomation:
                     self.logger.debug(f"Skipping {title}: already requested")
                     continue
 
-                # Check if already downloaded via Seer
+                # Check if already in the library (media server or Seer availability)
                 is_downloaded = await self.seer_client.check_already_downloaded(
-                    tmdb_id, media_type
+                    tmdb_id, media_type, self.local_content
                 )
                 if is_downloaded:
                     self.logger.debug(f"Skipping {title}: already downloaded")
@@ -352,7 +366,7 @@ class DiscoverAutomation:
             self.logger.warning(f"Failed to save metadata for {item.get('title')}: {str(e)}")
 
 
-async def execute_discover_job(job_id: int, execution_id=None) -> ExecutionResult:
+async def execute_discover_job(job_id: int, execution_id=None, *, overrides=None) -> ExecutionResult:
     """
     Execute a discover job by ID.
     This is the function to be called by JobManager.
@@ -367,7 +381,10 @@ async def execute_discover_job(job_id: int, execution_id=None) -> ExecutionResul
     logger.info(f"Starting execution of discover job: {job_id}")
 
     try:
-        automation = await DiscoverAutomation.create(job_id)
+        if overrides:
+            automation = await DiscoverAutomation.create(job_id, overrides=overrides)
+        else:
+            automation = await DiscoverAutomation.create(job_id)
         result = await automation.run(execution_id=execution_id)
         return result
     except Exception as e:

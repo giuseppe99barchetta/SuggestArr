@@ -28,7 +28,8 @@ class OmdbClient(BaseHTTPClient):
             api_key (str): OMDb API key (free tier at omdbapi.com).
         """
         super().__init__()
-        self.api_key = api_key
+        # Strip whitespace to avoid 401s from copy-paste artefacts.
+        self.api_key = api_key.strip() if isinstance(api_key, str) else api_key
         self.base_url = "https://www.omdbapi.com/"
         self.logger.debug("OmdbClient initialized")
 
@@ -47,12 +48,13 @@ class OmdbClient(BaseHTTPClient):
         if not imdb_id or not self.api_key:
             return None
 
-        url = f"{self.base_url}?i={imdb_id}&apikey={self.api_key}"
+        params = {'i': imdb_id, 'apikey': self.api_key}
         self.logger.debug("Fetching OMDb rating for IMDB ID %s", imdb_id)
 
         try:
             session = await self._get_session()
-            async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:
+            async with session.get(self.base_url, params=params,
+                                   timeout=self.REQUEST_TIMEOUT) as response:
                 if response.status in HTTP_OK:
                     data = await response.json()
 

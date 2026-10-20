@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import { importConfig as importConfigAPI } from '@/api/api.js'; // importa il wrapper admin-only
+import { importConfig as importConfigAPI } from '@/api/api.js'; // Import the admin-only wrapper
 
 export function useConfigImport(fetchConfig) {
   const isImporting = ref(false);
@@ -19,10 +19,10 @@ export function useConfigImport(fetchConfig) {
       const text = await file.text();
       const configData = JSON.parse(text);
 
-      // usa il nuovo endpoint admin-only
+      // Use the new admin-only endpoint
       await importConfigAPI(configData);
 
-      // ricarica la config aggiornata
+      // Reload the updated config
       await fetchConfig();
 
       return { success: true };

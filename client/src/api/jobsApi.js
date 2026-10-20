@@ -4,6 +4,26 @@ import axios from 'axios';
  * API client for discover jobs management.
  */
 export const jobsApi = {
+  async previewList(config, offset = 0) {
+    const response = await axios.post('/api/jobs/lists/preview', { ...config, offset });
+    return response.data;
+  },
+  async importListOnce(config) {
+    const response = await axios.post('/api/jobs/lists/import', config);
+    return response.data;
+  },
+  async getListImport() {
+    const response = await axios.get('/api/jobs/lists/import');
+    return response.data;
+  },
+  async resumeListImport(id) {
+    const response = await axios.post(`/api/jobs/lists/import/${id}/resume`);
+    return response.data;
+  },
+  async verifyList(source) {
+    const response = await axios.post('/api/jobs/lists/verify', source);
+    return response.data;
+  },
   /**
    * Get all discover jobs.
    * @returns {Promise<Object>} Response with jobs array.

@@ -10,6 +10,7 @@ _INTEGRATION_REQUIRED_FIELDS = {
     'seer': ['api_url', 'api_key'],
     'tmdb': ['api_key'],
     'omdb': ['api_key'],
+    'mdblist': ['api_key'],
     'trakt': ['client_id'],
     'openai': [],
 }
@@ -146,6 +147,9 @@ class IntegrationMixin:
             'omdb': {
                 'api_key': env_vars.get('OMDB_API_KEY', ''),
             },
+            'mdblist': {
+                'api_key': env_vars.get('MDBLIST_API_KEY', ''),
+            },
             'trakt': {
                 'client_id': env_vars.get('TRAKT_CLIENT_ID', ''),
                 'client_secret': env_vars.get('TRAKT_CLIENT_SECRET', ''),
@@ -185,12 +189,7 @@ class IntegrationMixin:
                 continue
 
             action = "Updating" if existing is not None else "Migrating"
-            safe_log = {k: v for k, v in config.items() if k not in (
-                'api_key', 'session_token', 'client_secret', 'access_token', 'refresh_token'
-            )}
-            self.logger.info(
-                "%s '%s' credentials from config.yaml -> integrations table %s",
-                action, service, safe_log,
-            )
+            # No values: legacy URLs may embed credentials, and a denylist misses new secret fields.
+            self.logger.info("%s '%s' credentials from config.yaml -> integrations table", action, service)
             self.set_integration(service, config)
 

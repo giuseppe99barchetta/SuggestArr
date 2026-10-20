@@ -125,10 +125,9 @@ def test_webhook_worker_signs_and_marks_successful_delivery():
         'id': 1, 'event_id': 'event-1', 'event_type': 'run.failed', 'url': 'https://hooks.example.test',
         'secret': 'a' * 16, 'allow_private': 0, 'payload': '{"job_id":7}', 'retry_count': 0,
     }]
-    response = MagicMock(status_code=204)
     with patch('api_service.jobs.webhook_worker.DatabaseManager', return_value=db), \
             patch('api_service.jobs.webhook_worker.validate_url'), \
-            patch('api_service.jobs.webhook_worker.requests.post', return_value=response) as post:
+            patch('api_service.jobs.webhook_worker.send_bytes', return_value=(204, b'')) as post:
         run_webhook_worker()
     assert post.call_args.kwargs['headers']['X-SuggestArr-Signature'].startswith('sha256=')
     db.update_webhook_delivery.assert_called_once_with(1, 'delivered', 0)
@@ -140,10 +139,9 @@ def test_webhook_worker_retries_a_failed_delivery():
         'id': 1, 'event_id': 'event-1', 'event_type': 'run.failed', 'url': 'https://hooks.example.test',
         'secret': 'a' * 16, 'allow_private': 0, 'payload': '{}', 'retry_count': 0,
     }]
-    response = MagicMock(status_code=503)
     with patch('api_service.jobs.webhook_worker.DatabaseManager', return_value=db), \
             patch('api_service.jobs.webhook_worker.validate_url'), \
-            patch('api_service.jobs.webhook_worker.requests.post', return_value=response):
+            patch('api_service.jobs.webhook_worker.send_bytes', return_value=(503, b'')):
         run_webhook_worker()
     assert db.update_webhook_delivery.call_args.args[:3] == (1, 'queued', 1)
 
@@ -157,7 +155,7 @@ def test_webhook_worker_retries_timeout_and_ssrf_rejection_without_posting():
     db.get_due_webhook_deliveries.return_value = [item]
     with patch('api_service.jobs.webhook_worker.DatabaseManager', return_value=db), \
             patch('api_service.jobs.webhook_worker.validate_url'), \
-            patch('api_service.jobs.webhook_worker.requests.post', side_effect=__import__('requests').Timeout):
+            patch('api_service.jobs.webhook_worker.send_bytes', side_effect=TimeoutError):
         run_webhook_worker()
     assert db.update_webhook_delivery.call_args.args[:3] == (1, 'queued', 1)
 
@@ -165,7 +163,7 @@ def test_webhook_worker_retries_timeout_and_ssrf_rejection_without_posting():
     db.get_due_webhook_deliveries.return_value = [item]
     with patch('api_service.jobs.webhook_worker.DatabaseManager', return_value=db), \
             patch('api_service.jobs.webhook_worker.validate_url', side_effect=ValueError('blocked')), \
-            patch('api_service.jobs.webhook_worker.requests.post') as post:
+            patch('api_service.jobs.webhook_worker.send_bytes') as post:
         run_webhook_worker()
     post.assert_not_called()
     assert db.update_webhook_delivery.call_args.args[:3] == (1, 'queued', 1)

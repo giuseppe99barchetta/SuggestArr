@@ -1,334 +1,429 @@
 <template>
+  <!-- Not AppDialog: a native modal <dialog> would make the jobs tour, which highlights fields in here, inert. -->
   <Teleport to="body">
-    <div class="modal-overlay" @click.self="$emit('close')">
-      <div class="modal">
-      <!-- Minimal Header -->
-      <div class="modal-header">
-        <h3 class="modal-title">{{ isEditing ? 'Edit Job' : 'Create New Job' }}</h3>
-        <button @click="$emit('close')" class="modal-close" aria-label="Close">
-          <i class="fas fa-times"></i>
+    <div class="fixed inset-0 z-[1050] flex bg-black/70 p-4 backdrop-blur-sm max-sm:p-2" @click.self="requestClose">
+      <div role="dialog" aria-modal="true" aria-labelledby="job-modal-title" class="m-auto flex max-h-full sm:max-h-[min(80dvh,52rem)] w-full max-w-4xl flex-col overflow-hidden rounded-card border border-edge bg-panel text-ink shadow-2xl">
+      <header class="flex shrink-0 items-start gap-3 border-b border-edge px-6 py-4 max-sm:px-4">
+        <span aria-hidden="true" class="grid h-9 w-9 shrink-0 place-items-center rounded-ctl bg-brand-soft text-sm text-brand-ink"><i aria-hidden="true" :class="jobTypeInfoIcon"></i></span>
+        <div class="min-w-0 flex-1 self-center">
+          <h2 id="job-modal-title" class="m-0 text-base font-bold text-ink">{{ oneTime ? 'Import list once' : isEditing ? 'Edit job' : 'New job' }}</h2>
+          <p class="m-0 mt-0.5 truncate text-[13px] text-ink-3">{{ oneTime ? 'Import all matching titles without creating a scheduled job.' : isEditing ? form.name : 'Pick what to look for, when, and how it reaches Seer.' }}</p>
+        </div>
+        <button type="button" class="-mr-2 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" aria-label="Close" @click="requestClose">
+          <i aria-hidden="true" class="fas fa-times"></i>
         </button>
-      </div>
+      </header>
 
-      <form @submit.prevent="handleSubmit" class="modal-form">
-        <div class="modal-body">
-          <!-- Job Type Selector -->
-          <div class="settings-group" data-tour-id="job-modal-type-selector">
-            <h4>Job Type</h4>
-            <div class="job-type-selector">
-              <button
-                type="button"
-                class="job-type-btn discover"
-                :class="{ active: form.job_type === 'discover' }"
-                @click="setJobType('discover')"
-              >
-                <i class="fas fa-search"></i>
-                <div class="job-type-info">
-                  <span class="job-type-name">Discover</span>
-                  <span class="job-type-desc">Find content using TMDb filters</span>
+      <form @submit.prevent="handleSubmit" class="flex min-h-0 flex-1 flex-col">
+        <div class="flex min-h-0 flex-1">
+          <!-- Section index with a one-line summary of each step (desktop only). -->
+          <nav aria-label="Job sections" class="hidden w-56 shrink-0 flex-col gap-1 border-r border-edge bg-panel-2/40 p-3 md:flex">
+            <button
+              v-for="(section, index) in sections"
+              :key="section.id"
+              type="button"
+              class="flex cursor-pointer items-start gap-3 rounded-ctl border-0 px-3 py-2.5 text-left transition-colors"
+              :class="activeSection === section.id ? 'bg-brand-soft' : 'bg-transparent hover:bg-raised'"
+              :aria-current="activeSection === section.id ? 'step' : null"
+              @click="scrollToSection(section.id)"
+            >
+              <span class="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold" :class="activeSection === section.id ? 'bg-brand text-white' : 'bg-raised text-ink-3'">{{ index + 1 }}</span>
+              <span class="flex min-w-0 flex-col">
+                <span class="text-[13px] font-semibold" :class="activeSection === section.id ? 'text-ink' : 'text-ink-2'">{{ section.title }}</span>
+                <span class="truncate text-xs text-ink-4">{{ section.summary }}</span>
+              </span>
+            </button>
+          </nav>
+
+          <div ref="body" class="min-h-0 flex-1 overflow-y-auto px-6 pb-8 max-sm:px-4" @scroll="updateActiveSection">
+            <!-- 1. Source -->
+            <section data-section="source" :class="sectionClass">
+              <h3 :class="sectionTitleClass"><span :class="sectionNumberClass">1</span>{{ oneTime ? 'List' : 'What to look for' }}</h3>
+
+              <div v-if="!oneTime" class="mb-6" data-tour-id="job-modal-type-selector">
+                <div :class="fieldLabelClass">
+                  <span>Job type</span>
+                  <InfoTip v-if="isEditing" text="The type sets how the job finds titles, so it can't be changed later. Create a new job to use a different type." />
                 </div>
-              </button>
-              <button
-                type="button"
-                class="job-type-btn recommendation"
-                :class="{ active: form.job_type === 'recommendation' }"
-                @click="setJobType('recommendation')"
-              >
-                <i class="fas fa-users"></i>
-                <div class="job-type-info">
-                  <span class="job-type-name">Recommendation</span>
-                  <span class="job-type-desc">Based on user watch history</span>
+                <div v-if="isEditing" class="flex items-center gap-3 rounded-ctl border border-edge-strong bg-panel-2 px-3.5 py-3">
+                  <i aria-hidden="true" :class="jobTypeInfoIcon" class="w-5 text-center text-brand-ink"></i>
+                  <span class="flex min-w-0 flex-col gap-0.5">
+                    <span class="text-[0.85rem] font-semibold text-ink">{{ currentJobType.label }}</span>
+                    <span class="text-xs text-ink-3">{{ jobTypeInfoText }}</span>
+                  </span>
                 </div>
-              </button>
-              <button
-                type="button"
-                class="job-type-btn trakt_recommendations"
-                :class="{
-                  active: form.job_type === 'trakt_recommendations',
-                  disabled: !traktJobAvailable
-                }"
-                :disabled="!traktJobAvailable"
-                :title="traktJobUnavailableReason"
-                @click="setJobType('trakt_recommendations')"
-              >
-                <i class="icon-trakt"></i>
-                <div class="job-type-info">
-                  <span class="job-type-name">Trakt Recommendations</span>
-                  <span class="job-type-desc">Personalized lists from Trakt.tv</span>
-                </div>
-              </button>
-            </div>
-            <div v-if="!traktJobAvailable" class="trakt-setup-alert" role="status">
-              <i class="fas fa-circle-info"></i>
-              <span>{{ traktJobUnavailableReason }}</span>
-            </div>
-          </div>
-
-          <!-- Info Note based on job type -->
-          <div class="info-note" :class="form.job_type">
-            <i :class="jobTypeInfoIcon"></i>
-            <span>{{ jobTypeInfoText }}</span>
-          </div>
-
-          <!-- Basic Info -->
-          <div class="settings-group" data-tour-id="job-modal-basic-info">
-            <h4>Basic Information</h4>
-
-            <div class="form-group">
-              <label for="jobName">Job Name</label>
-              <input
-                id="jobName"
-                v-model="form.name"
-                type="text"
-                :placeholder="jobNamePlaceholder"
-                class="form-control"
-                required
-              />
-            </div>
-
-            <div class="form-group">
-              <label>Media Type</label>
-              <div class="media-type-selector">
-                <button
-                  type="button"
-                  class="media-type-btn"
-                  :class="{ active: form.media_type === 'movie' }"
-                  @click="form.media_type = 'movie'"
-                >
-                  <i class="fas fa-film"></i>
-                  Movies
-                </button>
-                <button
-                  type="button"
-                  class="media-type-btn"
-                  :class="{ active: form.media_type === 'tv' }"
-                  @click="form.media_type = 'tv'"
-                >
-                  <i class="fas fa-tv"></i>
-                  TV Shows
-                </button>
-                <button
-                  v-if="form.job_type !== 'discover'"
-                  type="button"
-                  class="media-type-btn"
-                  :class="{ active: form.media_type === 'both' }"
-                  @click="form.media_type = 'both'"
-                >
-                  <i class="fas fa-layer-group"></i>
-                  Both
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- User Selection (only for recommendation jobs) -->
-          <div v-if="form.job_type === 'recommendation'" class="settings-group">
-            <h4>Users to Monitor</h4>
-            <RecommendationFilters v-model="form" :show-advanced="showAdvanced" :llm-configured="llmConfigured" />
-          </div>
-
-          <div v-if="form.job_type === 'trakt_recommendations'" class="settings-group">
-            <h4>Trakt User</h4>
-            <TraktRecommendationFilters
-              v-model="form"
-              :show-advanced="showAdvanced"
-              :trakt-configured="traktConfigured"
-              :connected-users="connectedUsers"
-              :is-loading="traktLoading"
-            />
-          </div>
-
-          <!-- Schedule -->
-          <div class="settings-group">
-            <h4>Seer delivery</h4>
-            <div class="delivery-mode-selector">
-              <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'inherit' }" @click="form.delivery_mode = 'inherit'">
-                <i class="fas fa-sliders"></i><span><strong>Use global setting</strong><small>Follow Advanced settings</small></span>
-              </button>
-              <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'automatic' }" @click="form.delivery_mode = 'automatic'">
-                <i class="fas fa-paper-plane"></i><span><strong>Send automatically</strong><small>Queue for Seer immediately</small></span>
-              </button>
-              <button type="button" class="media-type-btn" :class="{ active: form.delivery_mode === 'manual' }" @click="form.delivery_mode = 'manual'">
-                <i class="fas fa-user-check"></i><span><strong>Approve first</strong><small>Review in Requests</small></span>
-              </button>
-            </div>
-            <BaseDropdown
-              v-model="form.seer_identity_mode"
-              :options="seerIdentityOptions"
-              label="Request as"
-              placeholder="Select Seer identity"
-              help-text="Choose who Seer credits for these requests. Mapped users fall back to the technical user configured in Services."
-            />
-            <div class="request-profiles-grid">
-              <div v-for="type in visibleProfileTypes" :key="type" class="request-profile-card">
-                <div class="request-profile-heading"><i :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
-                <BaseDropdown :model-value="form.request_profiles[type].serverId || ''" :options="serverOptions(type)" label="Server" placeholder="Use Seer default" @update:model-value="setRequestServer(type, $event)" />
-                <template v-if="form.request_profiles[type].serverId">
-                  <BaseDropdown v-model="form.request_profiles[type].profileId" :options="profileOptions(type)" label="Quality profile" placeholder="Select quality profile" />
-                  <BaseDropdown v-model="form.request_profiles[type].rootFolder" :options="rootFolderOptions(type)" label="Root folder" placeholder="Select root folder" />
-                  <BaseDropdown v-if="type === 'tv' && languageProfileOptions(type).length" v-model="form.request_profiles[type].languageProfileId" :options="languageProfileOptions(type)" label="Language profile" placeholder="Use Sonarr default" />
+                <template v-else>
+                  <div class="grid gap-2 sm:grid-cols-2">
+                    <button
+                      v-for="type in jobTypes"
+                      :key="type.value"
+                      type="button"
+                      :class="choiceClass(form.job_type === type.value)"
+                      :disabled="type.value === 'trakt_recommendations' && !traktJobAvailable"
+                      :title="type.value === 'trakt_recommendations' ? traktJobUnavailableReason : null"
+                      :aria-pressed="form.job_type === type.value ? 'true' : 'false'"
+                      @click="setJobType(type.value)"
+                    >
+                      <i aria-hidden="true" :class="type.icon" class="w-5 text-center"></i>
+                      <span class="flex min-w-0 flex-col gap-0.5">
+                        <span>{{ type.label }}</span>
+                        <span class="text-[0.72rem] font-normal text-ink-3">{{ type.description }}</span>
+                      </span>
+                    </button>
+                  </div>
+                  <p class="m-0 mt-2 text-xs text-ink-4">{{ jobTypeInfoText }}</p>
+                  <p v-if="!traktJobAvailable" class="m-0 mt-1 flex items-start gap-1.5 text-xs text-ink-4" role="status">
+                    <i aria-hidden="true" class="fas fa-circle-info mt-0.5 text-brand-ink"></i>
+                    <span>{{ traktJobUnavailableReason }}</span>
+                  </p>
                 </template>
               </div>
-            </div>
-          </div>
 
-          <div class="settings-group" data-tour-id="job-modal-schedule">
-            <h4>Schedule</h4>
-            <SchedulePicker v-model="schedule" />
-            <div class="schedule-options">
-              <BaseCheckbox
-                v-model="form.pause_if_pending_requests"
-                label="Pause while Seer requests are pending"
-                description="Skip this job when Seer still has requests awaiting approval or denial."
-              />
-              <div class="form-group">
-                <label>Pause while this job has SuggestArr approvals pending</label>
-                <div class="delivery-mode-selector">
-                  <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'inherit' }" @click="form.approval_pause_mode = 'inherit'">
-                    <i class="fas fa-sliders"></i><span><strong>Use global setting</strong><small>Follow Advanced settings</small></span>
-                  </button>
-                  <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'always' }" @click="form.approval_pause_mode = 'always'">
-                    <i class="fas fa-pause"></i><span><strong>Always pause</strong><small>Wait for this job's approvals</small></span>
-                  </button>
-                  <button type="button" class="media-type-btn" :class="{ active: form.approval_pause_mode === 'never' }" @click="form.approval_pause_mode = 'never'">
-                    <i class="fas fa-play"></i><span><strong>Never pause</strong><small>Ignore pending approvals</small></span>
-                  </button>
+              <!-- Where titles come from, per job type -->
+              <div v-if="form.job_type === 'list_import'" class="mb-6 grid gap-3" data-testid="public-list-source">
+                <div class="grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)]">
+                  <label class="ui-label">Provider
+                    <select v-model="form.filters.list_provider" class="ui-input" @change="listCheckMessage = ''">
+                      <option :value="undefined" disabled>Select provider</option>
+                      <option v-for="option in listProviders" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                  </label>
+                  <label class="ui-label" for="listUrl">List URL
+                    <input id="listUrl" v-model="form.filters.list_url" type="url" required class="ui-input" placeholder="https://mdblist.com/lists/username/list-name" @input="listCheckMessage = ''" />
+                  </label>
                 </div>
-              </div>
-              <BaseCheckbox
-                v-if="form.job_type !== 'discover'"
-                v-model="form.prevent_suggestions_if_unwatched"
-                label="Pause if suggestions remain unwatched"
-                description="Scheduled runs only. Manual Run now remains available."
-              />
-              <div v-if="form.job_type !== 'discover' && form.prevent_suggestions_if_unwatched" class="form-group">
-                <label for="unwatchedDays">Days before pausing</label>
-                <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days"
-                  class="form-control" type="number" min="1" required />
-              </div>
-              <div class="form-group">
-                <label for="maxRequestsPerUser">Automatic requests per user</label>
-                <input id="maxRequestsPerUser" v-model.number="form.max_requests_per_user"
-                  class="form-control" type="number" min="0" max="1000" required />
-                <small class="form-help">Set 0 for no extra limit. Max Results still caps each run.</small>
-              </div>
-              <div v-if="form.max_requests_per_user > 0" class="form-group">
-                <label for="requestLimitWindowHours">Rolling window (hours)</label>
-                <input id="requestLimitWindowHours" v-model.number="form.request_limit_window_hours"
-                  class="form-control" type="number" min="1" max="8760" required />
-              </div>
-            </div>
-          </div>
-
-          <!-- Advanced Settings Toggle -->
-          <button type="button" class="advanced-toggle" data-tour-id="job-modal-advanced-toggle" @click="showAdvanced = !showAdvanced">
-            <i :class="showAdvanced ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
-            {{ showAdvanced ? 'Hide Advanced Settings' : 'Show Advanced Settings' }}
-          </button>
-
-          <!-- Advanced Settings (collapsible) -->
-          <transition name="slide">
-            <div v-if="showAdvanced" class="advanced-section">
-              <!-- Max Results -->
-              <div v-if="form.job_type !== 'recommendation'" class="settings-group" data-tour-id="job-modal-max-results">
-                <h4>Results</h4>
-                <div class="form-group">
-                  <label for="maxResults">Max Results: {{ form.max_results }}</label>
-                  <input
-                    id="maxResults"
-                    v-model.number="form.max_results"
-                    type="range"
-                    min="5"
-                    max="100"
-                    step="5"
-                    class="form-range"
-                  />
-                  <small class="form-help">
-                    Maximum content to discover per run
-                  </small>
+                <p class="m-0 text-xs text-ink-4">{{ oneTime ? 'All matching titles are checked and queued in the background. Titles already in your library, requested or queued are skipped.' : 'Public lists only. Titles are imported gradually, in list order, skipping what you already have or requested.' }}</p>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button type="button" class="ui-btn" :disabled="listChecking || !form.filters.list_provider || !form.filters.list_url" @click="verifyList">{{ listChecking ? 'Checking…' : 'Verify list' }}</button>
+                  <button type="button" class="ui-btn" :disabled="listPreviewLoading || !form.filters.list_provider || !form.filters.list_url" @click="previewList()"><i aria-hidden="true" :class="listPreviewLoading ? 'fas fa-spinner fa-spin' : 'fas fa-eye'"></i>{{ listPreviewLoading ? 'Loading…' : 'Preview list' }}</button>
+                  <span v-if="listCheckMessage" role="status" class="min-w-0 break-words text-sm" :class="listCheckSuccess ? 'text-good' : 'text-bad'">{{ listCheckMessage }}</span>
                 </div>
               </div>
 
-              <!-- Filters -->
-              <div class="settings-group filters-section" data-tour-id="job-modal-filters">
-                <h4>{{ form.job_type === 'discover' ? 'Discovery Filters' : 'Quality Filters' }}</h4>
-                <JobFilters
-                  v-model="form.filters"
-                  :media-type="form.media_type"
-                  :job-type="form.job_type"
+              <div v-if="form.job_type === 'recommendation'" class="mb-6">
+                <div :class="fieldLabelClass">
+                  <span>Users to monitor</span>
+                  <InfoTip text="Suggestions are based on what these users watched on your media server." />
+                </div>
+                <RecommendationUsers v-model="form" />
+              </div>
+
+              <div v-if="form.job_type === 'trakt_recommendations'" class="mb-6">
+                <div :class="fieldLabelClass">
+                  <span>Trakt account</span>
+                  <InfoTip text="The media user whose linked Trakt recommendations this job fetches." />
+                </div>
+                <TraktRecommendationFilters
+                  v-model="form"
+                  :trakt-configured="traktConfigured"
+                  :connected-users="connectedUsers"
+                  :is-loading="traktLoading"
                 />
               </div>
 
-              <!-- Spacer for dropdown overflow -->
-              <div class="dropdown-spacer"></div>
-            </div>
-          </transition>
+              <div class="grid gap-4 sm:grid-cols-2" data-tour-id="job-modal-basic-info">
+                <div class="ui-label">
+                  <span>Media type</span>
+                  <div role="group" aria-label="Media type" class="flex rounded-ctl border border-edge-strong bg-canvas p-1">
+                    <button
+                      v-for="type in visibleMediaTypes"
+                      :key="type.value"
+                      type="button"
+                      class="flex h-[32px] flex-1 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border-0 px-2 text-[13px] font-semibold transition-colors"
+                      :class="form.media_type === type.value ? 'bg-brand text-white' : 'bg-transparent text-ink-3 hover:text-ink'"
+                      :aria-pressed="form.media_type === type.value ? 'true' : 'false'"
+                      @click="form.media_type = type.value"
+                    >
+                      <i aria-hidden="true" :class="type.icon"></i>
+                      {{ type.label }}
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="!oneTime" class="flex flex-col gap-1.5">
+                  <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                    <label for="jobName">Name</label>
+                    <InfoTip text="Shown in the job list and history. Leave it empty to use the suggested name." />
+                  </div>
+                  <input
+                    id="jobName"
+                    v-model="form.name"
+                    type="text"
+                    :placeholder="autoName"
+                    class="ui-input"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <!-- 2. Filters -->
+            <section data-section="filters" :class="sectionClass" data-tour-id="job-modal-filters">
+              <h3 :class="sectionTitleClass"><span :class="sectionNumberClass">2</span>Filters</h3>
+
+              <div v-if="usesExclusions" class="mb-6">
+                <div :class="fieldLabelClass">
+                  <span>Skip titles that are</span>
+                </div>
+                <div class="flex flex-wrap gap-x-6 gap-y-2">
+                  <div class="flex items-center gap-1.5">
+                    <BaseCheckbox v-model="excludeDownloaded" label="Already in your library" />
+                    <InfoTip text="Titles your media server already has are never requested again." />
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <BaseCheckbox v-model="excludeRequested" label="Already requested in Seer" />
+                    <InfoTip text="Titles with an existing Seer request, from anyone, are skipped." />
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="form.job_type === 'recommendation'" class="mb-6">
+                <div :class="fieldLabelClass"><span>Recommendation tuning</span></div>
+                <RecommendationFilters v-model="form" :llm-configured="llmConfigured" />
+              </div>
+
+              <!-- Filters: own stacking context so its dropdowns overlap what follows -->
+              <div v-if="form.job_type === 'discover'" class="relative z-50">
+                <JobFilters v-model="form.filters" :media-type="form.media_type" :job-type="form.job_type" />
+              </div>
+              <template v-else>
+                <button type="button" :class="disclosureClass" :aria-expanded="qualityOpen.toString()" aria-controls="job-quality-filters" @click="qualityOpen = !qualityOpen">
+                  <span class="flex min-w-0 flex-col items-start gap-0.5">
+                    <span class="text-[13px] font-semibold text-ink">Quality filters</span>
+                    <span class="text-xs font-normal text-ink-4">Rating, votes, runtime, release date, language, genres and streaming services.</span>
+                  </span>
+                  <i aria-hidden="true" class="fas fa-chevron-down ml-auto text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': qualityOpen }"></i>
+                </button>
+                <div v-if="qualityOpen" id="job-quality-filters" class="relative z-50 mt-4">
+                  <JobFilters v-model="form.filters" :media-type="form.media_type" :job-type="form.job_type" />
+                </div>
+              </template>
+            </section>
+
+            <!-- 3. Schedule -->
+            <section v-if="!oneTime" data-section="schedule" :class="sectionClass" data-tour-id="job-modal-schedule">
+              <h3 :class="sectionTitleClass"><span :class="sectionNumberClass">3</span>Schedule</h3>
+              <SchedulePicker v-model="schedule" />
+
+              <div class="mt-6">
+                <div :class="fieldLabelClass">
+                  <span>Skip a scheduled run when…</span>
+                  <InfoTip text="Pause rules only affect scheduled runs. “Run now” always works." />
+                </div>
+                <div class="flex flex-col divide-y divide-edge rounded-ctl border border-edge">
+                  <div class="flex items-center gap-1.5 px-4 py-3">
+                    <BaseCheckbox v-model="form.pause_if_pending_requests" label="Seer still has requests waiting for approval" />
+                    <InfoTip text="Avoids piling up new requests while Seer admins haven't reviewed the previous ones." />
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                    <div class="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-ink">
+                      <span id="approval-pause-label">This job has suggestions waiting in Requests</span>
+                      <InfoTip text="Suggestions held for your approval in SuggestArr's Requests page (when delivery is “Approve first”)." />
+                    </div>
+                    <div role="radiogroup" aria-labelledby="approval-pause-label" class="flex rounded-ctl border border-edge-strong bg-canvas p-1">
+                      <button
+                        v-for="mode in approvalPauseModes"
+                        :key="mode.value"
+                        type="button"
+                        role="radio"
+                        :aria-checked="form.approval_pause_mode === mode.value"
+                        :title="mode.hint"
+                        class="cursor-pointer rounded-[8px] border-0 px-3 py-1.5 text-xs font-semibold transition-colors"
+                        :class="form.approval_pause_mode === mode.value ? 'bg-brand text-white' : 'bg-transparent text-ink-3 hover:text-ink'"
+                        @click="form.approval_pause_mode = mode.value"
+                      >{{ mode.label }}</button>
+                    </div>
+                  </div>
+
+                  <div v-if="!['discover', 'list_import'].includes(form.job_type)" class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                    <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                      <BaseCheckbox v-model="form.prevent_suggestions_if_unwatched" label="Pause if suggestions remain unwatched" />
+                      <InfoTip text="Waits until people actually watch what was suggested before adding more." />
+                    </div>
+                    <label v-if="form.prevent_suggestions_if_unwatched" class="flex items-center gap-2 text-[13px] text-ink-3" for="unwatchedDays">
+                      for
+                      <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days" class="ui-input h-9! w-20" type="number" min="1" required />
+                      days
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- 4. Requests -->
+            <section data-section="requests" :class="sectionClass" data-tour-id="job-modal-requests">
+              <h3 :class="sectionTitleClass"><span :class="sectionNumberClass">{{ oneTime ? 3 : 4 }}</span>Requests</h3>
+
+              <div class="mb-6">
+                <div :class="fieldLabelClass">
+                  <span>Delivery</span>
+                  <InfoTip text="“Approve first” holds suggestions in the Requests page until you accept them. “Send automatically” requests them in Seer straight away." />
+                </div>
+                <div class="grid gap-2 sm:grid-cols-3">
+                  <button v-for="mode in deliveryModes" :key="mode.value" type="button" :class="choiceClass(form.delivery_mode === mode.value)" :aria-pressed="form.delivery_mode === mode.value ? 'true' : 'false'" @click="form.delivery_mode = mode.value">
+                    <i aria-hidden="true" :class="mode.icon" class="w-4 shrink-0 text-center"></i><span class="grid flex-1 gap-0.5"><strong>{{ mode.label }}</strong><small class="text-[0.72rem] font-normal text-ink-3">{{ mode.hint }}</small></span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="mb-6">
+                <label class="ui-label">Request as
+                  <select v-model="form.seer_identity_mode" class="ui-input">
+                    <option v-for="option in seerIdentityOptions" :key="option.value" :value="option.value" :disabled="option.disabled">{{ option.label }}</option>
+                  </select>
+                  <span v-if="seerIdentityHelp" class="text-xs font-normal text-ink-4">{{ seerIdentityHelp }}</span>
+                </label>
+              </div>
+
+              <div v-if="!oneTime" class="mb-6" data-tour-id="job-modal-max-results">
+                <div :class="fieldLabelClass"><span>Limits</span></div>
+                <div class="grid gap-4 sm:grid-cols-3">
+                  <div class="flex flex-col gap-1.5">
+                    <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                      <label for="maxResults">Per run</label>
+                      <InfoTip :text="maxResultsHelp" />
+                    </div>
+                    <input id="maxResults" v-model.number="form.max_results" class="ui-input" type="number" min="1" :max="maxResultsLimit" required />
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                    <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                      <label for="maxRequestsPerUser">Per user</label>
+                      <InfoTip text="Most automatic requests credited to one Seer user within the window. 0 means no extra limit; the per-run limit still applies." />
+                    </div>
+                    <input id="maxRequestsPerUser" v-model.number="form.max_requests_per_user" class="ui-input" type="number" min="0" max="1000" required />
+                  </div>
+                  <div v-if="form.max_requests_per_user > 0" class="flex flex-col gap-1.5">
+                    <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                      <label for="requestLimitWindowHours">Window (hours)</label>
+                      <InfoTip text="The per-user limit counts requests made in this many past hours, e.g. 24 for a daily cap or 168 for a weekly one." />
+                    </div>
+                    <input id="requestLimitWindowHours" v-model.number="form.request_limit_window_hours" class="ui-input" type="number" min="1" max="8760" required />
+                  </div>
+                </div>
+              </div>
+
+              <button type="button" :class="disclosureClass" :aria-expanded="profilesOpen.toString()" aria-controls="job-request-profiles" @click="profilesOpen = !profilesOpen">
+                <span class="flex min-w-0 flex-col items-start gap-0.5">
+                  <span class="text-[13px] font-semibold text-ink">Radarr / Sonarr overrides</span>
+                  <span class="text-xs font-normal text-ink-4">{{ profilesSummary }}</span>
+                </span>
+                <i aria-hidden="true" class="fas fa-chevron-down ml-auto text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': profilesOpen }"></i>
+              </button>
+              <div v-if="profilesOpen" id="job-request-profiles" class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
+                <div v-for="type in visibleProfileTypes" :key="type" class="grid gap-2 rounded-ctl border border-edge bg-panel-2 p-4">
+                  <div class="flex items-center gap-2 text-[0.85rem] font-semibold text-ink"><i aria-hidden="true" :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'" class="text-ink-4"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
+                  <label class="ui-label">Server
+                    <select :value="form.request_profiles[type].serverId ?? ''" class="ui-input" @change="setRequestServer(type, $event.target.value)">
+                      <option value="">Use Seer default</option>
+                      <option v-for="option in serverOptions(type)" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                  </label>
+                  <template v-if="form.request_profiles[type].serverId">
+                    <label class="ui-label">Quality profile
+                      <select v-model="form.request_profiles[type].profileId" class="ui-input">
+                        <option value="" disabled>Select quality profile</option>
+                        <option v-for="option in profileOptions(type)" :key="option.value" :value="option.value">{{ option.label }}</option>
+                      </select>
+                    </label>
+                    <label class="ui-label">Root folder
+                      <select v-model="form.request_profiles[type].rootFolder" class="ui-input">
+                        <option value="" disabled>Select root folder</option>
+                        <option v-for="option in rootFolderOptions(type)" :key="option.value" :value="option.value">{{ option.label }}</option>
+                      </select>
+                    </label>
+                    <label v-if="type === 'tv' && languageProfileOptions(type).length" class="ui-label">Language profile
+                      <select v-model="form.request_profiles[type].languageProfileId" class="ui-input">
+                        <option value="">Use Sonarr default</option>
+                        <option v-for="option in languageProfileOptions(type)" :key="option.value" :value="option.value">{{ option.label }}</option>
+                      </select>
+                    </label>
+                  </template>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
 
-        <!-- Footer outside scrollable area -->
-        <div class="modal-footer">
-          <button type="button" @click="$emit('close')" class="btn btn-secondary">
-            Cancel
+        <footer class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-edge bg-panel-2/50 px-6 py-3 max-sm:px-4">
+          <p v-if="validationMessage" class="m-0 mr-auto flex min-w-0 items-center gap-1.5 text-xs text-caution" role="status">
+            <i aria-hidden="true" class="fas fa-circle-exclamation"></i>{{ validationMessage }}
+          </p>
+          <button type="button" class="ui-btn" @click="requestClose">Cancel</button>
+          <button type="submit" class="ui-btn-primary" :disabled="!isValid || isSaving">
+            <i v-if="isSaving" aria-hidden="true" class="fas fa-spinner fa-spin"></i>
+            {{ oneTime ? 'Import entire list' : isEditing ? 'Save job' : 'Create job' }}
           </button>
-          <button type="submit" class="btn btn-primary" :disabled="!isValid || isSaving">
-            <i v-if="isSaving" class="fas fa-spinner fa-spin"></i>
-            <i v-else class="fas fa-check"></i>
-            {{ isEditing ? 'Update Job' : 'Create Job' }}
-          </button>
-        </div>
+        </footer>
       </form>
       </div>
     </div>
   </Teleport>
+  <DryRunResultModal v-if="listPreview" :job="{ name: 'List preview' }" :items="listPreview.items" run-label="" :has-more="listPreview.has_more" :loading-more="listPreviewLoading" @more="previewList(true)" @close="listPreview = null" />
 </template>
 
 <script>
 import JobFilters from './JobFilters.vue';
 import RecommendationFilters from './RecommendationFilters.vue';
+import RecommendationUsers from './RecommendationUsers.vue';
 import TraktRecommendationFilters from './TraktRecommendationFilters.vue';
 import SchedulePicker from './SchedulePicker.vue';
+import DryRunResultModal from './DryRunResultModal.vue';
 import { jobsApi } from '@/api/jobsApi';
 import { listTraktJobUsers } from '@/api/api';
 import { waitForAuthReady, useAuth } from '@/composables/useAuth';
-import { getJobTypeIcon } from '@/utils/jobTypeVisuals.js';
+import { getJobTypeIcon, formatJobSchedule } from '@/utils/jobTypeVisuals.js';
+import { jobRequiresApproval } from '@/utils/requestApproval.js';
 import axios from 'axios';
+import { confirmDialog } from '@/utils/confirmDialog';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
-import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import InfoTip from '@/components/ui/InfoTip.vue';
 
 export default {
   name: 'JobModal',
   components: {
     JobFilters,
     RecommendationFilters,
+    RecommendationUsers,
     TraktRecommendationFilters,
     SchedulePicker,
+    DryRunResultModal,
     BaseCheckbox,
-    BaseDropdown
+    InfoTip
   },
   props: {
+    oneTime: { type: Boolean, default: false },
     job: {
       type: Object,
       default: null
-    }
+    },
+    /** Global REQUIRE_REQUEST_APPROVAL, shown on the "Use global setting" delivery option; null when unknown. */
+    requestApprovalDefault: { type: [Boolean, String], default: null },
+    /** Global PAUSE_JOBS_WITH_PENDING_APPROVALS, shown on the "Global" pause option; null when unknown. */
+    approvalPauseDefault: { type: Boolean, default: null }
   },
   emits: ['close', 'save'],
   setup() { const { currentUser } = useAuth(); return { currentUser }; },
   data() {
     return {
+      // JSON of form + schedule once loading settles; edits are compared against it.
+      pristine: null,
       connectedUsers: [],
       form: {
-        name: '',
-        job_type: 'discover',
-        media_type: 'movie',
+        name: this.oneTime ? 'One-time list import' : '',
+        job_type: this.oneTime ? 'list_import' : 'discover',
+        media_type: this.oneTime ? 'both' : 'movie',
         max_results: 20,
         filters: {},
         user_ids: [],
         enabled: true,
         pause_if_pending_requests: false,
         prevent_suggestions_if_unwatched: false,
-        unwatched_suggestion_days: 7
-        , max_requests_per_user: 0, request_limit_window_hours: 24
-        , delivery_mode: 'inherit', approval_pause_mode: 'inherit', seer_identity_mode: 'technical_user',
+        unwatched_suggestion_days: 7,
+        max_requests_per_user: 0,
+        request_limit_window_hours: 24,
+        delivery_mode: 'inherit',
+        approval_pause_mode: 'inherit',
+        seer_identity_mode: 'technical_user',
         request_profiles: { movie: {}, tv: {} }
       },
       schedule: {
@@ -336,21 +431,120 @@ export default {
         value: 'daily'
       },
       isSaving: false,
-      showAdvanced: false,
+      qualityOpen: false,
+      profilesOpen: false,
+      activeSection: 'source',
+      sectionClass: 'scroll-mt-2 border-b border-edge py-7 last:border-b-0',
+      sectionTitleClass: 'm-0 mb-5 flex items-center gap-2.5 text-[15px] font-bold text-ink',
+      sectionNumberClass: 'grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-soft text-xs font-bold text-brand-ink',
+      fieldLabelClass: 'mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-2',
+      disclosureClass: 'flex w-full cursor-pointer items-center gap-3 rounded-ctl border border-edge-strong bg-panel-2 px-4 py-3 text-left hover:border-ink-4',
+      jobTypes: [
+        { value: 'list_import', label: 'Import list', description: 'Public MDBList or Trakt list', icon: 'fas fa-list' },
+        { value: 'discover', label: 'Discover', description: 'Find content using TMDb filters', icon: 'fas fa-search' },
+        { value: 'recommendation', label: 'Recommendation', description: 'Based on user watch history', icon: 'fas fa-users' },
+        { value: 'trakt_recommendations', label: 'Trakt Recommendations', description: 'Personalized lists from Trakt.tv', icon: 'icon-trakt' },
+      ],
+      mediaTypes: [
+        { value: 'movie', label: 'Movies', icon: 'fas fa-film' },
+        { value: 'tv', label: 'TV', icon: 'fas fa-tv' },
+        { value: 'both', label: 'Both', icon: 'fas fa-layer-group' },
+      ],
       llmConfigured: false,
+      listProviders: [{ value: 'mdblist', label: 'MDBList' }, { value: 'trakt', label: 'Trakt' }],
+      listChecking: false,
+      listPreview: null,
+      listPreviewLoading: false,
+      listCheckMessage: '',
+      listCheckSuccess: false,
       traktConfigured: false,
-      traktLoading: false
-      , radarrServers: [], sonarrServers: []
+      traktLoading: false,
+      radarrServers: [],
+      sonarrServers: []
     };
   },
   computed: {
     seerIdentityOptions() {
       const options = [
-        { value: 'technical_user', label: 'Technical user configured in Services' },
-        { value: 'matching_user', label: 'Mapped Seer user (fallback to technical)' }
+        { value: 'technical_user', label: 'Technical user' },
+        { value: 'matching_user', label: 'Matching Seer user' }
       ];
-      if (this.currentUser?.role === 'admin') options.push({ value: 'admin_user', label: 'Mapped Seer admin' });
+      if (this.currentUser?.role === 'admin') options.push({ value: 'admin_user', label: 'Seer admin' });
       return options;
+    },
+    seerIdentityHelp() {
+      if (this.form.seer_identity_mode === 'matching_user') {
+        return 'Each request is credited to the Seer account linked to the user it is for. Users without one fall back to the technical user.';
+      }
+      if (this.form.seer_identity_mode === 'admin_user') {
+        return 'Requests are made as your linked Seer admin account.';
+      }
+      return 'Requests are made as the Seer user configured in Connections.';
+    },
+    deliveryModes() {
+      const global = this.requestApprovalDefault === null ? null : jobRequiresApproval({ delivery_mode: 'inherit' }, this.requestApprovalDefault);
+      return [
+        { value: 'inherit', label: 'Use global setting', hint: global === null ? 'Follow Advanced settings' : global ? 'Currently: approval required' : 'Currently: sent automatically', icon: 'fas fa-sliders' },
+        { value: 'automatic', label: 'Send automatically', hint: 'Request in Seer right away', icon: 'fas fa-paper-plane' },
+        { value: 'manual', label: 'Approve first', hint: 'Review in Requests', icon: 'fas fa-user-check' },
+      ];
+    },
+    approvalPauseModes() {
+      const global = this.approvalPauseDefault === null ? '' : ` (${this.approvalPauseDefault ? 'on' : 'off'})`;
+      return [
+        { value: 'inherit', label: `Global${global}`, hint: 'Follow the setting in Advanced' },
+        { value: 'always', label: 'Always', hint: "Wait until this job's suggestions are reviewed" },
+        { value: 'never', label: 'Never', hint: 'Ignore pending approvals' },
+      ];
+    },
+    currentJobType() {
+      return this.jobTypes.find(type => type.value === this.form.job_type) || this.jobTypes[0];
+    },
+    visibleMediaTypes() {
+      return this.mediaTypes.filter(type => type.value !== 'both' || this.form.job_type !== 'discover');
+    },
+    mediaLabel() {
+      return this.mediaTypes.find(type => type.value === this.form.media_type)?.label || '';
+    },
+    autoName() {
+      return `${this.currentJobType.label} · ${this.mediaLabel}`;
+    },
+    usesExclusions() {
+      return ['recommendation', 'trakt_recommendations'].includes(this.form.job_type);
+    },
+    // Unset means the job follows the global EXCLUDE_* settings, which default to on.
+    excludeDownloaded: {
+      get() { return this.form.filters.exclude_downloaded ?? true; },
+      set(value) { this.form.filters = { ...this.form.filters, exclude_downloaded: value }; }
+    },
+    excludeRequested: {
+      get() { return this.form.filters.exclude_requested ?? true; },
+      set(value) { this.form.filters = { ...this.form.filters, exclude_requested: value }; }
+    },
+    maxResultsLimit() {
+      return this.form.job_type === 'list_import' ? 1000 : 100;
+    },
+    maxResultsHelp() {
+      if (this.form.job_type === 'list_import') return 'Most new titles requested from the list each run (1–1000).';
+      if (this.form.job_type === 'discover') return 'Most titles discovered and requested each run (1–100).';
+      return 'Most suggestions requested each run, across all monitored users (1–100).';
+    },
+    profilesSummary() {
+      const set = this.visibleProfileTypes.filter(type => this.form.request_profiles[type]?.serverId);
+      if (!set.length) return "Using Seer's default server, quality profile and root folder.";
+      return `Custom ${set.map(type => (type === 'movie' ? 'Radarr' : 'Sonarr')).join(' and ')} profile.`;
+    },
+    sections() {
+      const delivery = { inherit: 'Global delivery', automatic: 'Automatic', manual: 'Approve first' }[this.form.delivery_mode] || '';
+      const sections = [
+        { id: 'source', title: this.oneTime ? 'List' : 'What to look for', summary: this.oneTime ? this.mediaLabel : this.autoName },
+        { id: 'filters', title: 'Filters', summary: this.form.job_type === 'discover' ? 'TMDb discovery filters' : this.form.job_type === 'recommendation' ? 'Tuning and quality' : 'Quality filters' },
+      ];
+      if (!this.oneTime) {
+        sections.push({ id: 'schedule', title: 'Schedule', summary: formatJobSchedule({ schedule_type: this.schedule.type, schedule_value: this.schedule.value }) });
+      }
+      sections.push({ id: 'requests', title: 'Requests', summary: this.oneTime ? delivery : `${delivery} · ${this.form.max_results || 0} per run` });
+      return sections;
     },
     visibleProfileTypes() {
       return this.form.media_type === 'both' ? ['movie', 'tv'] : [this.form.media_type];
@@ -363,10 +557,10 @@ export default {
     },
     traktJobUnavailableReason() {
       if (!this.traktConfigured) {
-        return 'Configure Trakt app credentials in Services before creating a Trakt recommendations job.';
+        return 'Configure Trakt app credentials in Connections before creating a Trakt recommendations job.';
       }
       if (this.connectedUsers.length === 0) {
-        return 'Link at least one media user to Trakt in Services before creating a Trakt recommendations job.';
+        return 'Link at least one media user to Trakt in Connections before creating a Trakt recommendations job.';
       }
       return '';
     },
@@ -374,6 +568,9 @@ export default {
       return getJobTypeIcon(this.form.job_type);
     },
     jobTypeInfoText() {
+      if (this.form.job_type === 'list_import') {
+        return 'Import missing titles from a public list, in list order, using your quality filters and delivery settings.';
+      }
       if (this.form.job_type === 'discover') {
         return 'Discover Jobs find content using TMDb filters, independent from user watch history.';
       }
@@ -383,24 +580,24 @@ export default {
       return 'Recommendation Jobs find similar content based on what your users have watched on your media server or Trakt.tv.';
     },
     jobNamePlaceholder() {
+      if (this.form.job_type === 'list_import') return 'e.g., Weekly MDBList Movies';
       if (this.form.job_type === 'discover') return 'e.g., Popular Movies 2024';
       if (this.form.job_type === 'trakt_recommendations') return 'e.g., Weekly Trakt Picks';
       return 'e.g., Weekly Recommendations';
     },
+    validationMessage() {
+      if (this.form.job_type === 'list_import' && !this.form.filters.list_provider) return 'Choose a list provider.';
+      if (this.form.job_type === 'list_import' && !this.form.filters.list_url?.trim()) return 'Enter the URL of the public list.';
+      if (this.form.job_type === 'trakt_recommendations' && (this.form.user_ids || []).length !== 1) return 'Choose the Trakt account to use.';
+      if (!this.form.media_type) return 'Choose a media type.';
+      if (!this.oneTime && !(this.form.max_results >= 1 && this.form.max_results <= this.maxResultsLimit)) return `Requests per run must be between 1 and ${this.maxResultsLimit}.`;
+      if (this.form.prevent_suggestions_if_unwatched && !(this.form.unwatched_suggestion_days >= 1)) return 'Days before pausing must be at least 1.';
+      if (!(this.form.max_requests_per_user >= 0 && this.form.max_requests_per_user <= 1000)) return 'Per-user limit must be between 0 and 1000.';
+      if (!(this.form.request_limit_window_hours >= 1 && this.form.request_limit_window_hours <= 8760)) return 'Limit window must be between 1 and 8760 hours.';
+      return '';
+    },
     isValid() {
-      if (!this.form.name.trim().length || !this.form.media_type) {
-        return false;
-      }
-      if (this.form.prevent_suggestions_if_unwatched && this.form.unwatched_suggestion_days < 1) {
-        return false;
-      }
-      if (this.form.max_requests_per_user < 0 || this.form.max_requests_per_user > 1000 || this.form.request_limit_window_hours < 1 || this.form.request_limit_window_hours > 8760) {
-        return false;
-      }
-      if (this.form.job_type === 'trakt_recommendations') {
-        return (this.form.user_ids || []).length === 1;
-      }
-      return true;
+      return !this.validationMessage;
     }
   },
   async mounted() {
@@ -415,10 +612,10 @@ export default {
         enabled: this.job.enabled !== false,
         pause_if_pending_requests: this.job.pause_if_pending_requests === true,
         prevent_suggestions_if_unwatched: this.job.prevent_suggestions_if_unwatched === true,
-        unwatched_suggestion_days: this.job.unwatched_suggestion_days || 7
-        , max_requests_per_user: this.job.max_requests_per_user || 0,
-        request_limit_window_hours: this.job.request_limit_window_hours || 24
-        , delivery_mode: this.job.delivery_mode || 'automatic',
+        unwatched_suggestion_days: this.job.unwatched_suggestion_days || 7,
+        max_requests_per_user: this.job.max_requests_per_user || 0,
+        request_limit_window_hours: this.job.request_limit_window_hours || 24,
+        delivery_mode: this.job.delivery_mode || 'automatic',
         approval_pause_mode: this.job.approval_pause_mode || 'inherit',
         seer_identity_mode: this.job.seer_identity_mode || 'technical_user',
         request_profiles: {
@@ -430,6 +627,7 @@ export default {
         type: this.job.schedule_type || 'preset',
         value: this.job.schedule_value || 'daily'
       };
+      this.profilesOpen = Object.values(this.form.request_profiles).some(profile => profile.serverId);
     }
     // For new jobs, pre-populate filters with global config defaults
     if (!this.isEditing) {
@@ -464,8 +662,96 @@ export default {
       this.radarrServers = radarr.data.servers || [];
       this.sonarrServers = sonarr.data.servers || [];
     } catch { /* Seer defaults remain available. */ }
+    this.pristine = this.snapshot();
+    document.addEventListener('keydown', this.onKeydown);
+  },
+  beforeUnmount() {
+    document.removeEventListener('keydown', this.onKeydown);
   },
   methods: {
+    snapshot() {
+      return JSON.stringify({ form: this.form, schedule: this.schedule });
+    },
+
+    // Backdrop, Escape, the close button and Cancel all ask before throwing away edits.
+    async requestClose() {
+      const dirty = this.pristine !== null && this.snapshot() !== this.pristine;
+      if (dirty && !(await confirmDialog({
+        title: 'Discard your changes?',
+        message: 'This job has unsaved changes.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        danger: true,
+      }))) return;
+      this.$emit('close');
+    },
+
+    onKeydown(event) {
+      // A native dialog on top (list preview, confirmation) handles its own Escape.
+      if (event.key !== 'Escape' || document.querySelector('dialog[open]')) return;
+      event.preventDefault();
+      this.requestClose();
+    },
+
+    listConfig() {
+      return {
+        filters: this.form.filters,
+        media_type: this.form.media_type,
+        delivery_mode: this.form.delivery_mode,
+        seer_identity_mode: this.form.seer_identity_mode,
+        request_profiles: Object.fromEntries(Object.entries(this.form.request_profiles).map(([type, profile]) => [type,
+          profile.serverId !== '' && profile.serverId != null && profile.profileId !== '' && profile.profileId != null && profile.rootFolder ? {
+            serverId: Number(profile.serverId), profileId: Number(profile.profileId), rootFolder: profile.rootFolder,
+            is4k: profile.is4k === true,
+            ...(profile.languageProfileId !== '' && profile.languageProfileId != null ? { languageProfileId: Number(profile.languageProfileId) } : {})
+          } : {}
+        ]))
+      };
+    },
+    async previewList(more = false) {
+      this.listPreviewLoading = true;
+      this.listCheckMessage = '';
+      const config = JSON.parse(JSON.stringify(this.listConfig()));
+      try {
+        const response = await jobsApi.previewList(config, more ? this.listPreview.next_offset : 0);
+        if (JSON.stringify(config) !== JSON.stringify(this.listConfig())) return;
+        const previous = more && this.listPreview ? this.listPreview.items : [];
+        const items = [...new Map([...previous, ...(response.items || [])].map(item => [`${item.media_type}:${item.tmdb_id}`, item])).values()];
+        this.listPreview = { ...response, items };
+      } catch (error) {
+        this.listCheckSuccess = false;
+        this.listCheckMessage = error.response?.data?.message || 'Could not preview the list.';
+        this.listPreview = null;
+      } finally {
+        this.listPreviewLoading = false;
+      }
+    },
+    async verifyList() {
+      const source = { list_provider: this.form.filters.list_provider, list_url: this.form.filters.list_url };
+      this.listChecking = true;
+      this.listCheckMessage = '';
+      try {
+        const response = await jobsApi.verifyList(source);
+        if (source.list_url !== this.form.filters.list_url || source.list_provider !== this.form.filters.list_provider) return;
+        this.listCheckSuccess = true;
+        this.listCheckMessage = `Public list: ${response.data.name}`;
+      } catch (error) {
+        if (source.list_url !== this.form.filters.list_url || source.list_provider !== this.form.filters.list_provider) return;
+        this.listCheckSuccess = false;
+        this.listCheckMessage = error.response?.data?.message || 'Could not verify the list.';
+      } finally {
+        this.listChecking = false;
+      }
+    },
+    // Selectable option tile used by every choice group in this modal.
+    choiceClass(active) {
+      return [
+        'flex cursor-pointer items-center gap-3 rounded-ctl border px-3.5 py-3 text-left text-[0.85rem] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45',
+        active
+          ? 'border-brand bg-brand-soft text-ink [&>i]:text-brand-ink'
+          : 'border-edge-strong bg-panel-2 text-ink-2 hover:enabled:border-ink-4 hover:enabled:text-ink [&>i]:text-ink-4',
+      ];
+    },
     serversFor(type) { return type === 'movie' ? this.radarrServers : this.sonarrServers; },
     selectedServer(type) { return this.serversFor(type).find(server => String(server.id) === String(this.form.request_profiles[type].serverId)); },
     serverOptions(type) { return this.serversFor(type).map(server => ({ value: server.id, label: `${server.name}${server.is4k ? ' (4K)' : ''}` })); },
@@ -476,8 +762,25 @@ export default {
       const server = this.serversFor(type).find(item => String(item.id) === String(serverId));
       this.form.request_profiles[type] = { serverId, profileId: '', rootFolder: '', is4k: server?.is4k === true, languageProfileId: server?.activeLanguageProfileId ?? '' };
     },
-    openAdvanced() {
-      this.showAdvanced = true;
+    scrollToSection(id) {
+      this.$refs.body?.querySelector(`[data-section="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+
+    // Highlights the last section whose heading has scrolled past the top of the body.
+    updateActiveSection() {
+      const body = this.$refs.body;
+      if (!body) return;
+      const nodes = [...body.querySelectorAll('[data-section]')];
+      const atBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 4;
+      const top = body.getBoundingClientRect().top + 80;
+      const current = atBottom ? nodes[nodes.length - 1] : nodes.filter(node => node.getBoundingClientRect().top <= top).pop();
+      this.activeSection = (current || nodes[0])?.dataset.section || 'source';
+    },
+
+    // Used by the jobs tour so its steps can point at collapsed parts.
+    expandAll() {
+      this.qualityOpen = true;
+      this.profilesOpen = true;
     },
 
     async refreshTraktSetup() {
@@ -509,12 +812,20 @@ export default {
       if (jobType === 'discover' && this.form.media_type === 'both') {
         this.form.media_type = 'movie';
       }
-      if (jobType === 'discover') {
+      this.listCheckMessage = '';
+      if (['discover', 'list_import'].includes(jobType)) {
         this.form.user_ids = [];
+        this.form.prevent_suggestions_if_unwatched = false;
       }
     },
     async handleSubmit() {
       if (!this.isValid) return;
+
+      if (this.oneTime) {
+        this.$emit('save', this.listConfig());
+        return;
+      }
+      if (!this.form.name.trim()) this.form.name = this.autoName;
 
       this.isSaving = true;
       try {
@@ -541,441 +852,3 @@ export default {
   }
 };
 </script>
-
-<style scoped>
-/* Component-specific styles only */
-
-.modal {
-  position: relative;
-  z-index: 2001;
-}
-
-/* Job Type Selector */
-.job-type-selector {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.job-type-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1rem;
-  background: transparent;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: var(--transition-base);
-  text-align: left;
-}
-
-.job-type-btn:hover {
-  background: var(--color-bg-overlay-light);
-  color: var(--color-text-primary);
-}
-
-.job-type-btn.active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
-}
-
-.job-type-btn i {
-  font-size: 1rem;
-  width: 1.5rem;
-  text-align: center;
-}
-
-.job-type-btn.discover > i {
-  color: var(--color-primary-light);
-}
-
-.job-type-btn.recommendation > i {
-  color: var(--color-warning-light);
-}
-
-.job-type-btn.trakt_recommendations > i {
-  color: var(--color-error-light);
-}
-
-.job-type-btn.active i {
-  color: white;
-}
-
-.job-type-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.job-type-name {
-  font-weight: var(--font-weight-medium);
-  font-size: 0.85rem;
-}
-
-.job-type-desc {
-  font-size: 0.7rem;
-  color: var(--color-text-muted);
-}
-
-.job-type-btn.active .job-type-desc {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.job-type-btn.disabled,
-.job-type-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.job-type-btn.disabled:hover,
-.job-type-btn:disabled:hover {
-  background: transparent;
-  color: var(--color-text-secondary);
-  border-color: var(--color-border-light);
-}
-
-.trakt-setup-alert {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-  padding: 0.75rem;
-  border: 1px dashed var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  font-size: 0.8rem;
-}
-
-.trakt-setup-alert i {
-  color: var(--color-primary);
-  margin-top: 0.1rem;
-}
-
-/* Info Note */
-.info-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  background: var(--color-bg-overlay-light);
-  border-radius: var(--radius-sm);
-  margin-bottom: 1.5rem;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.info-note.recommendation {
-  background: var(--color-bg-overlay-light);
-}
-
-.info-note.discover i {
-  color: var(--color-primary-light);
-}
-
-.info-note.recommendation i {
-  color: var(--color-warning-light);
-}
-
-.info-note.trakt_recommendations i {
-  color: var(--color-error-light);
-}
-
-.info-note i {
-  font-size: 0.9rem;
-  flex-shrink: 0;
-  margin-top: 0.1rem;
-}
-
-.settings-group {
-  margin-bottom: 1.5rem;
-  overflow: visible;
-}
-
-.settings-group:last-of-type {
-  margin-bottom: 0;
-}
-
-/* Filters section needs room for dropdowns */
-.settings-group.filters-section {
-  overflow: visible;
-  position: relative;
-  z-index: 50;
-}
-
-/* Small spacer for visual breathing room */
-.dropdown-spacer {
-  height: 1rem;
-  flex-shrink: 0;
-}
-
-.settings-group h4 {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 0 0 1rem 0;
-}
-
-.delivery-mode-selector {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
-}
-
-.delivery-mode-selector .media-type-btn span {
-  display: grid;
-  flex: 1;
-  gap: var(--spacing-xs);
-  text-align: left;
-}
-
-.delivery-mode-selector .media-type-btn {
-  justify-content: flex-start;
-  gap: var(--spacing-md);
-}
-
-.delivery-mode-selector .media-type-btn > i {
-  flex: 0 0 var(--spacing-md);
-  text-align: center;
-}
-
-.delivery-mode-selector small {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-normal);
-}
-
-.request-profiles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  gap: var(--spacing-md);
-  margin-top: var(--spacing-md);
-}
-
-.request-profile-card {
-  display: grid;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--surface-glass-light);
-  border-radius: var(--radius-md);
-}
-
-.request-profile-heading {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  color: var(--color-text-primary);
-  font-weight: var(--font-weight-semibold);
-}
-
-@media (max-width: 768px) {
-  .delivery-mode-selector,
-  .request-profiles-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.form-group {
-  margin-bottom: 1rem;
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-group label {
-  display: block;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--spacing-sm);
-}
-
-.form-control {
-  width: 100%;
-  padding: 0.65rem 0.875rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  font-size: 0.9rem;
-  transition: var(--transition-base);
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-glow);
-}
-
-.form-control::placeholder {
-  color: var(--color-text-muted);
-}
-
-.form-help {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  margin-top: 0.35rem;
-}
-
-.schedule-options {
-  display: grid;
-  gap: var(--spacing-md);
-  margin-top: var(--spacing-md);
-}
-
-.schedule-options > .form-group {
-  margin-bottom: 0;
-}
-
-.schedule-options .delivery-mode-selector {
-  margin-bottom: 0;
-}
-
-.media-type-selector {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.media-type-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.65rem 0.75rem;
-  background: transparent;
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: var(--transition-base);
-  font-size: 0.85rem;
-  font-weight: var(--font-weight-medium);
-}
-
-.media-type-btn:hover {
-  background: var(--color-bg-overlay-light);
-  color: var(--color-text-primary);
-}
-
-.media-type-btn.active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
-}
-
-.form-range {
-  width: 100%;
-  height: 6px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: var(--color-border-light);
-  border-radius: var(--radius-full);
-  outline: none;
-  margin-top: 0.5rem;
-}
-
-.form-range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  background: var(--color-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.form-range::-webkit-slider-thumb:hover {
-  transform: scale(1.1);
-  box-shadow: var(--shadow-glow);
-}
-
-.form-range::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  background: var(--color-primary);
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-}
-
-/* Advanced Toggle */
-.advanced-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  background: transparent;
-  border: 1px dashed var(--color-border-light);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: var(--transition-base);
-}
-
-.advanced-toggle:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  background: var(--color-primary-alpha-10);
-}
-
-.advanced-toggle i {
-  font-size: 0.75rem;
-  transition: transform 0.2s ease;
-}
-
-.advanced-section {
-  border-top: 1px solid var(--color-border-light);
-  padding-top: 1rem;
-}
-
-/* Slide Transition */
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s ease;
-  overflow: hidden;
-}
-
-.slide-enter-from,
-.slide-leave-to {
-  opacity: 0;
-  max-height: 0;
-  padding-top: 0;
-}
-
-.slide-enter-to,
-.slide-leave-from {
-  opacity: 1;
-  max-height: 2000px;
-}
-
-
-
-@media (max-width: 600px) {
-  .media-type-selector {
-    flex-direction: column;
-  }
-
-  .job-type-selector {
-    flex-direction: column;
-  }
-
-  .settings-group {
-    padding: 1.25rem;
-    margin-bottom: 1.25rem;
-  }
-}
-</style>

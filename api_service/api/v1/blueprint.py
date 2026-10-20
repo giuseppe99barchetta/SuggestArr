@@ -1,5 +1,6 @@
 from copy import deepcopy
 from pathlib import Path
+import secrets
 import time
 
 import yaml
@@ -14,10 +15,12 @@ from api_service.jobs.job_manager import JobManager
 from api_service.jobs.discover_automation import DiscoverAutomation
 from api_service.jobs.recommendation_automation import RecommendationAutomation
 from api_service.jobs.trakt_recommendations_automation import TraktRecommendationsAutomation
+from api_service.jobs.list_import_automation import ListImportAutomation
 from api_service.utils.asyncio_loop import run_coroutine_sync
 from api_service.config.logger_manager import LoggerManager
 from api_service.observability.metrics import render_metrics
 from api_service.utils.ssrf_guard import validate_url
+from api_service.services.notification_formats import WEBHOOK_FORMATS, notification_target_error
 from api_service.utils import request_scope
 
 public_api_v1_bp = Blueprint('public_api_v1', __name__)
@@ -73,7 +76,7 @@ def metrics():
 
 _WEBHOOK_EVENTS = {
     'suggestion.created', 'suggestion.awaiting_approval', 'suggestion.approved',
-    'suggestion.rejected', 'request.submitted', 'request.failed', 'run.failed',
+    'suggestion.rejected', 'request.submitted', 'request.failed', 'request.available', 'run.failed',
     'job.completed', 'job.skipped',
 }
 
@@ -90,6 +93,12 @@ def webhooks():
 def create_webhook():
     data = request.get_json(silent=True) or {}
     name, url, secret, events = data.get('name'), data.get('url'), data.get('secret'), data.get('events')
+    fmt = data.get('format') or 'json'
+    if fmt not in WEBHOOK_FORMATS:
+        return jsonify({'error': {'code': 'validation_error', 'message': f"format must be one of {', '.join(WEBHOOK_FORMATS)}."}}), 400
+    if fmt != 'json' and not secret:
+        # Chat services do not check signatures; the stored secret only keeps the delivery row uniform.
+        secret = secrets.token_hex(16)
     if not isinstance(name, str) or not name.strip() or len(name) > 100:
         return jsonify({'error': {'code': 'validation_error', 'message': 'name must be 1 to 100 characters.'}}), 400
     if not isinstance(url, str) or len(url) > 2048 or not isinstance(secret, str) or len(secret) < 16:
@@ -100,12 +109,16 @@ def create_webhook():
         validate_url(url, allow_private=bool(data.get('allow_private', False)))
     except ValueError as exc:
         return jsonify({'error': {'code': 'validation_error', 'message': str(exc)}}), 400
+    target_error = notification_target_error(fmt, url) if fmt != 'json' else None
+    if target_error:
+        return jsonify({'error': {'code': 'validation_error', 'message': target_error}}), 400
     db = DatabaseManager()
     if not db.is_webhook_destination_allowed(url):
         return jsonify({'error': {'code': 'validation_error', 'message': 'Webhook destination is not in the allowlist.'}}), 400
     item = db.create_webhook({
         'name': name, 'url': url, 'secret': secret, 'events': events,
         'enabled': data.get('enabled', True), 'allow_private': data.get('allow_private', False),
+        'format': fmt,
     })
     return jsonify({'data': item}), 201
 
@@ -203,7 +216,7 @@ def jobs():
         return jsonify({'error': {'code': 'validation_error', 'message': 'Invalid pagination.'}}), 400
     enabled = request.args.get('enabled')
     job_type = request.args.get('job_type')
-    if enabled not in (None, 'true', 'false') or job_type not in (None, 'discover', 'recommendation', 'trakt_recommendations'):
+    if enabled not in (None, 'true', 'false') or job_type not in (None, 'discover', 'recommendation', 'trakt_recommendations', 'list_import'):
         return jsonify({'error': {'code': 'validation_error', 'message': 'Invalid filters.'}}), 400
     items = [job for job in JobRepository().get_all_jobs() if _visible_job(job)]
     if enabled is not None:
@@ -237,6 +250,8 @@ def preview_job(job_id):
             automation = await RecommendationAutomation.create(job_id, dry_run=True)
         elif item.get('job_type') == 'trakt_recommendations':
             automation = await TraktRecommendationsAutomation.create(job_id, dry_run=True)
+        elif item.get('job_type') == 'list_import':
+            automation = await ListImportAutomation.create(job_id, dry_run=True)
         else:
             automation = await DiscoverAutomation.create(job_id)
         return await automation.run(dry_run=True)
@@ -384,6 +399,7 @@ def suggestions():
     items, total = db.list_suggestions(
         scope.owner_id, status, search, page, per_page, media_type, scope.media_user_ids,
         int(g.current_user['id']), scope.include_unassigned,
+        include_owned_list_imports=scope.include_owned_list_imports,
     )
     return jsonify({'data': items, 'meta': {'page': page, 'per_page': per_page, 'total': total, 'pages': max(1, (total + per_page - 1) // per_page)}}), 200
 
@@ -465,7 +481,7 @@ def installation_stats():
     """Return installation-wide, non-sensitive operational counters for admins."""
     db = DatabaseManager()
     jobs = JobRepository().get_all_jobs()
-    job_types = ('discover', 'recommendation', 'trakt_recommendations')
+    job_types = ('discover', 'recommendation', 'trakt_recommendations', 'list_import')
     jobs_by_type = {job_type: sum(job.get('job_type') == job_type for job in jobs) for job_type in job_types}
 
     suggestion_statuses = ('awaiting_approval', 'queued', 'submitting', 'submitted', 'rejected', 'failed', 'blacklisted')

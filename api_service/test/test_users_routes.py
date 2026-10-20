@@ -106,6 +106,9 @@ class _UsersBlueprintBase(unittest.TestCase):
                     for u in users.values()
                 ]
 
+            def get_user_media_profiles(self_inner, user_id):
+                return []
+
             def update_auth_user(self_inner, user_id, updates):
                 for u in users.values():
                     if u["id"] == user_id:
@@ -192,6 +195,25 @@ class _UsersBlueprintBase(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestListUsers(_UsersBlueprintBase):
+
+    def test_media_profiles_are_scoped_and_never_expose_tokens(self):
+        admin_id = self._make_admin('admin')
+        viewer_id = self._make_user('bob')
+        profiles = {
+            admin_id: [{'provider': 'plex', 'external_user_id': 'plex-1', 'external_username': 'Owner', 'verified': True,
+                        'access_token': 'private-token', 'refresh_token': 'private-refresh'}],
+            viewer_id: [],
+        }
+        with patch.object(self.FakeDB, 'get_user_media_profiles', side_effect=lambda uid: profiles[uid]):
+            response = self.client.get('/api/users')
+        self.assertEqual(response.status_code, 200)
+        data = {user['id']: user for user in response.get_json()}
+        self.assertEqual(data[admin_id]['media_profiles'], [{
+            'provider': 'plex', 'external_user_id': 'plex-1', 'external_username': 'Owner', 'verified': True,
+        }])
+        self.assertEqual(data[viewer_id]['media_profiles'], [])
+        self.assertNotIn('private-token', response.get_data(as_text=True))
+        self.assertNotIn('private-refresh', response.get_data(as_text=True))
 
     def test_admin_can_list_users(self):
         self._make_admin('admin')

@@ -1,15 +1,73 @@
 import aiohttp
 import asyncio
-from typing import List, Set
+from datetime import datetime, timezone
+from urllib.parse import urlsplit, urlunsplit
+from typing import Dict, List, Set
 from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.config.config import load_env_vars
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.request_sources import is_tmdb_metadata_source_id
+from api_service.utils.ssrf_guard import normalize_base_url
 
 BATCH_SIZE = 20  # Number of requests fetched per batch
 HTTP_OK = {200, 201, 202}  # Include 202 Accepted for async operations
 PENDING_REQUEST_STATUSES = {1, "1", "pending", "PENDING"}
+MEDIA_PAGE_SIZE = 100  # Number of media items fetched per page when loading availability
+# Seer MediaStatus values that mean the title is already in the library:
+# 4 = PARTIALLY_AVAILABLE, 5 = AVAILABLE (same values in Overseerr and Jellyseerr).
+# Seer tracks regular and 4K availability separately (status / status4k).
+AVAILABLE_MEDIA_STATUSES = {4, 5}
+# How far along a title is, by Seer MediaStatus (2 pending, 3 processing, 4 partial, 5 available).
+MEDIA_STATUS_ORDER = {1: 'pending', 2: 'processing', 3: 'partial', 4: 'available'}
+MEDIA_STATUS_RANK = {2: 1, 3: 2, 4: 3, 5: 4}
+
+
+def media_play_url(media):
+    """Seer's link to play a title on the media server, when it is in the library.
+
+    Jellyseerr/Seerr call it ``mediaUrl`` (Jellyfin, Emby or Plex), Overseerr
+    ``plexUrl``; the 4K copy's link is used when only that copy is available.
+    Only http(s) links are returned, as the value ends up in a page link.
+
+    :param media: One item of Seer's media list.
+    :return: The URL, or None.
+    """
+    candidates = []
+    if media.get('status') in AVAILABLE_MEDIA_STATUSES:
+        candidates += [media.get('mediaUrl'), media.get('plexUrl')]
+    if media.get('status4k') in AVAILABLE_MEDIA_STATUSES:
+        candidates += [media.get('mediaUrl4k'), media.get('plexUrl4k')]
+    for url in candidates:
+        if isinstance(url, str) and urlsplit(url.strip()).scheme.lower() in ('http', 'https'):
+            url = url.strip()
+            # Longer would not fit the stored column; a cut link would not play anything.
+            return url if len(url) <= 500 else None
+    return None
+
+
+def normalize_seer_url(url):
+    """Bind remote request IDs to the configured instance, without credentials."""
+    parts = urlsplit(normalize_base_url(url.strip()))
+    if parts.scheme.lower() not in ('http', 'https') or not parts.hostname or parts.username or parts.password:
+        raise ValueError('Invalid Seer base URL')
+    host = parts.hostname.lower()
+    if ':' in host:
+        host = f'[{host}]'
+    port = parts.port
+    if port and (parts.scheme.lower(), port) not in (('http', 80), ('https', 443)):
+        host += f':{port}'
+    if parts.query or parts.fragment:
+        raise ValueError('Invalid Seer base URL')
+    return urlunsplit((parts.scheme.lower(), host, parts.path.rstrip('/'), '', ''))
+
+
+def parse_seer_timestamp(value):
+    """Parse remote ISO timestamps as naive UTC for all database adapters."""
+    parsed = value if isinstance(value, datetime) else datetime.fromisoformat(value.replace('Z', '+00:00'))
+    if parsed.tzinfo is None:
+        return parsed
+    return parsed.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class SeerPermissionError(Exception):
@@ -54,7 +112,9 @@ class SeerClient(BaseHTTPClient):
             Each value is a dict with optional keys: serverId, profileId, rootFolder, tags, languageProfileId.
         """
         super().__init__()
-        self.api_url = api_url.rstrip('/')
+        self.api_url = normalize_base_url(api_url)
+        self.guard_outbound = True
+        self.private_urls = self.allowed_urls = (self.api_url,)
         self.api_key = api_key
         self.username = seer_user_name
         self.password = seer_password
@@ -300,17 +360,16 @@ class SeerClient(BaseHTTPClient):
         """Fetch servers and enrich list-only responses with profiles and root folders.
 
         The list endpoint carries no profiles; the per-server endpoint does, and
-        Jellyseerr answers it with the API key as well as with a session cookie.
-        Enriching only when a cookie was present left API-key-only setups with
-        empty profile and root-folder lists — nothing to choose from.
+        Always use the API key: the session cookie belongs to the configured
+        requesting user, who usually lacks the admin permission this endpoint
+        needs and gets a 403.
         """
         servers = await self._make_request("GET", f"api/v1/service/{service}") or []
         for index, server in enumerate(servers):
             if server.get('profiles') and server.get('rootFolders'):
                 continue
             details = await self._make_request(
-                "GET", f"api/v1/service/{service}/{server['id']}",
-                use_cookie=bool(self.session_token),
+                "GET", f"api/v1/service/{service}/{server['id']}"
             )
             if details:
                 detail_server = details.get('server', {})
@@ -477,6 +536,8 @@ class SeerClient(BaseHTTPClient):
                 pass
 
         context = self.queue_context
+        if context.get('_replacement_for') is not None:
+            payload['_replacement_for'] = context['_replacement_for']
         profile = (context.get('request_profiles') or {}).get(media_type) or {}
         for key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId'):
             if profile.get(key) is not None:
@@ -511,7 +572,7 @@ class SeerClient(BaseHTTPClient):
             self.logger.info("Enqueued %s tmdb:%s for Seer delivery.", media_type, tmdb_id)
         return enqueued
 
-    async def submit_queued_request(self, payload: dict) -> bool:
+    async def submit_queued_request(self, payload: dict):
         """Perform the actual HTTP submission to Seer for a single queue row.
 
         Called by the queue worker.  Strips private meta-keys before sending.
@@ -520,7 +581,7 @@ class SeerClient(BaseHTTPClient):
         absent or ``None``.
 
         :param payload: The JSON-decoded payload stored in pending_requests.
-        :return: True on HTTP success, False on any failure.
+        :return: The Seer response on success, False on failure.
         """
         # Build clean Seer body (drop private meta-keys)
         data = {k: v for k, v in payload.items() if not k.startswith('_')}
@@ -587,7 +648,7 @@ class SeerClient(BaseHTTPClient):
             return False
         if response and 'error' not in response:
             self.logger.debug("Seer submission successful: %s", response)
-            return True
+            return response
 
         self.logger.error(
             "Jellyseerr request failed for %s tmdb:%s | "
@@ -641,6 +702,22 @@ class SeerClient(BaseHTTPClient):
         
         return False
 
+    async def request_expiry_action(self, request_id, *, decline=False):
+        """Use admin API-key auth and retain statuses needed for safe expiry decisions."""
+        endpoint = f'api/v1/request/{int(request_id)}' + ('/decline' if decline else '')
+        headers, cookies = self._get_auth_headers(False)
+        session = await self._get_session()
+        try:
+            async with session.request(
+                'POST' if decline else 'GET', f'{self.api_url}/{endpoint}',
+                headers=headers, cookies=cookies, timeout=self.REQUEST_TIMEOUT,
+                allow_redirects=False,
+            ) as response:
+                data = await response.json() if response.status == 200 else None
+                return response.status, data
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError):
+            return 0, None
+
     async def check_requests_exist_batch(self, media_type: str, tmdb_ids: List[str]) -> Set[str]:
         """Check which of the provided TMDB IDs already have requests in the database."""
         if not self.exclude_requested or not tmdb_ids:
@@ -651,6 +728,123 @@ class SeerClient(BaseHTTPClient):
         except Exception as e:
             self.logger.error("Error in bulk check requests: %s", e)
             return set()
+
+    async def _load_media_pages(self):
+        """Read every page of Seer's media list (all statuses).
+
+        :return: List of decoded pages (a page that failed is None), or None when
+            the first page could not be read at all.
+        """
+        first_page = await self._fetch_available_media_page(0)
+        if first_page is None:
+            return None
+        total = (first_page.get('pageInfo') or {}).get('results') or 0
+        pages = [first_page]
+        if total > MEDIA_PAGE_SIZE:
+            pages.extend(await asyncio.gather(*[
+                self._fetch_available_media_page(skip)
+                for skip in range(MEDIA_PAGE_SIZE, total, MEDIA_PAGE_SIZE)
+            ]))
+        return pages
+
+    async def get_available_tmdb_ids(self) -> Dict[str, Set[str]]:
+        """Fetch the TMDB IDs that Seer reports as available or partially available.
+
+        Seer tracks availability by scanning the media server and matches items by
+        TMDB, TVDB or IMDb ID, so this also covers library items whose media-server
+        metadata has no TMDB ID (for example shows matched only through TVDB).
+        A title counts when either its regular or its 4K copy is available. Seer's
+        ``filter=allavailable`` only checks the regular status, so the media list is
+        read unfiltered and both statuses are checked here.
+
+        Best-effort: when Seer cannot be reached the returned sets are empty and the
+        caller falls back to the media-server library alone.
+
+        :return: Dict with 'movie' and 'tv' keys mapping to sets of TMDB ID strings.
+        """
+        available = {'movie': set(), 'tv': set()}
+
+        pages = await self._load_media_pages()
+        if pages is None:
+            self.logger.warning(
+                "Could not load available media from Seer; "
+                "already-in-library checks will use the media server library only."
+            )
+            return available
+
+        for page in pages:
+            if page is None:
+                self.logger.warning("A page of available media from Seer failed to load; results may be incomplete.")
+                continue
+            for media in page.get('results') or []:
+                media_type = media.get('mediaType')
+                tmdb_id = media.get('tmdbId')
+                is_available = (
+                    media.get('status') in AVAILABLE_MEDIA_STATUSES
+                    or media.get('status4k') in AVAILABLE_MEDIA_STATUSES
+                )
+                if media_type in available and tmdb_id and is_available:
+                    available[media_type].add(str(tmdb_id))
+
+        self.logger.info(
+            "Seer reports %d movies and %d TV shows as available.",
+            len(available['movie']), len(available['tv']),
+        )
+        return available
+
+    async def get_application_url(self):
+        """Seer's public address ("Application URL" in its settings), when set.
+
+        :return: An http(s) URL without trailing slash, or None.
+        """
+        data = await self._make_request("GET", "api/v1/settings/main", retries=1)
+        url = (data or {}).get('applicationUrl') if isinstance(data, dict) else None
+        if isinstance(url, str) and urlsplit(url.strip()).scheme.lower() in ('http', 'https'):
+            return url.strip().rstrip('/')
+        return None
+
+    async def get_media_statuses(self):
+        """Where each title Seer knows about stands, from requested to in the library.
+
+        The regular and 4K copies are tracked separately; the further along of the
+        two wins, so a title available in either counts as available. Available
+        titles also carry Seer's link to play them on the media server.
+
+        :return: Dict mapping ``(media_type, tmdb_id)`` to ``{'status', 'url'}``, where
+            status is one of MEDIA_STATUS_ORDER's values and url is an http(s) link or
+            None; or None when Seer could not be read completely (a partial read must
+            not make titles look as if they had left Seer).
+        """
+        pages = await self._load_media_pages()
+        if pages is None or any(page is None for page in pages):
+            self.logger.warning("Could not read Seer's media list completely; availability not updated.")
+            return None
+        statuses = {}
+        for page in pages:
+            for media in page.get('results') or []:
+                media_type, tmdb_id = media.get('mediaType'), media.get('tmdbId')
+                ranks = [MEDIA_STATUS_RANK.get(media.get(key), 0) for key in ('status', 'status4k')]
+                best = max(ranks)
+                if media_type in ('movie', 'tv') and tmdb_id and best:
+                    statuses[(media_type, str(tmdb_id))] = {
+                        'status': MEDIA_STATUS_ORDER[best], 'url': media_play_url(media),
+                    }
+        return statuses
+
+    async def _fetch_available_media_page(self, skip):
+        """Fetch one page of Seer's media list (all statuses; filtered by the caller).
+
+        :param skip: Number of items to skip (page offset).
+        :return: Decoded JSON page, or None when the request failed.
+        """
+        self.logger.debug("Fetching available media from Seer starting at skip=%d", skip)
+        try:
+            return await self._make_request(
+                "GET", f"api/v1/media?take={MEDIA_PAGE_SIZE}&skip={skip}"
+            )
+        except Exception as e:  # timeouts are not aiohttp.ClientError, so _make_request lets them through
+            self.logger.error("Failed to fetch available media from Seer at skip %d: %s", skip, e)
+            return None
 
     async def check_already_downloaded(self, tmdb_id, media_type, local_content=None):
         """Check if a media item has already been downloaded based on local content."""

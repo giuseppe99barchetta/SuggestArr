@@ -1,0 +1,288 @@
+/* Tailwind entry point: theme tokens, element defaults and the shared .ui-* controls. */
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-canvas: #0b0d12;
+  --color-side: #0f1219;
+  --color-panel: #141822;
+  --color-panel-2: #1b2030;
+  --color-raised: #1d2130;
+  --color-edge: #232838;
+  --color-edge-strong: #2a3042;
+  --color-ink: #e8eaf0;
+  --color-ink-2: #c5cbd8;
+  --color-ink-3: #9aa3b5;
+  --color-ink-4: #8790a3;
+  --color-brand: #6a5ae0;
+  --color-brand-soft: #2e2850;
+  --color-brand-ink: #b3a9ff;
+  --color-good: #4fc98a;
+  --color-caution: #f2b84b;
+  --color-bad: #f07067;
+  --color-notice: #5aa9f0;
+  --color-anime: #e74c9c;
+  /* Text on a solid status colour. */
+  --color-on-good: #05180e;
+  --color-on-caution: #1a1405;
+  --color-on-bad: #2a0c0b;
+  --color-on-notice: #06131f;
+
+  --radius-ctl: 10px;
+  --radius-card: 14px;
+
+  --animate-pop: pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  @keyframes pop {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+}
+
+/* Light theme: <html data-theme="light">, set by utils/theme.js (and early in index.html). */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-canvas: #f4f5f9;
+  --color-side: #ffffff;
+  --color-panel: #ffffff;
+  --color-panel-2: #f1f3f8;
+  --color-raised: #e8ebf2;
+  --color-edge: #e1e4ec;
+  --color-edge-strong: #cfd4e0;
+  --color-ink: #151926;
+  --color-ink-2: #343b4f;
+  --color-ink-3: #555e72;
+  --color-ink-4: #656e82;
+  --color-brand: #6a5ae0;
+  --color-brand-soft: #ebe8ff;
+  --color-brand-ink: #5141cf;
+  --color-good: #1d8f55;
+  --color-caution: #9a6400;
+  --color-bad: #c93b36;
+  --color-notice: #2470c2;
+  --color-anime: #c4317f;
+  --color-on-good: #ffffff;
+  --color-on-caution: #ffffff;
+  --color-on-bad: #ffffff;
+  --color-on-notice: #ffffff;
+}
+
+/* Theme switch: one cross-fade of the whole page (utils/theme.js). Element colour
+   transitions are paused meanwhile so nothing lags behind the fade. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.35s;
+  animation-timing-function: ease-out;
+}
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+
+/* Areas designed over dark imagery (recaps, tour, sign-in and setup screens, the
+   "By watched title" ambience) keep the dark palette in either theme.
+   Keep these values in sync with @theme above. */
+.theme-dark {
+  color-scheme: dark;
+  --color-canvas: #0b0d12;
+  --color-side: #0f1219;
+  --color-panel: #141822;
+  --color-panel-2: #1b2030;
+  --color-raised: #1d2130;
+  --color-edge: #232838;
+  --color-edge-strong: #2a3042;
+  --color-ink: #e8eaf0;
+  --color-ink-2: #c5cbd8;
+  --color-ink-3: #9aa3b5;
+  --color-ink-4: #8790a3;
+  --color-brand-soft: #2e2850;
+  --color-brand-ink: #b3a9ff;
+  --color-good: #4fc98a;
+  --color-caution: #f2b84b;
+  --color-bad: #f07067;
+  --color-notice: #5aa9f0;
+  --color-anime: #e74c9c;
+  --color-on-good: #05180e;
+  --color-on-caution: #1a1405;
+  --color-on-bad: #2a0c0b;
+  --color-on-notice: #06131f;
+}
+
+@layer base {
+  /* Native controls (date picker, select menus, scrollbars) follow the active theme. */
+  :root {
+    color-scheme: dark;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply overflow-x-hidden bg-canvas font-sans leading-normal text-ink;
+  }
+
+  /* Element defaults the screens were built on (formerly the legacy global.css). */
+  h1, h2, h3, h4, h5, h6 { @apply font-bold leading-tight text-ink; }
+  h1 { @apply mb-6 text-4xl; }
+  h2 { @apply mb-4 text-3xl; }
+  h3 { @apply mb-4 text-2xl; }
+  h4 { @apply mb-2 text-xl; }
+  h5 { @apply mb-2 text-lg; }
+  h6 { @apply mb-2 text-base; }
+  p { @apply mb-4 text-ink-2; }
+  a { @apply text-brand-ink no-underline transition-colors hover:text-brand; }
+  strong { @apply font-semibold text-ink; }
+  code { @apply rounded-[6px] bg-panel-2 px-1.5 py-0.5 font-mono text-sm text-brand-ink; }
+  select, select option { @apply border-edge-strong bg-panel-2 text-ink; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--color-panel); }
+  ::-webkit-scrollbar-thumb { background: var(--color-panel-2); border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-edge-strong); }
+  ::selection { @apply bg-brand/20 text-ink; }
+  *:focus-visible { @apply outline-2 outline-offset-2 outline-brand; }
+
+  /* "Disable visual effects" setting: DashboardPage toggles this class on <body>. */
+  body.no-blur * { backdrop-filter: none !important; }
+}
+
+/*
+ * Dropdowns. Unlayered on purpose: only appearance, chevron and end padding are set, so they beat per-select
+ * utilities like px-2.5 without touching size or colours. Browsers with customizable selects
+ * (appearance: base-select) also get a themed popup; the rest keep the native list behind the same trigger.
+ */
+select {
+  appearance: none;
+  cursor: pointer;
+  padding-inline-end: 2.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%239aa3b5' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  background-size: 0.75rem;
+  transition: border-color 0.15s;
+}
+select:hover:not(:disabled) { border-color: var(--color-ink-4); }
+select:disabled { cursor: not-allowed; }
+
+@supports (appearance: base-select) {
+  select,
+  select::picker(select) {
+    appearance: base-select;
+  }
+  select {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-block: 0;
+    background-image: none;
+    padding-inline-end: 0.75rem;
+  }
+  select::picker-icon {
+    content: "";
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-inline-start: auto;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%239aa3b5' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+    transition: rotate 0.2s;
+  }
+  select:open::picker-icon { rotate: 180deg; }
+  select::picker(select) {
+    margin-block: 4px;
+    padding: 4px;
+    border: 1px solid var(--color-edge-strong);
+    border-radius: var(--radius-ctl);
+    background: var(--color-panel-2);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.15s, transform 0.15s, display 0.15s allow-discrete, overlay 0.15s allow-discrete;
+  }
+  select:open::picker(select) { opacity: 1; transform: none; }
+  @starting-style {
+    select:open::picker(select) { opacity: 0; transform: translateY(-4px); }
+  }
+  select option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    color: var(--color-ink-2);
+    cursor: pointer;
+  }
+  select option:hover,
+  select option:focus-visible { background: var(--color-raised); color: var(--color-ink); outline: none; }
+  select option:checked { background: var(--color-brand-soft); color: var(--color-brand-ink); font-weight: 600; }
+  select option::checkmark { content: "\2713"; margin-inline-start: auto; order: 2; color: var(--color-brand-ink); }
+  @media (prefers-reduced-motion: reduce) {
+    select::picker(select), select::picker-icon { transition: none; }
+  }
+}
+
+/* Form controls shared by the settings screens. */
+@layer components {
+  .ui-input {
+    @apply h-[42px] w-full min-w-0 rounded-ctl border border-edge-strong bg-canvas px-3 text-sm font-normal text-ink outline-none placeholder:text-ink-4 focus:border-brand-ink disabled:opacity-60;
+  }
+  .ui-label {
+    @apply flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2;
+  }
+  .ui-btn {
+    @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink hover:border-ink-4 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .ui-btn-primary {
+    @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border-0 bg-brand px-4 text-sm font-bold text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .ui-btn-danger {
+    @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border-0 bg-bad px-4 text-sm font-bold text-on-bad hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .ui-btn-icon-danger {
+    @apply inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-bad/15 hover:text-bad disabled:opacity-50;
+  }
+  .ui-alert-bad {
+    @apply m-0 rounded-[8px] border border-bad/40 bg-bad/10 px-3 py-2 text-[13px] text-ink-2;
+  }
+  .ui-alert-good {
+    @apply m-0 rounded-[8px] border border-good/40 bg-good/10 px-3 py-2 text-[13px] text-ink-2;
+  }
+
+  /* GitHub release notes rendered by utils/markdown.js inside the changelog dialog. */
+  .release-notes {
+    @apply text-sm leading-relaxed text-ink-2;
+  }
+  .release-notes > :first-child { @apply mt-0; }
+  .release-notes > :last-child { @apply mb-0; }
+  .release-notes p { @apply my-3 text-ink-2; }
+  .release-notes h2 { @apply mt-7 mb-3 text-lg font-bold text-ink; }
+  .release-notes h3 {
+    @apply mt-7 mb-3 flex items-center gap-2 text-base font-bold text-ink;
+  }
+  .release-notes h4 { @apply mt-5 mb-2 text-sm font-semibold uppercase tracking-wide text-ink-3; }
+  .release-notes hr { @apply my-6 h-px border-0 bg-edge; }
+  .release-notes ul,
+  .release-notes ol { @apply my-2 space-y-1.5 pl-5; }
+  .release-notes ul { @apply list-disc; }
+  .release-notes ol { @apply list-decimal; }
+  .release-notes li { @apply pl-1 marker:text-ink-4; }
+  .release-notes li > ul,
+  .release-notes li > ol { @apply mt-1.5 mb-0; }
+  .release-notes strong { @apply text-ink; }
+  .release-notes code { @apply text-[12.5px]; }
+  .release-notes pre { @apply my-3 overflow-x-auto rounded-ctl border border-edge bg-canvas p-3 font-mono text-[12.5px] text-ink-2; }
+  .release-notes pre code { @apply bg-transparent p-0 text-inherit; }
+  .release-notes blockquote { @apply my-3 rounded-r-[8px] border-l-2 border-brand bg-brand-soft/30 px-3 py-2 text-ink-2; }
+  .release-notes a { @apply font-medium text-brand-ink hover:text-ink hover:underline; }
+
+  /* Trakt brand mark from Simple Icons (CC0-1.0), drawn in currentColor like the Font Awesome icons. */
+  .icon-trakt {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    flex-shrink: 0;
+    background-color: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m15.082 15.107-.73-.73 9.578-9.583a4.499 4.499 0 0 0-.115-.575L13.662 14.382l1.08 1.08-.73.73-1.81-1.81L23.422 3.144c-.075-.15-.155-.3-.25-.44L11.508 14.377l2.154 2.155-.73.73-7.193-7.199.73-.73 4.309 4.31L22.546 1.86A5.618 5.618 0 0 0 18.362 0H5.635A5.637 5.637 0 0 0 0 5.634V18.37A5.632 5.632 0 0 0 5.635 24h12.732C21.477 24 24 21.48 24 18.37V6.19l-8.913 8.918zm-4.314-2.155L6.814 8.988l.73-.73 3.954 3.96zm1.075-1.084-3.954-3.96.73-.73 3.959 3.96zm9.853 5.688a4.141 4.141 0 0 1-4.14 4.14H6.438a4.144 4.144 0 0 1-4.139-4.14V6.438A4.141 4.141 0 0 1 6.44 2.3h10.387v1.04H6.438c-1.71 0-3.099 1.39-3.099 3.1V17.55c0 1.71 1.39 3.105 3.1 3.105h11.117c1.71 0 3.1-1.395 3.1-3.105v-1.754h1.04v1.754z'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+}

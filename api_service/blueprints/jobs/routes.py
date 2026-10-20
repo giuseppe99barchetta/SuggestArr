@@ -12,6 +12,12 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
 from api_service.utils import request_scope
 from api_service.jobs.job_manager import JobManager
+from api_service.jobs.list_import_automation import ListImportAutomation, execute_list_import_job, validate_list_job
+from api_service.services.public_lists import PublicListError, build_list_client
+from api_service.services.config_service import ConfigService
+from api_service.db.list_import_repository import ListImportRepository, public_import_state
+from api_service.db.recap_repository import watch_provider
+from api_service.jobs.one_time_list_import import start_import
 from api_service.jobs.discover_automation import DiscoverAutomation, execute_discover_job
 from api_service.jobs.recommendation_automation import RecommendationAutomation, execute_recommendation_job
 from api_service.jobs.trakt_recommendations_automation import (
@@ -73,7 +79,124 @@ def get_job_manager() -> JobManager:
         manager.set_job_executor(execute_recommendation_job, job_type='recommendation')
     if 'trakt_recommendations' not in manager._job_executors:
         manager.set_job_executor(execute_trakt_recommendations_job, job_type='trakt_recommendations')
+    if 'list_import' not in manager._job_executors:
+        manager.set_job_executor(execute_list_import_job, job_type='list_import')
     return manager
+
+
+@jobs_bp.route('/lists/verify', methods=['POST'])
+@limiter.limit('10 per minute')
+def verify_public_list():
+    if not getattr(g, 'current_user', None):
+        return jsonify({'status': 'error', 'message': 'Authentication required.'}), 401
+    data = request.get_json(silent=True) or {}
+    try:
+        async def verify():
+            client = build_list_client(data, ConfigService.get_runtime_config())
+            async with client:
+                return await client.public_list_info(data.get('list_url'))
+        info = run_async(verify())
+        return jsonify({'status': 'success', 'data': info}), 200
+    except PublicListError as exc:
+        return jsonify({'status': 'error', 'message': str(exc)}), 400
+    except Exception:
+        logger.error('Public list verification failed.')
+        return jsonify({'status': 'error', 'message': 'Could not verify the public list.'}), 502
+
+
+def _list_import_config(data):
+    if not isinstance(data, dict):
+        raise PublicListError('List settings must be an object.')
+    config = {key: data[key] for key in ('filters', 'media_type', 'delivery_mode', 'seer_identity_mode', 'request_profiles') if key in data}
+    config.setdefault('media_type', 'both')
+    config.setdefault('delivery_mode', 'inherit')
+    config.setdefault('seer_identity_mode', 'technical_user')
+    validate_list_job(config)
+    if config['media_type'] not in ('movie', 'tv', 'both'):
+        raise PublicListError('Select movies, TV shows or both.')
+    if config['delivery_mode'] not in ('inherit', 'automatic', 'manual'):
+        raise PublicListError('Invalid delivery mode.')
+    if config['seer_identity_mode'] not in ('matching_user', 'technical_user', 'admin_user'):
+        raise PublicListError('Invalid Seer identity.')
+    if config['seer_identity_mode'] == 'admin_user' and g.current_user.get('role') != 'admin':
+        raise PublicListError('Admin Seer identity requires an administrator.')
+    try:
+        config['request_profiles'] = validate_request_profiles(config.get('request_profiles'))
+        validate_request_profiles_with_seer(config['request_profiles'])
+    except ValueError as exc:
+        raise PublicListError(str(exc)) from None
+    return config
+
+
+@jobs_bp.route('/lists/preview', methods=['POST'])
+@limiter.limit('10 per minute')
+def preview_public_list():
+    if not getattr(g, 'current_user', None):
+        return jsonify({'status': 'error', 'message': 'Authentication required.'}), 401
+    automation = None
+    try:
+        data = request.get_json(silent=True)
+        config = _list_import_config(data)
+        offset = data.get('offset', 0)
+        if type(offset) is not int or not 0 <= offset <= 10000000:
+            raise PublicListError('Invalid list offset.')
+        owner_id = int(g.current_user['id'])
+        async def preview():
+            nonlocal automation
+            automation = await ListImportAutomation.from_config(config, owner_id, dry_run=True)
+            automation.SCAN_LIMIT = 100
+            return await automation.run(dry_run=True, start_offset=offset)
+        result = run_async(preview())
+        if not result.success:
+            return jsonify({'status': 'error', 'message': result.error_message}), 502
+        return jsonify({'status': 'success', 'items': result.dry_run_items or [],
+                        'scanned_count': result.results_count, 'next_offset': automation.next_offset,
+                        'has_more': not automation.scan_complete}), 200
+    except PublicListError as exc:
+        return jsonify({'status': 'error', 'message': str(exc)}), 400
+    except Exception:
+        logger.error('Public list preview failed.')
+        return jsonify({'status': 'error', 'message': 'Could not preview the list.'}), 502
+
+
+@jobs_bp.route('/lists/import', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'])
+def import_public_list_once():
+    user = getattr(g, 'current_user', None)
+    if not user:
+        return jsonify({'status': 'error', 'message': 'Authentication required.'}), 401
+    owner_id = int(user['id'])
+    repository = ListImportRepository()
+    if request.method == 'GET':
+        return jsonify({'status': 'success', 'data': public_import_state(repository.get(owner_id))}), 200
+    try:
+        config = _list_import_config(request.get_json(silent=True))
+        # Fail before reserving an import when the shared provider credentials are missing.
+        build_list_client(config['filters'], ConfigService.get_runtime_config())
+        run_id = repository.reserve(owner_id, config)
+        if not run_id:
+            return jsonify({'status': 'error', 'message': 'You already have an import in progress.'}), 409
+        state = public_import_state(repository.get(owner_id, run_id))
+        start_import(owner_id, run_id)
+        return jsonify({'status': 'success', 'data': state}), 202
+    except PublicListError as exc:
+        return jsonify({'status': 'error', 'message': str(exc)}), 400
+
+
+@jobs_bp.route('/lists/import/<run_id>/resume', methods=['POST'])
+@limiter.limit('5 per minute')
+def resume_public_list_import(run_id):
+    user = getattr(g, 'current_user', None)
+    if not user:
+        return jsonify({'status': 'error', 'message': 'Authentication required.'}), 401
+    owner_id = int(user['id'])
+    run = ListImportRepository().get(owner_id, run_id)
+    if not run:
+        return jsonify({'status': 'error', 'message': 'Import not found.'}), 404
+    if public_import_state(run)['status'] not in ('failed', 'interrupted'):
+        return jsonify({'status': 'error', 'message': 'This import cannot be resumed.'}), 409
+    start_import(owner_id, run_id)
+    return jsonify({'status': 'success'}), 202
 
 
 @jobs_bp.route('', methods=['GET'])
@@ -105,10 +228,19 @@ def get_jobs():
             scheduler_id = f"discover_job_{job['id']}"
             job['next_run'] = scheduled.get(scheduler_id)
 
+        env_vars = load_env_vars()
+        # Hit rate needs a media server that reports plays; without one "watched" is unknown.
+        watch_tracking = watch_provider(env_vars) is not None
+        from api_service.db.database_manager import DatabaseManager
+        watch_stats = DatabaseManager().get_job_watch_stats() if watch_tracking else {}
+        for job in jobs:
+            job['stats'] = watch_stats.get(job['id'], {'requested': 0, 'watched': 0}) if watch_tracking else None
+
         return jsonify({
             'status': 'success',
             'jobs': jobs,
-            'request_approval_default': load_env_vars().get('REQUIRE_REQUEST_APPROVAL', False),
+            'request_approval_default': env_vars.get('REQUIRE_REQUEST_APPROVAL', False),
+            'approval_pause_default': env_vars.get('PAUSE_JOBS_WITH_PENDING_APPROVALS', False) is True,
         }), 200
     except Exception as e:
         logger.error(f"Error retrieving jobs: {e}", exc_info=True)
@@ -275,12 +407,17 @@ def create_job():
 
         # Set default job_type
         job_type = data.get('job_type', 'discover')
-        if job_type not in ['discover', 'recommendation', 'trakt_recommendations']:
+        if job_type not in ['discover', 'recommendation', 'trakt_recommendations', 'list_import']:
             return jsonify({
                 'status': 'error',
-                'message': 'job_type must be one of: discover, recommendation, trakt_recommendations'
+                'message': 'job_type must be one of: discover, recommendation, trakt_recommendations, list_import'
             }), 400
         data['job_type'] = job_type
+        if job_type == 'list_import':
+            try:
+                validate_list_job(data)
+            except PublicListError as exc:
+                return jsonify({'status': 'error', 'message': str(exc)}), 400
         delivery_mode = data.get('delivery_mode', 'inherit')
         if delivery_mode not in ('inherit', 'automatic', 'manual'):
             return jsonify({'status': 'error', 'message': 'delivery_mode must be inherit, automatic or manual'}), 400
@@ -419,11 +556,19 @@ def update_job(job_id: int):
             _validate_request_limits(data)
         except ValueError as exc:
             return jsonify({'status': 'error', 'message': str(exc)}), 400
-        if 'job_type' in data and job_type not in ['discover', 'recommendation', 'trakt_recommendations']:
+        if 'job_type' in data and job_type not in ['discover', 'recommendation', 'trakt_recommendations', 'list_import']:
             return jsonify({
                 'status': 'error',
-                'message': 'job_type must be one of: discover, recommendation, trakt_recommendations'
+                'message': 'job_type must be one of: discover, recommendation, trakt_recommendations, list_import'
             }), 400
+
+        if job_type == 'list_import':
+            merged = {**existing, **data}
+            try:
+                validate_list_job(merged)
+            except PublicListError as exc:
+                return jsonify({'status': 'error', 'message': str(exc)}), 400
+            data.update({key: merged[key] for key in ('max_results', 'user_ids', 'prevent_suggestions_if_unwatched')})
 
         # Validate media_type if provided
         valid_media_types = ['movie', 'tv'] if job_type == 'discover' else ['movie', 'tv', 'both']
@@ -631,6 +776,8 @@ def run_job_now(job_id: int):
             result = run_async(execute_recommendation_job(job_id, execution_id=exec_id))
         elif job_type == 'trakt_recommendations':
             result = run_async(execute_trakt_recommendations_job(job_id, execution_id=exec_id))
+        elif job_type == 'list_import':
+            result = run_async(execute_list_import_job(job_id, execution_id=exec_id))
         else:
             result = run_async(execute_discover_job(job_id, execution_id=exec_id))
 
@@ -694,6 +841,8 @@ def dry_run_job(job_id: int):
                 automation = await RecommendationAutomation.create(job_id, dry_run=True)
             elif job_type == 'trakt_recommendations':
                 automation = await TraktRecommendationsAutomation.create(job_id, dry_run=True)
+            elif job_type == 'list_import':
+                automation = await ListImportAutomation.create(job_id, dry_run=True)
             else:
                 automation = await DiscoverAutomation.create(job_id)
             return await automation.run(dry_run=True)
@@ -753,6 +902,8 @@ def _run_all_jobs_in_background():
                     run_async(execute_recommendation_job(job_id))
                 elif job_type == 'trakt_recommendations':
                     run_async(execute_trakt_recommendations_job(job_id))
+                elif job_type == 'list_import':
+                    run_async(execute_list_import_job(job_id))
                 else:
                     run_async(execute_discover_job(job_id))
                 logger.info(f"Force run all: job {job_id} completed")

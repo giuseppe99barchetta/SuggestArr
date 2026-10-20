@@ -442,6 +442,8 @@ class AuthMixin:
         query = f"DELETE FROM auth_users WHERE id = {ph}"
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            # Search history is personal; removed explicitly in case SQLite FK enforcement is off.
+            cursor.execute(f"DELETE FROM ai_search_history WHERE user_id = {ph}", (user_id,))
             cursor.execute(query, (user_id,))
             deleted = cursor.rowcount
             conn.commit()

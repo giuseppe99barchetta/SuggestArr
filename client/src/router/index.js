@@ -1,10 +1,8 @@
 import { createRouter, createWebHistory } from "vue-router";
 import axios from "axios";
-import "vue-toast-notification/dist/theme-bootstrap.css";
 import { useAuth, setAuthRouter, initializeAuthReady, markAuthReady, waitForAuthReady } from "@/composables/useAuth";
 
 // Lazy load components for code splitting
-const RequestsPage = () => import("@/components/RequestsPage.vue");
 const ConfigWizard = () => import("@/components/ConfigWizard.vue");
 const DashboardPage = () => import("@/components/DashboardPage.vue");
 const LoginPage = () => import("@/components/LoginPage.vue");
@@ -219,8 +217,7 @@ export async function createAppRouter() {
     {
       path: `/requests`,
       name: "RequestsPage",
-      component: RequestsPage,
-      meta: { requiresSetup: true },
+      redirect: (to) => ({ name: "DashboardTab", params: { tab: "requests" }, query: to.query }),
     },
     {
       path: `/`,
@@ -262,6 +259,11 @@ export async function createAppRouter() {
       path: `/wizard`,
       redirect: "/setup",
     },
+    // Unknown paths land on the dashboard instead of an empty page.
+    {
+      path: "/:pathMatch(.*)*",
+      redirect: "/dashboard",
+    },
   ];
 
   const router = createRouter({
@@ -284,10 +286,7 @@ export async function createAppRouter() {
       return;
     }
 
-    const currentStatus = await checkSetupStatus();
-    const authMode = await getAuthMode();
-    const isAuthDisabled = authMode === "disabled";
-    let statusAuth = { authenticated: false, bypass: false };
+    let statusAuth;
     try {
       const status = await auth.getAuthStatus();
       statusAuth = {
@@ -295,8 +294,12 @@ export async function createAppRouter() {
         bypass: !!status?.bypass,
       };
     } catch {
-      // Keep default unauthenticated status when the probe fails.
+      if (to.name !== "Login") return { name: "Login", query: { redirect: to.fullPath } };
+      return;
     }
+    const currentStatus = await checkSetupStatus();
+    const authMode = await getAuthMode();
+    const isAuthDisabled = authMode === "disabled";
 
     const isBypassAuthenticated = statusAuth.authenticated && statusAuth.bypass;
     const isAuthenticated = !!auth.accessToken.value || isBypassAuthenticated;

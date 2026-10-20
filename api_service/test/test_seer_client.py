@@ -9,6 +9,7 @@ Covers:
 - get_total_request(): success, None data
 - check_already_requested(): exclude_requested=True/False, found/not-found, exception
 - check_already_downloaded(): found, not found, None local_content, exclude=False
+- get_available_tmdb_ids(): regular and 4K status filtering, pagination, Seer failures
 - _apply_profile_config(): applies all keys, tv languageProfileId, empty profile
 - _build_seer_payload(): movie / tv (all/numbered seasons), anime key, private meta-keys present
 - request_media(): duplicate pending, already in DB, new enqueue
@@ -429,6 +430,86 @@ class TestCheckAlreadyRequested(unittest.IsolatedAsyncioTestCase):
 
 
 # ---------------------------------------------------------------------------
+# get_available_tmdb_ids
+# ---------------------------------------------------------------------------
+
+def _media_page(results, total=None):
+    return {
+        'pageInfo': {'results': len(results) if total is None else total},
+        'results': results,
+    }
+
+
+class TestGetAvailableTmdbIds(unittest.IsolatedAsyncioTestCase):
+
+    async def test_keeps_only_available_and_partially_available_titles(self):
+        client = _make_client()
+        page = _media_page([
+            {'mediaType': 'movie', 'tmdbId': 603, 'status': 5},
+            {'mediaType': 'tv', 'tmdbId': 1399, 'status': 4},
+            {'mediaType': 'movie', 'tmdbId': 155, 'status': 3},   # processing
+            {'mediaType': 'tv', 'tmdbId': 1396, 'status': 2},     # pending
+            {'mediaType': 'movie', 'tmdbId': None, 'status': 5},  # no TMDB id
+            {'mediaType': 'music', 'tmdbId': 42, 'status': 5},    # unknown type
+        ])
+        with patch.object(client, '_make_request', AsyncMock(return_value=page)) as mock_req:
+            result = await client.get_available_tmdb_ids()
+
+        self.assertEqual(result, {'movie': {'603'}, 'tv': {'1399'}})
+        # Unfiltered: Seer's filter=allavailable ignores status4k.
+        mock_req.assert_awaited_once_with('GET', 'api/v1/media?take=100&skip=0')
+
+    async def test_title_available_only_in_4k_counts_as_owned(self):
+        client = _make_client()
+        page = _media_page([
+            {'mediaType': 'movie', 'tmdbId': 27205, 'status': 1, 'status4k': 5},  # 4K only
+            {'mediaType': 'tv', 'tmdbId': 1399, 'status': 2, 'status4k': 4},      # 4K partially
+            {'mediaType': 'movie', 'tmdbId': 155, 'status': 2, 'status4k': 3},    # neither
+        ])
+        with patch.object(client, '_make_request', AsyncMock(return_value=page)):
+            result = await client.get_available_tmdb_ids()
+
+        self.assertEqual(result, {'movie': {'27205'}, 'tv': {'1399'}})
+
+    async def test_fetches_every_page(self):
+        client = _make_client()
+        pages = {
+            0: _media_page([{'mediaType': 'movie', 'tmdbId': 1, 'status': 5}], total=250),
+            100: _media_page([{'mediaType': 'movie', 'tmdbId': 2, 'status': 5}], total=250),
+            200: _media_page([{'mediaType': 'tv', 'tmdbId': 3, 'status': 5}], total=250),
+        }
+
+        async def fake_request(method, endpoint):
+            skip = int(endpoint.rsplit('skip=', 1)[1])
+            return pages[skip]
+
+        with patch.object(client, '_make_request', AsyncMock(side_effect=fake_request)) as mock_req:
+            result = await client.get_available_tmdb_ids()
+
+        self.assertEqual(result, {'movie': {'1', '2'}, 'tv': {'3'}})
+        self.assertEqual(mock_req.await_count, 3)
+
+    async def test_returns_empty_sets_when_seer_is_unreachable(self):
+        client = _make_client()
+        with patch.object(client, '_make_request', AsyncMock(return_value=None)):
+            result = await client.get_available_tmdb_ids()
+        self.assertEqual(result, {'movie': set(), 'tv': set()})
+
+    async def test_timeout_is_treated_as_unreachable(self):
+        client = _make_client()
+        with patch.object(client, '_make_request', AsyncMock(side_effect=asyncio.TimeoutError())):
+            result = await client.get_available_tmdb_ids()
+        self.assertEqual(result, {'movie': set(), 'tv': set()})
+
+    async def test_keeps_loaded_pages_when_a_later_page_fails(self):
+        client = _make_client()
+        first = _media_page([{'mediaType': 'movie', 'tmdbId': 1, 'status': 5}], total=150)
+        with patch.object(client, '_make_request', AsyncMock(side_effect=[first, None])):
+            result = await client.get_available_tmdb_ids()
+        self.assertEqual(result, {'movie': {'1'}, 'tv': set()})
+
+
+# ---------------------------------------------------------------------------
 # check_already_downloaded
 # ---------------------------------------------------------------------------
 
@@ -813,7 +894,7 @@ class TestGetArrServers(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(servers[0]['activeLanguageProfileId'], 2)
         self.assertNotIn('apiKey', servers[0])
         client._make_request.assert_any_await(
-            'GET', 'api/v1/service/sonarr/7', use_cookie=True
+            'GET', 'api/v1/service/sonarr/7'
         )
 
 
@@ -884,14 +965,14 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
         login.assert_awaited_once()
         self.assertTrue(request.call_args.kwargs['use_cookie'])
 
-    async def test_strips_private_keys_and_returns_true_on_success(self):
+    async def test_strips_private_keys_and_returns_remote_response_on_success(self):
         client = _make_client(session_token='tok')
         payload = self._valid_payload()
         with patch.object(client, 'login', AsyncMock()) as mock_login, \
              patch.object(client, '_make_request', AsyncMock(return_value={'id': 55})) as mock_req:
             result = await client.submit_queued_request(payload)
 
-        self.assertTrue(result)
+        self.assertEqual(result, {'id': 55})
         mock_login.assert_awaited_once()
         sent_data = mock_req.call_args[1]['data']
         for key in sent_data:
@@ -1063,9 +1144,10 @@ class TestGetArrServersEnrichment(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(servers[0]["rootFolders"], [{"id": 1, "path": "/movies"}])
         self.assertIn(("api/v1/service/radarr/0", False), calls)
 
-    async def test_cookie_is_used_when_there_is_one(self):
+    async def test_api_key_is_used_even_with_a_cookie(self):
+        # The cookie user is usually not an admin and gets a 403 here.
         servers, calls = await self._servers(session_token="tok")
-        self.assertIn(("api/v1/service/radarr/0", True), calls)
+        self.assertIn(("api/v1/service/radarr/0", False), calls)
         self.assertEqual(len(servers[0]["profiles"]), 1)
 
     async def test_server_secrets_are_not_copied(self):

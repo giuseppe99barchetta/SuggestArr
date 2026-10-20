@@ -4,13 +4,15 @@ rating filtering, and history-based deduplication to power the AI Search tab.
 """
 
 import asyncio
+import inspect
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Dict, List, Optional, Union
 
 
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
 from api_service.services.filter_normalization import build_tmdb_params, normalize_filters
+from api_service.services.library_content import load_library_content
 from api_service.services.llm.llm_service import (
     generate_search_result_rationales,
     interpret_search_query,
@@ -31,7 +33,7 @@ class AiSearchService:
     2. Send query + history to the LLM to obtain a ranked list of specific title
        suggestions (plus discover_params used for the interpretation bar).
     3. Resolve each suggested title on TMDB in parallel.
-    4. Apply rating filters, exclude already-watched/requested titles, deduplicate.
+    4. Apply rating filters, exclude already-watched/requested/owned titles, deduplicate.
     5. Return AI-curated results only — no generic Discover fallback.
     """
 
@@ -47,6 +49,52 @@ class AiSearchService:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    async def inspiration(self, profile: Dict, saved_history: List[Dict]) -> List[Dict]:
+        """Build a small poster shelf from an explicitly linked media profile.
+
+        Never fall back to all server users. Loading this shelf neither calls
+        the LLM nor records titles as recommendations already shown.
+        """
+        external_id = profile.get("external_user_id")
+        if not external_id or profile.get("provider") != str(self.config.get("SELECTED_SERVICE") or "").lower():
+            return []
+        try:
+            history = await asyncio.wait_for(self._get_history([external_id]), timeout=8)
+        except Exception:
+            logger.warning("Could not load AI Search inspiration history")
+            history = []
+
+        items, seen = [], set()
+        for item in history + saved_history:
+            title = str(item.get("title") or "").strip()
+            media_type = item.get("media_type") or item.get("type")
+            key = (title.casefold(), media_type)
+            if not title or media_type not in {"movie", "tv"} or key in seen:
+                continue
+            seen.add(key)
+            items.append({"title": title, "year": item.get("year"), "media_type": media_type, "poster_path": None})
+            if len(items) == 6:
+                break
+        if not items or not self.config.get("TMDB_API_KEY"):
+            return items
+
+        async def enrich(item, client):
+            try:
+                match = await asyncio.wait_for(
+                    self._resolve_suggested_title(item, item["media_type"], client), timeout=5,
+                )
+                if match:
+                    item["poster_path"] = match.get("poster_path")
+            except Exception:
+                logger.warning("Could not load an AI Search inspiration poster")
+
+        try:
+            async with self._make_tmdb_client() as client:
+                await asyncio.gather(*(enrich(item, client) for item in items))
+        except Exception:
+            logger.warning("Could not initialise AI Search inspiration posters")
+        return items
 
     async def search(
         self,
@@ -68,49 +116,80 @@ class AiSearchService:
         :param exclude_watched: Whether to exclude already-watched titles from results.
         :return: Dict with 'results', 'ai_reasoning', and 'total'.
         """
-        if media_type == "both":
-            movie_task = self._search_single(
-                query, "movie", user_ids, max_results, use_history, exclude_watched, exclude_seen,
-                record_seen=False,
+        # Load the library in the background while the LLM interprets the query;
+        # each media type awaits it only when filtering results.
+        owned_ids = asyncio.ensure_future(self._get_owned_tmdb_ids())
+        try:
+            if media_type == "both":
+                movie_task = self._search_single(
+                    query, "movie", user_ids, max_results, use_history, exclude_watched, exclude_seen,
+                    record_seen=False, owned_ids=owned_ids,
+                )
+                tv_task = self._search_single(
+                    query, "tv", user_ids, max_results, use_history, exclude_watched, exclude_seen,
+                    record_seen=False, owned_ids=owned_ids,
+                )
+                movie_res, tv_res = await asyncio.gather(movie_task, tv_task)
+
+                # Interleave: AI movie, AI tv, …
+                ai_movies = movie_res["results"]
+                ai_tv = tv_res["results"]
+
+                merged: List[Dict] = []
+                for pair in zip(ai_movies, ai_tv):
+                    merged.extend(pair)
+
+                # Append leftovers (when one list is longer than the other)
+                for lst in (ai_movies, ai_tv):
+                    for item in lst:
+                        if item not in merged:
+                            merged.append(item)
+
+                ai_reasoning = {
+                    "movie": movie_res.get("ai_reasoning", {}),
+                    "tv": tv_res.get("ai_reasoning", {}),
+                }
+                final_results = merged[:max_results]
+                self._record_seen_items(final_results, media_type)
+
+                return {
+                    "results": final_results,
+                    "ai_reasoning": ai_reasoning,
+                    "total": len(final_results),
+                }
+
+            return await self._search_single(
+                query, media_type, user_ids, max_results, use_history, exclude_watched, exclude_seen,
+                owned_ids=owned_ids,
             )
-            tv_task = self._search_single(
-                query, "tv", user_ids, max_results, use_history, exclude_watched, exclude_seen,
-                record_seen=False,
-            )
-            movie_res, tv_res = await asyncio.gather(movie_task, tv_task)
-
-            # Interleave: AI movie, AI tv, …
-            ai_movies = movie_res["results"]
-            ai_tv = tv_res["results"]
-
-            merged: List[Dict] = []
-            for pair in zip(ai_movies, ai_tv):
-                merged.extend(pair)
-
-            # Append leftovers (when one list is longer than the other)
-            for lst in (ai_movies, ai_tv):
-                for item in lst:
-                    if item not in merged:
-                        merged.append(item)
-
-            ai_reasoning = {
-                "movie": movie_res.get("ai_reasoning", {}),
-                "tv": tv_res.get("ai_reasoning", {}),
-            }
-            final_results = merged[:max_results]
-            self._record_seen_items(final_results, media_type)
-
-            return {
-                "results": final_results,
-                "ai_reasoning": ai_reasoning,
-                "total": len(final_results),
-            }
-
-        return await self._search_single(query, media_type, user_ids, max_results, use_history, exclude_watched, exclude_seen)
+        finally:
+            owned_ids.cancel()  # no-op once the library has loaded
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    async def _get_owned_tmdb_ids(self) -> Dict[str, set]:
+        """Return the TMDB IDs already in the library, keyed by media type.
+
+        Uses the shared owned-content policy (media server plus Seer availability,
+        see :func:`load_library_content`), so AI Search and the jobs agree on what
+        counts as owned. Without Seer configured only the media server is used.
+        Best-effort: a failure never breaks a search.
+
+        :return: Dict mapping 'movie' / 'tv' to sets of TMDB ID strings (may be empty).
+        """
+        if not self.config.get("EXCLUDE_DOWNLOADED", True):
+            return {}
+        try:
+            if not self.config.get("SEER_API_URL"):
+                return await load_library_content(self.config)
+            from api_service.services.seer.seer_client import SeerClient  # local import avoids circular deps
+            async with SeerClient(self.config["SEER_API_URL"], self.config.get("SEER_TOKEN")) as seer_client:
+                return await load_library_content(self.config, seer_client)
+        except Exception as exc:
+            logger.warning("Could not load the library for AI Search: %s", exc)
+            return {}
 
     async def _search_single(
         self,
@@ -122,8 +201,14 @@ class AiSearchService:
         exclude_watched: bool = True,
         exclude_seen: bool = False,
         record_seen: bool = True,
+        owned_ids: Optional[Union[Dict[str, set], Awaitable[Dict[str, set]]]] = None,
     ) -> Dict[str, Any]:
-        """Run the full search pipeline for a single media type."""
+        """Run the full search pipeline for a single media type.
+
+        :param owned_ids: TMDB IDs already in the library, keyed by media type, or
+            a task resolving to them; matching results are excluded like
+            already-requested ones.
+        """
         # 1. Fetch history (best-effort — never crash the search if unavailable)
         history: List[Dict] = []
         if use_history:
@@ -209,7 +294,12 @@ class AiSearchService:
             ]
             similar_result_groups: List[List[Dict]] = list(await asyncio.gather(*similar_tasks))
 
-        # 6. Build result list: AI suggestions only, filtered & deduped
+        # 6. Build result list: AI suggestions only, filtered & deduped.
+        # Titles already in the library are excluded like already-requested ones.
+        if inspect.isawaitable(owned_ids):
+            owned_ids = await owned_ids
+        already_requested = already_requested | (owned_ids or {}).get(media_type, set())
+
         seen_ids: set = set()
         final: List[Dict] = []
 

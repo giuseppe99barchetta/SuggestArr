@@ -20,6 +20,7 @@ class TestConfig(unittest.TestCase):
 
     # This should be kept in sync with mock data for save/load config structure.
     config_data = {
+        "MDBLIST_API_KEY": "",
         "CRON_TIMES": "0 4 * * *",
         "FILTER_LANGUAGE": [{"id": "en", "english_name": "English"}],
         "FILTER_GENRES_EXCLUDE": [{"id": 27, "name": "Horror"}, {"id": 10752, "name": "War"}],
@@ -71,7 +72,6 @@ class TestConfig(unittest.TestCase):
         "DB_RETRY_DELAY": "1.0",
         "LOG_LEVEL": "INFO",
         "SEER_ANIME_PROFILE_CONFIG": {},
-        "ENABLE_BETA_FEATURES": False,
         "ENABLE_ADVANCED_ALGORITHM": False,
         "ENABLE_SOCIAL_FEATURES": False,
         "ENABLE_DEBUG_MODE": False,
@@ -86,6 +86,9 @@ class TestConfig(unittest.TestCase):
         "TMDB_LANGUAGE": "en",
         "PAUSE_JOBS_WITH_PENDING_APPROVALS": False,
         "AUTO_REJECT_APPROVAL_DAYS": 0,
+        "SEER_AUTO_DECLINE_DAYS": 0,
+        "SEER_AUTO_DECLINE_DRY_RUN": True,
+        "REPLACE_REJECTED_REQUESTS": False,
         "FILTER_MIN_RUNTIME": 0,
         "ENABLE_VISUAL_EFFECTS": False,
         "ENABLE_STATIC_BACKGROUND": False,
@@ -105,11 +108,14 @@ class TestConfig(unittest.TestCase):
         "TRAKT_ACCESS_TOKEN": "trakt-access-token",
         "TRAKT_REFRESH_TOKEN": "trakt-refresh-token",
         "TRAKT_EXPIRES_AT": 1234567890,
+        "TRAKT_SYNC_SEEN_FEEDBACK": False,
         "SEER_REQUEST_DELAY": 0.5,
         "FILTER_INCLUDE_TVOD": "false",
         "ALLOW_REGISTRATION": False,
+        "REGISTRATION_DEFAULT_TABS": "requests,jobs,profile",
         "AUTH_MODE": "enabled",
         "AUTH_TRUSTED_CIDRS": "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7",
+        "AUTH_TRUSTED_PROXY_CIDRS": "",
         "AUTH_BYPASS_USERNAME": "local_admin",
         "AUTH_TRUSTED_HEADER": "X-Forwarded-User",
         "AUTH_TRUSTED_HEADER_AUTO_CREATE": True,
@@ -206,6 +212,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(config['TRAKT_ACCESS_TOKEN'], '')
         self.assertEqual(config['TRAKT_REFRESH_TOKEN'], '')
         self.assertIsNone(config['TRAKT_EXPIRES_AT'])
+        self.assertFalse(config['TRAKT_SYNC_SEEN_FEEDBACK'])
 
     def test_trakt_defaults_and_integration_mapping_are_present(self):
         defaults = get_config_values()
@@ -545,13 +552,13 @@ class TestConfig(unittest.TestCase):
         config_service.ConfigService.import_config({
             'version': config_service.CURRENT_VERSION,
             'integrations': {
-                'plex': {'api_url': 'http://new-plex', 'api_key': '***'},
+                'plex': {'api_url': 'http://plex', 'api_key': '***'},
             },
             'settings': {'PLEX_TOKEN': '***'},
         })
 
         written = self._db_manager_cls.return_value.set_integration.call_args.args[1]
-        self.assertEqual(written['api_url'], 'http://new-plex')
+        self.assertEqual(written['api_url'], 'http://plex')
         self.assertEqual(written['api_key'], 'live-token')
 
     def test_config_import_preserves_oauth_tokens_when_snapshot_is_redacted(self):

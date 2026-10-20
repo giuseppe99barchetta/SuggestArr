@@ -93,6 +93,14 @@ class TestFrontendRoutes(unittest.TestCase):
         self.assertIn("text/html", response.content_type)
         self.assertIn('<base href="/suggestarr/">', response.get_data(as_text=True))
 
+    def test_deep_link_without_subpath_injects_root_base(self):
+        with patch.dict(os.environ, {"SUBPATH": ""}), \
+             patch("api_service.frontend_routes.load_env_vars", return_value={"SUBPATH": ""}):
+            response = self.client.get("/dashboard/ai_provider")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('<base href="/">', response.get_data(as_text=True))
+
     def test_subpath_favicon_serves_file_not_html(self):
         with patch("api_service.frontend_routes.load_env_vars", return_value={"SUBPATH": "/suggestarr"}):
             response = self.client.get("/suggestarr/favicon.ico")

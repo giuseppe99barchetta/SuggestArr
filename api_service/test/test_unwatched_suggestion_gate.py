@@ -14,6 +14,8 @@ class _Db:
         self.conn.executescript("""
             CREATE TABLE requests (tmdb_request_id TEXT, media_type TEXT, requested_by TEXT, user_id TEXT, requested_at TIMESTAMP);
             CREATE TABLE unwatched_suggestion_cycles (job_id INTEGER, user_id TEXT, media_type TEXT, reset_at TIMESTAMP, PRIMARY KEY(job_id,user_id,media_type));
+            CREATE TABLE pending_requests(id INTEGER, tmdb_id TEXT, media_type TEXT);
+            CREATE TABLE request_replacements(delivery_id INTEGER PRIMARY KEY, remote_status INTEGER);
         """)
 
     def get_connection(self):
@@ -62,3 +64,12 @@ def test_old_unwatched_request_blocks_and_watched_request_resets_cycle():
     assert gate._is_allowed(job, "u1", "movie", set()) is False
     assert gate._is_allowed(job, "u1", "movie", {"42"}) is True
     assert gate._is_allowed(job, "u1", "movie", set()) is True
+
+
+def test_remotely_declined_request_does_not_block_unwatched_gate():
+    gate = UnwatchedSuggestionGate.__new__(UnwatchedSuggestionGate)
+    gate.db = _Db()
+    gate.db.conn.execute("INSERT INTO requests VALUES ('42','movie','SuggestArr','u1',datetime('now','-8 days'))")
+    gate.db.conn.execute("INSERT INTO pending_requests VALUES (1,'42','movie')")
+    gate.db.conn.execute("INSERT INTO request_replacements VALUES (1,3)")
+    assert gate._is_allowed({'id': 1}, 'u1', 'movie', set()) is True

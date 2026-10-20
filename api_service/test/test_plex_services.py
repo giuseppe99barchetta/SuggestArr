@@ -268,7 +268,7 @@ class TestPlexAuth(unittest.TestCase):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {'id': 123, 'code': 'ABCDEF'}
 
-        with patch('requests.post', return_value=mock_resp):
+        with patch('api_service.services.plex.plex_auth.requests.post', return_value=mock_resp):
             pin_id, auth_url = self.auth.get_authentication_pin()
 
         self.assertEqual(pin_id, 123)
@@ -279,7 +279,7 @@ class TestPlexAuth(unittest.TestCase):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {'authToken': 'my_token_xyz'}
 
-        with patch('requests.get', return_value=mock_resp):
+        with patch('api_service.services.plex.plex_auth.requests.get', return_value=mock_resp):
             token = self.auth.check_authentication(123)
 
         self.assertEqual(token, 'my_token_xyz')
@@ -288,7 +288,7 @@ class TestPlexAuth(unittest.TestCase):
         mock_resp = MagicMock()
         mock_resp.json.return_value = {'id': 123, 'code': 'ABCDEF'}
 
-        with patch('requests.get', return_value=mock_resp):
+        with patch('api_service.services.plex.plex_auth.requests.get', return_value=mock_resp):
             token = self.auth.check_authentication(123)
 
         self.assertIsNone(token)

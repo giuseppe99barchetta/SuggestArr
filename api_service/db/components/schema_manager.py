@@ -118,6 +118,31 @@ class SchemaManager:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """,
+            'list_import_runs': """
+                CREATE TABLE IF NOT EXISTS list_import_runs (
+                    id TEXT PRIMARY KEY,
+                    owner_id INTEGER UNIQUE NOT NULL,
+                    config_json TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    scan_offset INTEGER NOT NULL DEFAULT 0,
+                    scanned_count INTEGER NOT NULL DEFAULT 0,
+                    requested_count INTEGER NOT NULL DEFAULT 0,
+                    lease_token TEXT,
+                    lease_until TIMESTAMP NULL,
+                    last_error TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """,
+            'job_list_state': """
+                CREATE TABLE IF NOT EXISTS job_list_state (
+                    job_id INTEGER PRIMARY KEY,
+                    source_key TEXT NOT NULL,
+                    scan_offset INTEGER NOT NULL DEFAULT 0,
+                    lease_token TEXT,
+                    lease_until TIMESTAMP NULL,
+                    FOREIGN KEY (job_id) REFERENCES discover_jobs(id) ON DELETE CASCADE
+                )
+            """,
             'job_execution_history': """
                 CREATE TABLE IF NOT EXISTS job_execution_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -159,7 +184,33 @@ class SchemaManager:
                     decided_by INTEGER,
                     last_error TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    seer_request_id INTEGER,
+                    seer_created_at TIMESTAMP NULL,
+                    seer_instance TEXT,
                     UNIQUE(tmdb_id, media_type)
+                )
+            """,
+            'request_replacements': """
+                CREATE TABLE IF NOT EXISTS request_replacements (
+                    delivery_id INTEGER PRIMARY KEY,
+                    remote_status INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    replacement_delivery_id INTEGER,
+                    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """,
+            'request_expiry_log': """
+                CREATE TABLE IF NOT EXISTS request_expiry_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    delivery_id INTEGER NOT NULL,
+                    seer_request_id INTEGER NOT NULL,
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    dry_run INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """,
             'api_keys': """
@@ -229,6 +280,25 @@ class SchemaManager:
                     rationale TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     PRIMARY KEY (tmdb_id, media_type)
+                )
+            """,
+            'media_availability': """
+                CREATE TABLE IF NOT EXISTS media_availability (
+                    media_type VARCHAR(16) NOT NULL,
+                    tmdb_id VARCHAR(64) NOT NULL,
+                    status VARCHAR(16) NOT NULL,
+                    url VARCHAR(512),
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (media_type, tmdb_id)
+                )
+            """,
+            'ai_search_history': """
+                CREATE TABLE IF NOT EXISTS ai_search_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    query TEXT NOT NULL,
+                    searched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
                 )
             """,
             'integrations': """
@@ -413,8 +483,13 @@ class SchemaManager:
 
         # Add missing columns
         self.add_missing_columns()
+        from api_service.db.recap_repository import initialize_recap_schema
+        initialize_recap_schema(self._database)
         self._migrate_execution_history()
+        self._migrate_request_expiry()
+        self._migrate_media_availability()
         self._migrate_suggestion_feedback()
+        self._widen_mysql_overview_columns()
         self._create_api_key_indexes()
 
         # Create submission lock table (separate to control column types per DB engine)
@@ -461,6 +536,45 @@ class SchemaManager:
         except Exception as exc:
             raise DatabaseError(error=f"Execution-history migration failed: {exc}", db_type=self.db_type) from exc
 
+    def _migrate_media_availability(self):
+        """Add the play-link column to availability tables created before it existed."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type == 'sqlite':
+                cursor.execute('PRAGMA table_info(media_availability)')
+                existing = {row[1] for row in cursor.fetchall()}
+            elif self.db_type == 'postgres':
+                cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='media_availability'")
+                existing = {row[0] for row in cursor.fetchall()}
+            else:
+                cursor.execute('SHOW COLUMNS FROM media_availability')
+                existing = {row[0] for row in cursor.fetchall()}
+            if 'url' not in existing:
+                cursor.execute('ALTER TABLE media_availability ADD COLUMN url VARCHAR(512)')
+            conn.commit()
+
+    def _migrate_request_expiry(self):
+        """Older deliveries remain untracked; never infer their remote identity."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type == 'sqlite':
+                cursor.execute('PRAGMA table_info(pending_requests)')
+                existing = {row[1] for row in cursor.fetchall()}
+            elif self.db_type == 'postgres':
+                cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='pending_requests'")
+                existing = {row[0] for row in cursor.fetchall()}
+            else:
+                cursor.execute('SHOW COLUMNS FROM pending_requests')
+                existing = {row[0] for row in cursor.fetchall()}
+            for name, kind in {
+                'seer_request_id': 'INTEGER',
+                'seer_created_at': 'TIMESTAMP(6) NULL' if self.db_type in ('mysql', 'mariadb') else 'TIMESTAMP NULL',
+                'seer_instance': 'TEXT',
+            }.items():
+                if name not in existing:
+                    cursor.execute(f'ALTER TABLE pending_requests ADD COLUMN {name} {kind}')
+            conn.commit()
+
     def _migrate_suggestion_feedback(self):
         """Add the title/year columns feedback needs to reach the recommendation prompt.
 
@@ -488,6 +602,32 @@ class SchemaManager:
                 conn.commit()
         except Exception as exc:
             raise DatabaseError(error=f"Suggestion-feedback migration failed: {exc}", db_type=self.db_type) from exc
+
+    def _widen_mysql_overview_columns(self):
+        """Turn MySQL overview columns created as VARCHAR into TEXT.
+
+        Older installs mapped every TEXT column to VARCHAR(255), later VARCHAR(512),
+        and TMDb overviews are often longer, so they were stored cut mid-word.
+        Rows saved before this keep their cut text until the title is saved again.
+        """
+        if self.db_type not in ('mysql', 'mariadb'):
+            return
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                for table in ('metadata', 'metadata_translations'):
+                    cursor.execute(
+                        "SELECT DATA_TYPE FROM information_schema.columns "
+                        "WHERE table_schema = DATABASE() AND table_name = %s AND column_name = 'overview'",
+                        (table,),
+                    )
+                    row = cursor.fetchone()
+                    if row and str(row[0]).lower() == 'varchar':
+                        cursor.execute(f"ALTER TABLE {table} MODIFY overview TEXT")
+                        self.logger.info("Widened %s.overview to TEXT", table)
+                conn.commit()
+        except Exception as exc:
+            raise DatabaseError(error=f"Overview column migration failed: {exc}", db_type=self.db_type) from exc
 
     def _prepare_create_table_query_for_db(self, table_name: str, query: str, db_type: str) -> str:
         """Apply database-specific DDL rewrites for a table creation query."""
@@ -625,8 +765,19 @@ class SchemaManager:
             query = query.replace("TEXT", "VARCHAR(512)")
             query = query.replace("REAL", "DOUBLE")
 
+            if table_name == 'pending_requests':
+                # Identity comparisons require the exact timestamp returned by Seer.
+                query = query.replace('seer_created_at TIMESTAMP NULL', 'seer_created_at TIMESTAMP(6) NULL')
+                query = query.replace('seer_instance VARCHAR(512)', 'seer_instance TEXT')
+
+            # Overviews are free text; TMDb ones regularly exceed 512 characters.
+            if table_name in ('metadata', 'metadata_translations'):
+                query = query.replace("overview VARCHAR(512)", "overview TEXT")
+
             # Job filters are serialized JSON and can easily exceed the generic
             # VARCHAR(512) compatibility mapping used for MySQL text columns.
+            if table_name == 'list_import_runs':
+                query = query.replace('config_json VARCHAR(512) NOT NULL', 'config_json LONGTEXT NOT NULL')
             if table_name == 'discover_jobs':
                 query = query.replace(
                     "filters VARCHAR(512) NOT NULL",
@@ -827,6 +978,11 @@ class SchemaManager:
                         cursor.execute("ALTER TABLE auth_users ADD COLUMN language VARCHAR(16)")
                     else:
                         cursor.execute("ALTER TABLE auth_users ADD COLUMN language TEXT")
+                    conn.commit()
+                # Personal "ready to watch" notification destination (JSON), kept with the
+                # account so it is private, removed with it and never in config exports.
+                if 'notify_config' not in existing_columns:
+                    cursor.execute("ALTER TABLE auth_users ADD COLUMN notify_config TEXT")
                     conn.commit()
 
             except Exception as e:

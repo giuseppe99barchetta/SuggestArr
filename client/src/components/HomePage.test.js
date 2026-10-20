@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+
+const source = readFileSync(new URL('./HomePage.vue', import.meta.url), 'utf8');
+
+test('pending cards offer an already-seen action beside approve and reject', () => {
+  assert.match(source, /aria-label="Already seen it"/);
+  assert.match(source, /@click="openSeen\(request\)"/);
+});
+
+test('already-seen opens the star picker only when the rating reaches Trakt', () => {
+  const method = source.slice(source.indexOf('openSeen(request) {'), source.indexOf('async saveSeenRating('));
+  assert.match(method, /if \(this\.seenRatingMode\) this\.seenRatingItem = request;/);
+  assert.match(method, /else this\.seenMenuId = request\.id;/);
+  assert.match(source, /loadSeenRatingMode\(axios\)/);
+  assert.match(source, /<SeenRatingDialog v-if="seenRatingItem"/);
+});
+
+test('a star rating is saved through the same markSeen path as the icons', () => {
+  const method = source.slice(source.indexOf('async saveSeenRating('), source.indexOf('async decidePending('));
+  assert.match(method, /this\.markSeen\(request, ratedSeenOption\(rating\), \{ rating, markWatched \}\)/);
+});
+
+test('a failed save keeps the star picker open with its choices', () => {
+  const method = source.slice(source.indexOf('async saveSeenRating('), source.indexOf('async decidePending('));
+  assert.match(method, /if \(await this\.markSeen\([^)]*\)[^)]*\)\) \{\s*this\.seenRatingItem = null;\s*\}/);
+  assert.doesNotMatch(method.replace(/if \(await[\s\S]*?\}\s*\}/, ''), /seenRatingItem = null/);
+});
+
+test('the rating options come from the shared module, not a local copy', () => {
+  // Both pending UIs must offer the same actions; duplicating the list is how they drift.
+  assert.match(source, /import \{ SEEN_OPTIONS, loadSeenRatingMode, ratedSeenOption, saveSeenFeedback \} from '@\/utils\/suggestionFeedback\.js'/);
+  assert.match(source, /seenOptions: SEEN_OPTIONS/);
+});
+
+test('marking a suggestion seen saves feedback before clearing the card', () => {
+  const method = source.slice(source.indexOf('async markSeen('), source.indexOf('async decidePending('));
+  const feedbackCall = method.indexOf('saveSeenFeedback(');
+  const rejectCall = method.indexOf("this.decidePending('reject'");
+  assert.ok(feedbackCall > -1, 'markSeen should save feedback');
+  assert.ok(rejectCall > -1, 'markSeen should clear the pending card');
+  assert.ok(feedbackCall < rejectCall, 'feedback must be saved before the request is rejected');
+});
+
+test('a failed feedback save leaves the suggestion in the queue', () => {
+  const method = source.slice(source.indexOf('async markSeen('), source.indexOf('async decidePending('));
+  assert.match(method, /catch \(error\)[\s\S]*?return false;/);
+  assert.match(method, /return true;/);
+});

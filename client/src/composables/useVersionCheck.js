@@ -1,5 +1,5 @@
 /* global __APP_VERSION__ */
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onBeforeUnmount } from "vue";
 import { useToast } from "vue-toast-notification";
 import axios from "axios";
 import { getLatestRelease } from "@/api/githubReleasesApi";
@@ -129,14 +129,19 @@ export function useVersionCheck() {
     });
   };
 
+  let firstCheck = null;
+  let interval = null;
+
   onMounted(() => {
     getCurrentVersion();
+    firstCheck = setTimeout(() => checkForUpdates(false), 5000);
+    interval = setInterval(() => checkForUpdates(false), CHECK_INTERVAL);
+  });
 
-    setTimeout(() => checkForUpdates(false), 5000);
-
-    const interval = setInterval(() => checkForUpdates(false), CHECK_INTERVAL);
-
-    return () => clearInterval(interval);
+  // onMounted ignores a returned cleanup, so the timers are cleared here.
+  onBeforeUnmount(() => {
+    clearTimeout(firstCheck);
+    clearInterval(interval);
   });
 
   return {

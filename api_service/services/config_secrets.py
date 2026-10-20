@@ -7,7 +7,7 @@ REDACTED = '***'
 INTEGRATION_SECRET_PATTERNS = ('token', 'api_key', 'password', 'secret')
 
 SETTINGS_SECRET_KEYS = frozenset({
-    'TMDB_API_KEY', 'OMDB_API_KEY',
+    'TMDB_API_KEY', 'OMDB_API_KEY', 'MDBLIST_API_KEY',
     'PLEX_TOKEN', 'JELLYFIN_TOKEN',
     'SEER_TOKEN', 'SEER_USER_PSW', 'SEER_SESSION_TOKEN',
     'DB_PASSWORD',
@@ -45,6 +45,18 @@ def redact_settings(settings: dict) -> dict:
 def merge_integration_config(service: str, incoming: Dict[str, Any], existing: Dict[str, Any]) -> Dict[str, Any]:
     """Merge an imported integration config, preserving secrets omitted as redacted."""
     from api_service.services.integration_sanitizer import sanitize_integration_config
+    from api_service.services.integration_security import bind_flat_credentials
+
+    if service in ('plex', 'jellyfin', 'seer'):
+        prefix = service.upper()
+        fields = {'api_url': f'{prefix}_API_URL', 'api_key': f'{prefix}_TOKEN'}
+        if service == 'seer':
+            fields['session_token'] = 'SEER_SESSION_TOKEN'
+        bound = bind_flat_credentials(
+            {fields[k]: v for k, v in incoming.items() if k in fields},
+            {fields[k]: v for k, v in (existing or {}).items() if k in fields},
+        )
+        incoming = {**incoming, **{k: bound[v] for k, v in fields.items() if v in bound}}
 
     merged = dict(existing or {})
     for key, value in incoming.items():

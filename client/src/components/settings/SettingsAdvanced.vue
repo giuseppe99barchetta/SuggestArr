@@ -1,803 +1,505 @@
 <template>
-  <div class="settings-advanced">
-    <div class="section-header">
-      <h2>Advanced Settings</h2>
-      <p>Configure advanced options and experimental features</p>
-    </div>
+  <div class="[&_code]:break-all [&_code]:px-[0.35rem] [&_code]:py-[0.1rem] [&_code]:text-xs">
+    <PageHeader :title="sectionMeta.title" :subtitle="sectionMeta.subtitle" />
 
-    <div class="settings-grid">
-      <SettingsPanel
-        panel-id="experimental-ai"
-        title="Experimental & AI"
-        description="Beta features, personalized suggestions, and AI provider configuration."
-        icon="fas fa-flask"
-        tone="warning"
-      >
-      <!-- Experimental Features -->
-      <section class="advanced-subsection experimental">
-        <h3>
-          <i class="fas fa-flask"></i>
-          Experimental Features
-        </h3>
-      
-        <div class="warning-box">
-          <i class="fas fa-exclamation-triangle"></i>
-          <div>
-            <strong>Warning:</strong>
-            <p>
-              These features are experimental and may cause unexpected behavior. Use with caution.
-            </p>
+    <div class="mb-6">
+      <div v-if="section === 'ai'" class="flex flex-col gap-5">
+        <SectionCard icon="fas fa-wand-magic-sparkles" title="AI recommendations" description="Let the AI pick suggestions from watch history.">
+          <div class="flex flex-col gap-4">
+            <BaseCheckbox
+              v-model="localConfig.ENABLE_ADVANCED_ALGORITHM"
+              :disabled="isLoading"
+              label="Use AI suggestion algorithm"
+              description="Use an AI-powered algorithm for hyper-personalized content suggestions based on watch history."
+            />
+
+            <div v-if="localConfig.ENABLE_ADVANCED_ALGORITHM && !hasAiProvider" role="alert" class="flex items-start gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
+              <i aria-hidden="true" class="fas fa-exclamation-triangle mt-0.5 text-caution"></i>
+              <p class="m-0 text-sm text-ink-2"><strong class="text-ink">No AI provider configured.</strong> The AI algorithm needs an API key or a base URL (for local providers) in the provider card, otherwise it cannot run.</p>
+            </div>
           </div>
-        </div>
-      
-        <div class="form-group">
-          <BaseCheckbox
-            v-model="localConfig.ENABLE_BETA_FEATURES"
-            :disabled="isLoading"
-            label="Enable beta features"
-            description="Enable experimental features that are still in development"
-          />
-        </div>
-      
-        <div class="form-group feature-wrapper" :class="{ 'feature-disabled': !localConfig.ENABLE_BETA_FEATURES }">
-          <BaseCheckbox
-            v-model="localConfig.ENABLE_ADVANCED_ALGORITHM"
-            :disabled="isLoading || !localConfig.ENABLE_BETA_FEATURES"
-            label="Use advanced suggestion algorithm"
-            description="Use an AI-powered algorithm for hyper-personalized content suggestions based on watch history."
-          />
-        </div>
-      </section>
+        </SectionCard>
 
-      <!-- AI Provider Configuration (visible only when advanced algorithm is enabled) -->
-      <transition name="ai-card">
-        <section
-          v-if="localConfig.ENABLE_ADVANCED_ALGORITHM && localConfig.ENABLE_BETA_FEATURES"
-          class="advanced-subsection ai-group"
-        >
-          <h3>
-            <i class="fas fa-robot"></i>
-            AI Provider Configuration
-            <button class="info-btn" @click="showAiInfoModal = true" title="Learn how to configure AI providers">
-              <i class="fas fa-circle-info"></i>
+        <!-- Also used by AI Search, so always visible -->
+        <SectionCard icon="fas fa-robot" title="AI provider" description="Any OpenAI-compatible API, in the cloud or on your machine.">
+          <template #actions>
+            <button type="button" class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-brand-ink hover:bg-brand-soft" title="Learn how to configure AI providers" aria-label="Learn how to configure AI providers" @click="showAiInfoModal = true">
+              <i aria-hidden="true" class="fas fa-circle-info"></i>
             </button>
-          </h3>
+          </template>
 
-          <div class="form-group">
-            <label for="openaiApiKey">
-              API Key
-              <span class="optional-tag">Optional</span>
+          <div class="flex flex-col gap-4">
+            <div class="grid gap-4 md:grid-cols-2">
+            <label class="ui-label" for="openaiApiKey">
+              <span>API key <span class="ml-1.5 rounded-full bg-raised px-2 py-0.5 text-[11px] font-normal text-ink-4">Optional</span></span>
+              <input id="openaiApiKey" v-model="localConfig.OPENAI_API_KEY" type="password" placeholder="sk-..." class="ui-input" :disabled="isLoading" />
+              <span class="text-xs font-normal text-ink-4">Required for OpenAI and hosted providers. For local providers like Ollama or LM Studio, use any placeholder (for example <code>sk-local</code>).</span>
             </label>
-            <input
-              id="openaiApiKey"
-              v-model="localConfig.OPENAI_API_KEY"
-              type="password"
-              placeholder="sk-..."
-              class="form-control"
-              :disabled="isLoading"
-            />
-            <small class="form-help">
-              Required for OpenAI and hosted providers. For local providers like Ollama or LM Studio, you can use any placeholder value (for example <code>sk-local</code>).
-            </small>
-          </div>
 
-          <div class="form-group">
-            <label for="llmModel">Model</label>
-            <input
-              id="llmModel"
-              v-model="localConfig.LLM_MODEL"
-              type="text"
-              placeholder="gpt-4o-mini"
-              class="form-control"
-              :disabled="isLoading"
-            />
-            <small class="form-help">
-              The model name to use. For Ollama use the local model tag (for example <code>llama3.1</code>). For LM Studio use the loaded model identifier.
-            </small>
-          </div>
-
-          <div class="form-group">
-            <label for="openaiBaseUrl">
-              Base URL
-              <span class="optional-tag">Optional</span>
+            <label class="ui-label" for="llmModel">
+              Model
+              <input id="llmModel" v-model="localConfig.LLM_MODEL" type="text" placeholder="gpt-4o-mini" class="ui-input" :disabled="isLoading" />
+              <span class="text-xs font-normal text-ink-4">For Ollama use the local model tag (for example <code>llama3.1</code>). For LM Studio use the loaded model identifier.</span>
             </label>
-            <input
-              id="openaiBaseUrl"
-              v-model="localConfig.OPENAI_BASE_URL"
-              type="text"
-              placeholder="https://api.openai.com/v1"
-              class="form-control"
-              :disabled="isLoading"
-            />
-            <small class="form-help">
-              Leave blank for OpenAI. Set to <code>http://localhost:11434/v1</code> for Ollama, <code>http://localhost:1234/v1</code> for LM Studio, or your LiteLLM/OpenRouter endpoint.
-            </small>
-          </div>
+            </div>
 
-          <div class="ai-advanced-section">
-            <button
-              type="button"
-              class="ai-advanced-toggle"
-              :aria-expanded="aiAdvancedExpanded.toString()"
-              aria-controls="ai-advanced-settings"
-              @click="aiAdvancedExpanded = !aiAdvancedExpanded"
-            >
-              <span class="ai-advanced-icon"><i class="fas fa-sliders-h"></i></span>
-              <span class="ai-advanced-copy">
-                <span class="ai-advanced-title">Advanced AI settings</span>
-                <span class="ai-advanced-summary">Temperature, reasoning effort, and web search</span>
+            <label class="ui-label" for="openaiBaseUrl">
+              <span>Base URL <span class="ml-1.5 rounded-full bg-raised px-2 py-0.5 text-[11px] font-normal text-ink-4">Optional</span></span>
+              <input id="openaiBaseUrl" v-model="localConfig.OPENAI_BASE_URL" type="text" placeholder="https://api.openai.com/v1" class="ui-input" :disabled="isLoading" />
+              <span class="text-xs font-normal text-ink-4">Leave blank for OpenAI. Use <code>http://localhost:11434/v1</code> for Ollama, <code>http://localhost:1234/v1</code> for LM Studio, or your LiteLLM/OpenRouter endpoint.</span>
+            </label>
+
+            <div class="rounded-ctl border border-edge bg-panel-2">
+              <button
+                type="button"
+                class="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent p-3.5 text-left text-ink"
+                :aria-expanded="aiAdvancedExpanded.toString()"
+                aria-controls="ai-advanced-settings"
+                @click="aiAdvancedExpanded = !aiAdvancedExpanded"
+              >
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-brand-soft text-brand-ink"><i aria-hidden="true" class="fas fa-sliders-h"></i></span>
+                <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span class="text-sm font-semibold">Advanced AI settings</span>
+                  <span class="text-xs text-ink-4">Temperature, reasoning effort, and web search</span>
+                </span>
+                <i aria-hidden="true" class="fas fa-chevron-right text-ink-4 transition-transform" :class="{ 'rotate-90': aiAdvancedExpanded }"></i>
+              </button>
+
+              <div v-show="aiAdvancedExpanded" id="ai-advanced-settings" class="grid gap-4 px-3.5 pb-3.5 md:grid-cols-2">
+                <label class="ui-label" for="llmTemperature">
+                  Temperature
+                  <input id="llmTemperature" v-model.trim="localConfig.LLM_TEMPERATURE" type="text" inputmode="decimal" placeholder="legacy" class="ui-input" :disabled="isLoading" />
+                  <span class="text-xs font-normal text-ink-4">Use <code>legacy</code> to keep current behavior (0.7 for recommendations, 0.8 for AI Search). Clear and save to omit the parameter, or enter a value from 0 to 2.</span>
+                </label>
+
+                <label class="ui-label" for="llmReasoningEffort">
+                  Reasoning effort
+                  <select id="llmReasoningEffort" v-model="localConfig.LLM_REASONING_EFFORT" class="ui-input" :disabled="isLoading">
+                    <option v-for="option in reasoningEffortOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                  </select>
+                  <span class="text-xs font-normal text-ink-4">Sent only to direct OpenAI GPT-5 and o-series models. Other OpenAI-compatible provider/model combinations omit it.</span>
+                </label>
+
+                <label class="ui-label md:col-span-2" for="searxngBaseUrl">
+                  <span>SearXNG base URL <span class="ml-1.5 rounded-full bg-raised px-2 py-0.5 text-[11px] font-normal text-ink-4">Optional</span></span>
+                  <input id="searxngBaseUrl" v-model.trim="localConfig.SEARXNG_BASE_URL" type="url" placeholder="http://searxng:8080" class="ui-input" :disabled="isLoading" />
+                  <span class="text-xs font-normal text-ink-4">Optional self-hosted SearXNG instance. Its top three JSON search results add current context to AI Search and AI recommendations; leave blank to disable it.</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <button type="button" class="ui-btn" :disabled="isLoading || isTestingLlm" @click="testLlmConnection">
+                <i aria-hidden="true" :class="isTestingLlm ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>
+                {{ isTestingLlm ? 'Testing…' : 'Test connection' }}
+              </button>
+              <span v-if="llmStatus && !isTestingLlm" class="text-[13px] font-semibold" :class="llmStatus === 'ok' ? 'text-good' : 'text-bad'" role="status">
+                <i aria-hidden="true" :class="llmStatus === 'ok' ? 'fas fa-check-circle' : 'fas fa-times-circle'"></i>
+                {{ llmStatus === 'ok' ? 'Connected' : 'Connection failed' }}
               </span>
-              <i class="fas fa-chevron-right ai-advanced-chevron" :class="{ expanded: aiAdvancedExpanded }"></i>
-            </button>
-
-            <transition name="ai-advanced-slide">
-              <div id="ai-advanced-settings" class="ai-advanced-content" v-show="aiAdvancedExpanded">
-                <div class="form-group">
-                  <label for="llmTemperature">Temperature</label>
-                  <input
-                    id="llmTemperature"
-                    v-model.trim="localConfig.LLM_TEMPERATURE"
-                    type="text"
-                    inputmode="decimal"
-                    placeholder="legacy"
-                    class="form-control"
-                    :disabled="isLoading"
-                  />
-                  <small class="form-help">
-                    Use <code>legacy</code> to keep current behavior (0.7 for recommendations, 0.8 for AI Search). Clear and save to omit the parameter, or enter a value from 0 to 2.
-                  </small>
-                </div>
-
-                <div class="form-group">
-                  <BaseDropdown
-                    v-model="localConfig.LLM_REASONING_EFFORT"
-                    :options="reasoningEffortOptions"
-                    label="Reasoning effort"
-                    :disabled="isLoading"
-                    id="llmReasoningEffort"
-                  />
-                  <small class="form-help">
-                    Sent only to direct OpenAI GPT-5 and o-series models. Other OpenAI-compatible provider/model combinations omit it.
-                  </small>
-                </div>
-
-                <div class="form-group">
-                  <label for="searxngBaseUrl">
-                    SearXNG Base URL
-                    <span class="optional-tag">Optional</span>
-                  </label>
-                  <input
-                    id="searxngBaseUrl"
-                    v-model.trim="localConfig.SEARXNG_BASE_URL"
-                    type="url"
-                    placeholder="http://searxng:8080"
-                    class="form-control"
-                    :disabled="isLoading"
-                  />
-                  <small class="form-help">
-                    Optional self-hosted SearXNG instance. Its top three JSON search results add current context to AI Search and AI recommendations; leave blank to disable it.
-                  </small>
-                </div>
-              </div>
-            </transition>
+            </div>
           </div>
+        </SectionCard>
+      </div>
 
-          <div class="form-group">
+      <AppDialog v-if="showAiInfoModal" width="max-w-3xl" title="Set up an AI provider" subtitle="Any OpenAI-compatible API works, in the cloud or on your machine." icon="fas fa-robot" @close="showAiInfoModal = false">
+        <div class="flex flex-col gap-5">
+          <p class="m-0 text-sm leading-relaxed text-ink-2">
+            SuggestArr uses any <strong>OpenAI-compatible API</strong> to generate personalized recommendations based on your watch history. You can use a cloud provider or a local LLM running on your machine.
+          </p>
+
+          <div class="flex flex-wrap gap-2" role="tablist" aria-label="AI Providers">
             <button
-              @click="testLlmConnection"
-              class="btn btn-outline btn-sm"
-              :disabled="isLoading || isTestingLlm"
+              class="cursor-pointer rounded-ctl border px-[0.7rem] py-[0.4rem] text-[0.85rem] font-semibold transition"
+              :class="activeAiGuideTab === 'openai' ? 'border-brand bg-brand-soft text-ink' : 'border-edge-strong bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
+              role="tab"
+              :aria-selected="activeAiGuideTab === 'openai'"
+              @click="activeAiGuideTab = 'openai'"
             >
-              <i :class="isTestingLlm ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>
-              {{ isTestingLlm ? 'Testing...' : 'Test Connection' }}
+              OpenAI
+            </button>
+            <button
+              class="cursor-pointer rounded-ctl border px-[0.7rem] py-[0.4rem] text-[0.85rem] font-semibold transition"
+              :class="activeAiGuideTab === 'ollama' ? 'border-brand bg-brand-soft text-ink' : 'border-edge-strong bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
+              role="tab"
+              :aria-selected="activeAiGuideTab === 'ollama'"
+              @click="activeAiGuideTab = 'ollama'"
+            >
+              Ollama
+            </button>
+            <button
+              class="cursor-pointer rounded-ctl border px-[0.7rem] py-[0.4rem] text-[0.85rem] font-semibold transition"
+              :class="activeAiGuideTab === 'lmstudio' ? 'border-brand bg-brand-soft text-ink' : 'border-edge-strong bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
+              role="tab"
+              :aria-selected="activeAiGuideTab === 'lmstudio'"
+              @click="activeAiGuideTab = 'lmstudio'"
+            >
+              LM Studio
+            </button>
+            <button
+              class="cursor-pointer rounded-ctl border px-[0.7rem] py-[0.4rem] text-[0.85rem] font-semibold transition"
+              :class="activeAiGuideTab === 'gemini' ? 'border-brand bg-brand-soft text-ink' : 'border-edge-strong bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
+              role="tab"
+              :aria-selected="activeAiGuideTab === 'gemini'"
+              @click="activeAiGuideTab = 'gemini'"
+            >
+              Gemini
+            </button>
+            <button
+              class="cursor-pointer rounded-ctl border px-[0.7rem] py-[0.4rem] text-[0.85rem] font-semibold transition"
+              :class="activeAiGuideTab === 'litellm' ? 'border-brand bg-brand-soft text-ink' : 'border-edge-strong bg-panel-2 text-ink-3 hover:border-ink-4 hover:text-ink'"
+              role="tab"
+              :aria-selected="activeAiGuideTab === 'litellm'"
+              @click="activeAiGuideTab = 'litellm'"
+            >
+              LiteLLM
             </button>
           </div>
-        </section>
-      </transition>
-      </SettingsPanel>
 
-      <!-- AI Info Modal -->
-      <teleport to="body">
-        <transition name="modal-fade">
-          <div v-if="showAiInfoModal" class="modal-overlay" @click.self="showAiInfoModal = false">
-            <div class="modal-box">
-              <div class="modal-header">
-                <h3><i class="fas fa-robot"></i> AI Provider Setup Guide</h3>
-                <button class="modal-close" @click="showAiInfoModal = false">
-                  <i class="fas fa-times"></i>
-                </button>
-              </div>
-              <div class="modal-body">
-                <p class="modal-intro">
-                  SuggestArr uses any <strong>OpenAI-compatible API</strong> to generate personalized recommendations based on your watch history. You can use a cloud provider or a local LLM running on your machine.
-                </p>
-
-                <div class="provider-tabs" role="tablist" aria-label="AI Providers">
-                  <button
-                    class="provider-tab"
-                    :class="{ active: activeAiGuideTab === 'openai' }"
-                    role="tab"
-                    :aria-selected="activeAiGuideTab === 'openai'"
-                    @click="activeAiGuideTab = 'openai'"
-                  >
-                    OpenAI
-                  </button>
-                  <button
-                    class="provider-tab"
-                    :class="{ active: activeAiGuideTab === 'ollama' }"
-                    role="tab"
-                    :aria-selected="activeAiGuideTab === 'ollama'"
-                    @click="activeAiGuideTab = 'ollama'"
-                  >
-                    Ollama
-                  </button>
-                  <button
-                    class="provider-tab"
-                    :class="{ active: activeAiGuideTab === 'lmstudio' }"
-                    role="tab"
-                    :aria-selected="activeAiGuideTab === 'lmstudio'"
-                    @click="activeAiGuideTab = 'lmstudio'"
-                  >
-                    LM Studio
-                  </button>
-                  <button
-                    class="provider-tab"
-                    :class="{ active: activeAiGuideTab === 'gemini' }"
-                    role="tab"
-                    :aria-selected="activeAiGuideTab === 'gemini'"
-                    @click="activeAiGuideTab = 'gemini'"
-                  >
-                    Gemini
-                  </button>
-                  <button
-                    class="provider-tab"
-                    :class="{ active: activeAiGuideTab === 'litellm' }"
-                    role="tab"
-                    :aria-selected="activeAiGuideTab === 'litellm'"
-                    @click="activeAiGuideTab = 'litellm'"
-                  >
-                    LiteLLM
-                  </button>
-                </div>
-
-                <div class="provider-panel" role="tabpanel" v-if="activeAiGuideTab === 'openai'">
-                  <div class="provider-card">
-                    <div class="provider-name"><i class="fas fa-cloud"></i> OpenAI</div>
-                    <ol class="provider-steps">
-                      <li>Create an API key in your OpenAI account.</li>
-                      <li>Use a model that supports chat completions, such as <code>gpt-4o-mini</code>.</li>
-                      <li>Leave Base URL empty to use the default OpenAI endpoint.</li>
-                    </ol>
-                    <pre class="provider-code" aria-label="OpenAI config example"><code>OPENAI_API_KEY=sk-proj-...
+          <div role="tabpanel" v-if="activeAiGuideTab === 'openai'">
+            <div class="rounded-ctl border border-edge bg-panel-2 px-4 py-3.5">
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i aria-hidden="true" class="fas fa-cloud"></i> OpenAI</div>
+              <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
+                <li>Create an API key in your OpenAI account.</li>
+                <li>Use a model that supports chat completions, such as <code>gpt-4o-mini</code>.</li>
+                <li>Leave Base URL empty to use the default OpenAI endpoint.</li>
+              </ol>
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2" aria-label="OpenAI config example"><code>OPENAI_API_KEY=sk-proj-...
 OPENAI_BASE_URL=
 LLM_MODEL=gpt-4o-mini</code></pre>
-                  </div>
-                </div>
+            </div>
+          </div>
 
-                <div class="provider-panel" role="tabpanel" v-else-if="activeAiGuideTab === 'ollama'">
-                  <div class="provider-card provider-card--local">
-                    <div class="provider-name"><i class="fas fa-server"></i> Ollama <span class="badge-local">Local</span></div>
-                    <ol class="provider-steps">
-                      <li>Install and run Ollama on your machine.</li>
-                      <li>Pull a model (example: <code>ollama pull llama3.1</code>).</li>
-                      <li>Set Base URL to <code>http://localhost:11434/v1</code> and model to your local model name.</li>
-                    </ol>
-                    <pre class="provider-code" aria-label="Ollama config example"><code>OPENAI_API_KEY=sk-local
+          <div role="tabpanel" v-else-if="activeAiGuideTab === 'ollama'">
+            <div class="rounded-ctl border border-brand/40 bg-panel-2 px-4 py-3.5">
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i aria-hidden="true" class="fas fa-server"></i> Ollama <span class="rounded-lg bg-brand-soft px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-brand-ink">Local</span></div>
+              <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
+                <li>Install and run Ollama on your machine.</li>
+                <li>Pull a model (example: <code>ollama pull llama3.1</code>).</li>
+                <li>Set Base URL to <code>http://localhost:11434/v1</code> and model to your local model name.</li>
+              </ol>
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2" aria-label="Ollama config example"><code>OPENAI_API_KEY=sk-local
 OPENAI_BASE_URL=http://localhost:11434/v1
 LLM_MODEL=llama3.1</code></pre>
-                    <pre class="provider-code provider-code--scroll" aria-label="Ollama docker example"><code>docker run --rm -it \
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2 mt-2.5 max-h-[140px] overflow-y-auto" aria-label="Ollama docker example"><code>docker run --rm -it \
   -p 11434:11434 \
   -v ollama:/root/.ollama \
   ollama/ollama</code></pre>
-                  </div>
-                </div>
+            </div>
+          </div>
 
-                <div class="provider-panel" role="tabpanel" v-else-if="activeAiGuideTab === 'lmstudio'">
-                  <div class="provider-card provider-card--local">
-                    <div class="provider-name"><i class="fas fa-laptop-code"></i> LM Studio <span class="badge-local">Local</span></div>
-                    <ol class="provider-steps">
-                      <li>Run LM Studio.</li>
-                      <li>Start the OpenAI-compatible server from LM Studio.</li>
-                      <li>Use Base URL <code>http://localhost:1234/v1</code>.</li>
-                      <li>Use any dummy API key, for example <code>sk-local</code>.</li>
-                    </ol>
-                    <pre class="provider-code" aria-label="LM Studio config example"><code>OPENAI_API_KEY=sk-local
+          <div role="tabpanel" v-else-if="activeAiGuideTab === 'lmstudio'">
+            <div class="rounded-ctl border border-brand/40 bg-panel-2 px-4 py-3.5">
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i aria-hidden="true" class="fas fa-laptop-code"></i> LM Studio <span class="rounded-lg bg-brand-soft px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-brand-ink">Local</span></div>
+              <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
+                <li>Run LM Studio.</li>
+                <li>Start the OpenAI-compatible server from LM Studio.</li>
+                <li>Use Base URL <code>http://localhost:1234/v1</code>.</li>
+                <li>Use any dummy API key, for example <code>sk-local</code>.</li>
+              </ol>
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2" aria-label="LM Studio config example"><code>OPENAI_API_KEY=sk-local
 OPENAI_BASE_URL=http://localhost:1234/v1
 LLM_MODEL=your-loaded-model</code></pre>
-                    <small class="provider-note">
-                      SuggestArr automatically falls back if a provider rejects
-                      <code>response_format={"type":"json_object"}</code>, so LM Studio works without requiring a LiteLLM proxy.
-                    </small>
-                  </div>
-                </div>
+              <small class="mt-2 block text-[0.8rem] text-ink-3">
+                SuggestArr automatically falls back if a provider rejects
+                <code>response_format={"type":"json_object"}</code>, so LM Studio works without requiring a LiteLLM proxy.
+              </small>
+            </div>
+          </div>
 
-                <div class="provider-panel" role="tabpanel" v-else-if="activeAiGuideTab === 'gemini'">
-                  <div class="provider-card">
-                    <div class="provider-name"><i class="fas fa-gem"></i> Google Gemini</div>
-                    <p class="provider-description">
-                      Use Google's Gemini API through its OpenAI-compatible endpoint.
-                    </p>
-                    <ol class="provider-steps">
-                      <li>Create an API key in Google AI Studio.</li>
-                      <li>Paste the API key into SuggestArr.</li>
-                      <li>Use the Gemini OpenAI-compatible base URL shown below.</li>
-                    </ol>
-                    <pre class="provider-code" aria-label="Gemini config example"><code>OPENAI_API_KEY=AIza...
+          <div role="tabpanel" v-else-if="activeAiGuideTab === 'gemini'">
+            <div class="rounded-ctl border border-edge bg-panel-2 px-4 py-3.5">
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i aria-hidden="true" class="fas fa-gem"></i> Google Gemini</div>
+              <p class="mb-3 text-sm text-ink-2">
+                Use Google's Gemini API through its OpenAI-compatible endpoint.
+              </p>
+              <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
+                <li>Create an API key in Google AI Studio.</li>
+                <li>Paste the API key into SuggestArr.</li>
+                <li>Use the Gemini OpenAI-compatible base URL shown below.</li>
+              </ol>
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2" aria-label="Gemini config example"><code>OPENAI_API_KEY=AIza...
 OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 LLM_MODEL=gemini-2.0-flash</code></pre>
-                    <small class="provider-note">Generate keys at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>.</small>
-                  </div>
-                </div>
+              <small class="mt-2 block text-[0.8rem] text-ink-3">Generate keys at <a href="https://aistudio.google.com/" target="_blank" rel="noopener">Google AI Studio</a>.</small>
+            </div>
+          </div>
 
-                <div class="provider-panel" role="tabpanel" v-else>
-                  <div class="provider-card">
-                    <div class="provider-name"><i class="fas fa-exchange-alt"></i> LiteLLM Proxy <span class="badge-advanced">Advanced</span></div>
-                    <ol class="provider-steps">
-                      <li>Run LiteLLM proxy with your provider mappings.</li>
-                      <li>Set SuggestArr Base URL to the proxy endpoint.</li>
-                      <li>Use the model alias configured in LiteLLM.</li>
-                    </ol>
-                    <pre class="provider-code" aria-label="LiteLLM config example"><code>OPENAI_API_KEY=sk-your-proxy-key
+          <div role="tabpanel" v-else>
+            <div class="rounded-ctl border border-edge bg-panel-2 px-4 py-3.5">
+              <div class="mb-2.5 flex items-center gap-2 text-[0.95rem] font-semibold text-ink [&_i]:text-brand-ink"><i aria-hidden="true" class="fas fa-exchange-alt"></i> LiteLLM Proxy <span class="rounded-lg bg-caution/15 px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider text-caution">Advanced</span></div>
+              <ol class="mb-3 flex list-decimal flex-col gap-2.5 pl-[1.15rem] text-[0.9rem] leading-snug text-ink-2">
+                <li>Run LiteLLM proxy with your provider mappings.</li>
+                <li>Set SuggestArr Base URL to the proxy endpoint.</li>
+                <li>Use the model alias configured in LiteLLM.</li>
+              </ol>
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2" aria-label="LiteLLM config example"><code>OPENAI_API_KEY=sk-your-proxy-key
 OPENAI_BASE_URL=http://localhost:4000/v1
 LLM_MODEL=gpt-4o-mini</code></pre>
-                    <pre class="provider-code provider-code--scroll" aria-label="LiteLLM docker example"><code>docker run --rm -it \
+              <pre class="m-0 overflow-x-auto rounded-lg border border-edge bg-canvas p-3 text-[0.8rem] leading-[1.4] text-ink-2 mt-2.5 max-h-[140px] overflow-y-auto" aria-label="LiteLLM docker example"><code>docker run --rm -it \
   -p 4000:4000 \
   -v ./litellm_config.yaml:/app/config.yaml \
   ghcr.io/berriai/litellm:main-latest \
   --config /app/config.yaml</code></pre>
-                  </div>
-                </div>
+            </div>
+          </div>
 
-                <div class="modal-tip">
-                  <i class="fas fa-lightbulb"></i>
-                  <span>The system sends your watch history to the LLM and receives a ranked list of recommendations with reasoning. No personal data is stored by the provider beyond your API usage.</span>
-                </div>
-              </div>
-              <div class="modal-footer">
-                <button class="btn btn-outline btn-sm" @click="showAiInfoModal = false">
-                  Close
-                </button>
+          <p class="m-0 flex gap-3 rounded-ctl border border-edge bg-panel-2 p-3 text-[13px] leading-relaxed text-ink-3">
+            <i aria-hidden="true" class="fas fa-lightbulb mt-0.5 text-caution"></i>
+            <span>The system sends your watch history to the LLM and receives a ranked list of recommendations with reasoning. No personal data is stored by the provider beyond your API usage.</span>
+          </p>
+        </div>
+        <template #footer>
+          <button type="button" class="ui-btn" @click="showAiInfoModal = false">Close</button>
+        </template>
+      </AppDialog>
+
+      <div v-if="section === 'system'" class="grid gap-5 lg:grid-cols-2">
+        <SectionCard icon="fas fa-bug" title="Debug &amp; appearance" description="Logs, diagnostics and backgrounds." class="lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0">
+          <div class="flex flex-col gap-4">
+            <label class="ui-label" for="logLevel">
+              Log level
+              <select id="logLevel" v-model="localConfig.LOG_LEVEL" class="ui-input" :disabled="isLoading">
+                <option v-for="option in logLevelOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+            </label>
+
+            <BaseCheckbox v-model="localConfig.ENABLE_DEBUG_MODE" :disabled="isLoading" label="Debug mode" description="Detailed logs for troubleshooting." />
+            <BaseCheckbox v-model="localConfig.ENABLE_PERFORMANCE_MONITORING" :disabled="isLoading" label="Performance monitoring" description="Track application performance." />
+            <h3 class="m-0 border-t border-edge pt-4 text-xs font-semibold text-ink-3">Appearance</h3>
+            <BaseCheckbox
+              :model-value="!localConfig.ENABLE_VISUAL_EFFECTS"
+              :disabled="isLoading"
+              label="Disable background blur"
+              description="Reduce visual effects on setup and sign-in screens."
+              @update:model-value="localConfig.ENABLE_VISUAL_EFFECTS = !$event"
+            />
+            <BaseCheckbox v-model="localConfig.ENABLE_STATIC_BACKGROUND" :disabled="isLoading" label="Solid setup background" description="Replace rotating posters with a single color." />
+
+            <div v-if="localConfig.ENABLE_STATIC_BACKGROUND" class="ui-label">
+              <label for="staticBackgroundColor">Static background color (hex)</label>
+              <div class="flex items-center gap-2">
+                <input id="staticBackgroundColor" v-model="localConfig.STATIC_BACKGROUND_COLOR" type="color" class="ui-input h-[42px] w-14 shrink-0 cursor-pointer p-1" :disabled="isLoading" />
+                <input v-model="localConfig.STATIC_BACKGROUND_COLOR" type="text" placeholder="#2E3440" class="ui-input" pattern="^#[0-9A-Fa-f]{6}$" title="Must be a valid hex color code (e.g. #FF0000)" aria-label="Background color hex code" :disabled="isLoading" />
               </div>
             </div>
           </div>
-        </transition>
-      </teleport>
+        </SectionCard>
 
-      <SettingsPanel
-        panel-id="diagnostics-performance"
-        title="Diagnostics & Performance"
-        description="Logging, visual performance, monitoring, and TMDb cache controls."
-        icon="fas fa-tachometer-alt"
-      >
-      <div class="advanced-subsection-grid">
-      <!-- Debug Settings -->
-      <section class="advanced-subsection">
-        <h3>
-          <i class="fas fa-bug"></i>
-          Debug & Appearance
-        </h3>
+        <SectionCard icon="fas fa-memory" title="Cache" description="Storage limits for TMDb data." class="lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0">
+          <div class="flex flex-col gap-4">
+            <label class="ui-label" for="cacheTtl">
+              Cache lifetime (hours)
+              <input id="cacheTtl" v-model.number="localConfig.CACHE_TTL" type="number" min="1" max="168" placeholder="24" class="ui-input" :disabled="isLoading" />
+              <span class="text-xs font-normal text-ink-4">Refresh cached data after 1–168 hours.</span>
+            </label>
 
-        <div class="form-group">
-          <BaseDropdown
-            v-model="localConfig.LOG_LEVEL"
-            :options="logLevelOptions"
-            label="Log Level"
-            :disabled="isLoading"
-            id="logLevel"
-          />
-          <small class="form-help">Set the verbosity of application logs</small>
-        </div>
+            <label class="ui-label" for="maxCacheSize">
+              Max cache size (MB)
+              <input id="maxCacheSize" v-model.number="localConfig.MAX_CACHE_SIZE" type="number" min="10" max="1024" placeholder="100" class="ui-input" :disabled="isLoading" />
+              <span class="text-xs font-normal text-ink-4">Keep up to 10–1024 MB of cached data.</span>
+            </label>
 
-        <div class="form-group">
-          <BaseCheckbox
-            v-model="localConfig.ENABLE_DEBUG_MODE"
-            :disabled="isLoading"
-            label="Enable debug mode"
-            description="Enable detailed logging and debugging information"
-          />
-        </div>
+            <BaseCheckbox v-model="localConfig.ENABLE_API_CACHING" :disabled="isLoading" label="Cache TMDb responses" description="Reuse metadata to reduce API calls." />
 
-        <div class="form-group">
-          <BaseCheckbox
-            v-model="localConfig.ENABLE_PERFORMANCE_MONITORING"
-            :disabled="isLoading"
-            label="Enable performance monitoring"
-            description="Track performance metrics for optimization"
-          />
-        </div>
-
-        <div class="form-group">
-          <BaseCheckbox
-            :model-value="!localConfig.ENABLE_VISUAL_EFFECTS"
-            @update:model-value="localConfig.ENABLE_VISUAL_EFFECTS = !$event"
-            :disabled="isLoading"
-            label="Disable visual effects (blur)"
-            description="Check this box to improve UI performance and frame rates by turning off heavy CSS background blurs."
-          />
-        </div>
-
-        <div class="form-group">
-          <BaseCheckbox
-            v-model="localConfig.ENABLE_STATIC_BACKGROUND"
-            :disabled="isLoading"
-            label="Enable static colored background"
-            description="Override the app's default rotating background pictures with a static color."
-          />
-        </div>
-
-        <div class="form-group" v-if="localConfig.ENABLE_STATIC_BACKGROUND">
-          <label for="staticBackgroundColor">Static Background Color (Hex)</label>
-          <div class="color-input-row">
-            <input
-              id="staticBackgroundColor"
-              v-model="localConfig.STATIC_BACKGROUND_COLOR"
-              type="color"
-              class="form-control color-swatch-input"
-              :disabled="isLoading"
-            />
-            <input
-              v-model="localConfig.STATIC_BACKGROUND_COLOR"
-              type="text"
-              placeholder="#2E3440"
-              class="form-control"
-              pattern="^#[0-9A-Fa-f]{6}$"
-              title="Must be a valid hex color code (e.g. #FF0000)"
-              :disabled="isLoading"
-            />
+            <div class="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-4">
+              <span class="min-w-0 flex-[1_1_180px] text-xs text-ink-4">Remove cached metadata and fetch fresh data.</span>
+              <button type="button" class="ui-btn" :disabled="isLoading" @click="clearCache"><i aria-hidden="true" class="fas fa-trash"></i>Clear cache</button>
+            </div>
           </div>
-        </div>
-      </section>
+        </SectionCard>
 
-      <!-- Cache Settings -->
-      <section class="advanced-subsection">
-        <h3>
-          <i class="fas fa-memory"></i>
-          Cache Settings
-        </h3>
+        <SectionCard icon="fas fa-shield-alt" title="Access &amp; routing" description="Sign-in rules and reverse-proxy path." class="lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0">
+          <div class="flex flex-col gap-4">
+            <label class="ui-label" for="authMode">
+              Authentication mode
+              <select id="authMode" v-model="localConfig.AUTH_MODE" class="ui-input" :disabled="isLoading">
+                <option v-for="option in authModeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+            </label>
 
-        <div class="form-group">
-          <label for="cacheTtl">Cache TTL (hours)</label>
-          <input
-            id="cacheTtl"
-            v-model.number="localConfig.CACHE_TTL"
-            type="number"
-            min="1"
-            max="168"
-            placeholder="24"
-            class="form-control"
-            :disabled="isLoading"
-          />
-          <small class="form-help">
-            How long to cache API responses and data (1-168 hours)
-          </small>
-        </div>
+            <div v-if="localConfig.AUTH_MODE === 'disabled' || localConfig.AUTH_MODE === 'local_bypass'" role="alert" class="flex items-start gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
+              <i aria-hidden="true" class="fas fa-exclamation-triangle mt-0.5 text-caution"></i>
+              <p class="m-0 text-sm text-ink-2">
+                <strong class="text-ink">Warning:</strong>
+                {{ localConfig.AUTH_MODE === 'disabled' ? 'Authentication will be completely disabled. Only use this in trusted environments.' : 'Requests from trusted local networks will bypass authentication.' }}
+              </p>
+            </div>
 
-        <div class="form-group">
-          <label for="maxCacheSize">Max Cache Size (MB)</label>
-          <input
-            id="maxCacheSize"
-            v-model.number="localConfig.MAX_CACHE_SIZE"
-            type="number"
-            min="10"
-            max="1024"
-            placeholder="100"
-            class="form-control"
-            :disabled="isLoading"
-          />
-          <small class="form-help">
-            Maximum cache size in megabytes (10-1024 MB)
-          </small>
-        </div>
+            <label v-if="localConfig.AUTH_MODE === 'local_bypass'" class="ui-label" for="authTrustedCidrs">
+              Trusted CIDRs
+              <input id="authTrustedCidrs" v-model="localConfig.AUTH_TRUSTED_CIDRS" type="text" placeholder="127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" class="ui-input" :disabled="isLoading" />
+              <span class="text-xs font-normal text-ink-4">Networks allowed to skip sign-in, separated by commas.</span>
+            </label>
+            <label v-if="localConfig.AUTH_MODE === 'local_bypass'" class="ui-label" for="authTrustedProxyCidrs">
+              Trusted reverse proxy CIDRs
+              <input id="authTrustedProxyCidrs" v-model="localConfig.AUTH_TRUSTED_PROXY_CIDRS" type="text" placeholder="10.0.20.11/32" class="ui-input" :disabled="isLoading" />
+              <span class="text-xs text-ink-4">Only these proxies may supply the client IP. Leave empty for direct access. Proxy addresses and bypass client networks are separate lists.</span>
+            </label>
 
-        <div class="form-group">
-          <BaseCheckbox
-            v-model="localConfig.ENABLE_API_CACHING"
-            :disabled="isLoading"
-            label="Enable TMDb response caching"
-            description="Cache repeated TMDb metadata requests to reduce external API calls"
-          />
-        </div>
+            <label v-if="localConfig.AUTH_MODE === 'local_bypass' || localConfig.AUTH_MODE === 'disabled'" class="ui-label" for="authBypassUsername">
+              Bypass username
+              <input id="authBypassUsername" v-model="localConfig.AUTH_BYPASS_USERNAME" type="text" placeholder="local_admin" class="ui-input" :disabled="isLoading" />
+              <span class="text-xs font-normal text-ink-4">Account name used when sign-in is bypassed.</span>
+            </label>
 
-        <div class="form-group">
-          <button
-            @click="clearCache"
-            class="btn btn-outline btn-sm"
-            :disabled="isLoading"
-          >
-            <i class="fas fa-trash"></i>
-            Clear Cache
-          </button>
-          <small class="form-help">
-            Clear cached TMDb metadata and force fresh API calls
-          </small>
-        </div>
-      </section>
+            <label class="ui-label border-t border-edge pt-4" for="subpath">
+              Subpath
+              <input id="subpath" v-model="localConfig.SUBPATH" type="text" placeholder="/suggestarr" class="ui-input" :disabled="isLoading" />
+              <span class="text-xs font-normal text-ink-4">Use <code>/suggestarr</code> for a subdirectory. Leave empty for root.</span>
+            </label>
+          </div>
+        </SectionCard>
+
+        <SectionCard icon="fas fa-file-export" title="Configuration management" description="Back up, restore or reset your settings." class="lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0">
+          <div class="flex min-w-0 flex-col gap-4">
+            <div class="flex flex-col gap-2.5">
+              <div v-for="action in configActions" :key="action.event" class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-ctl border p-3.5" :class="action.danger ? 'border-bad/40 bg-bad/10' : 'border-edge bg-panel-2'">
+                <span class="flex min-w-0 flex-col gap-0.5">
+                  <span class="text-sm font-semibold text-ink">{{ action.title }}</span>
+                  <span class="text-xs leading-snug text-ink-4">{{ action.hint }}</span>
+                </span>
+                <button type="button" class="min-w-20" :class="action.danger ? 'ui-btn-danger' : 'ui-btn'" :disabled="isLoading" @click="$emit(action.event)">{{ action.label }}</button>
+              </div>
+            </div>
+            <p class="m-0 mt-auto flex items-start gap-2 border-t border-edge pt-4 text-xs leading-relaxed text-ink-4">
+              <i aria-hidden="true" class="fas fa-lock mt-0.5 text-caution"></i>
+              <span>Configuration backups may contain service credentials. Store exported files securely.</span>
+            </p>
+          </div>
+        </SectionCard>
       </div>
-      </SettingsPanel>
 
       <!-- Request Workflow -->
-      <SettingsPanel
-        panel-id="request-workflow"
-        title="Request Workflow"
-        description="Approvals, request visibility, job pauses, and pending-suggestion retention."
-        icon="fas fa-user-check"
-      >
-      <div class="request-workflow-settings">
-        <section class="workflow-card workflow-card--approval">
-          <div class="workflow-card__header">
-            <span class="workflow-card__icon"><i class="fas fa-check-double"></i></span>
-            <span>
-              <strong>Approval flow</strong>
-              <small>Control when suggestions can leave SuggestArr and reach Seer.</small>
-            </span>
-          </div>
-
-          <div class="workflow-card__body">
-            <div class="workflow-option">
-              <BaseCheckbox
-                v-model="localConfig.REQUIRE_REQUEST_APPROVAL"
-                :disabled="isLoading"
-                label="Require approval before delivery"
-                description="Hold new suggestions in SuggestArr until an administrator approves them."
-              />
-            </div>
-
-            <div class="workflow-option">
-              <BaseCheckbox
-                v-model="localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS"
-                :disabled="isLoading"
-                label="Pause jobs while approvals are pending"
-                description="Prevent automation from adding more suggestions until the current queue is reviewed."
-              />
-            </div>
-          </div>
-        </section>
-
-        <section class="workflow-card">
-          <div class="workflow-card__header">
-            <span class="workflow-card__icon"><i class="fas fa-users"></i></span>
-            <span>
-              <strong>Review policy</strong>
-              <small>Choose who can see requests and how long pending items remain open.</small>
-            </span>
-          </div>
-
-          <div class="workflow-card__body workflow-card__body--fields">
-            <div class="workflow-setting">
-              <label class="workflow-setting__label" for="requestVisibility">Request visibility</label>
-              <BaseDropdown
-                v-model="localConfig.REQUEST_VISIBILITY"
-                :options="requestVisibilityOptions"
-                :disabled="isLoading"
-                id="requestVisibility"
-              />
-              <p class="workflow-setting__help">
-                Limit users to requests from their linked media accounts — regular users only, or admins too.
-                A suggestion belongs to whoever an admin linked (or who signed in) to the media account it was made for;
-                suggestions without such an owner stay with the admins.
-              </p>
-            </div>
-
-            <div class="workflow-setting">
-              <label class="workflow-setting__label" for="tmdbLanguage">Default title language</label>
-              <BaseDropdown
-                v-model="localConfig.TMDB_LANGUAGE"
-                :options="titleLanguageOptions"
-                :disabled="isLoading"
-                id="tmdbLanguage"
-              />
-              <p class="workflow-setting__help">
-                Titles and descriptions for everyone who has not picked a language on their profile.
-              </p>
-            </div>
-
-            <div class="workflow-setting">
-              <span class="workflow-setting__label-row">
-                <label class="workflow-setting__label" for="autoRejectApprovalDays">Pending retention</label>
-                <span class="workflow-setting__range">0–365 days</span>
+      <div v-if="section === 'workflow'" class="grid gap-5 xl:grid-cols-2">
+        <SectionCard icon="fas fa-check-double" title="Approval flow" description="Review suggestions before they are sent to Seer.">
+          <div class="flex flex-1 flex-col gap-2.5">
+            <button
+              v-for="toggle in approvalToggles"
+              :key="toggle.key"
+              type="button"
+              role="switch"
+              :aria-checked="localConfig[toggle.key] ? 'true' : 'false'"
+              :disabled="isLoading || (toggle.needsApproval && !localConfig.REQUIRE_REQUEST_APPROVAL)"
+              class="flex min-h-20 cursor-pointer items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 text-left hover:border-edge-strong disabled:cursor-not-allowed disabled:opacity-50 xl:h-[88px]"
+              @click="localConfig[toggle.key] = !localConfig[toggle.key]"
+            >
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="text-sm font-semibold text-ink">{{ toggle.title }}</span>
+                <span class="text-xs leading-snug text-ink-4">{{ toggle.hint }}</span>
               </span>
-              <input
-                id="autoRejectApprovalDays"
-                v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS"
-                type="number"
-                min="0"
-                max="365"
-                class="form-control"
-                :disabled="isLoading"
-              />
-              <p class="workflow-setting__help">
-                Automatically reject older pending suggestions. Use 0 to keep them until manual review.
-              </p>
+              <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="localConfig[toggle.key] ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="localConfig[toggle.key] ? 'left-[21px]' : 'left-[3px]'"></span></span>
+            </button>
+
+            <label class="flex min-h-20 items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 xl:h-[88px]" :class="{ 'opacity-50': !localConfig.REQUIRE_REQUEST_APPROVAL }">
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="text-sm font-semibold text-ink">Auto-reject after</span>
+                <span class="text-xs leading-snug text-ink-4">Days awaiting review. 0 keeps suggestions indefinitely.</span>
+              </span>
+              <span class="flex shrink-0 items-center gap-2 text-[13px] text-ink-3">
+                <input id="autoRejectApprovalDays" v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS" type="number" min="0" max="365" class="ui-input h-9 w-20 px-2.5 tabular-nums" :disabled="isLoading || !localConfig.REQUIRE_REQUEST_APPROVAL" />days
+              </span>
+            </label>
+            <p class="m-0 mt-auto pt-2 text-xs leading-relaxed text-ink-4">{{ localConfig.REQUIRE_REQUEST_APPROVAL ? 'Suggestions wait here before they reach Seer.' : 'Suggestions go straight to Seer, so the queue options are off.' }}</p>
+          </div>
+        </SectionCard>
+
+        <SectionCard icon="fas fa-hourglass-end" title="Seerr pending requests" description="Expire requests still waiting for approval in Seerr.">
+          <div class="flex flex-col gap-2.5">
+            <label class="flex min-h-20 items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 xl:h-[88px]">
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="text-sm font-semibold text-ink">Auto-decline after</span>
+                <span class="text-xs leading-snug text-ink-4">Days pending in Seerr. 0 disables expiry.</span>
+              </span>
+              <span class="flex shrink-0 items-center gap-2 text-[13px] text-ink-3">
+                <input v-model.number="localConfig.SEER_AUTO_DECLINE_DAYS" aria-label="Auto-decline after (days)" type="number" min="0" max="365" step="1" class="ui-input h-9 w-20 px-2.5 tabular-nums" :disabled="isLoading" />days
+              </span>
+            </label>
+            <div class="flex min-h-20 items-center rounded-ctl border border-edge bg-panel-2 p-3.5 xl:h-[88px]">
+              <BaseCheckbox v-model="localConfig.SEER_AUTO_DECLINE_DRY_RUN" label="Preview only (dry-run)" description="Log what would be declined without changing Seerr." class="w-full" :disabled="isLoading" />
             </div>
           </div>
-        </section>
-      </div>
-      </SettingsPanel>
+          <RequestExpiryControls :enabled="originalConfig.SEER_AUTO_DECLINE_DAYS > 0" :dry-run="originalConfig.SEER_AUTO_DECLINE_DRY_RUN" :disabled="isLoading || hasChanges" />
+          <p class="m-0 mt-auto pt-3 text-xs leading-relaxed text-ink-4">Checked daily at 04:30 server time. Only new SuggestArr deliveries are tracked; media files stay untouched.</p>
+        </SectionCard>
 
-      <SettingsPanel
-        panel-id="application-maintenance"
-        title="Application & Maintenance"
-        description="Authentication, reverse-proxy routing, backups, imports, and reset controls."
-        icon="fas fa-gear"
-      >
-      <div class="advanced-subsection-grid advanced-subsection-grid--application">
-      <section class="advanced-subsection">
-        <h3>
-          <i class="fas fa-shield-alt"></i>
-          Access & Routing
-        </h3>
+        <SectionCard icon="fas fa-sync-alt" title="Replace rejected requests" description="Offer an alternative when a request is declined in Seerr or Overseerr." class="xl:col-span-2">
+          <BaseCheckbox v-model="localConfig.REPLACE_REJECTED_REQUESTS" label="Generate an alternative after rejection" description="Try one new title using the same job, user and media type. Approval rules still apply." :disabled="isLoading" />
+          <RequestReplacementControls :enabled="originalConfig.REPLACE_REJECTED_REQUESTS" :disabled="isLoading || hasChanges" />
+          <p class="m-0 mt-3 text-xs leading-relaxed text-ink-4">Checked every 15 minutes for tracked SuggestArr requests. Deleted requests and automatic expiry declines do not trigger alternatives. Disabled or paused jobs wait.</p>
+        </SectionCard>
 
-        <BaseDropdown
-          v-model="localConfig.AUTH_MODE"
-          :options="authModeOptions"
-          label="Authentication Mode"
-          :disabled="isLoading"
-          id="authMode"
-        />
+        <SectionCard icon="fas fa-eye" title="Who sees what" description="Choose request visibility and the default title language." class="xl:col-span-2">
+          <fieldset class="m-0 min-w-0 border-0 p-0">
+            <legend class="mb-2 p-0 text-[13px] font-semibold text-ink-2">Request visibility</legend>
+            <div class="grid gap-2.5 md:grid-cols-3">
+            <label
+              v-for="option in requestVisibilityOptions"
+              :key="option.value"
+              class="flex cursor-pointer items-start gap-3 rounded-ctl border p-3.5"
+              :class="localConfig.REQUEST_VISIBILITY === option.value ? 'border-brand-ink bg-brand-soft/50' : 'border-edge bg-panel-2 hover:border-edge-strong'"
+            >
+              <input v-model="localConfig.REQUEST_VISIBILITY" type="radio" name="requestVisibility" :value="option.value" class="mt-1 accent-brand" :disabled="isLoading" />
+              <span class="flex min-w-0 flex-col gap-0.5">
+                <span class="text-sm font-semibold text-ink">{{ option.label }}</span>
+                <span class="text-xs leading-snug text-ink-4">{{ option.hint }}</span>
+              </span>
+            </label>
+            </div>
+            <p class="m-0 mt-3 text-xs leading-relaxed text-ink-4">A suggestion belongs to whoever is linked to the media account it was made for. Suggestions without an owner stay with the admins.</p>
+          </fieldset>
 
-        <p class="section-description">
-          Choose how users access SuggestArr. You can require login for everyone, allow trusted local networks to bypass login, or disable authentication.
-        </p>
-
-        <div v-if="localConfig.AUTH_MODE === 'disabled'" class="warning-box warning-box--auth">
-          <i class="fas fa-exclamation-triangle"></i>
-          <div>
-            <strong>Warning:</strong>
-            <p>
-              Authentication will be completely disabled. This should only be used in trusted environments.
-            </p>
+          <div class="mt-5 grid gap-3 border-t border-edge pt-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] sm:items-center">
+            <label for="tmdbLanguage" class="flex flex-col gap-1 text-[13px] font-semibold text-ink-2">
+              Default title language
+              <span class="text-xs font-normal leading-relaxed text-ink-4">For everyone who has not picked a language on their profile.</span>
+            </label>
+            <select id="tmdbLanguage" v-model="localConfig.TMDB_LANGUAGE" class="ui-input" :disabled="isLoading">
+              <option v-for="option in titleLanguageOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
           </div>
-        </div>
-
-        <div v-else-if="localConfig.AUTH_MODE === 'local_bypass'" class="warning-box warning-box--auth">
-          <i class="fas fa-exclamation-triangle"></i>
-          <div>
-            <strong>Warning:</strong>
-            <p>
-              Requests from trusted local networks will bypass authentication.
-            </p>
-          </div>
-        </div>
-
-        <div v-if="localConfig.AUTH_MODE === 'local_bypass'" class="form-group">
-          <label for="authTrustedCidrs">Trusted CIDRs</label>
-          <input
-            id="authTrustedCidrs"
-            v-model="localConfig.AUTH_TRUSTED_CIDRS"
-            type="text"
-            placeholder="127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
-            class="form-control"
-            :disabled="isLoading"
-          />
-          <small class="form-help">
-            Comma-separated CIDR ranges that can bypass auth when mode is <code>local_bypass</code>.
-          </small>
-        </div>
-
-        <div v-if="localConfig.AUTH_MODE === 'local_bypass' || localConfig.AUTH_MODE === 'disabled'" class="form-group">
-          <label for="authBypassUsername">Bypass Username</label>
-          <input
-            id="authBypassUsername"
-            v-model="localConfig.AUTH_BYPASS_USERNAME"
-            type="text"
-            placeholder="local_admin"
-            class="form-control"
-            :disabled="isLoading"
-          />
-          <small class="form-help">
-            Username used as internal request context when auth is bypassed.
-          </small>
-        </div>
-
-        <div class="form-group">
-          <label for="subpath">Subpath</label>
-          <input id="subpath" v-model="localConfig.SUBPATH" type="text" placeholder="/suggestarr" class="form-control"
-            :disabled="isLoading" />
-          <small class="form-help">
-            Subpath for running SuggestArr under a subdirectory (e.g., "/suggestarr"). Leave empty for root.
-          </small>
-        </div>
-      </section>
-
-      <section class="advanced-subsection configuration-management">
-        <h3>
-          <i class="fas fa-file-export"></i>
-          Configuration Management
-        </h3>
-        <p class="section-description">
-          Back up, restore, or reset the complete SuggestArr configuration.
-        </p>
-        <div class="configuration-actions">
-          <article class="configuration-action">
-            <span class="configuration-action__icon"><i class="fas fa-download"></i></span>
-            <span class="configuration-action__copy">
-              <strong>Export a backup</strong>
-              <small>Download the current SuggestArr configuration for safekeeping or migration.</small>
-            </span>
-            <button class="btn btn-outline btn-sm" :disabled="isLoading" @click="$emit('export-config')">
-              Export
-            </button>
-          </article>
-
-          <article class="configuration-action">
-            <span class="configuration-action__icon"><i class="fas fa-upload"></i></span>
-            <span class="configuration-action__copy">
-              <strong>Restore a backup</strong>
-              <small>Import a previously exported configuration into this instance.</small>
-            </span>
-            <button class="btn btn-outline btn-sm" :disabled="isLoading" @click="$emit('import-config')">
-              Import
-            </button>
-          </article>
-
-          <article class="configuration-action configuration-action--danger">
-            <span class="configuration-action__icon"><i class="fas fa-undo"></i></span>
-            <span class="configuration-action__copy">
-              <strong>Reset SuggestArr</strong>
-              <small>Discard the current configuration and return application settings to their defaults.</small>
-            </span>
-            <button class="btn btn-danger btn-sm" :disabled="isLoading" @click="$emit('reset-config')">
-              Reset
-            </button>
-          </article>
-        </div>
-
-        <div class="configuration-note">
-          <i class="fas fa-lock"></i>
-          <span>Configuration backups may contain service credentials. Store exported files securely.</span>
-        </div>
-      </section>
+        </SectionCard>
       </div>
-      </SettingsPanel>
 
-      <SettingsWebhooks />
-      <SettingsCleanup embedded />
+
     </div>
 
 
 
-    <!-- Save Button -->
-    <div class="settings-actions">
-      <button
-        @click="saveSettings"
-        class="btn btn-primary"
-        :disabled="isLoading || !hasChanges"
-      >
-        <i class="fas fa-save"></i>
-        {{ isLoading ? 'Saving...' : 'Save Changes' }}
-      </button>
-
-      <button
-        @click="resetToDefaults"
-        class="btn btn-outline"
-        :disabled="isLoading"
-      >
-        <i class="fas fa-undo"></i>
-        Reset to Defaults
-      </button>
+    <div class="mt-5 flex flex-wrap items-center gap-3 rounded-card border px-[18px] py-3.5" :class="hasChanges ? 'sticky bottom-4 z-10 border-brand-soft bg-panel max-lg:bottom-24' : 'border-edge bg-panel'">
+      <span class="min-w-0 flex-[1_0_100%] text-sm sm:flex-1" :class="hasChanges ? 'text-brand-ink' : 'text-ink-3'">{{ hasChanges ? 'You have unsaved changes.' : 'All changes saved.' }}</span>
+      <button v-if="section === 'system'" type="button" class="ui-btn h-auto min-h-10 flex-1 whitespace-normal border-0 bg-transparent px-2 py-2 text-ink-3 hover:text-bad sm:flex-none sm:px-4" :disabled="isLoading" title="Resets AI, diagnostics, cache and access settings" @click="resetToDefaults">Reset all advanced settings</button>
+      <button type="button" class="ui-btn-primary h-auto min-h-10 flex-1 py-2 sm:flex-none" :disabled="isLoading || !hasChanges" @click="saveSettings">{{ isLoading ? 'Saving…' : 'Save changes' }}</button>
     </div>
   </div>
 </template>
 
 <script>
+import PageHeader from '@/components/ui/PageHeader.vue';
+import SectionCard from '@/components/ui/SectionCard.vue';
+import AppDialog from '@/components/ui/AppDialog.vue';
 import axios from 'axios';
-import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import { confirmDialog } from '@/utils/confirmDialog';
+import unsavedChangesGuard from './mixins/unsavedChangesGuard';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
-import SettingsCleanup from './SettingsCleanup.vue';
-import SettingsPanel from './SettingsPanel.vue';
-import SettingsWebhooks from './SettingsWebhooks.vue';
 import { languageOptions } from '@/utils/titleLanguage.js';
+import RequestExpiryControls from './RequestExpiryControls.vue';
+import RequestReplacementControls from './RequestReplacementControls.vue';
 
 export default {
   name: 'SettingsAdvanced',
-  components: {
-    BaseDropdown,
+  mixins: [unsavedChangesGuard],
+  components: { AppDialog, PageHeader, SectionCard,
     BaseCheckbox,
-    SettingsCleanup,
-    SettingsPanel,
-    SettingsWebhooks,
+    RequestExpiryControls,
+    RequestReplacementControls,
   },
   props: {
+    // Which part of the former Advanced page to show: 'ai', 'workflow' or 'system'.
+    section: {
+      type: String,
+      default: 'ai',
+    },
     config: {
       type: Object,
       required: true,
@@ -808,6 +510,8 @@ export default {
     },
   },
   emits: ['save-section', 'export-config', 'import-config', 'reset-config'],
+  // The dashboard shell passes props this page does not declare.
+  inheritAttrs: false,
   data() {
     return {
       localConfig: {},
@@ -818,6 +522,7 @@ export default {
       aiAdvancedExpanded: false,
       activeAiGuideTab: 'openai',
       isTestingLlm: false,
+      llmStatus: null, // null | 'ok' | 'error', result of the last connection test
       logLevelOptions: [
         { value: 'ERROR', label: 'Error' },
         { value: 'WARNING', label: 'Warning' },
@@ -836,14 +541,30 @@ export default {
         { value: 'disabled', label: 'Disable Authentication' },
       ],
       requestVisibilityOptions: [
-        { value: 'all', label: 'All requests' },
-        { value: 'own', label: 'Own linked account only (admins see all)' },
-        { value: 'own_all', label: 'Own linked account only, admins too' },
+        { value: 'all', label: 'Everyone sees everything', hint: 'Every user sees every request.' },
+        { value: 'own', label: 'Users see their own', hint: 'Users see requests for their linked accounts; admins still see all.' },
+        { value: 'own_all', label: 'Everyone sees their own', hint: 'Admins are limited to their linked accounts too.' },
+      ],
+      approvalToggles: [
+        { key: 'REQUIRE_REQUEST_APPROVAL', title: 'Require approval before delivery', hint: 'Review each suggestion in SuggestArr before delivery.' },
+        { key: 'PAUSE_JOBS_WITH_PENDING_APPROVALS', title: 'Pause jobs while approvals are pending', hint: 'Wait for the current queue to be reviewed.', needsApproval: true },
+      ],
+      configActions: [
+        { event: 'export-config', title: 'Export a backup', hint: 'Download your current configuration.', label: 'Export' },
+        { event: 'import-config', title: 'Restore a backup', hint: 'Load a previously exported configuration.', label: 'Import' },
+        { event: 'reset-config', title: 'Reset SuggestArr', hint: 'Discard your configuration and restore defaults.', label: 'Reset', danger: true },
       ],
       tmdbLanguages: [],
     };
   },
   computed: {
+    sectionMeta() {
+      return {
+        ai: { title: 'AI provider', subtitle: 'The language model behind AI Search and AI recommendations.' },
+        workflow: { title: 'Approvals', subtitle: 'Choose how suggestions are reviewed, when Seerr requests expire, and who can see them.' },
+        system: { title: 'System', subtitle: 'Logging, cache, sign-in, reverse-proxy path and configuration backups.' },
+      }[this.section] || { title: 'Advanced', subtitle: '' };
+    },
     // Without a profile choice there is no "default of the default": English
     // is what TMDb answers with anyway.
     titleLanguageOptions() {
@@ -853,17 +574,20 @@ export default {
     hasChanges() {
       return JSON.stringify(this.localConfig) !== JSON.stringify(this.originalConfig);
     },
+    // Local providers (Ollama, LM Studio) only need a base URL; hosted ones need a key.
+    hasAiProvider() {
+      return Boolean((this.localConfig.OPENAI_API_KEY || '').trim() || (this.localConfig.OPENAI_BASE_URL || '').trim());
+    },
   },
   watch: {
     config: {
       immediate: true,
+      deep: true,
       handler(newConfig) {
         this.localConfig = { ...newConfig };
         if (this.localConfig.LLM_TEMPERATURE === 'unset') {
           this.localConfig.LLM_TEMPERATURE = '';
         }
-        this.originalConfig = { ...this.localConfig };
-
         // Ensure SELECTED_USERS is always a parsed array
         if (typeof this.localConfig.SELECTED_USERS === 'string') {
           try {
@@ -888,7 +612,9 @@ export default {
           TMDB_LANGUAGE: 'en',
           PAUSE_JOBS_WITH_PENDING_APPROVALS: false,
           AUTO_REJECT_APPROVAL_DAYS: 0,
-          ENABLE_BETA_FEATURES: false,
+          SEER_AUTO_DECLINE_DAYS: 0,
+          SEER_AUTO_DECLINE_DRY_RUN: true,
+          REPLACE_REJECTED_REQUESTS: false,
           ENABLE_ADVANCED_ALGORITHM: false,
           OPENAI_API_KEY: '',
           OPENAI_BASE_URL: '',
@@ -901,6 +627,7 @@ export default {
           ENABLE_STATIC_BACKGROUND: false,
           STATIC_BACKGROUND_COLOR: '#2E3440',
           AUTH_MODE: 'enabled',
+          AUTH_TRUSTED_PROXY_CIDRS: '',
           AUTH_TRUSTED_CIDRS: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
           AUTH_BYPASS_USERNAME: 'local_admin',
         };
@@ -914,6 +641,9 @@ export default {
         if (!this.authModeOptions.some(option => option.value === this.localConfig.AUTH_MODE)) {
           this.localConfig.AUTH_MODE = 'enabled';
         }
+
+        // Snapshot after defaults and normalisation, so an untouched page is not "dirty".
+        this.originalConfig = { ...this.localConfig };
       },
     },
   },
@@ -1029,7 +759,7 @@ export default {
     },
 
     async clearCache() {
-      if (confirm('Are you sure you want to clear cached TMDb data? This may temporarily slow down metadata requests.')) {
+      if (await confirmDialog({ title: 'Clear the TMDb cache?', message: 'Cached TMDb data is deleted. Metadata requests may be slower for a while.', confirmLabel: 'Clear cache', danger: true })) {
         try {
           await axios.post('/api/tmdb/cache/clear');
           this.$toast.success('Cache cleared successfully!');
@@ -1041,6 +771,10 @@ export default {
     },
 
     async saveSettings() {
+      if (!Number.isInteger(this.localConfig.SEER_AUTO_DECLINE_DAYS) || this.localConfig.SEER_AUTO_DECLINE_DAYS < 0 || this.localConfig.SEER_AUTO_DECLINE_DAYS > 365) {
+        this.$toast.error('Seerr auto-decline days must be an integer between 0 and 365.');
+        return;
+      }
       const cidrText = String(this.localConfig.AUTH_TRUSTED_CIDRS || '').trim();
       const temperatureText = String(this.localConfig.LLM_TEMPERATURE ?? '').trim();
       const temperature = temperatureText.toLowerCase() === 'legacy' ? 'legacy' : temperatureText;
@@ -1050,11 +784,6 @@ export default {
 
       if (temperature && temperature !== 'legacy' && (Number.isNaN(Number(temperature)) || Number(temperature) < 0 || Number(temperature) > 2)) {
         this.$toast.error('Temperature must be legacy, blank, or a number from 0 to 2.');
-        return;
-      }
-
-      if (authMode === 'local_bypass' && !cidrText) {
-        this.$toast.error('Trusted CIDRs are required when Authentication Mode is local_bypass.');
         return;
       }
 
@@ -1085,7 +814,9 @@ export default {
             TMDB_LANGUAGE: /^[a-z]{2}(-[A-Z]{2})?$/.test(this.localConfig.TMDB_LANGUAGE || '') ? this.localConfig.TMDB_LANGUAGE : 'en',
             PAUSE_JOBS_WITH_PENDING_APPROVALS: this.localConfig.PAUSE_JOBS_WITH_PENDING_APPROVALS === true,
             AUTO_REJECT_APPROVAL_DAYS: Math.max(0, Number(this.localConfig.AUTO_REJECT_APPROVAL_DAYS) || 0),
-            ENABLE_BETA_FEATURES: this.localConfig.ENABLE_BETA_FEATURES || false,
+            SEER_AUTO_DECLINE_DAYS: this.localConfig.SEER_AUTO_DECLINE_DAYS,
+            SEER_AUTO_DECLINE_DRY_RUN: this.localConfig.SEER_AUTO_DECLINE_DRY_RUN,
+            REPLACE_REJECTED_REQUESTS: this.localConfig.REPLACE_REJECTED_REQUESTS === true,
             ENABLE_ADVANCED_ALGORITHM: this.localConfig.ENABLE_ADVANCED_ALGORITHM || false,
             OPENAI_API_KEY: this.localConfig.OPENAI_API_KEY || '',
             OPENAI_BASE_URL: this.localConfig.OPENAI_BASE_URL || '',
@@ -1098,13 +829,14 @@ export default {
             ENABLE_STATIC_BACKGROUND: this.localConfig.ENABLE_STATIC_BACKGROUND || false,
             STATIC_BACKGROUND_COLOR: this.localConfig.STATIC_BACKGROUND_COLOR || '#2E3440',
             AUTH_MODE: authMode,
-            AUTH_TRUSTED_CIDRS: cidrText || '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
+            AUTH_TRUSTED_CIDRS: cidrText,
+            AUTH_TRUSTED_PROXY_CIDRS: String(this.localConfig.AUTH_TRUSTED_PROXY_CIDRS || '').trim(),
             AUTH_BYPASS_USERNAME: (this.localConfig.AUTH_BYPASS_USERNAME || '').trim() || 'local_admin',
             SUBPATH: this.localConfig.SUBPATH || null,
           },
         });
 
-        this.originalConfig = { ...this.localConfig };
+        if (this.section === 'ai' && this.hasAiProvider) this.testLlmConnection();
       } catch (error) {
         console.error('Error saving advanced settings:', error);
       }
@@ -1119,11 +851,14 @@ export default {
           LLM_MODEL: this.localConfig.LLM_MODEL || 'gpt-4o-mini',
         });
         if (response.data.status === 'success') {
+          this.llmStatus = 'ok';
           this.$toast.success('AI connection successful!');
         } else {
+          this.llmStatus = 'error';
           this.$toast.error(response.data.message || 'Connection failed');
         }
       } catch (error) {
+        this.llmStatus = 'error';
         const msg = error.response?.data?.message || 'Connection failed';
         this.$toast.error(msg);
       } finally {
@@ -1140,7 +875,6 @@ export default {
         CACHE_TTL: 24,
         MAX_CACHE_SIZE: 100,
         ENABLE_API_CACHING: true,
-        ENABLE_BETA_FEATURES: false,
         ENABLE_ADVANCED_ALGORITHM: false,
         OPENAI_API_KEY: '',
         OPENAI_BASE_URL: '',
@@ -1153,12 +887,13 @@ export default {
         ENABLE_STATIC_BACKGROUND: false,
         STATIC_BACKGROUND_COLOR: '#2E3440',
         AUTH_MODE: 'enabled',
+        AUTH_TRUSTED_PROXY_CIDRS: '',
         AUTH_TRUSTED_CIDRS: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
         AUTH_BYPASS_USERNAME: 'local_admin',
         SUBPATH: null,
       };
 
-      if (confirm('Are you sure you want to reset all advanced settings to their defaults?')) {
+      if (await confirmDialog({ title: 'Reset advanced settings?', message: 'AI, diagnostics, cache and access settings go back to their defaults and are saved.', confirmLabel: 'Reset', danger: true })) {
         this.localConfig = { ...this.localConfig, ...defaults };
         await this.saveSettings();
       }
@@ -1166,1106 +901,3 @@ export default {
   },
 };
 </script>
-
-<style scoped>
-.settings-advanced {
-  color: var(--color-text-primary);
-  padding: var(--spacing-lg);
-}
-
-.section-header {
-  margin-bottom: 2rem;
-}
-
-.section-header h2 {
-  font-size: 1.8rem;
-  margin-bottom: 0.5rem;
-  color: var(--color-text-primary);
-}
-
-.section-header p {
-  color: var(--color-text-muted);
-  font-size: 1rem;
-}
-
-.settings-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-xl);
-}
-
-.advanced-subsection-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-lg);
-}
-
-.advanced-subsection {
-  min-width: 0;
-  padding: var(--spacing-lg);
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-}
-
-.advanced-subsection + .advanced-subsection {
-  margin-top: var(--spacing-lg);
-}
-
-.advanced-subsection-grid .advanced-subsection + .advanced-subsection {
-  margin-top: 0;
-}
-
-.advanced-subsection.experimental {
-  background: var(--color-warning-alpha-10);
-  border-color: var(--color-warning);
-}
-
-.settings-group {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--border-radius-md);
-  padding: 1.5rem;
-}
-
-.settings-group h3 {
-  font-size: 1.2rem;
-  margin-bottom: 1rem;
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.form-group {
-  margin-bottom: 1.5rem;
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-group label:not(.base-checkbox) {
-  display: block;
-  margin-bottom: var(--spacing-xs);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-  line-height: var(--line-height-normal);
-}
-
-.form-control {
-  box-sizing: border-box;
-  width: 100%;
-  padding: 0.75rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
-  color: var(--color-text-primary);
-  font-size: 1rem;
-  transition: var(--transition-base);
-}
-
-.settings-group > :deep(.form-group-modern) {
-  margin-bottom: var(--spacing-lg);
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  background: var(--color-bg-active);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.form-control:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.form-help {
-  display: block;
-  margin-top: var(--spacing-2xs);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  line-height: var(--line-height-normal);
-}
-
-.color-input-row {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-sm);
-}
-
-.color-swatch-input {
-  flex: 0 0 var(--input-height-lg);
-  width: var(--input-height-lg);
-  height: var(--input-height-md);
-  padding: var(--spacing-2xs);
-  cursor: pointer;
-}
-
-.request-workflow-settings {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-lg);
-}
-
-.workflow-card {
-  min-width: 0;
-  padding: var(--spacing-lg);
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-}
-
-.workflow-card--approval {
-  background: var(--color-primary-alpha-10);
-  border-color: var(--color-primary);
-}
-
-.workflow-card__header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
-}
-
-.workflow-card__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: var(--input-height-md);
-  height: var(--input-height-md);
-  color: var(--color-primary-light);
-  background: var(--surface-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-}
-
-.workflow-card__header strong,
-.workflow-card__header small {
-  display: block;
-}
-
-.workflow-card__header strong {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-lg);
-}
-
-.workflow-card__header small {
-  margin-top: var(--spacing-xs);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-normal);
-}
-
-.workflow-card__body {
-  display: grid;
-  gap: var(--spacing-sm);
-}
-
-.workflow-card__body--fields {
-  gap: var(--spacing-lg);
-}
-
-.workflow-option {
-  padding: var(--spacing-md);
-  background: var(--surface-raised);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-}
-
-.request-workflow-settings .workflow-setting {
-  display: grid;
-  gap: var(--spacing-sm);
-  margin: 0;
-}
-
-.request-workflow-settings .workflow-setting__label {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  line-height: var(--line-height-normal);
-}
-
-.workflow-setting__label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-}
-
-.workflow-setting__range {
-  padding: var(--spacing-2xs) var(--spacing-sm);
-  color: var(--color-text-muted);
-  background: var(--surface-interactive);
-  border-radius: var(--radius-full);
-  font-size: var(--font-size-xs);
-  white-space: nowrap;
-}
-
-.request-workflow-settings .workflow-setting__help {
-  margin: var(--spacing-2xs) 0 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-normal);
-}
-
-.request-workflow-settings .form-control,
-.request-workflow-settings :deep(.value-text),
-.request-workflow-settings :deep(.placeholder-text) {
-  font-size: var(--font-size-sm);
-}
-
-.request-workflow-settings :deep(.base-checkbox) {
-  width: 100%;
-}
-
-.section-description {
-  margin: 0 0 1rem;
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
-  line-height: 1.5;
-}
-
-.configuration-actions {
-  display: grid;
-  gap: var(--spacing-sm);
-}
-
-.configuration-action {
-  display: grid;
-  grid-template-columns: var(--input-height-md) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md);
-  background: var(--surface-raised);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm);
-  transition: border-color var(--transition-fast), background var(--transition-fast);
-}
-
-.configuration-action:hover {
-  background: var(--surface-interactive);
-  border-color: var(--color-border-medium);
-}
-
-.configuration-action--danger {
-  background: var(--color-error-alpha-10);
-  border-color: var(--color-error);
-}
-
-.configuration-action--danger:hover {
-  background: var(--color-error-alpha-20);
-  border-color: var(--color-error-light);
-}
-
-.configuration-action__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--input-height-md);
-  height: var(--input-height-md);
-  color: var(--color-primary-light);
-  background: var(--surface-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-}
-
-.configuration-action--danger .configuration-action__icon {
-  color: var(--color-error-light);
-  background: var(--color-error-alpha-10);
-  border-color: var(--color-error);
-}
-
-.configuration-action__copy strong,
-.configuration-action__copy small {
-  display: block;
-}
-
-.configuration-action__copy strong {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-}
-
-.configuration-action__copy small {
-  margin-top: var(--spacing-xs);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-normal);
-}
-
-.configuration-note {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
-  padding: var(--spacing-md);
-  color: var(--color-text-muted);
-  background: var(--surface-interactive);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-normal);
-}
-
-.configuration-note i {
-  margin-top: var(--spacing-2xs);
-  color: var(--color-warning-light);
-}
-
-.warning-box {
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: var(--border-radius-sm);
-  padding: 1rem;
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.warning-box i {
-  color: var(--color-warning);
-  margin-top: 0.25rem;
-  flex-shrink: 0;
-}
-
-.warning-box strong {
-  color: var(--color-warning);
-  display: block;
-  margin-bottom: 0.5rem;
-}
-
-.warning-box p {
-  color: #e5e7eb;
-  margin: 0;
-  line-height: 1.5;
-}
-
-.warning-box--auth {
-  margin-top: 0.5rem;
-  margin-bottom: 1rem;
-  padding: 0.85rem;
-}
-
-.loading-users {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--color-text-muted);
-  padding: 1rem;
-  text-align: center;
-}
-
-.user-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: 1rem;
-  padding: 0.5rem;
-  max-height: 400px;
-  overflow-y: auto;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: var(--border-radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.user-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1.25rem 1rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--border-radius-md);
-  cursor: pointer;
-  transition: var(--transition-base);
-  position: relative;
-  overflow: hidden;
-}
-
-.user-card:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--color-border-light);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.user-card.selected {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.user-card.selected .user-avatar {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-}
-
-.user-card.selected .user-name {
-  color: #60a5fa;
-}
-
-.user-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: var(--color-bg-interactive);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid transparent;
-  transition: var(--transition-base);
-}
-
-.user-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.user-avatar i {
-  color: var(--color-text-muted);
-  font-size: 1.25rem;
-}
-
-.user-info {
-  text-align: center;
-  flex: 1;
-  width: 100%;
-}
-
-.user-name {
-  color: #e5e7eb;
-  font-weight: 500;
-  font-size: 0.875rem;
-  margin-bottom: 0.25rem;
-  word-wrap: break-word;
-  white-space: normal;
-  line-height: 1.2;
-  transition: color 0.3s ease;
-}
-
-.user-type {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.025em;
-  font-weight: 500;
-}
-
-.user-selection-indicator {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  width: 24px;
-  height: 24px;
-  background: var(--color-primary);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transform: scale(0.8);
-  transition: var(--transition-base);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
-}
-
-.user-card.selected .user-selection-indicator {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.user-selection-indicator i {
-  color: white;
-  font-size: 0.75rem;
-}
-
-.no-users {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem 2rem;
-  color: var(--color-text-muted);
-  text-align: center;
-}
-
-.no-users i {
-  font-size: 2rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
-}
-
-.no-users p {
-  margin: 0 0 0.5rem 0;
-  font-weight: 500;
-  color: #e5e7eb;
-}
-
-.no-users small {
-  font-size: 0.875rem;
-  opacity: 0.8;
-}
-
-.btn {
-  padding: 0.5rem 1rem;
-  border-radius: var(--border-radius-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition-base);
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  text-decoration: none;
-  font-size: 0.875rem;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn-outline {
-  background: var(--color-bg-interactive);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border-medium);
-}
-
-/* Disabled feature styling with blur effect */
-.feature-disabled {
-  opacity: 0.5;
-  filter: blur(0.8px);
-  pointer-events: none;
-  transition: all 0.3s ease;
-}
-
-/* Feature wrapper for positioning */
-.feature-wrapper {
-  position: relative;
-}
-
-.btn-outline:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.5);
-}
-
-.btn-sm {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.8125rem;
-}
-
-.settings-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  padding-top: 2rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* AI Provider card */
-.advanced-subsection.ai-group {
-  background: var(--color-primary-alpha-10);
-  border-color: var(--color-primary);
-}
-
-.advanced-subsection.ai-group h3 {
-  color: var(--color-primary-light);
-}
-
-.advanced-subsection.ai-group h3 i {
-  color: var(--color-primary);
-}
-
-.ai-advanced-toggle {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-primary);
-  cursor: pointer;
-  display: flex;
-  font-family: var(--font-family-base);
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  text-align: left;
-  transition: var(--transition-base);
-  width: 100%;
-}
-
-.ai-advanced-section {
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--surface-glass-light);
-  border-radius: var(--radius-sm);
-  margin-bottom: var(--spacing-lg);
-}
-
-.ai-advanced-toggle:hover {
-  background: var(--surface-glass-light);
-}
-
-.ai-advanced-icon {
-  align-items: center;
-  background: var(--color-primary-alpha-10);
-  border-radius: var(--radius-sm);
-  color: var(--color-primary);
-  display: flex;
-  justify-content: center;
-  padding: var(--spacing-sm);
-}
-
-.ai-advanced-copy {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: var(--spacing-2xs);
-}
-
-.ai-advanced-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.ai-advanced-summary {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-}
-
-.ai-advanced-chevron {
-  color: var(--color-text-muted);
-  margin-left: auto;
-  transition: var(--transition-base);
-}
-
-.ai-advanced-chevron.expanded {
-  transform: rotate(90deg);
-}
-
-.ai-advanced-content {
-  padding: 0 var(--spacing-md) var(--spacing-md);
-}
-
-.ai-advanced-slide-enter-active,
-.ai-advanced-slide-leave-active {
-  overflow: hidden;
-  transition: max-height var(--transition-base), opacity var(--transition-base), transform var(--transition-base);
-}
-
-.ai-advanced-slide-enter-from,
-.ai-advanced-slide-leave-to {
-  max-height: 0;
-  opacity: 0;
-  transform: translateY(calc(var(--spacing-sm) * -1));
-}
-
-.ai-advanced-slide-enter-to,
-.ai-advanced-slide-leave-from {
-  max-height: 100vh;
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.optional-tag {
-  font-size: 0.75rem;
-  font-weight: 400;
-  color: var(--color-text-muted);
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-md);
-  padding: 0.1rem 0.45rem;
-  margin-left: 0.4rem;
-  vertical-align: middle;
-}
-
-/* Transition for the AI card appearing in the grid */
-.ai-card-enter-active,
-.ai-card-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.ai-card-enter-from,
-.ai-card-leave-to {
-  opacity: 0;
-  transform: scale(0.97) translateY(-8px);
-}
-
-.ai-card-enter-to,
-.ai-card-leave-from {
-  opacity: 1;
-  transform: scale(1) translateY(0);
-}
-
-/* Info button next to AI section title */
-.info-btn {
-  margin-left: auto;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #818cf8;
-  font-size: 1rem;
-  padding: 0.2rem 0.4rem;
-  border-radius: 50%;
-  transition: color 0.2s, background 0.2s;
-  line-height: 1;
-}
-
-.info-btn:hover {
-  color: #a5b4fc;
-  background: rgba(165, 180, 252, 0.12);
-}
-
-/* Modal overlay */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 1rem;
-}
-
-.modal-box {
-  background: #1e1e2e;
-  border: 1px solid rgba(165, 180, 252, 0.3);
-  border-radius: var(--border-radius-md);
-  width: 100%;
-  max-width: 700px;
-  max-height: min(86vh, 820px);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  color: #a5b4fc;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.modal-close {
-  margin-left: auto;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  font-size: 1rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: var(--border-radius-sm);
-  transition: color 0.2s, background 0.2s;
-}
-
-.modal-close:hover {
-  color: #e5e7eb;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.modal-body {
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  overflow-y: auto;
-}
-
-.modal-intro {
-  color: #e5e7eb;
-  line-height: 1.6;
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.provider-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.provider-tab {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--color-text-muted);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--border-radius-sm);
-  padding: 0.4rem 0.7rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition-base);
-}
-
-.provider-tab:hover {
-  color: #e5e7eb;
-  border-color: rgba(165, 180, 252, 0.5);
-}
-
-.provider-tab.active {
-  color: #e5e7eb;
-  border-color: rgba(165, 180, 252, 0.65);
-  background: rgba(99, 102, 241, 0.2);
-}
-
-.provider-panel {
-  display: flex;
-  flex-direction: column;
-}
-
-.provider-list,
-.provider-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.provider-steps {
-  color: var(--color-text-muted);
-  margin: 0 0 0.8rem;
-  padding-left: 1.15rem;
-  font-size: 0.9rem;
-  line-height: 1.45;
-}
-
-.provider-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--border-radius-sm);
-  padding: 0.9rem 1rem;
-}
-
-.provider-card--local {
-  border-color: rgba(99, 102, 241, 0.35);
-  background: rgba(99, 102, 241, 0.06);
-}
-
-.provider-name {
-  font-weight: 600;
-  color: #e5e7eb;
-  margin-bottom: 0.6rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.95rem;
-}
-
-.provider-name i {
-  color: #818cf8;
-}
-
-.badge-local {
-  font-size: 0.7rem;
-  font-weight: 600;
-  background: rgba(99, 102, 241, 0.25);
-  color: #a5b4fc;
-  border-radius: 8px;
-  padding: 0.1rem 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.badge-advanced {
-  font-size: 0.7rem;
-  font-weight: 600;
-  background: rgba(245, 158, 11, 0.22);
-  color: #fbbf24;
-  border-radius: 8px;
-  padding: 0.1rem 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.provider-code {
-  margin: 0;
-  background: rgba(17, 24, 39, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  color: #d1d5db;
-  padding: 0.75rem;
-  font-size: 0.8rem;
-  line-height: 1.4;
-  overflow-x: auto;
-}
-
-.provider-code + .provider-code {
-  margin-top: 0.6rem;
-}
-
-.provider-code--scroll {
-  max-height: 140px;
-  overflow-y: auto;
-}
-
-.provider-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-}
-
-.provider-table td {
-  padding: 0.2rem 0.4rem;
-  color: var(--color-text-muted);
-}
-
-.provider-table td:first-child {
-  font-weight: 500;
-  color: #9ca3af;
-  width: 90px;
-  white-space: nowrap;
-}
-
-.provider-table code {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
-  padding: 0.1rem 0.35rem;
-  font-size: 0.8rem;
-  color: #c4b5fd;
-  font-family: monospace;
-}
-
-.provider-note {
-  display: block;
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-  font-style: italic;
-}
-
-.modal-tip {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  border-radius: var(--border-radius-sm);
-  padding: 0.85rem 1rem;
-  font-size: 0.875rem;
-  color: #fbbf24;
-  line-height: 1.5;
-}
-
-.modal-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.9rem 1.5rem 1.1rem;
-  display: flex;
-  justify-content: flex-end;
-  flex-shrink: 0;
-}
-
-.modal-tip i {
-  margin-top: 0.1rem;
-  flex-shrink: 0;
-}
-
-/* Modal transition */
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
-}
-
-@media (max-width: 768px) {
-  .settings-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-
-  .advanced-subsection-grid,
-  .request-workflow-settings {
-    grid-template-columns: 1fr;
-  }
-
-  .configuration-action {
-    grid-template-columns: var(--input-height-md) minmax(0, 1fr);
-  }
-
-  .configuration-action .btn {
-    grid-column: 2;
-    justify-self: start;
-  }
-
-  .settings-group {
-    padding: 1rem;
-  }
-
-  .warning-box {
-    flex-direction: column;
-    text-align: center;
-  }
-
-  .user-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.75rem;
-    padding: 0.25rem;
-    max-height: 300px;
-  }
-
-  .user-card {
-    padding: 1rem 0.75rem;
-  }
-
-  .user-avatar {
-    width: 40px;
-    height: 40px;
-  }
-
-  .user-avatar i {
-    font-size: 1rem;
-  }
-
-  .user-name {
-    font-size: 0.8125rem;
-  }
-
-  .user-type {
-    font-size: 0.6875rem;
-  }
-
-  .settings-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .modal-box {
-    max-height: 92vh;
-  }
-
-  .modal-body {
-    padding: 1rem;
-  }
-
-  .modal-header,
-  .modal-footer {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-}
-</style>

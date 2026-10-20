@@ -3,7 +3,8 @@ Repository for discover jobs and job execution history.
 Provides CRUD operations for the discover_jobs and job_execution_history tables.
 """
 import json
-from datetime import datetime
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from api_service.config.logger_manager import LoggerManager
@@ -17,6 +18,54 @@ class JobRepository:
         """Initialize the job repository."""
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.db = DatabaseManager()
+
+    def list_scan_offset(self, job_id, source_key):
+        ph = '?' if self.db.db_type == 'sqlite' else '%s'
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f'SELECT scan_offset FROM job_list_state WHERE job_id={ph} AND source_key={ph}',
+                           (job_id, source_key))
+            row = cursor.fetchone()
+            return int(row[0]) if row else 0
+
+    def claim_list_scan(self, job_id, source_key):
+        """One expiring DB lease per job, including manual and replacement runs."""
+        ph = '?' if self.db.db_type == 'sqlite' else '%s'
+        token = uuid.uuid4().hex
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        insert = f'INSERT INTO job_list_state(job_id,source_key) VALUES({ph},{ph})'
+        if self.db.db_type in ('mysql', 'mariadb'):
+            insert = insert.replace('INSERT INTO', 'INSERT IGNORE INTO')
+        else:
+            insert += ' ON CONFLICT (job_id) DO NOTHING'
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(insert, (job_id, source_key))
+            cursor.execute(
+                f'UPDATE job_list_state SET scan_offset=CASE WHEN source_key={ph} THEN scan_offset ELSE 0 END,'
+                f'source_key={ph},lease_token={ph},lease_until={ph} WHERE job_id={ph} '
+                f'AND (lease_token IS NULL OR lease_until < {ph})',
+                (source_key, source_key, token, now + timedelta(minutes=10), job_id, now))
+            claimed = cursor.rowcount == 1
+            conn.commit()
+        return token if claimed else None
+
+    def checkpoint_list_scan(self, job_id, token, offset, release=False):
+        ph = '?' if self.db.db_type == 'sqlite' else '%s'
+        until = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=10)
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f'UPDATE job_list_state SET scan_offset={ph},lease_token={ph},lease_until={ph} '
+                           f'WHERE job_id={ph} AND lease_token={ph}',
+                           (offset, None if release else token, None if release else until, job_id, token))
+            changed = cursor.rowcount == 1
+            if not changed and not release:
+                # MySQL reports zero when the second-resolution heartbeat is unchanged.
+                cursor.execute(f'SELECT 1 FROM job_list_state WHERE job_id={ph} AND lease_token={ph}',
+                               (job_id, token))
+                changed = cursor.fetchone() is not None
+            conn.commit()
+        return changed
 
     def get_all_jobs(self) -> List[Dict[str, Any]]:
         """

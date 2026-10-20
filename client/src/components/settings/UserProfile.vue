@@ -1,298 +1,183 @@
 <template>
-  <div class="settings-users" :class="{ 'settings-users--embedded': embedded }">
-    <div class="section-header">
-      <h2>My Profile</h2>
-      <p>Update your account credentials and link your media server account.</p>
-    </div>
+  <div class="flex flex-col gap-5" data-profile-page>
+    <PageHeader title="My profile" subtitle="Your account, preferences, API keys and the accounts SuggestArr learns from." />
 
-    <div class="settings-grid">
-
-      <!-- ── Account Information ─────────────────────────────────────────── -->
-      <div class="settings-group accounts-group">
-        <div class="group-title-row accounts-group__heading">
-          <h3>
-            <i class="fas fa-user-circle"></i>
-            Account Information
-          </h3>
-        </div>
-        <p class="card-desc">Manage your username and password.</p>
-
-        <div class="account-fields">
-        <!-- Username -->
-        <form class="account-form-section" @submit.prevent="saveUsername">
-          <div class="account-section-heading">
-            <span class="account-section-heading__icon"><i class="fas fa-user"></i></span>
-            <div><h4 class="subsection-title">Username</h4><p>How your account is identified in SuggestArr.</p></div>
-          </div>
-          <div class="form-group">
-            <label class="account-field-label" for="newUsername">New username</label>
-            <input
-              id="newUsername"
-              v-model="usernameForm.value"
-              type="text"
-              class="form-control"
-              :placeholder="currentUser?.username || 'Current username'"
-              maxlength="64"
-              :disabled="isSavingUsername"
-            />
-          </div>
-          <div v-if="usernameError" class="error-banner">
-            <i class="fas fa-exclamation-circle"></i>
-            {{ usernameError }}
-          </div>
-          <div v-if="usernameSuccess" class="success-banner">
-            <i class="fas fa-check-circle"></i>
-            {{ usernameSuccess }}
-          </div>
-          <button
-            type="submit"
-            class="btn btn-outline btn-sm"
-            :disabled="isSavingUsername || !usernameForm.value.trim()"
-          >
-            <i :class="isSavingUsername ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
-            {{ isSavingUsername ? 'Saving…' : 'Save Username' }}
-          </button>
-        </form>
-
-        <!-- Password -->
-        <form class="account-form-section" @submit.prevent="savePassword">
-          <div class="account-section-heading">
-            <span class="account-section-heading__icon"><i class="fas fa-shield-alt"></i></span>
-            <div><h4 class="subsection-title">Password</h4><p>Use a strong password to protect your account.</p></div>
-          </div>
-          <div class="form-group">
-            <label class="account-field-label" for="currentPassword">Current password</label>
-            <input
-              id="currentPassword"
-              v-model="passwordForm.current"
-              type="password"
-              class="form-control"
-              placeholder="Current password"
-              autocomplete="current-password"
-              :disabled="isSavingPassword"
-            />
-          </div>
-          <div class="form-group">
-            <label class="account-field-label" for="newPassword">New password</label>
-            <input
-              id="newPassword"
-              v-model="passwordForm.new"
-              type="password"
-              class="form-control"
-              placeholder="At least 8 characters"
-              autocomplete="new-password"
-              :disabled="isSavingPassword"
-            />
-          </div>
-          <div class="form-group">
-            <label class="account-field-label" for="confirmPassword">Confirm new password</label>
-            <input
-              id="confirmPassword"
-              v-model="passwordForm.confirm"
-              type="password"
-              class="form-control"
-              placeholder="Repeat new password"
-              autocomplete="new-password"
-              :disabled="isSavingPassword"
-            />
-          </div>
-          <div v-if="passwordError" class="error-banner">
-            <i class="fas fa-exclamation-circle"></i>
-            {{ passwordError }}
-          </div>
-          <div v-if="passwordSuccess" class="success-banner">
-            <i class="fas fa-check-circle"></i>
-            {{ passwordSuccess }}
-          </div>
-          <button
-            type="submit"
-            class="btn btn-outline btn-sm"
-            :disabled="isSavingPassword || !passwordForm.current || !passwordForm.new || !passwordForm.confirm"
-          >
-            <i :class="isSavingPassword ? 'fas fa-spinner fa-spin' : 'fas fa-lock'"></i>
-            {{ isSavingPassword ? 'Saving…' : 'Change Password' }}
-          </button>
-        </form>
-
-        </div>
-      </div>
-
-      <!-- ── Title language ──────────────────────────────────────────────── -->
-      <div class="settings-group language-group">
-        <h3>
-          <i class="fas fa-language"></i>
-          Title language
-        </h3>
-        <p class="card-desc">Show titles and descriptions of suggestions and requests in this language.</p>
-        <form class="account-form-section" @submit.prevent="saveLanguage">
-          <BaseDropdown
-            id="titleLanguage"
-            v-model="languageForm.value"
-            :options="languageChoices"
-            label="Language"
-            :disabled="isSavingLanguage"
-          />
-          <p v-if="!languageForm.value && displayLanguage" class="card-desc">Currently shown in: {{ displayLanguageLabel }}</p>
-          <div v-if="languageError" class="error-banner">
-            <i class="fas fa-exclamation-circle"></i>
-            {{ languageError }}
-          </div>
-          <div v-if="languageSuccess" class="success-banner">
-            <i class="fas fa-check-circle"></i>
-            {{ languageSuccess }}
-          </div>
-          <button type="submit" class="btn btn-outline btn-sm" :disabled="isSavingLanguage">
-            <i :class="isSavingLanguage ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
-            {{ isSavingLanguage ? 'Saving…' : 'Save Language' }}
-          </button>
-        </form>
-      </div>
-
-      <ApiKeysPanel class="api-keys-group" />
-
-      <!-- ── Media Server Link ────────────────────────────────────────────── -->
-      <div v-if="isLinkableService" class="settings-group connections-group">
-        <div class="connection-columns">
-        <section>
-        <h3>
-          <i :class="providerIcon"></i>
-          {{ providerLabel }} Account
-        </h3>
-
-        <p class="card-desc">
-          Link your {{ providerLabel }} account so SuggestArr can personalise recommendations based on your watch history.
-        </p>
-
-        <!-- Already linked -->
-        <div v-if="currentLink" class="user-row">
-          <div class="user-identity">
-            <div class="user-avatar">
-              <i :class="providerIcon"></i>
-            </div>
-            <div class="user-info">
-              <span class="user-name">{{ currentLink.external_username }}</span>
-              <span class="user-meta">{{ providerLabel }} account</span>
+    <div class="grid gap-5 lg:grid-cols-2">
+      <div class="flex min-w-0 flex-col gap-5">
+        <SectionCard icon="fas fa-user-circle" title="Account" description="The name you sign in with and your password.">
+          <div class="flex items-center gap-4">
+            <UserAvatar :user="profileUser" class="h-16 w-16 shrink-0 text-[64px]" />
+            <div class="min-w-0 flex-1">
+              <form v-if="editingName" class="flex gap-2" @submit.prevent="saveUsername">
+                <label class="sr-only" for="newUsername">New username</label>
+                <input id="newUsername" ref="usernameInput" v-model="usernameForm.value" type="text" class="ui-input" maxlength="64" :disabled="isSavingUsername" @keydown.esc="cancelRename" />
+                <button type="submit" class="ui-btn-primary shrink-0" :disabled="isSavingUsername || !usernameForm.value.trim() || usernameForm.value.trim() === profileUser?.username">
+                  <i v-if="isSavingUsername" aria-hidden="true" class="fas fa-spinner fa-spin"></i>Save
+                </button>
+                <button type="button" class="ui-btn shrink-0" :disabled="isSavingUsername" @click="cancelRename">Cancel</button>
+              </form>
+              <div v-else class="flex min-w-0 items-center gap-1">
+                <p class="m-0 truncate text-lg font-bold text-ink">{{ profileUser?.username }}</p>
+                <button type="button" class="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" aria-label="Rename" title="Rename" @click="startRename">
+                  <i aria-hidden="true" class="fas fa-pen text-xs"></i>
+                </button>
+              </div>
+              <p class="m-0 mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
+                <span><i aria-hidden="true" :class="profileUser?.role === 'admin' ? 'fas fa-shield-alt' : 'fas fa-user'" class="mr-1"></i>{{ profileUser?.role === 'admin' ? 'Administrator' : 'User' }}</span>
+                <span v-if="currentLink"><i aria-hidden="true" :class="providerIcon" class="mr-1"></i>Linked to {{ providerLabel }}</span>
+              </p>
             </div>
           </div>
-          <button
-            type="button"
-            class="btn btn-danger btn-sm icon-btn"
-            :disabled="isUnlinking"
-            title="Unlink account"
-            @click="unlinkAccount"
-          >
-            <i :class="isUnlinking ? 'fas fa-spinner fa-spin' : 'fas fa-unlink'"></i>
-          </button>
-        </div>
+          <p v-if="usernameError" role="alert" class="ui-alert-bad mt-3">{{ usernameError }}</p>
+          <p v-if="usernameSuccess" role="status" class="ui-alert-good mt-3">{{ usernameSuccess }}</p>
 
-        <!-- Link form: credential-based self-linking -->
-        <template v-else>
-          <div v-if="isPlexService">
-            <div v-if="linkError" class="error-banner">
-              <i class="fas fa-exclamation-circle"></i>
-              {{ linkError }}
+          <div class="mt-5 flex items-center justify-between gap-3 border-t border-edge pt-5">
+            <div>
+              <h3 class="m-0 text-sm font-bold text-ink">Password</h3>
+              <p class="m-0 mt-0.5 text-xs text-ink-4">At least 8 characters.</p>
             </div>
-            <button
-              type="button"
-              class="btn btn-outline btn-sm"
-              :disabled="isLinking"
-              @click="linkPlexWithOAuth"
-            >
-              <i :class="isLinking ? 'fas fa-spinner fa-spin' : 'fas fa-link'"></i>
-              {{ isLinking ? 'Waiting for Plex…' : 'Link Plex Account' }}
-            </button>
+            <button v-if="!passwordOpen" type="button" class="ui-btn shrink-0" @click="openPassword"><i aria-hidden="true" class="fas fa-lock"></i>Change</button>
           </div>
-
-          <form v-else @submit.prevent="linkAccount">
-            <div v-if="isDirectoryBackedService" class="form-group">
-              <label for="linkServerUser">{{ providerLabel }} account</label>
-              <BaseDropdown
-                id="linkServerUser"
-                v-model="selectedServerUserId"
-                :options="serverUserOptions"
-                placeholder="Select your account"
-                :disabled="isLinking || isLoadingServerUsers"
-              />
-              <small v-if="isLoadingServerUsers" class="form-help">
-                Loading {{ providerLabel }} users…
-              </small>
-              <small v-else class="form-help">
-                Username is loaded from the configured {{ providerLabel }} server.
-              </small>
+          <p v-if="passwordSuccess && !passwordOpen" role="status" class="ui-alert-good mt-3">{{ passwordSuccess }}</p>
+          <form v-if="passwordOpen" class="mt-4 flex flex-col gap-3" @submit.prevent="savePassword">
+            <label class="ui-label">Current password<input id="currentPassword" ref="currentPasswordInput" v-model="passwordForm.current" :type="showPasswords ? 'text' : 'password'" class="ui-input" autocomplete="current-password" :disabled="isSavingPassword" /></label>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="ui-label">New password<input id="newPassword" v-model="passwordForm.new" :type="showPasswords ? 'text' : 'password'" class="ui-input" placeholder="At least 8 characters" autocomplete="new-password" :disabled="isSavingPassword" /></label>
+              <label class="ui-label">Confirm new password<input id="confirmPassword" v-model="passwordForm.confirm" :type="showPasswords ? 'text' : 'password'" class="ui-input" autocomplete="new-password" :disabled="isSavingPassword" :aria-invalid="passwordMismatch" /></label>
             </div>
-
-            <div v-else class="form-group">
-              <label for="linkUsername">{{ providerLabel }} username</label>
-              <input
-                id="linkUsername"
-                v-model="linkForm.username"
-                type="text"
-                class="form-control"
-                :placeholder="`${providerLabel} username`"
-                autocomplete="username"
-                :disabled="isLinking"
-              />
+            <p v-if="passwordMismatch" class="m-0 text-xs text-bad">Passwords don't match.</p>
+            <label class="flex cursor-pointer items-center gap-2 self-start text-xs text-ink-3"><input v-model="showPasswords" type="checkbox" />Show passwords</label>
+            <p v-if="passwordError" role="alert" class="ui-alert-bad">{{ passwordError }}</p>
+            <div class="flex gap-2">
+              <button type="submit" class="ui-btn-primary" :disabled="isSavingPassword || passwordMismatch || !passwordForm.current || !passwordForm.new || !passwordForm.confirm">
+                <i v-if="isSavingPassword" aria-hidden="true" class="fas fa-spinner fa-spin"></i>{{ isSavingPassword ? 'Saving…' : 'Change password' }}
+              </button>
+              <button type="button" class="ui-btn" :disabled="isSavingPassword" @click="closePassword">Cancel</button>
             </div>
-            <div class="form-group">
-              <label for="linkPassword">{{ providerLabel }} password</label>
-              <input
-                id="linkPassword"
-                v-model="linkForm.password"
-                type="password"
-                class="form-control"
-                placeholder="Password"
-                autocomplete="current-password"
-                :disabled="isLinking"
-              />
-            </div>
-
-            <div v-if="linkError" class="error-banner">
-              <i class="fas fa-exclamation-circle"></i>
-              {{ linkError }}
-            </div>
-
-            <button
-              type="submit"
-              class="btn btn-outline btn-sm"
-              :disabled="isLinking || !canSubmitLink"
-            >
-              <i :class="isLinking ? 'fas fa-spinner fa-spin' : 'fas fa-link'"></i>
-              {{ isLinking ? 'Linking…' : `Link ${providerLabel} Account` }}
-            </button>
           </form>
-        </template>
+        </SectionCard>
 
-        </section>
-        <section>
-        <h3><i class="fas fa-tv"></i> Trakt Account</h3>
-        <TraktMediaUsers
-          mode="self"
-          :trakt-configured="isTraktAppConfigured"
-          embedded
-        />
-        </section>
-        </div>
+        <SectionCard icon="fas fa-bell" title="Notifications" description="Get a message when one of your requests is ready to watch.">
+          <form class="flex flex-col gap-3" @submit.prevent="saveNotify">
+            <div role="radiogroup" aria-label="Service" class="grid grid-cols-3 gap-2">
+              <label v-for="option in notifyFormats" :key="option.value" class="flex cursor-pointer items-center justify-center gap-2 rounded-ctl border px-3 py-2.5 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-ink" :class="notify.format === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong text-ink-2 hover:border-ink-4'">
+                <input v-model="notify.format" type="radio" name="notify-format" :value="option.value" class="sr-only" />
+                <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
+              </label>
+            </div>
+            <label class="ui-label">{{ notifyFormat.urlLabel }}
+              <input v-model.trim="notify.url" type="url" class="ui-input" :placeholder="notifyFormat.placeholder" maxlength="500" required :disabled="notifyBusy" />
+              <span class="text-xs font-normal text-ink-4">{{ notifyFormat.hint }}</span>
+            </label>
+            <div class="flex flex-wrap gap-2">
+              <button type="submit" class="ui-btn-primary" :disabled="notifyBusy || !notify.url">Save</button>
+              <template v-if="notifySaved">
+                <button type="button" class="ui-btn" :disabled="notifyBusy" @click="testNotify"><i aria-hidden="true" class="fas fa-paper-plane"></i>Send test</button>
+                <button type="button" class="ui-btn border-0 bg-transparent text-ink-3 hover:text-bad" :disabled="notifyBusy" @click="removeNotify">Turn off</button>
+              </template>
+            </div>
+            <p v-if="notifyError" role="alert" class="ui-alert-bad">{{ notifyError }}</p>
+            <p v-if="notifySuccess" role="status" class="ui-alert-good">{{ notifySuccess }}</p>
+          </form>
+        </SectionCard>
+
+        <SectionCard icon="fas fa-language" title="Title language" description="Titles and descriptions of suggestions and requests are shown in this language.">
+          <form class="flex flex-col gap-3" @submit.prevent="saveLanguage">
+            <div class="flex gap-2">
+              <label class="sr-only" for="titleLanguage">Language</label>
+              <select id="titleLanguage" v-model="languageForm.value" class="ui-input" :disabled="isSavingLanguage">
+                <option v-for="option in languageChoices" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+              <button type="submit" class="ui-btn shrink-0" :disabled="isSavingLanguage">
+                <i v-if="isSavingLanguage" aria-hidden="true" class="fas fa-spinner fa-spin"></i>{{ isSavingLanguage ? 'Saving…' : 'Save' }}
+              </button>
+            </div>
+            <p v-if="!languageForm.value && displayLanguage" class="m-0 text-xs text-ink-4">Currently shown in {{ displayLanguageLabel }}.</p>
+            <p v-if="languageError" role="alert" class="ui-alert-bad">{{ languageError }}</p>
+            <p v-if="languageSuccess" role="status" class="ui-alert-good">{{ languageSuccess }}</p>
+          </form>
+        </SectionCard>
       </div>
 
-      <WatchedMediaHistory v-if="isLinkableService" class="settings-group history-group" />
+      <div class="flex min-w-0 flex-col gap-5">
+        <SectionCard icon="fas fa-adjust" title="Appearance" description="Saved in this browser. System follows your device's light or dark setting.">
+          <div role="radiogroup" aria-label="Theme" class="grid grid-cols-3 gap-2">
+            <label v-for="option in themeOptions" :key="option.value" class="flex cursor-pointer items-center justify-center gap-2 rounded-ctl border px-3 py-2.5 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-ink" :class="themeChoice === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong text-ink-2 hover:border-ink-4'">
+              <input v-model="themeChoice" type="radio" name="theme" :value="option.value" class="sr-only" @change="chooseTheme(option.value)" />
+              <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
+            </label>
+          </div>
+        </SectionCard>
 
-      <!-- No linkable service configured -->
-      <div v-if="!isLinkableService && hasProviderContext" class="settings-group connections-group">
-        <h3>
-          <i class="fas fa-plug"></i>
-          Media Server
-        </h3>
-        <div class="list-empty">
-          <i class="fas fa-info-circle"></i>
-          No linkable media server is configured. An admin must configure Jellyfin, Emby, or Plex first.
-        </div>
+        <ApiKeysPanel class="flex-1" />
       </div>
-
     </div>
+
+    <SectionCard v-if="isLinkableService" icon="fas fa-link" title="Linked accounts" description="SuggestArr reads your watch history from these accounts to personalise suggestions.">
+      <div class="flex flex-col gap-3">
+        <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
+          <div class="flex items-center gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-raised text-ink-2"><i aria-hidden="true" :class="providerIcon"></i></span>
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="text-sm font-bold text-ink">{{ providerLabel }}</span>
+              <span v-if="currentLink" class="truncate text-xs text-ink-3"><i aria-hidden="true" class="fas fa-check-circle mr-1 text-good"></i>Linked as {{ currentLink.external_username }}</span>
+              <span v-else class="text-xs text-ink-4">Not linked</span>
+            </span>
+            <button v-if="currentLink" type="button" class="ui-btn h-9 px-3 text-[13px]" :disabled="isUnlinking" @click="unlinkAccount">
+              <i aria-hidden="true" :class="isUnlinking ? 'fas fa-spinner fa-spin' : 'fas fa-unlink'"></i>Unlink
+            </button>
+          </div>
+
+          <template v-if="!currentLink">
+            <div v-if="isPlexService" class="flex flex-col gap-3">
+              <p class="m-0 text-[13px] text-ink-3">Sign in with Plex in a new window to link your account.</p>
+              <p v-if="linkError" role="alert" class="ui-alert-bad">{{ linkError }}</p>
+              <button type="button" class="ui-btn-primary self-start" :disabled="isLinking" @click="linkPlexWithOAuth">
+                <i aria-hidden="true" :class="isLinking ? 'fas fa-spinner fa-spin' : 'fas fa-link'"></i>{{ isLinking ? 'Waiting for Plex…' : 'Link Plex account' }}
+              </button>
+            </div>
+
+            <form v-else class="flex flex-col gap-3" @submit.prevent="linkAccount">
+              <label v-if="isDirectoryBackedService" class="ui-label">
+                Your {{ providerLabel }} user
+                <select id="linkServerUser" v-model="selectedServerUserId" class="ui-input" :disabled="isLinking || isLoadingServerUsers">
+                  <option value="" disabled>{{ isLoadingServerUsers ? `Loading ${providerLabel} users…` : 'Select your account' }}</option>
+                  <option v-for="option in serverUserOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+              </label>
+              <label v-else class="ui-label">
+                {{ providerLabel }} username
+                <input id="linkUsername" v-model="linkForm.username" type="text" class="ui-input" autocomplete="username" :disabled="isLinking" />
+              </label>
+              <label class="ui-label">
+                {{ providerLabel }} password
+                <input id="linkPassword" v-model="linkForm.password" type="password" class="ui-input" autocomplete="current-password" :disabled="isLinking" />
+              </label>
+              <p v-if="linkError" role="alert" class="ui-alert-bad">{{ linkError }}</p>
+              <button type="submit" class="ui-btn-primary self-start" :disabled="isLinking || !canSubmitLink">
+                <i aria-hidden="true" :class="isLinking ? 'fas fa-spinner fa-spin' : 'fas fa-link'"></i>{{ isLinking ? 'Linking…' : `Link ${providerLabel} account` }}
+              </button>
+            </form>
+          </template>
+        </div>
+
+        <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
+          <TraktMediaUsers mode="self" :trakt-configured="isTraktAppConfigured" />
+        </div>
+      </div>
+    </SectionCard>
+
+    <WatchedMediaHistory v-if="isLinkableService" />
+
+    <SectionCard v-if="!isLinkableService && hasProviderContext" icon="fas fa-plug" title="Linked accounts" description="No linkable media server is configured yet. An admin must set up Jellyfin, Emby or Plex in Connections first." />
+
+    <RecapPreferences v-if="profileUser?.role === 'admin'" />
   </div>
 </template>
 
 <script>
+import RecapPreferences from '@/components/recap/RecapPreferences.vue';
+import PageHeader from '@/components/ui/PageHeader.vue';
 import axios from 'axios';
 import { useAuth } from '@/composables/useAuth';
 import {
@@ -304,12 +189,20 @@ import {
   plexOAuthStart,
   unlinkProvider,
   updateMyProfile,
+  getMyNotifications,
+  saveMyNotifications,
+  deleteMyNotifications,
+  testMyNotifications,
 } from '@/api/api';
-import BaseDropdown from '@/components/common/BaseDropdown.vue';
+import { CHAT_FORMATS } from '@/utils/notificationFormats.js';
+import SectionCard from '@/components/ui/SectionCard.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
 import WatchedMediaHistory from './WatchedMediaHistory.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
+import UserAvatar from '@/components/ui/UserAvatar.vue';
+import { refreshUserAvatar } from '@/composables/useUserAvatar';
 import { languageOptions, languagePayload } from '@/utils/titleLanguage.js';
+import { readThemeChoice, setThemeChoice } from '@/utils/theme.js';
 
 const PROVIDER_META = {
   jellyfin: { label: 'Jellyfin', icon: 'fas fa-server' },
@@ -319,27 +212,46 @@ const PROVIDER_META = {
 
 export default {
   name: 'UserProfile',
+  emits: ['profile-updated'],
 
-  components: { BaseDropdown, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel },
+  components: { PageHeader, SectionCard, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel, RecapPreferences, UserAvatar },
+
+  // The dashboard shell passes props this page does not declare.
+  inheritAttrs: false,
 
   props: {
+    currentUser: Object,
     config: Object,
     isLoading: Boolean,
-    embedded: Boolean,
   },
 
   setup() {
-    const { currentUser, accessToken } = useAuth();
-    return { currentUser, accessToken };
+    const { currentUser: authUser, accessToken } = useAuth();
+    return { authUser, accessToken };
   },
 
   data() {
     return {
+      themeChoice: readThemeChoice(),
+      notifyFormats: CHAT_FORMATS,
+      notify: { format: 'discord', url: '' },
+      notifySaved: false,
+      notifyBusy: false,
+      notifyError: '',
+      notifySuccess: '',
+      themeOptions: [
+        { value: 'system', label: 'System', icon: 'fas fa-desktop' },
+        { value: 'light', label: 'Light', icon: 'fas fa-sun' },
+        { value: 'dark', label: 'Dark', icon: 'fas fa-moon' },
+      ],
       // Account form state
       usernameForm: { value: '' },
       passwordForm: { current: '', new: '', confirm: '' },
       isSavingUsername: false,
       isSavingPassword: false,
+      editingName: false,
+      passwordOpen: false,
+      showPasswords: false,
       usernameError: null,
       usernameSuccess: null,
       passwordError: null,
@@ -379,6 +291,15 @@ export default {
   },
 
   computed: {
+    notifyFormat() {
+      return CHAT_FORMATS.find(option => option.value === this.notify.format) || CHAT_FORMATS[0];
+    },
+    passwordMismatch() {
+      return !!this.passwordForm.confirm && this.passwordForm.new !== this.passwordForm.confirm;
+    },
+    profileUser() {
+      return this.currentUser || this.authUser;
+    },
     languageChoices() {
       return languageOptions(this.languages);
     },
@@ -437,7 +358,8 @@ export default {
     },
 
     selectedServerUser() {
-      return this.serverUsers.find((user) => user.id === this.selectedServerUserId) || null;
+      // A native <select> hands back strings; Plex ids are numbers.
+      return this.serverUsers.find((user) => String(user.id) === String(this.selectedServerUserId)) || null;
     },
 
     canSubmitLink() {
@@ -458,6 +380,7 @@ export default {
   },
 
   async mounted() {
+    this.loadNotify();
     this.loadLanguage();
     await this.loadConfigStatus();
     await this.loadLinks();
@@ -479,6 +402,50 @@ export default {
   },
 
   methods: {
+    chooseTheme(choice) {
+      setThemeChoice(choice);
+    },
+    // ── Personal notifications ─────────────────────────────────────────────
+    async loadNotify() {
+      try {
+        const { data } = await getMyNotifications();
+        if (data.url) {
+          this.notify = { format: data.format, url: data.url };
+          this.notifySaved = true;
+        }
+      } catch {
+        // The card stays usable for setting a destination.
+      }
+    },
+    async runNotify(action, success) {
+      this.notifyBusy = true;
+      this.notifyError = '';
+      this.notifySuccess = '';
+      try {
+        await action();
+        this.notifySuccess = success;
+      } catch (error) {
+        this.notifyError = error.response?.data?.error || 'Something went wrong. Try again.';
+      } finally {
+        this.notifyBusy = false;
+      }
+    },
+    saveNotify() {
+      return this.runNotify(async () => {
+        await saveMyNotifications(this.notify);
+        this.notifySaved = true;
+      }, 'Saved. Use "Send test" to check it arrives.');
+    },
+    testNotify() {
+      return this.runNotify(testMyNotifications, 'Test sent; it should arrive within a minute.');
+    },
+    removeNotify() {
+      return this.runNotify(async () => {
+        await deleteMyNotifications();
+        this.notify = { format: 'discord', url: '' };
+        this.notifySaved = false;
+      }, 'Notifications turned off.');
+    },
     // ── Title language ─────────────────────────────────────────────────────
 
     async loadLanguage() {
@@ -526,10 +493,11 @@ export default {
       }
     },
 
-    async loadLinks() {
+    async loadLinks(refreshAvatar = false) {
       try {
         const res = await getMyLinks();
         this.links = res.data;
+        if (refreshAvatar) refreshUserAvatar(this.profileUser?.id);
       } catch (err) {
         console.error('Failed to load media links', err);
       }
@@ -579,7 +547,7 @@ export default {
         this.linkForm.username = '';
         this.linkForm.password = '';
         this.selectedServerUserId = '';
-        await this.loadLinks();
+        await this.loadLinks(true);
       } catch (err) {
         this.linkError = err.response?.data?.error || `Failed to link ${this.providerLabel} account`;
       } finally {
@@ -605,7 +573,7 @@ export default {
           if (poll.data?.status === 'linked') {
             const linkedName = poll.data.external_username || 'Plex';
             this.$toast.success(`${this.providerLabel} account linked as ${linkedName}`);
-            await this.loadLinks();
+            await this.loadLinks(true);
             return;
           }
         }
@@ -623,7 +591,7 @@ export default {
       try {
         await unlinkProvider(this.selectedService);
         this.$toast.success(`${this.providerLabel} account unlinked`);
-        await this.loadLinks();
+        await this.loadLinks(true);
       } catch (err) {
         this.$toast.error(err.response?.data?.error || `Failed to unlink ${this.providerLabel}`);
       } finally {
@@ -632,6 +600,32 @@ export default {
     },
 
     // ── Account updates ────────────────────────────────────────────────────
+
+    startRename() {
+      this.usernameForm.value = this.profileUser?.username || '';
+      this.usernameError = null;
+      this.usernameSuccess = null;
+      this.editingName = true;
+      this.$nextTick(() => this.$refs.usernameInput?.select());
+    },
+
+    cancelRename() {
+      this.editingName = false;
+      this.usernameError = null;
+    },
+
+    openPassword() {
+      this.passwordSuccess = null;
+      this.passwordOpen = true;
+      this.$nextTick(() => this.$refs.currentPasswordInput?.focus());
+    },
+
+    closePassword() {
+      this.passwordOpen = false;
+      this.showPasswords = false;
+      this.passwordError = null;
+      this.passwordForm = { current: '', new: '', confirm: '' };
+    },
 
     async saveUsername() {
       this.usernameError = null;
@@ -642,10 +636,12 @@ export default {
       try {
         const res = await updateMyProfile({ username: newName });
         // Update singleton auth state so the header reflects the new name immediately.
-        if (this.currentUser) this.currentUser.username = newName;
+        if (this.authUser) this.authUser.username = newName;
         if (res.data.access_token) this.accessToken = res.data.access_token;
+        this.$emit('profile-updated');
         this.usernameSuccess = 'Username updated.';
         this.usernameForm.value = '';
+        this.editingName = false;
       } catch (err) {
         this.usernameError = err.response?.data?.error || 'Failed to update username';
       } finally {
@@ -666,8 +662,8 @@ export default {
           current_password: this.passwordForm.current,
           new_password: this.passwordForm.new,
         });
+        this.closePassword();
         this.passwordSuccess = 'Password changed successfully.';
-        this.passwordForm = { current: '', new: '', confirm: '' };
       } catch (err) {
         this.passwordError = err.response?.data?.error || 'Failed to change password';
       } finally {
@@ -678,306 +674,3 @@ export default {
 };
 </script>
 
-<style scoped>
-/* ── Outer wrapper ─────────────────────────────────────────────────────── */
-.settings-users {
-  color: var(--color-text-primary);
-  padding: var(--spacing-lg);
-}
-
-.settings-users--embedded {
-  padding: 0;
-}
-
-/* ── Section header ────────────────────────────────────────────────────── */
-.section-header {
-  margin-bottom: 2rem;
-}
-
-.section-header h2 {
-  font-size: 1.8rem;
-  margin-bottom: 0.5rem;
-  color: var(--color-text-primary);
-}
-
-.section-header p {
-  color: var(--color-text-muted);
-  font-size: 1rem;
-  margin: 0;
-}
-
-/* ── Settings grid ─────────────────────────────────────────────────────── */
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: stretch;
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
-}
-
-/* ── Settings group card ───────────────────────────────────────────────── */
-.settings-group {
-  min-width: 0;
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-lg);
-}
-
-.settings-group h3,
-:deep(.settings-group > h3) {
-  font-size: var(--font-size-xl);
-  margin-bottom: var(--spacing-md);
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.accounts-group {
-  grid-column: 1;
-  grid-row: 1 / 3;
-}
-
-.language-group { grid-column: 2; grid-row: 1; }
-.api-keys-group { grid-column: 2; grid-row: 2; }
-.connections-group, .history-group { grid-column: 1 / -1; }
-.connection-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-xl); }
-.connection-columns > section { min-width: 0; }
-.connection-columns > section + section { border-left: 1px solid var(--color-border-light); padding-left: var(--spacing-xl); }
-.account-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--spacing-lg); }
-.account-fields > form + form { border-top: 1px solid var(--color-border-light); padding-top: var(--spacing-lg); }
-.account-fields > * { min-width: 0; }
-.account-form-section > .btn { align-self: flex-start; }
-.accounts-group__heading {
-  margin-bottom: var(--spacing-md);
-}
-
-.account-form-section {
-  gap: var(--spacing-sm);
-}
-
-.account-section-heading {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-md);
-}
-
-.account-section-heading__icon {
-  display: inline-flex;
-  width: var(--spacing-xl);
-  height: var(--spacing-xl);
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-secondary);
-  background: var(--surface-glass-subtle);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-full);
-}
-
-.account-section-heading p {
-  margin: var(--spacing-xs) 0 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-normal);
-}
-
-
-/* Form elements */
-
-.form-group label {
-  display: block;
-  margin-top: 0;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
-}
-.form-control {
-  width: 100%;
-  padding: 0.75rem;
-  background: var(--color-bg-interactive);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--border-radius-sm);
-  color: var(--color-text-primary);
-  font-size: 1rem;
-  transition: var(--transition-base);
-  min-height: 44px;
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  background: var(--color-bg-active);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.form-control:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.input-group {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.input-group .form-control {
-  flex: 1;
-}
-
-.form-help {
-  display: block;
-  margin-top: 0.25rem;
-  font-size: 0.875rem;
-  color: var(--color-text-muted);
-  line-height: 1.4;
-}
-
-.mb-3 { margin-bottom: 0.75rem; }
-
-.group-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1.25rem;
-}
-
-.group-title-row h3 {
-  margin: 0;
-}
-
-.card-desc,
-:deep(.settings-group > .card-desc) {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  margin-bottom: var(--spacing-lg);
-  line-height: var(--line-height-normal);
-}
-
-/* ── Form sub-sections ─────────────────────────────────────────────────── */
-.settings-group form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.subsection-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  margin: 0;
-}
-
-.section-divider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.08);
-  margin: 1.25rem 0;
-}
-
-/* ── Empty / loading state ─────────────────────────────────────────────── */
-.list-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 2rem 1rem;
-  color: var(--color-text-muted);
-  font-size: 0.95rem;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
-  border-radius: var(--border-radius-sm);
-}
-
-/* ── User row (linked state) ───────────────────────────────────────────── */
-.user-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.9rem 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: var(--border-radius-sm);
-}
-
-.user-identity {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex: 1;
-  min-width: 0;
-}
-
-.user-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-muted);
-  font-size: 0.9rem;
-  flex-shrink: 0;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  min-width: 0;
-}
-
-.user-name {
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--color-text-primary);
-}
-
-.user-meta {
-  font-size: 0.78rem;
-  color: var(--color-text-muted);
-}
-
-.icon-btn {
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-/* ── Feedback banners ──────────────────────────────────────────────────── */
-.error-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--color-danger);
-  font-size: 0.875rem;
-  padding: 0.6rem 0.75rem;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: var(--border-radius-sm);
-}
-
-.success-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--color-success);
-  font-size: 0.875rem;
-  padding: 0.6rem 0.75rem;
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  border-radius: var(--border-radius-sm);
-}
-
-/* ── Responsive ────────────────────────────────────────────────────────── */
-@media (max-width: 1000px) {
-  .settings-grid { grid-template-columns: minmax(0, 1fr); }
-  .accounts-group, .language-group, .api-keys-group { grid-column: auto; grid-row: auto; }
-}
-@media (max-width: 700px) {
-  .connection-columns { grid-template-columns: minmax(0, 1fr); }
-  .connection-columns > section + section { border-left: 0; padding-left: 0; border-top: 1px solid var(--color-border-light); padding-top: var(--spacing-lg); }
-}
-</style>
