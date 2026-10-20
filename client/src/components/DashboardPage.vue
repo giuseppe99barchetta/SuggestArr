@@ -75,8 +75,10 @@
       </nav>
 
       <!-- Content -->
-      <main class="flex-1 min-w-0 px-4 sm:px-8 lg:px-12 pt-6 lg:pt-8 pb-28 lg:pb-12">
-        <div class="max-w-[1240px] mx-auto">
+      <main class="flex-1 min-w-0 min-h-screen flex flex-col px-4 sm:px-8 lg:px-12 pt-6 lg:pt-8 pb-28 lg:pb-12">
+        <div class="max-w-[1240px] w-full mx-auto flex-1 flex flex-col">
+          <!-- flex-1 keeps the footer at the bottom while the out-in transition leaves this empty. -->
+          <div class="flex-1">
           <transition mode="out-in" enter-active-class="transition duration-300" leave-active-class="transition duration-300" enter-from-class="translate-x-5 opacity-0" leave-to-class="-translate-x-5 opacity-0">
             <component
               v-if="activeTabComponent"
@@ -95,6 +97,7 @@
               @profile-updated="fetchMe"
             />
           </transition>
+          </div>
           <AppFooter :is-admin="currentUser?.role === 'admin'" />
         </div>
       </main>

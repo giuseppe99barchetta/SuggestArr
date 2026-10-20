@@ -14,6 +14,7 @@ Before installing, prepare:
 - A running Seer instance, such as Jellyseerr or Overseerr-compatible Seer.
 - Network access from SuggestArr to TMDb, your media server, and Seer.
 - Optional: OMDb API key for IMDb-based filters.
+- Optional: MDBList API key (`MDBLIST_API_KEY`, from <https://mdblist.com/preferences/>) to import public MDBList lists. See [Public list import](FEATURES.md#public-list-import).
 - Optional: OpenAI-compatible LLM provider for AI recommendations and AI Search.
 - Optional: a Trakt app Client ID for per-user Trakt watch-history integration. Client Secret is optional; older apps may still have one.
 
@@ -111,7 +112,7 @@ The screenshots below show the main configuration areas. Values shown in the ima
 
 ### Services
 
-Use this page to configure TMDb, optional OMDb, your media server, Trakt app credentials, and Seer.
+Use this page to configure TMDb, optional OMDb, optional MDBList, your media server, Trakt app credentials, and Seer.
 
 For Trakt, Services stores only the shared app-level OAuth credentials. Individual Trakt accounts are linked by each user from their Profile page.
 
