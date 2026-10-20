@@ -101,7 +101,7 @@
       </div>
     </header>
 
-    <div v-if="item.rationale || origin.length || $slots.default" class="flex flex-col gap-5 border-t border-edge p-7 max-sm:p-4">
+    <div v-if="item.rationale || hasExtraDetails || origin.length || $slots.default" class="flex flex-col gap-5 border-t border-edge p-7 max-sm:p-4">
       <section v-if="item.rationale" class="rounded-ctl border border-brand-ink/25 bg-brand-soft/40 p-4">
         <h3 class="m-0 mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-ink">
           <i aria-hidden="true" class="fas fa-lightbulb"></i> {{ rationaleTitle }}
@@ -109,11 +109,39 @@
         <p class="m-0 whitespace-pre-wrap leading-relaxed text-ink-2">{{ item.rationale }}</p>
       </section>
 
-      <p v-if="origin.length" class="m-0 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-4">
-        <span v-for="part in origin" :key="part.label">{{ part.label }} <strong class="font-semibold text-ink">{{ part.value }}</strong></span>
-      </p>
+      <!-- One label/value list, so title facts and where the suggestion came from read the same way. -->
+      <dl v-if="hasExtraDetails || origin.length" class="m-0 grid grid-cols-[max-content_1fr] items-baseline gap-x-6 gap-y-2.5 text-sm">
+        <template v-if="details?.genres.length || runtimeLabel">
+          <dt class="text-ink-4">Genre</dt>
+          <dd class="m-0 text-ink-2">{{ details.genres.join(', ') }}<span v-if="runtimeLabel" class="text-ink-4"><template v-if="details.genres.length"> · </template>{{ runtimeLabel }}</span></dd>
+        </template>
+        <template v-if="details?.cast.length">
+          <dt class="text-ink-4">Cast</dt>
+          <dd class="m-0 flex flex-wrap gap-x-4 gap-y-1.5">
+            <span v-for="person in details.cast" :key="person.name" class="inline-flex items-center gap-1.5 text-ink-2" :title="person.character ? `${person.name} as ${person.character}` : person.name">
+              <img v-if="person.profile_path" :src="`https://image.tmdb.org/t/p/w45${person.profile_path}`" alt="" loading="lazy" class="h-6 w-6 rounded-full object-cover" />
+              <span v-else aria-hidden="true" class="grid h-6 w-6 place-items-center rounded-full bg-raised text-[10px] font-bold text-ink-3">{{ initials(person.name) }}</span>
+              {{ person.name }}
+            </span>
+          </dd>
+        </template>
+        <template v-if="details?.providers.length">
+          <dt class="text-ink-4">Stream on<template v-if="details.region"> ({{ details.region }})</template></dt>
+          <dd class="m-0 flex flex-wrap gap-x-4 gap-y-1.5">
+            <span v-for="provider in details.providers" :key="provider.name" class="inline-flex items-center gap-1.5 text-ink-2">
+              <img v-if="provider.logo_path" :src="`https://image.tmdb.org/t/p/w45${provider.logo_path}`" alt="" loading="lazy" class="h-6 w-6 rounded-md" />{{ provider.name }}
+            </span>
+          </dd>
+        </template>
+        <template v-for="part in origin" :key="part.label">
+          <dt class="text-ink-4">{{ part.label }}</dt>
+          <dd class="m-0 font-semibold text-ink">{{ part.value }}</dd>
+        </template>
+      </dl>
 
-      <slot />
+      <div v-if="$slots.default" :class="{ 'border-t border-edge pt-5': item.rationale || hasExtraDetails || origin.length }">
+        <slot />
+      </div>
     </div>
   </AppDialog>
 </template>
@@ -121,7 +149,7 @@
 <script>
 import axios from 'axios';
 import AppDialog from '@/components/ui/AppDialog.vue';
-import { loadTrailerUrl, trailerTarget } from '@/utils/trailer.js';
+import { loadTitleDetails, trailerTarget } from '@/utils/trailer.js';
 
 /**
  * Detail view for one title (request, suggestion or AI result).
@@ -145,6 +173,7 @@ export default {
       backgroundLoaded: false,
       trailerUrl: null,
       trailerState: 'loading', // 'loading' | 'ready' | 'none'
+      details: null,
     };
   },
   computed: {
@@ -171,6 +200,16 @@ export default {
       const year = String(this.item.release_date || '').slice(0, 4);
       return /^\d{4}$/.test(year) ? year : '';
     },
+    hasExtraDetails() {
+      const d = this.details;
+      return Boolean(d && (d.genres.length || d.runtime || d.cast.length || d.providers.length));
+    },
+    runtimeLabel() {
+      const minutes = Number(this.details?.runtime) || 0;
+      if (!minutes) return '';
+      const text = minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
+      return this.item.media_type === 'tv' ? `${text} per episode` : text;
+    },
     origin() {
       const { source_title: source, user_name: userName, user_id: userId } = this.item;
       return [
@@ -189,21 +228,32 @@ export default {
       handler() {
         this.overviewExpanded = false;
         this.$nextTick(this.measureOverview);
-        this.loadTrailer();
+        this.loadDetails();
       },
     },
   },
   methods: {
-    async loadTrailer() {
+    async loadDetails() {
       const shown = this.item;
       this.trailerUrl = null;
       this.trailerState = 'loading';
+      this.details = null;
       if (!this.hasTrailerSlot) return;
-      const url = await loadTrailerUrl(axios, shown);
+      const details = await loadTitleDetails(axios, shown);
       // Another title may be open by the time the answer arrives.
       if (this.item !== shown) return;
-      this.trailerUrl = url;
-      this.trailerState = url ? 'ready' : 'none';
+      this.details = details && {
+        ...details,
+        genres: details.genres || [],
+        cast: details.cast || [],
+        providers: details.providers || [],
+      };
+      this.trailerUrl = details?.trailer_url || null;
+      this.trailerState = this.trailerUrl ? 'ready' : 'none';
+    },
+
+    initials(name) {
+      return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
     },
 
     /** "Show more" only when the four-line clamp actually hides text. */

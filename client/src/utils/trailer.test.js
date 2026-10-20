@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { loadTrailerUrl, openTrailer, trailerEndpoint, trailerTarget } from './trailer.js';
+import { loadTitleDetails, loadTrailerUrl, openTrailer, trailerEndpoint, trailerTarget } from './trailer.js';
 
 test('a sent request is looked up by its TMDb id', () => {
   const target = trailerTarget({ request_id: '10950', media_type: 'movie' });
@@ -57,4 +57,15 @@ test('a trailer the browser refuses to open a tab for is reported as blocked, no
 
   assert.equal(await openTrailer({ get: async () => ({ data: { url: 'https://www.youtube.com/watch?v=abc' } }) }, movie, () => null), 'blocked');
   assert.equal(await openTrailer({ get: async () => ({ data: { url: null } }) }, movie, () => null), 'none');
+});
+
+test('title details come from the details API, and are null when failing or not applicable', async () => {
+  const asked = [];
+  const http = (answer) => ({ get: async (path) => { asked.push(path); return answer(); } });
+  const show = { tmdb_id: 1399, media_type: 'tv' };
+
+  assert.deepEqual(await loadTitleDetails(http(() => ({ data: { genres: ['Drama'] } })), show), { genres: ['Drama'] });
+  assert.equal(await loadTitleDetails(http(() => { throw new Error('offline'); }), show), null);
+  assert.equal(await loadTitleDetails(http(() => ({ data: {} })), { media_type: 'tv' }), null);
+  assert.deepEqual(asked, Array(2).fill('/api/tmdb/details/tv/1399'));
 });

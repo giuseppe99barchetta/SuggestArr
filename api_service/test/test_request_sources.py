@@ -220,3 +220,43 @@ def test_save_user_without_name_falls_back_to_id(tmp_path):
     DatabaseManager._instance = None
     assert row is not None
     assert row[0] == "trakt-user-1"  # falls back to the id when name is missing
+
+
+def test_grouped_requests_report_when_a_title_was_watched(tmp_path):
+    from datetime import datetime, timezone
+    from api_service.db.recap_repository import RecapRepository
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        db.save_metadata({"id": "101", "title": "Watched"}, "movie")
+        db.save_metadata({"id": "102", "title": "Unwatched"}, "movie")
+        db.save_request("movie", "101", DISCOVER_SOURCE, user_id="plex-1")
+        db.save_request("movie", "102", DISCOVER_SOURCE, user_id="plex-1")
+        RecapRepository(db).mark_watched([(datetime(2030, 1, 2, tzinfo=timezone.utc), "movie", "101")])
+
+        requests = db.get_all_requests_grouped_by_source()["data"][0]["requests"]
+
+    DatabaseManager._instance = None
+    watched = {request["request_id"]: bool(request["watched_at"]) for request in requests}
+    assert watched == {"101": True, "102": False}
+
+
+def test_pending_requests_carry_their_rationale(tmp_path):
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        db.enqueue_request("101", "movie", None, {"_rationale": "Same director."}, status="awaiting_approval")
+        db.enqueue_request("102", "movie", None, {}, status="awaiting_approval")
+
+        items, _total = db.list_suggestions()
+
+    DatabaseManager._instance = None
+    assert {item["tmdb_id"]: item["rationale"] for item in items} == {"101": "Same director.", "102": None}

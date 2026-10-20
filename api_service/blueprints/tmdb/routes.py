@@ -503,3 +503,98 @@ def get_trailer(media_type, tmdb_id):
     except Exception as exc:
         logger.error("Error fetching trailer: %s", exc, exc_info=True)
         return jsonify({'message': 'Error fetching trailer', 'status': 'error'}), 500
+
+
+def summarize_title_details(data, language, region):
+    """
+    Reduce a TMDb details response (with videos, credits and watch providers
+    appended) to what the details modal shows.
+
+    Args:
+        data: TMDb '/{media_type}/{id}' response with append_to_response.
+        language: TMDb language code of the reader, used to pick the trailer.
+        region: ISO 3166-1 country code whose streaming providers are listed.
+
+    Returns:
+        Dict with trailer_url, genres, runtime (minutes or None), cast (up to six
+        {name, character, profile_path}) and providers (subscription services, {name, logo_path}).
+    """
+    runtime = data.get('runtime') or next(iter(data.get('episode_run_time') or []), None)
+    cast = [
+        {'name': person.get('name'), 'character': person.get('character') or None,
+         'profile_path': person.get('profile_path') or None}
+        for person in ((data.get('credits') or {}).get('cast') or [])[:6]
+        if person.get('name')
+    ]
+    regional = ((data.get('watch/providers') or {}).get('results') or {}).get(region) or {}
+    providers = [
+        {'name': provider.get('provider_name'), 'logo_path': provider.get('logo_path')}
+        for provider in regional.get('flatrate') or []
+        if provider.get('provider_name')
+    ]
+    return {
+        'trailer_url': youtube_trailer_url((data.get('videos') or {}).get('results'), language),
+        'genres': [genre['name'] for genre in data.get('genres') or [] if genre.get('name')],
+        'runtime': runtime,
+        'cast': cast,
+        'providers': providers,
+    }
+
+
+@tmdb_bp.route('/details/<media_type>/<int:tmdb_id>', methods=['GET'])
+def get_title_details(media_type, tmdb_id):
+    """
+    Trailer, genres, runtime, main cast and streaming services of one title,
+    fetched in a single TMDb call for the details modal.
+
+    Providers are listed for the configured FILTER_REGION_PROVIDER, falling
+    back to the country of the reader's language. Cached for the configured
+    TTL per (media_type, tmdb_id, language, region).
+
+    Path params:
+        media_type (str) — 'movie' or 'tv'.
+        tmdb_id    (int) — TMDb id of the title.
+
+    Returns:
+        200 with { status, trailer_url, genres, runtime, cast, providers, region }.
+        400 if media_type is invalid or TMDB is not configured.
+        502 if TMDB upstream returns an error.
+    """
+    if media_type not in ('movie', 'tv'):
+        return jsonify({'message': "media_type must be 'movie' or 'tv'", 'status': 'error'}), 400
+
+    db = DatabaseManager()
+    try:
+        own = db.get_user_language(int(g.current_user['id']))
+    except Exception:
+        own = None
+    env = load_env_vars()
+    language = display_language(own, env)
+    region = (env.get('FILTER_REGION_PROVIDER') or (language.split('-')[1] if '-' in language else '')).upper()
+
+    cache_key = f'details:{media_type}:{tmdb_id}:{language}:{region}'
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached), 200
+
+    api_key = _get_api_key()
+    if not api_key:
+        return _not_configured()
+
+    try:
+        spoken = language.split('-')[0]
+        data, status = _run(_fetch_tmdb(f'/{media_type}/{tmdb_id}', api_key, {
+            'language': language,
+            'append_to_response': 'videos,credits,watch/providers',
+            'include_video_language': ','.join(dict.fromkeys([spoken, 'en', 'null'])),
+        }))
+        if status != 200:
+            return jsonify({'message': f'TMDB returned {status}', 'status': 'error'}), 502
+
+        payload = {'status': 'success', 'region': region or None, **summarize_title_details(data, language, region)}
+        _cache_set(cache_key, payload)
+        return jsonify(payload), 200
+
+    except Exception as exc:
+        logger.error("Error fetching title details: %s", exc, exc_info=True)
+        return jsonify({'message': 'Error fetching title details', 'status': 'error'}), 500

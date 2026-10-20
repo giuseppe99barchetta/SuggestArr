@@ -306,6 +306,7 @@ class RequestQueueMixin:
                 item['seer_identity_mode'] = payload.get('_seer_identity_mode', 'technical_user')
                 item['request_profile'] = {key: payload.get(key) for key in ('serverId', 'profileId', 'rootFolder')}
                 item['media_user_id'] = payload.get('_user_id')
+                item['rationale'] = payload.get('_rationale')
                 item['user_name'] = None
                 if item['media_user_id'] is not None:
                     cursor.execute(

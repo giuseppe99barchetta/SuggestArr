@@ -54,7 +54,8 @@
               <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-bad disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Reject request" title="Reject" @click="confirmRejectId = request.id"><i aria-hidden="true" class="fas fa-times"></i></button>
             </template>
           </template>
-          <span v-if="request.source_title" class="line-clamp-2 text-xs leading-snug text-ink-3">Because you watched {{ request.source_title }}</span>
+          <span v-if="request.rationale" class="line-clamp-2 text-xs italic leading-snug text-ink-3" :title="request.rationale">“{{ request.rationale }}”</span>
+          <span v-else-if="request.source_title" class="line-clamp-2 text-xs leading-snug text-ink-3">From {{ request.source_title }}</span>
           <span v-if="request.user_name || request.user_id" class="truncate text-xs text-ink-4" :title="`For ${request.user_name || request.user_id}`">For {{ request.user_name || request.user_id }}</span>
         </MediaCard>
       </div>
@@ -78,6 +79,9 @@
           :badge="request.media_type === 'movie' ? 'Movie' : 'TV'"
           @open="openDetails(request)"
         >
+          <template v-if="request.watched_at" #overlay>
+            <span class="absolute right-2.5 top-2.5 rounded-md bg-good px-2 py-0.5 text-[11px] font-bold text-on-good"><i aria-hidden="true" class="fas fa-check mr-1"></i>Watched</span>
+          </template>
           <span class="truncate text-xs text-ink-4" :title="request.user_name || request.user_id ? `for ${request.user_name || request.user_id}` : null">{{ formatDate(request.requested_at) }}<template v-if="request.user_name || request.user_id"> · for {{ request.user_name || request.user_id }}</template></span>
         </MediaCard>
       </div>

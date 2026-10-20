@@ -98,3 +98,53 @@ class TestTrailerRoute(unittest.TestCase):
         with patch.object(routes, '_run', return_value=(None, 404)), \
                 patch.object(routes, '_fetch_tmdb', new=MagicMock()):
             self.assertEqual(self.client.get('/api/tmdb/trailer/movie/1').status_code, 502)
+
+
+class TestTitleDetailsRoute(TestTrailerRoute):
+    """The details modal's single call: trailer, genres, runtime, cast and providers."""
+
+    DETAILS = {
+        'genres': [{'id': 18, 'name': 'Drama'}, {'id': 9648}],
+        'episode_run_time': [52],
+        'videos': {'results': [_video('german12345', language='de')]},
+        'credits': {'cast': [{'name': f'Actor {n}', 'character': 'Role'} for n in range(8)] + [{'name': None}]},
+        'watch/providers': {'results': {
+            'DE': {'flatrate': [{'provider_name': 'Netflix', 'logo_path': '/n.png'}], 'rent': [{'provider_name': 'Apple'}]},
+            'US': {'flatrate': [{'provider_name': 'Hulu', 'logo_path': '/h.png'}]},
+        }},
+    }
+
+    def test_summarizes_details_for_the_configured_region_and_caches_them(self):
+        with patch.object(routes, 'load_env_vars', return_value={'FILTER_REGION_PROVIDER': 'de'}), \
+                patch.object(routes, '_run', return_value=(self.DETAILS, 200)) as run, \
+                patch.object(routes, '_fetch_tmdb', new=MagicMock()) as fetch:
+            first = self.client.get('/api/tmdb/details/tv/1399')
+            second = self.client.get('/api/tmdb/details/tv/1399')
+
+        self.assertEqual(first.status_code, 200)
+        body = first.get_json()
+        self.assertEqual(body['trailer_url'], 'https://www.youtube.com/watch?v=german12345')
+        self.assertEqual(body['genres'], ['Drama'])
+        self.assertEqual(body['runtime'], 52)
+        self.assertEqual([person['name'] for person in body['cast']], [f'Actor {n}' for n in range(6)])
+        self.assertEqual(body['cast'][0], {'name': 'Actor 0', 'character': 'Role', 'profile_path': None})
+        self.assertEqual(body['providers'], [{'name': 'Netflix', 'logo_path': '/n.png'}])
+        self.assertEqual(body['region'], 'DE')
+        self.assertEqual(second.get_json(), body)
+        self.assertEqual(run.call_count, 1)
+        path, _key, params = fetch.call_args.args
+        self.assertEqual(path, '/tv/1399')
+        self.assertEqual(params['append_to_response'], 'videos,credits,watch/providers')
+
+    def test_empty_details_when_tmdb_lists_nothing(self):
+        with patch.object(routes, '_run', return_value=({'runtime': 0}, 200)), \
+                patch.object(routes, '_fetch_tmdb', new=MagicMock()):
+            body = self.client.get('/api/tmdb/details/movie/1').get_json()
+        self.assertEqual((body['trailer_url'], body['genres'], body['runtime'], body['cast'], body['providers']),
+                         (None, [], None, [], []))
+
+    def test_details_reject_unknown_media_type_and_report_tmdb_failure(self):
+        self.assertEqual(self.client.get('/api/tmdb/details/person/1').status_code, 400)
+        with patch.object(routes, '_run', return_value=(None, 404)), \
+                patch.object(routes, '_fetch_tmdb', new=MagicMock()):
+            self.assertEqual(self.client.get('/api/tmdb/details/movie/1').status_code, 502)

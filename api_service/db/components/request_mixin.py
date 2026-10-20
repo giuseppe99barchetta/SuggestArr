@@ -216,12 +216,13 @@ class RequestMixin:
                     (SELECT ump.external_username FROM user_media_profiles ump
                      WHERE ump.external_user_id = r.user_id AND ump.external_username IS NOT NULL LIMIT 1)
                 ) AS user_name, r.source_origin,
-                {feedback_columns}
+                {feedback_columns}, rt.watched_at
             FROM requests r
             JOIN metadata m ON r.tmdb_request_id = m.media_id AND r.media_type = m.media_type
             LEFT JOIN metadata s ON r.tmdb_source_id = s.media_id
             LEFT JOIN users u ON r.user_id = u.user_id
             {feedback_join}
+            LEFT JOIN recap_titles rt ON rt.media_type = r.media_type AND rt.tmdb_id = r.tmdb_request_id
             WHERE r.requested_by = 'SuggestArr'
             AND COALESCE(r.tmdb_source_id, '') != 'ai_search'
         """
@@ -285,6 +286,8 @@ class RequestMixin:
                 "user_name": row[21] if len(row) > 21 else None,
                 "source_origin": row[22] if len(row) > 22 else None,
                 "feedback": feedback,
+                # First play seen by the watch sync (recap ledger), shown as a "Watched" badge.
+                "watched_at": row[26] if len(row) > 26 else None,
             })
     
         # Sort sources

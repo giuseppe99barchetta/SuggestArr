@@ -113,6 +113,7 @@
             <span class="relative block aspect-[2/3] w-full overflow-hidden rounded-[8px] bg-black/30 ring-1 ring-white/10 shadow-[0_6px_20px_rgba(0,0,0,0.35)] transition group-hover:ring-2 group-hover:ring-white/70">
               <img v-if="request.poster_path" :src="request.poster_path" alt="" loading="lazy" class="absolute inset-0 h-full w-full object-cover" />
               <span v-else class="absolute inset-0 flex items-center justify-center text-2xl text-white/40"><i aria-hidden="true" class="fas fa-film"></i></span>
+              <span v-if="request.watched_at" class="absolute right-1.5 top-1.5 rounded-md bg-good px-1.5 py-0.5 text-[10px] font-bold text-on-good" title="Watched"><i aria-hidden="true" class="fas fa-check"></i><span class="sr-only">Watched</span></span>
               <span v-if="request.media_type === 'tv'" class="absolute left-1.5 top-1.5 rounded-md bg-canvas/80 px-1.5 py-0.5 text-[10px] font-bold text-ink">TV</span>
             </span>
             <span class="block w-full truncate text-[13px] font-semibold leading-snug text-white" :title="request.title">{{ request.title }}</span>
@@ -900,6 +901,7 @@ export default {
             user_name: request.user_name,
             source_origin: request.source_origin,
             feedback: request.feedback || null,
+            watched_at: request.watched_at || null,
           })),
         }));
 

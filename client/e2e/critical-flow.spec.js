@@ -326,12 +326,12 @@ test("the trailer button does not move the details when it arrives", async ({ pa
   let answerTrailer;
   const trailerAnswered = new Promise(resolve => { answerTrailer = resolve; });
   // Registered after mockApi, so it wins for this path; held until the layout is measured.
-  await page.route("http://localhost:5000/api/tmdb/trailer/**", async (route) => {
+  await page.route("http://localhost:5000/api/tmdb/details/**", async (route) => {
     await trailerAnswered;
     await route.fulfill({
       contentType: "application/json",
       headers: { "access-control-allow-origin": "http://127.0.0.1:5173", "access-control-allow-credentials": "true" },
-      body: JSON.stringify({ url: "https://www.youtube.com/watch?v=e2e" }),
+      body: JSON.stringify({ trailer_url: "https://www.youtube.com/watch?v=e2e" }),
     });
   });
   await signIn(page);

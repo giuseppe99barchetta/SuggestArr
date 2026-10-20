@@ -85,7 +85,7 @@
               :config="config"
               :current-user="currentUser"
               :section="activeTabSection"
-              :isLoading="isLoading"
+              :isLoading="isLoading || isSaving"
               :testingConnections="testingConnections"
               @save-section="saveSection"
               @test-connection="testConnection"
@@ -287,6 +287,8 @@ export default {
       currentUser: null,
       config: {},
       isLoading: false,
+      // Section saves only disable the form; the full-screen overlay is for config-wide loads.
+      isSaving: false,
       loadingMessage: 'Processing...',
       showResetModal: false,
       showExportModal: false,
@@ -640,8 +642,7 @@ export default {
     },
 
     async saveSection({ section, data }) {
-      this.loadingMessage = `Saving ${section} settings...`;
-      this.isLoading = true;
+      this.isSaving = true;
       const oldSubpath = (this.config.SUBPATH || '').replace(/\/$/, '');
       try {
         await axios.post(`/api/config/section/${section}`, data);
@@ -690,7 +691,7 @@ export default {
         });
         console.error('Error saving section:', error);
       } finally {
-        this.isLoading = false;
+        this.isSaving = false;
       }
     },
     async testConnection(service, config) {

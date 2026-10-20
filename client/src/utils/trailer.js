@@ -60,3 +60,22 @@ export async function openTrailer(http, item, openTab = () => window.open('', '_
   tab.location.replace(url);
   return 'opened';
 }
+
+/**
+ * Trailer, genres, runtime, cast and streaming services for the details modal, in one call.
+ *
+ * @param {{ get: Function }} http - axios, or anything with the same `get`.
+ * @param {object|null} item - What the details modal shows.
+ * @returns {Promise<object|null>} The details; null when not applicable or the lookup fails.
+ */
+export async function loadTitleDetails(http, item) {
+  const target = trailerTarget(item);
+  if (!target) return null;
+  try {
+    const { data } = await http.get(`/api/tmdb/details/${target.mediaType}/${target.tmdbId}`);
+    return data || null;
+  } catch {
+    // The modal still shows what the item itself carries.
+    return null;
+  }
+}
