@@ -3,9 +3,22 @@
     <header class="relative isolate overflow-hidden">
       <!-- Without a backdrop the blurred poster stands in for one. -->
       <div aria-hidden="true" class="absolute inset-0 -z-10">
-        <img v-if="backdrop" :src="backdrop" alt="" class="h-full w-full object-cover object-top opacity-60" />
-        <img v-else-if="item.poster_path" :src="item.poster_path" alt="" class="h-full w-full scale-125 object-cover opacity-50 blur-3xl saturate-150" />
-        <div v-else class="h-full w-full opacity-50" :style="{ background: placeholderBackground }"></div>
+        <Transition
+          enter-active-class="transition-opacity duration-700 ease-out motion-reduce:transition-none"
+          enter-from-class="opacity-0"
+          enter-to-class="opacity-100"
+        >
+          <div v-if="backgroundImage" v-show="backgroundLoaded" :key="backgroundImage" class="h-full w-full">
+            <img
+              :src="backgroundImage"
+              alt=""
+              class="h-full w-full object-cover"
+              :class="backdrop ? 'object-top opacity-60' : 'scale-125 opacity-50 blur-3xl saturate-150'"
+              @load="backgroundLoaded = true"
+            />
+          </div>
+        </Transition>
+        <div v-if="!backgroundImage" class="h-full w-full opacity-50" :style="{ background: placeholderBackground }"></div>
         <div class="absolute inset-0 bg-gradient-to-r from-panel via-panel/85 to-panel/30 max-sm:bg-gradient-to-t max-sm:via-panel/90"></div>
       </div>
 
@@ -129,6 +142,7 @@ export default {
     return {
       overviewExpanded: false,
       overviewClamped: false,
+      backgroundLoaded: false,
       trailerUrl: null,
       trailerState: 'loading', // 'loading' | 'ready' | 'none'
     };
@@ -142,6 +156,9 @@ export default {
       const path = this.item.backdrop_path;
       if (!path) return '';
       return path.startsWith('/') ? `https://image.tmdb.org/t/p/w1280${path}` : path;
+    },
+    backgroundImage() {
+      return this.backdrop || this.item.poster_path || '';
     },
     rating() {
       const value = Number(this.item.rating);
@@ -163,6 +180,9 @@ export default {
     },
   },
   watch: {
+    backgroundImage() {
+      this.backgroundLoaded = false;
+    },
     // Related titles open in the same modal, so a new item starts collapsed again.
     item: {
       immediate: true,
