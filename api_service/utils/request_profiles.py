@@ -19,6 +19,10 @@ MEDIA_TYPES = ('movie', 'tv')
 PROFILE_KEYS = ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId')
 
 
+class UnknownSeerProfileError(ValueError):
+    """A server, quality profile or root folder Jellyseerr does not offer; safe to show."""
+
+
 def _run_async(coro):
     """Run an async coroutine synchronously on a per-invocation event loop."""
     return run_coroutine_sync(coro, logger)
@@ -93,10 +97,17 @@ def validate_request_profiles_with_seer(profiles):
                                  else seer.get_sonarr_servers())
                 server = next((item for item in servers or [] if item.get('id') == profile['serverId']), None)
                 if not server:
-                    raise ValueError(f"Unknown {media_type} server")
+                    raise UnknownSeerProfileError(f"Unknown {media_type} server")
                 if profile.get('profileId') not in {item.get('id') for item in server.get('profiles', [])}:
-                    raise ValueError(f"Unknown {media_type} quality profile")
+                    raise UnknownSeerProfileError(f"Unknown {media_type} quality profile")
                 if profile.get('rootFolder') not in {item.get('path') for item in server.get('rootFolders', [])}:
-                    raise ValueError(f"Unknown {media_type} root folder")
+                    raise UnknownSeerProfileError(f"Unknown {media_type} root folder")
 
-    _run_async(check())
+    try:
+        _run_async(check())
+    except UnknownSeerProfileError:
+        raise
+    except ValueError:
+        # Client errors (e.g. aiohttp.InvalidURL) carry the Seer address; callers show the message.
+        logger.warning('Could not verify request profiles with Seer', exc_info=True)
+        raise ValueError('Could not verify request profiles with Seer') from None
