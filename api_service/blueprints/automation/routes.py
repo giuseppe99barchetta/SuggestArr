@@ -14,6 +14,7 @@ from api_service.utils.request_profiles import (
 )
 from api_service.utils import request_scope
 from api_service.services.tmdb.localization import display_language, localize_groups
+from api_service.services.tmdb.logos import fill_logos
 from api_service.services.trakt.feedback_sync import schedule_seen_feedback_sync
 from api_service.jobs.request_expiry import execute_request_expiry
 from api_service.jobs.request_replacement import execute_request_replacements
@@ -178,6 +179,7 @@ def _localize(db, *groups):
     integration = db.get_integration('tmdb') or {}
     api_key = integration.get('api_key') or env.get('TMDB_API_KEY')
     localize_groups(list(groups), language, db, api_key)
+    fill_logos(list(groups), language, db, api_key)
 
 
 def _visible_request_user_ids(db):

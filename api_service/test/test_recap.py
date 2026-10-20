@@ -307,6 +307,19 @@ def test_external_recap_schema_has_portable_keys_and_backfill(db_type):
     assert ('ON CONFLICT DO NOTHING' if db_type == 'postgres' else 'INSERT IGNORE') in backfill
 
 
+@pytest.mark.parametrize('extra,repaired', [('on update current_timestamp()', True), ('', False)])
+def test_mysql_requested_at_drops_on_update_and_restores_dates(extra, repaired):
+    db = MagicMock(db_type='mariadb')
+    cursor = db.get_connection.return_value.__enter__.return_value.cursor.return_value
+    cursor.fetchall.return_value = []
+    cursor.fetchone.return_value = ('requested_at', 'timestamp', 'NO', '', 'current_timestamp()', extra)
+    initialize_recap_schema(db)
+    statements = [call.args[0] for call in cursor.execute.call_args_list]
+    assert 'requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' in statements[0]
+    assert any('MODIFY requested_at' in sql for sql in statements) is repaired
+    assert any('SET r.requested_at=q.first_at' in sql for sql in statements) is repaired
+
+
 def route_client(db, user=ADMIN):
     from api_service.blueprints.recap.routes import recap_bp
     app = Flask(__name__)

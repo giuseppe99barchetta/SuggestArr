@@ -69,12 +69,26 @@ def initialize_recap_schema(db):
         cursor = conn.cursor()
         cursor.execute('''CREATE TABLE IF NOT EXISTS recap_titles (
             media_type VARCHAR(16) NOT NULL, tmdb_id VARCHAR(64) NOT NULL,
-            user_id VARCHAR(191), requested_at TIMESTAMP NOT NULL, watched_at TIMESTAMP NULL,
-            PRIMARY KEY (media_type, tmdb_id))''')
+            user_id VARCHAR(191), requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            watched_at TIMESTAMP NULL, PRIMARY KEY (media_type, tmdb_id))''')
         if 'watched_at' not in _columns(cursor, db.db_type, 'recap_titles'):
             # First observed play of a requested title by its recipient, at or after the request.
             cursor.execute('ALTER TABLE recap_titles ADD COLUMN watched_at TIMESTAMP NULL')
         if db.db_type in ('mysql', 'mariadb'):
+            # Without an explicit DEFAULT, MySQL 5.7/MariaDB <10.10 made requested_at
+            # ON UPDATE CURRENT_TIMESTAMP, so recording a play overwrote the request date.
+            cursor.execute("SHOW COLUMNS FROM recap_titles WHERE Field='requested_at'")
+            column = cursor.fetchone()
+            if column and 'on update' in str(column[5]).lower():
+                cursor.execute('ALTER TABLE recap_titles MODIFY requested_at '
+                               'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP')
+                # Restore dates already overwritten, from the same source the backfill uses.
+                cursor.execute('''UPDATE recap_titles r JOIN (
+                    SELECT media_type, tmdb_request_id, MIN(requested_at) AS first_at FROM requests
+                    WHERE requested_by='SuggestArr' AND requested_at IS NOT NULL
+                    GROUP BY media_type, tmdb_request_id) q
+                    ON q.media_type=r.media_type AND q.tmdb_request_id=r.tmdb_id
+                    SET r.requested_at=q.first_at''')
             cursor.execute("SHOW INDEX FROM recap_titles WHERE Key_name='idx_recap_titles_user'")
             if not cursor.fetchall():
                 cursor.execute('CREATE INDEX idx_recap_titles_user ON recap_titles (user_id)')

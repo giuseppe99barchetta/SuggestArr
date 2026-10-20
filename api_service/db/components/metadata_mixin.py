@@ -44,6 +44,23 @@ class MetadataMixin:
             cursor.execute(query, params)
             conn.commit()
     
+    def update_logo(self, media_id: str, media_type: str, logo_path: str) -> None:
+        """
+        Store a title logo found after the metadata row was saved.
+
+        Args:
+            media_id: TMDb id.
+            media_type: 'movie' or 'tv'.
+            logo_path: Absolute TMDb logo URL.
+        """
+        query = "UPDATE metadata SET logo_path = ? WHERE media_id = ? AND media_type = ?"
+        if self.db_type in ['mysql', 'postgres']:
+            query = query.replace("?", "%s")
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (logo_path, str(media_id), media_type))
+            conn.commit()
+
     def get_metadata(self, media_id: str, media_type: str) -> Optional[Dict[str, Any]]:
         """Retrieve metadata for a media item if it exists in the database."""
         self.logger.debug(f"Retrieving metadata: {media_type} {media_id}")

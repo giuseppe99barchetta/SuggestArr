@@ -11,6 +11,7 @@ import aiohttp
 import asyncio
 from api_service.services.http.base_client import BaseHTTPClient
 from api_service.config.logger_manager import LoggerManager
+from api_service.services.tmdb.logos import LOGO_URL, pick_logo
 
 # Constants for HTTP status codes and timeout
 HTTP_OK = {200, 201}
@@ -251,7 +252,7 @@ class TMDbClient(BaseHTTPClient):
         :return: A dictionary with metadata details or None if not found.
         """
         url = f"{self.tmdb_api_url}/{content_type}/{tmdb_id}?api_key={self.api_key}"
-        images_url = f"{self.tmdb_api_url}/{content_type}/{tmdb_id}/images?api_key={self.api_key}&include_image_language=en,null"
+        images_url = f"{self.tmdb_api_url}/{content_type}/{tmdb_id}/images?api_key={self.api_key}"
         self.logger.debug("Fetching metadata for %s with ID %s", content_type, tmdb_id)
         
         try:
@@ -269,10 +270,9 @@ class TMDbClient(BaseHTTPClient):
             async with session.get(images_url, timeout=self.REQUEST_TIMEOUT) as images_response:
                 if images_response.status in HTTP_OK:
                     images_data = await images_response.json()
-                    logos = images_data.get("logos", [])
-                    logo_path = logos[0]["file_path"] if logos else None
+                    logo_path = pick_logo(images_data.get("logos"))
                     if logo_path:
-                        metadata["logo_path"] = f"https://image.tmdb.org/t/p/w500{logo_path}"
+                        metadata["logo_path"] = LOGO_URL.format(logo_path)
                     self.logger.debug("Successfully fetched logo for %s with ID %s", content_type, tmdb_id)
                 else:
                     self.logger.warning("Failed to retrieve logos for TMDb ID %s: %d", tmdb_id, images_response.status)
