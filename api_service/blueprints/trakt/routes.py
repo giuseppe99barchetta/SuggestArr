@@ -230,7 +230,9 @@ def get_my_trakt_status():
     link = _link_status_for_identity(db, identity["id"])
     # Tells the pending-request UI to ask for a 1-10 rating on "Seen it", since that
     # rating will actually reach this user's Trakt account.
-    sync_seen_feedback = bool(link.get("connected")) and is_sync_enabled(load_env_vars())
+    # Only a verified profile is written through (see feedback_sync.own_verified_profile).
+    sync_seen_feedback = (bool(link.get("connected")) and bool(profile.get("verified"))
+                          and is_sync_enabled(load_env_vars()))
     return jsonify({
         "media_user": _media_user_payload(profile, link),
         "sync_seen_feedback": sync_seen_feedback,

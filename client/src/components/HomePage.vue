@@ -345,11 +345,12 @@ export default {
       } catch (error) {
         this.$toast.open({ message: error.response?.data?.message || 'Could not save feedback', type: 'error' });
         this.actionLoadingId = null;
-        return;
+        return false;
       } finally {
         this.seenMenuId = null;
       }
       await this.decidePending('reject', request.id);
+      return true;
     },
 
     openSeen(request) {
@@ -361,8 +362,10 @@ export default {
     // matching liked / disliked / seen verdict.
     async saveSeenRating({ rating, markWatched }) {
       const request = this.seenRatingItem;
-      await this.markSeen(request, ratedSeenOption(rating), { rating, markWatched });
-      this.seenRatingItem = null;
+      // Close only once the feedback is saved, so a failed save keeps the stars.
+      if (await this.markSeen(request, ratedSeenOption(rating), { rating, markWatched })) {
+        this.seenRatingItem = null;
+      }
     },
 
     async decidePending(action, id, profile = null) {

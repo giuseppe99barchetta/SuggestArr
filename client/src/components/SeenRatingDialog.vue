@@ -31,9 +31,10 @@
         label="Mark all episodes as watched"
         description="Leave this off if you have only seen part of it. The show is then only rated."
       />
+      <p v-if="localOnly && !rating" class="m-0 text-xs leading-snug text-ink-4">Without stars or the episodes box, this is saved in SuggestArr only and nothing is sent to Trakt.</p>
     </div>
     <template #footer>
-      <button type="button" class="ui-btn" :disabled="busy" @click="save(null)">Seen it, no rating</button>
+      <button type="button" class="ui-btn" :disabled="busy" @click="save(null)">{{ localOnly ? 'Seen it, SuggestArr only' : 'Seen it, no rating' }}</button>
       <button type="button" class="ui-btn-primary" :disabled="busy || !rating" @click="save(rating)">Save rating</button>
     </template>
   </AppDialog>
@@ -66,6 +67,10 @@ export default {
     return { rating: null, hover: 0, markWatched: this.item.media_type !== 'tv' };
   },
   computed: {
+    // A show saved with no stars and no episodes has nothing to send to Trakt.
+    localOnly() {
+      return this.item.media_type === 'tv' && !this.markWatched;
+    },
     ratingText() {
       const shown = this.hover || this.rating;
       if (!shown) return 'Pick 1 to 10 stars, or save without a rating.';

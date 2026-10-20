@@ -222,6 +222,60 @@ class TraktClient(BaseHTTPClient):
                                    json=self._sync_body(media_type, tmdb_id, rating=rating),
                                    authenticated=True)
 
+    async def lookup_trakt_id(self, media_type: str, tmdb_id: str) -> Optional[int]:
+        """Return Trakt's own id for a TMDb title, or None when Trakt does not know it.
+
+        Args:
+            media_type: ``movie`` or ``tv``.
+            tmdb_id: TMDb id of the title.
+        """
+        kind = "movie" if media_type == "movie" else "show"
+        payload = await self._request("GET", f"/search/tmdb/{int(tmdb_id)}", params={"type": kind},
+                                      authenticated=False)
+        for entry in payload or []:
+            trakt_id = ((entry or {}).get(kind) or {}).get("ids", {}).get("trakt")
+            if trakt_id:
+                return int(trakt_id)
+        return None
+
+    async def has_movie_play(self, trakt_id: int) -> bool:
+        """Whether the user's Trakt history already holds at least one play of a movie."""
+        payload = await self._request("GET", f"/sync/history/movies/{int(trakt_id)}",
+                                      params={"limit": 1}, authenticated=True)
+        return bool(payload)
+
+    async def unwatched_episodes(self, trakt_id: int) -> list[dict[str, Any]]:
+        """Return the aired episodes of a show the user has not watched yet.
+
+        Args:
+            trakt_id: Trakt id of the show.
+
+        Returns:
+            list[dict[str, Any]]: ``/sync/history`` season entries
+            (``{"number": s, "episodes": [{"number": e}, ...]}``), empty when
+            every aired episode is already watched.
+        """
+        payload = await self._request("GET", f"/shows/{int(trakt_id)}/progress/watched",
+                                      params={"hidden": "false", "specials": "false"},
+                                      authenticated=True)
+        seasons = []
+        for season in (payload or {}).get("seasons", []):
+            missing = [{"number": ep["number"]} for ep in season.get("episodes", [])
+                       if not ep.get("completed") and ep.get("number") is not None]
+            if missing:
+                seasons.append({"number": season["number"], "episodes": missing})
+        return seasons
+
+    async def add_episodes_to_history(self, trakt_id: int, seasons: list[dict[str, Any]]) -> dict[str, Any]:
+        """Add specific episodes of a show to the user's Trakt history.
+
+        Args:
+            trakt_id: Trakt id of the show.
+            seasons: Season entries as returned by ``unwatched_episodes``.
+        """
+        body = {"shows": [{"ids": {"trakt": int(trakt_id)}, "seasons": seasons}]}
+        return await self._request("POST", "/sync/history", json=body, authenticated=True)
+
     @staticmethod
     def _sync_body(media_type: str, tmdb_id: str, **fields: Any) -> dict[str, Any]:
         """Build a single-item ``/sync/*`` payload keyed by TMDb id."""

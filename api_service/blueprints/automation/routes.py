@@ -121,8 +121,11 @@ def _feedback_payload():
     rating = data.get('rating')
     if rating is not None and (isinstance(rating, bool) or not isinstance(rating, int) or not 1 <= rating <= 10):
         return None, (jsonify({'status': 'error', 'message': 'rating must be an integer from 1 to 10'}), 400)
-    mark_watched = data.get('mark_watched', True)
-    if not isinstance(mark_watched, bool):
+    # Omitted means the safe default per media type (plays for a movie, none for a
+    # show), decided by the sync, so a client that never sends it cannot mark a
+    # whole series watched.
+    mark_watched = data.get('mark_watched')
+    if mark_watched is not None and not isinstance(mark_watched, bool):
         return None, (jsonify({'status': 'error', 'message': 'mark_watched must be a boolean'}), 400)
     trakt = {'rating': rating, 'mark_watched': mark_watched}
     return (feedback, reason_type, reason_text, data.get('media_user_id'), title, year, trakt), None
@@ -137,7 +140,7 @@ def _sync_seen_feedback(saved, trakt):
 
     Args:
         saved: The feedback dict returned by the database layer.
-        trakt: ``{'rating': int|None, 'mark_watched': bool}`` from the request.
+        trakt: ``{'rating': int|None, 'mark_watched': bool|None}`` from the request.
     """
     try:
         schedule_seen_feedback_sync(int(g.current_user['id']), saved,

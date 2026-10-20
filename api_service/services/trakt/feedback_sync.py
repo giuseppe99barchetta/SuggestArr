@@ -9,14 +9,22 @@ enabled, the same verdict is also sent to Trakt so the two stay in step:
 - ``seen_disliked`` -> added to history and rated ``DISLIKED_RATING``
 
 A caller can pass an explicit 1-10 ``rating`` (the star picker does), which
-replaces those defaults, and ``mark_watched=False`` to rate without adding a
-play - useful for a show the user has only partly watched, since adding a
-show to history marks every aired episode.
+replaces those defaults, and ``mark_watched`` to choose whether plays are
+added. It defaults to True for movies and False for shows: adding a show to
+history marks every aired episode, so that has to be asked for explicitly.
+
+Writes are idempotent. Ratings are upserts on Trakt's side. A movie that
+already has a play in the user's history gets no new one, and a show only gets
+plays for the aired episodes still unwatched, so saving the same feedback
+again, changing the rating or retrying never adds duplicate plays.
 
 The Trakt account used is the one linked to the *acting* SuggestArr user's own
 media profile, since "I have seen this" is a statement about the person
-clicking. The sync is best-effort: it runs in the background, never changes the
-HTTP response of the feedback call, and only logs on failure.
+clicking, and only when that profile is verified (assigned by an admin or
+proven by the media server's own sign-in): a self-selected, unverified profile
+may name somebody else's media account. The sync is best-effort: it runs in
+the background, never changes the HTTP response of the feedback call, and only
+logs on failure.
 """
 import asyncio
 import threading
@@ -58,6 +66,31 @@ def is_sync_enabled(env_vars: dict) -> bool:
     return env_vars.get('TRAKT_SYNC_SEEN_FEEDBACK') is True and bool(_trakt_credentials(env_vars)[0])
 
 
+def default_mark_watched(media_type: str, mark_watched: Optional[bool]) -> bool:
+    """Resolve an omitted ``mark_watched``: plays are added for movies, never implicitly for shows.
+
+    Args:
+        media_type: ``movie`` or ``tv``.
+        mark_watched: The caller's choice, or None when it gave none.
+    """
+    return media_type == 'movie' if mark_watched is None else bool(mark_watched)
+
+
+def own_verified_profile(db, user_id: int, provider: str) -> Optional[dict]:
+    """Return the user's media profile for the selected service, only if it is verified.
+
+    Args:
+        db: Database manager.
+        user_id: SuggestArr user id.
+        provider: Configured media service (``plex``, ``jellyfin`` or ``emby``).
+
+    Returns:
+        Optional[dict]: The profile, or None when there is none or it is unverified.
+    """
+    profile = next((p for p in db.get_user_media_profiles(user_id) if p.get('provider') == provider), None)
+    return profile if profile and profile.get('verified') else None
+
+
 class TraktFeedbackSync:
     """Send one seen verdict to the acting user's linked Trakt account."""
 
@@ -74,12 +107,11 @@ class TraktFeedbackSync:
         self.client_factory = client_factory
 
     def _resolve_link(self, user_id: int) -> Optional[dict]:
-        """Return the Trakt link and tokens for the user's own media profile, or None."""
+        """Return the Trakt link and tokens for the user's own verified media profile, or None."""
         provider = str(self.env_vars.get('SELECTED_SERVICE') or '').lower()
         if provider not in _MEDIA_PROVIDERS:
             return None
-        profile = next((p for p in self.db.get_user_media_profiles(user_id)
-                        if p.get('provider') == provider), None)
+        profile = own_verified_profile(self.db, user_id, provider)
         if not profile:
             return None
         try:
@@ -89,7 +121,7 @@ class TraktFeedbackSync:
         return TraktAccountResolver(self.db).resolve(identity['id'])
 
     async def sync(self, user_id: int, tmdb_id: str, media_type: str, feedback: str,
-                   rating: Optional[int] = None, mark_watched: bool = True) -> dict[str, Any]:
+                   rating: Optional[int] = None, mark_watched: Optional[bool] = None) -> dict[str, Any]:
         """Write the verdict to Trakt.
 
         Args:
@@ -98,16 +130,20 @@ class TraktFeedbackSync:
             media_type: ``movie`` or ``tv``.
             feedback: One of ``SEEN_FEEDBACK``.
             rating: Explicit 1-10 Trakt rating; defaults to the verdict's rating.
-            mark_watched: Whether to add a play to Trakt history.
+            mark_watched: Whether to add plays to Trakt history; None means yes
+                for a movie and no for a show.
 
         Returns:
-            dict[str, Any]: ``{'status': 'synced'|'skipped'|'error', ...}``.
+            dict[str, Any]: ``{'status': 'synced'|'skipped'|'error', ...}``. A
+            synced result says what happened to history: ``added``,
+            ``already watched`` or ``not requested``.
         """
         if feedback not in SEEN_FEEDBACK or media_type not in ('movie', 'tv'):
             return {'status': 'skipped', 'reason': 'not seen feedback'}
         if not is_sync_enabled(self.env_vars):
             return {'status': 'skipped', 'reason': 'disabled'}
         rating = rating if rating is not None else FEEDBACK_RATINGS.get(feedback)
+        mark_watched = default_mark_watched(media_type, mark_watched)
         if not mark_watched and not rating:
             return {'status': 'skipped', 'reason': 'nothing to send'}
         link = self._resolve_link(user_id)
@@ -125,20 +161,49 @@ class TraktFeedbackSync:
                 link_id=link['id'],
                 token_source=link.get('token_source', 'manual_oauth'),
             ) as client:
-                history = await client.add_to_history(media_type, tmdb_id) if mark_watched else None
+                trakt_id = await client.lookup_trakt_id(media_type, tmdb_id)
+                if trakt_id is None:
+                    logger.warning("Trakt does not know %s %s; '%s' was not recorded",
+                                   media_type, tmdb_id, feedback)
+                    return {'status': 'error', 'reason': 'not found on Trakt'}
+                history = 'not requested'
+                if mark_watched:
+                    history = await self._add_missing_plays(client, media_type, tmdb_id, trakt_id)
                 rated = await client.add_rating(media_type, tmdb_id, rating) if rating else None
         except Exception as exc:
             logger.warning("Trakt sync of '%s' for %s %s failed: %s", feedback, media_type, tmdb_id, exc)
             return {'status': 'error', 'reason': str(exc)}
 
-        not_found = any((response or {}).get('not_found', {}).get(key)
-                        for response in (history, rated) for key in ('movies', 'shows'))
-        if not_found:
-            logger.warning("Trakt does not know %s %s; '%s' was not recorded", media_type, tmdb_id, feedback)
+        if any((rated or {}).get('not_found', {}).get(key) for key in ('movies', 'shows')):
+            logger.warning("Trakt did not accept the rating for %s %s", media_type, tmdb_id)
             return {'status': 'error', 'reason': 'not found on Trakt'}
-        logger.info("Recorded '%s' for %s %s on Trakt (watched: %s, rating: %s)", feedback, media_type,
-                    tmdb_id, mark_watched, rating)
-        return {'status': 'synced', 'rating': rating, 'watched': mark_watched}
+        logger.info("Recorded '%s' for %s %s on Trakt (history: %s, rating: %s)",
+                    feedback, media_type, tmdb_id, history, rating)
+        return {'status': 'synced', 'rating': rating, 'history': history}
+
+    @staticmethod
+    async def _add_missing_plays(client, media_type: str, tmdb_id: str, trakt_id: int) -> str:
+        """Add plays only where Trakt has none, so repeated feedback never duplicates them.
+
+        Args:
+            client: Open Trakt client.
+            media_type: ``movie`` or ``tv``.
+            tmdb_id: TMDb id of the title.
+            trakt_id: Trakt id of the same title.
+
+        Returns:
+            str: ``added`` or ``already watched``.
+        """
+        if media_type == 'movie':
+            if await client.has_movie_play(trakt_id):
+                return 'already watched'
+            await client.add_to_history('movie', tmdb_id)
+            return 'added'
+        seasons = await client.unwatched_episodes(trakt_id)
+        if not seasons:
+            return 'already watched'
+        await client.add_episodes_to_history(trakt_id, seasons)
+        return 'added'
 
 
 def _run_in_thread(coro_factory) -> threading.Thread:
@@ -155,7 +220,7 @@ def _run_in_thread(coro_factory) -> threading.Thread:
 
 
 def schedule_seen_feedback_sync(user_id: int, saved: Optional[dict], rating: Optional[int] = None,
-                                mark_watched: bool = True, runner=_run_in_thread):
+                                mark_watched: Optional[bool] = None, runner=_run_in_thread):
     """Queue a background Trakt sync for a just-saved feedback row, if it applies.
 
     Cheap to call for every feedback write: non-seen verdicts and a disabled
@@ -166,7 +231,8 @@ def schedule_seen_feedback_sync(user_id: int, saved: Optional[dict], rating: Opt
         saved: The dict returned by ``set_media_feedback`` (needs ``feedback``,
                ``tmdb_id`` and ``media_type``).
         rating: Optional explicit 1-10 Trakt rating.
-        mark_watched: Whether to add a play to Trakt history.
+        mark_watched: Whether to add plays to Trakt history; None means yes for
+               a movie and no for a show.
         runner: Callable that executes the coroutine factory; replaceable in tests.
 
     Returns:

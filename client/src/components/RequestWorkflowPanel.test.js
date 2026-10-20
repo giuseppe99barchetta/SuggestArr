@@ -45,7 +45,13 @@ test('marking a suggestion seen saves feedback before clearing the card', () => 
 });
 
 test('a failed feedback save leaves the suggestion in the queue', () => {
-  assert.match(markSeen, /catch \(error\)[\s\S]*?return;/);
+  assert.match(markSeen, /catch \(error\)[\s\S]*?return false;/);
+  assert.match(markSeen, /return true;/);
+});
+
+test('a failed save keeps the star picker open with its choices', () => {
+  const method = source.slice(source.indexOf('async saveSeenRating('), source.indexOf('async decideOne('));
+  assert.match(method, /if \(await this\.markSeen\([^)]*\)[^)]*\)\) \{\s*this\.seenRatingItem = null;\s*\}/);
 });
 
 test('switching to bulk mode closes an open rating row', () => {
