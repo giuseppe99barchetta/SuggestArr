@@ -216,6 +216,7 @@
 </template>
 
 <script>
+import { defineAsyncComponent } from 'vue';
 import axios from 'axios';
 import AppFooter from './AppFooter.vue';
 import AppDialog from './ui/AppDialog.vue';
@@ -226,22 +227,23 @@ import { useAuth } from '@/composables/useAuth';
 import { approvalEnabled } from '@/utils/requestApproval';
 import { releaseNotesToHtml } from '@/utils/markdown';
 
-// Import tab components
-import SettingsServices from './settings/SettingsServices.vue';
-import SettingsDatabase from './settings/SettingsDatabase.vue';
-import SettingsAdvanced from './settings/SettingsAdvanced.vue';
-import SettingsWebhooks from './settings/SettingsWebhooks.vue';
-import SettingsCleanup from './settings/SettingsCleanup.vue';
 import HomePage from './HomePage.vue';
-import RequestsPage from './RequestsPage.vue';
-import SettingsJobs from './settings/SettingsJobs.vue';
-import AiSearchPage from './settings/AiSearchPage.vue';
-import LogsComponent from './LogsComponent.vue';
-import UserManagement from './settings/UserManagement.vue';
-import UserProfile from './settings/UserProfile.vue';
 import { exportConfig, importConfig } from '@/api/api';
 import { getReleaseByTag } from '@/api/githubReleasesApi';
 import { REQUESTS_CHANGED } from '@/utils/requestEvents.js';
+
+// Tabs load on first visit to keep the dashboard chunk small.
+const SettingsServices = defineAsyncComponent(() => import('./settings/SettingsServices.vue'));
+const SettingsDatabase = defineAsyncComponent(() => import('./settings/SettingsDatabase.vue'));
+const SettingsAdvanced = defineAsyncComponent(() => import('./settings/SettingsAdvanced.vue'));
+const SettingsWebhooks = defineAsyncComponent(() => import('./settings/SettingsWebhooks.vue'));
+const SettingsCleanup = defineAsyncComponent(() => import('./settings/SettingsCleanup.vue'));
+const RequestsPage = defineAsyncComponent(() => import('./RequestsPage.vue'));
+const SettingsJobs = defineAsyncComponent(() => import('./settings/SettingsJobs.vue'));
+const AiSearchPage = defineAsyncComponent(() => import('./settings/AiSearchPage.vue'));
+const LogsComponent = defineAsyncComponent(() => import('./LogsComponent.vue'));
+const UserManagement = defineAsyncComponent(() => import('./settings/UserManagement.vue'));
+const UserProfile = defineAsyncComponent(() => import('./settings/UserProfile.vue'));
 
 const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
 

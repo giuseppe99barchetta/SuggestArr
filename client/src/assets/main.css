@@ -129,9 +129,9 @@ select:disabled { cursor: not-allowed; }
     transform: translateY(-4px);
     transition: opacity 0.15s, transform 0.15s, display 0.15s allow-discrete, overlay 0.15s allow-discrete;
   }
-  select::picker(select):popover-open { opacity: 1; transform: none; }
+  select:open::picker(select) { opacity: 1; transform: none; }
   @starting-style {
-    select::picker(select):popover-open { opacity: 0; transform: translateY(-4px); }
+    select:open::picker(select) { opacity: 0; transform: translateY(-4px); }
   }
   select option {
     display: flex;
