@@ -44,6 +44,16 @@ export function latestBadge(badges = []) {
     .reduce((latest, badge) => (!latest || (badge.unlocked_at || '') >= (latest.unlocked_at || '') ? badge : latest), null);
 }
 
+/** A hit rate is only worth showing once a few picks were watched; a near-zero share demotivates. */
+export const showHitRate = recap => recap?.hit_rate != null && recap.watched >= 3 && recap.hit_rate >= 10;
+
+/** Locked badges closest to unlocking, by share of progress; anniversaries count elapsed days. */
+export function upNext(badges = [], limit = 3) {
+  return badges.filter(badge => !badge.unlocked && badge.progress > 0)
+    .sort((a, b) => b.progress / b.threshold - a.progress / a.threshold)
+    .slice(0, limit);
+}
+
 const storage = () => { try { return window.localStorage; } catch { return null; } };
 
 /**

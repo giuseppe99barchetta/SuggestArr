@@ -5,7 +5,7 @@ AI Search blueprint — semantic movie/TV search powered by LLM + TMDB.
 import asyncio
 
 import aiohttp
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from api_service.auth.limiter import limiter
 from api_service.config.logger_manager import LoggerManager
@@ -16,6 +16,30 @@ from api_service.services.llm.llm_service import get_llm_client
 
 ai_search_bp = Blueprint("ai_search", __name__)
 logger = LoggerManager.get_logger("AiSearchRoute")
+
+
+@ai_search_bp.route("/inspiration", methods=["GET"])
+@limiter.limit("20 per minute")
+async def ai_search_inspiration():
+    """Return viewing-history starters belonging only to the signed-in user."""
+    user = getattr(g, "current_user", None)
+    if not user or not user.get("id"):
+        return jsonify({"status": "success", "items": []}), 200
+    try:
+        service = AiSearchService()
+        provider = str(service.config.get("SELECTED_SERVICE") or "").lower()
+        db = DatabaseManager()
+        profile = next((p for p in db.get_user_media_profiles(int(user["id"]))
+                        if p.get("provider") == provider and p.get("external_user_id")), None)
+        if not profile:
+            return jsonify({"status": "success", "items": []}), 200
+        identity = db.upsert_media_user_identity(provider, str(profile["external_user_id"]), profile.get("external_username"))
+        saved_history = db.list_watched_media(identity["id"], limit=6)
+        items = await service.inspiration(profile, saved_history)
+        return jsonify({"status": "success", "items": items}), 200
+    except Exception:
+        logger.warning("Could not load AI Search inspiration", exc_info=True)
+        return jsonify({"status": "error", "message": "Could not load viewing history"}), 503
 
 
 @ai_search_bp.route("/query", methods=["POST"])

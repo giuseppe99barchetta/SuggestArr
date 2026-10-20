@@ -12,6 +12,7 @@
       <label class="flex flex-col gap-1.5">
         <span class="sr-only">What do you want to watch?</span>
         <textarea
+          ref="queryInput"
           v-model="query"
           :disabled="!llmAvailable || isSearching"
           rows="3"
@@ -80,20 +81,6 @@
       </details>
     </form>
 
-    <div v-if="recentSearches.length > 0" class="flex flex-wrap items-center gap-2">
-      <span class="text-xs font-semibold uppercase tracking-wider text-ink-4">Recent</span>
-      <button
-        v-for="(search, i) in recentSearches"
-        :key="i"
-        type="button"
-        class="h-8 max-w-[280px] cursor-pointer truncate rounded-full border border-edge-strong bg-panel px-3 text-[13px] text-ink-2 hover:border-brand-ink hover:text-ink disabled:opacity-50"
-        :disabled="isSearching"
-        :title="search"
-        @click="rerunSearch(search)"
-      >{{ search }}</button>
-      <button type="button" class="h-8 cursor-pointer rounded-full border-0 bg-transparent px-2 text-[13px] text-ink-4 hover:text-ink" @click="clearHistory">Clear</button>
-    </div>
-
     <div v-if="queryInterpretation && hasInterpretation" class="flex flex-wrap items-center gap-2 text-[13px]">
       <span class="font-semibold text-ink-3"><i aria-hidden="true" class="fas fa-brain mr-1.5 text-brand-ink"></i>Understood as</span>
       <span v-if="interpGenres" class="rounded-full bg-raised px-3 py-1 text-ink-2">{{ interpGenres }}</span>
@@ -109,7 +96,10 @@
     </div>
 
     <section v-else-if="results.length > 0" class="flex flex-col gap-4">
-      <h2 class="m-0 text-[19px] font-bold text-ink">{{ results.length }} {{ results.length === 1 ? 'match' : 'matches' }}</h2>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="m-0 text-[19px] font-bold text-ink">{{ results.length }} {{ results.length === 1 ? 'match' : 'matches' }}</h2>
+        <button type="button" class="ui-btn h-9 text-xs" @click="browseIdeas"><i aria-hidden="true" class="fas fa-compass"></i>Explore search ideas</button>
+      </div>
       <div class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
         <MediaCard
           v-for="item in results"
@@ -145,18 +135,70 @@
       <i aria-hidden="true" class="fas fa-search text-4xl text-ink-4"></i>
       <h2 class="m-0 text-lg font-bold text-ink">No matches</h2>
       <p class="m-0 max-w-md text-sm text-ink-3">Try describing it differently, widen the media type, or relax the search options.</p>
+      <button type="button" class="ui-btn mt-2" @click="browseIdeas">Explore search ideas</button>
     </div>
 
-    <div v-else-if="llmAvailable" class="grid gap-3 sm:grid-cols-3">
-      <button
-        v-for="example in examples"
-        :key="example"
-        type="button"
-        class="cursor-pointer rounded-card border border-edge bg-panel p-4 text-left text-sm leading-relaxed text-ink-2 hover:border-brand-ink hover:text-ink"
-        @click="rerunSearch(example)"
-      >
-        <span class="mb-2 block text-brand-ink"><i aria-hidden="true" class="fas fa-magic"></i></span>{{ example }}
-      </button>
+    <div v-else-if="llmAvailable" class="flex flex-col gap-8">
+      <section aria-labelledby="moods-title" class="flex flex-col gap-3">
+        <div>
+          <h2 id="moods-title" class="m-0 text-lg font-bold text-ink">Set the mood</h2>
+          <p class="m-0 mt-1 text-sm text-ink-3">Pick a feeling. Make the search your own.</p>
+        </div>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+          <button v-for="mood in moods" :key="mood.label" type="button" class="group flex cursor-pointer flex-col items-start gap-3 rounded-card border border-edge bg-panel p-4 text-left transition-colors hover:border-brand-ink hover:bg-brand-soft/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink" @click="prepareSearch(mood.query)">
+            <span class="flex h-10 w-10 items-center justify-center rounded-ctl bg-brand-soft/50 text-lg text-brand-ink"><i aria-hidden="true" :class="mood.icon"></i></span>
+            <span><span class="block text-sm font-bold text-ink">{{ mood.label }}</span><span class="mt-1 block text-xs leading-relaxed text-ink-3">{{ mood.hint }}</span></span>
+          </button>
+        </div>
+      </section>
+
+      <section aria-labelledby="inspiration-title" class="flex flex-col gap-3">
+        <div class="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 id="inspiration-title" class="m-0 text-lg font-bold text-ink">Inspired by what you watch</h2>
+            <p class="m-0 mt-1 text-sm text-ink-3">Start with a familiar favourite and find your next one.</p>
+          </div>
+          <span v-if="inspiration.length" class="text-xs text-ink-4">Pick a title to build your search</span>
+        </div>
+        <div v-if="isLoadingInspiration" role="status" class="grid grid-cols-3 gap-3 sm:grid-cols-6">
+          <span class="sr-only">Loading your watched titles</span>
+          <div v-for="i in 6" :key="i" class="aspect-[2/3] animate-pulse rounded-card bg-panel"></div>
+        </div>
+        <div v-else-if="inspiration.length" class="grid grid-cols-3 gap-3 sm:grid-cols-6">
+          <button v-for="item in inspiration" :key="`${item.media_type}:${item.title}`" type="button" :aria-label="`Find more like ${item.title}`" class="group flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-card border border-edge bg-panel p-0 text-left transition-colors hover:border-brand-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink" @click="prepareFromTitle(item)">
+            <span class="relative block aspect-[2/3] w-full overflow-hidden bg-raised">
+              <img v-if="item.poster_path && !failedPosters.includes(item.poster_path)" :src="item.poster_path" alt="" loading="lazy" class="absolute inset-0 h-full w-full object-cover transition-transform group-hover:scale-105" @error="failedPosters.push(item.poster_path)" />
+              <span v-else class="absolute inset-0 flex items-center justify-center text-3xl text-ink-4"><i aria-hidden="true" :class="item.media_type === 'tv' ? 'fas fa-tv' : 'fas fa-film'"></i></span>
+              <span class="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-canvas/90 text-brand-ink"><i aria-hidden="true" class="fas fa-magic"></i></span>
+            </span>
+            <span class="flex flex-col gap-1 p-3"><span class="line-clamp-2 text-sm font-bold leading-snug text-ink">{{ item.title }}</span><span class="text-xs text-ink-3">{{ item.media_type === 'tv' ? 'TV show' : 'Movie' }}<template v-if="item.year"> · {{ item.year }}</template></span></span>
+          </button>
+        </div>
+        <div v-else class="flex flex-wrap items-center gap-4 rounded-card border border-dashed border-edge-strong bg-panel/50 p-5">
+          <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-card bg-brand-soft/50 text-xl text-brand-ink"><i aria-hidden="true" class="fas fa-film"></i></span>
+          <div class="flex-[1_1_220px]">
+            <h3 class="m-0 text-sm font-bold text-ink">{{ inspirationError ? 'Your watch history is taking a break' : 'Your favourites belong here' }}</h3>
+            <p class="m-0 mt-1 text-sm text-ink-3">{{ inspirationError ? 'You can still search by mood or describe what you want to watch.' : 'Link your media account in Profile, or add watched titles there, to get personal starting points.' }}</p>
+          </div>
+          <button v-if="inspirationError" type="button" class="ui-btn" @click="loadInspiration">Try again</button>
+          <router-link v-else :to="{ name: 'DashboardTab', params: { tab: 'profile' } }" class="ui-btn">Open profile<i aria-hidden="true" class="fas fa-arrow-right text-xs"></i></router-link>
+        </div>
+      </section>
+
+      <section v-if="recentSearches.length" aria-labelledby="recent-searches-title" class="flex flex-col gap-3">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 id="recent-searches-title" class="m-0 text-lg font-bold text-ink">Recent searches</h2>
+            <p class="m-0 mt-1 text-sm text-ink-3">Pick up where your curiosity left off.</p>
+          </div>
+          <button type="button" class="ui-btn h-9 px-3 text-xs" @click="clearHistory">Clear recent searches</button>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <button v-for="search in recentSearches" :key="search" type="button" class="flex min-w-0 cursor-pointer items-center gap-3 rounded-card border border-edge bg-panel p-4 text-left hover:border-brand-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-ink" @click="prepareSearch(search)">
+            <i aria-hidden="true" class="fas fa-history shrink-0 text-brand-ink"></i><span class="line-clamp-2 min-w-0 flex-1 text-sm text-ink-2">{{ search }}</span><i aria-hidden="true" class="fas fa-arrow-up shrink-0 text-xs text-ink-4"></i>
+          </button>
+        </div>
+      </section>
     </div>
 
     <MediaDetailsModal
@@ -193,7 +235,8 @@
 import PageHeader from '@/components/ui/PageHeader.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
-import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear } from '@/api/api.js';
+import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchInspiration, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear } from '@/api/api.js';
+import { useAuth } from '@/composables/useAuth.js';
 
 const MEDIA_TYPE_OPTIONS = [
   { value: 'movie', label: 'Movies', icon: 'fas fa-film' },
@@ -207,11 +250,22 @@ const TOGGLES = [
   { key: 'excludeSeen', title: 'Hide earlier AI picks', hint: 'Skip titles from previous AI searches' },
 ];
 
-const EXAMPLES = [
-  'A tense sci-fi thriller set in space, nothing too gory',
-  'Feel-good comedies for a lazy Sunday',
-  'Award-winning foreign films from the last ten years',
+const MOODS = [
+  { label: 'Feel-good', hint: 'A little lighter, a little happier', icon: 'fas fa-sun', query: 'Something uplifting and feel-good, with warm characters and a hopeful ending' },
+  { label: 'Adrenaline', hint: 'Keep me on the edge of my seat', icon: 'fas fa-bolt', query: 'A gripping, fast-paced adventure with high stakes and plenty of suspense' },
+  { label: 'A good mystery', hint: 'Give me something to figure out', icon: 'fas fa-search', query: 'A clever mystery with intriguing clues and an unexpected twist, without revealing the ending' },
+  { label: 'In my feelings', hint: 'Stories that stay with you', icon: 'fas fa-heart', query: 'An emotionally moving story with complex characters and meaningful relationships' },
+  { label: 'Family time', hint: 'Share a story, share some popcorn', icon: 'fas fa-home', query: 'Something family-friendly for adults and children to enjoy together, without graphic violence or adult themes' },
 ];
+
+function readRecentSearches(key) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(saved) ? [...new Set(saved.filter(item => typeof item === 'string' && item.trim()))].slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
 
 export default {
   name: 'AiSearchPage',
@@ -220,11 +274,17 @@ export default {
   inheritAttrs: false,
 
   data() {
+    const userId = useAuth().currentUser.value?.id;
+    const historyKey = `suggestarr_ai_search_history:${userId ?? 'local'}`;
     return {
       query: '',
       mediaTypeOptions: MEDIA_TYPE_OPTIONS,
       toggles: TOGGLES,
-      examples: EXAMPLES,
+      moods: MOODS,
+      inspiration: [],
+      isLoadingInspiration: true,
+      inspirationError: false,
+      failedPosters: [],
       mediaType: 'movie',
       isSearching: false,
       hasSearched: false,
@@ -243,9 +303,10 @@ export default {
       maxResults: 12,
       // Recent search history (persisted in localStorage)
       feedbackMap: {},
-      excludeSeen: JSON.parse(localStorage.getItem('suggestarr_ai_exclude_seen') || 'false'),
+      excludeSeen: localStorage.getItem('suggestarr_ai_exclude_seen') === 'true',
       isResettingSeen: false,
-      recentSearches: JSON.parse(localStorage.getItem('suggestarr_ai_search_history') || '[]'),
+      historyKey,
+      recentSearches: readRecentSearches(historyKey),
     };
   },
 
@@ -300,6 +361,38 @@ export default {
   },
 
   methods: {
+
+    async loadInspiration() {
+      this.isLoadingInspiration = true;
+      this.inspirationError = false;
+      try {
+        const { data } = await aiSearchInspiration();
+        this.inspiration = data.items || [];
+      } catch {
+        this.inspirationError = true;
+      } finally {
+        this.isLoadingInspiration = false;
+      }
+    },
+
+    prepareSearch(query) {
+      if (this.isSearching || !this.llmAvailable) return;
+      this.query = query;
+      this.$nextTick(() => this.$refs.queryInput?.focus());
+    },
+
+    prepareFromTitle(item) {
+      this.mediaType = item.media_type;
+      const year = item.year ? ` (${item.year})` : '';
+      this.prepareSearch(`Something like "${item.title}"${year}, with a similar atmosphere and storytelling, but a fresh story`);
+    },
+
+    browseIdeas() {
+      this.hasSearched = false;
+      this.results = [];
+      this.queryInterpretation = null;
+      this.errorMessage = '';
+    },
 
     async resetSeen() {
       if (this.isResettingSeen) return;
@@ -424,23 +517,21 @@ export default {
 
     saveToHistory(query) {
       if (!query) return;
-      let history = JSON.parse(localStorage.getItem('suggestarr_ai_search_history') || '[]');
-      const idx = history.indexOf(query);
-      if (idx !== -1) history.splice(idx, 1);
-      history.unshift(query);
-      history = history.slice(0, 8);
-      localStorage.setItem('suggestarr_ai_search_history', JSON.stringify(history));
-      this.recentSearches = history;
-    },
-
-    rerunSearch(query) {
-      this.query = query;
-      this.runSearch();
+      this.recentSearches = [query, ...this.recentSearches.filter(item => item !== query)].slice(0, 5);
+      try {
+        localStorage.setItem(this.historyKey, JSON.stringify(this.recentSearches));
+      } catch {
+        // Search still works when browser storage is unavailable or full.
+      }
     },
 
     clearHistory() {
-      localStorage.removeItem('suggestarr_ai_search_history');
       this.recentSearches = [];
+      try {
+        localStorage.removeItem(this.historyKey);
+      } catch {
+        // Keep the in-memory history usable without browser storage.
+      }
     },
 
     toggleOption(key) {
@@ -501,6 +592,7 @@ export default {
   mounted() {
     this.checkLlmStatus();
     this.loadFeedback();
+    this.loadInspiration();
   },
 };
 </script>

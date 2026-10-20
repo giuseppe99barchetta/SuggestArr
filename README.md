@@ -297,6 +297,8 @@ Type a natural-language description of what you feel like watching. The LLM inte
 
 ### Key capabilities
 
+- **Search starters** — choose a mood or a title from your linked Plex/Jellyfin/Emby viewing history to prepare an editable query. Titles added to your watch history in Profile are also included. Missing posters use a placeholder, and an unavailable history service never blocks searching.
+- **Recent searches** — revisit up to five successful searches, saved per SuggestArr account in the current browser. Starters and recent searches fill the input; press **Search** when ready. These sections give way to results, with **Explore search ideas** to bring them back.
 - **Natural language queries** — describe mood, genre, decade, language, or specific themes
 - **Viewing-history personalisation** — the AI tailors results based on what you (or your users) have already watched
 - **Exclude already-watched titles** — hide content you've already seen

@@ -42,7 +42,7 @@ Personal progress follows the media profiles currently linked to your account; c
 
 ## Badges
 
-Every badge shows when it was unlocked, derived from the ledger itself (for example, the 100-title badge carries the date of the 100th recorded title), or what is still missing. The badge collection groups:
+Every badge shows when it was unlocked, derived from the ledger itself (for example, the 100-title badge carries the date of the 100th recorded title), or what is still missing. **Your badges** opens from the Home medallion, the recap dialog and the celebration dialog. It shows your latest badge, the hit rate and current streak (when meaningful), **Up next** with the three locked badges closest to unlocking, and compact tiles per category: select a locked badge to see what is missing, or an earned one to reopen its shareable view without confetti. The collection groups:
 
 - **Titles requested**: 10, 25, 50, 100, 250, 500 and 1,000 for a personal recap; 10, 50, 100, 250, 500, 1,000, 2,500, 5,000 and 10,000 for the installation-wide recap.
 - **Suggestions watched**: 1, 10, 50 and 250 requested titles watched by their recipient.

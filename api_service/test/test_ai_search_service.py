@@ -60,6 +60,45 @@ def _tmdb_item(item_id=1, title='Test Movie', media_type='movie'):
 # _is_watched (static method)
 # ---------------------------------------------------------------------------
 
+class TestInspiration(unittest.IsolatedAsyncioTestCase):
+    async def test_scopes_history_deduplicates_and_enriches_without_llm(self):
+        service = _make_service()
+        service._get_history = AsyncMock(return_value=[
+            {'title': 'Arrival', 'year': 2016, 'type': 'movie'},
+            {'title': 'arrival', 'year': 2016, 'type': 'movie'},
+            {'title': 'Severance', 'year': 2022, 'type': 'tv'},
+        ])
+        service._resolve_suggested_title = AsyncMock(return_value={'poster_path': 'poster.jpg'})
+        client = MagicMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        service._make_tmdb_client = MagicMock(return_value=client)
+        with patch('api_service.services.ai_search.ai_search_service.interpret_search_query', new_callable=AsyncMock) as llm:
+            items = await service.inspiration({'provider': 'jellyfin', 'external_user_id': 'my-id'}, [
+                {'title': 'Saved', 'media_type': 'movie'},
+            ])
+        service._get_history.assert_awaited_once_with(['my-id'])
+        self.assertEqual([item['title'] for item in items], ['Arrival', 'Severance', 'Saved'])
+        self.assertTrue(all(item['poster_path'] == 'poster.jpg' for item in items))
+        llm.assert_not_awaited()
+
+    async def test_saved_titles_survive_history_and_poster_failures(self):
+        service = _make_service()
+        service._get_history = AsyncMock(side_effect=TimeoutError)
+        service._make_tmdb_client = MagicMock(side_effect=RuntimeError)
+        saved = [{'title': f'Title {i}', 'media_type': 'movie'} for i in range(10)]
+        items = await service.inspiration({'provider': 'jellyfin', 'external_user_id': 'my-id'}, saved)
+        self.assertEqual(len(items), 6)
+        self.assertTrue(all(item['poster_path'] is None for item in items))
+
+    async def test_missing_or_mismatched_profile_does_not_load_history(self):
+        service = _make_service()
+        service._get_history = AsyncMock()
+        for profile in [{}, {'provider': 'plex', 'external_user_id': 'someone'}]:
+            self.assertEqual(await service.inspiration(profile, []), [])
+        service._get_history.assert_not_awaited()
+
+
 class TestIsWatched(unittest.TestCase):
 
     def test_returns_true_on_exact_match(self):

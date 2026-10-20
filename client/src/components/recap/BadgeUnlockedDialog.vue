@@ -21,8 +21,8 @@
         </span>
       </div>
 
-      <p class="m-0 mt-6 text-sm font-semibold text-ink-3">Congratulations!</p>
-      <h3 class="m-0 mt-1 text-3xl font-extrabold leading-tight tracking-tight text-ink sm:text-4xl">{{ badge.label }}</h3>
+      <p v-if="celebrate" class="m-0 mt-6 text-sm font-semibold text-ink-3">Congratulations!</p>
+      <h3 class="m-0 text-3xl font-extrabold leading-tight tracking-tight text-ink sm:text-4xl">{{ badge.label }}</h3>
       <p class="m-0 mt-2 text-sm text-ink-2">{{ badge.description }}</p>
       <p v-if="badge.unlocked_at" class="m-0 mt-1 text-xs text-ink-4">{{ unlockedOn }}</p>
 
@@ -48,7 +48,7 @@
       </div>
     </div>
 
-    <div class="border-t border-edge px-6 py-3 text-center">
+    <div v-if="celebrate" class="border-t border-edge px-6 py-3 text-center">
       <button type="button" class="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border-0 bg-transparent px-3 text-xs font-medium text-ink-3 hover:bg-raised hover:text-brand-ink" @click="$emit('show-badges')"><i aria-hidden="true" class="fas fa-th-large"></i>See all your badges</button>
     </div>
   </AppDialog>
@@ -68,7 +68,8 @@ let nextId = 0;
 export default {
   name: 'BadgeUnlockedDialog',
   components: { AppDialog, RecapShareActions },
-  props: { badges: { type: Array, required: true } },
+  // `celebrate` is off when an earned badge is reopened from the collection: no confetti or gallery link.
+  props: { badges: { type: Array, required: true }, celebrate: { type: Boolean, default: true } },
   emits: ['close', 'support', 'show-badges'],
   data: () => ({ selected: 0, sharing: false, rendering: true, blob: null, previewUrl: '', error: '', active: true,
     stopConfetti: null, generation: 0, titleId: `badge-unlocked-${++nextId}` }),
@@ -81,7 +82,7 @@ export default {
   mounted() {
     this.render();
     // Wait for the dialog to be laid out so the overlay has its viewport size.
-    requestAnimationFrame(() => this.celebrate());
+    if (this.celebrate) requestAnimationFrame(() => this.burst());
   },
   beforeUnmount() {
     this.active = false;
@@ -89,7 +90,7 @@ export default {
     if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
   },
   methods: {
-    celebrate() {
+    burst() {
       if (!this.active) return;
       this.stopConfetti?.();
       this.stopConfetti = launchConfetti(this.$refs.confetti);
@@ -97,7 +98,7 @@ export default {
     select(index) {
       this.selected = index;
       this.render();
-      this.celebrate();
+      this.burst();
     },
     async render() {
       const generation = ++this.generation;

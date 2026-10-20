@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { badgeHint, badgeMedallion, latestBadge, markBadgesSeen, newlyUnlocked } from './recapBadges.js';
+import { badgeHint, badgeMedallion, latestBadge, markBadgesSeen, newlyUnlocked, showHitRate, upNext } from './recapBadges.js';
 
 const store = new Map();
 globalThis.window = { localStorage: {
@@ -37,4 +37,13 @@ test('celebrations start silently and then report only new unlocks', () => {
   assert.deepEqual(newlyUnlocked(recap, 8), [], 'another user on the same browser has their own history');
   markBadgesSeen(recap, 7);
   assert.deepEqual(newlyUnlocked(recap, 7), []);
+});
+
+test('up next ranks locked badges by share of progress; hit rate needs a meaningful share', () => {
+  const badges = [badge('titles_1000', 'titles', 1000, { progress: 597 }), badge('watched_10', 'watched', 10, { progress: 9 }),
+    badge('genres_5', 'variety', 5), badge('titles_10', 'titles', 10, { progress: 10, unlocked: true }), badge('streak_3', 'streak', 3, { progress: 1 })];
+  assert.deepEqual(upNext(badges).map(item => item.id), ['watched_10', 'titles_1000', 'streak_3']);
+  assert.equal(showHitRate({ hit_rate: 0, watched: 2 }), false);
+  assert.equal(showHitRate({ hit_rate: 40, watched: 2 }), false);
+  assert.equal(showHitRate({ hit_rate: 12, watched: 30 }), true);
 });

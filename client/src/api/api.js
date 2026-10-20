@@ -144,6 +144,8 @@ export const aiSearchStatus = () => {
     return axios.get('/api/ai-search/status');
 };
 
+export const aiSearchInspiration = () => axios.get('/api/ai-search/inspiration');
+
 // Trakt OAuth device flow (admin, media-user scoped). App credentials are admin
 // settings; account tokens are stored per media-server user (provider + id).
 export const listTraktMediaUsers = () => axios.get('/api/trakt/media-users');

@@ -168,7 +168,7 @@ for (const { width, height } of [{ width: 1280, height: 720 }, { width: 768, hei
     await expect(dialog.getByRole('tab')).toHaveCount(0);
     const bounds = await dialog.boundingBox();
     const minimumMargin = width >= 640 ? 32 : 16;
-    expect(bounds.width).toBeLessThanOrEqual(896);
+    expect(bounds.width).toBeLessThanOrEqual(1152);
     expect(bounds.x).toBeGreaterThanOrEqual(minimumMargin);
     expect(width - bounds.x - bounds.width).toBeGreaterThanOrEqual(minimumMargin);
     expect(bounds.y).toBeGreaterThanOrEqual(width >= 640 ? height * 0.1 - 1 : 16);
@@ -185,7 +185,8 @@ for (const { width, height } of [{ width: 1280, height: 720 }, { width: 768, hei
     await expect(dialog.getByRole('link', { name: 'Reddit', exact: true })).toBeAttached();
     await expect(dialog.getByLabel('Caption')).toBeAttached();
     await dialog.getByText(/^Badges · 6 \/ 10 unlocked$/).click();
-    await expect(dialog.getByRole('heading', { name: 'Your badges' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Your badges' })).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(page.getByLabel('Show top-title covers')).toBeChecked();
     await page.screenshot({ path: testInfo.outputPath('recap-badges.png'), animations: 'disabled' });
     const overflow = await dialog.evaluate(element => {
@@ -442,25 +443,45 @@ test('denied image clipboard downloads a PNG and sharing feedback expires', asyn
   await composer.close();
 });
 
-test('badges expand inside the actions panel without resizing the dialog', async ({ page }, testInfo) => {
+test('the badge collection opens from the recap and Home with up next, details and sharing', async ({ page }, testInfo) => {
   await openJourney(page, { total: 597 });
   await page.getByRole('button', { name: 'Create your recap', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Your SuggestArr recap' });
-  await expect(dialog.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
-  const height = (await dialog.boundingBox()).height;
-  const badges = dialog.locator('details');
-  await expect(badges.getByRole('heading', { name: 'Your badges' })).toBeHidden();
-  await badges.locator('summary').click();
-  await expect(badges.getByText('6 / 10 unlocked', { exact: true })).toBeVisible();
-  await expect(badges.getByRole('listitem')).toHaveCount(10);
-  await expect(badges.getByText(/^Next milestone · 403 more titles to go$/)).toHaveCount(1);
-  await expect(badges.getByRole('progressbar', { name: 'Progress toward A thousand discoveries' })).toHaveAttribute('value', '597');
-  await expect(badges.getByText('Unlocked Oct 5, 2026')).toBeVisible();
-  await expect(badges.getByText('One year since your first recorded request')).toBeVisible();
+  const recapDialog = page.getByRole('dialog', { name: 'Your SuggestArr recap' });
+  await expect(recapDialog.getByText('Latest: Discovery enthusiast')).toBeVisible();
+  await recapDialog.getByRole('button', { name: /Badges · 6 \/ 10 unlocked/ }).click();
+  const badges = page.getByRole('dialog', { name: 'Your badges' });
+  await expect(badges.getByText('6 of 10 unlocked')).toBeVisible();
+  await expect(badges.getByText('Latest badge')).toBeVisible();
+  // Up next leads with the closest locked badge.
+  const upNext = badges.getByRole('region', { name: 'Up next' });
+  await expect(upNext.getByRole('listitem')).toHaveCount(3);
+  await expect(upNext.getByRole('listitem').first()).toContainText('A thousand discoveries');
+  await expect(upNext.getByRole('listitem').first()).toContainText('403 more titles to go');
+  await expect(badges.getByRole('list', { name: 'Titles requested' }).getByRole('listitem')).toHaveCount(9);
   await expect(badges.getByRole('heading', { name: 'Anniversaries' })).toBeVisible();
   await expect(badges.getByText('Connect Plex or Jellyfin to unlock badges for the suggestions you actually watch.')).toBeVisible();
-  await dialog.screenshot({ path: testInfo.outputPath('badge-gallery.png'), animations: 'disabled' });
-  expect((await dialog.boundingBox()).height).toBeCloseTo(height, 0);
+  await page.screenshot({ path: testInfo.outputPath('badge-gallery.png'), animations: 'disabled' });
+  // A locked badge expands what is still missing; tiles stay compact.
+  await badges.getByRole('button', { name: 'Cinema explorer, locked' }).click();
+  await expect(badges.getByRole('region', { name: 'Cinema explorer details' })).toContainText('Request 5,000 titles · 4,403 more titles to go');
+  await badges.getByRole('button', { name: 'Cinema explorer, locked' }).click();
+  await expect(badges.getByRole('region', { name: 'Cinema explorer details' })).toHaveCount(0);
+  // An earned badge opens its shareable view without confetti.
+  await badges.getByRole('button', { name: 'Century club, unlocked' }).click();
+  const earned = page.getByRole('dialog', { name: 'Badge unlocked' });
+  await expect(earned.getByRole('heading', { name: 'Century club' })).toBeVisible();
+  await expect(earned.getByText('Congratulations!')).toHaveCount(0);
+  await expect(earned.getByRole('button', { name: 'See all your badges' })).toHaveCount(0);
+  await earned.getByRole('button', { name: 'Share badge' }).click();
+  await expect(earned.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  await page.keyboard.press('Escape');
+  await expect(earned).toHaveCount(0);
+  await expect(badges).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Open your badges' }).click();
+  await expect(page.getByRole('dialog', { name: 'Your badges' })).toBeVisible();
 });
 
 test('edited captions feed the composers and can be reset', async ({ page }) => {

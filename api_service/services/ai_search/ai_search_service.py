@@ -50,6 +50,52 @@ class AiSearchService:
     # Public API
     # ------------------------------------------------------------------
 
+    async def inspiration(self, profile: Dict, saved_history: List[Dict]) -> List[Dict]:
+        """Build a small poster shelf from an explicitly linked media profile.
+
+        Never fall back to all server users. Loading this shelf neither calls
+        the LLM nor records titles as recommendations already shown.
+        """
+        external_id = profile.get("external_user_id")
+        if not external_id or profile.get("provider") != str(self.config.get("SELECTED_SERVICE") or "").lower():
+            return []
+        try:
+            history = await asyncio.wait_for(self._get_history([external_id]), timeout=8)
+        except Exception:
+            logger.warning("Could not load AI Search inspiration history")
+            history = []
+
+        items, seen = [], set()
+        for item in history + saved_history:
+            title = str(item.get("title") or "").strip()
+            media_type = item.get("media_type") or item.get("type")
+            key = (title.casefold(), media_type)
+            if not title or media_type not in {"movie", "tv"} or key in seen:
+                continue
+            seen.add(key)
+            items.append({"title": title, "year": item.get("year"), "media_type": media_type, "poster_path": None})
+            if len(items) == 6:
+                break
+        if not items or not self.config.get("TMDB_API_KEY"):
+            return items
+
+        async def enrich(item, client):
+            try:
+                match = await asyncio.wait_for(
+                    self._resolve_suggested_title(item, item["media_type"], client), timeout=5,
+                )
+                if match:
+                    item["poster_path"] = match.get("poster_path")
+            except Exception:
+                logger.warning("Could not load an AI Search inspiration poster")
+
+        try:
+            async with self._make_tmdb_client() as client:
+                await asyncio.gather(*(enrich(item, client) for item in items))
+        except Exception:
+            logger.warning("Could not initialise AI Search inspiration posters")
+        return items
+
     async def search(
         self,
         query: str,
