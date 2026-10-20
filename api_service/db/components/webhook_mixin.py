@@ -3,6 +3,8 @@ import json
 import uuid
 from urllib.parse import urlparse
 
+from api_service.services.notification_formats import describe_event, render_notification
+
 
 class WebhookMixin:
     _WEBHOOK_SERVICE = "outbound_webhooks"
@@ -30,6 +32,7 @@ class WebhookMixin:
             "name": data["name"].strip(), "url": data["url"].strip(), "secret": data["secret"],
             "events": sorted(set(data["events"])), "enabled": bool(data.get("enabled", True)),
             "allow_private": bool(data.get("allow_private", False)),
+            "format": data.get("format") or "json",
         }
         config = self.get_integration(self._WEBHOOK_SERVICE) or {"items": []}
         config["items"] = [*config.get("items", []), item]
@@ -54,18 +57,43 @@ class WebhookMixin:
             VALUES (?, ?, ?, ?, ?, ?, ?)"""
         if self.db_type in ("mysql", "mariadb", "postgres"):
             query = query.replace("?", "%s")
+        targets = [hook for hook in hooks if hook.get("enabled", True) and event in hook.get("events", [])]
+        # Chat notifications need readable names; looked up once, and only when one is due.
+        text = None
+        if any(hook.get("format", "json") != "json" for hook in targets):
+            text = describe_event(event, payload, *self._webhook_event_names(payload))
         inserted = 0
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            for hook in hooks:
-                if hook.get("enabled", True) and event in hook.get("events", []):
-                    cursor.execute(query, (event_id, hook["id"], event, hook["url"], hook["secret"],
-                                           int(bool(hook.get("allow_private", False))), json.dumps({
-                                               "version": 1, "event": event, "data": payload,
-                                           })))
-                    inserted += 1
+            for hook in targets:
+                fmt = hook.get("format", "json")
+                if fmt == "json":
+                    url, body = hook["url"], json.dumps({"version": 1, "event": event, "data": payload})
+                else:
+                    url, body = render_notification(fmt, hook["url"], text)
+                cursor.execute(query, (event_id, hook["id"], event, url, hook["secret"],
+                                       int(bool(hook.get("allow_private", False))), body))
+                inserted += 1
             conn.commit()
         return inserted
+
+    def _webhook_event_names(self, payload):
+        """Title and job name an event refers to, or None where unknown.
+
+        :param payload: Webhook event data (``tmdb_id``/``media_type`` and/or ``job_id``).
+        :return: Tuple ``(title, job_name)``.
+        """
+        title = job_name = None
+        if payload.get("tmdb_id") and payload.get("media_type"):
+            title = (self.get_metadata(str(payload["tmdb_id"]), payload["media_type"]) or {}).get("title")
+        if payload.get("job_id") is not None:
+            ph = "%s" if self.db_type in ("mysql", "mariadb", "postgres") else "?"
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"SELECT name FROM discover_jobs WHERE id={ph}", (payload["job_id"],))
+                row = cursor.fetchone()
+                job_name = row[0] if row else None
+        return title, job_name
 
     def list_webhook_deliveries(self, max_items=100):
         ph = "%s" if self.db_type in ("mysql", "mariadb", "postgres") else "?"

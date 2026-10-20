@@ -68,6 +68,16 @@
     </div>
 
     <div v-else class="flex flex-col gap-3">
+      <!-- Which kind of job sends titles people actually watch. -->
+      <section v-if="sourceHitRates.length" aria-labelledby="hit-rate-title" class="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-card border border-edge bg-panel px-5 py-4">
+        <h2 id="hit-rate-title" class="m-0 text-sm font-bold text-ink">Watched after request</h2>
+        <dl class="m-0 flex flex-wrap gap-x-6 gap-y-2">
+          <div v-for="source in sourceHitRates" :key="source.label" class="flex items-baseline gap-2" :title="`${source.watched} of ${source.requested} requested titles watched`">
+            <dt class="text-[13px] text-ink-3">{{ source.label }}</dt>
+            <dd class="m-0 text-sm font-bold text-ink">{{ source.rate }}%</dd>
+          </div>
+        </dl>
+      </section>
       <article
         v-for="(job, index) in jobs"
         :key="job.id"
@@ -111,6 +121,15 @@
             <span class="truncate text-xs text-ink-4">{{ timeFromNow(lastRunByJob[job.id].started_at) }} · {{ lastRunByJob[job.id].status === 'failed' ? (lastRunByJob[job.id].error_message || 'see logs') : `${lastRunByJob[job.id].results_count} found` }}</span>
           </template>
           <span v-else class="text-sm text-ink-3">Never</span>
+        </div>
+
+        <div v-if="job.stats" class="flex flex-[1_1_110px] flex-col gap-0.5">
+          <span class="text-xs font-semibold text-ink-4">Watched</span>
+          <template v-if="hitRate(job.stats) !== null">
+            <span class="text-sm font-semibold text-ink">{{ hitRate(job.stats) }}%</span>
+            <span class="text-xs text-ink-4">{{ job.stats.watched }} of {{ job.stats.requested }} requested</span>
+          </template>
+          <span v-else class="text-sm text-ink-3">Nothing sent yet</span>
         </div>
 
         <div class="ml-auto flex flex-wrap items-center gap-2" :data-tour-id="index === 0 ? 'jobs-first-card-actions' : null">
@@ -224,6 +243,7 @@ import DryRunResultModal from './jobs/DryRunResultModal.vue';
 import OnboardingTour from '@/components/OnboardingTour.vue';
 import AppDialog from '@/components/ui/AppDialog.vue';
 import { timeFromNow } from '@/utils/dateUtils.js';
+import { hitRate, hitRatesBySource } from '@/utils/jobHitRates.js';
 import { getJobTypeIcon as resolveJobTypeIcon, getJobTypeLabel as resolveJobTypeLabel, formatJobSchedule } from '@/utils/jobTypeVisuals.js';
 
 const JOBS_TOUR_KEY = 'suggestarr_jobs_tour_done';
@@ -357,6 +377,9 @@ export default {
     };
   },
   computed: {
+    sourceHitRates() {
+      return hitRatesBySource(this.jobs);
+    },
     // Most recent execution of each job; history arrives newest first.
     lastRunByJob() {
       const latest = {};
@@ -693,6 +716,7 @@ export default {
     },
 
     formatSchedule: formatJobSchedule,
+    hitRate,
 
     formatDate(dateStr) {
       if (!dateStr) return 'N/A';

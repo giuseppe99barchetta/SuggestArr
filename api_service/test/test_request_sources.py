@@ -260,3 +260,29 @@ def test_pending_requests_carry_their_rationale(tmp_path):
 
     DatabaseManager._instance = None
     assert {item["tmdb_id"]: item["rationale"] for item in items} == {"101": "Same director.", "102": None}
+
+
+def test_job_watch_stats_count_delivered_and_watched_titles_per_job(tmp_path):
+    from datetime import datetime, timezone
+    from api_service.db.recap_repository import RecapRepository
+    db_file = str(tmp_path / "requests.db")
+    with (
+        patch.object(dm_mod, "DB_PATH", db_file),
+        patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}),
+    ):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        for tmdb_id, job_id, status in (("101", 1, "submitted"), ("102", 1, "submitted"),
+                                        ("103", 1, "awaiting_approval"), ("201", 2, "submitted")):
+            db.enqueue_request(tmdb_id, "movie", None, {}, status=status, job_id=job_id)
+            if status == "submitted":
+                db.save_request("movie", tmdb_id, DISCOVER_SOURCE)
+        with db.get_connection() as conn:
+            conn.execute("UPDATE pending_requests SET status='submitted' WHERE tmdb_id IN ('101','102','201')")
+            conn.commit()
+        RecapRepository(db).mark_watched([(datetime(2030, 1, 2, tzinfo=timezone.utc), "movie", "101")])
+
+        stats = db.get_job_watch_stats()
+
+    DatabaseManager._instance = None
+    assert stats == {1: {"requested": 2, "watched": 1}, 2: {"requested": 1, "watched": 0}}

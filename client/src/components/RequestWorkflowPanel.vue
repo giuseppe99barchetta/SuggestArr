@@ -18,6 +18,7 @@
       <span v-if="!selected.length" class="text-[13px] text-ink-4">Click cards to select them</span>
     </div>
 
+    <p v-if="!bulkMode && items.some(item => item.status === 'awaiting_approval')" class="m-0 text-xs text-ink-4"><span class="max-sm:hidden">Focus a card and press A to approve, R to reject, S if already seen.</span><span class="sm:hidden">Swipe right to approve, left to reject.</span></p>
     <MediaGridSkeleton v-if="loading && !items.length" :count="6" label="Loading requests…" />
     <div v-else-if="!items.length && showEmpty" class="py-10 text-center text-sm text-ink-3">No requests in this state.</div>
     <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
@@ -30,6 +31,9 @@
         :tone="statusTone(item.status)"
         :selected="selected.includes(item.id)"
         @open="openItem(item)"
+        @keydown="quickDecide(keyDecision($event), item, $event)"
+        @touchstart.passive="swipeStart = touchPoint($event)"
+        @touchend="quickDecide(swipeDecision(swipeStart, touchPoint($event)), item)"
       >
         <template v-if="bulkMode" #overlay>
           <label class="absolute right-2.5 top-2.5 z-10 flex h-7 w-7 items-center justify-center rounded-md bg-canvas/80" @click.stop>
@@ -96,11 +100,12 @@ import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
 import { approvalNeedsDialog, loadSeerServers, mediaTypesOf } from '@/utils/requestProfiles.js';
 import { SEEN_OPTIONS, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
 import { notifyRequestsChanged } from '@/utils/requestEvents.js';
+import { keyDecision, swipeDecision, touchPoint } from '@/utils/quickDecision.js';
 export default {
   name: 'RequestWorkflowPanel', components: { AppDialog, MediaCard, MediaGridSkeleton, ApprovalProfileChoice },
   emits: ['open', 'update:total'],
   props: { statusFilter: { type: String, default: 'all' }, searchQuery: { type: String, default: '' }, mediaType: { type: String, default: 'all' }, requestedFor: { type: String, default: 'all' }, showHeader: { type: Boolean, default: true }, showEmpty: { type: Boolean, default: true }, bulkMode: { type: Boolean, default: false } },
-  data() { return { items: [], selected: [], actionLoading: false, seenMenuId: null, seenOptions: SEEN_OPTIONS, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,
+  data() { return { items: [], selected: [], actionLoading: false, swipeStart: null, seenMenuId: null, seenOptions: SEEN_OPTIONS, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,
     statuses: [{ value: 'awaiting_approval', label: 'Awaiting approval' }, { value: 'queued', label: 'Queued' }, { value: 'submitted', label: 'Submitted' }, { value: 'rejected', label: 'Rejected' }, { value: 'failed', label: 'Failed' }, { value: 'blacklisted', label: 'Blacklisted' }] }; },
   computed: {
     selectedItems() { return this.items.filter(item => this.selected.includes(item.id)); },
@@ -180,6 +185,17 @@ export default {
       } finally { this.actionLoading = false; }
     },
     confirmAction(action) { const labels = { approve: ['Send to Seer', `Send ${this.selected.length} selected items using the identity and profiles shown on each card?`, 'fas fa-paper-plane', 'Send'], reject: ['Reject requests', `${this.selected.length} selected items will be removed from the approval queue.`, 'fas fa-archive', 'Reject requests'], blacklist: ['Blacklist requests', `Permanently prevent ${this.selected.length} items from being suggested again?`, 'fas fa-ban', 'Blacklist'], retry: ['Retry failed requests', `Queue ${this.selected.length} failed items for another delivery attempt?`, 'fas fa-redo', 'Retry'], 'request-again': ['Request again', `Remove any blacklist and send ${this.selected.length} selected items to Seer?`, 'fas fa-paper-plane', 'Request again'] }; this.confirmation = { action, ids: [...this.selected], items: [...this.selectedItems], removeBlacklist: action === 'request-again' && this.selectedItems.some(item => item.status === 'blacklisted'), title: labels[action][0], message: labels[action][1], icon: labels[action][2], confirmLabel: labels[action][3] }; },
+    keyDecision,
+    swipeDecision,
+    touchPoint,
+    // A/R/S keys and swipes press the card's own buttons, so approving and rejecting keep their confirmations.
+    quickDecide(decision, item, event) {
+      if (!decision || this.bulkMode || this.actionLoading || item.status !== 'awaiting_approval') return;
+      event?.preventDefault();
+      if (decision === 'approve') this.decideOne('approve', item.id);
+      else if (decision === 'reject') this.confirmSingle('reject', item.id);
+      else this.seenMenuId = item.id;
+    },
     confirmSingle(action, id) {
       const item = this.items.find(request => request.id === id);
       this.confirmation = action === 'approve'

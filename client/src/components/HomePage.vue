@@ -18,7 +18,12 @@
     <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       <div v-for="tile in statTiles" :key="tile.label" class="flex flex-col gap-1.5 rounded-card border border-edge bg-panel px-4 py-4 sm:px-5 sm:py-[18px]">
         <span class="text-[13px] font-medium text-ink-3">{{ tile.label }}</span>
-        <span class="text-[28px] font-extrabold tracking-tight text-ink">{{ tile.value }}</span>
+        <span class="flex items-baseline gap-2">
+          <span class="text-[28px] font-extrabold tracking-tight text-ink">{{ tile.value }}</span>
+          <span v-if="tile.trend" class="text-xs font-bold" :class="tile.trend.delta > 0 ? 'text-good' : tile.trend.delta < 0 ? 'text-ink-3' : 'text-ink-4'" :title="tile.trend.title">
+            <i aria-hidden="true" :class="tile.trend.delta > 0 ? 'fas fa-arrow-up' : tile.trend.delta < 0 ? 'fas fa-arrow-down' : 'fas fa-equals'" class="mr-0.5 text-[10px]"></i>{{ Math.abs(tile.trend.delta) || '' }}<span class="sr-only">{{ tile.trend.title }}</span>
+          </span>
+        </span>
         <span class="text-xs text-ink-4">{{ tile.hint }}</span>
       </div>
     </div>
@@ -27,7 +32,10 @@
 
     <section v-if="pendingRequests.length" class="flex flex-col gap-4">
       <div class="flex items-baseline justify-between gap-3">
-        <h2 class="m-0 text-[19px] font-bold text-ink">Waiting for your approval</h2>
+        <div class="flex flex-col gap-0.5">
+          <h2 class="m-0 text-[19px] font-bold text-ink">Waiting for your approval</h2>
+          <p class="m-0 text-xs text-ink-4"><span class="max-sm:hidden">Focus a card and press A to approve, R to reject, S if already seen.</span><span class="sm:hidden">Swipe right to approve, left to reject.</span></p>
+        </div>
         <router-link :to="tabLink('requests')" class="text-sm font-semibold no-underline">See all {{ pendingTotal }} →</router-link>
       </div>
       <div class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
@@ -38,6 +46,9 @@
           :poster="request.poster_path || ''"
           :badge="request.media_type === 'movie' ? 'Movie' : 'TV'"
           @open="openDetails(request)"
+          @keydown="quickDecide(keyDecision($event), request, $event)"
+          @touchstart.passive="swipeStart = touchPoint($event)"
+          @touchend="quickDecide(swipeDecision(swipeStart, touchPoint($event)), request)"
         >
           <template #actions>
             <template v-if="confirmRejectId === request.id">
@@ -147,6 +158,7 @@ import { SEEN_OPTIONS, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
 import { approvalEnabled } from '@/utils/requestApproval.js';
 import JourneyPanel from '@/components/recap/JourneyPanel.vue';
 import { notifyRequestsChanged } from '@/utils/requestEvents.js';
+import { keyDecision, swipeDecision, touchPoint } from '@/utils/quickDecision.js';
 
 /**
  * Dashboard home: request stats, the approval queue, recent requests and job activity.
@@ -171,6 +183,7 @@ export default {
       seenMenuId: null,
       seenOptions: SEEN_OPTIONS,
       approveItem: null,
+      swipeStart: null,
       servers: null,
       actionLoadingId: null,
       approvalEnabled: false,
@@ -196,10 +209,17 @@ export default {
       return parts.join(' ');
     },
     statTiles() {
+      // Compared with the previous day/week/month up to the same point in time.
+      const trend = (key, period) => {
+        const previous = this.stats.previous?.[key];
+        if (previous === undefined) return null;
+        const delta = (this.stats[key] || 0) - previous;
+        return { delta, title: `${delta > 0 ? '+' : ''}${delta} vs the same time ${period} (${previous})` };
+      };
       const tiles = [
-        { label: 'Requested today', value: this.stats.today || 0, hint: 'Sent to Seer since midnight' },
-        { label: 'This week', value: this.stats.this_week || 0, hint: 'Requests in the last 7 days' },
-        { label: 'This month', value: this.stats.this_month || 0, hint: 'Requests this month' },
+        { label: 'Requested today', value: this.stats.today || 0, hint: 'Sent to Seer since midnight', trend: trend('today', 'yesterday') },
+        { label: 'This week', value: this.stats.this_week || 0, hint: 'Requests since Monday', trend: trend('this_week', 'last week') },
+        { label: 'This month', value: this.stats.this_month || 0, hint: 'Requests this month', trend: trend('this_month', 'last month') },
         { label: 'All time', value: this.stats.total || 0, hint: 'Every request SuggestArr made' },
       ];
       if (this.approvalEnabled) {
@@ -320,6 +340,19 @@ export default {
 
     // The same choice as on the Requests page: approving asks first, unless
     // the server list has loaded and is empty.
+    keyDecision,
+    swipeDecision,
+    touchPoint,
+
+    // A/R/S keys and swipes press the card's own buttons: reject and "seen" still ask first.
+    quickDecide(decision, request, event) {
+      if (!decision || this.actionLoadingId === request.id) return;
+      event?.preventDefault();
+      if (decision === 'approve') this.requestApprove(request);
+      else if (decision === 'reject') this.confirmRejectId = request.id;
+      else this.seenMenuId = request.id;
+    },
+
     requestApprove(request) {
       if (approvalNeedsDialog(this.servers)) { this.approveItem = request; return; }
       this.decidePending('approve', request.id);

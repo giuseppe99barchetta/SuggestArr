@@ -3,6 +3,53 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
+
+def _naive_utc(value) -> Optional[datetime]:
+    """Read a stored ``requested_at`` (datetime or SQLite text) as naive UTC."""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.strip()[:19])
+        except ValueError:
+            return None
+    if not isinstance(value, datetime):
+        return None
+    return value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
+
+
+def period_starts(now: datetime) -> Dict[str, tuple]:
+    """Start of the current and the previous day, week (Monday) and month.
+
+    :param now: Current naive UTC time.
+    :return: Dict of stat key to ``(current_start, previous_start)``.
+    """
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week = today - timedelta(days=today.weekday())
+    month = today.replace(day=1)
+    previous_month = (month - timedelta(days=1)).replace(day=1)
+    return {
+        'today': (today, today - timedelta(days=1)),
+        'this_week': (week, week - timedelta(days=7)),
+        'this_month': (month, previous_month),
+    }
+
+
+def previous_period_counts(timestamps, now: datetime) -> Dict[str, int]:
+    """Count requests in the previous day, week and month up to the same point in time.
+
+    Comparing a half-finished week with a whole previous week would always look like a
+    drop, so each previous period is cut at the same elapsed time as the current one.
+
+    :param timestamps: Iterable of naive UTC request times.
+    :param now: Current naive UTC time.
+    :return: Dict with 'today', 'this_week' and 'this_month' counts for the previous period.
+    """
+    counts = {}
+    for key, (start, previous_start) in period_starts(now).items():
+        end = min(previous_start + (now - start), start)
+        counts[key] = sum(1 for moment in timestamps if previous_start <= moment < end)
+    return counts
+
+
 class AiSearchMixin:
     def set_ai_feedback(self, tmdb_id: str, media_type: str, feedback: str,
                         title: str = None, year: int = None, rationale: str = None) -> None:
@@ -327,12 +374,24 @@ class AiSearchMixin:
             month_result = cursor.fetchone()
             this_month = month_result[0] if month_result else 0
 
+            # Trend baseline, computed here so one query serves every database engine.
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            since = min(previous for _, previous in period_starts(now).values())
+            ph = '%s' if self.db_type in ['mysql', 'mariadb', 'postgres'] else '?'
+            cursor.execute(
+                f"SELECT requested_at FROM requests WHERE requested_by = 'SuggestArr' AND requested_at >= {ph}",
+                (since.strftime('%Y-%m-%d %H:%M:%S'),),
+            )
+            moments = [moment for moment in (_naive_utc(row[0]) for row in cursor.fetchall()) if moment]
+            previous = previous_period_counts(moments, now)
+
             return {
                 "total": total,
                 "approved": 0,  # Not handled on your side
                 "pending": 0,   # Not handled on your side
                 "today": today,
                 "this_week": this_week,
-                "this_month": this_month
+                "this_month": this_month,
+                "previous": previous,
             }
     

@@ -16,6 +16,7 @@ from api_service.jobs.list_import_automation import ListImportAutomation, execut
 from api_service.services.public_lists import PublicListError, build_list_client
 from api_service.services.config_service import ConfigService
 from api_service.db.list_import_repository import ListImportRepository, public_import_state
+from api_service.db.recap_repository import watch_provider
 from api_service.jobs.one_time_list_import import start_import
 from api_service.jobs.discover_automation import DiscoverAutomation, execute_discover_job
 from api_service.jobs.recommendation_automation import RecommendationAutomation, execute_recommendation_job
@@ -228,6 +229,13 @@ def get_jobs():
             job['next_run'] = scheduled.get(scheduler_id)
 
         env_vars = load_env_vars()
+        # Hit rate needs a media server that reports plays; without one "watched" is unknown.
+        watch_tracking = watch_provider(env_vars) is not None
+        from api_service.db.database_manager import DatabaseManager
+        watch_stats = DatabaseManager().get_job_watch_stats() if watch_tracking else {}
+        for job in jobs:
+            job['stats'] = watch_stats.get(job['id'], {'requested': 0, 'watched': 0}) if watch_tracking else None
+
         return jsonify({
             'status': 'success',
             'jobs': jobs,

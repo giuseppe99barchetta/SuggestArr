@@ -254,6 +254,7 @@
               More <i aria-hidden="true" class="fas fa-chevron-down text-[10px]"></i>
             </button>
           </div>
+          <p class="m-0 basis-full text-xs text-ink-4">Your answers steer future recommendations for this profile.</p>
         </div>
         <div v-if="selectedSource.feedback?.feedback" class="flex flex-wrap items-center gap-x-3 gap-y-2">
           <p id="media-feedback-reason" class="m-0 text-xs font-semibold text-ink-4">Mostly because of <span class="font-normal">(optional)</span></p>

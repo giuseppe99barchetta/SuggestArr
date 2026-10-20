@@ -510,6 +510,27 @@ class RequestQueueMixin:
             conn.commit()
             return cursor.rowcount
 
+    def get_job_watch_stats(self):
+        """Count delivered titles per job and how many of them were watched afterwards.
+
+        A title counts as watched once the recap watch sync recorded a play at or
+        after its request (``recap_titles.watched_at``).
+
+        :return: Dict mapping job id to ``{'requested': int, 'watched': int}``.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT p.job_id, COUNT(*), "
+                "SUM(CASE WHEN rt.watched_at IS NOT NULL THEN 1 ELSE 0 END) "
+                "FROM pending_requests p "
+                "LEFT JOIN recap_titles rt ON rt.media_type = p.media_type AND rt.tmdb_id = p.tmdb_id "
+                "WHERE p.status = 'submitted' AND p.job_id IS NOT NULL "
+                "GROUP BY p.job_id"
+            )
+            return {int(row[0]): {'requested': int(row[1]), 'watched': int(row[2] or 0)}
+                    for row in cursor.fetchall()}
+
     def list_blacklist(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()

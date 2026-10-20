@@ -510,11 +510,16 @@ components:
             rating: {type: [number, 'null']}
     WebhookCreate:
       type: object
-      required: [name, url, secret, events]
+      required: [name, url, events]
       properties:
         name: {type: string, minLength: 1, maxLength: 100}
-        url: {type: string, format: uri, maxLength: 2048}
-        secret: {type: string, minLength: 16, writeOnly: true}
+        url: {type: string, format: uri, maxLength: 2048, description: 'For ntfy include the topic (https://ntfy.sh/my-topic); for Telegram the sendMessage URL with ?chat_id='}
+        secret: {type: string, minLength: 16, writeOnly: true, description: Required for the signed json format; generated when omitted for chat formats.}
+        format:
+          type: string
+          enum: [json, discord, ntfy, telegram]
+          default: json
+          description: json sends the signed SuggestArr payload; the others send a readable chat message.
         events:
           type: array
           minItems: 1

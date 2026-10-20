@@ -1,12 +1,12 @@
 <template>
   <div class="flex flex-col gap-5">
-    <PageHeader title="Webhooks" subtitle="Send signed events to Home Assistant, n8n or any automation when suggestions and requests change.">
+    <PageHeader title="Webhooks" subtitle="Get notified on Discord, Telegram or ntfy, or send signed events to Home Assistant, n8n or any automation.">
       <button type="button" class="ui-btn-primary" @click="openCreate"><i aria-hidden="true" class="fas fa-plus"></i>Add destination</button>
     </PageHeader>
 
     <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div class="flex min-w-0 flex-col gap-5">
-        <SectionCard icon="fas fa-satellite-dish" title="Destinations" description="Each destination receives a signed POST for the events it subscribes to.">
+        <SectionCard icon="fas fa-satellite-dish" title="Destinations" description="Each destination receives the events it subscribes to.">
           <template #actions>
             <button type="button" class="ui-btn h-9 px-3 text-[13px]" :disabled="loading" @click="load">
               <i aria-hidden="true" :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i>Refresh
@@ -17,7 +17,7 @@
             <li v-for="webhook in webhooks" :key="webhook.id" class="flex items-start gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
               <div class="flex min-w-0 flex-1 flex-col gap-2">
                 <div class="flex min-w-0 flex-col gap-0.5">
-                  <span class="text-sm font-bold text-ink">{{ webhook.name }}</span>
+                  <span class="flex items-center gap-2 text-sm font-bold text-ink">{{ webhook.name }}<span class="rounded-md bg-raised px-1.5 py-0.5 text-[11px] font-semibold text-ink-3">{{ formatLabel(webhook.format) }}</span></span>
                   <code class="break-all font-mono text-xs text-ink-3">{{ webhook.url }}</code>
                 </div>
                 <div class="flex flex-wrap gap-1.5">
@@ -112,13 +112,25 @@
       <form class="flex flex-col gap-5 p-6" @submit.prevent="create">
         <header>
           <h2 id="webhook-create-title" class="m-0 text-lg font-bold text-ink">Add destination</h2>
-          <p class="m-0 mt-1 text-[13px] text-ink-3">The receiver must accept JSON POST requests and answer 2xx quickly.</p>
+          <p class="m-0 mt-1 text-[13px] text-ink-3">Send a readable message to a chat app, or a signed JSON payload to your own automation.</p>
         </header>
 
+        <fieldset class="m-0 border-0 p-0">
+          <legend class="mb-2 p-0 text-[13px] font-semibold text-ink-2">Send to</legend>
+          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <label v-for="option in formats" :key="option.value" class="flex cursor-pointer items-center gap-2 rounded-ctl border px-3 py-2.5 text-sm font-semibold focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-ink" :class="form.format === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong text-ink-2 hover:border-ink-4'">
+              <input v-model="form.format" type="radio" name="webhook-format" :value="option.value" class="sr-only" />
+              <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
+            </label>
+          </div>
+        </fieldset>
+
         <div class="grid gap-4 sm:grid-cols-2">
-          <label class="ui-label">Name<input v-model.trim="form.name" class="ui-input" maxlength="100" placeholder="n8n" required /></label>
-          <label class="ui-label">Destination URL<input v-model.trim="form.url" type="url" class="ui-input" placeholder="https://hooks.example.com/suggestarr" required /></label>
-          <div class="ui-label sm:col-span-2">
+          <label class="ui-label">Name<input v-model.trim="form.name" class="ui-input" maxlength="100" :placeholder="selectedFormat.label" required /></label>
+          <label class="ui-label">{{ selectedFormat.urlLabel }}<input v-model.trim="form.url" type="url" class="ui-input" :placeholder="selectedFormat.placeholder" required />
+            <span class="text-xs font-normal text-ink-4">{{ selectedFormat.hint }}</span>
+          </label>
+          <div v-if="form.format === 'json'" class="ui-label sm:col-span-2">
             <label for="webhook-secret">Signing secret</label>
             <div class="flex gap-2">
               <input id="webhook-secret" v-model="form.secret" :type="showSecret ? 'text' : 'password'" class="ui-input font-mono" minlength="16" autocomplete="off" required />
@@ -188,7 +200,14 @@ const STATUS_TONES = {
   queued: 'bg-caution/15 text-caution',
 };
 
-const emptyForm = () => ({ name: '', url: '', secret: '', events: [], allow_private: false });
+const FORMATS = [
+  { value: 'discord', label: 'Discord', icon: 'fab fa-discord', urlLabel: 'Discord webhook URL', placeholder: 'https://discord.com/api/webhooks/…', hint: 'Channel settings → Integrations → Webhooks → Copy URL.' },
+  { value: 'telegram', label: 'Telegram', icon: 'fab fa-telegram-plane', urlLabel: 'Bot sendMessage URL', placeholder: 'https://api.telegram.org/bot<token>/sendMessage?chat_id=123', hint: 'Your bot token from @BotFather, plus the chat_id to post in.' },
+  { value: 'ntfy', label: 'ntfy', icon: 'fas fa-bell', urlLabel: 'Topic URL', placeholder: 'https://ntfy.sh/my-suggestarr', hint: 'The server and topic your phone subscribes to.' },
+  { value: 'json', label: 'Webhook', icon: 'fas fa-code', urlLabel: 'Destination URL', placeholder: 'https://hooks.example.com/suggestarr', hint: 'Receives a signed JSON POST; it must answer 2xx quickly.' },
+];
+
+const emptyForm = () => ({ format: 'discord', name: '', url: '', secret: '', events: [], allow_private: false });
 
 export default {
   name: 'SettingsWebhooks',
@@ -199,13 +218,17 @@ export default {
     return {
       loading: false, creating: false, savingAllowlist: false, showCreate: false, showSecret: false,
       webhooks: [], deliveries: [], allowedHostsText: '',
-      eventGroups: EVENT_GROUPS, guideSteps: GUIDE_STEPS,
+      eventGroups: EVENT_GROUPS, guideSteps: GUIDE_STEPS, formats: FORMATS,
       form: emptyForm(),
     };
   },
   computed: {
+    selectedFormat() {
+      return FORMATS.find(option => option.value === this.form.format) || FORMATS[3];
+    },
     canCreate() {
-      return Boolean(this.form.name && this.form.url && this.form.secret.length >= 16 && this.form.events.length);
+      const signed = this.form.format !== 'json' || this.form.secret.length >= 16;
+      return Boolean(this.form.name && this.form.url && signed && this.form.events.length);
     },
   },
   methods: {
@@ -221,6 +244,9 @@ export default {
     },
     webhookName(delivery) {
       return this.webhooks.find(hook => hook.id === delivery.webhook_id)?.name || 'Deleted destination';
+    },
+    formatLabel(format) {
+      return (FORMATS.find(option => option.value === (format || 'json')) || FORMATS[3]).label;
     },
     statusTone(status) {
       return STATUS_TONES[status] || 'bg-raised text-ink-3';
@@ -247,7 +273,8 @@ export default {
     async create() {
       this.creating = true;
       try {
-        await createWebhook(this.form);
+        // Chat services get a secret generated server-side; only signed JSON sends one.
+        await createWebhook(this.form.format === 'json' ? this.form : { ...this.form, secret: undefined });
         this.$refs.createDialog.close();
         this.$toast.success('Webhook added.');
         await this.load();

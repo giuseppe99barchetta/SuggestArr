@@ -1,5 +1,6 @@
 from copy import deepcopy
 from pathlib import Path
+import secrets
 import time
 
 import yaml
@@ -19,6 +20,7 @@ from api_service.utils.asyncio_loop import run_coroutine_sync
 from api_service.config.logger_manager import LoggerManager
 from api_service.observability.metrics import render_metrics
 from api_service.utils.ssrf_guard import validate_url
+from api_service.services.notification_formats import WEBHOOK_FORMATS, notification_target_error
 from api_service.utils import request_scope
 
 public_api_v1_bp = Blueprint('public_api_v1', __name__)
@@ -91,6 +93,12 @@ def webhooks():
 def create_webhook():
     data = request.get_json(silent=True) or {}
     name, url, secret, events = data.get('name'), data.get('url'), data.get('secret'), data.get('events')
+    fmt = data.get('format') or 'json'
+    if fmt not in WEBHOOK_FORMATS:
+        return jsonify({'error': {'code': 'validation_error', 'message': f"format must be one of {', '.join(WEBHOOK_FORMATS)}."}}), 400
+    if fmt != 'json' and not secret:
+        # Chat services do not check signatures; the stored secret only keeps the delivery row uniform.
+        secret = secrets.token_hex(16)
     if not isinstance(name, str) or not name.strip() or len(name) > 100:
         return jsonify({'error': {'code': 'validation_error', 'message': 'name must be 1 to 100 characters.'}}), 400
     if not isinstance(url, str) or len(url) > 2048 or not isinstance(secret, str) or len(secret) < 16:
@@ -101,12 +109,16 @@ def create_webhook():
         validate_url(url, allow_private=bool(data.get('allow_private', False)))
     except ValueError as exc:
         return jsonify({'error': {'code': 'validation_error', 'message': str(exc)}}), 400
+    target_error = notification_target_error(fmt, url) if fmt != 'json' else None
+    if target_error:
+        return jsonify({'error': {'code': 'validation_error', 'message': target_error}}), 400
     db = DatabaseManager()
     if not db.is_webhook_destination_allowed(url):
         return jsonify({'error': {'code': 'validation_error', 'message': 'Webhook destination is not in the allowlist.'}}), 400
     item = db.create_webhook({
         'name': name, 'url': url, 'secret': secret, 'events': events,
         'enabled': data.get('enabled', True), 'allow_private': data.get('allow_private', False),
+        'format': fmt,
     })
     return jsonify({'data': item}), 201
 
