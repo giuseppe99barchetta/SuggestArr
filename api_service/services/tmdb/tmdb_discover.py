@@ -209,16 +209,16 @@ class TMDbDiscover:
         for key in invalid_date_keys:
             query_params.pop(key, None)
         query_params['page'] = page
-        query_params['api_key'] = self.api_key
 
         self.logger.debug("Discover filters: %s", merged_filters)
         self.logger.debug("TMDb params: %s", query_params)
+        query_params['api_key'] = self.api_key
 
         # Build query string
         query_string = '&'.join(f"{k}={v}" for k, v in query_params.items())
         url = f"{self.tmdb_api_url}/discover/{media_type}?{query_string}"
 
-        self.logger.debug(f"Fetching URL: {url[:100]}...")
+        self.logger.debug("Fetching TMDb discover/%s page %s", media_type, page)
 
         try:
             session = await self._get_session()

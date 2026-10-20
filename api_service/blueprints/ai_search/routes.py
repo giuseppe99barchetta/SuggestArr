@@ -276,7 +276,7 @@ def ai_search_feedback_list():
         return jsonify({"status": "success", "feedback": rows}), 200
     except Exception as exc:
         logger.error("Failed to list ai feedback: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        return jsonify({"status": "error", "message": "An internal error occurred"}), 500
 
 
 @ai_search_bp.route("/feedback", methods=["POST"])
@@ -313,7 +313,7 @@ def ai_search_feedback_set():
         return jsonify({"status": "success"}), 200
     except Exception as exc:
         logger.error("Failed to set ai feedback: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        return jsonify({"status": "error", "message": "An internal error occurred"}), 500
 
 
 @ai_search_bp.route("/feedback", methods=["DELETE"])
@@ -330,7 +330,7 @@ def ai_search_feedback_delete():
         return jsonify({"status": "success"}), 200
     except Exception as exc:
         logger.error("Failed to delete ai feedback: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        return jsonify({"status": "error", "message": "An internal error occurred"}), 500
 
 
 
@@ -347,7 +347,7 @@ def ai_search_seen_clear():
         return jsonify({"status": "success", "deleted": deleted}), 200
     except Exception as exc:
         logger.error("Failed to clear ai seen: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        return jsonify({"status": "error", "message": "An internal error occurred"}), 500
 
 
 @ai_search_bp.route("/history", methods=["GET"])
