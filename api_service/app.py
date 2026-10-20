@@ -6,7 +6,7 @@ import os
 from flask import Flask, jsonify, render_template, send_from_directory, url_for
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
-from asgiref.wsgi import WsgiToAsgi
+from api_service.asgi import ContextSafeWsgiToAsgi
 import logging
 import atexit
 
@@ -266,7 +266,7 @@ def create_app():
 
 app = create_app()
 app.wsgi_app = SubpathMiddleware(app.wsgi_app)
-asgi_app = WsgiToAsgi(app)
+asgi_app = ContextSafeWsgiToAsgi(app)
 # Initialize database and jobs scheduler
 try:
     from api_service.db.database_manager import DatabaseManager
