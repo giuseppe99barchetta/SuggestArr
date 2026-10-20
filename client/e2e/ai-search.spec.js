@@ -11,6 +11,14 @@ const watched = Array.from({ length: 6 }, (_, index) => ({
 async function openPreview(page, { items = watched, available = true, brokenHistory = false, userId = 7, corruptHistory = false } = {}) {
   const errors = [];
   const searches = [];
+  // Stands in for the server's per-account history (newest first, five kept).
+  const history = [];
+  const remember = (query) => {
+    const at = history.indexOf(query);
+    if (at >= 0) history.splice(at, 1);
+    history.unshift(query);
+    history.splice(5);
+  };
   page.on('pageerror', error => errors.push(error.message));
   await page.route(url => !['127.0.0.1', 'localhost'].includes(url.hostname), route => route.abort());
   await page.route('**/ai-search-poster-*.svg', route => {
@@ -19,8 +27,15 @@ async function openPreview(page, { items = watched, available = true, brokenHist
   });
   await page.route('**/api/ai-search/**', route => {
     const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/history')) {
+      const method = route.request().method();
+      if (method === 'DELETE') history.splice(0);
+      if (method === 'POST') [...route.request().postDataJSON().queries.slice(0, 5)].reverse().forEach(remember);
+      return route.fulfill({ json: { status: 'success', history } });
+    }
     if (path.endsWith('/query')) {
       searches.push(route.request().postDataJSON());
+      remember(route.request().postDataJSON().query);
       return route.fulfill({ json: { status: 'success', results: [{ id: 1, title: 'A new discovery', media_type: 'movie' }] } });
     }
     if (path.endsWith('/status')) return route.fulfill({ json: { available } });
@@ -48,7 +63,7 @@ async function openPreview(page, { items = watched, available = true, brokenHist
   }));
   await page.goto('/ai-search-preview');
   await expect(page.getByRole('heading', { name: 'AI Search', exact: true })).toBeVisible();
-  return { errors, searches };
+  return { errors, searches, history };
 }
 
 for (const width of [1440, 900, 390]) {
@@ -106,15 +121,21 @@ test('History failure can be retried and never blocks searching', async ({ page 
   await expect(page.getByRole('button', { name: 'Find more like AFTERLIGHT', exact: true })).toBeVisible();
 });
 
-test('Recent searches are private to the current account and capped at five', async ({ page }) => {
+test('Searches kept in this browser move to the account once, other accounts stay untouched', async ({ page }) => {
   await page.addInitScript(() => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
     localStorage.setItem('suggestarr_ai_search_history:8', JSON.stringify(['Another account query']));
     localStorage.setItem('suggestarr_ai_search_history:7', JSON.stringify(Array.from({ length: 8 }, (_, i) => `My query ${i}`)));
   });
-  await openPreview(page);
+  const { history } = await openPreview(page);
   await expect(page.getByRole('button', { name: 'Another account query', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^My query/ })).toHaveCount(5);
+  await expect(page.getByRole('button', { name: /^My query/ }).first()).toHaveText(/My query 0/);
+  expect(history).toEqual(['My query 0', 'My query 1', 'My query 2', 'My query 3', 'My query 4']);
+  expect(await page.evaluate(() => localStorage.getItem('suggestarr_ai_search_history:7'))).toBeNull();
   await page.getByRole('button', { name: 'Clear recent searches' }).click();
+  expect(history).toEqual([]);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('suggestarr_ai_search_history:8')))).toEqual(['Another account query']);
 });
 

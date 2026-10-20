@@ -234,7 +234,7 @@ import PageHeader from '@/components/ui/PageHeader.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
-import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchInspiration, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear } from '@/api/api.js';
+import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchInspiration, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear, aiSearchHistory, aiSearchHistoryImport, aiSearchHistoryClear } from '@/api/api.js';
 import { useAuth } from '@/composables/useAuth.js';
 
 const MEDIA_TYPE_OPTIONS = [
@@ -300,12 +300,12 @@ export default {
       useHistory: true,
       excludeWatched: true,
       maxResults: 12,
-      // Recent search history (persisted in localStorage)
       feedbackMap: {},
       excludeSeen: localStorage.getItem('suggestarr_ai_exclude_seen') === 'true',
       isResettingSeen: false,
+      // Recent searches live on the server; historyKey only finds older browser-stored ones to import.
       historyKey,
-      recentSearches: readRecentSearches(historyKey),
+      recentSearches: [],
     };
   },
 
@@ -514,22 +514,38 @@ export default {
       }
     },
 
+    // The server records each successful search; this only keeps the list on screen current.
     saveToHistory(query) {
       if (!query) return;
       this.recentSearches = [query, ...this.recentSearches.filter(item => item !== query)].slice(0, 5);
+    },
+
+    async loadHistory() {
       try {
-        localStorage.setItem(this.historyKey, JSON.stringify(this.recentSearches));
+        const { data } = await aiSearchHistory();
+        this.recentSearches = data.history || [];
+        // Searches saved in this browser before history moved to the server are imported once.
+        const local = readRecentSearches(this.historyKey);
+        if (local.length) {
+          if (!this.recentSearches.length) {
+            const imported = await aiSearchHistoryImport(local);
+            this.recentSearches = imported.data.history || [];
+          }
+          localStorage.removeItem(this.historyKey);
+        }
       } catch {
-        // Search still works when browser storage is unavailable or full.
+        // Recent searches are a convenience; searching works without them.
       }
     },
 
-    clearHistory() {
+    async clearHistory() {
+      const previous = this.recentSearches;
       this.recentSearches = [];
       try {
-        localStorage.removeItem(this.historyKey);
+        await aiSearchHistoryClear();
       } catch {
-        // Keep the in-memory history usable without browser storage.
+        this.recentSearches = previous;
+        this.$toast.error('Could not clear recent searches.');
       }
     },
 
@@ -592,6 +608,7 @@ export default {
     this.checkLlmStatus();
     this.loadFeedback();
     this.loadInspiration();
+    this.loadHistory();
   },
 };
 </script>

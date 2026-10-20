@@ -282,6 +282,15 @@ class SchemaManager:
                     PRIMARY KEY (tmdb_id, media_type)
                 )
             """,
+            'ai_search_history': """
+                CREATE TABLE IF NOT EXISTS ai_search_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    query TEXT NOT NULL,
+                    searched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
+                )
+            """,
             'integrations': """
                 CREATE TABLE IF NOT EXISTS integrations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

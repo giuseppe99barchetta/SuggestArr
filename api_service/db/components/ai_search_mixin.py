@@ -198,6 +198,61 @@ class AiSearchMixin:
             conn.commit()
             return count
 
+    # Recent AI searches kept per user, and the longest query stored (fits MySQL's VARCHAR(512)).
+    AI_SEARCH_HISTORY_LIMIT = 5
+    AI_SEARCH_QUERY_MAX = 500
+
+    def _history_placeholder(self) -> str:
+        return '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+
+    def add_ai_search_history(self, user_id: int, query: str) -> None:
+        """Record a search as the user's most recent, keeping only the newest few.
+
+        A repeated query moves to the top instead of appearing twice.
+
+        :param user_id: SuggestArr account id.
+        :param query: The search text as typed.
+        """
+        query = (query or '').strip()[:self.AI_SEARCH_QUERY_MAX]
+        if not query:
+            return
+        ph = self._history_placeholder()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"DELETE FROM ai_search_history WHERE user_id = {ph} AND query = {ph}", (user_id, query))
+            cursor.execute(f"INSERT INTO ai_search_history (user_id, query) VALUES ({ph}, {ph})", (user_id, query))
+            cursor.execute(f"SELECT id FROM ai_search_history WHERE user_id = {ph} ORDER BY id DESC", (user_id,))
+            stale = [row[0] for row in cursor.fetchall()[self.AI_SEARCH_HISTORY_LIMIT:]]
+            if stale:
+                cursor.execute(f"DELETE FROM ai_search_history WHERE id IN ({','.join([ph] * len(stale))})", tuple(stale))
+            conn.commit()
+
+    def get_ai_search_history(self, user_id: int) -> List[str]:
+        """Return the user's recent searches, newest first.
+
+        :param user_id: SuggestArr account id.
+        :return: Up to AI_SEARCH_HISTORY_LIMIT query strings.
+        """
+        ph = self._history_placeholder()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT query FROM ai_search_history WHERE user_id = {ph} ORDER BY id DESC LIMIT {ph}",
+                (user_id, self.AI_SEARCH_HISTORY_LIMIT),
+            )
+            return [row[0] for row in cursor.fetchall()]
+
+    def clear_ai_search_history(self, user_id: int) -> None:
+        """Forget all recent searches of one user.
+
+        :param user_id: SuggestArr account id.
+        """
+        ph = self._history_placeholder()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"DELETE FROM ai_search_history WHERE user_id = {ph}", (user_id,))
+            conn.commit()
+
     def get_ai_search_requests(self, page: int = 1, per_page: int = 12, sort_by: str = 'date-desc') -> Dict[str, Any]:
         """Get requests made via AI Search, paginated and sorted.
 

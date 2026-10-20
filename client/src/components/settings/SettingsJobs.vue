@@ -153,6 +153,7 @@
             <i aria-hidden="true" v-if="isRunning[job.id]" class="fas fa-spinner fa-spin mr-1"></i>Run now
           </button>
           <button type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" :aria-label="`Edit ${job.name}`" title="Edit" @click="editJob(job)"><i aria-hidden="true" class="fas fa-pen"></i></button>
+          <button type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" :aria-label="`Duplicate ${job.name}`" title="Duplicate" @click="duplicateJob(job)"><i aria-hidden="true" class="fas fa-clone"></i></button>
           <button type="button" class="h-[38px] w-[38px] cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-bad/15 hover:text-bad" :aria-label="`Delete ${job.name}`" title="Delete" @click="confirmDeleteJob(job)"><i aria-hidden="true" class="fas fa-trash"></i></button>
         </div>
       </article>
@@ -597,6 +598,18 @@ export default {
 
     editJob(job) {
       this.editingJob = { ...job, filters: { ...job.filters } };
+    },
+
+    // Opens the create form prefilled; without an id it saves as a new job. Paused so the
+    // copy does not send the same titles as the original before it is changed.
+    duplicateJob(job) {
+      this.editingJob = {
+        ...job,
+        id: undefined,
+        name: `${job.name} (copy)`,
+        filters: JSON.parse(JSON.stringify(job.filters || {})),
+        enabled: false,
+      };
     },
 
     confirmDeleteJob(job) {

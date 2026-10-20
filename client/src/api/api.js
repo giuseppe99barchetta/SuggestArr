@@ -100,6 +100,11 @@ export const aiSearchSeenClear = (mediaType = null) => {
     });
 };
 
+// AI Search: recent searches, kept per account on the server
+export const aiSearchHistory = () => axios.get('/api/ai-search/history');
+export const aiSearchHistoryImport = (queries) => axios.post('/api/ai-search/history', { queries });
+export const aiSearchHistoryClear = () => axios.delete('/api/ai-search/history');
+
 // AI Search: fetch requests made via AI Search
 export const getAiSearchRequests = (page = 1, perPage = 12, sortBy = 'date-desc') => {
     return axios.get('/api/automation/requests/ai-search', {
