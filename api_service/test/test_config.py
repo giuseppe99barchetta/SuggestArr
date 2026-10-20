@@ -108,6 +108,7 @@ class TestConfig(unittest.TestCase):
         "TRAKT_ACCESS_TOKEN": "trakt-access-token",
         "TRAKT_REFRESH_TOKEN": "trakt-refresh-token",
         "TRAKT_EXPIRES_AT": 1234567890,
+        "TRAKT_SYNC_SEEN_FEEDBACK": False,
         "SEER_REQUEST_DELAY": 0.5,
         "FILTER_INCLUDE_TVOD": "false",
         "ALLOW_REGISTRATION": False,
@@ -210,6 +211,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(config['TRAKT_ACCESS_TOKEN'], '')
         self.assertEqual(config['TRAKT_REFRESH_TOKEN'], '')
         self.assertIsNone(config['TRAKT_EXPIRES_AT'])
+        self.assertFalse(config['TRAKT_SYNC_SEEN_FEEDBACK'])
 
     def test_trakt_defaults_and_integration_mapping_are_present(self):
         defaults = get_config_values()

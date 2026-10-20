@@ -61,7 +61,7 @@
             </template>
             <template v-else>
               <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand text-[13px] font-bold text-white disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Approve request" @click="requestApprove(request)">Approve</button>
-              <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Already seen it" title="Already seen it" @click="seenMenuId = request.id"><i aria-hidden="true" class="fas fa-eye"></i></button>
+              <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Already seen it" title="Already seen it" @click="openSeen(request)"><i aria-hidden="true" class="fas fa-eye"></i></button>
               <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-bad disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Reject request" title="Reject" @click="confirmRejectId = request.id"><i aria-hidden="true" class="fas fa-times"></i></button>
             </template>
           </template>
@@ -140,6 +140,8 @@
       </div>
     </AppDialog>
 
+    <SeenRatingDialog v-if="seenRatingItem" :item="seenRatingItem" :busy="actionLoadingId === seenRatingItem.id" @save="saveSeenRating" @close="seenRatingItem = null" />
+
     <MediaDetailsModal v-if="selectedRequest" :item="selectedRequest" @close="selectedRequest = null" />
   </div>
 </template>
@@ -154,7 +156,8 @@ import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
 import { approvalNeedsDialog, loadSeerServers } from '@/utils/requestProfiles.js';
-import { SEEN_OPTIONS, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
+import { SEEN_OPTIONS, loadSeenRatingMode, ratedSeenOption, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
+import SeenRatingDialog from '@/components/SeenRatingDialog.vue';
 import { approvalEnabled } from '@/utils/requestApproval.js';
 import JourneyPanel from '@/components/recap/JourneyPanel.vue';
 import { notifyRequestsChanged } from '@/utils/requestEvents.js';
@@ -165,7 +168,7 @@ import { keyDecision, swipeDecision, touchPoint } from '@/utils/quickDecision.js
  */
 export default {
   name: 'HomePage',
-  components: { AppDialog, MediaCard, MediaGridSkeleton, MediaDetailsModal, ApprovalProfileChoice, JourneyPanel },
+  components: { AppDialog, MediaCard, MediaGridSkeleton, MediaDetailsModal, ApprovalProfileChoice, JourneyPanel, SeenRatingDialog },
   // The dashboard shell passes settings props to every tab; only currentUser is used here.
   inheritAttrs: false,
   props: {
@@ -182,6 +185,9 @@ export default {
       confirmRejectId: null,
       seenMenuId: null,
       seenOptions: SEEN_OPTIONS,
+      // When "Seen it" is also written to Trakt, it asks for stars instead of the icons.
+      seenRatingMode: false,
+      seenRatingItem: null,
       approveItem: null,
       swipeStart: null,
       servers: null,
@@ -262,6 +268,7 @@ export default {
     this.loadRecentRequests();
     this.loadApprovalState();
     this.loadHistory();
+    loadSeenRatingMode(axios).then(enabled => { this.seenRatingMode = enabled; });
     this.servers = await loadSeerServers(axios);
   },
   methods: {
@@ -350,7 +357,7 @@ export default {
       event?.preventDefault();
       if (decision === 'approve') this.requestApprove(request);
       else if (decision === 'reject') this.confirmRejectId = request.id;
-      else this.seenMenuId = request.id;
+      else this.openSeen(request);
     },
 
     requestApprove(request) {
@@ -368,18 +375,34 @@ export default {
     // queue. The feedback is what stops it coming back; the reject only clears the card.
     // The title and year travel with the rating so the next recommendation prompt can
     // name what the user liked or disliked instead of only suppressing an id.
-    async markSeen(request, option) {
+    async markSeen(request, option, trakt = null) {
       this.actionLoadingId = request.id;
       try {
-        await saveSeenFeedback(axios, request.id, option, request);
+        await saveSeenFeedback(axios, request.id, option, request, trakt);
       } catch (error) {
         this.$toast.open({ message: error.response?.data?.message || 'Could not save feedback', type: 'error' });
         this.actionLoadingId = null;
-        return;
+        return false;
       } finally {
         this.seenMenuId = null;
       }
       await this.decidePending('reject', request.id);
+      return true;
+    },
+
+    openSeen(request) {
+      if (this.seenRatingMode) this.seenRatingItem = request;
+      else this.seenMenuId = request.id;
+    },
+
+    // The star picker's answer: the exact rating goes to Trakt, SuggestArr keeps the
+    // matching liked / disliked / seen verdict.
+    async saveSeenRating({ rating, markWatched }) {
+      const request = this.seenRatingItem;
+      // Close only once the feedback is saved, so a failed save keeps the stars.
+      if (await this.markSeen(request, ratedSeenOption(rating), { rating, markWatched })) {
+        this.seenRatingItem = null;
+      }
     },
 
     async decidePending(action, id, profile = null) {

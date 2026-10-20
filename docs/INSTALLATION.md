@@ -383,6 +383,28 @@ Recommendation jobs can use linked Trakt accounts:
 
 If no linked Trakt accounts exist, job filters will warn that Trakt is not usable yet. Media-server history still works without Trakt.
 
+### Send "Seen it" to Trakt
+
+Enable **Send "Seen it" to Trakt** in Services > Trakt (`TRAKT_SYNC_SEEN_FEEDBACK`, default `false`) to copy a user's "Seen it" answers to their own linked Trakt account.
+
+When the option is on and the user has linked Trakt, the eye button on a pending suggestion opens a rating dialog instead of the three icons:
+
+- Pick **1 to 10 stars** (Trakt's scale) and **Save rating**, or choose **Seen it, no rating**.
+- The rating is sent to Trakt as given. SuggestArr keeps its own verdict for future suggestions: 7-10 counts as liked, 1-4 as did not like, 5-6 and no rating as plain seen.
+- Movies are added to the user's Trakt watch history.
+- For a show, **Mark all episodes as watched** is off by default. Leave it off for a partly watched series and the show is only rated. With no stars and the box unticked the dialog says **Seen it, SuggestArr only**: nothing is sent to Trakt in that case.
+- If saving fails, the dialog stays open with the chosen stars.
+
+Users without a linked Trakt account, and everyone while the option is off, keep the three icons. Feedback on requests already sent to Seer follows the same rules without the dialog: liked and did not like are rated 8 and 3, a movie gets a play, and a show is only rated.
+
+- **Whose account:** the Trakt account linked to the media profile of the user who clicked, not the media user the suggestion was made for, and only when that profile is **verified** (assigned by an admin or proven by the media server's sign-in). A self-selected Jellyfin or Emby profile is never written through, since it may name someone else's account.
+- **No duplicate plays:** a movie that already has a play on Trakt gets no new one, and a show only gets plays for its aired episodes that are still unwatched. Saving the same feedback again, changing the rating or retrying is therefore safe. A new play is stamped with the time of the click, because SuggestArr does not know when the title was actually watched.
+- Other feedback (interested, not interested, too similar, save for later) is never sent.
+- The write happens in the background after the feedback is saved. A Trakt failure is logged and never blocks the feedback or the rejection that follows it.
+- Removing feedback in SuggestArr does not remove the play or rating from Trakt.
+
+The feedback endpoints (`PUT /api/automation/requests/workflow/<id>/feedback` and `PUT /api/automation/requests/media/<type>/<tmdb_id>/feedback`) accept two optional fields for this: `rating` (integer 1-10) and `mark_watched` (boolean). When `mark_watched` is omitted, a movie gets a play and a show does not. `GET /api/trakt/me` reports `sync_seen_feedback: true` when the option is on and the caller's verified profile has a linked Trakt account.
+
 ## Auto-decline pending Seerr requests
 
 Open **Approvals -> Seerr pending requests**:

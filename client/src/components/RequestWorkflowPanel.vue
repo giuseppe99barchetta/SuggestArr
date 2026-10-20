@@ -48,7 +48,7 @@
           </template>
           <template v-else-if="item.status === 'awaiting_approval'">
             <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand text-[13px] font-bold text-white disabled:opacity-50" :disabled="actionLoading" aria-label="Approve request" @click.stop="decideOne('approve', item.id)">Approve</button>
-            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoading" aria-label="Already seen it" title="Already seen it" @click.stop="seenMenuId = item.id"><i aria-hidden="true" class="fas fa-eye"></i></button>
+            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoading" aria-label="Already seen it" title="Already seen it" @click.stop="openSeen(item)"><i aria-hidden="true" class="fas fa-eye"></i></button>
             <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-bad disabled:opacity-50" :disabled="actionLoading" aria-label="Reject request" title="Reject" @click.stop="confirmSingle('reject', item.id)"><i aria-hidden="true" class="fas fa-times"></i></button>
           </template>
           <button v-else-if="item.status === 'failed'" type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand-soft text-[13px] font-bold text-brand-ink disabled:opacity-50" :disabled="actionLoading" @click.stop="decideOne('retry', item.id)"><i aria-hidden="true" class="fas fa-redo mr-1"></i>Retry</button>
@@ -64,6 +64,8 @@
       </MediaCard>
     </div>
     <div v-if="page < pages" ref="loadMoreTrigger" class="py-8 text-center text-sm text-ink-4">Loading more requests…</div>
+
+    <SeenRatingDialog v-if="seenRatingItem" :item="seenRatingItem" :busy="actionLoading" @save="saveSeenRating" @close="seenRatingItem = null" />
 
     <AppDialog v-if="confirmation" width="max-w-2xl" labelledby="confirm-title" @close="confirmation = null">
       <div class="flex flex-col gap-4 p-6">
@@ -98,14 +100,15 @@ import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
 import { approvalNeedsDialog, loadSeerServers, mediaTypesOf } from '@/utils/requestProfiles.js';
-import { SEEN_OPTIONS, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
+import { SEEN_OPTIONS, loadSeenRatingMode, ratedSeenOption, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
+import SeenRatingDialog from '@/components/SeenRatingDialog.vue';
 import { notifyRequestsChanged } from '@/utils/requestEvents.js';
 import { keyDecision, swipeDecision, touchPoint } from '@/utils/quickDecision.js';
 export default {
-  name: 'RequestWorkflowPanel', components: { AppDialog, MediaCard, MediaGridSkeleton, ApprovalProfileChoice },
+  name: 'RequestWorkflowPanel', components: { AppDialog, MediaCard, MediaGridSkeleton, ApprovalProfileChoice, SeenRatingDialog },
   emits: ['open', 'update:total'],
   props: { statusFilter: { type: String, default: 'all' }, searchQuery: { type: String, default: '' }, mediaType: { type: String, default: 'all' }, requestedFor: { type: String, default: 'all' }, showHeader: { type: Boolean, default: true }, showEmpty: { type: Boolean, default: true }, bulkMode: { type: Boolean, default: false } },
-  data() { return { items: [], selected: [], actionLoading: false, swipeStart: null, seenMenuId: null, seenOptions: SEEN_OPTIONS, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,
+  data() { return { items: [], selected: [], actionLoading: false, swipeStart: null, seenMenuId: null, seenOptions: SEEN_OPTIONS, seenRatingMode: false, seenRatingItem: null, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,
     statuses: [{ value: 'awaiting_approval', label: 'Awaiting approval' }, { value: 'queued', label: 'Queued' }, { value: 'submitted', label: 'Submitted' }, { value: 'rejected', label: 'Rejected' }, { value: 'failed', label: 'Failed' }, { value: 'blacklisted', label: 'Blacklisted' }] }; },
   computed: {
     selectedItems() { return this.items.filter(item => this.selected.includes(item.id)); },
@@ -119,9 +122,9 @@ export default {
     searchQuery(value) { this.search = value; this.reloadSoon(); },
     mediaType() { this.load(1); },
     requestedFor() { this.load(1); },
-    bulkMode(value) { if (!value) this.selected = []; this.seenMenuId = null; }
+    bulkMode(value) { if (!value) this.selected = []; this.seenMenuId = null; this.seenRatingItem = null; }
   },
-  async mounted() { const requested = this.$route.query.status; if (this.statuses.some(option => option.value === requested)) this.status = requested; const response = await axios.get('/api/jobs'); this.jobs = (response.data.jobs || []).filter(job => job.delivery_mode === 'manual'); this.load(); this.servers = await loadSeerServers(axios); },
+  async mounted() { const requested = this.$route.query.status; if (this.statuses.some(option => option.value === requested)) this.status = requested; const response = await axios.get('/api/jobs'); this.jobs = (response.data.jobs || []).filter(job => job.delivery_mode === 'manual'); this.load(); loadSeenRatingMode(axios).then(enabled => { this.seenRatingMode = enabled; }); this.servers = await loadSeerServers(axios); },
   beforeUnmount() { clearTimeout(this.searchTimer); this.observer?.disconnect(); },
   methods: {
     async load(page = this.page) {
@@ -159,17 +162,31 @@ export default {
     },
     // Record that the user has already watched a suggestion, then take it out of the
     // queue. The feedback is what stops it coming back; the reject only clears the card.
-    async markSeen(item, option) {
+    async markSeen(item, option, trakt = null) {
       this.actionLoading = true;
       try {
-        await saveSeenFeedback(axios, item.id, option, item);
+        await saveSeenFeedback(axios, item.id, option, item, trakt);
       } catch (error) {
         this.$toast.open({ message: error.response?.data?.message || 'Could not save feedback', type: 'error' });
         this.actionLoading = false;
-        return;
+        return false;
       } finally { this.seenMenuId = null; }
       this.actionLoading = false;
       await this.decideOne('reject', item.id);
+      return true;
+    },
+    openSeen(item) {
+      if (this.seenRatingMode) this.seenRatingItem = item;
+      else this.seenMenuId = item.id;
+    },
+    // The star picker's answer: the exact rating goes to Trakt, SuggestArr keeps the
+    // matching liked / disliked / seen verdict.
+    async saveSeenRating({ rating, markWatched }) {
+      const item = this.seenRatingItem;
+      // Close only once the feedback is saved, so a failed save keeps the stars.
+      if (await this.markSeen(item, ratedSeenOption(rating), { rating, markWatched })) {
+        this.seenRatingItem = null;
+      }
     },
     async decideOne(action, id) {
       // Approving is the one action that spends bandwidth and disk and cannot
@@ -194,7 +211,7 @@ export default {
       event?.preventDefault();
       if (decision === 'approve') this.decideOne('approve', item.id);
       else if (decision === 'reject') this.confirmSingle('reject', item.id);
-      else this.seenMenuId = item.id;
+      else this.openSeen(item);
     },
     confirmSingle(action, id) {
       const item = this.items.find(request => request.id === id);

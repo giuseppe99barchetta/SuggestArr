@@ -82,6 +82,7 @@ def test_feedback_is_scoped_to_internal_user_and_media_profile():
 
     saved = queue.set_suggestion_feedback(1, 7, 7, 'not_interested', 'genre', 'Not horror')
     assert saved['media_user_id'] == 'plex-a'
+    assert (saved['tmdb_id'], saved['media_type']) == ('42', 'movie')
     assert queue.get_suggestion_feedback(connection.cursor(), 7, '42', 'movie', 'plex-a')['feedback'] == 'not_interested'
     assert queue.get_suggestion_feedback(connection.cursor(), 8, '42', 'movie', 'plex-a') is None
     assert queue.get_suggestion_feedback(connection.cursor(), 7, '42', 'movie', 'plex-b') is None
