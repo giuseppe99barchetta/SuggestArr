@@ -407,3 +407,47 @@ test("a fully detailed request fits its dialog without scrolling and links to th
   const scroller = dialog.locator(".overflow-y-auto").first();
   expect(await scroller.evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
 });
+
+test("the light theme is chosen in the profile, applies at once and survives a reload", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await mockApi(page);
+  const cors = { "access-control-allow-origin": "http://127.0.0.1:5173", "access-control-allow-credentials": "true" };
+  await page.route("http://localhost:5000/api/automation/requests?**", route => route.fulfill({
+    contentType: "application/json", headers: cors, body: JSON.stringify({
+      data: [{ source_id: "100", source_title: "Fantastic Beasts", media_type: "movie", requests: [
+        { request_id: "155", title: "The Dark Knight", media_type: "movie", requested_at: "2030-01-01T10:00:00Z", rating: 8.5, user_name: "giuseppe", availability: "available", rationale: "Darker superhero films with strong visuals." },
+        { request_id: "156", title: "Mortal Engines", media_type: "movie", requested_at: "2030-01-01T09:00:00Z", rating: 6.2, user_name: "giuseppe", availability: "processing" },
+      ] }],
+      total_pages: 1, total_sources: 1, total_requests: 2, request_users: [],
+    }),
+  }));
+  await signIn(page);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  await page.getByRole("link", { name: "Profile", exact: true }).first().click();
+  await page.getByRole("radio", { name: "Light" }).check({ force: true });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.screenshot({ path: testInfo.outputPath("light-profile.png") });
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(244, 245, 249)");
+
+  await page.getByRole("link", { name: "Home", exact: true }).first().click();
+  await expect(page.getByText("The Dark Knight").first()).toBeVisible();
+  await page.waitForTimeout(1000); // let the page transition finish before the screenshot
+  await page.screenshot({ path: testInfo.outputPath("light-home.png"), fullPage: true });
+  await page.getByRole("button", { name: "Show details for The Dark Knight" }).click();
+  await page.screenshot({ path: testInfo.outputPath("light-modal.png") });
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "Jobs", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Manual job" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("light-jobs.png") });
+  await page.getByRole("link", { name: /^Requests/ }).first().click();
+  await expect(page.getByText("Smoke title")).toBeVisible(); // the page settles on its default tab first
+  await page.getByRole("tab", { name: /By watched title/ }).click();
+  await expect(page.getByRole("heading", { name: "Fantastic Beasts" })).toBeVisible();
+  await page.waitForTimeout(1000);
+  await page.screenshot({ path: testInfo.outputPath("light-requests.png"), fullPage: true });
+});

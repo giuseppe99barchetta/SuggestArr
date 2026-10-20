@@ -40,8 +40,78 @@
   }
 }
 
+/* Light theme: <html data-theme="light">, set by utils/theme.js (and early in index.html). */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-canvas: #f4f5f9;
+  --color-side: #ffffff;
+  --color-panel: #ffffff;
+  --color-panel-2: #f1f3f8;
+  --color-raised: #e8ebf2;
+  --color-edge: #e1e4ec;
+  --color-edge-strong: #cfd4e0;
+  --color-ink: #151926;
+  --color-ink-2: #343b4f;
+  --color-ink-3: #555e72;
+  --color-ink-4: #656e82;
+  --color-brand: #6a5ae0;
+  --color-brand-soft: #ebe8ff;
+  --color-brand-ink: #5141cf;
+  --color-good: #1d8f55;
+  --color-caution: #9a6400;
+  --color-bad: #c93b36;
+  --color-notice: #2470c2;
+  --color-anime: #c4317f;
+  --color-on-good: #ffffff;
+  --color-on-caution: #ffffff;
+  --color-on-bad: #ffffff;
+  --color-on-notice: #ffffff;
+}
+
+/* Theme switch: one cross-fade of the whole page (utils/theme.js). Element colour
+   transitions are paused meanwhile so nothing lags behind the fade. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.35s;
+  animation-timing-function: ease-out;
+}
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+
+/* Areas designed over dark imagery (recaps, tour, sign-in and setup screens, the
+   "By watched title" ambience) keep the dark palette in either theme.
+   Keep these values in sync with @theme above. */
+.theme-dark {
+  color-scheme: dark;
+  --color-canvas: #0b0d12;
+  --color-side: #0f1219;
+  --color-panel: #141822;
+  --color-panel-2: #1b2030;
+  --color-raised: #1d2130;
+  --color-edge: #232838;
+  --color-edge-strong: #2a3042;
+  --color-ink: #e8eaf0;
+  --color-ink-2: #c5cbd8;
+  --color-ink-3: #9aa3b5;
+  --color-ink-4: #8790a3;
+  --color-brand-soft: #2e2850;
+  --color-brand-ink: #b3a9ff;
+  --color-good: #4fc98a;
+  --color-caution: #f2b84b;
+  --color-bad: #f07067;
+  --color-notice: #5aa9f0;
+  --color-anime: #e74c9c;
+  --color-on-good: #05180e;
+  --color-on-caution: #1a1405;
+  --color-on-bad: #2a0c0b;
+  --color-on-notice: #06131f;
+}
+
 @layer base {
-  /* Native controls (date picker, select menus, scrollbars) follow the dark theme. */
+  /* Native controls (date picker, select menus, scrollbars) follow the active theme. */
   :root {
     color-scheme: dark;
   }

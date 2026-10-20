@@ -7,6 +7,11 @@ import axios from "axios";
 import { createAppRouter } from "./router";
 import { TOAST_OPTIONS } from "./toastOptions";
 import "@/assets/main.css";
+import { initTheme } from "@/utils/theme.js";
+import { registerServiceWorker } from "@/utils/pwa.js";
+
+initTheme();
+registerServiceWorker();
 
 async function initApp() {
   axios.defaults.withCredentials = true;

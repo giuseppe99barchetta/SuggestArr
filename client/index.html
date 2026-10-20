@@ -5,7 +5,23 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <link rel="icon" href="./favicon.ico">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+    <meta name="theme-color" content="#0b0d12">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>SuggestArr</title>
+    <script>
+      // Apply the saved light/dark choice before anything paints (see src/utils/theme.js).
+      (function () {
+        var choice = null;
+        try { choice = localStorage.getItem('suggestarr_theme'); } catch (e) { /* storage blocked */ }
+        var dark = choice === 'dark' || (choice !== 'light' && (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches));
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#0b0d12' : '#f4f5f9');
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">

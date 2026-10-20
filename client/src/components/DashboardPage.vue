@@ -36,7 +36,7 @@
               :data-tour-id="tab.tourId || null"
               :aria-current="activeTab === tab.id ? 'page' : null"
               class="flex items-center gap-3 px-3 py-2.5 rounded-ctl text-sm font-medium no-underline transition-colors"
-              :class="activeTab === tab.id ? 'bg-raised text-white' : 'text-ink-3 hover:bg-panel hover:text-ink'"
+              :class="activeTab === tab.id ? 'bg-raised text-ink' : 'text-ink-3 hover:bg-panel hover:text-ink'"
               @click="showMobileNav = false"
             >
               <i aria-hidden="true" :class="tab.icon" class="w-[18px] text-center"></i>
@@ -59,7 +59,7 @@
           <div class="flex items-center gap-2.5 p-2">
             <UserAvatar :user="currentUser" class="h-8 w-8 text-[32px]" />
             <div class="flex flex-col min-w-0">
-              <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }" class="text-[13px] font-semibold truncate text-ink no-underline hover:text-white" title="Your profile" @click="showMobileNav = false">{{ currentUser.username }}</router-link>
+              <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }" class="text-[13px] font-semibold truncate text-ink no-underline hover:text-brand-ink" title="Your profile" @click="showMobileNav = false">{{ currentUser.username }}</router-link>
               <button type="button" class="text-left text-xs text-ink-4 hover:text-ink-2 bg-transparent border-0 p-0 cursor-pointer" title="View changelog" @click="showChangelog">
                 {{ currentUser.role === 'admin' ? 'Admin' : 'User' }} · {{ currentVersion }}<span v-if="currentImageTag === 'nightly'"> (nightly)</span>
               </button>
@@ -120,7 +120,7 @@
 
       <!-- Loading Overlay -->
       <transition enter-active-class="transition-opacity duration-300" leave-active-class="transition-opacity duration-300" enter-from-class="opacity-0" leave-to-class="opacity-0">
-        <div v-if="isLoading" class="fixed inset-0 z-[1000] flex items-center justify-center bg-[rgba(11,13,18,0.92)]">
+        <div v-if="isLoading" class="fixed inset-0 z-[1000] flex items-center justify-center bg-canvas/90">
           <div class="text-center text-ink">
             <div class="mx-auto mb-4 h-11 w-11 animate-spin rounded-full border-4 border-edge-strong border-t-brand"></div>
             <p>{{ loadingMessage }}</p>
@@ -198,7 +198,7 @@
     </div>
 
     <div v-else>
-      <div class="fixed inset-0 z-[1000] flex items-center justify-center bg-[rgba(11,13,18,0.92)]">
+      <div class="fixed inset-0 z-[1000] flex items-center justify-center bg-canvas/90">
         <div class="text-center text-ink">
           <div class="mx-auto mb-4 h-11 w-11 animate-spin rounded-full border-4 border-edge-strong border-t-brand"></div>
           <p>Loading dashboard...</p>

@@ -9,7 +9,7 @@
                  :tabindex="service.comingSoon ? -1 : 0"
                  @keypress.enter="selectService(service)"
                  @keypress.space.prevent="selectService(service)"
-                 class="relative flex h-[100px] cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border-2 pb-2 transition duration-300 focus:outline-1 focus:outline-brand sm:h-[120px]"
+                 class="relative flex h-[100px] cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border-2 pb-2 transition duration-300 sm:h-[120px]"
                  :class="[
                      config.SELECTED_SERVICE === service.value && !service.comingSoon
                          ? 'border-brand bg-brand/6 shadow-[0_0_0_3px] shadow-brand/25'

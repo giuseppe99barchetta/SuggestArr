@@ -26,7 +26,7 @@
         role="tab"
         :aria-selected="tab.active ? 'true' : 'false'"
         class="inline-flex h-12 shrink-0 cursor-pointer items-center gap-2 border-0 border-b-2 bg-transparent px-3.5 text-sm font-semibold"
-        :class="tab.active ? 'border-brand-ink text-white' : 'border-transparent text-ink-3 hover:text-ink'"
+        :class="tab.active ? 'border-brand-ink text-ink' : 'border-transparent text-ink-3 hover:text-ink'"
         @click="selectTab(tab.id)"
       >
         {{ tab.label }}
@@ -66,7 +66,7 @@
       <section
         v-for="source in filteredAndSortedSources"
         :key="source.id"
-        class="relative isolate overflow-hidden rounded-card border border-white/10 bg-panel"
+        class="theme-dark relative isolate overflow-hidden rounded-card border border-white/10 bg-panel"
       >
         <!-- Apple Music style ambience: the backdrop tints the whole box and blurs more the further down it goes. -->
         <div v-if="sourceAmbience(source)" aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">

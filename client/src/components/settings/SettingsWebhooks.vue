@@ -118,7 +118,7 @@
         <fieldset class="m-0 border-0 p-0">
           <legend class="mb-2 p-0 text-[13px] font-semibold text-ink-2">Send to</legend>
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <label v-for="option in formats" :key="option.value" class="flex cursor-pointer items-center gap-2 rounded-ctl border px-3 py-2.5 text-sm font-semibold focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-ink" :class="form.format === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong text-ink-2 hover:border-ink-4'">
+            <label v-for="option in formats" :key="option.value" class="flex cursor-pointer items-center gap-2 rounded-ctl border px-3 py-2.5 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-ink" :class="form.format === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong text-ink-2 hover:border-ink-4'">
               <input v-model="form.format" type="radio" name="webhook-format" :value="option.value" class="sr-only" />
               <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
             </label>

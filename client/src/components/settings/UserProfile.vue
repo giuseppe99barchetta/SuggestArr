@@ -39,6 +39,15 @@
       </SectionCard>
 
       <div class="flex min-w-0 flex-col gap-5">
+        <SectionCard icon="fas fa-adjust" title="Appearance" description="Saved in this browser. System follows your device's light or dark setting.">
+          <div role="radiogroup" aria-label="Theme" class="grid grid-cols-3 gap-2">
+            <label v-for="option in themeOptions" :key="option.value" class="flex cursor-pointer items-center justify-center gap-2 rounded-ctl border px-3 py-2.5 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-ink" :class="themeChoice === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong text-ink-2 hover:border-ink-4'">
+              <input v-model="themeChoice" type="radio" name="theme" :value="option.value" class="sr-only" @change="chooseTheme(option.value)" />
+              <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
+            </label>
+          </div>
+        </SectionCard>
+
         <SectionCard icon="fas fa-language" title="Title language" description="Titles and descriptions of suggestions and requests are shown in this language.">
           <form class="flex flex-col gap-3" @submit.prevent="saveLanguage">
             <div class="flex gap-2">
@@ -146,6 +155,7 @@ import ApiKeysPanel from './ApiKeysPanel.vue';
 import UserAvatar from '@/components/ui/UserAvatar.vue';
 import { refreshUserAvatar } from '@/composables/useUserAvatar';
 import { languageOptions, languagePayload } from '@/utils/titleLanguage.js';
+import { readThemeChoice, setThemeChoice } from '@/utils/theme.js';
 
 const PROVIDER_META = {
   jellyfin: { label: 'Jellyfin', icon: 'fas fa-server' },
@@ -175,6 +185,12 @@ export default {
 
   data() {
     return {
+      themeChoice: readThemeChoice(),
+      themeOptions: [
+        { value: 'system', label: 'System', icon: 'fas fa-desktop' },
+        { value: 'light', label: 'Light', icon: 'fas fa-sun' },
+        { value: 'dark', label: 'Dark', icon: 'fas fa-moon' },
+      ],
       // Account form state
       usernameForm: { value: '' },
       passwordForm: { current: '', new: '', confirm: '' },
@@ -323,6 +339,9 @@ export default {
   },
 
   methods: {
+    chooseTheme(choice) {
+      setThemeChoice(choice);
+    },
     // ── Title language ─────────────────────────────────────────────────────
 
     async loadLanguage() {

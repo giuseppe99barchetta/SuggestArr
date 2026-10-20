@@ -1,6 +1,6 @@
 <template>
   <!-- Same player as the year recap: the image over a blurred backdrop, controls below, sharing in a side panel. -->
-  <dialog ref="dialog" :aria-labelledby="titleId" class="m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-transparent p-0 text-white outline-none backdrop:bg-black/75 backdrop:backdrop-blur-xl open:flex" @cancel="onCancel" @close="$emit('close')">
+  <dialog ref="dialog" :aria-labelledby="titleId" class="theme-dark m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-transparent p-0 text-white outline-none backdrop:bg-black/75 backdrop:backdrop-blur-xl open:flex" @cancel="onCancel" @close="$emit('close')">
     <div class="relative flex min-h-0 min-w-0 flex-1 flex-col items-center gap-3 px-4 pb-4 pt-3" @click.self="dismiss">
       <header class="flex w-full items-center justify-between gap-3">
         <h2 :id="titleId" class="m-0 truncate text-sm font-bold">Your SuggestArr recap</h2>

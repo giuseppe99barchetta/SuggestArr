@@ -33,7 +33,7 @@
             :aria-checked="mediaType === option.value ? 'true' : 'false'"
             :disabled="isSearching"
             class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border-0 px-3.5 text-[13px] font-semibold"
-            :class="mediaType === option.value ? 'bg-raised text-white' : 'bg-transparent text-ink-3 hover:text-ink'"
+            :class="mediaType === option.value ? 'bg-raised text-ink' : 'bg-transparent text-ink-3 hover:text-ink'"
             @click="mediaType = option.value"
           >
             <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}

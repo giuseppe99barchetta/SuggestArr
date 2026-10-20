@@ -15,7 +15,7 @@
         enter-from-class="opacity-0 scale-[0.94] translate-y-1.5"
         leave-to-class="opacity-0 scale-[0.94] -translate-y-1"
       >
-        <div :key="currentIndex" class="fixed z-[9002] rounded-card border border-white/12 bg-[rgba(18,24,38,0.97)] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.05)] backdrop-blur-xl" :style="tooltipStyle" @click.stop>
+        <div :key="currentIndex" class="theme-dark fixed z-[9002] rounded-card border border-white/12 bg-[rgba(18,24,38,0.97)] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.05)] backdrop-blur-xl" :style="tooltipStyle" @click.stop>
           <!-- Arrow indicator -->
           <div class="absolute h-0 w-0 border-8 border-transparent" :class="arrowClass"></div>
 

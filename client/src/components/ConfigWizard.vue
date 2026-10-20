@@ -1,5 +1,6 @@
 <template>
-  <div class="relative min-h-screen">
+  <!-- The setup screens sit on dark imagery, so they keep the dark palette in either theme. -->
+  <div class="theme-dark relative min-h-screen">
     <!-- Background layers -->
     <div class="fixed inset-0 z-0">
       <template v-if="!config.ENABLE_STATIC_BACKGROUND">

@@ -6,7 +6,7 @@
         <p class="m-0 mt-1.5 text-[15px] text-ink-3">{{ summary }}</p>
       </div>
       <div class="flex flex-wrap gap-2.5">
-        <router-link :to="tabLink('jobs')" class="inline-flex h-[42px] items-center gap-2 rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink no-underline hover:text-white">
+        <router-link :to="tabLink('jobs')" class="inline-flex h-[42px] items-center gap-2 rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink no-underline hover:border-ink-4 hover:text-ink">
           <i aria-hidden="true" class="fas fa-clock"></i>Manage jobs
         </router-link>
         <router-link :to="tabLink('requests')" class="inline-flex h-[42px] items-center rounded-ctl bg-brand px-[18px] text-sm font-bold text-white no-underline hover:text-white">

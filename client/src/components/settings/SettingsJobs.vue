@@ -148,7 +148,7 @@
     <section v-if="recentHistory.length > 0" class="flex flex-col gap-3.5" data-tour-id="jobs-history">
       <div class="flex items-baseline justify-between gap-3">
         <h2 class="m-0 text-[19px] font-bold text-ink">Recent runs</h2>
-        <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-sm font-semibold text-brand-ink hover:text-white" @click="showHistoryModal = true">Full history →</button>
+        <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-sm font-semibold text-brand-ink hover:text-brand" @click="showHistoryModal = true">Full history →</button>
       </div>
       <div class="overflow-x-auto rounded-card border border-edge bg-panel">
         <table class="w-full min-w-[640px] border-collapse text-sm">
