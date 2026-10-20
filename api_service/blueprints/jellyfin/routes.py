@@ -2,10 +2,18 @@ from flask import Blueprint, jsonify, request
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
-from api_service.utils.ssrf_guard import validate_url
+from api_service.utils.ssrf_guard import validate_base_url as validate_url
+from api_service.auth.middleware import require_role
+from api_service.services.integration_security import select_credentials
 
 logger = LoggerManager.get_logger("JellyfinRoute")
 jellyfin_bp = Blueprint('jellyfin', __name__)
+
+
+@jellyfin_bp.before_request
+@require_role('admin')
+def require_integration_admin():
+    return None
 
 
 def _load_jellyfin_config():
@@ -30,14 +38,10 @@ async def get_jellyfin_library():
     logger.info("Received request to fetch Jellyfin libraries")
     try:
         config_data = request.get_json(silent=True) or {}
-        api_url = (config_data.get('JELLYFIN_API_URL') or '').strip()
-        api_key = (config_data.get('JELLYFIN_TOKEN') or '').strip()
-
-        # Fallback to database config if not provided in request
-        if not api_url or not api_key:
-            api_url, api_key = _load_jellyfin_config()
-            api_url = (api_url or '').strip()
-            api_key = (api_key or '').strip()
+        try:
+            api_url, api_key = select_credentials(config_data, ('JELLYFIN_API_URL', 'JELLYFIN_TOKEN'), _load_jellyfin_config)
+        except ValueError:
+            return jsonify({'message': 'A complete explicit URL and token are required', 'type': 'error'}), 400
 
         if not api_url or not api_key:
             logger.warning("Jellyfin credentials not configured")
@@ -64,14 +68,18 @@ async def get_jellyfin_library():
         return jsonify({'message': 'Error fetching Jellyfin libraries', 'type': 'error'}), 500
 
 
-@jellyfin_bp.route('/test', methods=['GET'])
+@jellyfin_bp.route('/test', methods=['GET', 'POST'])
 async def test_jellyfin_connection():
     """
     Test Jellyfin server connection using the globally configured API key and URL.
     """
     logger.info("Received request to test Jellyfin connection")
     try:
-        api_url, api_key = _load_jellyfin_config()
+        try:
+            api_url, api_key = select_credentials(request.get_json(silent=True) or {},
+                ('JELLYFIN_API_URL', 'JELLYFIN_TOKEN'), _load_jellyfin_config)
+        except ValueError:
+            return jsonify({'message': 'A complete explicit URL and token are required', 'status': 'error'}), 400
 
         if not api_url or not api_key:
             logger.warning("Jellyfin credentials not configured")
@@ -132,14 +140,10 @@ async def get_jellyfin_users():
     """
     try:
         config_data = request.get_json(silent=True) or {}
-        api_url = (config_data.get('JELLYFIN_API_URL') or '').strip()
-        api_key = (config_data.get('JELLYFIN_TOKEN') or '').strip()
-
-        # Fallback to database config if not provided in request
-        if not api_url or not api_key:
-            api_url, api_key = _load_jellyfin_config()
-            api_url = (api_url or '').strip()
-            api_key = (api_key or '').strip()
+        try:
+            api_url, api_key = select_credentials(config_data, ('JELLYFIN_API_URL', 'JELLYFIN_TOKEN'), _load_jellyfin_config)
+        except ValueError:
+            return jsonify({'message': 'A complete explicit URL and token are required', 'type': 'error'}), 400
 
         if not api_url or not api_key:
             logger.warning("Jellyfin credentials not configured")

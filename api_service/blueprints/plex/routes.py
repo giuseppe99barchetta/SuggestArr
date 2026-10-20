@@ -4,7 +4,8 @@ from api_service.services.plex.plex_auth import PlexAuth
 from api_service.services.plex.plex_client import PlexClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.utils.error_handling import handle_api_errors, validate_request_data, success_response
-from api_service.utils.ssrf_guard import validate_url
+from api_service.utils.ssrf_guard import validate_base_url as validate_url
+from api_service.auth.middleware import require_role
 from api_service.services.config_service import ConfigService
 from api_service.services.config_secrets import REDACTED
 
@@ -43,6 +44,12 @@ def _resolve_plex_token(token, api_url):
         return None
     return config.get('PLEX_TOKEN') or None
 
+
+@plex_bp.before_request
+@require_role('admin')
+def require_integration_admin():
+    """Personal Plex linking uses the separate /users/me and /integrations APIs."""
+    return None
 
 @plex_bp.route('/libraries', methods=['POST'])
 async def get_plex_libraries():

@@ -8,7 +8,8 @@ from xml.etree import ElementTree
 import aiohttp
 
 from api_service.services.http.base_client import BaseHTTPClient
-from api_service.utils.ssrf_guard import validate_url
+from api_service.utils.ssrf_guard import validate_url, normalize_base_url
+from api_service.services.http.guarded_session import GuardedSession
 
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'}
@@ -20,7 +21,12 @@ class UserAvatarService(BaseHTTPClient):
     REQUEST_TIMEOUT = 4
 
     async def _read(self, url, headers=None):
-        session = await self._get_session()
+        private = (url,) if headers else ()
+        async with GuardedSession(private_urls=private, allowed_urls=(url,),
+                                  timeout=aiohttp.ClientTimeout(total=self.REQUEST_TIMEOUT)) as session:
+            return await self._read_image(session, url, headers)
+
+    async def _read_image(self, session, url, headers):
         async with session.get(url, headers=headers, allow_redirects=False) as response:
             if response.status != 200:
                 return None
@@ -63,6 +69,7 @@ class UserAvatarService(BaseHTTPClient):
         token = config.get('SEER_TOKEN')
         if not base or not token or not seer_user_id:
             return None
+        base = normalize_base_url(base)
         headers = {'X-Api-Key': token}
         user = await self._json(f'{base}/api/v1/user/{int(seer_user_id)}', headers)
         return await self._remote_image(user.get('avatar') if isinstance(user, dict) else None, base, headers)
@@ -72,6 +79,7 @@ class UserAvatarService(BaseHTTPClient):
         token = config.get('JELLYFIN_TOKEN')
         if not base or not token:
             return None
+        base = normalize_base_url(base)
         user_id = quote(str(external_id), safe='')
         return await self._image(
             f'{base}/Users/{user_id}/Images/Primary?maxWidth=128&maxHeight=128',

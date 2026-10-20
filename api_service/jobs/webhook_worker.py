@@ -4,12 +4,12 @@ import hmac
 import json
 from datetime import datetime, timedelta, timezone
 
-import requests
-
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.observability.metrics import WEBHOOK_DELIVERIES
 from api_service.utils.ssrf_guard import validate_url
+from api_service.services.http.guarded_session import send_bytes
+from api_service.utils.asyncio_loop import run_coroutine_sync
 
 logger = LoggerManager.get_logger("WebhookWorker")
 MAX_RETRIES = 5
@@ -26,16 +26,17 @@ def run_webhook_worker():
             validate_url(item["url"], allow_private=bool(item["allow_private"]))
             if not db.is_webhook_destination_allowed(item["url"]):
                 raise ValueError("Webhook destination is not in the allowlist")
-            response = requests.post(item["url"], data=body, timeout=10, allow_redirects=False, headers={
+            status, _ = run_coroutine_sync(send_bytes('POST', item["url"], data=body,
+                allow_private=bool(item["allow_private"]), headers={
                 "Content-Type": "application/json", "User-Agent": "SuggestArr-Webhook/1",
                 "X-SuggestArr-Event": item["event_type"], "X-SuggestArr-Event-Id": item["event_id"],
                 "X-SuggestArr-Timestamp": timestamp, "X-SuggestArr-Signature": f"sha256={signature}",
-            })
-            if 200 <= response.status_code < 300:
+            }), logger)
+            if 200 <= status < 300:
                 db.update_webhook_delivery(item["id"], "delivered", item["retry_count"])
                 WEBHOOK_DELIVERIES.labels(event=item["event_type"], status="delivered").inc()
                 continue
-            raise RuntimeError(f"HTTP {response.status_code}")
+            raise RuntimeError(f"HTTP {status}")
         except Exception as exc:
             retry = item["retry_count"] + 1
             if retry >= MAX_RETRIES:

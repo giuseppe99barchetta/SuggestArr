@@ -7,7 +7,11 @@
       <p class="m-0 mb-7 text-sm text-ink-4">{{ cardSubtitle }}</p>
 
       <!-- Login / Setup / Register form -->
-      <form @submit.prevent="handleSubmit" class="flex flex-col gap-4 text-left">
+      <div v-if="statusUnavailable" class="ui-alert-bad" role="alert">
+        Authentication is temporarily unavailable. Please try again.
+        <button type="button" class="ui-btn-secondary mt-3" @click="loadStatus">Retry</button>
+      </div>
+      <form v-else @submit.prevent="handleSubmit" class="flex flex-col gap-4 text-left">
         <label class="ui-label" for="login-username">
           Username
           <input
@@ -101,6 +105,7 @@ export default {
     const isSetupMode = ref(false)
     const isRegisterMode = ref(false)
     const allowRegistration = ref(false)
+    const statusUnavailable = ref(true)
 
     const cardTitle = computed(() => {
       if (isSetupMode.value) return 'Create Admin Account'
@@ -127,19 +132,25 @@ export default {
       return 'Sign In'
     })
 
+    async function loadStatus() {
+      statusUnavailable.value = true
+      try {
+        const response = await axios.get('/api/auth/status', { _skipAuth: true })
+        isSetupMode.value = !response.data.auth_setup_complete
+        allowRegistration.value = !!response.data.allow_registration
+        statusUnavailable.value = false
+      } catch {
+        isSetupMode.value = false
+        allowRegistration.value = false
+      }
+    }
+
     onMounted(async () => {
       if (accessToken.value) {
         router.replace(route.query.redirect || '/dashboard')
         return
       }
-      try {
-        const response = await axios.get('/api/auth/status')
-        isSetupMode.value = !response.data.auth_setup_complete
-        allowRegistration.value = !!response.data.allow_registration
-      } catch {
-        isSetupMode.value = false
-        allowRegistration.value = false
-      }
+      await loadStatus()
     })
 
     function switchToRegister() {
@@ -190,7 +201,7 @@ export default {
 
     return {
       username, password, confirmPassword,
-      loading, error, successMsg,
+      loading, error, successMsg, statusUnavailable, loadStatus,
       isSetupMode, isRegisterMode, allowRegistration,
       cardTitle, cardSubtitle, submitIcon, submitLabel,
       handleSubmit, switchToRegister, switchToLogin,

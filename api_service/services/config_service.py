@@ -22,6 +22,7 @@ from api_service.services.config_secrets import (
     strip_integration_secrets,
 )
 from api_service.services.integration_sanitizer import sanitize_integration_config
+from api_service.services.integration_security import bind_flat_credentials
 
 logger = LoggerManager.get_logger(__name__)
 
@@ -300,8 +301,11 @@ class ConfigService:
 
         db = DatabaseManager()
 
+        binding_config = load_env_vars()
+        incoming_settings = dict(data.get('settings') or {})
         # --- 1. Upsert integrations -------------------------------------------
         integrations: dict = data.get("integrations") or {}
+        prepared = {}
         for service, service_cfg in integrations.items():
             if not isinstance(service_cfg, dict):
                 logger.warning(
@@ -311,13 +315,22 @@ class ConfigService:
             service_cfg = _sanitize_integration_config(service, service_cfg)
             existing = db.get_integration(service) or {}
             service_cfg = merge_integration_config(service, service_cfg, existing)
+            prepared[service] = service_cfg
+            if service == 'seer':
+                binding_config = {**binding_config,
+                    'SEER_API_URL': existing.get('api_url') or binding_config.get('SEER_API_URL'),
+                    'SEER_TOKEN': existing.get('api_key') or binding_config.get('SEER_TOKEN')}
+                incoming_settings.update(SEER_API_URL=service_cfg.get('api_url'),
+                                         SEER_TOKEN=service_cfg.get('api_key'))
+
+        settings = bind_flat_credentials(incoming_settings, binding_config)
+        for service, service_cfg in prepared.items():
             # Log non-sensitive fields only.
             safe = _redact_for_log(service_cfg)
             logger.info("Importing integration '%s' %s", service, safe)
             db.set_integration(service, service_cfg)
 
         # --- 2. Restore settings ----------------------------------------------
-        settings: dict = data.get("settings") or {}
         if settings:
             current_config = load_env_vars()
             updated_keys = []

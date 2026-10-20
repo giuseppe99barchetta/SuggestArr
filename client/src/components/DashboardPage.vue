@@ -716,22 +716,22 @@ export default {
           case 'jellyfin':
             endpoint = '/api/jellyfin/test';
             payload = { 
-              api_url: config.api_url,
-              token: config.token 
+              JELLYFIN_API_URL: config.api_url,
+              JELLYFIN_TOKEN: config.token
             };
             break;
           case 'emby':
             endpoint = '/api/jellyfin/test';
             payload = { 
-              api_url: config.api_url,
-              token: config.token 
+              JELLYFIN_API_URL: config.api_url,
+              JELLYFIN_TOKEN: config.token
             };
             break;
           case 'seer':
             endpoint = '/api/seer/test';
             payload = { 
-              api_url: config.api_url, 
-              token: config.token 
+              SEER_API_URL: config.api_url,
+              SEER_TOKEN: config.token
             };
             break;
           case 'database':

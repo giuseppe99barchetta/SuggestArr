@@ -2,7 +2,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from flask import Flask
+from flask import Flask, g
 
 from api_service.blueprints.seer import routes
 
@@ -11,6 +11,11 @@ from api_service.blueprints.seer import routes
 def client():
     routes._web_url_cache.update(url=None, at=0.0)
     app = Flask(__name__)
+
+    @app.before_request
+    def authenticate():
+        g.current_user = {'id': '7', 'role': 'user'}
+
     app.register_blueprint(routes.seer_bp, url_prefix='/api/seer')
     yield app.test_client()
     routes._web_url_cache.update(url=None, at=0.0)
@@ -42,3 +47,9 @@ def test_falls_back_to_the_configured_address(client):
 def test_unconfigured_seer_has_no_link(client):
     with patch.object(routes, '_load_seer_config', return_value=('', '', None)):
         assert client.get('/api/seer/web-url').get_json() == {'url': None}
+
+
+def test_anonymous_callers_are_refused():
+    app = Flask(__name__)
+    app.register_blueprint(routes.seer_bp, url_prefix='/api/seer')
+    assert app.test_client().get('/api/seer/web-url').status_code == 401

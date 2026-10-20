@@ -331,6 +331,11 @@ LLM_MODEL=gpt-4o-mini</code></pre>
               <input id="authTrustedCidrs" v-model="localConfig.AUTH_TRUSTED_CIDRS" type="text" placeholder="127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" class="ui-input" :disabled="isLoading" />
               <span class="text-xs font-normal text-ink-4">Networks allowed to skip sign-in, separated by commas.</span>
             </label>
+            <label v-if="localConfig.AUTH_MODE === 'local_bypass'" class="ui-label" for="authTrustedProxyCidrs">
+              Trusted reverse proxy CIDRs
+              <input id="authTrustedProxyCidrs" v-model="localConfig.AUTH_TRUSTED_PROXY_CIDRS" type="text" placeholder="10.0.20.11/32" class="ui-input" :disabled="isLoading" />
+              <span class="text-xs text-ink-4">Only these proxies may supply the client IP. Leave empty for direct access. Proxy addresses and bypass client networks are separate lists.</span>
+            </label>
 
             <label v-if="localConfig.AUTH_MODE === 'local_bypass' || localConfig.AUTH_MODE === 'disabled'" class="ui-label" for="authBypassUsername">
               Bypass username
@@ -622,6 +627,7 @@ export default {
           ENABLE_STATIC_BACKGROUND: false,
           STATIC_BACKGROUND_COLOR: '#2E3440',
           AUTH_MODE: 'enabled',
+          AUTH_TRUSTED_PROXY_CIDRS: '',
           AUTH_TRUSTED_CIDRS: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
           AUTH_BYPASS_USERNAME: 'local_admin',
         };
@@ -781,11 +787,6 @@ export default {
         return;
       }
 
-      if (authMode === 'local_bypass' && !cidrText) {
-        this.$toast.error('Trusted CIDRs are required when Authentication Mode is local_bypass.');
-        return;
-      }
-
       if (cidrText) {
         const invalidCidrs = cidrText
           .split(',')
@@ -828,7 +829,8 @@ export default {
             ENABLE_STATIC_BACKGROUND: this.localConfig.ENABLE_STATIC_BACKGROUND || false,
             STATIC_BACKGROUND_COLOR: this.localConfig.STATIC_BACKGROUND_COLOR || '#2E3440',
             AUTH_MODE: authMode,
-            AUTH_TRUSTED_CIDRS: cidrText || '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
+            AUTH_TRUSTED_CIDRS: cidrText,
+            AUTH_TRUSTED_PROXY_CIDRS: String(this.localConfig.AUTH_TRUSTED_PROXY_CIDRS || '').trim(),
             AUTH_BYPASS_USERNAME: (this.localConfig.AUTH_BYPASS_USERNAME || '').trim() || 'local_admin',
             SUBPATH: this.localConfig.SUBPATH || null,
           },
@@ -885,6 +887,7 @@ export default {
         ENABLE_STATIC_BACKGROUND: false,
         STATIC_BACKGROUND_COLOR: '#2E3440',
         AUTH_MODE: 'enabled',
+        AUTH_TRUSTED_PROXY_CIDRS: '',
         AUTH_TRUSTED_CIDRS: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
         AUTH_BYPASS_USERNAME: 'local_admin',
         SUBPATH: null,

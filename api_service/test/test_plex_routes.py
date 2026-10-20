@@ -27,6 +27,9 @@ class TestPlexUsersRoute(unittest.TestCase):
     def setUp(self):
         app = Flask(__name__)
         app.config["TESTING"] = True
+        @app.before_request
+        def admin_identity():
+            g.current_user = {'id': '1', 'role': 'admin'}
         app.register_blueprint(plex_bp, url_prefix="/api/plex")
         self.client = app.test_client()
 
@@ -119,7 +122,7 @@ class TestRedactedPlexToken(unittest.TestCase):
                 self.assertNotIn("stored-token", [token for token, _ in _RecordingPlexClient.sent])
 
     def test_non_admin_never_gets_the_stored_token(self):
-        # Not even towards the configured server.
+        # Plex administration routes are admin-only, so a non-admin is refused outright.
         for path, body in (
             ("/api/plex/users", {"PLEX_TOKEN": "***", "PLEX_API_URL": STORED["PLEX_API_URL"]}),
             ("/api/plex/libraries", {"PLEX_TOKEN": "***", "PLEX_API_URL": STORED["PLEX_API_URL"]}),
@@ -127,7 +130,7 @@ class TestRedactedPlexToken(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 resp = self._post("user", path, body)
-                self.assertEqual(resp.status_code, 400)
+                self.assertEqual(resp.status_code, 403)
                 self.assertEqual(_RecordingPlexClient.sent, [])
 
     def test_redacted_token_with_nothing_stored_returns_400(self):
@@ -141,7 +144,7 @@ class TestRedactedPlexToken(unittest.TestCase):
         self.assertEqual(_RecordingPlexClient.sent, [])
 
     def test_a_real_token_is_used_as_given(self):
-        resp = self._post("user", "/api/plex/users",
+        resp = self._post("admin", "/api/plex/users",
                           {"PLEX_TOKEN": "typed-token", "PLEX_API_URL": "http://other.example:32400"})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(_RecordingPlexClient.sent, [("typed-token", "http://other.example:32400")])

@@ -589,6 +589,48 @@ Important options:
   the username in a header (see below).
 - `SUGGESTARR_AUTH_DISABLED=true`: disables auth. Use only for isolated testing.
 - `AUTH_TRUSTED_CIDRS`: trusted CIDR list for local bypass and trusted header.
+- `AUTH_TRUSTED_PROXY_CIDRS`: comma-separated proxy IPs/CIDRs allowed to supply
+  `X-Forwarded-For` for local bypass and anonymous rate limiting. Default: empty.
+  Keep this separate from the networks whose clients may bypass login. Explicit
+  empty or invalid trust lists grant no trust.
+
+For `local_bypass` behind a reverse proxy, explicitly list every trusted proxy
+hop, for example `AUTH_TRUSTED_PROXY_CIDRS=10.0.20.11/32`, and put the permitted
+client networks in `AUTH_TRUSTED_CIDRS`. The proxy must overwrite incoming
+forwarding headers or append the actual connecting client to `X-Forwarded-For`.
+SuggestArr walks that chain from the nearest proxy to the first non-proxy client.
+Missing/malformed chains and forwarded requests from unlisted peers cannot
+bypass login. With no forwarding headers, direct LAN access still works.
+Do not expose the backend directly or deploy an unlisted LAN proxy that omits
+forwarding headers: the backend cannot distinguish it from a direct LAN client.
+
+If the database cannot establish whether authentication accounts exist,
+SuggestArr returns `503` rather than enabling setup. The login screen offers
+a retry. Restore database availability before creating the first admin account.
+
+Integration configuration, connectivity tests, service discovery and setup OAuth
+endpoints require an administrator. Personal account linking remains available
+to authenticated users against configured providers. Job and approval profile
+lookups (`GET /api/seer/radarr-servers` and `/sonarr-servers`) use saved Seer
+credentials only and reject query/body overrides. Their responses contain only
+selection data, never upstream credentials or service addresses.
+
+For Plex, Jellyfin/Emby and Seer, use a complete HTTP/HTTPS base URL without
+embedded credentials, query strings or fragments. Reverse-proxy paths such as
+`https://media.example/jellyfin` remain supported. Changing an existing base URL
+requires an explicit token in saves/imports: a redacted `***` token cannot carry
+the old credential to a new destination. Replacing the Seer destination or API
+token clears its saved session. Invalid existing bases must be corrected manually.
+
+These integration requests do not follow redirects. Configure their final URL,
+including the correct HTTP/HTTPS scheme. LAN, localhost and Docker destinations
+remain supported for configured integrations. Public-only destinations, including
+external profile images and webhooks without `allow_private`, reject non-global
+addresses (including CGNAT), 6to4, Teredo and standard NAT64 prefixes. The HTTP
+connector validates the addresses it actually uses, including after DNS changes;
+TLS certificate validation and the original hostname remain enabled. Private
+webhooks still require explicit `allow_private` and the existing destination
+allowlist; delivery signatures, queueing and retry behavior remain unchanged.
 
 Do not expose SuggestArr publicly with authentication disabled or local bypass enabled unless a separate trusted authentication layer protects it.
 

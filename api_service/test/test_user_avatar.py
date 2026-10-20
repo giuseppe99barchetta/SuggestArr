@@ -145,8 +145,7 @@ def test_redirects_and_oversized_downloads_are_rejected(status, size, body_size)
     service = UserAvatarService()
     session = MagicMock()
     session.get.return_value = context
-    service._get_session = AsyncMock(return_value=session)
-    assert asyncio.run(service._read('http://seer/avatar')) is None
+    assert asyncio.run(service._read_image(session, 'http://seer/avatar', None)) is None
     assert session.get.call_args.kwargs['allow_redirects'] is False
 
 

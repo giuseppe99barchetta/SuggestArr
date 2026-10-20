@@ -1,4 +1,4 @@
-import requests
+from api_service.services.http import sync_client as requests
 
 
 class PlexAuth:

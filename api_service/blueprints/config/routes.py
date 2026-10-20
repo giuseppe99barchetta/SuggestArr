@@ -11,6 +11,8 @@ from api_service.config.config import (
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
+from api_service.services.integration_security import bind_flat_credentials
+from api_service.services.config_secrets import merge_integration_config
 
 logger = LoggerManager.get_logger("ConfigRoute")
 config_bp = Blueprint('config', __name__)
@@ -58,10 +60,9 @@ def _expand_integrations_into_flat(flat: dict, integrations: dict) -> None:
 def _sync_integrations_from_flat(db, flat: dict) -> None:
     """Upsert DB integration rows from a flat config dict.
 
-    Only keys present in *flat* with a non-empty, non-redacted value are written.
-    The optional Trakt client secret is the exception: an explicitly empty value
-    clears a previously stored secret so an ID-only Trakt app cannot inherit a
-    stale secret. Missing keys still leave the existing DB row untouched.
+    Missing/redacted keys leave stored values untouched. Explicit empty media
+    integration values clear destinations, tokens and sessions; an empty Trakt
+    client secret also clears the old secret for an ID-only app.
 
     Args:
         db: ``DatabaseManager`` instance.
@@ -74,12 +75,12 @@ def _sync_integrations_from_flat(db, flat: dict) -> None:
         val = flat.get(flat_key)
         if val == _REDACTED:
             continue
-        if val or (service == 'trakt' and db_field == 'client_secret'):
+        if val or (service == 'trakt' and db_field == 'client_secret') or service in ('jellyfin', 'seer'):
             service_updates.setdefault(service, {})[db_field] = val
 
     for service, changes in service_updates.items():
         existing = db.get_integration(service) or {}
-        db.set_integration(service, {**existing, **changes})
+        db.set_integration(service, merge_integration_config(service, changes, existing))
 
 
 def _redact_config(config: dict) -> dict:
@@ -100,9 +101,11 @@ def _merge_secrets(incoming: dict, existing: dict) -> dict:
         _expand_integrations_into_flat(db_flat, DatabaseManager().get_all_integrations())
     except Exception:
         pass
+    effective_existing = {**existing, **db_flat}
+    merged = bind_flat_credentials(merged, effective_existing)
     for key in _SECRET_KEYS:
         if merged.get(key) == _REDACTED:
-            merged[key] = existing.get(key) or db_flat.get(key)
+            merged[key] = effective_existing.get(key)
     return merged
 
 @config_bp.route('/fetch', methods=['GET'])

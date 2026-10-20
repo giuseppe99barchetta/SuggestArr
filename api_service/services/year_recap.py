@@ -10,6 +10,7 @@ from urllib.parse import quote
 from api_service.db.recap_repository import utc_datetime, watch_provider
 from api_service.services.http.base_client import BaseHTTPClient
 from api_service.services.plex.plex_client import normalize_guid_provider_id
+from api_service.utils.ssrf_guard import normalize_base_url
 
 PAGE_SIZE = 500
 MAX_PAGES = 10
@@ -27,6 +28,9 @@ class YearWatchActivity(BaseHTTPClient):
         if data['scope'] == 'personal' and not ids:
             return {'watchStatus': 'no_profiles', 'watchNote': f'Link your {data["providerLabel"]} account in My profile to load personal watch activity.'}
         try:
+            url = normalize_base_url(url)
+            self.guard_outbound = True
+            self.private_urls = self.allowed_urls = (url,)
             async with asyncio.timeout(25):
                 return await self._load(data, ids, url.rstrip('/'), token)
         except Exception as exc:
