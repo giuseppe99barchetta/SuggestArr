@@ -1,4 +1,6 @@
 import asyncio
+import os
+import threading
 from unittest.mock import MagicMock
 
 import pytest
@@ -399,6 +401,230 @@ def test_rejected_rating_is_an_error():
     FakeTraktClient.rating_not_found = True
     result = asyncio.run(_sync().sync(7, '1', 'movie', 'seen_liked'))
     assert result == {'status': 'error', 'reason': 'not found on Trakt'}
+
+
+# --- concurrency -----------------------------------------------------------------
+#
+# The check ("has this play already?") and the write must not interleave between
+# two syncs of the same account and title. RacyTraktClient widens that window: the
+# read yields before answering, so without the lock both syncs see "not watched"
+# and both write.
+
+class RacyTrakt:
+    """Shared fake Trakt state for one test, safe across threads."""
+
+    def __init__(self, read_delay=0.05, barrier=None):
+        self.guard = threading.Lock()
+        self.movie_plays = {}      # trakt_id -> number of plays
+        self.episode_writes = []   # (trakt_id, seasons) per write
+        self.read_delay = read_delay
+        self.barrier = barrier     # optional: makes reads of different titles meet
+
+    def client_factory(self):
+        state = self
+
+        class RacyTraktClient:
+            def __init__(self, client_id, client_secret, **kwargs):
+                self.kwargs = kwargs
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def lookup_trakt_id(self, media_type, tmdb_id):
+                return 1000 + int(tmdb_id)
+
+            async def has_movie_play(self, trakt_id):
+                if state.barrier is not None:
+                    await state.barrier()
+                with state.guard:
+                    seen = state.movie_plays.get(trakt_id, 0) > 0
+                await asyncio.sleep(state.read_delay)
+                return seen
+
+            async def add_to_history(self, media_type, tmdb_id):
+                with state.guard:
+                    key = 1000 + int(tmdb_id)
+                    state.movie_plays[key] = state.movie_plays.get(key, 0) + 1
+                return {'added': {'movies': 1}}
+
+            async def unwatched_episodes(self, trakt_id):
+                with state.guard:
+                    done = any(t == trakt_id for t, _ in state.episode_writes)
+                await asyncio.sleep(state.read_delay)
+                return [] if done else [{'number': 1, 'episodes': [{'number': 1}, {'number': 2}]}]
+
+            async def add_episodes_to_history(self, trakt_id, seasons):
+                with state.guard:
+                    state.episode_writes.append((trakt_id, seasons))
+                return {'added': {'episodes': 2}}
+
+            async def add_rating(self, media_type, tmdb_id, rating):
+                return {'added': {'movies': 1}, 'not_found': {'movies': []}}
+
+        return RacyTraktClient
+
+
+@pytest.fixture
+def isolated_lock_dir(monkeypatch, tmp_path):
+    monkeypatch.setattr(feedback_sync, '_LOCK_DIR', str(tmp_path / 'locks'))
+    monkeypatch.setattr(feedback_sync, '_process_locks', {})
+
+
+def _racy_sync(state, db=None):
+    return TraktFeedbackSync(db=db or _db(), env_vars=dict(ENABLED_ENV), client_factory=state.client_factory())
+
+
+def test_concurrent_syncs_on_one_loop_add_one_movie_play(isolated_lock_dir):
+    state = RacyTrakt()
+
+    async def both():
+        return await asyncio.gather(
+            _racy_sync(state).sync(7, '42', 'movie', 'already_seen'),
+            _racy_sync(state).sync(7, '42', 'movie', 'seen_liked', rating=9),
+        )
+
+    results = asyncio.run(both())
+    assert state.movie_plays == {1042: 1}
+    assert sorted(r['history'] for r in results) == ['added', 'already watched']
+
+
+def test_concurrent_syncs_in_separate_threads_add_one_movie_play(isolated_lock_dir):
+    # Production runs each sync on its own event loop in its own thread.
+    state = RacyTrakt()
+    start = threading.Barrier(2)
+    results = []
+
+    def run(feedback):
+        start.wait()
+        results.append(asyncio.run(_racy_sync(state).sync(7, '42', 'movie', feedback)))
+
+    threads = [threading.Thread(target=run, args=(f,)) for f in ('already_seen', 'seen_liked')]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+
+    assert state.movie_plays == {1042: 1}
+    assert sorted(r['history'] for r in results) == ['added', 'already watched']
+
+
+def test_concurrent_show_syncs_add_the_episodes_once(isolated_lock_dir):
+    state = RacyTrakt()
+    start = threading.Barrier(2)
+
+    def run():
+        start.wait()
+        asyncio.run(_racy_sync(state).sync(7, '1399', 'tv', 'already_seen', mark_watched=True))
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+
+    assert len(state.episode_writes) == 1
+
+
+def test_different_titles_are_not_serialised(isolated_lock_dir):
+    # Both reads must be in flight at the same time; a lock shared across titles
+    # would make the second read wait for the first write and the barrier time out.
+    state = RacyTrakt()
+    waiting = []
+
+    async def meet():
+        waiting.append(1)
+        for _ in range(100):
+            if len(waiting) >= 2:
+                return
+            await asyncio.sleep(0.01)
+        raise AssertionError('the second title waited for the first one')
+
+    state.barrier = meet
+
+    async def both():
+        return await asyncio.gather(
+            _racy_sync(state).sync(7, '42', 'movie', 'already_seen'),
+            _racy_sync(state).sync(7, '43', 'movie', 'already_seen'),
+        )
+
+    results = asyncio.run(both())
+    assert [r['history'] for r in results] == ['added', 'added']
+    assert state.movie_plays == {1042: 1, 1043: 1}
+
+
+def test_different_trakt_accounts_are_not_serialised(isolated_lock_dir):
+    state = RacyTrakt()
+    waiting = []
+
+    async def meet():
+        waiting.append(1)
+        for _ in range(100):
+            if len(waiting) >= 2:
+                return
+            await asyncio.sleep(0.01)
+        raise AssertionError('the second account waited for the first one')
+
+    state.barrier = meet
+    other = _db()
+    other.get_trakt_account_link.return_value = {
+        'id': 4, 'connected': True, 'status': 'connected', 'token_source': 'manual_oauth',
+        'trakt_user_id': 'someone-else'}
+
+    async def both():
+        return await asyncio.gather(
+            _racy_sync(state).sync(7, '42', 'movie', 'already_seen'),
+            _racy_sync(state, other).sync(8, '42', 'movie', 'already_seen'),
+        )
+
+    results = asyncio.run(both())
+    assert [r['history'] for r in results] == ['added', 'added']
+
+
+def test_lock_key_is_per_trakt_account_not_per_link():
+    # One Trakt account linked to two media identities must still share the lock.
+    a = {'id': 3, 'trakt_user_id': 'abc'}
+    b = {'id': 9, 'trakt_user_id': 'abc'}
+    assert feedback_sync._play_lock_key(a, 'movie', 1042) == feedback_sync._play_lock_key(b, 'movie', 1042)
+    assert feedback_sync._play_lock_key(a, 'movie', 1042) != feedback_sync._play_lock_key(a, 'tv', 1042)
+    assert feedback_sync._play_lock_key({'id': 3}, 'movie', 1) == 'link-3:movie:1'
+
+
+def test_a_held_lock_times_out_instead_of_writing(isolated_lock_dir):
+    async def scenario():
+        async with feedback_sync.play_write_lock('acct:movie:1'):
+            with pytest.raises(TimeoutError):
+                async with feedback_sync.play_write_lock('acct:movie:1', timeout=0.1):
+                    pass
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.skipif(feedback_sync.fcntl is None, reason='file locks need fcntl (POSIX)')
+def test_lock_also_excludes_other_processes(isolated_lock_dir):
+    # Another worker process must see the per-key lock file as locked.
+    import subprocess
+    import sys as _sys
+
+    key = 'acct:movie:1042'
+    name = feedback_sync.hashlib.sha256(key.encode('utf-8')).hexdigest()[:32] + '.lock'
+    path = os.path.join(feedback_sync._LOCK_DIR, name)
+    probe = ("import fcntl,sys\n"
+             "f=open(sys.argv[1],'a+')\n"
+             "try:\n"
+             "    fcntl.flock(f.fileno(), fcntl.LOCK_EX|fcntl.LOCK_NB); print('free')\n"
+             "except BlockingIOError:\n"
+             "    print('locked')\n")
+
+    async def scenario():
+        async with feedback_sync.play_write_lock(key):
+            held = subprocess.run([_sys.executable, '-c', probe, path], capture_output=True, text=True).stdout.strip()
+        after = subprocess.run([_sys.executable, '-c', probe, path], capture_output=True, text=True).stdout.strip()
+        return held, after
+
+    assert asyncio.run(scenario()) == ('locked', 'free')
 
 
 # --- scheduling ----------------------------------------------------------------

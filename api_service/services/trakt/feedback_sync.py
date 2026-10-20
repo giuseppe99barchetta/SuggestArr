@@ -16,7 +16,10 @@ history marks every aired episode, so that has to be asked for explicitly.
 Writes are idempotent. Ratings are upserts on Trakt's side. A movie that
 already has a play in the user's history gets no new one, and a show only gets
 plays for the aired episodes still unwatched, so saving the same feedback
-again, changing the rating or retrying never adds duplicate plays.
+again, changing the rating or retrying never adds duplicate plays. That check and
+the write are serialised per Trakt account and title (``play_write_lock``), in
+this process and across worker processes on the same host, so concurrent saves
+cannot both see "not watched" and both write.
 
 The Trakt account used is the one linked to the *acting* SuggestArr user's own
 media profile, since "I have seen this" is a statement about the person
@@ -27,8 +30,18 @@ the background, never changes the HTTP response of the feedback call, and only
 logs on failure.
 """
 import asyncio
+import contextlib
+import hashlib
+import os
+import tempfile
 import threading
+import time
 from typing import Any, Optional
+
+try:  # POSIX only; elsewhere the in-process lock is all there is.
+    import fcntl
+except ImportError:  # pragma: no cover - exercised on Windows only
+    fcntl = None
 
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
@@ -43,6 +56,69 @@ LIKED_RATING = 8
 DISLIKED_RATING = 3
 FEEDBACK_RATINGS = {'seen_liked': LIKED_RATING, 'seen_disliked': DISLIKED_RATING}
 _MEDIA_PROVIDERS = {'plex', 'jellyfin', 'emby'}
+
+# Serialises "read Trakt history -> add missing plays" per Trakt account and title.
+_LOCK_POLL_SECONDS = 0.05
+_LOCK_TIMEOUT_SECONDS = 60
+_LOCK_DIR = os.path.join(tempfile.gettempdir(), 'suggestarr-trakt-play-locks')
+_process_locks: dict[str, threading.Lock] = {}
+_process_locks_guard = threading.Lock()
+
+
+def _play_lock_key(link: dict, media_type: str, trakt_id: int) -> str:
+    """Key one Trakt account + title. Two SuggestArr links to the same Trakt user share it."""
+    account = link.get('trakt_user_id') or f"link-{link.get('id')}"
+    return f"{account}:{media_type}:{int(trakt_id)}"
+
+
+def _process_lock(key: str) -> threading.Lock:
+    with _process_locks_guard:
+        return _process_locks.setdefault(key, threading.Lock())
+
+
+@contextlib.asynccontextmanager
+async def play_write_lock(key: str, timeout: float = _LOCK_TIMEOUT_SECONDS):
+    """Hold the check-and-write of plays for one Trakt account and title exclusively.
+
+    Two levels, both acquired by polling so a waiting coroutine never blocks its
+    event loop (syncs can share one loop, or run on one loop per thread):
+
+    - a ``threading.Lock`` per key, for syncs inside this process;
+    - an ``fcntl.flock`` on a per-key file under the temp dir, for syncs in other
+      worker processes of the same host (skipped where ``fcntl`` is unavailable).
+
+    Args:
+        key: Value from ``_play_lock_key``.
+        timeout: Seconds to wait before giving up with ``TimeoutError``; giving up
+            means no play is written, which is safer than writing a duplicate.
+    """
+    deadline = time.monotonic() + timeout
+    lock = _process_lock(key)
+    while not lock.acquire(blocking=False):
+        if time.monotonic() >= deadline:
+            raise TimeoutError(f"Trakt play lock busy: {key}")
+        await asyncio.sleep(_LOCK_POLL_SECONDS)
+    handle = None
+    try:
+        if fcntl is not None:
+            os.makedirs(_LOCK_DIR, exist_ok=True)
+            name = hashlib.sha256(key.encode('utf-8')).hexdigest()[:32] + '.lock'
+            handle = open(os.path.join(_LOCK_DIR, name), 'a+')
+            while True:
+                try:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError(f"Trakt play lock busy: {key}")
+                    await asyncio.sleep(_LOCK_POLL_SECONDS)
+        yield
+    finally:
+        if handle is not None:
+            with contextlib.suppress(OSError):
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            handle.close()
+        lock.release()
 
 
 def _trakt_credentials(env_vars: dict) -> tuple[str, str]:
@@ -168,7 +244,10 @@ class TraktFeedbackSync:
                     return {'status': 'error', 'reason': 'not found on Trakt'}
                 history = 'not requested'
                 if mark_watched:
-                    history = await self._add_missing_plays(client, media_type, tmdb_id, trakt_id)
+                    # Check and write must not interleave with another sync of the same
+                    # account and title, or both see "not watched" and both add a play.
+                    async with play_write_lock(_play_lock_key(link, media_type, trakt_id)):
+                        history = await self._add_missing_plays(client, media_type, tmdb_id, trakt_id)
                 rated = await client.add_rating(media_type, tmdb_id, rating) if rating else None
         except Exception as exc:
             logger.warning("Trakt sync of '%s' for %s %s failed: %s", feedback, media_type, tmdb_id, exc)
