@@ -6,13 +6,14 @@ export function prepareYearRecap(data) {
   return { ...data, titles: data.titles.map(title => ({ ...title, artwork: posterUrl(title.poster_path) })) };
 }
 
-/** Stories without data to show are left out rather than rendered as empty placeholders. */
+/** Stories with too little data to be worth sharing are left out rather than shown nearly empty. */
 const CONTENT = {
-  watched: data => Boolean(data.watched),
-  hitrate: data => data.hitRate?.watched > 0,
-  // Without watch time or requests the chart would only show an empty "busiest month".
-  time: data => data.watchMinutes != null || data.requested?.total > 0,
-  genres: data => Boolean(data.genres?.length),
+  watched: data => data.watched?.movies + data.watched?.episodes >= 3,
+  // A single-digit share reads as a failure, not a celebration.
+  hitrate: data => data.hitRate?.watched >= 3 && data.hitRate.percent >= 10,
+  // One or two requests make a twelve-month chart look empty.
+  time: data => data.watchMinutes != null || data.requested?.total >= 3,
+  genres: data => data.genres?.length > 0 && data.genreCoverage >= 3,
   titles: data => Boolean(data.titles?.length),
   badges: data => Boolean(data.badgesUnlocked?.length),
 };

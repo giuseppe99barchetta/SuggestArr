@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { canvasBlob } from './recapCanvas.js';
 import { prepareYearRecap, yearStories, yearCaption, yearDescription } from './yearRecapData.js';
 
-const real = () => ({ year: 2025, isDemo: false, scope: 'personal', requested: { total: 2, movies: 1, series: 1 },
+const real = () => ({ year: 2025, isDemo: false, scope: 'personal', requested: { total: 3, movies: 2, series: 1 },
   watched: null, watchMinutes: null, watchNote: 'Not loaded.', genres: [], genreCoverage: 0, titles: [],
   peakMonth: { label: 'May', requests: 2 }, monthly: [] });
 
@@ -14,7 +14,7 @@ test('real stories and captions preserve the year and unavailable watch data', (
   assert.deepEqual(stories.map(story => story.id), ['intro', 'discovery', 'time', 'summary']);
   assert.equal(stories[0].title, 'Your 2025, on screen');
   assert.equal(stories[2].title, 'A year of discoveries');
-  assert.match(yearCaption(data, stories.at(-1)), /2025.*2 recorded titles/);
+  assert.match(yearCaption(data, stories.at(-1)), /2025.*3 recorded titles/);
   assert.doesNotMatch(yearCaption(data, stories.at(-1)), /Sample|undefined|null|NaN/);
   for (const story of stories) assert.doesNotMatch(yearDescription(data, story), /Sample|undefined|null|NaN/);
 });
@@ -37,7 +37,7 @@ test('hit rate, badges and streak stories appear only with real data behind them
   const data = prepareYearRecap({ ...real(), requested: { total: 0, movies: 0, series: 0 }, hitRate: { watched: 0, total: 0, percent: 0, movies: 0, series: 0 }, badgesUnlocked: [] });
   // Nothing requested: no empty chart, no 0% hit rate, no empty badge list.
   assert.deepEqual(yearStories(data).map(story => story.id), ['intro', 'discovery', 'summary']);
-  const full = prepareYearRecap({ ...real(), hitRate: { watched: 1, total: 2, percent: 50, movies: 1, series: 0 },
+  const full = prepareYearRecap({ ...real(), hitRate: { watched: 3, total: 6, percent: 50, movies: 2, series: 1 },
     streak: { longest: 3, months: 3 }, badgesUnlocked: [{ id: 'titles_10', kind: 'titles', label: 'First discoveries', unlockedAt: '2025-03-01T00:00:00+00:00' }] });
   const stories = yearStories(full);
   assert.deepEqual(stories.map(story => story.id), ['intro', 'discovery', 'hitrate', 'time', 'badges', 'summary']);
@@ -45,4 +45,11 @@ test('hit rate, badges and streak stories appear only with real data behind them
   assert.match(yearDescription(full, stories[3]), /Longest watch streak: 3 months/);
   assert.match(yearDescription(full, stories[4]), /First discoveries unlocked this year/);
   assert.match(yearCaption(full, stories.at(-1)), /50% of them watched/);
+});
+
+test('stories with too little behind them are left out', () => {
+  const thin = prepareYearRecap({ ...real(), requested: { total: 2, movies: 1, series: 1 },
+    watched: { movies: 1, episodes: 1, series: 1 }, genres: [{ label: 'Drama', percent: 100 }], genreCoverage: 2,
+    hitRate: { watched: 5, total: 60, percent: 8, movies: 5, series: 0 } });
+  assert.deepEqual(yearStories(thin).map(story => story.id), ['intro', 'discovery', 'summary']);
 });

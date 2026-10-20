@@ -513,9 +513,15 @@ test('a newly unlocked badge opens a celebration with confetti, sharing and supp
   await expect(dialog.getByRole('heading', { name: 'First pick watched' })).toBeVisible();
   await expect(dialog.getByText('2 new badges since your last visit')).toBeVisible();
   await expect(dialog.locator('canvas[aria-hidden="true"]')).toHaveCount(1);
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: testInfo.outputPath('badge-celebration.png') });
+  // Sharing stays one click away so the badge leads the dialog.
+  await expect(dialog.getByRole('button', { name: 'Download PNG' })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Share badge' }).click();
   await expect(dialog.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  await expect(dialog.getByRole('img', { name: 'First pick watched badge image' })).toBeVisible();
   await expect(dialog.getByLabel('Caption')).toHaveValue(/Badge unlocked on SuggestArr: First pick watched/);
-  await page.screenshot({ path: testInfo.outputPath('badge-celebration.png'), animations: 'disabled' });
+  await page.screenshot({ path: testInfo.outputPath('badge-celebration-share.png'), animations: 'disabled' });
   await dialog.getByRole('button', { name: 'Discovery enthusiast' }).click();
   await expect(dialog.getByRole('heading', { name: 'Discovery enthusiast' })).toBeVisible();
   await expect(dialog.getByLabel('Caption')).toHaveValue(/Discovery enthusiast — Request 500 titles/);
