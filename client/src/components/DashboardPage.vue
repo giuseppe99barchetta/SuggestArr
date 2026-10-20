@@ -241,6 +241,7 @@ import UserManagement from './settings/UserManagement.vue';
 import UserProfile from './settings/UserProfile.vue';
 import { exportConfig, importConfig } from '@/api/api';
 import { getReleaseByTag } from '@/api/githubReleasesApi';
+import { REQUESTS_CHANGED } from '@/utils/requestEvents.js';
 
 const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
 
@@ -294,6 +295,7 @@ export default {
       isLoadingChangelog: false,
       changelogError: null,
       requestCount: 0,
+      requestCountCall: 0,
       showMobileNav: false,
       showTour: false,
       testingConnections: {
@@ -450,6 +452,11 @@ export default {
     },
   },
   watch: {
+    // The badge was only counted once at load; recount when moving between pages so
+    // suggestions created by a job run in the meantime show up too.
+    activeTab() {
+      this.loadRequestCount();
+    },
     'config.ENABLE_VISUAL_EFFECTS': {
       immediate: true,
       handler(newValue) {
@@ -461,7 +468,12 @@ export default {
       }
     }
   },
+  beforeUnmount() {
+    window.removeEventListener(REQUESTS_CHANGED, this.loadRequestCount);
+  },
   async mounted() {
+    // Pages fire this after approving, rejecting or marking suggestions seen.
+    window.addEventListener(REQUESTS_CHANGED, this.loadRequestCount);
     try {
       // Ensure auth is fully initialized before making protected API calls
       const { waitForAuthReady } = await import("@/composables/useAuth");
@@ -580,17 +592,21 @@ export default {
     },
 
     async loadRequestCount() {
+      // Counts can overlap (an approval event and a tab switch at once). Only the
+      // newest call may write the badge, so an older, slower answer cannot put a
+      // stale count back.
+      const call = ++this.requestCountCall;
       try {
         const jobs = await axios.get('/api/jobs', { timeout: 5000 });
         if (!approvalEnabled(jobs.data)) {
-          this.requestCount = 0;
+          if (call === this.requestCountCall) this.requestCount = 0;
           return;
         }
         const response = await axios.get('/api/automation/requests/workflow', {
           params: { status: 'awaiting_approval', page: 1, per_page: 1 },
           timeout: 5000 // 5 second timeout
         });
-        this.requestCount = response.data.total || 0;
+        if (call === this.requestCountCall) this.requestCount = response.data.total || 0;
       } catch (error) {
         console.error('Error loading request count:', error);
       }
@@ -627,7 +643,12 @@ export default {
       const oldSubpath = (this.config.SUBPATH || '').replace(/\/$/, '');
       try {
         await axios.post(`/api/config/section/${section}`, data);
-        Object.assign(this.config, data);
+        // Unchanged secrets are sent as the '***' sentinel. Copying that back would
+        // replace the real value held here, and anything that later reads it from
+        // this config (the Users page loading Plex accounts) would send '***' on.
+        for (const [key, value] of Object.entries(data)) {
+          if (value !== '***') this.config[key] = value;
+        }
 
         // After saving advanced settings, sync use_llm flag on all recommendation jobs
         if (section === 'advanced' && 'ENABLE_ADVANCED_ALGORITHM' in data) {
