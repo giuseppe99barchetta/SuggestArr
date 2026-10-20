@@ -252,6 +252,11 @@ export const revokeApiKey = (id) => axios.delete(`/api/auth/api-keys/${id}`);
 // Outbound webhooks (admin only)
 export const getWebhooks = () => axios.get('/api/v1/webhooks');
 export const createWebhook = (data) => axios.post('/api/v1/webhooks', data);
+// Personal "ready to watch" notifications for the signed-in user
+export const getMyNotifications = () => axios.get('/api/users/me/notifications');
+export const saveMyNotifications = (data) => axios.put('/api/users/me/notifications', data);
+export const deleteMyNotifications = () => axios.delete('/api/users/me/notifications');
+export const testMyNotifications = () => axios.post('/api/users/me/notifications/test');
 export const deleteWebhook = (id) => axios.delete(`/api/v1/webhooks/${id}`);
 export const getWebhookSettings = () => axios.get('/api/v1/webhooks/settings');
 export const updateWebhookSettings = (allowed_hosts) => axios.put('/api/v1/webhooks/settings', { allowed_hosts });

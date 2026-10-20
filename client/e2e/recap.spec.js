@@ -286,8 +286,8 @@ test('support preference errors keep the dialog open and allow retry', async ({ 
 
 test('profile preferences survive reload and can be re-enabled', async ({ page }) => {
   const { actions } = await openJourney(page, { profile: true });
-  const disabled = page.getByRole('radio', { name: /Don't show support reminders/ });
-  const enabled = page.getByRole('radio', { name: /Show occasional reminders/ });
+  const disabled = page.getByRole('radio', { name: 'Off', exact: true });
+  const enabled = page.getByRole('radio', { name: 'Occasional', exact: true });
   await expect(enabled).toBeChecked();
   await disabled.check({ force: true });
   await expect.poll(() => actions).toEqual(['disable']);

@@ -72,18 +72,40 @@
       </div>
     </section>
 
+    <!-- In the library and not watched yet: the payoff of every request. -->
+    <section v-if="readyShown.length" class="flex flex-col gap-4">
+      <div class="flex items-baseline justify-between gap-3">
+        <h2 class="m-0 text-[19px] font-bold text-ink">Ready to watch</h2>
+        <router-link :to="{ name: 'DashboardTab', params: { tab: 'requests' }, query: { status: 'sent', progress: 'available' } }" class="text-sm font-semibold no-underline">See all →</router-link>
+      </div>
+      <CardRow label="titles ready to watch">
+        <BackdropCard
+          v-for="request in readyShown"
+          :key="request._key"
+          :title="request.title"
+          :backdrop="request.backdrop_path || ''"
+          :poster="request.poster_path || ''"
+          :logo="tmdbLogo(request.logo_path)"
+          :badge="request.media_type === 'movie' ? 'Movie' : 'TV'"
+          :subtitle="request.user_name || request.user_id ? `For ${request.user_name || request.user_id}` : ''"
+          :play-url="request.media_url || ''"
+          @open="openDetails(request)"
+        />
+      </CardRow>
+    </section>
+
     <section class="flex flex-col gap-4">
       <div class="flex items-baseline justify-between gap-3">
         <h2 class="m-0 text-[19px] font-bold text-ink">Recently requested</h2>
-        <router-link v-if="recentRequests.length" :to="tabLink('requests')" class="text-sm font-semibold no-underline">See all {{ stats.total || '' }} →</router-link>
+        <router-link v-if="recentShown.length" :to="tabLink('requests')" class="text-sm font-semibold no-underline">See all {{ stats.total || '' }} →</router-link>
       </div>
       <MediaGridSkeleton v-if="loading" :count="6" label="Loading recent requests…" />
-      <p v-else-if="!recentRequests.length" class="m-0 rounded-card border border-dashed border-edge-strong px-6 py-10 text-center text-sm text-ink-3">
+      <p v-else-if="!recentShown.length" class="m-0 rounded-card border border-dashed border-edge-strong px-6 py-10 text-center text-sm text-ink-3">
         Nothing requested yet. Requests appear here once a job has run.
       </p>
       <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
         <MediaCard
-          v-for="request in recentRequests.slice(0, 6)"
+          v-for="request in recentShown"
           :key="request._key"
           :title="request.title"
           :poster="request.poster_path || ''"
@@ -161,6 +183,9 @@ import SeenRatingDialog from '@/components/SeenRatingDialog.vue';
 import { approvalEnabled } from '@/utils/requestApproval.js';
 import JourneyPanel from '@/components/recap/JourneyPanel.vue';
 import MediaStatusBadge from '@/components/ui/MediaStatusBadge.vue';
+import BackdropCard from '@/components/ui/BackdropCard.vue';
+import CardRow from '@/components/ui/CardRow.vue';
+import { tmdbImage } from '@/utils/tmdbImage.js';
 import { notifyRequestsChanged } from '@/utils/requestEvents.js';
 import { keyDecision, swipeDecision, touchPoint } from '@/utils/quickDecision.js';
 
@@ -169,7 +194,7 @@ import { keyDecision, swipeDecision, touchPoint } from '@/utils/quickDecision.js
  */
 export default {
   name: 'HomePage',
-  components: { AppDialog, MediaCard, MediaGridSkeleton, MediaDetailsModal, ApprovalProfileChoice, JourneyPanel, SeenRatingDialog, MediaStatusBadge },
+  components: { AppDialog, MediaCard, MediaGridSkeleton, MediaDetailsModal, ApprovalProfileChoice, JourneyPanel, SeenRatingDialog, MediaStatusBadge, BackdropCard, CardRow },
   // The dashboard shell passes settings props to every tab; only currentUser is used here.
   inheritAttrs: false,
   props: {
@@ -179,6 +204,7 @@ export default {
     return {
       stats: { total: 0, today: 0, this_week: 0, this_month: 0 },
       recentRequests: [],
+      readyToWatch: [],
       pendingRequests: [],
       pendingTotal: 0,
       jobs: [],
@@ -199,6 +225,15 @@ export default {
     };
   },
   computed: {
+    // The newest requests always show as they are; "Ready to watch" skips any of them
+    // (their card already carries the play badge) rather than the other way round.
+    recentShown() {
+      return this.recentRequests.slice(0, 6);
+    },
+    readyShown() {
+      const recent = new Set(this.recentShown.map(request => `${request.media_type}:${request.request_id}`));
+      return this.readyToWatch.filter(request => !recent.has(`${request.media_type}:${request.request_id}`)).slice(0, 12);
+    },
     greeting() {
       const hour = new Date().getHours();
       if (hour < 12) return 'Good morning';
@@ -267,6 +302,7 @@ export default {
   async mounted() {
     this.loadStats();
     this.loadRecentRequests();
+    this.loadReadyToWatch();
     this.loadApprovalState();
     this.loadHistory();
     loadSeenRatingMode(axios).then(enabled => { this.seenRatingMode = enabled; });
@@ -325,6 +361,18 @@ export default {
       }
     },
 
+    async loadReadyToWatch() {
+      try {
+        const { data } = await axios.get('/api/automation/requests', { params: { page: 1, sort_by: 'date-desc', progress: 'available' } });
+        this.readyToWatch = (data.data || [])
+          .flatMap(source => source.requests.map(req => ({ ...req, source_title: source.source_title, _key: `ready-${req.request_id}` })))
+          .sort((a, b) => new Date(b.requested_at) - new Date(a.requested_at));
+      } catch (error) {
+        // The section is a bonus; Home works without it.
+        console.error('Error loading titles ready to watch:', error);
+      }
+    },
+
     async loadPendingRequests() {
       try {
         const { data } = await axios.get('/api/automation/requests/workflow', { params: { status: 'awaiting_approval', page: 1, per_page: 20 } });
@@ -348,6 +396,10 @@ export default {
 
     // The same choice as on the Requests page: approving asks first, unless
     // the server list has loaded and is empty.
+    tmdbLogo(path) {
+      return tmdbImage(path, 'w300');
+    },
+
     keyDecision,
     swipeDecision,
     touchPoint,

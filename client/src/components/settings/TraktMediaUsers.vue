@@ -28,25 +28,15 @@
       <ul v-else class="m-0 flex list-none flex-col gap-2 p-0">
         <li v-for="user in mediaUsers" :key="rowKey(user)" class="flex flex-wrap items-center justify-between gap-3 rounded-ctl border border-edge bg-white/3 px-4 py-3 transition-colors hover:border-edge-strong max-md:flex-col max-md:items-start">
           <div class="flex min-w-0 flex-1 items-center gap-2.5">
-            <i aria-hidden="true" class="fas fa-user text-[0.9rem] text-ink-3 opacity-60"></i>
+            <span v-if="isSelfMode" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-raised text-ink-2"><i aria-hidden="true" class="icon-trakt"></i></span>
+            <i v-else aria-hidden="true" class="fas fa-user text-[0.9rem] text-ink-3 opacity-60"></i>
             <div class="flex min-w-0 flex-col">
-              <span class="truncate text-[0.9rem] font-semibold text-ink">{{ user.external_username || user.external_user_id }}</span>
-              <span class="text-xs text-ink-4">{{ statusLabel(user) }}</span>
+              <span class="truncate text-[0.9rem] font-semibold text-ink" :class="{ 'font-bold': isSelfMode }">{{ isSelfMode ? 'Trakt' : (user.external_username || user.external_user_id) }}</span>
+              <span class="text-xs" :class="user.trakt?.connected ? 'text-ink-3' : 'text-ink-4'"><i v-if="user.trakt?.connected" aria-hidden="true" class="fas fa-check-circle mr-1 text-good"></i>{{ statusLabel(user) }}</span>
             </div>
           </div>
 
           <div class="flex shrink-0 items-center gap-2 max-md:w-full max-md:justify-end">
-            <button
-              v-if="user.trakt && user.trakt.connected"
-              type="button"
-              class="ui-btn-icon-danger"
-              :disabled="isUnlinking[rowKey(user)]"
-              title="Unlink Trakt"
-              aria-label="Unlink Trakt"
-              @click="unlinkUser(user)"
-            >
-              <i aria-hidden="true" :class="isUnlinking[rowKey(user)] ? 'fas fa-spinner fa-spin' : 'fas fa-unlink'"></i>
-            </button>
             <button
               type="button"
               class="ui-btn h-9"
@@ -56,6 +46,11 @@
               <i aria-hidden="true" :class="isBusy(user) ? 'fas fa-spinner fa-spin' : 'fas fa-link'"></i>
               {{ connectLabel(user) }}
             </button>
+            <ActionMenu
+              v-if="user.trakt && user.trakt.connected"
+              :label="`More Trakt actions for ${user.external_username || user.external_user_id}`"
+              :items="[{ label: 'Unlink Trakt', icon: 'fas fa-unlink', danger: true, onSelect: () => unlinkUser(user) }]"
+            />
           </div>
         </li>
       </ul>
@@ -68,7 +63,7 @@
           @click="togglePreviewPanel"
         >
           <i aria-hidden="true" class="fas fa-chevron-right text-ink-4 transition-transform" :class="{ 'rotate-90': previewExpanded }"></i>
-          <span>Recent Trakt Preview</span>
+          <span>Recent Trakt activity</span>
           <i aria-hidden="true" v-if="previewLoading" class="fas fa-spinner fa-spin ml-auto text-ink-4"></i>
         </button>
 
@@ -165,11 +160,12 @@ import {
   previewMyTraktRecent,
 } from '@/api/api';
 import traktDevicePolling from './mixins/traktDevicePolling';
+import ActionMenu from '@/components/ui/ActionMenu.vue';
 import AppDialog from '@/components/ui/AppDialog.vue';
 
 export default {
   name: 'TraktMediaUsers',
-  components: { AppDialog },
+  components: { ActionMenu, AppDialog },
   mixins: [traktDevicePolling],
   props: {
     config: Object,
@@ -215,7 +211,7 @@ export default {
     },
     subtitle() {
       if (this.isSelfMode) {
-        return 'Link your Trakt account to your media-server profile. SuggestArr uses your recent watches as recommendation seeds and watched history for skip-watched checks.';
+        return 'Recent Trakt watches seed your suggestions, and titles you already watched are skipped.';
       }
       return 'Link a Trakt account to each media-server user. Linked accounts add recent watches as recommendation seeds and contribute watched history to the skip-watched set during that user\'s run.';
     },

@@ -979,6 +979,11 @@ class SchemaManager:
                     else:
                         cursor.execute("ALTER TABLE auth_users ADD COLUMN language TEXT")
                     conn.commit()
+                # Personal "ready to watch" notification destination (JSON), kept with the
+                # account so it is private, removed with it and never in config exports.
+                if 'notify_config' not in existing_columns:
+                    cursor.execute("ALTER TABLE auth_users ADD COLUMN notify_config TEXT")
+                    conn.commit()
 
             except Exception as e:
                 self.logger.error(f"Failed to migrate auth_users table: {e}")

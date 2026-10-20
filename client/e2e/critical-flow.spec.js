@@ -451,3 +451,140 @@ test("the light theme is chosen in the profile, applies at once and survives a r
   await page.waitForTimeout(1000);
   await page.screenshot({ path: testInfo.outputPath("light-requests.png"), fullPage: true });
 });
+
+test("Home lists titles ready to watch, with a play link and a filtered See all", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockApi(page);
+  const cors = { "access-control-allow-origin": "http://127.0.0.1:5173", "access-control-allow-credentials": "true" };
+  const svg = (hue) => `<svg xmlns="http://www.w3.org/2000/svg" width="780" height="439"><defs><linearGradient id="g"><stop offset="0" stop-color="hsl(${hue},70%,35%)"/><stop offset="1" stop-color="hsl(${hue + 60},70%,20%)"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>`;
+  await page.route("https://image.tmdb.org/**", route => route.fulfill({ contentType: "image/svg+xml", body: svg(route.request().url().includes("knight") ? 220 : 20) }));
+  const progressSeen = [];
+  const knight = { request_id: "155", title: "The Dark Knight", media_type: "movie", requested_at: "2030-01-02T10:00:00Z", user_name: "giuseppe", availability: "available", media_url: "http://192.168.1.20:8096/web/#!/details?id=abc", backdrop_path: "https://image.tmdb.org/t/p/original/knight.jpg" };
+  const babylon = { request_id: "615", title: "Babylon", media_type: "movie", requested_at: "2030-01-01T10:00:00Z", user_name: "giuseppe", availability: "available", backdrop_path: "https://image.tmdb.org/t/p/original/babylon.jpg" };
+  const batman = { request_id: "414", title: "The Batman", media_type: "movie", requested_at: "2029-12-01T10:00:00Z", user_name: "giuseppe", availability: "processing" };
+  const oppenheimer = { request_id: "872", title: "Oppenheimer", media_type: "movie", requested_at: "2030-01-03T10:00:00Z", user_name: "giuseppe", availability: "available" };
+  await page.route("http://localhost:5000/api/automation/requests?**", route => {
+    const progress = new URL(route.request().url()).searchParams.get("progress");
+    progressSeen.push(progress);
+    const requests = progress === "available" ? [knight, babylon, oppenheimer] : [oppenheimer, batman];
+    return route.fulfill({ contentType: "application/json", headers: cors, body: JSON.stringify({
+      data: [{ source_id: "100", source_title: "Fantastic Beasts", media_type: "movie", requests }],
+      total_pages: 1, total_sources: 1, total_requests: requests.length, request_users: [],
+    }) });
+  });
+  await signIn(page);
+
+  const ready = page.locator("section", { has: page.getByRole("heading", { name: "Ready to watch" }) });
+  await expect(ready.getByRole("button", { name: /Show details for/ })).toHaveCount(2);
+  await expect(ready.getByRole("link", { name: "Watch The Dark Knight now" })).toHaveAttribute("href", "http://192.168.1.20:8096/web/#!/details?id=abc");
+  await expect(ready.getByRole("link", { name: "Watch Babylon now" })).toHaveCount(0);
+  const play = ready.getByRole("link", { name: "Watch The Dark Knight now" });
+  await page.mouse.move(5, 5);
+  await expect.poll(() => play.evaluate(el => getComputedStyle(el).opacity)).toBe("0");
+  await ready.getByRole("button", { name: "Show details for The Dark Knight" }).hover();
+  await expect.poll(() => play.evaluate(el => getComputedStyle(el).opacity)).toBe("1");
+
+  // The newest requests stay in "Recently requested"; a title in both shows only there.
+  const recent = page.locator("section", { has: page.getByRole("heading", { name: "Recently requested" }) });
+  await expect(recent.getByText("Oppenheimer")).toBeVisible();
+  await expect(recent.getByText("The Batman")).toBeVisible();
+  await expect(ready.getByText("Oppenheimer")).toHaveCount(0);
+  await expect(ready.getByRole("button", { name: /Previous|Next titles/ })).toHaveCount(0); // two fit: no arrows
+  await page.waitForTimeout(800);
+  await ready.screenshot({ path: testInfo.outputPath("ready-to-watch.png") });
+
+  await ready.getByRole("button", { name: "Show details for The Dark Knight" }).click();
+  await expect(page.getByRole("dialog", { name: "The Dark Knight" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await ready.getByRole("link", { name: "See all →" }).click();
+  await expect(page).toHaveURL(/progress=available/);
+  await expect(page.getByRole("combobox").filter({ hasText: "Any progress" })).toHaveValue("available");
+  await expect.poll(() => progressSeen.filter(value => value === "available").length).toBeGreaterThan(1);
+});
+
+test("a user sets, tests and turns off their personal notifications", async ({ page }) => {
+  await mockApi(page);
+  const cors = { "access-control-allow-origin": "http://127.0.0.1:5173", "access-control-allow-credentials": "true" };
+  const calls = [];
+  let saved = null;
+  await page.route("http://localhost:5000/api/users/me/notifications**", route => {
+    const request = route.request();
+    calls.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    const reply = (status, body) => route.fulfill({ status, contentType: "application/json", headers: cors, body: JSON.stringify(body) });
+    if (request.method() === "PUT") {
+      const body = request.postDataJSON();
+      if (body.url.includes("192.168")) return reply(400, { error: "Private network addresses are not allowed" });
+      saved = body;
+      return reply(200, body);
+    }
+    if (request.method() === "DELETE") { saved = null; return route.fulfill({ status: 204, headers: cors }); }
+    if (request.method() === "POST") return reply(202, { queued: true });
+    return reply(200, saved || { format: null, url: null });
+  });
+  await signIn(page);
+  await page.getByRole("link", { name: "Profile", exact: true }).first().click();
+
+  const card = page.locator("form", { has: page.getByRole("radiogroup", { name: "Service" }) });
+  await card.getByRole("radio", { name: "ntfy" }).check({ force: true });
+  await card.getByRole("textbox", { name: /Topic URL/ }).fill("http://192.168.1.5/me");
+  await card.getByRole("button", { name: "Save" }).click();
+  await expect(card.getByRole("alert")).toHaveText("Private network addresses are not allowed");
+
+  await card.getByRole("textbox", { name: /Topic URL/ }).fill("https://ntfy.sh/giuseppe");
+  await card.getByRole("button", { name: "Save" }).click();
+  await expect(card.getByRole("status")).toContainText("Saved");
+  expect(saved).toEqual({ format: "ntfy", url: "https://ntfy.sh/giuseppe" });
+
+  await card.getByRole("button", { name: "Send test" }).click();
+  await expect(card.getByRole("status")).toContainText("Test sent");
+  await card.getByRole("button", { name: "Turn off" }).click();
+  await expect(card.getByRole("status")).toContainText("turned off");
+  await expect(card.getByRole("button", { name: "Send test" })).toHaveCount(0);
+  expect(calls).toContain("POST /api/users/me/notifications/test");
+});
+
+test("a long Ready to watch row pages by whole cards with arrows instead of a scrollbar", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockApi(page);
+  const cors = { "access-control-allow-origin": "http://127.0.0.1:5173", "access-control-allow-credentials": "true" };
+  await page.route("https://image.tmdb.org/**", route => route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="780" height="439"><rect width="100%" height="100%" fill="#345"/></svg>' }));
+  const titles = Array.from({ length: 7 }, (_, i) => ({ request_id: String(900 + i), title: `Title ${i + 1}`, media_type: "movie", requested_at: `2030-01-0${i + 1}T10:00:00Z`, availability: "available", backdrop_path: `https://image.tmdb.org/t/p/original/${i}.jpg` }));
+  await page.route("http://localhost:5000/api/automation/requests?**", route => {
+    // Ready titles are older than the recent ones, so none of them is hidden as a duplicate.
+    const available = new URL(route.request().url()).searchParams.get("progress") === "available";
+    const requests = available ? titles : [{ request_id: "1", title: "Newest", media_type: "movie", requested_at: "2030-02-01T10:00:00Z" }];
+    return route.fulfill({ contentType: "application/json", headers: cors, body: JSON.stringify({
+      data: [{ source_id: "1", source_title: "S", media_type: "movie", requests }], total_pages: 1, total_sources: 1, total_requests: requests.length, request_users: [],
+    }) });
+  });
+  await signIn(page);
+
+  const ready = page.locator("section", { has: page.getByRole("heading", { name: "Ready to watch" }) });
+  const cards = ready.locator("article");
+  await expect(cards).toHaveCount(7);
+  const row = ready.locator(".overflow-x-auto");
+  const fits = async () => row.evaluate(el => [...el.children].filter(card => {
+    const a = card.getBoundingClientRect(); const b = el.getBoundingClientRect();
+    return a.left >= b.left - 1 && a.right <= b.right + 1;
+  }).length);
+  // Four whole cards, none cut, and no visible scrollbar.
+  expect(await fits()).toBe(4);
+  expect(await row.evaluate(el => el.offsetHeight - el.clientHeight)).toBe(0);
+  await expect(ready.getByRole("button", { name: "Previous titles ready to watch" })).toHaveCount(0);
+
+  // Arrows and play buttons stay hidden until the pointer is over the row / card.
+  const next = ready.getByRole("button", { name: "Next titles ready to watch" });
+  const opacity = locator => locator.evaluate(el => getComputedStyle(el).opacity);
+  await page.mouse.move(5, 5);
+  await expect.poll(() => opacity(next)).toBe("0");
+  await cards.first().hover();
+  await expect.poll(() => opacity(next)).toBe("1");
+
+  await next.click();
+  await expect(ready.getByRole("button", { name: "Previous titles ready to watch" })).toBeVisible();
+  await expect(ready.getByRole("button", { name: "Next titles ready to watch" })).toHaveCount(0);
+  await page.waitForTimeout(600);
+  expect(await row.evaluate(el => [...el.children].find(card => card.getBoundingClientRect().left >= el.getBoundingClientRect().left - 1).textContent)).toContain("Title 4");
+  await ready.screenshot({ path: testInfo.outputPath("ready-row-paged.png") });
+});

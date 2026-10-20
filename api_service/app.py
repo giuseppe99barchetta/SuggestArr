@@ -267,110 +267,119 @@ def create_app():
 app = create_app()
 app.wsgi_app = SubpathMiddleware(app.wsgi_app)
 asgi_app = ContextSafeWsgiToAsgi(app)
-# Initialize database and jobs scheduler
-try:
-    from api_service.db.database_manager import DatabaseManager
-    from api_service.jobs.job_manager import JobManager
-    from api_service.jobs.discover_automation import execute_discover_job
-    from api_service.jobs.recommendation_automation import execute_recommendation_job
-    from api_service.jobs.trakt_recommendations_automation import execute_trakt_recommendations_job
-    from api_service.jobs.list_import_automation import execute_list_import_job
-    from api_service.jobs.system_job_sync import sync_system_job_from_config
-    from api_service.jobs.queue_worker import run_queue_worker
-    from api_service.jobs.webhook_worker import run_webhook_worker
-    from api_service.jobs.request_expiry import run_request_expiry
-    from api_service.jobs.request_replacement import run_request_replacements
-    from api_service.jobs.availability_sync import run_availability_sync
-    import datetime as _dt
+def _start_background_services():
+    """Initialize the database and start the job scheduler for a running server."""
+    try:
+        from api_service.db.database_manager import DatabaseManager
+        from api_service.jobs.job_manager import JobManager
+        from api_service.jobs.discover_automation import execute_discover_job
+        from api_service.jobs.recommendation_automation import execute_recommendation_job
+        from api_service.jobs.trakt_recommendations_automation import execute_trakt_recommendations_job
+        from api_service.jobs.list_import_automation import execute_list_import_job
+        from api_service.jobs.system_job_sync import sync_system_job_from_config
+        from api_service.jobs.queue_worker import run_queue_worker
+        from api_service.jobs.webhook_worker import run_webhook_worker
+        from api_service.jobs.request_expiry import run_request_expiry
+        from api_service.jobs.request_replacement import run_request_replacements
+        from api_service.jobs.availability_sync import run_availability_sync
+        import datetime as _dt
 
-    # Initialize database tables (including discover_jobs).
-    # DatabaseManager.__init__ already calls initialize_db(), so no need to
-    # call it a second time here.
-    db_manager = DatabaseManager()
+        # Initialize database tables (including discover_jobs).
+        # DatabaseManager.__init__ already calls initialize_db(), so no need to
+        # call it a second time here.
+        db_manager = DatabaseManager()
 
-    # One-time migration: copy integration credentials from config.yaml into
-    # the integrations table if not already present.
-    db_manager.migrate_integrations_from_config()
+        # One-time migration: copy integration credentials from config.yaml into
+        # the integrations table if not already present.
+        db_manager.migrate_integrations_from_config()
 
-    # Sync system job from YAML config (backwards compatibility)
-    sync_result = sync_system_job_from_config()
-    if sync_result['status'] == 'success':
-        logger.info(f"System job synced from config (ID: {sync_result['job_id']})")
-    elif sync_result['status'] == 'skipped':
-        logger.debug("No system job to sync (CRON_TIMES not configured)")
+        # Sync system job from YAML config (backwards compatibility)
+        sync_result = sync_system_job_from_config()
+        if sync_result['status'] == 'success':
+            logger.info(f"System job synced from config (ID: {sync_result['job_id']})")
+        elif sync_result['status'] == 'skipped':
+            logger.debug("No system job to sync (CRON_TIMES not configured)")
 
-    # Initialize and start job scheduler
-    job_manager = JobManager.get_instance()
-    # Register executors for both job types
-    job_manager.set_job_executor(execute_discover_job, job_type='discover')
-    job_manager.set_job_executor(execute_recommendation_job, job_type='recommendation')
-    job_manager.set_job_executor(execute_trakt_recommendations_job, job_type='trakt_recommendations')
-    job_manager.set_job_executor(execute_list_import_job, job_type='list_import')
-    job_manager.start()
-    job_manager.sync_jobs_from_db()
+        # Initialize and start job scheduler
+        job_manager = JobManager.get_instance()
+        # Register executors for both job types
+        job_manager.set_job_executor(execute_discover_job, job_type='discover')
+        job_manager.set_job_executor(execute_recommendation_job, job_type='recommendation')
+        job_manager.set_job_executor(execute_trakt_recommendations_job, job_type='trakt_recommendations')
+        job_manager.set_job_executor(execute_list_import_job, job_type='list_import')
+        job_manager.start()
+        job_manager.sync_jobs_from_db()
 
-    # Register Seer delivery queue worker (every 2 min, no overlap)
-    job_manager.scheduler.add_job(
-        run_queue_worker,
-        'interval',
-        minutes=2,
-        id='seer_queue_worker',
-        max_instances=1,
-        replace_existing=True,
-    )
-    job_manager.scheduler.add_job(
-        run_webhook_worker,
-        'interval',
-        minutes=1,
-        id='webhook_delivery_worker',
-        max_instances=1,
-        replace_existing=True,
-    )
+        # Register Seer delivery queue worker (every 2 min, no overlap)
+        job_manager.scheduler.add_job(
+            run_queue_worker,
+            'interval',
+            minutes=2,
+            id='seer_queue_worker',
+            max_instances=1,
+            replace_existing=True,
+        )
+        job_manager.scheduler.add_job(
+            run_webhook_worker,
+            'interval',
+            minutes=1,
+            id='webhook_delivery_worker',
+            max_instances=1,
+            replace_existing=True,
+        )
 
-    # Daily cleanup job (no-op when disabled in cleanup_settings)
-    from api_service.jobs.cleanup_automation import execute_cleanup_job, _run_lock as _cleanup_run_lock
-    import asyncio as _asyncio
-    def _run_cleanup_job():
-        if not _cleanup_run_lock.acquire(blocking=False):
-            logger.info("Cleanup cron skipped: a run is already in progress.")
-            return
-        try:
-            _asyncio.run(execute_cleanup_job())
-        except Exception as exc:
-            logger.error(f"Cleanup job error: {exc}")
-        finally:
+        # Daily cleanup job (no-op when disabled in cleanup_settings)
+        from api_service.jobs.cleanup_automation import execute_cleanup_job, _run_lock as _cleanup_run_lock
+        import asyncio as _asyncio
+        def _run_cleanup_job():
+            if not _cleanup_run_lock.acquire(blocking=False):
+                logger.info("Cleanup cron skipped: a run is already in progress.")
+                return
             try:
-                _cleanup_run_lock.release()
-            except RuntimeError:
-                pass
-    job_manager.scheduler.add_job(
-        _run_cleanup_job,
-        'cron',
-        hour=4, minute=15,
-        id='cleanup_automation',
-        max_instances=1,
-        replace_existing=True,
-    )
-    job_manager.scheduler.add_job(
-        run_request_expiry, 'cron', hour=4, minute=30, id='seer_request_expiry',
-        max_instances=1, replace_existing=True,
-    )
-    job_manager.scheduler.add_job(
-        run_request_replacements, 'interval', minutes=15, id='seer_request_replacements',
-        max_instances=1, replace_existing=True,
-    )
-    # Requested -> processing -> available badges and the request.available webhook.
-    job_manager.scheduler.add_job(
-        run_availability_sync, 'interval', minutes=30, id='seer_availability_sync',
-        max_instances=1, replace_existing=True,
-        # First pass shortly after start-up, so badges appear without waiting half an hour.
-        next_run_time=_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(minutes=1),
-    )
-    logger.info("Jobs scheduler initialized (discover + recommendation + trakt_recommendations + queue_worker + cleanup + request_expiry + request_replacements + availability_sync)")
-except Exception as e:
-    import traceback
-    logger.error(f"Failed to initialize discover jobs scheduler: {e}")
-    logger.error(traceback.format_exc())
+                _asyncio.run(execute_cleanup_job())
+            except Exception as exc:
+                logger.error(f"Cleanup job error: {exc}")
+            finally:
+                try:
+                    _cleanup_run_lock.release()
+                except RuntimeError:
+                    pass
+        job_manager.scheduler.add_job(
+            _run_cleanup_job,
+            'cron',
+            hour=4, minute=15,
+            id='cleanup_automation',
+            max_instances=1,
+            replace_existing=True,
+        )
+        job_manager.scheduler.add_job(
+            run_request_expiry, 'cron', hour=4, minute=30, id='seer_request_expiry',
+            max_instances=1, replace_existing=True,
+        )
+        job_manager.scheduler.add_job(
+            run_request_replacements, 'interval', minutes=15, id='seer_request_replacements',
+            max_instances=1, replace_existing=True,
+        )
+        # Requested -> processing -> available badges and the request.available webhook.
+        job_manager.scheduler.add_job(
+            run_availability_sync, 'interval', minutes=30, id='seer_availability_sync',
+            max_instances=1, replace_existing=True,
+            # First pass shortly after start-up, so badges appear without waiting half an hour.
+            next_run_time=_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(minutes=1),
+        )
+        logger.info("Jobs scheduler initialized (discover + recommendation + trakt_recommendations + queue_worker + cleanup + request_expiry + request_replacements + availability_sync)")
+    except Exception as e:
+        import traceback
+        logger.error(f"Failed to initialize discover jobs scheduler: {e}")
+        logger.error(traceback.format_exc())
+
+
+# Tests import this module for its Flask app; starting the scheduler there would let its
+# jobs run against whichever test database is active (and the real one at import time).
+if os.environ.get('SUGGESTARR_DISABLE_BACKGROUND') == '1':
+    logger.info("Background services disabled (SUGGESTARR_DISABLE_BACKGROUND=1)")
+else:
+    _start_background_services()
 
 def close_log_handlers():
     for handler in logging.root.handlers[:]:

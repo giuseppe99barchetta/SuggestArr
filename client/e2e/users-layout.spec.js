@@ -242,9 +242,10 @@ for (const width of [1280, 900, 390]) {
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
     await openPreview(page, "Profile");
-    for (const title of ["Account", "Title language", "API keys", "Linked accounts", "Recommendation history"]) {
+    for (const title of ["Account", "Appearance", "Notifications", "Title language", "API keys", "Linked accounts", "Watched elsewhere"]) {
       await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
     }
+    await page.getByRole("button", { name: "Rename", exact: true }).click();
     await page.getByLabel("New username", { exact: true }).fill("draft-name");
     await page.getByLabel("Search TMDb").fill("Arrival");
     await page.getByLabel("Media type", { exact: true }).selectOption("movie");
@@ -260,10 +261,12 @@ for (const width of [1280, 900, 390]) {
     expect(cards.every(card => !card.overflow)).toBe(true);
     if (width > 1000) {
       const byTitle = Object.fromEntries(cards.map(card => [card.title, card]));
-      // Account on the left, preferences and keys stacked on the right, same top edge and width.
-      expect(byTitle["Account"].y).toBe(byTitle["Title language"].y);
-      expect(byTitle["Account"].width).toBe(byTitle["Title language"].width);
-      expect(byTitle["Title language"].x).toBe(byTitle["API keys"].x);
+      // Account, notifications and language on the left; appearance and keys on the right;
+      // both columns start at the same top edge and have the same width.
+      expect(byTitle["Account"].y).toBe(byTitle["Appearance"].y);
+      expect(byTitle["Account"].width).toBe(byTitle["Appearance"].width);
+      for (const title of ["Notifications", "Title language"]) expect(byTitle[title].x).toBe(byTitle["Account"].x);
+      expect(byTitle["API keys"].x).toBe(byTitle["Appearance"].x);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);

@@ -50,6 +50,35 @@ def plan_availability_changes(requested, known, statuses):
     return changes, newly_available
 
 
+def notify_owners(db, env, media_type, tmdb_id, play_url=None):
+    """
+    Tell each account a title was requested for that it is ready, on their own destination.
+
+    Args:
+        db: DatabaseManager.
+        env: Runtime config (for SELECTED_SERVICE).
+        media_type: 'movie' or 'tv'.
+        tmdb_id: TMDb id of the title.
+        play_url: Link to play it on the media server, when Seer knows one.
+
+    Returns:
+        Number of personal notifications queued.
+    """
+    sent = 0
+    try:
+        owners = db.get_title_owner_ids(media_type, tmdb_id, env.get('SELECTED_SERVICE'))
+        if not owners:
+            return 0
+        title = (db.get_metadata(str(tmdb_id), media_type) or {}).get('title') or f"{media_type} {tmdb_id}"
+        text = f"Your request is ready to watch: {title}" + (f"\n{play_url}" if play_url else "")
+        for owner_id in owners:
+            sent += bool(db.enqueue_personal_notification(owner_id, 'request.available', text))
+    except Exception as exc:
+        # A personal message is a courtesy; it must never stop the sync.
+        logger.error("Unable to queue personal availability notifications: %s", exc)
+    return sent
+
+
 async def sync_availability():
     """
     Update the stored Seer status of every requested title.
@@ -85,6 +114,7 @@ async def sync_availability():
                 db.enqueue_webhook_event('request.available', {'tmdb_id': tmdb_id, 'media_type': media_type})
             except Exception as exc:
                 logger.error("Unable to queue request.available webhook: %s", exc)
+            notify_owners(db, env, media_type, tmdb_id, (statuses.get((media_type, tmdb_id)) or {}).get('url'))
         if changes:
             logger.info("Availability sync: %d status changes, %d newly available.", len(changes), len(newly_available))
         return {'status': 'ok', 'changed': len(changes), 'available': len(newly_available)}

@@ -3,49 +3,82 @@
     <PageHeader title="My profile" subtitle="Your account, preferences, API keys and the accounts SuggestArr learns from." />
 
     <div class="grid gap-5 lg:grid-cols-2">
-      <SectionCard icon="fas fa-user-circle" title="Account" description="The name you sign in with and your password.">
-        <div class="mb-5 flex items-center gap-3 border-b border-edge pb-5">
-          <UserAvatar :user="profileUser" class="h-16 w-16 text-[64px]" />
-          <div class="min-w-0">
-            <p class="m-0 truncate font-semibold text-ink">{{ profileUser?.username }}</p>
-            <p class="m-0 mt-1 text-xs leading-relaxed text-ink-3">Your linked account photo, or a cinema avatar picked for you.</p>
-          </div>
-        </div>
-        <form class="flex flex-col gap-3" @submit.prevent="saveUsername">
-          <label class="ui-label" for="newUsername">New username</label>
-          <div class="flex gap-2">
-            <input id="newUsername" v-model="usernameForm.value" type="text" class="ui-input" :placeholder="profileUser?.username || 'Current username'" maxlength="64" :disabled="isSavingUsername" />
-            <button type="submit" class="ui-btn shrink-0" :disabled="isSavingUsername || !usernameForm.value.trim()">
-              <i v-if="isSavingUsername" aria-hidden="true" class="fas fa-spinner fa-spin"></i>{{ isSavingUsername ? 'Saving…' : 'Rename' }}
-            </button>
-          </div>
-          <p v-if="usernameError" role="alert" class="ui-alert-bad">{{ usernameError }}</p>
-          <p v-if="usernameSuccess" role="status" class="ui-alert-good">{{ usernameSuccess }}</p>
-        </form>
-
-        <form class="mt-5 flex flex-col gap-3 border-t border-edge pt-5" @submit.prevent="savePassword">
-          <h3 class="m-0 text-sm font-bold text-ink">Change password</h3>
-          <label class="ui-label">Current password<input id="currentPassword" v-model="passwordForm.current" type="password" class="ui-input" autocomplete="current-password" :disabled="isSavingPassword" /></label>
-          <div class="grid gap-3 sm:grid-cols-2">
-            <label class="ui-label">New password<input id="newPassword" v-model="passwordForm.new" type="password" class="ui-input" placeholder="At least 8 characters" autocomplete="new-password" :disabled="isSavingPassword" /></label>
-            <label class="ui-label">Confirm new password<input id="confirmPassword" v-model="passwordForm.confirm" type="password" class="ui-input" autocomplete="new-password" :disabled="isSavingPassword" /></label>
-          </div>
-          <p v-if="passwordError" role="alert" class="ui-alert-bad">{{ passwordError }}</p>
-          <p v-if="passwordSuccess" role="status" class="ui-alert-good">{{ passwordSuccess }}</p>
-          <button type="submit" class="ui-btn self-start" :disabled="isSavingPassword || !passwordForm.current || !passwordForm.new || !passwordForm.confirm">
-            <i aria-hidden="true" :class="isSavingPassword ? 'fas fa-spinner fa-spin' : 'fas fa-lock'"></i>{{ isSavingPassword ? 'Saving…' : 'Change password' }}
-          </button>
-        </form>
-      </SectionCard>
-
       <div class="flex min-w-0 flex-col gap-5">
-        <SectionCard icon="fas fa-adjust" title="Appearance" description="Saved in this browser. System follows your device's light or dark setting.">
-          <div role="radiogroup" aria-label="Theme" class="grid grid-cols-3 gap-2">
-            <label v-for="option in themeOptions" :key="option.value" class="flex cursor-pointer items-center justify-center gap-2 rounded-ctl border px-3 py-2.5 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-ink" :class="themeChoice === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong text-ink-2 hover:border-ink-4'">
-              <input v-model="themeChoice" type="radio" name="theme" :value="option.value" class="sr-only" @change="chooseTheme(option.value)" />
-              <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
-            </label>
+        <SectionCard icon="fas fa-user-circle" title="Account" description="The name you sign in with and your password.">
+          <div class="flex items-center gap-4">
+            <UserAvatar :user="profileUser" class="h-16 w-16 shrink-0 text-[64px]" />
+            <div class="min-w-0 flex-1">
+              <form v-if="editingName" class="flex gap-2" @submit.prevent="saveUsername">
+                <label class="sr-only" for="newUsername">New username</label>
+                <input id="newUsername" ref="usernameInput" v-model="usernameForm.value" type="text" class="ui-input" maxlength="64" :disabled="isSavingUsername" @keydown.esc="cancelRename" />
+                <button type="submit" class="ui-btn-primary shrink-0" :disabled="isSavingUsername || !usernameForm.value.trim() || usernameForm.value.trim() === profileUser?.username">
+                  <i v-if="isSavingUsername" aria-hidden="true" class="fas fa-spinner fa-spin"></i>Save
+                </button>
+                <button type="button" class="ui-btn shrink-0" :disabled="isSavingUsername" @click="cancelRename">Cancel</button>
+              </form>
+              <div v-else class="flex min-w-0 items-center gap-1">
+                <p class="m-0 truncate text-lg font-bold text-ink">{{ profileUser?.username }}</p>
+                <button type="button" class="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" aria-label="Rename" title="Rename" @click="startRename">
+                  <i aria-hidden="true" class="fas fa-pen text-xs"></i>
+                </button>
+              </div>
+              <p class="m-0 mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
+                <span><i aria-hidden="true" :class="profileUser?.role === 'admin' ? 'fas fa-shield-alt' : 'fas fa-user'" class="mr-1"></i>{{ profileUser?.role === 'admin' ? 'Administrator' : 'User' }}</span>
+                <span v-if="currentLink"><i aria-hidden="true" :class="providerIcon" class="mr-1"></i>Linked to {{ providerLabel }}</span>
+              </p>
+            </div>
           </div>
+          <p v-if="usernameError" role="alert" class="ui-alert-bad mt-3">{{ usernameError }}</p>
+          <p v-if="usernameSuccess" role="status" class="ui-alert-good mt-3">{{ usernameSuccess }}</p>
+
+          <div class="mt-5 flex items-center justify-between gap-3 border-t border-edge pt-5">
+            <div>
+              <h3 class="m-0 text-sm font-bold text-ink">Password</h3>
+              <p class="m-0 mt-0.5 text-xs text-ink-4">At least 8 characters.</p>
+            </div>
+            <button v-if="!passwordOpen" type="button" class="ui-btn shrink-0" @click="openPassword"><i aria-hidden="true" class="fas fa-lock"></i>Change</button>
+          </div>
+          <p v-if="passwordSuccess && !passwordOpen" role="status" class="ui-alert-good mt-3">{{ passwordSuccess }}</p>
+          <form v-if="passwordOpen" class="mt-4 flex flex-col gap-3" @submit.prevent="savePassword">
+            <label class="ui-label">Current password<input id="currentPassword" ref="currentPasswordInput" v-model="passwordForm.current" :type="showPasswords ? 'text' : 'password'" class="ui-input" autocomplete="current-password" :disabled="isSavingPassword" /></label>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="ui-label">New password<input id="newPassword" v-model="passwordForm.new" :type="showPasswords ? 'text' : 'password'" class="ui-input" placeholder="At least 8 characters" autocomplete="new-password" :disabled="isSavingPassword" /></label>
+              <label class="ui-label">Confirm new password<input id="confirmPassword" v-model="passwordForm.confirm" :type="showPasswords ? 'text' : 'password'" class="ui-input" autocomplete="new-password" :disabled="isSavingPassword" :aria-invalid="passwordMismatch" /></label>
+            </div>
+            <p v-if="passwordMismatch" class="m-0 text-xs text-bad">Passwords don't match.</p>
+            <label class="flex cursor-pointer items-center gap-2 self-start text-xs text-ink-3"><input v-model="showPasswords" type="checkbox" />Show passwords</label>
+            <p v-if="passwordError" role="alert" class="ui-alert-bad">{{ passwordError }}</p>
+            <div class="flex gap-2">
+              <button type="submit" class="ui-btn-primary" :disabled="isSavingPassword || passwordMismatch || !passwordForm.current || !passwordForm.new || !passwordForm.confirm">
+                <i v-if="isSavingPassword" aria-hidden="true" class="fas fa-spinner fa-spin"></i>{{ isSavingPassword ? 'Saving…' : 'Change password' }}
+              </button>
+              <button type="button" class="ui-btn" :disabled="isSavingPassword" @click="closePassword">Cancel</button>
+            </div>
+          </form>
+        </SectionCard>
+
+        <SectionCard icon="fas fa-bell" title="Notifications" description="Get a message when one of your requests is ready to watch.">
+          <form class="flex flex-col gap-3" @submit.prevent="saveNotify">
+            <div role="radiogroup" aria-label="Service" class="grid grid-cols-3 gap-2">
+              <label v-for="option in notifyFormats" :key="option.value" class="flex cursor-pointer items-center justify-center gap-2 rounded-ctl border px-3 py-2.5 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-ink" :class="notify.format === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong text-ink-2 hover:border-ink-4'">
+                <input v-model="notify.format" type="radio" name="notify-format" :value="option.value" class="sr-only" />
+                <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
+              </label>
+            </div>
+            <label class="ui-label">{{ notifyFormat.urlLabel }}
+              <input v-model.trim="notify.url" type="url" class="ui-input" :placeholder="notifyFormat.placeholder" maxlength="500" required :disabled="notifyBusy" />
+              <span class="text-xs font-normal text-ink-4">{{ notifyFormat.hint }}</span>
+            </label>
+            <div class="flex flex-wrap gap-2">
+              <button type="submit" class="ui-btn-primary" :disabled="notifyBusy || !notify.url">Save</button>
+              <template v-if="notifySaved">
+                <button type="button" class="ui-btn" :disabled="notifyBusy" @click="testNotify"><i aria-hidden="true" class="fas fa-paper-plane"></i>Send test</button>
+                <button type="button" class="ui-btn border-0 bg-transparent text-ink-3 hover:text-bad" :disabled="notifyBusy" @click="removeNotify">Turn off</button>
+              </template>
+            </div>
+            <p v-if="notifyError" role="alert" class="ui-alert-bad">{{ notifyError }}</p>
+            <p v-if="notifySuccess" role="status" class="ui-alert-good">{{ notifySuccess }}</p>
+          </form>
         </SectionCard>
 
         <SectionCard icon="fas fa-language" title="Title language" description="Titles and descriptions of suggestions and requests are shown in this language.">
@@ -64,30 +97,38 @@
             <p v-if="languageSuccess" role="status" class="ui-alert-good">{{ languageSuccess }}</p>
           </form>
         </SectionCard>
+      </div>
+
+      <div class="flex min-w-0 flex-col gap-5">
+        <SectionCard icon="fas fa-adjust" title="Appearance" description="Saved in this browser. System follows your device's light or dark setting.">
+          <div role="radiogroup" aria-label="Theme" class="grid grid-cols-3 gap-2">
+            <label v-for="option in themeOptions" :key="option.value" class="flex cursor-pointer items-center justify-center gap-2 rounded-ctl border px-3 py-2.5 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-ink" :class="themeChoice === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong text-ink-2 hover:border-ink-4'">
+              <input v-model="themeChoice" type="radio" name="theme" :value="option.value" class="sr-only" @change="chooseTheme(option.value)" />
+              <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
+            </label>
+          </div>
+        </SectionCard>
 
         <ApiKeysPanel class="flex-1" />
       </div>
     </div>
 
-    <RecapPreferences v-if="profileUser?.role === 'admin'" />
-
     <SectionCard v-if="isLinkableService" icon="fas fa-link" title="Linked accounts" description="SuggestArr reads your watch history from these accounts to personalise suggestions.">
-      <div class="grid items-start gap-5 md:grid-cols-2">
+      <div class="flex flex-col gap-3">
         <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
-          <h3 class="m-0 flex items-center gap-2 text-sm font-bold text-ink"><i aria-hidden="true" :class="providerIcon"></i>{{ providerLabel }} account</h3>
-
-          <div v-if="currentLink" class="flex items-center gap-3">
-            <span class="flex h-9 w-9 items-center justify-center rounded-full bg-good/15 text-good"><i aria-hidden="true" class="fas fa-check"></i></span>
+          <div class="flex items-center gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-raised text-ink-2"><i aria-hidden="true" :class="providerIcon"></i></span>
             <span class="flex min-w-0 flex-1 flex-col">
-              <span class="truncate text-sm font-semibold text-ink">{{ currentLink.external_username }}</span>
-              <span class="text-xs text-ink-4">Linked {{ providerLabel }} account</span>
+              <span class="text-sm font-bold text-ink">{{ providerLabel }}</span>
+              <span v-if="currentLink" class="truncate text-xs text-ink-3"><i aria-hidden="true" class="fas fa-check-circle mr-1 text-good"></i>Linked as {{ currentLink.external_username }}</span>
+              <span v-else class="text-xs text-ink-4">Not linked</span>
             </span>
-            <button type="button" class="ui-btn h-9 px-3 text-[13px]" :disabled="isUnlinking" @click="unlinkAccount">
+            <button v-if="currentLink" type="button" class="ui-btn h-9 px-3 text-[13px]" :disabled="isUnlinking" @click="unlinkAccount">
               <i aria-hidden="true" :class="isUnlinking ? 'fas fa-spinner fa-spin' : 'fas fa-unlink'"></i>Unlink
             </button>
           </div>
 
-          <template v-else>
+          <template v-if="!currentLink">
             <div v-if="isPlexService" class="flex flex-col gap-3">
               <p class="m-0 text-[13px] text-ink-3">Sign in with Plex in a new window to link your account.</p>
               <p v-if="linkError" role="alert" class="ui-alert-bad">{{ linkError }}</p>
@@ -121,7 +162,6 @@
         </div>
 
         <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
-          <h3 class="m-0 flex items-center gap-2 text-sm font-bold text-ink"><i aria-hidden="true" class="fas fa-tv"></i>Trakt account</h3>
           <TraktMediaUsers mode="self" :trakt-configured="isTraktAppConfigured" />
         </div>
       </div>
@@ -130,6 +170,8 @@
     <WatchedMediaHistory v-if="isLinkableService" />
 
     <SectionCard v-if="!isLinkableService && hasProviderContext" icon="fas fa-plug" title="Linked accounts" description="No linkable media server is configured yet. An admin must set up Jellyfin, Emby or Plex in Connections first." />
+
+    <RecapPreferences v-if="profileUser?.role === 'admin'" />
   </div>
 </template>
 
@@ -147,7 +189,12 @@ import {
   plexOAuthStart,
   unlinkProvider,
   updateMyProfile,
+  getMyNotifications,
+  saveMyNotifications,
+  deleteMyNotifications,
+  testMyNotifications,
 } from '@/api/api';
+import { CHAT_FORMATS } from '@/utils/notificationFormats.js';
 import SectionCard from '@/components/ui/SectionCard.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
 import WatchedMediaHistory from './WatchedMediaHistory.vue';
@@ -186,6 +233,12 @@ export default {
   data() {
     return {
       themeChoice: readThemeChoice(),
+      notifyFormats: CHAT_FORMATS,
+      notify: { format: 'discord', url: '' },
+      notifySaved: false,
+      notifyBusy: false,
+      notifyError: '',
+      notifySuccess: '',
       themeOptions: [
         { value: 'system', label: 'System', icon: 'fas fa-desktop' },
         { value: 'light', label: 'Light', icon: 'fas fa-sun' },
@@ -196,6 +249,9 @@ export default {
       passwordForm: { current: '', new: '', confirm: '' },
       isSavingUsername: false,
       isSavingPassword: false,
+      editingName: false,
+      passwordOpen: false,
+      showPasswords: false,
       usernameError: null,
       usernameSuccess: null,
       passwordError: null,
@@ -235,6 +291,12 @@ export default {
   },
 
   computed: {
+    notifyFormat() {
+      return CHAT_FORMATS.find(option => option.value === this.notify.format) || CHAT_FORMATS[0];
+    },
+    passwordMismatch() {
+      return !!this.passwordForm.confirm && this.passwordForm.new !== this.passwordForm.confirm;
+    },
     profileUser() {
       return this.currentUser || this.authUser;
     },
@@ -318,6 +380,7 @@ export default {
   },
 
   async mounted() {
+    this.loadNotify();
     this.loadLanguage();
     await this.loadConfigStatus();
     await this.loadLinks();
@@ -341,6 +404,47 @@ export default {
   methods: {
     chooseTheme(choice) {
       setThemeChoice(choice);
+    },
+    // ── Personal notifications ─────────────────────────────────────────────
+    async loadNotify() {
+      try {
+        const { data } = await getMyNotifications();
+        if (data.url) {
+          this.notify = { format: data.format, url: data.url };
+          this.notifySaved = true;
+        }
+      } catch {
+        // The card stays usable for setting a destination.
+      }
+    },
+    async runNotify(action, success) {
+      this.notifyBusy = true;
+      this.notifyError = '';
+      this.notifySuccess = '';
+      try {
+        await action();
+        this.notifySuccess = success;
+      } catch (error) {
+        this.notifyError = error.response?.data?.error || 'Something went wrong. Try again.';
+      } finally {
+        this.notifyBusy = false;
+      }
+    },
+    saveNotify() {
+      return this.runNotify(async () => {
+        await saveMyNotifications(this.notify);
+        this.notifySaved = true;
+      }, 'Saved. Use "Send test" to check it arrives.');
+    },
+    testNotify() {
+      return this.runNotify(testMyNotifications, 'Test sent; it should arrive within a minute.');
+    },
+    removeNotify() {
+      return this.runNotify(async () => {
+        await deleteMyNotifications();
+        this.notify = { format: 'discord', url: '' };
+        this.notifySaved = false;
+      }, 'Notifications turned off.');
     },
     // ── Title language ─────────────────────────────────────────────────────
 
@@ -497,6 +601,32 @@ export default {
 
     // ── Account updates ────────────────────────────────────────────────────
 
+    startRename() {
+      this.usernameForm.value = this.profileUser?.username || '';
+      this.usernameError = null;
+      this.usernameSuccess = null;
+      this.editingName = true;
+      this.$nextTick(() => this.$refs.usernameInput?.select());
+    },
+
+    cancelRename() {
+      this.editingName = false;
+      this.usernameError = null;
+    },
+
+    openPassword() {
+      this.passwordSuccess = null;
+      this.passwordOpen = true;
+      this.$nextTick(() => this.$refs.currentPasswordInput?.focus());
+    },
+
+    closePassword() {
+      this.passwordOpen = false;
+      this.showPasswords = false;
+      this.passwordError = null;
+      this.passwordForm = { current: '', new: '', confirm: '' };
+    },
+
     async saveUsername() {
       this.usernameError = null;
       this.usernameSuccess = null;
@@ -511,6 +641,7 @@ export default {
         this.$emit('profile-updated');
         this.usernameSuccess = 'Username updated.';
         this.usernameForm.value = '';
+        this.editingName = false;
       } catch (err) {
         this.usernameError = err.response?.data?.error || 'Failed to update username';
       } finally {
@@ -531,8 +662,8 @@ export default {
           current_password: this.passwordForm.current,
           new_password: this.passwordForm.new,
         });
+        this.closePassword();
         this.passwordSuccess = 'Password changed successfully.';
-        this.passwordForm = { current: '', new: '', confirm: '' };
       } catch (err) {
         this.passwordError = err.response?.data?.error || 'Failed to change password';
       } finally {

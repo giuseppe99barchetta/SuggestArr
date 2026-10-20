@@ -305,6 +305,7 @@ import { formatDate } from '@/utils/dateUtils.js';
 import { getRequestSourceVisual } from '@/utils/jobTypeVisuals.js';
 import { getAiSearchRequests } from '@/api/api.js';
 import { PROGRESS_OPTIONS } from '@/utils/mediaStatus.js';
+import { tmdbImage } from '@/utils/tmdbImage.js';
 import RequestWorkflowPanel from './RequestWorkflowPanel.vue';
 import { approvalEnabled } from '@/utils/requestApproval.js';
 
@@ -705,10 +706,8 @@ export default {
       return source.backdrop_path || source.poster_path || null;
     },
 
-    /** Swaps the size segment of a TMDB image URL, so blurred layers load a small file. */
-    tmdbImageSize(url, size) {
-      return url.replace(/\/t\/p\/(w\d+|original)\//, `/t/p/${size}/`);
-    },
+    // Smaller files for the blurred layers.
+    tmdbImageSize: tmdbImage,
 
     releaseYear(date) {
       return String(date).slice(0, 4);
@@ -974,6 +973,9 @@ export default {
     if (this.$route.query.status) {
       this.viewMode = 'all-requests';
       this.requestStatusFilter = this.$route.query.status;
+    }
+    if (PROGRESS_OPTIONS.some(option => option.value === this.$route.query.progress)) {
+      this.progressFilter = this.$route.query.progress;
     }
     setTimeout(() => {
       this.fetchRequests();

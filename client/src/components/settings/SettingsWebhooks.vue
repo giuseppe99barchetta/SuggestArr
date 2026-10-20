@@ -180,6 +180,7 @@ import {
   createWebhook, deleteWebhook, getWebhookDeliveries, getWebhookSettings,
   getWebhooks, retryWebhookDelivery, updateWebhookSettings,
 } from '@/api/api';
+import { CHAT_FORMATS, JSON_FORMAT } from '@/utils/notificationFormats.js';
 
 const EVENT_GROUPS = [
   { label: 'Suggestions', events: ['suggestion.created', 'suggestion.awaiting_approval', 'suggestion.approved', 'suggestion.rejected'] },
@@ -200,12 +201,7 @@ const STATUS_TONES = {
   queued: 'bg-caution/15 text-caution',
 };
 
-const FORMATS = [
-  { value: 'discord', label: 'Discord', icon: 'fab fa-discord', urlLabel: 'Discord webhook URL', placeholder: 'https://discord.com/api/webhooks/…', hint: 'Channel settings → Integrations → Webhooks → Copy URL.' },
-  { value: 'telegram', label: 'Telegram', icon: 'fab fa-telegram-plane', urlLabel: 'Bot sendMessage URL', placeholder: 'https://api.telegram.org/bot<token>/sendMessage?chat_id=123', hint: 'Your bot token from @BotFather, plus the chat_id to post in.' },
-  { value: 'ntfy', label: 'ntfy', icon: 'fas fa-bell', urlLabel: 'Topic URL', placeholder: 'https://ntfy.sh/my-suggestarr', hint: 'The server and topic your phone subscribes to.' },
-  { value: 'json', label: 'Webhook', icon: 'fas fa-code', urlLabel: 'Destination URL', placeholder: 'https://hooks.example.com/suggestarr', hint: 'Receives a signed JSON POST; it must answer 2xx quickly.' },
-];
+const FORMATS = [...CHAT_FORMATS, JSON_FORMAT];
 
 const emptyForm = () => ({ format: 'discord', name: '', url: '', secret: '', events: [], allow_private: false });
 

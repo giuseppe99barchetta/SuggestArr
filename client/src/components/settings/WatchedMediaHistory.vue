@@ -1,46 +1,51 @@
 <template>
-  <SectionCard id="profile-history-content" icon="fas fa-book-open" title="Recommendation history" description="Titles you watched outside your media server. They personalise suggestions and are never suggested again.">
-    <div class="grid gap-5 md:grid-cols-2">
-      <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
-        <h3 class="m-0 text-sm font-bold text-ink">Import a CSV</h3>
-        <p class="m-0 text-[13px] leading-relaxed text-ink-3">UTF-8 with the columns <code>tmdb_id,media_type,title,year,rating</code>. Rating is optional, from 0 to 10.</p>
-        <div class="flex flex-wrap items-center gap-2">
+  <SectionCard id="profile-history-content" icon="fas fa-book-open" title="Watched elsewhere" description="Titles you watched outside your media server. They personalise suggestions and are never suggested again.">
+    <template #actions>
+      <button type="button" class="ui-btn" @click="showImport = true"><i aria-hidden="true" class="fas fa-file-import"></i>Import CSV</button>
+    </template>
+
+    <form class="flex flex-wrap gap-2" role="search" @submit.prevent="search">
+      <label class="sr-only" for="watchedSearch">Search TMDb</label>
+      <input id="watchedSearch" v-model.trim="query" type="search" class="ui-input flex-[1_1_220px]" placeholder="Add a movie or series you watched">
+      <label class="sr-only" for="watchedSearchType">Media type</label>
+      <select id="watchedSearchType" v-model="searchType" class="ui-input w-auto">
+        <option v-for="option in searchTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+      </select>
+      <button type="submit" class="ui-btn-primary" :disabled="query.length < 2 || isSearching">
+        <i aria-hidden="true" :class="isSearching ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>Search
+      </button>
+    </form>
+    <ul v-if="searchResults.length" class="m-0 mt-3 flex max-h-64 list-none flex-col gap-1.5 overflow-y-auto p-0">
+      <li v-for="result in searchResults" :key="`${result.media_type}:${result.tmdb_id}`" class="flex flex-wrap items-center gap-2 rounded-[8px] border border-edge bg-panel-2 px-3 py-2">
+        <span class="min-w-0 flex-1 text-sm text-ink">{{ result.title }} <small class="text-ink-4">({{ result.year || '—' }}) · {{ result.media_type === 'tv' ? 'TV' : 'Movie' }}</small></span>
+        <label class="sr-only" :for="`rating-${result.media_type}-${result.tmdb_id}`">Your rating for {{ result.title }}</label>
+        <input :id="`rating-${result.media_type}-${result.tmdb_id}`" v-model.number="ratings[`${result.media_type}:${result.tmdb_id}`]" class="ui-input h-9 w-24" type="number" min="0" max="10" step="0.5" placeholder="Rating">
+        <button type="button" class="ui-btn h-9 px-3" :disabled="addingKey === `${result.media_type}:${result.tmdb_id}`" @click="addResult(result)">
+          <i aria-hidden="true" :class="addingKey === `${result.media_type}:${result.tmdb_id}` ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i>Add
+        </button>
+      </li>
+    </ul>
+
+    <AppDialog v-if="showImport" title="Import a CSV" icon="fas fa-file-import" @close="closeImport">
+      <div class="flex flex-col gap-3">
+        <p class="m-0 text-sm leading-relaxed text-ink-2">UTF-8 file with a header row and these columns:</p>
+        <code class="block rounded-ctl border border-edge bg-canvas px-3 py-2 font-mono text-[13px] text-ink">tmdb_id,media_type,title,year,rating</code>
+        <p class="m-0 text-xs text-ink-4"><code>media_type</code> is <code>movie</code> or <code>tv</code>. Rating is optional, from 0 to 10.</p>
+        <div class="flex items-center gap-2">
           <input ref="file" type="file" hidden accept=".csv,text/csv" :disabled="isImporting" @change="onFileChange">
-          <button type="button" class="ui-btn" :disabled="isImporting" @click="$refs.file.click()">
-            <i aria-hidden="true" class="fas fa-folder-open"></i>Choose CSV
+          <button type="button" class="ui-btn shrink-0" :disabled="isImporting" @click="$refs.file.click()">
+            <i aria-hidden="true" class="fas fa-folder-open"></i>Choose file
           </button>
           <span class="min-w-0 flex-1 truncate text-[13px] text-ink-3" aria-live="polite" :title="importFile?.name">{{ importFile?.name || 'No file selected' }}</span>
-          <button type="button" class="ui-btn-primary" :disabled="!importFile || isImporting" @click="importCsv">
-            <i aria-hidden="true" :class="isImporting ? 'fas fa-spinner fa-spin' : 'fas fa-file-import'"></i>{{ isImporting ? 'Importing…' : 'Import' }}
-          </button>
         </div>
       </div>
-
-      <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
-        <h3 class="m-0 text-sm font-bold text-ink">Add a title</h3>
-        <form class="flex flex-wrap gap-2" role="search" @submit.prevent="search">
-          <label class="sr-only" for="watchedSearch">Search TMDb</label>
-          <input id="watchedSearch" v-model.trim="query" type="search" class="ui-input flex-[1_1_180px]" placeholder="Movie or series title">
-          <label class="sr-only" for="watchedSearchType">Media type</label>
-          <select id="watchedSearchType" v-model="searchType" class="ui-input w-auto">
-            <option v-for="option in searchTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          </select>
-          <button type="submit" class="ui-btn" :disabled="query.length < 2 || isSearching">
-            <i aria-hidden="true" :class="isSearching ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>Search
-          </button>
-        </form>
-        <ul v-if="searchResults.length" class="m-0 flex max-h-64 list-none flex-col gap-1.5 overflow-y-auto p-0">
-          <li v-for="result in searchResults" :key="`${result.media_type}:${result.tmdb_id}`" class="flex flex-wrap items-center gap-2 rounded-[8px] bg-canvas px-3 py-2">
-            <span class="min-w-0 flex-1 text-sm text-ink">{{ result.title }} <small class="text-ink-4">({{ result.year || '—' }}) · {{ result.media_type === 'tv' ? 'TV' : 'Movie' }}</small></span>
-            <label class="sr-only" :for="`rating-${result.media_type}-${result.tmdb_id}`">Your rating for {{ result.title }}</label>
-            <input :id="`rating-${result.media_type}-${result.tmdb_id}`" v-model.number="ratings[`${result.media_type}:${result.tmdb_id}`]" class="ui-input h-9 w-24" type="number" min="0" max="10" step="0.5" placeholder="Rating">
-            <button type="button" class="ui-btn h-9 px-3" :disabled="addingKey === `${result.media_type}:${result.tmdb_id}`" @click="addResult(result)">
-              <i aria-hidden="true" :class="addingKey === `${result.media_type}:${result.tmdb_id}` ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i>Add
-            </button>
-          </li>
-        </ul>
-      </div>
-    </div>
+      <template #footer>
+        <button type="button" class="ui-btn" :disabled="isImporting" @click="closeImport">Cancel</button>
+        <button type="button" class="ui-btn-primary" :disabled="!importFile || isImporting" @click="importCsv">
+          <i aria-hidden="true" :class="isImporting ? 'fas fa-spinner fa-spin' : 'fas fa-file-import'"></i>{{ isImporting ? 'Importing…' : 'Import' }}
+        </button>
+      </template>
+    </AppDialog>
 
     <h3 class="m-0 mb-2 mt-5 text-sm font-bold text-ink">Your titles <span v-if="items.length" class="font-normal text-ink-4">({{ items.length }})</span></h3>
     <p v-if="isLoading" class="m-0 text-[13px] text-ink-4">Loading watched titles…</p>
@@ -69,16 +74,17 @@ import {
   listMyWatchedMedia,
   searchMyWatchedMedia,
 } from '@/api/api';
+import AppDialog from '@/components/ui/AppDialog.vue';
 import SectionCard from '@/components/ui/SectionCard.vue';
 import { confirmDialog } from '@/utils/confirmDialog';
 
 export default {
   name: 'WatchedMediaHistory',
-  components: { SectionCard },
+  components: { AppDialog, SectionCard },
   data() {
     return {
       items: [], importFile: null, query: '', searchType: 'both', searchResults: [], ratings: {},
-      isLoading: false, isImporting: false, isSearching: false, addingKey: '',
+      isLoading: false, isImporting: false, showImport: false, isSearching: false, addingKey: '',
       searchTypeOptions: [
         { value: 'both', label: 'Movies and TV' },
         { value: 'movie', label: 'Movies' },
@@ -95,6 +101,7 @@ export default {
         if (error.response?.status !== 404) this.$toast.error(error.response?.data?.message || 'Could not load recommendation history');
       } finally { this.isLoading = false; }
     },
+    closeImport() { this.showImport = false; this.importFile = null; },
     onFileChange(event) { [this.importFile] = event.target.files || []; },
     async importCsv() {
       if (!this.importFile) return;
@@ -103,8 +110,7 @@ export default {
         const result = (await importMyWatchedMedia(this.importFile)).data;
         this.$toast.success(result.message);
         if (result.errors?.length) this.$toast.error(`${result.errors.length} row(s) could not be imported`);
-        this.importFile = null;
-        this.$refs.file.value = '';
+        this.closeImport();
         await this.load();
       } catch (error) { this.$toast.error(error.response?.data?.message || 'CSV import failed'); }
       finally { this.isImporting = false; }
