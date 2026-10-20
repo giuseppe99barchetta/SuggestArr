@@ -189,12 +189,7 @@ class IntegrationMixin:
                 continue
 
             action = "Updating" if existing is not None else "Migrating"
-            safe_log = {k: v for k, v in config.items() if k not in (
-                'api_key', 'session_token', 'client_secret', 'access_token', 'refresh_token'
-            )}
-            self.logger.info(
-                "%s '%s' credentials from config.yaml -> integrations table %s",
-                action, service, safe_log,
-            )
+            # No values: legacy URLs may embed credentials, and a denylist misses new secret fields.
+            self.logger.info("%s '%s' credentials from config.yaml -> integrations table", action, service)
             self.set_integration(service, config)
 
