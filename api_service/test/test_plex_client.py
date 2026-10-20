@@ -137,6 +137,15 @@ class TestGetAllUsers(unittest.IsolatedAsyncioTestCase):
             result = await self.client.get_all_users()
         self.assertEqual(result, [{'id': 2, 'name': 'Bob'}])
 
+    async def test_mixed_numeric_and_text_ids_sort_without_error(self):
+        friends = [{'id': 'abc', 'title': 'Text', 'username': 'text'}, {'id': '10', 'title': 'Ten', 'username': 'ten'}]
+        accounts = {'MediaContainer': {'Account': [{'id': 2, 'name': 'Bob'}]}}
+        session = MagicMock()
+        session.get = MagicMock(side_effect=[_xml_response(200, friends), _text_response(200, accounts)])
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            result = await self.client.get_all_users()
+        self.assertEqual([u['id'] for u in result], [2, 10, 'abc'])
+
     async def test_falls_back_to_username_when_title_is_missing(self):
         self.assertEqual(PlexClient._parse_friends('<MediaContainer><User id="5" username="carol" /></MediaContainer>'),
                          [{'id': 5, 'name': 'carol'}])

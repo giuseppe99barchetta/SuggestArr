@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from api_service.services.plex.plex_auth import PlexAuth
 from api_service.services.plex.plex_client import PlexClient
 from api_service.config.logger_manager import LoggerManager
@@ -12,20 +12,37 @@ logger = LoggerManager.get_logger("PlexRoute")
 plex_bp = Blueprint('plex', __name__)
 
 
-def _resolve_plex_token(token):
+def _same_plex_url(left, right):
+    """Compare two Plex base URLs, ignoring case of scheme/host and a trailing slash."""
+    def norm(url):
+        return str(url or '').strip().rstrip('/').lower()
+    return bool(norm(left)) and norm(left) == norm(right)
+
+
+def _resolve_plex_token(token, api_url):
     """
-    Swap the redacted-secret sentinel for the stored Plex token.
+    Swap the redacted-secret sentinel for the stored Plex token, but only safely.
 
     The settings UI sends '***' for a secret it did not change, and that value can
     reach these routes from a form loaded before the save. Sent to Plex as-is it is
-    simply an invalid token (HTTP 401), so resolve it to the saved one instead.
+    simply an invalid token (HTTP 401). The stored token is used instead only for an
+    admin, and only towards the configured Plex server: these routes take the URL
+    from the caller, so resolving the sentinel for anyone, or for any URL, would let
+    a caller send the saved token to a host of their choosing.
 
     :param token: Token from the request body.
-    :return: The token to use with Plex.
+    :param api_url: Plex URL from the request body.
+    :return: The token to use with Plex, or None when the sentinel cannot be resolved.
     """
-    if token == REDACTED:
-        return ConfigService.get_runtime_config().get('PLEX_TOKEN') or None
-    return token
+    if token != REDACTED:
+        return token
+    if (getattr(g, 'current_user', None) or {}).get('role') != 'admin':
+        return None
+    config = ConfigService.get_runtime_config()
+    if not _same_plex_url(api_url, config.get('PLEX_API_URL')):
+        return None
+    return config.get('PLEX_TOKEN') or None
+
 
 @plex_bp.route('/libraries', methods=['POST'])
 async def get_plex_libraries():
@@ -36,7 +53,7 @@ async def get_plex_libraries():
     try:
         config_data = request.json
         api_url = config_data.get('PLEX_API_URL')
-        api_token = _resolve_plex_token(config_data.get('PLEX_TOKEN'))
+        api_token = _resolve_plex_token(config_data.get('PLEX_TOKEN'), api_url)
 
         if not api_url or not api_token:
             logger.warning("Missing API URL or token in Plex libraries request")
@@ -137,8 +154,8 @@ async def test_plex_connection():
     logger.info("Received request to test Plex connection")
     try:
         config_data = request.json
-        api_token = _resolve_plex_token(config_data.get('token'))
         api_url = config_data.get('api_url')
+        api_token = _resolve_plex_token(config_data.get('token'), api_url)
 
         if not api_token or not api_url:
             logger.warning("Missing API token or URL in Plex connection test request")
@@ -201,8 +218,8 @@ async def get_plex_users():
     """
     try:
         config_data = request.get_json(silent=True) or {}
-        api_token = _resolve_plex_token(config_data.get('PLEX_TOKEN'))
         api_url = config_data.get('PLEX_API_URL')
+        api_token = _resolve_plex_token(config_data.get('PLEX_TOKEN'), api_url)
 
         if not api_token:
             return jsonify({'message': 'API token is required', 'type': 'error'}), 400

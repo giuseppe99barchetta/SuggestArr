@@ -295,6 +295,7 @@ export default {
       isLoadingChangelog: false,
       changelogError: null,
       requestCount: 0,
+      requestCountCall: 0,
       showMobileNav: false,
       showTour: false,
       testingConnections: {
@@ -591,17 +592,21 @@ export default {
     },
 
     async loadRequestCount() {
+      // Counts can overlap (an approval event and a tab switch at once). Only the
+      // newest call may write the badge, so an older, slower answer cannot put a
+      // stale count back.
+      const call = ++this.requestCountCall;
       try {
         const jobs = await axios.get('/api/jobs', { timeout: 5000 });
         if (!approvalEnabled(jobs.data)) {
-          this.requestCount = 0;
+          if (call === this.requestCountCall) this.requestCount = 0;
           return;
         }
         const response = await axios.get('/api/automation/requests/workflow', {
           params: { status: 'awaiting_approval', page: 1, per_page: 1 },
           timeout: 5000 // 5 second timeout
         });
-        this.requestCount = response.data.total || 0;
+        if (call === this.requestCountCall) this.requestCount = response.data.total || 0;
       } catch (error) {
         console.error('Error loading request count:', error);
       }

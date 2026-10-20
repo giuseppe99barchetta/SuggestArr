@@ -57,6 +57,22 @@ class PlexClient(BaseHTTPClient):
             self.headers['X-Plex-Client-Identifier'] = client_id
 
     @staticmethod
+    def _user_sort_key(user):
+        """
+        Sort key that copes with mixed id types.
+
+        A friend id that is not numeric stays a string while local account ids are
+        integers, and comparing an int with a str raises TypeError. Numeric ids sort
+        first, numerically, then the rest as text.
+        :param user: A {'id', 'name'} dict.
+        :return: A tuple that orders consistently across both kinds of id.
+        """
+        user_id = user['id']
+        if isinstance(user_id, int):
+            return (0, user_id, '')
+        return (1, 0, str(user_id))
+
+    @staticmethod
     def _parse_friends(xml_text):
         """
         Parse the plex.tv /api/users/ XML into SuggestArr's user shape.
@@ -139,7 +155,7 @@ class PlexClient(BaseHTTPClient):
                     self.logger.error("Failed to retrieve local accounts: HTTP %d", accounts_response.status)
 
             unique_users = {user['id']: user for user in users}.values()
-            sorted_users = sorted(unique_users, key=lambda x: x['id'])
+            sorted_users = sorted(unique_users, key=self._user_sort_key)
             self.logger.info(f"Successfully retrieved {len(sorted_users)} unique users from Plex")
 
         except aiohttp.ClientError as e:

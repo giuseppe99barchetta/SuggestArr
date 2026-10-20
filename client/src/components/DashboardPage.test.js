@@ -28,3 +28,16 @@ test('saving a section never copies the redacted-secret sentinel into the live c
   assert.doesNotMatch(save, /Object\.assign\(this\.config, data\)/);
   assert.match(save, /if \(value !== '\*\*\*'\) this\.config\[key\] = value;/);
 });
+
+test('only the newest badge count may write the badge', () => {
+  // An approval event and a tab switch can start overlapping counts; an older,
+  // slower answer must not overwrite a newer one.
+  const method = source.slice(source.indexOf('async loadRequestCount()'), source.indexOf('async showChangelog()'));
+  assert.match(method, /const call = \+\+this\.requestCountCall;/);
+  const writes = method.match(/this\.requestCount = [^;]+;/g);
+  assert.ok(writes.length >= 2);
+  for (const write of writes) {
+    assert.match(method, new RegExp(`if \\(call === this\\.requestCountCall\\) ${write.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  }
+  assert.match(source, /requestCountCall: 0,/);
+});
