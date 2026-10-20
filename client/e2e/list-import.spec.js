@@ -55,8 +55,7 @@ for (const width of [1440, 900, 390]) {
     await dialog.getByRole('button', { name: 'Import list Public MDBList or Trakt list' }).click();
     await page.getByLabel('Name', { exact: true }).fill('Weekly list');
     const source = page.getByTestId('public-list-source');
-    await source.getByRole('button', { name: 'Select provider' }).click();
-    await page.getByRole('menuitem', { name: 'MDBList', exact: true }).click();
+    await source.getByLabel('Provider').selectOption('mdblist');
     await page.getByLabel('List URL').fill('https://mdblist.com/lists/alice/favorites');
     await source.getByRole('button', { name: 'Verify list' }).click();
     await expect(source.getByRole('status')).toHaveText('Public list: Weekly favorites');
@@ -235,8 +234,7 @@ for (const width of [1400, 390]) {
     await expect(page.locator('#jobName')).toHaveCount(0);
     await expect(page.locator('[data-tour-id="job-modal-schedule"]')).toHaveCount(0);
     const source = page.getByTestId('public-list-source');
-    await source.getByRole('button', { name: 'Select provider' }).click();
-    await page.getByRole('menuitem', { name: 'MDBList', exact: true }).click();
+    await source.getByLabel('Provider').selectOption('mdblist');
     await page.getByLabel('List URL').fill('https://mdblist.com/lists/alice/favorites');
     await modal.getByRole('button', { name: 'Approve first', exact: false }).click();
     await source.getByRole('button', { name: 'Preview list' }).click();
@@ -271,8 +269,7 @@ test('Unsaved list job preview leaves the form open and creates no job', async (
   await openPreview(page, 'JobModal');
   await page.getByRole('button', { name: 'Import list Public MDBList or Trakt list' }).click();
   const source = page.getByTestId('public-list-source');
-  await source.getByRole('button', { name: 'Select provider' }).click();
-  await page.getByRole('menuitem', { name: 'Trakt', exact: true }).click();
+  await source.getByLabel('Provider').selectOption('trakt');
   await page.getByLabel('List URL').fill('https://trakt.tv/users/alice/lists/favorites');
   await page.route('**/api/jobs/lists/preview', route => route.fulfill({ json: { status: 'success', has_more: false, next_offset: 0,
     items: [{ tmdb_id: 9, media_type: 'movie', title: 'Unsaved preview' }] } }));

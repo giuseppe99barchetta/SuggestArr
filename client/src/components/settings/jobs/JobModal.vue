@@ -82,7 +82,12 @@
               <!-- Where titles come from, per job type -->
               <div v-if="form.job_type === 'list_import'" class="mb-6 grid gap-3" data-testid="public-list-source">
                 <div class="grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)]">
-                  <BaseDropdown v-model="form.filters.list_provider" :options="listProviders" label="Provider" placeholder="Select provider" @update:model-value="listCheckMessage = ''" />
+                  <label class="ui-label">Provider
+                    <select v-model="form.filters.list_provider" class="ui-input" @change="listCheckMessage = ''">
+                      <option :value="undefined" disabled>Select provider</option>
+                      <option v-for="option in listProviders" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                  </label>
                   <label class="ui-label" for="listUrl">List URL
                     <input id="listUrl" v-model="form.filters.list_url" type="url" required class="ui-input" placeholder="https://mdblist.com/lists/username/list-name" @input="listCheckMessage = ''" />
                   </label>
@@ -262,13 +267,12 @@
               </div>
 
               <div class="mb-6">
-                <BaseDropdown
-                  v-model="form.seer_identity_mode"
-                  :options="seerIdentityOptions"
-                  label="Request as"
-                  placeholder="Select Seer identity"
-                  :help-text="seerIdentityHelp"
-                />
+                <label class="ui-label">Request as
+                  <select v-model="form.seer_identity_mode" class="ui-input">
+                    <option v-for="option in seerIdentityOptions" :key="option.value" :value="option.value" :disabled="option.disabled">{{ option.label }}</option>
+                  </select>
+                  <span v-if="seerIdentityHelp" class="text-xs font-normal text-ink-4">{{ seerIdentityHelp }}</span>
+                </label>
               </div>
 
               <div v-if="!oneTime" class="mb-6" data-tour-id="job-modal-max-results">
@@ -308,11 +312,31 @@
               <div v-if="profilesOpen" id="job-request-profiles" class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
                 <div v-for="type in visibleProfileTypes" :key="type" class="grid gap-2 rounded-ctl border border-edge bg-panel-2 p-4">
                   <div class="flex items-center gap-2 text-[0.85rem] font-semibold text-ink"><i aria-hidden="true" :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'" class="text-ink-4"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
-                  <BaseDropdown :model-value="form.request_profiles[type].serverId || ''" :options="serverOptions(type)" label="Server" placeholder="Use Seer default" @update:model-value="setRequestServer(type, $event)" />
+                  <label class="ui-label">Server
+                    <select :value="form.request_profiles[type].serverId ?? ''" class="ui-input" @change="setRequestServer(type, $event.target.value)">
+                      <option value="">Use Seer default</option>
+                      <option v-for="option in serverOptions(type)" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                  </label>
                   <template v-if="form.request_profiles[type].serverId">
-                    <BaseDropdown v-model="form.request_profiles[type].profileId" :options="profileOptions(type)" label="Quality profile" placeholder="Select quality profile" />
-                    <BaseDropdown v-model="form.request_profiles[type].rootFolder" :options="rootFolderOptions(type)" label="Root folder" placeholder="Select root folder" />
-                    <BaseDropdown v-if="type === 'tv' && languageProfileOptions(type).length" v-model="form.request_profiles[type].languageProfileId" :options="languageProfileOptions(type)" label="Language profile" placeholder="Use Sonarr default" />
+                    <label class="ui-label">Quality profile
+                      <select v-model="form.request_profiles[type].profileId" class="ui-input">
+                        <option value="" disabled>Select quality profile</option>
+                        <option v-for="option in profileOptions(type)" :key="option.value" :value="option.value">{{ option.label }}</option>
+                      </select>
+                    </label>
+                    <label class="ui-label">Root folder
+                      <select v-model="form.request_profiles[type].rootFolder" class="ui-input">
+                        <option value="" disabled>Select root folder</option>
+                        <option v-for="option in rootFolderOptions(type)" :key="option.value" :value="option.value">{{ option.label }}</option>
+                      </select>
+                    </label>
+                    <label v-if="type === 'tv' && languageProfileOptions(type).length" class="ui-label">Language profile
+                      <select v-model="form.request_profiles[type].languageProfileId" class="ui-input">
+                        <option value="">Use Sonarr default</option>
+                        <option v-for="option in languageProfileOptions(type)" :key="option.value" :value="option.value">{{ option.label }}</option>
+                      </select>
+                    </label>
                   </template>
                 </div>
               </div>
@@ -352,7 +376,6 @@ import { jobRequiresApproval } from '@/utils/requestApproval.js';
 import axios from 'axios';
 import { confirmDialog } from '@/utils/confirmDialog';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
-import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import InfoTip from '@/components/ui/InfoTip.vue';
 
 export default {
@@ -365,7 +388,6 @@ export default {
     SchedulePicker,
     DryRunResultModal,
     BaseCheckbox,
-    BaseDropdown,
     InfoTip
   },
   props: {

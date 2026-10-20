@@ -218,7 +218,9 @@
         <section class="flex flex-col gap-2">
           <h3 class="m-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Seer identity</h3>
           <p class="m-0 text-[13px] text-ink-3">Approved requests are credited to this Seer user.</p>
-          <BaseDropdown v-model="editPermissions.seer_user_id" :options="seerUserOptions" placeholder="Use technical user fallback" :disabled="isSavingPermissions" />
+          <select v-model="editPermissions.seer_user_id" class="ui-input" aria-label="Seer identity" :disabled="isSavingPermissions">
+            <option v-for="option in seerUserOptions" :key="option.value ?? 'fallback'" :value="option.value">{{ option.label }}</option>
+          </select>
         </section>
 
         <fieldset v-if="editPermissions.role !== 'admin'" class="m-0 flex flex-col gap-2 border-0 p-0">
@@ -257,13 +259,13 @@
 
     <AppDialog v-if="showMediaLinkModal" title="Link media account" icon="fas fa-link" :subtitle="mediaLinkSubtitle" @close="showMediaLinkModal = false">
       <div class="flex flex-col gap-3">
-        <BaseDropdown
-          v-model="selectedMediaUserId"
-          :options="mediaUserOptions"
-          :label="providerLabel + ' user'"
-          placeholder="Select account"
-          :disabled="isLoadingMediaUsers || isSavingMediaLink"
-        />
+        <label class="ui-label">
+          {{ providerLabel }} user
+          <select v-model="selectedMediaUserId" class="ui-input" :disabled="isLoadingMediaUsers || isSavingMediaLink">
+            <option value="" disabled>Select account</option>
+            <option v-for="option in mediaUserOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+        </label>
         <p v-if="isLoadingMediaUsers" class="m-0 text-xs text-ink-4"><i aria-hidden="true" class="fas fa-spinner fa-spin mr-1"></i>Loading {{ providerLabel }} users…</p>
         <p v-if="mediaLinkError" class="ui-alert-bad" role="alert">{{ mediaLinkError }}</p>
       </div>
@@ -291,7 +293,6 @@ import {
   updateUserPermissions,
 } from '@/api/api';
 import axios from 'axios';
-import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import AppDialog from '@/components/ui/AppDialog.vue';
@@ -313,7 +314,7 @@ function readViewMode() {
 export default {
   name: 'UserManagement',
 
-  components: { AppDialog, BaseDropdown, BaseCheckbox, PageHeader, SectionCard, UserAvatar },
+  components: { AppDialog, BaseCheckbox, PageHeader, SectionCard, UserAvatar },
 
   props: {
     config: Object,

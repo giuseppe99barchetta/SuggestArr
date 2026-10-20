@@ -72,10 +72,13 @@
                   <span class="text-xs font-normal text-ink-4">Use <code>legacy</code> to keep current behavior (0.7 for recommendations, 0.8 for AI Search). Clear and save to omit the parameter, or enter a value from 0 to 2.</span>
                 </label>
 
-                <div class="flex flex-col gap-1.5">
-                  <BaseDropdown v-model="localConfig.LLM_REASONING_EFFORT" :options="reasoningEffortOptions" label="Reasoning effort" :disabled="isLoading" id="llmReasoningEffort" />
-                  <span class="text-xs text-ink-4">Sent only to direct OpenAI GPT-5 and o-series models. Other OpenAI-compatible provider/model combinations omit it.</span>
-                </div>
+                <label class="ui-label" for="llmReasoningEffort">
+                  Reasoning effort
+                  <select id="llmReasoningEffort" v-model="localConfig.LLM_REASONING_EFFORT" class="ui-input" :disabled="isLoading">
+                    <option v-for="option in reasoningEffortOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                  </select>
+                  <span class="text-xs font-normal text-ink-4">Sent only to direct OpenAI GPT-5 and o-series models. Other OpenAI-compatible provider/model combinations omit it.</span>
+                </label>
 
                 <label class="ui-label md:col-span-2" for="searxngBaseUrl">
                   <span>SearXNG base URL <span class="ml-1.5 rounded-full bg-raised px-2 py-0.5 text-[11px] font-normal text-ink-4">Optional</span></span>
@@ -254,7 +257,12 @@ LLM_MODEL=gpt-4o-mini</code></pre>
       <div v-if="section === 'system'" class="grid gap-5 lg:grid-cols-2">
         <SectionCard icon="fas fa-bug" title="Debug &amp; appearance" description="Logs, diagnostics and backgrounds." class="lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0">
           <div class="flex flex-col gap-4">
-            <BaseDropdown v-model="localConfig.LOG_LEVEL" :options="logLevelOptions" label="Log level" :disabled="isLoading" id="logLevel" class="[&>label]:mb-1.5 [&>label]:text-[13px] [&>label]:font-semibold" />
+            <label class="ui-label" for="logLevel">
+              Log level
+              <select id="logLevel" v-model="localConfig.LOG_LEVEL" class="ui-input" :disabled="isLoading">
+                <option v-for="option in logLevelOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+            </label>
 
             <BaseCheckbox v-model="localConfig.ENABLE_DEBUG_MODE" :disabled="isLoading" label="Debug mode" description="Detailed logs for troubleshooting." />
             <BaseCheckbox v-model="localConfig.ENABLE_PERFORMANCE_MONITORING" :disabled="isLoading" label="Performance monitoring" description="Track application performance." />
@@ -303,7 +311,12 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 
         <SectionCard icon="fas fa-shield-alt" title="Access &amp; routing" description="Sign-in rules and reverse-proxy path." class="lg:row-span-2 lg:grid lg:grid-rows-subgrid lg:gap-y-0">
           <div class="flex flex-col gap-4">
-            <BaseDropdown v-model="localConfig.AUTH_MODE" :options="authModeOptions" label="Authentication mode" :disabled="isLoading" id="authMode" />
+            <label class="ui-label" for="authMode">
+              Authentication mode
+              <select id="authMode" v-model="localConfig.AUTH_MODE" class="ui-input" :disabled="isLoading">
+                <option v-for="option in authModeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+            </label>
 
             <div v-if="localConfig.AUTH_MODE === 'disabled' || localConfig.AUTH_MODE === 'local_bypass'" role="alert" class="flex items-start gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
               <i aria-hidden="true" class="fas fa-exclamation-triangle mt-0.5 text-caution"></i>
@@ -463,7 +476,6 @@ import AppDialog from '@/components/ui/AppDialog.vue';
 import axios from 'axios';
 import { confirmDialog } from '@/utils/confirmDialog';
 import unsavedChangesGuard from './mixins/unsavedChangesGuard';
-import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import { languageOptions } from '@/utils/titleLanguage.js';
 import RequestExpiryControls from './RequestExpiryControls.vue';
@@ -473,7 +485,6 @@ export default {
   name: 'SettingsAdvanced',
   mixins: [unsavedChangesGuard],
   components: { AppDialog, PageHeader, SectionCard,
-    BaseDropdown,
     BaseCheckbox,
     RequestExpiryControls,
     RequestReplacementControls,

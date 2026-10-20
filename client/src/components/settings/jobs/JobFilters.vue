@@ -169,29 +169,23 @@
 
     <!-- Language Filter -->
     <div class="flex flex-col">
-      <BaseDropdown
-        v-model="localFilters.with_original_language"
-        :options="languageOptions"
-        label="Original Language"
-        placeholder="Select language"
-        option-key="value"
-        option-label="label"
-        option-value="value"
-      />
+      <label class="ui-label">
+        Original Language
+        <select :value="localFilters.with_original_language || ''" class="ui-input" @change="localFilters.with_original_language = $event.target.value">
+          <option v-for="option in languageOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
+      </label>
     </div>
 
     <!-- Streaming Region & Provider Exclusion -->
     <div class="flex flex-col">
-      <BaseDropdown
-        v-model="localFilters.watch_region"
-        :options="watchRegions"
-        label="Streaming Region"
-        placeholder="Use global setting"
-        option-key="iso_3166_1"
-        option-label="english_name"
-        option-value="iso_3166_1"
-        @update:modelValue="onRegionChange"
-      />
+      <label class="ui-label">
+        Streaming Region
+        <select :value="localFilters.watch_region || ''" class="ui-input" @change="localFilters.watch_region = $event.target.value; onRegionChange($event.target.value)">
+          <option value="">Use global setting</option>
+          <option v-for="region in watchRegions" :key="region.iso_3166_1" :value="region.iso_3166_1">{{ region.english_name }}</option>
+        </select>
+      </label>
       <small class="mt-2 text-sm text-ink-4">Region used to check streaming availability</small>
     </div>
 
@@ -311,28 +305,23 @@
 
     <!-- Sort By (discover jobs only) -->
     <div v-if="jobType === 'discover'" class="flex flex-col">
-      <BaseDropdown
-        v-model="localFilters.sort_by"
-        :options="sortOptions"
-        label="Sort Results By"
-        placeholder="Select sort order"
-        option-key="value"
-        option-label="label"
-        option-value="value"
-      />
+      <label class="ui-label">
+        Sort Results By
+        <select v-model="localFilters.sort_by" class="ui-input">
+          <option v-for="option in sortOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
+      </label>
     </div>
   </div>
 </template>
 
 <script>
 import { jobsApi } from '@/api/jobsApi';
-import BaseDropdown from '@/components/common/BaseDropdown.vue';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 
 export default {
   name: 'JobFilters',
   components: {
-    BaseDropdown,
     BaseCheckbox,
   },
   props: {

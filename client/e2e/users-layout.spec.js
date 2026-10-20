@@ -98,15 +98,13 @@ test('Changing media and Seer assignments refreshes just the affected avatar', a
   const originalSource = await viewer.locator('[role="img"] img').getAttribute('src');
   await viewer.getByRole('button', { name: 'Assign Jellyfin account to viewer' }).click();
   const link = page.getByRole('dialog', { name: 'Link media account', exact: true });
-  await link.getByRole('button', { name: 'Select account', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Cinema viewer', exact: true }).click();
+  await link.getByRole('combobox').selectOption({ label: 'Cinema viewer' });
   await link.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(viewer.locator('[role="img"] img')).not.toHaveAttribute('src', originalSource);
   await expect.poll(() => avatarRequests.filter(id => id === 2).length).toBe(2);
   await viewer.getByRole('button', { name: 'Edit Seer identity for viewer', exact: true }).click();
   const permissions = page.getByRole('dialog', { name: 'Permissions', exact: true });
-  await permissions.getByRole('button', { name: 'Requests viewer', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Technical user fallback', exact: true }).click();
+  await permissions.getByLabel('Seer identity').selectOption({ label: 'Technical user fallback' });
   await permissions.getByRole('button', { name: 'Save permissions' }).click();
   await expect(viewer.getByRole('img', { name: 'viewer avatar from Jellyfin', exact: true })).toBeVisible();
   expect(avatarRequests.filter(id => id === 2)).toHaveLength(3);
@@ -157,14 +155,13 @@ test('User controls still update status, role, permissions and media links', asy
   await expect(viewer.getByText('All pages', { exact: true })).toBeVisible();
   await viewer.getByRole('button', { name: 'Assign Jellyfin account to viewer' }).click();
   const link = page.getByRole('dialog', { name: 'Link media account', exact: true });
-  await link.getByRole('button', { name: 'Select account', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Cinema viewer', exact: true }).click();
+  await link.getByRole('combobox').selectOption({ label: 'Cinema viewer' });
   await link.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(link).toHaveCount(0);
   await expect(viewer.getByText('Cinema viewer', { exact: true })).toBeVisible();
   expect(mutations[3]).toMatchObject({ path: '/api/users/2/link/jellyfin', body: { external_user_id: 'media-2', external_username: 'Cinema viewer' } });
   await viewer.getByRole('button', { name: 'Assign Jellyfin account to viewer' }).click();
-  await expect(page.getByRole('dialog').getByRole('button', { name: 'Cinema viewer', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('combobox').locator('option:checked')).toHaveText('Cinema viewer');
 });
 
 test('Own role and the last admin are locked, overview chips filter, list view keeps controls', async ({ page }) => {
