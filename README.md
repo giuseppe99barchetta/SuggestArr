@@ -68,10 +68,12 @@ External integrations use the stable API at `/api/v1` (endpoints under `/api/*` 
 
 ## Support SuggestArr ❤️
 
-If you enjoy SuggestArr, you can support its development:
+SuggestArr is free, open source and built in my spare time. If it saves you time or helps you find something great to watch, a small donation helps me keep improving it.
 
-- ☕ [Ko-fi](https://ko-fi.com/ciuse99)
-- 💛 [Buy Me a Coffee](https://buymeacoffee.com/suggestarr)
+<a href="https://ko-fi.com/ciuse99"><img src="https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=ko-fi&logoColor=white&style=for-the-badge" alt="Support on Ko-fi"></a>
+<a href="https://buymeacoffee.com/suggestarr"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-FFDD00?logo=buy-me-a-coffee&logoColor=black&style=for-the-badge" alt="Buy Me a Coffee"></a>
+
+You can also help without donating: star the repo ⭐, report bugs, or share SuggestArr with other Plex, Jellyfin and Emby users.
 
 ## Community and contributing
 
