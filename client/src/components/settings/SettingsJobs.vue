@@ -8,7 +8,7 @@
       <div class="flex flex-wrap gap-2">
         <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Replay the Jobs tour" aria-label="Replay the Jobs tour" @click="restartJobsTour"><i aria-hidden="true" class="fas fa-question-circle"></i></button>
         <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink disabled:opacity-50" :disabled="isLoading" title="Refresh" aria-label="Refresh" @click="loadJobs"><i aria-hidden="true" :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i></button>
-        <button type="button" class="ui-btn" :disabled="importStarting || ['queued', 'running'].includes(listImport?.status)" @click="showImportModal = true"><i aria-hidden="true" class="fas fa-list"></i>Import list once</button>
+        <button type="button" class="ui-btn h-[42px]" :disabled="importStarting || ['queued', 'running'].includes(listImport?.status)" @click="showImportModal = true"><i aria-hidden="true" class="fas fa-list"></i>Import list once</button>
         <button type="button" class="ui-btn-primary h-[42px] px-[18px]" data-tour-id="jobs-new-btn" @click="showCreateModal = true"><i aria-hidden="true" class="fas fa-plus"></i>New job</button>
       </div>
     </header>

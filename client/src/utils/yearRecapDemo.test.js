@@ -28,8 +28,8 @@ test('server demo scales every count and monthly value fivefold without changing
   server.monthly.forEach((month, i) => assert.equal(month.minutes, personal.monthly[i].minutes * 5));
 });
 
-test('all seven share captions and accessible descriptions disclose fictional data and the year', () => {
-  assert.equal(YEAR_RECAP_STORIES.length, 7);
+test('all nine share captions and accessible descriptions disclose fictional data and the year', () => {
+  assert.equal(YEAR_RECAP_STORIES.length, 9);
   const data = createYearRecapDemo('server');
   for (const story of YEAR_RECAP_STORIES) {
     const caption = yearRecapCaption(data, story);

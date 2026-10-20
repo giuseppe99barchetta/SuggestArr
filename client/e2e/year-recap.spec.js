@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
-const storyTitles = ['Your 2026, on screen', 'Discovery, on autopilot', 'You pressed play', 'Time well watched', 'Your kind of stories', 'The titles that defined your year', 'Your year, wrapped'];
+const storyTitles = ['Your 2026, on screen', 'Discovery, on autopilot', 'You pressed play', 'Picks that landed', 'Time well watched',
+  'Your kind of stories', 'The titles that defined your year', 'Milestones unlocked', 'Your year, wrapped'];
+const LAST = storyTitles.length - 1;
 
 async function openPreview(page, { admin = true, journey = false, width = 1280, height = 1000, reducedMotion = true, date } = {}) {
   if (date) await page.clock.setFixedTime(new Date(date));
@@ -39,11 +41,11 @@ async function go(page, index) {
   await expect(page.getByRole('heading', { name: storyTitles[index], exact: true })).toBeVisible();
 }
 
-test('all seven personal stories export distinct, complete 1080×1920 PNGs offline', async ({ page }, testInfo) => {
+test('all nine personal stories export distinct, complete 1080×1920 PNGs offline', async ({ page }, testInfo) => {
   const { errors, apiCalls, remoteArtwork } = await openPreview(page);
   const pngSizes = [];
   await openShare(page);
-  for (let index = 0; index < 7; index += 1) {
+  for (let index = 0; index < storyTitles.length; index += 1) {
     await go(page, index);
     await expect(page.getByRole('img')).toHaveAttribute('aria-label', /Fictional sample data for 2026/);
     const download = page.waitForEvent('download');
@@ -59,7 +61,7 @@ test('all seven personal stories export distinct, complete 1080×1920 PNGs offli
     // Every story offers the same sharing options, not only the summary.
     await expect(page.getByRole('link', { name: 'Reddit', exact: true })).toBeAttached();
   }
-  expect(new Set(pngSizes).size).toBe(7);
+  expect(new Set(pngSizes).size).toBe(storyTitles.length);
   await expect(page.getByRole('button', { name: 'Download summary', exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('desktop-player.png'), animations: 'disabled' });
   expect(errors).toEqual([]);
@@ -76,7 +78,7 @@ for (const width of [390, 320]) {
     await page.getByRole('button', { name: 'Next story', exact: true }).click();
     await expect(page.getByRole('heading', { name: storyTitles[1], exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('mobile-player.png'), animations: 'disabled' });
-    await go(page, 6);
+    await go(page, LAST);
     await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeAttached();
     expect(await page.getByRole('dialog').evaluate(dialog => dialog.scrollWidth <= dialog.clientWidth + 1)).toBeTruthy();
     expect(errors).toEqual([]);
@@ -164,8 +166,9 @@ test('missing profiles and empty years never substitute sample statistics', asyn
   await expect(page.getByRole('link', { name: 'Link your media account', exact: true })).toBeVisible();
   await expect(page.getByLabel('Recap scope')).toHaveCount(0);
   // Stories without data (watch activity, genres, titles) are skipped instead of shown empty.
-  await expect(page.getByRole('button', { name: /^Go to story / })).toHaveCount(4);
-  for (let index = 0; index < 4; index += 1) {
+  // An empty year also drops the request chart, which would only show an empty busiest month.
+  await expect(page.getByRole('button', { name: /^Go to story / })).toHaveCount(3);
+  for (let index = 0; index < 3; index += 1) {
     await page.getByRole('button', { name: new RegExp(`Go to story ${index + 1}:`) }).click();
     await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
     await expect(page.getByRole('img')).not.toHaveAttribute('aria-label', /Fictional|248|314 hours/);
@@ -201,6 +204,8 @@ test('admin scope and provider changes reset the story and update the sample num
   await go(page, 2);
   await expect(page.getByRole('img')).toHaveAttribute('aria-label', /410 movies, 2050 episodes and 170 TV series watched on Plex/);
   await go(page, 3);
+  await expect(page.getByRole('img')).toHaveAttribute('aria-label', /42% of requested titles watched: 520 of 1240/);
+  await go(page, 4);
   await expect(page.getByRole('img')).toHaveAttribute('aria-label', /1571 hours and 40 minutes/);
 });
 
@@ -222,7 +227,7 @@ test('every story renders in all four provider and scope combinations', async ({
       await openOptions(page);
       await page.getByLabel('Media server').selectOption(provider);
       await page.getByLabel('Recap scope').selectOption(scope);
-      for (let index = 0; index < 7; index += 1) {
+      for (let index = 0; index < storyTitles.length; index += 1) {
         await go(page, index);
         expect(await page.getByRole('img').evaluate(canvas => canvas.width / canvas.height)).toBe(9 / 16);
       }
@@ -330,9 +335,9 @@ test('autoplay advances after eight seconds, pauses, resumes and holds the last 
   await page.getByRole('button', { name: 'Play stories', exact: true }).click();
   await page.clock.runFor(8100);
   await expect(page.getByRole('heading', { name: storyTitles[2], exact: true })).toBeVisible();
-  await go(page, 6);
+  await go(page, LAST);
   await page.clock.runFor(20000);
-  await expect(page.getByRole('heading', { name: storyTitles[6], exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: storyTitles[LAST], exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Next story', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Play stories', exact: true })).toBeVisible();
 });
@@ -358,7 +363,7 @@ test('hidden tabs, lost focus and downloads pause playback', async ({ page }) =>
 test('summary Reddit shortcut exports a clearly marked demo and opens only a composer', async ({ page }) => {
   await page.context().route('https://www.reddit.com/submit*', route => route.fulfill({ contentType: 'text/html', body: 'Composer fixture' }));
   await openPreview(page);
-  await go(page, 6);
+  await go(page, LAST);
   await openShare(page);
   const link = page.getByRole('link', { name: 'Reddit', exact: true });
   expect(new URL(await link.getAttribute('href')).searchParams.get('title')).toContain('Preview · Sample data');

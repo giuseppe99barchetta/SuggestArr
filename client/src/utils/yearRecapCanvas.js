@@ -18,7 +18,8 @@ const percent = (part, total) => total ? Math.round(part / total * 100) : 0;
 // Title cards stand in for covers that could not be loaded; each gets its own tint.
 const CARD_TINTS = ['brand', 'anime', 'notice', 'good'];
 // Each story's signature icon, drawn in its accent colour beside the headline.
-const STORY_ICONS = { intro: 'clapper', discovery: 'ticket', watched: 'tv', time: 'popcorn', genres: 'masks', titles: 'reel', summary: 'star' };
+const STORY_ICONS = { intro: 'clapper', discovery: 'ticket', watched: 'tv', hitrate: 'play', time: 'popcorn', genres: 'masks', titles: 'reel', badges: 'star', summary: 'film' };
+const shortDate = iso => new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' });
 
 export async function renderYearStory(canvas, data, story) {
   await document.fonts?.ready;
@@ -213,6 +214,40 @@ export async function renderYearStory(canvas, data, story) {
         text(month.month, x + 24, 1484, 18, { align: 'center', ink: 'ink-3', width: 65 });
       });
       if (hasTime && peak) text(`${data.peakMonth.label} · ${number(Math.round(peak / 60))} hours.`, 540, 1640, 42, { align: 'center', ink: 'caution' });
+      if (data.streak?.longest > 1) text(`Longest watch streak · ${data.streak.longest} months in a row`, 540, hasTime ? 1710 : 1640, 34, { align: 'center', ink: 'ink-2' });
+      break;
+    }
+    case 'hitrate': {
+      const { percent: share, watched, total, movies, series } = data.hitRate;
+      headline('Picks that', 'landed.');
+      text(`${share}%`, 76, 760, 220, { weight: 800, ink: 'good' });
+      text(`of requested titles watched · ${number(watched)} of ${number(total)}`, 80, 840, 36, { ink: 'ink-2' });
+      panel(80, 920, 920, 34, 'panel-2', 17);
+      if (share) panel(80, 920, Math.max(34, 920 * share / 100), 34, 'good', 17);
+      tile(number(movies), 'movies watched', 80, 1030, { h: 240, size: 140 });
+      tile(number(series), 'TV series started', 565, 1030, { h: 240, size: 140 });
+      text(data.isDemo ? 'Suggestions worth your evening.' : 'Watched by the profile each title was requested for.', 540, 1560, 34, { align: 'center', ink: 'ink-2' });
+      break;
+    }
+    case 'badges': {
+      headline('Milestones', 'unlocked.');
+      const shown = data.badgesUnlocked.slice(0, 4);
+      shown.forEach((badge, i) => {
+        const y = 580 + i * 230;
+        panel(80, y, 920, 200);
+        ctx.fillStyle = color('brand-soft');
+        ctx.beginPath();
+        ctx.arc(180, y + 100, 64, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = color('caution');
+        ctx.lineWidth = 5;
+        ctx.stroke();
+        text('★', 180, y + 128, 72, { align: 'center', ink: 'caution', width: 110 });
+        text(badge.label, 280, y + 95, 50, { weight: 800, width: 690 });
+        text(`Unlocked ${shortDate(badge.unlockedAt)}`, 280, y + 150, 30, { ink: 'ink-3', width: 690 });
+      });
+      const more = data.badgesUnlocked.length - shown.length;
+      text(more > 0 ? `+${more} more ${more === 1 ? 'badge' : 'badges'} this year` : 'Here’s to the next one.', 540, 1560 + (shown.length < 4 ? -230 * (4 - shown.length) / 2 : 0), 40, { align: 'center', ink: 'caution' });
       break;
     }
     case 'genres': {

@@ -1,5 +1,6 @@
 /** One local renderer for the preview and the exported PNG. */
 import { drawCinemaPattern } from './cinemaIcons.js';
+import { latestBadge } from './recapBadges.js';
 
 export const PROJECT_URL = 'https://github.com/giuseppe99barchetta/SuggestArr';
 
@@ -204,9 +205,8 @@ export async function renderRecap(canvas, recap, { logoUrl, includePosters = tru
     ctx.restore();
   });
   text('Good taste. On autopilot.', 540, 1150, 43, 800);
-  const unlocked = recap.badges.filter(badge => badge.unlocked);
-  const highest = unlocked.filter(badge => badge.kind === 'titles').at(-1) || unlocked.at(-1);
-  if (highest) text(`★  ${highest.label}`, 540, 1215, 26, 700, 'brand-ink');
+  const latest = latestBadge(recap.badges);
+  if (latest) text(`★  ${latest.label}`, 540, 1215, 26, 700, 'brand-ink');
   return { missingPosters: includePosters && images.some(img => !img) };
 }
 

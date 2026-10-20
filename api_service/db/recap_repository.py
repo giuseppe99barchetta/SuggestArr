@@ -5,11 +5,20 @@ users. Only successful, canonical SuggestArr requests can seed it.
 """
 from datetime import datetime, timedelta, timezone
 
+from api_service.services.recap_badges import LedgerTitle, build_badges
 
-TITLE_BADGES = ((10, 'First discoveries'), (100, 'Century club'),
-                (500, 'Discovery enthusiast'), (1000, 'A thousand discoveries'),
-                (5000, 'Cinema explorer'), (10000, 'Discovery legend'))
+
 SUPPORT_MILESTONES = (100, 500, 1000, 5000, 10000)
+WATCH_PROVIDERS = ('plex', 'jellyfin')
+
+
+def watch_provider(env):
+    """Return the media server able to report watched titles, or ``None`` when unconfigured."""
+    provider = (env.get('SELECTED_SERVICE') or '').lower()
+    prefix = provider.upper()
+    if provider in WATCH_PROVIDERS and env.get(f'{prefix}_API_URL') and env.get(f'{prefix}_TOKEN'):
+        return provider
+    return None
 
 
 def utc_datetime(value):
@@ -42,14 +51,29 @@ def record_requested_title(cursor, db_type, media_type=None, media_id=None):
                                  'media_type, tmdb_id, user_id, requested_at', query), params)
 
 
+def _columns(cursor, db_type, table):
+    """Existing column names of an internal table, for additive migrations."""
+    if db_type == 'sqlite':
+        cursor.execute(f'PRAGMA table_info({table})')
+        return {row[1] for row in cursor.fetchall()}
+    if db_type == 'postgres':
+        cursor.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name='{table}'")
+    else:
+        cursor.execute(f'SHOW COLUMNS FROM {table}')
+    return {row[0] for row in cursor.fetchall()}
+
+
 def initialize_recap_schema(db):
     """Additive and repeatable on SQLite, PostgreSQL and MySQL/MariaDB."""
     with db.get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''CREATE TABLE IF NOT EXISTS recap_titles (
             media_type VARCHAR(16) NOT NULL, tmdb_id VARCHAR(64) NOT NULL,
-            user_id VARCHAR(191), requested_at TIMESTAMP NOT NULL,
+            user_id VARCHAR(191), requested_at TIMESTAMP NOT NULL, watched_at TIMESTAMP NULL,
             PRIMARY KEY (media_type, tmdb_id))''')
+        if 'watched_at' not in _columns(cursor, db.db_type, 'recap_titles'):
+            # First observed play of a requested title by its recipient, at or after the request.
+            cursor.execute('ALTER TABLE recap_titles ADD COLUMN watched_at TIMESTAMP NULL')
         if db.db_type in ('mysql', 'mariadb'):
             cursor.execute("SHOW INDEX FROM recap_titles WHERE Key_name='idx_recap_titles_user'")
             if not cursor.fetchall():
@@ -66,17 +90,6 @@ def initialize_recap_schema(db):
             PRIMARY KEY (user_id, scope))''')
         record_requested_title(cursor, db.db_type)
         conn.commit()
-
-
-def badge_progress(total, first_requested_at, now):
-    badges = [{'id': f'titles_{threshold}', 'label': label, 'threshold': threshold,
-               'unlocked': total >= threshold, 'kind': 'titles'}
-              for threshold, label in TITLE_BADGES]
-    first = utc_datetime(first_requested_at)
-    badges.append({'id': 'one_year', 'label': 'One year of discoveries', 'threshold': 365,
-                   'unlocked': bool(first and now >= first + timedelta(days=365)), 'kind': 'days'})
-    next_badge = next((badge for badge in badges if badge['kind'] == 'titles' and not badge['unlocked']), None)
-    return badges, next_badge
 
 
 class RecapRepository:
@@ -98,37 +111,79 @@ class RecapRepository:
             return ' WHERE 1=0', ()
         return f" WHERE r.user_id IN ({','.join([self.ph] * len(ids))})", tuple(ids)
 
-    def summary(self, user, env, include_posters=False, now=None):
-        now = now or datetime.now(timezone.utc)
-        scope, ids = self._scope(user, env)
+    def ledger(self, ids):
+        """All ledger titles in a scope, joined with any cached metadata.
+
+        :param ids: Recipient profile IDs, or ``None`` for the whole installation.
+        :return: List of ``LedgerTitle`` with timezone-aware dates.
+        """
         restriction, params = self._restriction(ids)
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''SELECT COUNT(*), COALESCE(SUM(CASE WHEN r.media_type='movie' THEN 1 ELSE 0 END),0),
-                COALESCE(SUM(CASE WHEN r.media_type='tv' THEN 1 ELSE 0 END),0), MIN(r.requested_at)
-                FROM recap_titles r''' + restriction, params)
-            total, movies, tv, first = cursor.fetchone()
-            # MySQL returns SUM(integer-expression) as Decimal; keep the API numeric.
-            total, movies, tv = int(total), int(movies), int(tv)
+            cursor.execute('''SELECT r.tmdb_id, r.media_type, r.user_id, r.requested_at, r.watched_at, m.title,
+                m.poster_path, m.release_date, m.genre_ids, m.rating, m.origin_country FROM recap_titles r
+                LEFT JOIN metadata m ON m.media_id=r.tmdb_id AND m.media_type=r.media_type''' + restriction, params)
+            rows = cursor.fetchall()
+        return [LedgerTitle(str(row[0]), row[1], row[2], utc_datetime(row[3]), utc_datetime(row[4]), *row[5:9],
+                            float(row[9]) if row[9] is not None else None, row[10]) for row in rows]
+
+    def summary(self, user, env, include_posters=False, now=None):
+        now = now or datetime.now(timezone.utc)
+        scope, ids = self._scope(user, env)
+        rows = self.ledger(ids)
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
             cursor.execute(f'SELECT reminder_mode FROM recap_preferences WHERE user_id={self.ph}', (int(user['id']),))
             row = cursor.fetchone()
             mode = row[0] if row else 'enabled'
-            posters = []
-            if include_posters:
-                where = restriction + (' AND ' if restriction else ' WHERE ')
-                cursor.execute('''SELECT r.tmdb_id, r.media_type, m.poster_path, m.title, m.rating FROM recap_titles r
-                    JOIN metadata m ON m.media_id=r.tmdb_id AND m.media_type=r.media_type''' + where +
-                    "m.poster_path IS NOT NULL AND m.poster_path<>'' "
-                    "ORDER BY COALESCE(m.rating,0) DESC, r.requested_at DESC, r.tmdb_id DESC LIMIT 4", params)
-                posters = [{'tmdb_id': row[0], 'media_type': row[1], 'poster_path': row[2],
-                            'title': row[3], 'rating': float(row[4]) if row[4] is not None else None}
-                           for row in cursor.fetchall()]
-        badges, next_badge = badge_progress(total, first, now)
+        posters = []
+        if include_posters:
+            ranked = sorted((row for row in rows if row.poster_path),
+                            key=lambda row: (row.rating or 0, row.requested_at, row.tmdb_id), reverse=True)
+            posters = [{'tmdb_id': row.tmdb_id, 'media_type': row.media_type, 'poster_path': row.poster_path,
+                        'title': row.title, 'rating': row.rating} for row in ranked[:4]]
+        tracking = watch_provider(env) is not None
+        badges, next_badge, streak = build_badges(rows, scope, now, tracking)
+        total = len(rows)
+        watched = sum(row.watched_at is not None for row in rows)
+        first = min((row.requested_at for row in rows), default=None)
         return {'scope': scope, 'has_linked_profiles': ids is None or bool(ids),
-                'total': total, 'movies': movies, 'tv': tv,
-                'first_requested_at': utc_datetime(first).isoformat() if first else None,
+                'total': total, 'movies': sum(row.media_type == 'movie' for row in rows),
+                'tv': sum(row.media_type == 'tv' for row in rows),
+                'first_requested_at': first.isoformat() if first else None,
+                'watch_tracking': tracking, 'watched': watched if tracking else None,
+                'hit_rate': round(watched * 100 / total) if tracking and total else None, 'streak': streak,
                 'badges': badges, 'next_badge': next_badge, 'posters': posters,
                 'preferences': {'reminder_mode': mode}, 'can_support': user.get('role') == 'admin'}
+
+    def pending_watch(self, ids):
+        """Ledger titles in a scope not yet seen as watched, as ``(media_type, tmdb_id, user_id, requested_at)``."""
+        restriction, params = self._restriction(ids)
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT r.media_type, r.tmdb_id, r.user_id, r.requested_at FROM recap_titles r' + restriction +
+                           (' AND ' if restriction else ' WHERE ') + 'r.watched_at IS NULL', params)
+            return [(row[0], str(row[1]), row[2], utc_datetime(row[3])) for row in cursor.fetchall()]
+
+    def mark_watched(self, matches):
+        """Record first observed plays; an existing ``watched_at`` is never overwritten.
+
+        :param matches: Iterable of ``(watched_at, media_type, tmdb_id)``.
+        :return: Number of titles newly marked as watched.
+        """
+        values = [(date.astimezone(timezone.utc).replace(tzinfo=None), media_type, str(tmdb_id))
+                  for date, media_type, tmdb_id in matches]
+        if not values:
+            return 0
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            updated = 0
+            for value in values:
+                cursor.execute(f'''UPDATE recap_titles SET watched_at={self.ph}
+                    WHERE media_type={self.ph} AND tmdb_id={self.ph} AND watched_at IS NULL''', value)
+                updated += max(cursor.rowcount, 0)
+            conn.commit()
+        return updated
 
     def _ensure_state(self, cursor, user_id, scope):
         if self.db.db_type in ('mysql', 'mariadb'):

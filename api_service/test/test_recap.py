@@ -7,9 +7,8 @@ from decimal import Decimal
 import pytest
 from flask import Flask, g
 
-from api_service.db.recap_repository import (
-    RecapRepository, badge_progress, initialize_recap_schema, insert_ignore,
-)
+from api_service.db.recap_repository import RecapRepository, initialize_recap_schema, insert_ignore
+from api_service.services.recap_badges import LedgerTitle, build_badges
 
 NOW = datetime(2026, 10, 19, 12, tzinfo=timezone.utc)
 ADMIN = {'id': 1, 'role': 'admin'}
@@ -130,11 +129,65 @@ def test_featured_covers_are_the_four_highest_rated_titles_in_the_callers_scope(
     assert [p['rating'] for p in posters] == [6.0, 5.0, 4.0, 3.0]
 
 
+def ledger_rows(count, first, media_type='movie', **fields):
+    return [LedgerTitle(str(i), media_type, 'alice', first + timedelta(days=i), fields.get('watched', lambda i: None)(i),
+                        None, None, fields.get('release', lambda i: None)(i), fields.get('genres', lambda i: None)(i),
+                        None, fields.get('country', lambda i: None)(i)) for i in range(count)]
+
+
+def unlocked(badges):
+    return [badge['id'] for badge in badges if badge['unlocked']]
+
+
 def test_anniversary_and_title_badges_use_exact_boundaries():
-    badges, next_badge = badge_progress(100, NOW - timedelta(days=365), NOW)
-    assert [b['id'] for b in badges if b['unlocked']] == ['titles_10', 'titles_100', 'one_year']
-    assert next_badge['threshold'] == 500
-    assert not badge_progress(9, NOW - timedelta(days=365) + timedelta(seconds=1), NOW)[0][-1]['unlocked']
+    first = NOW - timedelta(days=365)
+    rows = [row._replace(requested_at=first) for row in ledger_rows(100, first)]
+    badges, next_badge, streak = build_badges(rows, 'installation', NOW, False)
+    assert unlocked(badges) == ['titles_10', 'titles_50', 'titles_100', 'one_year']
+    assert next_badge['threshold'] == 250
+    assert streak is None and not any(badge['kind'] in ('watched', 'streak') for badge in badges)
+    anniversary = next(badge for badge in badges if badge['id'] == 'one_year')
+    assert anniversary['unlocked_at'] == anniversary['unlocks_at'] == NOW.isoformat()
+    late = [row._replace(requested_at=first + timedelta(seconds=1)) for row in rows[:9]]
+    assert 'one_year' not in unlocked(build_badges(late, 'installation', NOW, False)[0])
+
+
+def test_personal_scope_uses_a_denser_title_ladder_with_unlock_dates():
+    first = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    badges, next_badge, _ = build_badges(ledger_rows(30, first), 'personal', NOW, False)
+    titles = [badge for badge in badges if badge['kind'] == 'titles']
+    assert [badge['threshold'] for badge in titles] == [10, 25, 50, 100, 250, 500, 1000]
+    # The unlock date is the request that crossed the threshold.
+    assert titles[1]['unlocked_at'] == (first + timedelta(days=24)).isoformat()
+    assert next_badge['threshold'] == 50 and next_badge['progress'] == 30
+
+
+def test_watch_badges_and_monthly_streaks_use_first_play_dates():
+    first = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    # Plays in Jan, Feb, Mar (streak of 3), then a gap, then Oct (current month).
+    plays = {0: datetime(2026, 1, 5, tzinfo=timezone.utc), 1: datetime(2026, 2, 5, tzinfo=timezone.utc),
+             2: datetime(2026, 3, 5, tzinfo=timezone.utc), 3: datetime(2026, 10, 1, tzinfo=timezone.utc)}
+    badges, _, streak = build_badges(ledger_rows(12, first, watched=plays.get), 'personal', NOW, True)
+    assert streak == {'current': 1, 'longest': 3}
+    assert 'watched_1' in unlocked(badges) and 'watched_10' not in unlocked(badges)
+    three = next(badge for badge in badges if badge['id'] == 'streak_3')
+    assert three['unlocked_at'] == plays[2].isoformat()
+    assert next(badge for badge in badges if badge['id'] == 'watched_10')['progress'] == 4
+
+
+def test_variety_badges_follow_metadata_and_record_when_they_were_reached():
+    first = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    genres = ['[28]', '[35]', '[18]', '[27]', '[878]', '[18]']
+    rows = ledger_rows(6, first, genres=lambda i: genres[i], release=lambda i: f'{1960 + i * 10}-01-01',
+                       country=lambda i: 'US,GB' if i == 0 else 'IT')
+    rows += ledger_rows(10, first + timedelta(days=30), media_type='tv')
+    rows += [row._replace(tmdb_id=f'm{row.tmdb_id}') for row in ledger_rows(10, first + timedelta(days=60))]
+    badges = {badge['id']: badge for badge in build_badges(rows, 'personal', NOW, False)[0]}
+    assert badges['genres_5']['unlocked_at'] == (first + timedelta(days=4)).isoformat()
+    assert badges['decades_5']['unlocked']
+    assert not badges['countries_5']['unlocked'] and badges['countries_5']['progress'] == 3
+    assert badges['balanced']['unlocked']
+    assert not badges['genres_10']['unlocked'] and badges['genres_10']['progress'] == 5
 
 
 @pytest.mark.parametrize('count,age,eligible', [(99, 30, False), (100, 13, False), (100, 14, True), (1000, 50, True)])
@@ -228,10 +281,13 @@ def test_external_recap_summary_is_numeric_and_uses_native_parameters(db_type):
     db = MagicMock(db_type=db_type)
     db.get_user_media_profiles.return_value = [{'provider': 'plex', 'external_user_id': 'alice'}]
     cursor = db.get_connection.return_value.__enter__.return_value.cursor.return_value
-    cursor.fetchone.side_effect = [(4, Decimal(3), Decimal(1), NOW), None]
-    result = RecapRepository(db).summary(USER, {}, now=NOW)
+    row = lambda i, kind: (i, kind, 'alice', NOW, None, None, None, None, None, Decimal('7.5'), None)  # noqa: E731
+    cursor.fetchall.return_value = [row(1, 'movie'), row(2, 'movie'), row(3, 'movie'), row(4, 'tv')]
+    cursor.fetchone.return_value = None
+    result = RecapRepository(db).summary(USER, {}, now=NOW, include_posters=True)
     assert result['movies'] == 3 and isinstance(result['movies'], int)
     assert result['tv'] == 1 and isinstance(result['tv'], int)
+    assert result['posters'] == []
     assert all('?' not in call.args[0] for call in cursor.execute.call_args_list)
     assert cursor.execute.call_args_list[0].args[1] == ('alice',)
 

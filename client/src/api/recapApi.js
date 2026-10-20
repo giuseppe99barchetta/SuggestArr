@@ -17,6 +17,12 @@ export async function getRecap(includePosters = false) {
   return recap;
 }
 
+/** Link recorded requests to plays on the media server; the server throttles repeated scans. */
+export async function syncWatchActivity() {
+  const { data } = await axios.post('/api/recap/watch-sync', null, { timeout: 50000 });
+  return data.data;
+}
+
 export async function claimRecapPrompt() {
   const { data } = await axios.post('/api/recap/prompt');
   return data.data.prompt;

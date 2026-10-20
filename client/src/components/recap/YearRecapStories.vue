@@ -129,7 +129,8 @@ export default {
     displayYear() { return this.data?.year ?? this.year; },
     stories() { return yearStories(this.data || { year: this.year, isDemo: false }); },
     availableYears() { return [...new Set([this.year, ...(this.realData?.availableYears || [this.year - 1])])].sort((a, b) => b - a); },
-    story() { return this.stories[this.index]; },
+    // A new year or scope can have fewer stories; stay in range until the player resets.
+    story() { return this.stories[Math.min(this.index, this.stories.length - 1)]; },
     description() { return this.data ? yearDescription(this.data, this.story) : 'Recorded progress is not available yet.'; },
     caption() { return this.data ? yearCaption(this.data, this.story) : ''; },
     shareTitle() { return `${this.displayYear} Year Recap${this.mode === 'demo' ? ' · Preview · Sample data' : ' · Recorded progress'}`; },

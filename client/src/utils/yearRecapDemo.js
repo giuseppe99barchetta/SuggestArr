@@ -3,9 +3,11 @@ export const YEAR_RECAP_STORIES = [
   { id: 'intro', title: 'Your 2026, on screen', kicker: 'THE YEAR IN STORIES', accent: 'brand' },
   { id: 'discovery', title: 'Discovery, on autopilot', kicker: 'SUGGESTARR DISCOVERIES', accent: 'brand' },
   { id: 'watched', title: 'You pressed play', kicker: 'YOUR WATCH HISTORY', accent: 'notice' },
+  { id: 'hitrate', title: 'Picks that landed', kicker: 'SUGGESTIONS YOU WATCHED', accent: 'good' },
   { id: 'time', title: 'Time well watched', kicker: 'MAKE TIME FOR GOOD STORIES', accent: 'caution' },
   { id: 'genres', title: 'Your kind of stories', kicker: 'YOUR VIEWING DNA', accent: 'anime' },
   { id: 'titles', title: 'The titles that defined your year', kicker: 'THE LEADING TITLES', accent: 'good' },
+  { id: 'badges', title: 'Milestones unlocked', kicker: 'BADGES EARNED THIS YEAR', accent: 'caution' },
   { id: 'summary', title: 'Your year, wrapped', kicker: 'A YEAR WORTH SHARING', accent: 'brand' },
 ];
 
@@ -36,6 +38,14 @@ export function createYearRecapDemo(scope = 'personal', provider = 'jellyfin') {
     monthly, peakMonth: monthly.reduce((peak, month) => month.minutes > peak.minutes ? month : peak),
     genres: [{ label: 'Sci-fi', percent: 38 }, { label: 'Drama', percent: 27 }, { label: 'Thriller', percent: 21 }, { label: 'Animation', percent: 14 }],
     titles: DEMO_TITLES.map(title => ({ ...title })),
+    hitRate: { watched: 104 * factor, total: 248 * factor, percent: 42, movies: 71 * factor, series: 33 * factor },
+    streak: { longest: 7, months: 10 },
+    badgesUnlocked: [
+      { id: 'titles_100', kind: 'titles', label: 'Century club', unlockedAt: '2026-04-18T00:00:00+00:00' },
+      { id: 'watched_50', kind: 'watched', label: 'Trusted taste', unlockedAt: '2026-06-02T00:00:00+00:00' },
+      { id: 'genres_10', kind: 'variety', label: 'Eclectic taste', unlockedAt: '2026-08-21T00:00:00+00:00' },
+      { id: 'streak_6', kind: 'streak', label: 'Half-year habit', unlockedAt: '2026-09-01T00:00:00+00:00' },
+    ],
   };
 }
 
@@ -50,6 +60,8 @@ export function storyDetail(data, story) {
     intro: `${data.scope === 'server' ? `Server recap for ${data.activeUsers} active viewers` : 'Your personal recap'} on ${data.providerLabel}.`,
     discovery: `${data.requested.total} titles requested: ${data.requested.movies} movies and ${data.requested.series} TV series.`,
     watched: `${data.watched.movies} movies, ${data.watched.episodes} episodes and ${data.watched.series} TV series watched on ${data.providerLabel}.`,
+    hitrate: `${data.hitRate.percent}% of requested titles watched: ${data.hitRate.watched} of ${data.hitRate.total}.`,
+    badges: data.badgesUnlocked.map(badge => badge.label).join(', '),
     time: `${Math.floor(data.watchMinutes / 60)} hours and ${data.watchMinutes % 60} minutes watched. ${data.peakMonth.label} was the busiest month with ${data.peakMonth.minutes / 60} hours.`,
     genres: data.genres.map(genre => `${genre.label} ${genre.percent}%`).join(', '),
     titles: data.titles.map(title => `${title.title}, ${title.detail}`).join('; '),

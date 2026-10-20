@@ -32,3 +32,17 @@ test('PNG export recovers when the browser encoder never calls back', async () =
   assert.equal(blob.type, 'image/png');
   assert.deepEqual(new Uint8Array(await blob.arrayBuffer()), new Uint8Array([1, 2, 3]));
 });
+
+test('hit rate, badges and streak stories appear only with real data behind them', () => {
+  const data = prepareYearRecap({ ...real(), requested: { total: 0, movies: 0, series: 0 }, hitRate: { watched: 0, total: 0, percent: 0, movies: 0, series: 0 }, badgesUnlocked: [] });
+  // Nothing requested: no empty chart, no 0% hit rate, no empty badge list.
+  assert.deepEqual(yearStories(data).map(story => story.id), ['intro', 'discovery', 'summary']);
+  const full = prepareYearRecap({ ...real(), hitRate: { watched: 1, total: 2, percent: 50, movies: 1, series: 0 },
+    streak: { longest: 3, months: 3 }, badgesUnlocked: [{ id: 'titles_10', kind: 'titles', label: 'First discoveries', unlockedAt: '2025-03-01T00:00:00+00:00' }] });
+  const stories = yearStories(full);
+  assert.deepEqual(stories.map(story => story.id), ['intro', 'discovery', 'hitrate', 'time', 'badges', 'summary']);
+  assert.match(yearDescription(full, stories[2]), /50% of the titles requested this year were watched/);
+  assert.match(yearDescription(full, stories[3]), /Longest watch streak: 3 months/);
+  assert.match(yearDescription(full, stories[4]), /First discoveries unlocked this year/);
+  assert.match(yearCaption(full, stories.at(-1)), /50% of them watched/);
+});

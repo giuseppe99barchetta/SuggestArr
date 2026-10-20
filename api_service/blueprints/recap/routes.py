@@ -9,7 +9,7 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.db.recap_repository import RecapRepository
 from api_service.db.year_recap_repository import YearRecapRepository
-from api_service.services.year_recap import YearWatchActivity
+from api_service.services.year_recap import RecapWatchSync, YearWatchActivity
 from api_service.utils.asyncio_loop import run_coroutine_sync
 from api_service.auth.limiter import limiter
 
@@ -32,7 +32,14 @@ def get_year_recap():
         return jsonify({'status': 'error', 'message': 'Provide a valid year and recap scope'}), 400
     try:
         db, env = DatabaseManager(), load_env_vars()
-        data = YearRecapRepository(db).summary(g.current_user, env, int(year), scope)
+        repo = YearRecapRepository(db)
+        if request.args.get('include_playback') == 'true':
+            # The hit rate reads the ledger, so refresh it first; a failed sync leaves it as it was.
+            try:
+                run_coroutine_sync(RecapWatchSync().sync(repo, g.current_user, env), logger)
+            except Exception:
+                logger.warning('Recap watch sync skipped before the annual recap', exc_info=True)
+        data = repo.summary(g.current_user, env, int(year), scope)
         if request.args.get('include_playback') == 'true':
             profiles = db.get_user_media_profiles(int(g.current_user['id'])) if scope == 'personal' else []
             data.update(run_coroutine_sync(YearWatchActivity().load(data, profiles, env), logger))
@@ -54,6 +61,20 @@ def get_recap():
     except Exception:
         logger.error('Unable to load recap', exc_info=True)
         return jsonify({'status': 'error', 'message': 'Unable to load your recap'}), 500
+
+
+@recap_bp.route('/watch-sync', methods=['POST'])
+@require_role('admin', 'user')
+@limiter.limit('20 per hour')
+def sync_watch_activity():
+    """Link recorded requests to plays on the media server, for the hit rate and watch badges."""
+    try:
+        result = run_coroutine_sync(RecapWatchSync().sync(RecapRepository(DatabaseManager()), g.current_user,
+                                                          load_env_vars()), logger)
+        return jsonify({'status': 'success', 'data': result})
+    except Exception:
+        logger.error('Unable to sync recap watch activity', exc_info=True)
+        return jsonify({'status': 'error', 'message': 'Unable to check watch activity'}), 500
 
 
 @recap_bp.route('/prompt', methods=['POST'])

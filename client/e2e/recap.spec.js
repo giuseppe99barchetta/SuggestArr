@@ -2,10 +2,26 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { posterFixture, titles } from './fixtures/recapPosters.js';
 
-const badgeThresholds = [10, 100, 500, 1000, 5000, 10000];
-const badgeLabels = { 10: 'First discoveries', 100: 'Century club', 500: 'Discovery enthusiast', 1000: 'A thousand discoveries', 5000: 'Cinema explorer', 10000: 'Discovery legend' };
+const badgeThresholds = [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
+const badgeLabels = { 10: 'First discoveries', 50: 'Half-century', 100: 'Century club', 250: 'Film buff', 500: 'Discovery enthusiast',
+  1000: 'A thousand discoveries', 2500: 'Marathon curator', 5000: 'Cinema explorer', 10000: 'Discovery legend' };
+const unlockDate = index => `2026-10-${String(index + 1).padStart(2, '0')}T12:00:00+00:00`;
 
-async function openJourney(page, { width = 1280, role = 'admin', total = 100, linked = true, profile = false, subpath = false, failPosters = false, missingPosters = false, nativeShare = false } = {}) {
+/** Badges as the API returns them: each title badge was unlocked after the anniversary. */
+function recapBadges(total, { watched = null } = {}) {
+  const badges = badgeThresholds.map((threshold, i) => ({ id: `titles_${threshold}`, kind: 'titles', threshold,
+    label: badgeLabels[threshold], description: `Request ${threshold.toLocaleString('en-US')} titles`,
+    progress: Math.min(total, threshold), unlocked: total >= threshold, unlocked_at: total >= threshold ? unlockDate(i) : null }));
+  if (watched != null) badges.push({ id: 'watched_1', kind: 'watched', threshold: 1, label: 'First pick watched',
+    description: 'Watch a title SuggestArr requested', progress: Math.min(watched, 1), unlocked: watched >= 1,
+    unlocked_at: watched >= 1 ? '2026-10-15T12:00:00+00:00' : null });
+  badges.push({ id: 'one_year', kind: 'days', threshold: 365, label: 'One year of discoveries',
+    description: 'One year since your first recorded request', progress: total ? 365 : 0, unlocked: total > 0,
+    unlocked_at: total ? '2026-09-01T00:00:00+00:00' : null, unlocks_at: total ? '2026-09-01T00:00:00+00:00' : null });
+  return badges;
+}
+
+async function openJourney(page, { width = 1280, role = 'admin', total = 100, linked = true, profile = false, subpath = false, failPosters = false, missingPosters = false, nativeShare = false, watched = null } = {}) {
   await page.setViewportSize({ width, height: 1000 });
   const errors = [];
   const actions = [];
@@ -18,10 +34,10 @@ async function openJourney(page, { width = 1280, role = 'admin', total = 100, li
     scope: role === 'admin' ? 'installation' : 'personal', has_linked_profiles: linked,
     total, movies: Math.ceil(total * 0.72), tv: total - Math.ceil(total * 0.72),
     first_requested_at: total ? '2025-09-01T00:00:00+00:00' : null,
-    badges: [...badgeThresholds.map(threshold => ({ id: `titles_${threshold}`, kind: 'titles', threshold,
-      label: badgeLabels[threshold], unlocked: total >= threshold })),
-    { id: 'one_year', kind: 'days', threshold: 365, label: 'One year of discoveries', unlocked: total > 0 }],
-    next_badge: nextThreshold ? { threshold: nextThreshold, label: badgeLabels[nextThreshold] } : null,
+    badges: recapBadges(total, { watched }),
+    watch_tracking: watched != null, watched, hit_rate: watched != null && total ? Math.round(watched * 100 / total) : null,
+    streak: watched != null ? { current: 2, longest: 3 } : null,
+    next_badge: nextThreshold ? { id: `titles_${nextThreshold}`, threshold: nextThreshold, label: badgeLabels[nextThreshold] } : null,
     preferences: { reminder_mode: mode }, posters: [], can_support: role === 'admin',
   };
   await page.route(url => url.pathname.startsWith('/api/') || url.pathname.startsWith('/suggestarr/api/'), async route => {
@@ -36,6 +52,7 @@ async function openJourney(page, { width = 1280, role = 'admin', total = 100, li
       mode = ({ disable: 'disabled', supported: 'supported', enable: 'enabled' })[action] || mode;
       return route.fulfill({ json: { status: 'success', data: { reminder_mode: mode } }, headers });
     }
+    if (url.pathname.endsWith('/recap/watch-sync')) return route.fulfill({ json: { status: 'success', data: { status: 'ok', matched: 0 } }, headers });
     if (url.pathname.endsWith('/recap/prompt')) {
       const prompt = !claimed && mode === 'enabled' && total >= 100 ? { milestone: 100, scope: recap.scope, version: 1 } : null;
       claimed = true;
@@ -167,7 +184,7 @@ for (const { width, height } of [{ width: 1280, height: 720 }, { width: 768, hei
     expect(button.y + button.height).toBeLessThanOrEqual(height);
     await expect(dialog.getByRole('link', { name: 'Reddit', exact: true })).toBeAttached();
     await expect(dialog.getByLabel('Caption')).toBeAttached();
-    await dialog.getByText(/^Badges · 4 \/ 7 unlocked$/).click();
+    await dialog.getByText(/^Badges · 6 \/ 10 unlocked$/).click();
     await expect(dialog.getByRole('heading', { name: 'Your badges' })).toBeVisible();
     await expect(page.getByLabel('Show top-title covers')).toBeChecked();
     await page.screenshot({ path: testInfo.outputPath('recap-badges.png'), animations: 'disabled' });
@@ -434,11 +451,14 @@ test('badges expand inside the actions panel without resizing the dialog', async
   const badges = dialog.locator('details');
   await expect(badges.getByRole('heading', { name: 'Your badges' })).toBeHidden();
   await badges.locator('summary').click();
-  await expect(badges.getByText('4 / 7 unlocked', { exact: true })).toBeVisible();
-  await expect(badges.getByRole('listitem')).toHaveCount(6);
-  await expect(badges.getByText('Next milestone', { exact: true })).toHaveCount(1);
-  await expect(badges.getByRole('progressbar')).toHaveAttribute('value', '597');
-  await expect(badges.getByText('365 days since your first recorded request')).toBeVisible();
+  await expect(badges.getByText('6 / 10 unlocked', { exact: true })).toBeVisible();
+  await expect(badges.getByRole('listitem')).toHaveCount(10);
+  await expect(badges.getByText(/^Next milestone · 403 more titles to go$/)).toHaveCount(1);
+  await expect(badges.getByRole('progressbar', { name: 'Progress toward A thousand discoveries' })).toHaveAttribute('value', '597');
+  await expect(badges.getByText('Unlocked Oct 5, 2026')).toBeVisible();
+  await expect(badges.getByText('One year since your first recorded request')).toBeVisible();
+  await expect(badges.getByRole('heading', { name: 'Anniversaries' })).toBeVisible();
+  await expect(badges.getByText('Connect Plex or Jellyfin to unlock badges for the suggestions you actually watch.')).toBeVisible();
   await dialog.screenshot({ path: testInfo.outputPath('badge-gallery.png'), animations: 'disabled' });
   expect((await dialog.boundingBox()).height).toBeCloseTo(height, 0);
 });
@@ -476,4 +496,49 @@ test('native sharing failure saves the image while cancelling leaves the dialog 
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   expect((await download).suggestedFilename()).toBe('suggestarr-recap.png');
   await expect(page.getByRole('status')).toContainText('PNG saved so you can attach it.');
+});
+
+test('a newly unlocked badge opens a celebration with confetti, sharing and support', async ({ page }, testInfo) => {
+  const { errors, requests } = await openJourney(page, { total: 597, watched: 120 });
+  await expect(page.getByRole('heading', { name: 'Your SuggestArr journey' })).toBeVisible();
+  // The first visit stored every badge as seen; pretend two were unlocked since then.
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find(name => name.startsWith('suggestarr-recap-seen-badges:'));
+    localStorage.setItem(key, JSON.stringify(['titles_10', 'titles_50', 'titles_100', 'titles_250', 'one_year']));
+  });
+  await page.reload();
+  const dialog = page.getByRole('dialog', { name: 'Badge unlocked' });
+  await expect(dialog).toBeVisible();
+  // The most recent unlock leads; the other new badge can be selected.
+  await expect(dialog.getByRole('heading', { name: 'First pick watched' })).toBeVisible();
+  await expect(dialog.getByText('2 new badges since your last visit')).toBeVisible();
+  await expect(dialog.locator('canvas[aria-hidden="true"]')).toHaveCount(1);
+  await expect(dialog.getByRole('button', { name: 'Download PNG' })).toBeEnabled();
+  await expect(dialog.getByLabel('Caption')).toHaveValue(/Badge unlocked on SuggestArr: First pick watched/);
+  await page.screenshot({ path: testInfo.outputPath('badge-celebration.png'), animations: 'disabled' });
+  await dialog.getByRole('button', { name: 'Discovery enthusiast' }).click();
+  await expect(dialog.getByRole('heading', { name: 'Discovery enthusiast' })).toBeVisible();
+  await expect(dialog.getByLabel('Caption')).toHaveValue(/Discovery enthusiast — Request 500 titles/);
+  await dialog.getByRole('button', { name: 'Support SuggestArr' }).click();
+  await expect(page.getByRole('dialog', { name: 'Support SuggestArr' }).getByRole('link', { name: 'Support on Ko-fi' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.reload();
+  // Seen badges do not celebrate again.
+  await expect(page.getByRole('heading', { name: 'Your SuggestArr journey' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Badge unlocked' })).toHaveCount(0);
+  const journey = page.getByRole('region', { name: 'Your SuggestArr journey' });
+  await expect(journey.getByText('20% of picks watched')).toBeVisible();
+  await expect(journey.getByText('2-month watch streak')).toBeVisible();
+  await expect(journey.getByText('First pick watched', { exact: true })).toBeVisible();
+  expect(requests.filter(request => request.path.endsWith('/recap/watch-sync')).length).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});
+
+test('the first visit records existing badges without a celebration', async ({ page }) => {
+  await openJourney(page, { total: 597 });
+  await expect(page.getByRole('heading', { name: 'Your SuggestArr journey' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Badge unlocked' })).toHaveCount(0);
+  const seen = await page.evaluate(() => Object.entries(localStorage).find(([name]) => name.startsWith('suggestarr-recap-seen-badges:')));
+  expect(seen[0]).toMatch(/:installation$/);
+  expect(JSON.parse(seen[1])).toHaveLength(6);
 });

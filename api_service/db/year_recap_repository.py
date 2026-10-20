@@ -1,26 +1,24 @@
 """Annual aggregates of recorded discoveries; never reconstruct deleted history."""
-import json
 from collections import Counter
 from datetime import datetime, timezone
 
-from api_service.db.recap_repository import RecapRepository, utc_datetime
-from api_service.services.filter_normalization import TMDB_GENRE_MAP
+from api_service.db.recap_repository import RecapRepository, watch_provider
+from api_service.services.recap_badges import build_badges, genre_labels, month_key, month_streaks
 
-GENRES = {value: key for key, value in TMDB_GENRE_MAP.items()}
-GENRES.update({10759: 'Action & Adventure', 10762: 'Kids', 10765: 'Sci-Fi & Fantasy',
-               10766: 'Soap', 10767: 'Talk', 10768: 'War & Politics', 10764: 'Reality'})
 MONTHS = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
 
 
-def genre_distribution(rows):
+def genre_distribution(genre_values):
+    """Share of genre tags among requested titles, rounded to exactly 100%.
+
+    :param genre_values: Stored ``genre_ids`` values, one per requested title.
+    :return: Tuple ``(genres, covered)``: up to four ``{label, percent}`` entries (the fourth may be
+        ``Other``) and the number of titles that had genre metadata.
+    """
     counts = Counter()
     covered = 0
-    for row in rows:
-        try:
-            ids = json.loads(row[7]) if isinstance(row[7], str) else row[7]
-            labels = {GENRES[int(value)] for value in ids or [] if str(value).isdigit() and int(value) in GENRES}
-        except (TypeError, ValueError):
-            labels = set()
+    for raw in genre_values:
+        labels = genre_labels(raw)
         if labels:
             covered += 1
             counts.update(labels)
@@ -36,6 +34,12 @@ def genre_distribution(rows):
     return [{'label': label, 'percent': rounded[i]} for i, (label, _) in enumerate(ranked)], covered
 
 
+def longest_run_in_year(dates, year):
+    """Longest run of consecutive months within ``year`` containing at least one date."""
+    in_year = [date for date in dates if date.year == year]
+    return month_streaks(in_year, datetime(year, 12, 31, tzinfo=timezone.utc))[1]
+
+
 class YearRecapRepository(RecapRepository):
     def summary(self, user, env, year, scope='personal', now=None):
         now = now or datetime.now(timezone.utc)
@@ -45,42 +49,51 @@ class YearRecapRepository(RecapRepository):
         profiles = self.db.get_user_media_profiles(int(user['id'])) if scope == 'personal' else []
         ids = None if scope == 'server' else sorted({str(p['external_user_id']) for p in profiles
                                                    if p.get('provider') in ('plex', 'jellyfin', 'emby')})
-        restriction, params = self._restriction(ids)
-        start = datetime(year, 1, 1)
-        end = min(datetime(year + 1, 1, 1, tzinfo=timezone.utc), now).replace(tzinfo=None)
-        # Legacy SQLite timestamps contain both spaces and ISO T separators.
-        date_expr = 'julianday(r.requested_at)' if self.db.db_type == 'sqlite' else 'r.requested_at'
-        date_param = 'julianday(?)' if self.db.db_type == 'sqlite' else self.ph
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT r.requested_at FROM recap_titles r' + restriction, params)
-            recorded_dates = [utc_datetime(row[0]) for row in cursor.fetchall()]
-            cursor.execute('''SELECT r.tmdb_id,r.media_type,r.user_id,r.requested_at,
-                m.title,m.poster_path,m.release_date,m.genre_ids FROM recap_titles r
-                LEFT JOIN metadata m ON m.media_id=r.tmdb_id AND m.media_type=r.media_type''' +
-                restriction + (' AND ' if restriction else ' WHERE ') +
-                f'{date_expr}>={date_param} AND {date_expr}<{date_param} ORDER BY {date_expr} DESC,r.tmdb_id DESC',
-                params + (start, end))
-            rows = cursor.fetchall()
+        ledger = self.ledger(ids)
+        start = datetime(year, 1, 1, tzinfo=timezone.utc)
+        end = min(datetime(year + 1, 1, 1, tzinfo=timezone.utc), now)
+        rows = sorted((row for row in ledger if start <= row.requested_at < end),
+                      key=lambda row: (row.requested_at, row.tmdb_id), reverse=True)
         monthly = [{'month': month, 'label': datetime(year, i + 1, 1).strftime('%B'), 'requests': 0, 'minutes': None}
                    for i, month in enumerate(MONTHS)]
         for row in rows:
-            monthly[utc_datetime(row[3]).month - 1]['requests'] += 1
-        genres, covered = genre_distribution(rows)
-        titles = [{'title': row[4], 'poster_path': row[5],
-                   'detail': ('Movie' if row[1] == 'movie' else 'TV series') +
-                   (f' · {str(row[6])[:4]}' if row[6] else '')}
-                  for row in rows if row[4]][:4]
+            monthly[row.requested_at.month - 1]['requests'] += 1
+        genres, covered = genre_distribution(row.genre_ids for row in rows)
+        # Standout titles: best rated first, so January recaps are not just the last few requests.
+        ranked = sorted((row for row in rows if row.title), key=lambda row: row.rating or 0, reverse=True)
+        titles = [{'title': row.title, 'poster_path': row.poster_path,
+                   'detail': ('Movie' if row.media_type == 'movie' else 'TV series') +
+                   (f' · {str(row.release_date)[:4]}' if row.release_date else '') +
+                   (' · Watched' if row.watched_at else '')}
+                  for row in ranked][:4]
+        tracking = watch_provider(env) is not None
+        watched_rows = [row for row in rows if row.watched_at]
+        hit_rate = ({'watched': len(watched_rows), 'total': len(rows),
+                     'percent': round(len(watched_rows) * 100 / len(rows)),
+                     'movies': sum(row.media_type == 'movie' for row in watched_rows),
+                     'series': sum(row.media_type == 'tv' for row in watched_rows)}
+                    if tracking and rows else None)
+        watch_dates = [row.watched_at for row in ledger if row.watched_at and row.watched_at < end]
+        badges, _next, _streak = build_badges(ledger, 'installation' if scope == 'server' else 'personal', now, tracking)
+        unlocked = sorted((badge for badge in badges if badge['unlocked_at']
+                           and start <= datetime.fromisoformat(badge['unlocked_at']) < end),
+                          key=lambda badge: badge['unlocked_at'])
         provider = (env.get('SELECTED_SERVICE') or '').lower()
+        recorded = [row.requested_at for row in ledger if row.requested_at <= now]
         return {'year': year, 'isDemo': False, 'scope': scope, 'allowedScopes': ['personal', 'server'] if can_server else ['personal'],
-                'availableYears': sorted({now.year} | {date.year for date in recorded_dates if date <= now}, reverse=True),
+                'availableYears': sorted({now.year} | {date.year for date in recorded}, reverse=True),
                 'hasLinkedProfiles': ids is None or bool(ids), 'isYearToDate': year == now.year,
-                'generatedAt': now.isoformat(), 'firstRecordedAt': min(recorded_dates).isoformat() if recorded_dates else None,
+                'generatedAt': now.isoformat(), 'firstRecordedAt': min(recorded).isoformat() if recorded else None,
                 'provider': provider if provider in ('plex', 'jellyfin') else None,
                 'providerLabel': {'plex': 'Plex', 'jellyfin': 'Jellyfin'}.get(provider, 'SuggestArr'),
-                'activeUsers': None, 'requested': {'total': len(rows), 'movies': sum(row[1] == 'movie' for row in rows),
-                                                  'series': sum(row[1] == 'tv' for row in rows)},
+                'activeUsers': None, 'requested': {'total': len(rows), 'movies': sum(row.media_type == 'movie' for row in rows),
+                                                  'series': sum(row.media_type == 'tv' for row in rows)},
                 'watched': None, 'watchMinutes': None, 'watchStatus': 'not_loaded',
                 'watchNote': 'Watch activity has not been loaded. Watch time requires a full playback-session history.',
                 'monthly': monthly, 'peakMonth': max(monthly, key=lambda month: month['requests']),
-                'genres': genres, 'genreSource': 'requested', 'genreCoverage': covered, 'titles': titles}
+                'genres': genres, 'genreSource': 'requested', 'genreCoverage': covered, 'titles': titles,
+                'hitRate': hit_rate,
+                'streak': {'longest': longest_run_in_year(watch_dates, year),
+                           'months': len({month_key(date) for date in watch_dates if date.year == year})} if tracking else None,
+                'badgesUnlocked': [{'id': badge['id'], 'kind': badge['kind'], 'label': badge['label'],
+                                    'unlockedAt': badge['unlocked_at']} for badge in unlocked]}
