@@ -110,14 +110,14 @@ def create_app():
              origins=allowed_origins,
              supports_credentials=True,
              allow_headers=["Authorization", "Content-Type", "X-API-Key"],
-             methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+             methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
         logger.info("CORS restricted to: %s", allowed_origins)
     else:
         CORS(application,
              origins=DEFAULT_CORS_ORIGINS,
              supports_credentials=True,
              allow_headers=["Authorization", "Content-Type", "X-API-Key"],
-             methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+             methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
         logger.info("CORS using default frontend origins: %s", DEFAULT_CORS_ORIGINS)
 
     # ------------------------------------------------------------------

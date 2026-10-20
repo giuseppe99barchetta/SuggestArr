@@ -65,7 +65,8 @@ def get_recap():
 
 @recap_bp.route('/watch-sync', methods=['POST'])
 @require_role('admin', 'user')
-@limiter.limit('20 per hour')
+# Abuse guard only: RecapWatchSync already throttles real scans per scope, and Home calls this on every visit.
+@limiter.limit('30 per minute')
 def sync_watch_activity():
     """Link recorded requests to plays on the media server, for the hit rate and watch badges."""
     try:
