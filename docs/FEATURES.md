@@ -168,6 +168,7 @@ The engine works with **any OpenAI-compatible API**, so you can use a cloud prov
 | **Ollama** (local) | Not required | `http://localhost:11434/v1` | `mistral`, `llama3` |
 | **OpenRouter** | Required (`sk-or-v1-...`) | `https://openrouter.ai/api/v1` | `meta-llama/llama-3-8b-instruct` |
 | **OrcaRouter** | Required (`sk-orca-...`) | `https://api.orcarouter.ai/v1` | `openai/gpt-5.5` |
+| **Cheaper Inference** | Required (`ci_live_...`) | `https://api.cheaperinference.com/v1` | `gpt-5.4-mini` |
 | **LiteLLM Proxy** | Depends on config | `http://<your-proxy>:4000` | Depends on config |
 
 **Note for Ollama users:** make sure Ollama is running and the model is pulled (`ollama pull mistral`) before saving. The API Key field can be left blank — SuggestArr will use a placeholder automatically.
