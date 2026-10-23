@@ -15,7 +15,7 @@ SuggestArr automates media recommendations and download requests based on what y
 
 ## Features
 
-- **Jellyfin, Plex and Emby** as watch-history sources, plus optional per-user **Trakt** history and [imported watch history](docs/WATCH_HISTORY_IMPORT.md) (CSV or manual TMDb titles with ratings).
+- **Jellyfin, Plex and Emby** as watch-history sources, plus optional per-user **Trakt** and **Simkl** history and [imported watch history](docs/WATCH_HISTORY_IMPORT.md) (CSV or manual TMDb titles with ratings).
 - **Recommendations** from TMDb, or from any OpenAI-compatible LLM (OpenAI, Ollama, OpenRouter, LiteLLM…) with a short reason for each pick.
 - **AI Search**: describe what you want to watch in plain language and request results in one click.
 - **Public list import** from MDBList or Trakt, as a scheduled job or a single import.
@@ -35,7 +35,7 @@ See the [Feature Guide](docs/FEATURES.md) for how each feature works.
 - A **[TMDb API key](https://www.themoviedb.org/documentation/api)**
 - **[Jellyfin](https://jellyfin.org/)**, **[Plex](https://www.plex.tv/)** or **[Emby](https://emby.media/)**
 - **[Seer](https://github.com/seerr-team/seerr)**
-- Optional: PostgreSQL/MySQL, an OpenAI-compatible LLM, a [Trakt app](https://developer.trakt.tv/apps/new)
+- Optional: PostgreSQL/MySQL, an OpenAI-compatible LLM, a [Trakt app](https://developer.trakt.tv/apps/new), a [Simkl app](https://simkl.com/settings/developer/)
 
 ## Quick start
 

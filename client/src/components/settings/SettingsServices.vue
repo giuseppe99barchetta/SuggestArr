@@ -13,12 +13,13 @@
         </div>
       </section>
 
-      <section v-if="showSection('omdb') || showSection('trakt') || (!wizardMode && showSection('mdblist'))" :class="wizardMode ? '' : 'flex flex-col gap-2'">
+      <section v-if="showSection('omdb') || showSection('trakt') || showSection('simkl') || (!wizardMode && showSection('mdblist'))" :class="wizardMode ? '' : 'flex flex-col gap-2'">
         <h3 v-if="!wizardMode" class="m-0 text-xs font-bold tracking-wider text-ink-4 uppercase">Optional extras</h3>
         <div :class="listClass">
           <MdblistCard v-if="!wizardMode && showSection('mdblist')" />
           <OmdbCard v-if="showSection('omdb')" />
           <TraktCard v-if="showSection('trakt')" />
+          <SimklCard v-if="showSection('simkl')" />
         </div>
       </section>
     </div>
@@ -41,6 +42,7 @@ import TmdbCard from './services/TmdbCard.vue';
 import MdblistCard from './services/MdblistCard.vue';
 import OmdbCard from './services/OmdbCard.vue';
 import TraktCard from './services/TraktCard.vue';
+import SimklCard from './services/SimklCard.vue';
 
 /**
  * Connections page: one card per service (./services), plus the shared draft,
@@ -49,7 +51,7 @@ import TraktCard from './services/TraktCard.vue';
 export default {
   name: 'SettingsServices',
   mixins: [unsavedChangesGuard],
-  components: { PageHeader, MediaServerCard, SeerCard, TmdbCard, MdblistCard, OmdbCard, TraktCard },
+  components: { PageHeader, MediaServerCard, SeerCard, TmdbCard, MdblistCard, OmdbCard, TraktCard, SimklCard },
   provide() {
     return { services: this };
   },
@@ -72,7 +74,8 @@ export default {
       default: false,
     },
     // When set, only the matching section is rendered (used by the wizard)
-    // Values: 'tmdb' | 'omdb' | 'media-server' | 'seer' | null (show all)
+    // Values: 'tmdb' | 'omdb' | 'media-server' | 'trakt' | 'simkl' | 'seer'
+    // | null (show all)
     wizardSection: {
       type: String,
       default: null,
@@ -147,6 +150,7 @@ export default {
           TRAKT_CLIENT_ID: this.localConfig.TRAKT_CLIENT_ID || '',
           TRAKT_CLIENT_SECRET: traktClientSecret,
           TRAKT_SYNC_SEEN_FEEDBACK: this.localConfig.TRAKT_SYNC_SEEN_FEEDBACK === true,
+          SIMKL_CLIENT_ID: this.localConfig.SIMKL_CLIENT_ID || '',
         };
         if (this.localConfig.SELECTED_SERVICE === 'plex') {
           Object.assign(dataToSave, {
@@ -184,11 +188,11 @@ export default {
       const defaults = {
         TMDB_API_KEY: '', OMDB_API_KEY: '', MDBLIST_API_KEY: '', SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
         JELLYFIN_API_URL: '', JELLYFIN_EXTERNAL_URL: '', JELLYFIN_TOKEN: '', JELLYFIN_LIBRARIES: [],
-        TRAKT_CLIENT_ID: '', TRAKT_CLIENT_SECRET: '', TRAKT_SYNC_SEEN_FEEDBACK: false,
+        TRAKT_CLIENT_ID: '', TRAKT_CLIENT_SECRET: '', TRAKT_SYNC_SEEN_FEEDBACK: false, SIMKL_CLIENT_ID: '',
         SEER_API_URL: '', SEER_EXTERNAL_URL: '', SEER_TOKEN: '', SEER_USER_NAME: null, SEER_USER_PSW: null,
         SEER_SESSION_TOKEN: null, SEER_ANIME_PROFILE_CONFIG: {}, SEER_REQUEST_DELAY: 2, SELECTED_USERS: [],
       };
-      if (await confirmDialog({ title: 'Reset service settings?', message: 'All connections are cleared and saved: TMDb, your media server, Seer, Trakt, OMDb and MDBList.', confirmLabel: 'Reset', danger: true })) {
+      if (await confirmDialog({ title: 'Reset service settings?', message: 'All connections are cleared and saved: TMDb, your media server, Seer, Trakt, Simkl, OMDb and MDBList.', confirmLabel: 'Reset', danger: true })) {
         this.localConfig = { ...this.localConfig, ...defaults };
         this.resetCount += 1; // each card forgets its connection state (serviceCard onReset)
         await this.saveSettings();

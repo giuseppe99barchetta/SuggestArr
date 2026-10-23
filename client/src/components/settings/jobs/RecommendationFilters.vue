@@ -13,10 +13,10 @@
 
     <div class="grid gap-x-6 gap-y-1 sm:grid-cols-2">
       <div v-for="toggle in behaviorToggles" :key="toggle.key" class="flex items-center gap-1.5 py-1.5">
-        <BaseCheckbox v-model="localFilters[toggle.key]" :disabled="toggle.trakt && !traktUsable">
-          <span class="font-medium text-ink" :class="{ 'opacity-50': toggle.trakt && !traktUsable }">{{ toggle.label }}</span>
+        <BaseCheckbox v-model="localFilters[toggle.key]" :disabled="toggle.tracker && !trackerUsable(toggle.tracker)">
+          <span class="font-medium text-ink" :class="{ 'opacity-50': toggle.tracker && !trackerUsable(toggle.tracker) }">{{ toggle.label }}</span>
         </BaseCheckbox>
-        <InfoTip :text="toggle.trakt && traktWarning ? traktWarning : toggle.help" />
+        <InfoTip :text="(toggle.tracker && trackerWarnings[toggle.tracker]) || toggle.help" />
       </div>
     </div>
 
@@ -44,9 +44,13 @@
 <script>
 import axios from 'axios';
 import { waitForAuthReady } from '@/composables/useAuth';
-import { listTraktMediaUsers } from '@/api/api';
+import {
+  listTraktMediaUsers, listSimklMediaUsers,
+  getMyTraktStatus, getMySimklStatus,
+} from '@/api/api';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import InfoTip from '@/components/ui/InfoTip.vue';
+import { trackerState, trackerWarning } from './trackerState.js';
 
 const DEFAULTS = {
   use_llm: false,
@@ -57,7 +61,9 @@ const DEFAULTS = {
   honor_seer_discovery: false,
   only_first_movie_in_collection: false,
   use_trakt_as_seed: true,
-  use_trakt_as_exclusion: true
+  use_trakt_as_exclusion: true,
+  use_simkl_as_seed: true,
+  use_simkl_as_exclusion: true
 };
 
 /**
@@ -84,6 +90,10 @@ export default {
       isUpdatingFromParent: false,
       traktConfigured: false,
       traktMediaUsers: [],
+      traktSelfConnected: false,
+      simklConfigured: false,
+      simklMediaUsers: [],
+      simklSelfConnected: false,
       sliders: [
         { key: 'max_content', label: 'Watched items to analyse', fallback: 10, min: 5, max: 50, step: 5, help: 'How many recently watched titles per user are used as a starting point.' },
         { key: 'search_size', label: 'TMDb results per search', fallback: 20, min: 10, max: 50, step: 5, help: 'How many candidates are fetched from TMDb for each watched title before filtering.' },
@@ -93,23 +103,28 @@ export default {
       behaviorToggles: [
         { key: 'honor_seer_discovery', label: 'Honor Seer discovery', help: "Respect Seer's own discovery settings when requesting." },
         { key: 'only_first_movie_in_collection', label: 'Only first movie in collections', help: 'Skip sequels, while still introducing new movie collections.' },
-        { key: 'use_trakt_as_seed', label: 'Use Trakt history as seed', help: 'Also use linked Trakt watch history to find similar titles.', trakt: true },
-        { key: 'use_trakt_as_exclusion', label: 'Skip titles watched on Trakt', help: 'Never suggest something already watched on Trakt.', trakt: true },
+        { key: 'use_trakt_as_seed', label: 'Use Trakt history as seed', help: 'Also use linked Trakt watch history to find similar titles.', tracker: 'trakt' },
+        { key: 'use_trakt_as_exclusion', label: 'Skip titles watched on Trakt', help: 'Never suggest something already watched on Trakt.', tracker: 'trakt' },
+        { key: 'use_simkl_as_seed', label: 'Use Simkl history as seed', help: 'Also use linked Simkl watch history to find similar titles.', tracker: 'simkl' },
+        { key: 'use_simkl_as_exclusion', label: 'Skip titles completed on Simkl', help: 'Never suggest something already completed on Simkl.', tracker: 'simkl' },
       ],
     };
   },
   computed: {
-    traktWarning() {
-      if (!this.traktConfigured) return 'Trakt is not configured: set the Client ID and Secret in Connections.';
-      if (!this.traktUsable) return 'No monitored user has a linked Trakt account (Connections > Trakt).';
-      return '';
-    },
-    traktUsable() {
-      if (!this.traktConfigured || !this.traktMediaUsers.length) return false;
+    trackerStates() {
       const selectedIds = this.modelValue.user_ids || [];
       // No selection means every user is monitored.
-      if (!selectedIds.length) return this.traktMediaUsers.some(u => u.trakt?.connected);
-      return this.traktMediaUsers.some(u => selectedIds.includes(u.external_user_id) && u.trakt?.connected);
+      const userMode = selectedIds.length ? 'selected' : 'all';
+      return {
+        trakt: trackerState({ configured: this.traktConfigured, users: this.traktMediaUsers, selfConnected: this.traktSelfConnected, key: 'trakt', userMode, selectedIds }),
+        simkl: trackerState({ configured: this.simklConfigured, users: this.simklMediaUsers, selfConnected: this.simklSelfConnected, key: 'simkl', userMode, selectedIds }),
+      };
+    },
+    trackerWarnings() {
+      return {
+        trakt: trackerWarning(this.trackerStates.trakt, 'Trakt', 'Client ID / Secret'),
+        simkl: trackerWarning(this.trackerStates.simkl, 'Simkl', 'Client ID'),
+      };
     },
   },
   watch: {
@@ -135,17 +150,57 @@ export default {
       deep: true
     }
   },
+  methods: {
+    trackerUsable(tracker) {
+      return this.trackerStates[tracker] === 'usable';
+    },
+    /** Fetch linked accounts for one tracker, tolerating a failed lookup. */
+    async loadTrackerUsers(configured, list) {
+      if (!configured) return [];
+      try {
+        const res = await list();
+        return res.data?.media_users || [];
+      } catch {
+        return [];
+      }
+    },
+    /**
+     * Whether the current user's own media profile has the tracker linked.
+     *
+     * The admin list only covers users chosen in Connections, so a link made
+     * from Profile against a media account that was never selected is
+     * invisible there. Reading it separately lets the warning say the account
+     * is linked-but-unmonitored instead of claiming nothing is linked at all.
+     * A caller with no media profile gets a 404, which is not an error here.
+     */
+    async loadSelfConnected(configured, fetchStatus, key) {
+      if (!configured) return false;
+      try {
+        const res = await fetchStatus();
+        return res.data?.media_user?.[key]?.connected === true;
+      } catch {
+        return false;
+      }
+    },
+  },
   async mounted() {
     try {
       await waitForAuthReady();
       const statusResponse = await axios.get('/api/config/status');
       this.traktConfigured = statusResponse.data?.trakt_app_configured === true;
-      if (this.traktConfigured) {
-        const traktRes = await listTraktMediaUsers();
-        this.traktMediaUsers = traktRes.data?.media_users || [];
-      }
+      this.simklConfigured = statusResponse.data?.simkl_app_configured === true;
+      [
+        this.traktMediaUsers, this.simklMediaUsers,
+        this.traktSelfConnected, this.simklSelfConnected,
+      ] = await Promise.all([
+        this.loadTrackerUsers(this.traktConfigured, listTraktMediaUsers),
+        this.loadTrackerUsers(this.simklConfigured, listSimklMediaUsers),
+        this.loadSelfConnected(this.traktConfigured, getMyTraktStatus, 'trakt'),
+        this.loadSelfConnected(this.simklConfigured, getMySimklStatus, 'simkl'),
+      ]);
     } catch {
       this.traktMediaUsers = [];
+      this.simklMediaUsers = [];
     }
   }
 };

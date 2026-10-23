@@ -164,6 +164,10 @@
         <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
           <TraktMediaUsers mode="self" :trakt-configured="isTraktAppConfigured" />
         </div>
+
+        <div class="flex min-w-0 flex-col gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
+          <SimklMediaUsers mode="self" :simkl-configured="isSimklAppConfigured" />
+        </div>
       </div>
     </SectionCard>
 
@@ -195,6 +199,7 @@ import {
 import { CHAT_FORMATS } from '@/utils/notificationFormats.js';
 import SectionCard from '@/components/ui/SectionCard.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
+import SimklMediaUsers from './SimklMediaUsers.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
 import UserAvatar from '@/components/ui/UserAvatar.vue';
 import { refreshUserAvatar } from '@/composables/useUserAvatar';
@@ -211,7 +216,7 @@ export default {
   name: 'UserProfile',
   emits: ['profile-updated'],
 
-  components: { PageHeader, SectionCard, TraktMediaUsers, ApiKeysPanel, RecapPreferences, UserAvatar },
+  components: { PageHeader, SectionCard, TraktMediaUsers, SimklMediaUsers, ApiKeysPanel, RecapPreferences, UserAvatar },
 
   // The dashboard shell passes props this page does not declare.
   inheritAttrs: false,
@@ -266,6 +271,7 @@ export default {
       configStatus: {
         selected_service: '',
         trakt_app_configured: false,
+        simkl_app_configured: false,
       },
 
       // Credential-based link form
@@ -345,6 +351,10 @@ export default {
 
     isTraktAppConfigured() {
       return !!this.config?.TRAKT_CLIENT_ID || this.configStatus?.trakt_app_configured === true;
+    },
+
+    isSimklAppConfigured() {
+      return !!this.config?.SIMKL_CLIENT_ID || this.configStatus?.simkl_app_configured === true;
     },
 
     serverUserOptions() {
