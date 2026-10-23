@@ -117,7 +117,8 @@ class JellyfinHandler(BaseMediaHandler):
         if media_type == 'movie':
             tmdb_id = (item.get('ProviderIds') or {}).get('Tmdb')
         else:
-            tmdb_id = ((item.get('SeriesProviderIds') or item.get('ProviderIds', {})).get('Tmdb'))
+            # Never fall back to the episode's own ProviderIds: its TMDb ID is an episode ID (#539).
+            tmdb_id = (item.get('SeriesProviderIds') or {}).get('Tmdb')
             if not tmdb_id:
                 series_id = item.get('SeriesId')
                 if series_id:
@@ -265,7 +266,7 @@ class JellyfinHandler(BaseMediaHandler):
 
         self.processed_series.add(series_id)
 
-        provider_ids = item.get("SeriesProviderIds") or item.get("ProviderIds", {})
+        provider_ids = item.get("SeriesProviderIds") or {}
         source_tmdb_id = provider_ids.get("Tmdb")
 
         if not source_tmdb_id:
