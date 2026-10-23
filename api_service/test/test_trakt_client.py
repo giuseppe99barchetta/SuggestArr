@@ -282,6 +282,31 @@ async def test_recent_history_collapses_episodes_to_unique_parent_shows():
 
 
 @pytest.mark.asyncio
+async def test_ratings_merge_movies_and_shows_newest_first_and_cap():
+    session = FakeSession([
+        FakeResponse(200, [
+            {"rated_at": "2026-01-01T00:00:00.000Z", "rating": 9,
+             "movie": {"title": "Heat", "year": 1995, "ids": {"tmdb": 949}}},
+            {"rated_at": "2026-03-01T00:00:00.000Z", "rating": 7,
+             "movie": {"title": "No TMDb", "ids": {"trakt": 5}}},
+        ]),
+        FakeResponse(200, [
+            {"rated_at": "2026-02-01T00:00:00.000Z", "rating": 3,
+             "show": {"title": "Dark", "year": 2017, "ids": {"tmdb": 70523}}},
+        ]),
+    ])
+    client = TraktClient("cid", "secret", "access", "refresh", expires_at=int(time.time()) + 3600, session=session)
+
+    result = await client.get_ratings(limit=1)
+
+    assert [call[1] for call in session.calls] == [
+        "https://api.trakt.tv/sync/ratings/movies", "https://api.trakt.tv/sync/ratings/shows",
+    ]
+    assert result == [{"tmdb_id": "70523", "media_type": "tv", "title": "Dark", "year": 2017,
+                       "rating": 3, "watched_at": TraktClient._parse_iso("2026-02-01T00:00:00Z")}]
+
+
+@pytest.mark.asyncio
 async def test_existing_content_uses_watched_movies_and_shows_tmdb_ids():
     session = FakeSession([
         FakeResponse(200, [{"movie": {"title": "Heat", "year": 1995, "ids": {"tmdb": 949}}}]),

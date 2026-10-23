@@ -62,6 +62,7 @@ const DEFAULTS = {
   only_first_movie_in_collection: false,
   use_trakt_as_seed: true,
   use_trakt_as_exclusion: true,
+  use_trakt_ratings: true,
   use_simkl_as_seed: true,
   use_simkl_as_exclusion: true
 };
@@ -104,6 +105,7 @@ export default {
         { key: 'honor_seer_discovery', label: 'Honor Seer discovery', help: "Respect Seer's own discovery settings when requesting." },
         { key: 'only_first_movie_in_collection', label: 'Only first movie in collections', help: 'Skip sequels, while still introducing new movie collections.' },
         { key: 'use_trakt_as_seed', label: 'Use Trakt history as seed', help: 'Also use linked Trakt watch history to find similar titles.', tracker: 'trakt' },
+        { key: 'use_trakt_ratings', label: 'Use Trakt ratings', help: 'Also use titles rated on Trakt (including ratings synced from streaming services). Ratings set in SuggestArr win. Needs Trakt history as seed.', tracker: 'trakt' },
         { key: 'use_trakt_as_exclusion', label: 'Skip titles watched on Trakt', help: 'Never suggest something already watched on Trakt.', tracker: 'trakt' },
         { key: 'use_simkl_as_seed', label: 'Use Simkl history as seed', help: 'Also use linked Simkl watch history to find similar titles.', tracker: 'simkl' },
         { key: 'use_simkl_as_exclusion', label: 'Skip titles completed on Simkl', help: 'Never suggest something already completed on Simkl.', tracker: 'simkl' },

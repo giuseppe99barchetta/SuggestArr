@@ -8,6 +8,9 @@ from api_service.services.llm.llm_service import is_llm_configured, get_recommen
 from api_service.config.config import load_env_vars
 from api_service.services.library_content import load_library_content, merge_content_sets
 
+# Seed origins whose rating was given inside SuggestArr (watched_media sources).
+_OWN_RATING_ORIGINS = frozenset({'manual', 'csv_import', 'server'})
+
 class BaseMediaHandler(ABC):
     """
     Abstract base class for media handlers (Plex, Jellyfin).
@@ -232,6 +235,9 @@ class BaseMediaHandler(ABC):
         # Excluded titles stay "already watched" but say nothing about taste,
         # whichever source (server, Trakt, managed history) reported them.
         seen = {(s.get("media_type"), str(s.get("tmdb_id", ""))) for s in seeds if s.get("excluded")}
+        # A rating given in SuggestArr wins over one imported from Trakt for the same title.
+        own_rated = {(s.get("media_type"), str(s.get("tmdb_id", ""))) for s in seeds
+                     if s.get("rating") is not None and s.get("source_origin") in _OWN_RATING_ORIGINS}
         deduped = []
         def seed_sort_key(seed):
             rating = seed.get('rating')
@@ -245,6 +251,8 @@ class BaseMediaHandler(ABC):
         for s in sorted(seeds, key=seed_sort_key, reverse=True):
             key = (s.get("media_type"), str(s.get("tmdb_id", "")))
             if key in seen or not s.get("tmdb_id"):
+                continue
+            if key in own_rated and s.get("source_origin") not in _OWN_RATING_ORIGINS:
                 continue
             seen.add(key)
             deduped.append(s)

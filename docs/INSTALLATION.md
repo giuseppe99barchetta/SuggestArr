@@ -382,6 +382,7 @@ If no items appear:
 Recommendation jobs can use linked Trakt accounts:
 
 - Use Trakt as Seed: recent Trakt watches can seed recommendations.
+- Use Trakt ratings (`use_trakt_ratings`, default on): the user's most recent Trakt ratings (`/sync/ratings`, same 1-10 scale) are added as seeds on every run, so ratings given in the Trakt app or synced into Trakt from streaming services steer recommendations. 7-10 counts as liked, 1-4 as did not like. A rating set in SuggestArr (Ratings page or CSV import) wins over the Trakt one for the same title. Needs Use Trakt as Seed; ratings are read live and are not shown on the Ratings page.
 - Exclude Trakt Watched: watched Trakt items can be skipped.
 
 If no linked Trakt accounts exist, job filters will warn that Trakt is not usable yet. Media-server history still works without Trakt.

@@ -252,6 +252,7 @@ class RecommendationAutomation:
         )
         trakt_use_as_seed = _resolve_bool('use_trakt_as_seed', 'TRAKT_USE_AS_SEED')
         trakt_use_as_exclusion = _resolve_bool('use_trakt_as_exclusion', 'TRAKT_USE_AS_EXCLUSION')
+        trakt_use_ratings = _resolve_bool('use_trakt_ratings', 'TRAKT_USE_RATINGS')
         simkl_use_as_seed = _resolve_bool('use_simkl_as_seed', 'SIMKL_USE_AS_SEED')
         simkl_use_as_exclusion = _resolve_bool('use_simkl_as_exclusion', 'SIMKL_USE_AS_EXCLUSION')
 
@@ -395,6 +396,7 @@ class RecommendationAutomation:
                 dry_run=dry_run,
                 trakt_use_as_seed=trakt_use_as_seed,
                 trakt_use_as_exclusion=trakt_use_as_exclusion,
+                trakt_use_ratings=trakt_use_ratings,
                 simkl_use_as_seed=simkl_use_as_seed,
                 simkl_use_as_exclusion=simkl_use_as_exclusion,
             )
@@ -408,6 +410,7 @@ class RecommendationAutomation:
                 dry_run=dry_run,
                 trakt_use_as_seed=trakt_use_as_seed,
                 trakt_use_as_exclusion=trakt_use_as_exclusion,
+                trakt_use_ratings=trakt_use_ratings,
                 simkl_use_as_seed=simkl_use_as_seed,
                 simkl_use_as_exclusion=simkl_use_as_exclusion,
             )
@@ -454,6 +457,7 @@ class RecommendationAutomation:
         dry_run=False,
         trakt_use_as_seed=True,
         trakt_use_as_exclusion=True,
+        trakt_use_ratings=True,
         simkl_use_as_seed=True,
         simkl_use_as_exclusion=True,
     ):
@@ -489,6 +493,7 @@ class RecommendationAutomation:
                 self.env_vars, max_content,
                 use_as_seed=trakt_use_as_seed,
                 use_as_exclusion=trakt_use_as_exclusion,
+                use_ratings=trakt_use_ratings,
             ),
             simkl_augmentor=MediaUserSimklAugmentor.from_env(
                 self.env_vars, max_content,
@@ -512,6 +517,7 @@ class RecommendationAutomation:
         dry_run=False,
         trakt_use_as_seed=True,
         trakt_use_as_exclusion=True,
+        trakt_use_ratings=True,
         simkl_use_as_seed=True,
         simkl_use_as_exclusion=True,
     ):
@@ -548,6 +554,7 @@ class RecommendationAutomation:
                 self.env_vars, max_content,
                 use_as_seed=trakt_use_as_seed,
                 use_as_exclusion=trakt_use_as_exclusion,
+                use_ratings=trakt_use_ratings,
             ),
             simkl_augmentor=MediaUserSimklAugmentor.from_env(
                 self.env_vars, max_content,
