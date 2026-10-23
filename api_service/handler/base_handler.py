@@ -176,6 +176,8 @@ class BaseMediaHandler(ABC):
             media_type, tmdb_id = seed.get('media_type'), seed.get('tmdb_id')
             if media_type in {'movie', 'tv'} and tmdb_id:
                 self.existing_content_sets.setdefault(media_type, set()).add(str(tmdb_id))
+        # Excluded titles stay "already watched" but say nothing about taste.
+        seeds = [seed for seed in seeds if not seed.get('excluded')]
         if seeds:
             self.logger.info('Managed watch history: media user identity %s → %d seed(s)',
                              media_user_identity_id, len(seeds))

@@ -43,7 +43,8 @@ async def ai_search_inspiration():
         if not profile:
             return jsonify({"status": "success", "items": []}), 200
         identity = db.upsert_media_user_identity(provider, str(profile["external_user_id"]), profile.get("external_username"))
-        saved_history = db.list_watched_media(identity["id"], limit=6)
+        saved_history = [item for item in db.list_watched_media(identity["id"], limit=50)
+                         if not item.get("excluded")][:6]
         items = await service.inspiration(profile, saved_history)
         return jsonify({"status": "success", "items": items}), 200
     except Exception:

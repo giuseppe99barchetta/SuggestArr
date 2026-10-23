@@ -79,6 +79,27 @@ def add_my_watched_media():
     return jsonify({'status': 'success', 'item': item}), 201
 
 
+@watched_history_bp.route('/me/<int:item_id>', methods=['PATCH'])
+@limiter.limit('60 per minute')
+def update_my_watched_media(item_id: int):
+    """Re-rate or exclude one of the current user's titles without changing its source."""
+    db = DatabaseManager()
+    identity = _identity_for_current_user(db)
+    if not identity:
+        return _missing_profile()
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'status': 'error', 'message': 'JSON body required'}), 400
+    changes = {key: payload[key] for key in ('rating', 'excluded') if key in payload}
+    try:
+        item = db.update_watched_media(identity['id'], item_id, changes)
+    except ValueError as exc:
+        return jsonify({'status': 'error', 'message': str(exc)}), 400
+    if not item:
+        return jsonify({'status': 'error', 'message': 'Watched title not found'}), 404
+    return jsonify({'status': 'success', 'item': item}), 200
+
+
 @watched_history_bp.route('/me/<int:item_id>', methods=['DELETE'])
 def delete_my_watched_media(item_id: int):
     db = DatabaseManager()

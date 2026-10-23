@@ -75,3 +75,25 @@ def test_csv_import_rejects_wrong_headers():
         )
     assert response.status_code == 400
     assert 'headers' in response.get_json()['message']
+
+
+def test_patch_updates_rating_and_exclusion_for_current_profile_only():
+    db = _db()
+    db.update_watched_media.return_value = {'id': 3, 'rating': 8.0, 'excluded': True, 'source': 'csv_import'}
+    p1, p2 = _patches(db)
+    with p1, p2:
+        response = make_app().test_client().patch(
+            '/api/watched-history/me/3', json={'rating': 8, 'excluded': True, 'source': 'manual'},
+        )
+    assert response.status_code == 200
+    assert response.get_json()['item']['source'] == 'csv_import'
+    db.update_watched_media.assert_called_once_with(42, 3, {'rating': 8, 'excluded': True})
+
+
+def test_patch_unknown_title_returns_404():
+    db = _db()
+    db.update_watched_media.return_value = None
+    p1, p2 = _patches(db)
+    with p1, p2:
+        response = make_app().test_client().patch('/api/watched-history/me/99', json={'excluded': False})
+    assert response.status_code == 404

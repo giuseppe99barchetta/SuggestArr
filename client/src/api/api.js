@@ -192,6 +192,7 @@ export const importMyWatchedMedia = (file) => {
 export const searchMyWatchedMedia = (query, mediaType = 'both') =>
     axios.get('/api/watched-history/me/search', { params: { query, media_type: mediaType } });
 export const addMyWatchedMedia = (item) => axios.post('/api/watched-history/me', item);
+export const updateMyWatchedMedia = (itemId, changes) => axios.patch(`/api/watched-history/me/${itemId}`, changes);
 export const deleteMyWatchedMedia = (itemId) => axios.delete(`/api/watched-history/me/${itemId}`);
 
 

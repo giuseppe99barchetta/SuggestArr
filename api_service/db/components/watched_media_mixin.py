@@ -81,7 +81,7 @@ class WatchedMediaMixin:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                f"SELECT id, tmdb_id, media_type, title, year, rating, source, created_at, updated_at "
+                f"SELECT id, tmdb_id, media_type, title, year, rating, source, created_at, updated_at, excluded "
                 f"FROM watched_media WHERE media_user_identity_id={ph} AND tmdb_id={ph} AND media_type={ph}",
                 (media_user_identity_id, str(tmdb_id), media_type),
             )
@@ -93,7 +93,7 @@ class WatchedMediaMixin:
         return {
             'id': row[0], 'tmdb_id': str(row[1]), 'media_type': row[2], 'title': row[3],
             'year': row[4], 'rating': row[5], 'source': row[6],
-            'created_at': row[7], 'updated_at': row[8],
+            'created_at': row[7], 'updated_at': row[8], 'excluded': bool(row[9]),
         }
 
     def list_watched_media(self, media_user_identity_id: int, limit: int = 500) -> List[Dict[str, Any]]:
@@ -102,12 +102,55 @@ class WatchedMediaMixin:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                f"SELECT id, tmdb_id, media_type, title, year, rating, source, created_at, updated_at "
+                f"SELECT id, tmdb_id, media_type, title, year, rating, source, created_at, updated_at, excluded "
                 f"FROM watched_media WHERE media_user_identity_id={ph} "
                 f"ORDER BY updated_at DESC, id DESC LIMIT {ph}",
                 (media_user_identity_id, limit),
             )
             return [self._watched_media_row(row) for row in cursor.fetchall()]
+
+    def update_watched_media(self, media_user_identity_id: int, item_id: int,
+                             changes: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Change the rating and/or exclusion flag of one title, keeping its source.
+
+        Args:
+            media_user_identity_id: Owner of the row; other users' rows are never touched.
+            item_id: Primary key of the watched title.
+            changes: Any of ``rating`` (0-10 or None to clear) and ``excluded`` (bool).
+
+        Returns:
+            The updated row, or None when it does not belong to this identity.
+
+        Raises:
+            ValueError: When no supported field is given or a value is invalid.
+        """
+        ph = self._watched_media_placeholder()
+        assignments, values = [], []
+        if 'rating' in changes:
+            assignments.append(f'rating={ph}')
+            values.append(self._normalise_rating(changes['rating']))
+        if 'excluded' in changes:
+            if not isinstance(changes['excluded'], bool):
+                raise ValueError('excluded must be true or false')
+            assignments.append(f'excluded={ph}')
+            values.append(int(changes['excluded']))
+        if not assignments:
+            raise ValueError('Nothing to update: send rating and/or excluded')
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"UPDATE watched_media SET {', '.join(assignments)}, updated_at=CURRENT_TIMESTAMP "
+                f"WHERE id={ph} AND media_user_identity_id={ph}",
+                (*values, item_id, media_user_identity_id),
+            )
+            conn.commit()
+            cursor.execute(
+                f"SELECT id, tmdb_id, media_type, title, year, rating, source, created_at, updated_at, excluded "
+                f"FROM watched_media WHERE id={ph} AND media_user_identity_id={ph}",
+                (item_id, media_user_identity_id),
+            )
+            row = cursor.fetchone()
+        return self._watched_media_row(row) if row else None
 
     def delete_watched_media(self, media_user_identity_id: int, item_id: int) -> bool:
         ph = self._watched_media_placeholder()
@@ -143,6 +186,6 @@ class WatchedMediaMixin:
                 'tmdb_id': item['tmdb_id'], 'media_type': item['media_type'],
                 'title': item['title'], 'year': item['year'], 'rating': rating,
                 'preference_signal': signal, 'source_origin': item['source'],
-                'date': seed_date,
+                'date': seed_date, 'excluded': item['excluded'],
             })
         return seeds
