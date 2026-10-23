@@ -138,7 +138,9 @@ def update_my_watched_media(item_id: int):
     try:
         item = db.update_watched_media(identity['id'], item_id, changes)
     except ValueError as exc:
-        return jsonify({'status': 'error', 'message': str(exc)}), 400
+        logger.info('Rejected watched-media update for identity %s item %s: %s', identity['id'], item_id, exc)
+        return jsonify({'status': 'error',
+                        'message': 'Send a rating from 0 to 10 and/or excluded as true or false'}), 400
     if not item:
         return jsonify({'status': 'error', 'message': 'Watched title not found'}), 404
     return jsonify({'status': 'success', 'item': item}), 200
