@@ -1,6 +1,8 @@
 import asyncio
 import csv
 import io
+import threading
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, g, jsonify, request
 
@@ -9,6 +11,7 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
 from api_service.services.tmdb.tmdb_client import TMDbClient
+from api_service.services.year_recap import PlayedTitles
 from api_service.utils.asyncio_loop import run_coroutine_sync
 
 
@@ -17,6 +20,11 @@ logger = LoggerManager.get_logger('WatchedHistoryRoute')
 CSV_COLUMNS = ('tmdb_id', 'media_type', 'title', 'year', 'rating')
 MAX_IMPORT_ROWS = 1000
 MAX_IMPORT_BYTES = 2 * 1024 * 1024
+SYNC_INTERVAL = timedelta(minutes=5)
+# Jellyfin only keeps the last play per item, so re-read a day back to catch replays.
+SYNC_OVERLAP = timedelta(days=1)
+_last_sync = {}
+_sync_lock = threading.Lock()
 
 
 def _provider() -> str:
@@ -24,9 +32,13 @@ def _provider() -> str:
 
 
 def _identity_for_current_user(db: DatabaseManager):
+    """Resolve the media identity to act on: the caller's own, or ``?user=`` for admins."""
     provider = _provider()
     if provider not in {'jellyfin', 'emby', 'plex'}:
         return None
+    requested = str(request.args.get('user') or '').strip()
+    if requested and g.current_user.get('role') == 'admin':
+        return db.upsert_media_user_identity(provider, requested[:191])
     user_id = int(g.current_user['id'])
     for profile in db.get_user_media_profiles(user_id):
         if profile.get('provider') == provider:
@@ -58,7 +70,39 @@ def list_my_watched_media():
     identity = _identity_for_current_user(db)
     if not identity:
         return _missing_profile()
-    return jsonify({'status': 'success', 'items': db.list_watched_media(identity['id'])}), 200
+    return jsonify({'status': 'success', 'items': db.list_watched_media(identity['id'], limit=10000)}), 200
+
+
+@watched_history_bp.route('/me/sync', methods=['POST'])
+@limiter.limit('10 per minute')
+def sync_my_server_history():
+    """Store plays newer than the last sync, so the Ratings page loads from the database."""
+    db = DatabaseManager()
+    identity = _identity_for_current_user(db)
+    if not identity:
+        return _missing_profile()
+    now = datetime.now(timezone.utc)
+    with _sync_lock:
+        last = _last_sync.get(identity['id'])
+        if last and now - last < SYNC_INTERVAL:
+            return jsonify({'status': 'success', 'server_status': 'skipped', 'added': 0}), 200
+        _last_sync[identity['id']] = now
+    latest = db.latest_server_play(identity['id'])
+    since = latest.replace(tzinfo=timezone.utc) - SYNC_OVERLAP if latest else None
+    try:
+        result = run_coroutine_sync(PlayedTitles().titles(
+            _provider(), identity['external_user_id'], ConfigService.get_runtime_config(), since=since), logger)
+    except Exception as exc:
+        with _sync_lock:
+            _last_sync.pop(identity['id'], None)
+        logger.warning('Could not sync media-server history for ratings: %s', type(exc).__name__)
+        return jsonify({'status': 'success', 'server_status': 'unavailable', 'added': 0}), 200
+    if result is None:
+        return jsonify({'status': 'success', 'server_status': 'not_configured', 'added': 0}), 200
+    played, truncated = result
+    added = db.record_server_plays(identity['id'], played)
+    return jsonify({'status': 'success', 'server_status': 'partial' if truncated else 'ok',
+                    'added': added, 'updated': len(played)}), 200
 
 
 @watched_history_bp.route('/me', methods=['POST'])

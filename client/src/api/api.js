@@ -183,17 +183,20 @@ export const previewMyTraktRecent = (limit = 10) =>
     axios.get('/api/trakt/me/recent', { params: { limit } });
 
 // Persistent watch-history seeds imported from CSV or added manually.
-export const listMyWatchedMedia = () => axios.get('/api/watched-history/me');
-export const importMyWatchedMedia = (file) => {
+// `user` lets an admin act on another media profile; omit it for your own.
+const asMediaUser = (user) => (user ? { params: { user } } : {});
+export const listMyWatchedMedia = (user) => axios.get('/api/watched-history/me', asMediaUser(user));
+export const syncMyWatchedMedia = (user) => axios.post('/api/watched-history/me/sync', null, asMediaUser(user));
+export const importMyWatchedMedia = (file, user) => {
     const data = new FormData();
     data.append('file', file);
-    return axios.post('/api/watched-history/me/import', data);
+    return axios.post('/api/watched-history/me/import', data, asMediaUser(user));
 };
 export const searchMyWatchedMedia = (query, mediaType = 'both') =>
     axios.get('/api/watched-history/me/search', { params: { query, media_type: mediaType } });
-export const addMyWatchedMedia = (item) => axios.post('/api/watched-history/me', item);
-export const updateMyWatchedMedia = (itemId, changes) => axios.patch(`/api/watched-history/me/${itemId}`, changes);
-export const deleteMyWatchedMedia = (itemId) => axios.delete(`/api/watched-history/me/${itemId}`);
+export const addMyWatchedMedia = (item, user) => axios.post('/api/watched-history/me', item, asMediaUser(user));
+export const updateMyWatchedMedia = (itemId, changes, user) => axios.patch(`/api/watched-history/me/${itemId}`, changes, asMediaUser(user));
+export const deleteMyWatchedMedia = (itemId, user) => axios.delete(`/api/watched-history/me/${itemId}`, asMediaUser(user));
 
 
 // Cleanup automation

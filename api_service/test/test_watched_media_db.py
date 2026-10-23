@@ -1,6 +1,7 @@
 """Integration tests for watched-media editing against a real SQLite database."""
 import os
 import tempfile
+from datetime import datetime
 import unittest
 from unittest.mock import patch
 
@@ -65,6 +66,32 @@ class TestWatchedMediaUpdate(unittest.TestCase):
             self.db.update_watched_media(self.owner, self.item['id'], {'excluded': 'yes'})
         with self.assertRaises(ValueError):
             self.db.update_watched_media(self.owner, self.item['id'], {})
+
+
+    def test_server_plays_are_stored_once_and_keep_user_edits(self):
+        plays = [
+            {'tmdb_id': '27205', 'media_type': 'movie', 'title': 'Inception', 'year': 2010,
+             'watched_at': datetime(2026, 3, 1, 20, 0)},
+            {'tmdb_id': '82728', 'media_type': 'tv', 'title': 'Bluey', 'year': None,
+             'watched_at': datetime(2026, 5, 1, 8, 0)},
+        ]
+        self.assertEqual(self.db.record_server_plays(self.owner, plays), 1)
+        self.assertEqual(self.db.record_server_plays(self.owner, plays), 0)
+        items = self.db.list_watched_media(self.owner)
+        # Newest play first; the CSV row keeps its rating and source.
+        self.assertEqual([item['title'] for item in items], ['Bluey', 'Inception'])
+        self.assertEqual((items[1]['rating'], items[1]['source']), (9.0, 'csv_import'))
+        self.assertEqual(self.db.latest_server_play(self.owner), datetime(2026, 5, 1, 8, 0))
+        self.assertEqual(self.db.list_watched_media(self.other), [])
+
+    def test_untouched_server_plays_are_not_seeds_until_rated_or_excluded(self):
+        self.db.record_server_plays(self.owner, [{'tmdb_id': '82728', 'media_type': 'tv', 'title': 'Bluey',
+                                                  'year': None, 'watched_at': datetime(2026, 5, 1)}])
+        self.assertEqual([seed['tmdb_id'] for seed in self.db.get_watched_media_seeds(self.owner)], ['27205'])
+        bluey = self.db.get_watched_media_item(self.owner, '82728', 'tv')
+        self.db.update_watched_media(self.owner, bluey['id'], {'excluded': True})
+        seeds = {seed['tmdb_id']: seed for seed in self.db.get_watched_media_seeds(self.owner)}
+        self.assertTrue(seeds['82728']['excluded'])
 
 
 if __name__ == '__main__':

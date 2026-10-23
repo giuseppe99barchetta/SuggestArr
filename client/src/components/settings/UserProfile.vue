@@ -167,8 +167,6 @@
       </div>
     </SectionCard>
 
-    <WatchedMediaHistory v-if="isLinkableService" />
-
     <SectionCard v-if="!isLinkableService && hasProviderContext" icon="fas fa-plug" title="Linked accounts" description="No linkable media server is configured yet. An admin must set up Jellyfin, Emby or Plex in Connections first." />
 
     <RecapPreferences v-if="profileUser?.role === 'admin'" />
@@ -197,7 +195,6 @@ import {
 import { CHAT_FORMATS } from '@/utils/notificationFormats.js';
 import SectionCard from '@/components/ui/SectionCard.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
-import WatchedMediaHistory from './WatchedMediaHistory.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
 import UserAvatar from '@/components/ui/UserAvatar.vue';
 import { refreshUserAvatar } from '@/composables/useUserAvatar';
@@ -214,7 +211,7 @@ export default {
   name: 'UserProfile',
   emits: ['profile-updated'],
 
-  components: { PageHeader, SectionCard, TraktMediaUsers, WatchedMediaHistory, ApiKeysPanel, RecapPreferences, UserAvatar },
+  components: { PageHeader, SectionCard, TraktMediaUsers, ApiKeysPanel, RecapPreferences, UserAvatar },
 
   // The dashboard shell passes props this page does not declare.
   inheritAttrs: false,

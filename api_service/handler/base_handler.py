@@ -176,8 +176,7 @@ class BaseMediaHandler(ABC):
             media_type, tmdb_id = seed.get('media_type'), seed.get('tmdb_id')
             if media_type in {'movie', 'tv'} and tmdb_id:
                 self.existing_content_sets.setdefault(media_type, set()).add(str(tmdb_id))
-        # Excluded titles stay "already watched" but say nothing about taste.
-        seeds = [seed for seed in seeds if not seed.get('excluded')]
+        # Excluded seeds are kept so _merge_seeds can also drop the server's copy.
         if seeds:
             self.logger.info('Managed watch history: media user identity %s → %d seed(s)',
                              media_user_identity_id, len(seeds))
@@ -207,14 +206,16 @@ class BaseMediaHandler(ABC):
         Each seed dict must have: ``tmdb_id``, ``media_type``, ``date`` (Unix
         timestamp). Seeds without ``date`` sort last.  Duplicate
         ``(media_type, tmdb_id)`` pairs keep the newest entry (first seen in
-        descending sort).
+        descending sort). Titles any seed marks ``excluded`` are dropped entirely.
 
         Returns the merged list truncated to ``self.max_content`` items.
         """
         if not seeds:
             return []
 
-        seen = set()
+        # Excluded titles stay "already watched" but say nothing about taste,
+        # whichever source (server, Trakt, managed history) reported them.
+        seen = {(s.get("media_type"), str(s.get("tmdb_id", ""))) for s in seeds if s.get("excluded")}
         deduped = []
         def seed_sort_key(seed):
             rating = seed.get('rating')

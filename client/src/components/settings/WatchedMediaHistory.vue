@@ -1,12 +1,12 @@
 <template>
-  <SectionCard id="profile-history-content" icon="fas fa-book-open" title="Watched elsewhere" description="Titles you watched outside your media server. They personalise suggestions and are never suggested again.">
+  <SectionCard id="ratings-content" icon="fas fa-star" title="Watch history" description="Everything you played on your media server, plus titles you watched elsewhere. Watched titles are never suggested again.">
     <template #actions>
       <button type="button" class="ui-btn" @click="showImport = true"><i aria-hidden="true" class="fas fa-file-import"></i>Import CSV</button>
     </template>
 
     <form class="flex flex-wrap gap-2" role="search" @submit.prevent="search">
       <label class="sr-only" for="watchedSearch">Search TMDb</label>
-      <input id="watchedSearch" v-model.trim="query" type="search" class="ui-input flex-[1_1_220px]" placeholder="Add a movie or series you watched">
+      <input id="watchedSearch" v-model.trim="query" type="search" class="ui-input flex-[1_1_220px]" placeholder="Add a movie or series you watched elsewhere">
       <label class="sr-only" for="watchedSearchType">Media type</label>
       <select id="watchedSearchType" v-model="searchType" class="ui-input w-auto">
         <option v-for="option in searchTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -47,29 +47,58 @@
       </template>
     </AppDialog>
 
-    <h3 class="m-0 mb-2 mt-5 text-sm font-bold text-ink">Your titles <span v-if="items.length" class="font-normal text-ink-4">({{ items.length }})</span></h3>
-    <p v-if="isLoading" class="m-0 text-[13px] text-ink-4">Loading watched titles…</p>
-    <p v-else-if="!items.length" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[13px] text-ink-4">Nothing added yet. Imported and manually added titles show up here, private to your linked account.</p>
+    <div class="mb-2 mt-5 flex flex-wrap items-center gap-2">
+      <h3 class="m-0 mr-auto text-sm font-bold text-ink">Your titles <span v-if="items.length" class="font-normal text-ink-4">({{ filteredItems.length }}<template v-if="filteredItems.length !== items.length"> of {{ items.length }}</template>)</span></h3>
+      <template v-if="mediaUsers.length">
+        <label class="sr-only" for="ratingsProfile">Profile</label>
+        <select id="ratingsProfile" v-model="mediaUser" class="ui-input h-9 w-auto" @change="load">
+          <option value="">My profile</option>
+          <option v-for="user in mediaUsers" :key="user.external_user_id" :value="user.external_user_id">{{ user.external_username || user.external_user_id }}</option>
+        </select>
+      </template>
+      <label class="sr-only" for="ratingsFilter">Filter titles</label>
+      <input id="ratingsFilter" v-model.trim="filterText" type="search" class="ui-input h-9 w-48" placeholder="Filter titles">
+      <label class="sr-only" for="ratingsFilterType">Media type</label>
+      <select id="ratingsFilterType" v-model="filterType" class="ui-input h-9 w-auto">
+        <option v-for="option in filterTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+      </select>
+      <label class="sr-only" for="ratingsFilterState">Rating state</label>
+      <select id="ratingsFilterState" v-model="filterState" class="ui-input h-9 w-auto">
+        <option v-for="option in filterStateOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+      </select>
+    </div>
+    <p v-if="isSyncing || serverNote" class="m-0 mb-2 text-xs text-ink-4" aria-live="polite">
+      <template v-if="isSyncing"><i aria-hidden="true" class="fas fa-spinner fa-spin"></i> Checking your media server for new plays…</template>
+      <template v-else>{{ serverNote }}</template>
+    </p>
+    <p v-if="isLoading" class="m-0 text-[13px] text-ink-4">Loading your watch history…</p>
+    <p v-else-if="notLinked" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[13px] text-ink-4">Link your media server account in <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }">Profile</router-link> to rate your titles.</p>
+    <p v-else-if="!items.length" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[13px] text-ink-4">Nothing watched yet. Titles you play on your media server, import or add here show up in this list.</p>
+    <p v-else-if="!filteredItems.length" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[13px] text-ink-4">No titles match these filters.</p>
     <div v-else class="overflow-x-auto rounded-ctl border border-edge">
       <table class="w-full min-w-[640px] border-collapse text-sm">
         <thead><tr class="text-left text-xs text-ink-4"><th class="px-3 py-2.5 font-semibold">Title</th><th class="px-3 py-2.5 font-semibold">Type</th><th class="px-3 py-2.5 font-semibold">Rating</th><th class="px-3 py-2.5 font-semibold">Source</th><th class="px-3 py-2.5 font-semibold">Use for suggestions</th><th class="px-3 py-2.5"><span class="sr-only">Actions</span></th></tr></thead>
         <tbody>
-          <tr v-for="item in items" :key="item.id" class="border-t border-edge" :class="{ 'opacity-60': item.excluded }">
+          <tr v-for="item in shownItems" :key="rowKey(item)" class="border-t border-edge" :class="{ 'opacity-60': item.excluded }">
             <td class="px-3 py-2 text-ink">{{ item.title }} <small v-if="item.year" class="text-ink-4">({{ item.year }})</small></td>
             <td class="px-3 py-2 text-ink-2">{{ item.media_type === 'tv' ? 'TV' : 'Movie' }}</td>
             <td class="px-3 py-1">
-              <label class="sr-only" :for="`saved-rating-${item.id}`">Your rating for {{ item.title }}</label>
-              <input :id="`saved-rating-${item.id}`" :value="item.rating" class="ui-input h-9 w-24" type="number" min="0" max="10" step="0.5" placeholder="—" :disabled="savingId === item.id" @change="saveRating(item, $event.target)">
+              <label class="sr-only" :for="`saved-rating-${rowKey(item)}`">Your rating for {{ item.title }}</label>
+              <input :id="`saved-rating-${rowKey(item)}`" :value="item.rating" class="ui-input h-9 w-24" type="number" min="0" max="10" step="0.5" placeholder="—" :disabled="savingKey === rowKey(item)" @change="saveRating(item, $event.target)">
             </td>
-            <td class="px-3 py-2 text-ink-2">{{ item.source === 'csv_import' ? 'CSV import' : 'Manual' }}</td>
+            <td class="px-3 py-2 text-ink-2">{{ sourceLabels[item.source] || 'Manual' }}</td>
             <td class="px-3 py-2">
-              <input type="checkbox" class="h-4 w-4 cursor-pointer accent-brand" :checked="!item.excluded" :disabled="savingId === item.id" :aria-label="`Use ${item.title} for suggestions`" title="Off: still counts as watched, but says nothing about your taste" @change="update(item, { excluded: !$event.target.checked })">
+              <input type="checkbox" class="h-4 w-4 cursor-pointer accent-brand" :checked="!item.excluded" :disabled="savingKey === rowKey(item)" :aria-label="`Use ${item.title} for suggestions`" title="Off: still counts as watched, but says nothing about your taste" @change="update(item, { excluded: !$event.target.checked })">
             </td>
-            <td class="px-3 py-1 text-right"><button type="button" class="ui-btn-icon-danger" :aria-label="`Remove ${item.title}`" title="Remove" @click="remove(item)"><i aria-hidden="true" class="fas fa-trash"></i></button></td>
+            <td class="px-3 py-1 text-right">
+              <!-- Media-server plays come back on the next sync, so only titles added here can be removed. -->
+              <button v-if="item.source !== 'server'" type="button" class="ui-btn-icon-danger" :aria-label="`Remove ${item.title}`" title="Remove" @click="remove(item)"><i aria-hidden="true" class="fas fa-trash"></i></button>
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
+    <button v-if="filteredItems.length > shownItems.length" type="button" class="ui-btn mt-3" @click="pageSize += 100">Show more ({{ filteredItems.length - shownItems.length }} left)</button>
   </SectionCard>
 </template>
 <script>
@@ -78,7 +107,9 @@ import {
   deleteMyWatchedMedia,
   importMyWatchedMedia,
   listMyWatchedMedia,
+  listTraktMediaUsers,
   searchMyWatchedMedia,
+  syncMyWatchedMedia,
   updateMyWatchedMedia,
 } from '@/api/api';
 import AppDialog from '@/components/ui/AppDialog.vue';
@@ -88,10 +119,24 @@ import { confirmDialog } from '@/utils/confirmDialog';
 export default {
   name: 'WatchedMediaHistory',
   components: { AppDialog, SectionCard },
+  props: { currentUser: { type: Object, default: null } },
   data() {
     return {
       items: [], importFile: null, query: '', searchType: 'both', searchResults: [], ratings: {},
-      isLoading: false, isImporting: false, showImport: false, isSearching: false, addingKey: '', savingId: null,
+      isLoading: false, isImporting: false, showImport: false, isSearching: false, addingKey: '', savingKey: '', notLinked: false,
+      mediaUser: '', mediaUsers: [], serverStatus: '', isSyncing: false, filterText: '', filterType: 'all', filterState: 'all', pageSize: 100,
+      sourceLabels: { csv_import: 'CSV import', manual: 'Manual', server: 'Media server' },
+      filterTypeOptions: [
+        { value: 'all', label: 'Movies and TV' },
+        { value: 'movie', label: 'Movies' },
+        { value: 'tv', label: 'TV shows' },
+      ],
+      filterStateOptions: [
+        { value: 'all', label: 'All titles' },
+        { value: 'unrated', label: 'Unrated' },
+        { value: 'rated', label: 'Rated' },
+        { value: 'excluded', label: 'Not used for suggestions' },
+      ],
       searchTypeOptions: [
         { value: 'both', label: 'Movies and TV' },
         { value: 'movie', label: 'Movies' },
@@ -99,14 +144,62 @@ export default {
       ],
     };
   },
-  mounted() { this.load(); },
+  computed: {
+    filteredItems() {
+      const text = this.filterText.toLowerCase();
+      return this.items.filter(item => (this.filterType === 'all' || item.media_type === this.filterType)
+        && (!text || String(item.title).toLowerCase().includes(text))
+        && (this.filterState === 'all'
+          || (this.filterState === 'excluded' ? item.excluded : (this.filterState === 'rated') === (item.rating != null))));
+    },
+    shownItems() { return this.filteredItems.slice(0, this.pageSize); },
+    serverNote() {
+      return {
+        partial: 'Only your most recent plays could be loaded from the media server.',
+        unavailable: 'The media server could not be reached, so only titles saved here are shown.',
+      }[this.serverStatus] || '';
+    },
+  },
+  watch: {
+    filterText() { this.pageSize = 100; },
+    filterType() { this.pageSize = 100; },
+    filterState() { this.pageSize = 100; },
+  },
+  mounted() {
+    this.load();
+    if (this.currentUser?.role === 'admin') {
+      listTraktMediaUsers().then(response => { this.mediaUsers = response.data.media_users || []; }).catch(() => {});
+    }
+  },
   methods: {
+    rowKey(item) { return `${item.media_type}:${item.tmdb_id}`; },
     async load() {
       this.isLoading = true;
-      try { this.items = (await listMyWatchedMedia()).data.items || []; }
-      catch (error) {
-        if (error.response?.status !== 404) this.$toast.error(error.response?.data?.message || 'Could not load recommendation history');
+      this.pageSize = 100;
+      this.serverStatus = '';
+      const user = this.mediaUser;
+      try {
+        this.items = (await listMyWatchedMedia(user)).data.items || [];
+        this.notLinked = false;
+      } catch (error) {
+        this.items = [];
+        this.notLinked = error.response?.status === 404;
+        if (!this.notLinked) this.$toast.error(error.response?.data?.message || 'Could not load recommendation history');
+        return;
       } finally { this.isLoading = false; }
+      this.sync(user);
+    },
+    async sync(user) {
+      // Saved titles are already on screen; only new plays need the media server.
+      this.isSyncing = true;
+      try {
+        const data = (await syncMyWatchedMedia(user)).data;
+        if (user !== this.mediaUser) return;
+        this.serverStatus = data.server_status || '';
+        if (data.updated) this.items = (await listMyWatchedMedia(user)).data.items || [];
+      } catch {
+        if (user === this.mediaUser) this.serverStatus = 'unavailable';
+      } finally { this.isSyncing = false; }
     },
     closeImport() { this.showImport = false; this.importFile = null; },
     onFileChange(event) { [this.importFile] = event.target.files || []; },
@@ -114,7 +207,7 @@ export default {
       if (!this.importFile) return;
       this.isImporting = true;
       try {
-        const result = (await importMyWatchedMedia(this.importFile)).data;
+        const result = (await importMyWatchedMedia(this.importFile, this.mediaUser)).data;
         this.$toast.success(result.message);
         if (result.errors?.length) this.$toast.error(`${result.errors.length} row(s) could not be imported`);
         this.closeImport();
@@ -133,7 +226,7 @@ export default {
       const key = `${result.media_type}:${result.tmdb_id}`;
       this.addingKey = key;
       try {
-        await addMyWatchedMedia({ ...result, rating: this.ratings[key] ?? null });
+        await addMyWatchedMedia({ ...result, rating: this.ratings[key] ?? null }, this.mediaUser);
         this.$toast.success(`${result.title} added to your recommendation history`);
         await this.load();
       } catch (error) { this.$toast.error(error.response?.data?.message || 'Could not add title'); }
@@ -149,18 +242,19 @@ export default {
       if (rating !== item.rating) this.update(item, { rating });
     },
     async update(item, changes) {
-      this.savingId = item.id;
+      const key = this.rowKey(item);
+      this.savingKey = key;
       try {
-        const updated = (await updateMyWatchedMedia(item.id, changes)).data.item;
-        this.items = this.items.map(entry => (entry.id === item.id ? updated : entry));
+        const saved = (await updateMyWatchedMedia(item.id, changes, this.mediaUser)).data.item;
+        this.items = this.items.map(entry => (this.rowKey(entry) === key ? saved : entry));
       } catch (error) {
         this.$toast.error(error.response?.data?.message || 'Could not update title');
         await this.load();
-      } finally { this.savingId = null; }
+      } finally { this.savingKey = ''; }
     },
     async remove(item) {
       if (!(await confirmDialog({ title: `Remove ${item.title}?`, message: 'It no longer shapes your recommendations.', confirmLabel: 'Remove', danger: true }))) return;
-      try { await deleteMyWatchedMedia(item.id); this.items = this.items.filter(entry => entry.id !== item.id); }
+      try { await deleteMyWatchedMedia(item.id, this.mediaUser); this.items = this.items.filter(entry => entry.id !== item.id); }
       catch (error) { this.$toast.error(error.response?.data?.message || 'Could not remove title'); }
     },
   },

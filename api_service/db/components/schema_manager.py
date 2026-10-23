@@ -422,6 +422,7 @@ class SchemaManager:
                     rating REAL,
                     source TEXT NOT NULL DEFAULT 'manual',
                     excluded INTEGER NOT NULL DEFAULT 0,
+                    watched_at TIMESTAMP NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
@@ -556,7 +557,7 @@ class SchemaManager:
             conn.commit()
 
     def _migrate_watched_media(self):
-        """Add the exclusion flag to watched-history tables created before it existed."""
+        """Add the exclusion flag and play date to watched-history tables created before them."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if self.db_type == 'sqlite':
@@ -570,6 +571,8 @@ class SchemaManager:
                 existing = {row[0] for row in cursor.fetchall()}
             if 'excluded' not in existing:
                 cursor.execute('ALTER TABLE watched_media ADD COLUMN excluded INTEGER NOT NULL DEFAULT 0')
+            if 'watched_at' not in existing:
+                cursor.execute('ALTER TABLE watched_media ADD COLUMN watched_at TIMESTAMP NULL')
             conn.commit()
 
     def _migrate_request_expiry(self):
