@@ -758,29 +758,14 @@ def _reconcile_plex_account_id(db, plex_account_id: str, plex_username: str) -> 
         "Plex account %s is %s on this server; storing the server id",
         plex_account_id, resolved,
     )
-    try:
-        target = db.get_media_user_identity("plex", resolved)
-    except ValueError:
-        pass
-    else:
-        if not db.delete_empty_media_user_identity(target["id"]):
-            logger.warning(
-                "Could not move Plex identity from %s to existing destination %s; "
-                "keeping the Plex.tv id",
-                plex_account_id, resolved,
-            )
-            return str(plex_account_id)
-
-    try:
-        db.get_media_user_identity("plex", plex_account_id)
-    except ValueError:
-        # A new OAuth link has no identity or tracker links to preserve.
-        return resolved
-
-    renamed = db.rename_media_user_identity("plex", plex_account_id, resolved)
-    if renamed is None:
-        logger.debug(
-            "Could not move identity from plex/%s to plex/%s; keeping the Plex.tv id",
+    # The caller's existing profile moves in the same transaction as the
+    # identity, so a failure later in the link cannot leave them apart.
+    if not db.move_media_user_identity(
+        "plex", plex_account_id, resolved, user_id=current_user_id,
+    ):
+        logger.warning(
+            "Could not move Plex identity from %s to existing destination %s; "
+            "keeping the Plex.tv id",
             plex_account_id, resolved,
         )
         return str(plex_account_id)

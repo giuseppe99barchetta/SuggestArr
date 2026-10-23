@@ -95,6 +95,10 @@ class ClientFactory:
 def make_sync(monkeypatch, client, db=None):
     db = db or MagicMock()
     db.get_simkl_watched_cache.return_value = []
+    # The sync re-reads the link and token under the lock; by default they
+    # still match what the caller passed in.
+    db.get_simkl_account_link_by_id.return_value = dict(LINK)
+    db.get_simkl_oauth_tokens.return_value = {"access_token": "tok"}
     sync = SimklWatchHistorySync("cid", db=db)
     monkeypatch.setattr(
         "api_service.services.simkl.watch_history_sync.SimklClient",

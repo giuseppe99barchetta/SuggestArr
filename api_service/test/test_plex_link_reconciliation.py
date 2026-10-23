@@ -31,9 +31,7 @@ def app_context():
 def make_db(plex_profiles=()):
     db = MagicMock()
     db.get_media_profiles_by_provider.return_value = list(plex_profiles)
-    db.get_media_user_identity.side_effect = ValueError("not found")
-    db.delete_empty_media_user_identity.return_value = False
-    db.rename_media_user_identity.return_value = None
+    db.move_media_user_identity.return_value = True
     return db
 
 
@@ -41,14 +39,15 @@ def make_db(plex_profiles=()):
 def test_the_owners_plex_tv_id_is_mapped_to_the_server_id(_users, app_context):
     db = make_db()
     assert _reconcile_plex_account_id(db, "14621895", "Wirewraith") == "1"
-    db.rename_media_user_identity.assert_not_called()
+    # The caller's profile moves in the same transaction as the identity.
+    db.move_media_user_identity.assert_called_once_with("plex", "14621895", "1", user_id=7)
 
 
 @patch("api_service.blueprints.users.routes.list_plex_server_users", return_value=SERVER_USERS)
 def test_an_id_the_server_already_uses_is_left_alone(_users, app_context):
     db = make_db()
     assert _reconcile_plex_account_id(db, "3502706", "somepotato") == "3502706"
-    db.rename_media_user_identity.assert_not_called()
+    db.move_media_user_identity.assert_not_called()
 
 
 @patch("api_service.blueprints.users.routes.list_plex_server_users", return_value=[])
@@ -68,46 +67,43 @@ def test_an_id_another_account_already_holds_is_refused(_users, app_context):
     db = make_db([{"user_id": 3, "external_user_id": "1", "external_username": "Wirewraith"}])
 
     assert _reconcile_plex_account_id(db, "14621895", "Wirewraith") == "14621895"
-    db.rename_media_user_identity.assert_not_called()
+    db.move_media_user_identity.assert_not_called()
 
 
 @patch("api_service.blueprints.users.routes.list_plex_server_users", return_value=SERVER_USERS)
-def test_a_new_oauth_link_without_an_old_identity_uses_the_server_id(_users, app_context):
-    """A new OAuth link has no old tracker identity to strand."""
-    db = make_db([{"user_id": 7, "external_user_id": "1", "external_username": "Wirewraith"}])
-
-    assert _reconcile_plex_account_id(db, "14621895", "Wirewraith") == "1"
-
-
-@patch("api_service.blueprints.users.routes.list_plex_server_users", return_value=SERVER_USERS)
-def test_an_existing_destination_identity_aborts_the_profile_move(_users, app_context):
+def test_a_destination_with_linked_data_keeps_the_plex_tv_id(_users, app_context):
     """Existing identities may own links even when no media profile claims them."""
     db = make_db()
-
-    def identity(provider, external_user_id):
-        if str(external_user_id) == "1":
-            return {"id": 2, "provider": provider, "external_user_id": "1"}
-        if str(external_user_id) == "14621895":
-            return {"id": 1, "provider": provider, "external_user_id": "14621895"}
-        raise ValueError("not found")
-
-    db.get_media_user_identity.side_effect = identity
+    db.move_media_user_identity.return_value = False
 
     assert _reconcile_plex_account_id(db, "14621895", "Wirewraith") == "14621895"
-    db.rename_media_user_identity.assert_not_called()
 
 
 @patch("api_service.blueprints.users.routes.list_plex_server_users", return_value=SERVER_USERS)
-def test_an_empty_destination_identity_is_absorbed(_users, app_context):
-    db = make_db()
-    db.get_media_user_identity.side_effect = lambda provider, external_user_id: (
-        {"id": 2, "provider": provider, "external_user_id": "1"}
-        if str(external_user_id) == "1" else
-        {"id": 1, "provider": provider, "external_user_id": "14621895"}
-    )
-    db.delete_empty_media_user_identity.return_value = True
-    db.rename_media_user_identity.return_value = {"id": 1, "external_user_id": "1"}
+def test_a_retried_oauth_link_after_a_failed_profile_write_is_repaired(_users, app_context, tmp_path):
+    """The identity moved, then the profile write failed; linking again must finish the job."""
+    import api_service.db.database_manager as dm_mod
+    from api_service.db.database_manager import DatabaseManager
 
-    assert _reconcile_plex_account_id(db, "14621895", "Wirewraith") == "1"
-    db.delete_empty_media_user_identity.assert_called_once_with(2)
-    db.rename_media_user_identity.assert_called_once_with("plex", "14621895", "1")
+    with patch.object(dm_mod, "DB_PATH", str(tmp_path / "plex.db")), \
+         patch("api_service.db.database_manager.load_env_vars", return_value={"DB_TYPE": "sqlite"}):
+        DatabaseManager._instance = None
+        db = DatabaseManager()
+        try:
+            uid = db.create_auth_user("wire", "dummy_hash", role="admin")
+            g.current_user = {"id": str(uid), "username": "wire", "role": "admin"}
+            db.create_user_media_profile(uid, "plex", "14621895", "Wirewraith", access_token="tok")
+            identity = db.upsert_media_user_identity("plex", "14621895", "Wirewraith")
+            db.upsert_simkl_account_link(identity["id"], "s1", "wire_simkl", status="connected")
+
+            # First attempt: the move succeeds, the later full profile write fails.
+            assert _reconcile_plex_account_id(db, "14621895", "Wirewraith") == "1"
+            assert db.get_user_media_profiles(uid)[0]["external_user_id"] == "1"
+
+            # Retry: nothing left to move, the server id is still returned.
+            assert _reconcile_plex_account_id(db, "14621895", "Wirewraith") == "1"
+            moved = db.get_media_user_identity("plex", "1")
+            assert moved["id"] == identity["id"]
+            assert db.get_simkl_account_link(moved["id"])["connected"]
+        finally:
+            DatabaseManager._instance = None

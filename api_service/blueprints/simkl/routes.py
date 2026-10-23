@@ -110,9 +110,11 @@ def _link_status_for_identity(db: DatabaseManager, identity_id: int) -> dict:
     if not link:
         return {"connected": False}
 
-    # pending_device_code is an in-flight authorization secret, and status/error
-    # payloads are the easiest place for it to leak into a log or a browser.
+    # The pending device code and its PKCE verifier are in-flight authorization
+    # secrets, and status payloads are the easiest place for them to leak into a
+    # log or a browser.
     link.pop("pending_device_code", None)
+    link.pop("pending_code_verifier", None)
     link.pop("activities_json", None)
 
     if link.get("connected"):

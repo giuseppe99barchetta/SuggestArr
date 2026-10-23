@@ -132,31 +132,16 @@ def reconcile_plex_profiles(db, list_server_users: Callable[[], List[Dict[str, A
                 profile.get("user_id"), resolved, owner,
             )
             continue
-        renamed = db.rename_media_user_identity("plex", stored_id, resolved)
-        if renamed is None:
-            # A destination identity may have been created by discovery without
-            # a media profile. Moving the profile anyway would hide any tracker
-            # links still attached to the old identity.
-            try:
-                target = db.get_media_user_identity("plex", resolved)
-            except ValueError:
-                # There was no identity to move, so there are no links to strand.
-                pass
-            else:
-                if db.delete_empty_media_user_identity(target["id"]):
-                    renamed = db.rename_media_user_identity("plex", stored_id, resolved)
-                    if renamed is not None:
-                        pass
-                    else:
-                        continue
-                else:
-                    logger.warning(
-                        "Not re-pointing the Plex profile for user id=%s from %s to %s: "
-                        "the destination identity contains linked data",
-                        profile.get("user_id"), stored_id, resolved,
-                    )
-                    continue
-        db.update_media_profile_external_id(profile["user_id"], "plex", resolved)
+        # A destination identity created by discovery may hold tracker links of
+        # its own; moving the profile anyway would hide the ones still attached
+        # to the old identity.
+        if not db.move_media_user_identity("plex", stored_id, resolved, user_id=profile["user_id"]):
+            logger.warning(
+                "Not re-pointing the Plex profile for user id=%s from %s to %s: "
+                "the destination identity contains linked data",
+                profile.get("user_id"), stored_id, resolved,
+            )
+            continue
         claimed.pop(stored_id, None)
         claimed[resolved] = profile["user_id"]
         logger.info(

@@ -155,6 +155,38 @@ def test_persisting_an_account_change_respects_the_sync_lock(db, link):
     db.release_submission_lock(lock_key, "simkl_sync")
 
 
+def test_a_sync_started_with_the_old_account_does_not_write_after_a_relink(db, link, monkeypatch):
+    """Caller reads account A, A is relinked to B, then the stale sync runs."""
+    import asyncio
+    from api_service.services.simkl.watch_history_sync import SimklWatchHistorySync
+
+    db.upsert_simkl_oauth_tokens(link["link_id"], "a-access", refresh_token="a-refresh")
+    stale_link = db.get_simkl_account_link_by_id(link["link_id"])
+
+    db.persist_simkl_link(
+        link["identity_id"], "account-b", "B", "b-access", "b-refresh", 123,
+    )
+
+    opened = []
+
+    def fake_client(*args, **kwargs):
+        opened.append(kwargs)
+        raise AssertionError("no Simkl request may be made for the stale account")
+
+    monkeypatch.setattr(
+        "api_service.services.simkl.watch_history_sync.SimklClient", fake_client,
+    )
+    sync = SimklWatchHistorySync("cid", db=db)
+
+    assert asyncio.run(sync.ensure_synced(stale_link, "a-access")) is False
+    assert opened == []
+    assert db.get_simkl_watched_cache(link["link_id"]) == []
+    assert db.get_simkl_sync_state(link["link_id"])["last_activities_check_at"] is None
+    assert db.get_simkl_oauth_tokens(link["link_id"])["access_token"] == "b-access"
+    # The lock is free again, so the current account syncs on its next call.
+    assert db.try_acquire_submission_lock(f"simkl:{link['link_id']}", "simkl_sync", 3600) is True
+
+
 # ---- Cache -------------------------------------------------------------------
 
 def test_the_cache_returns_newest_watched_first(db, link):

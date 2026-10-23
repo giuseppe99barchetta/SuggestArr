@@ -120,81 +120,69 @@ class _DBBase(unittest.TestCase):
         )
 
 
-class TestRenameMediaUserIdentity(_DBBase):
+class TestMoveMediaUserIdentity(_DBBase):
 
-    def test_rename_moves_the_row_not_its_links(self):
+    def test_move_keeps_the_row_and_its_links(self):
         identity = self.db.upsert_media_user_identity('plex', '14621895', 'Wirewraith')
         self._link_simkl(identity['id'])
 
-        renamed = self.db.rename_media_user_identity('plex', '14621895', '1')
+        self.assertTrue(self.db.move_media_user_identity('plex', '14621895', '1'))
 
-        self.assertEqual(renamed['id'], identity['id'])
-        self.assertEqual(renamed['external_user_id'], '1')
-        link = self.db.get_simkl_account_link(identity['id'])
-        self.assertTrue(link['connected'])
-
-    def test_renamed_identity_is_reachable_under_the_new_id(self):
-        identity = self.db.upsert_media_user_identity('plex', '14621895', 'Wirewraith')
-        self._link_simkl(identity['id'])
-        self.db.rename_media_user_identity('plex', '14621895', '1')
-
-        found = self.db.get_media_user_identity('plex', '1')
-        self.assertEqual(found['id'], identity['id'])
+        moved = self.db.get_media_user_identity('plex', '1')
+        self.assertEqual(moved['id'], identity['id'])
+        self.assertEqual(moved['external_username'], 'Wirewraith')
+        self.assertTrue(self.db.get_simkl_account_link(identity['id'])['connected'])
         with self.assertRaises(ValueError):
             self.db.get_media_user_identity('plex', '14621895')
 
-    def test_username_survives_the_rename(self):
-        self.db.upsert_media_user_identity('plex', '14621895', 'Wirewraith')
-        renamed = self.db.rename_media_user_identity('plex', '14621895', '1')
-        self.assertEqual(renamed['external_username'], 'Wirewraith')
-
-    def test_existing_target_is_not_clobbered(self):
+    def test_a_target_with_linked_data_is_not_clobbered(self):
         # Merging would have to discard one of two sets of tracker links, so
-        # the rename declines instead.
+        # the move declines instead.
         old = self.db.upsert_media_user_identity('plex', '14621895', 'Wirewraith')
         target = self.db.upsert_media_user_identity('plex', '1', 'Someone Else')
+        self._link_simkl(target['id'])
+        uid = self._user()
+        self.db.create_user_media_profile(uid, 'plex', '14621895', 'Wirewraith')
 
-        self.assertIsNone(self.db.rename_media_user_identity('plex', '14621895', '1'))
+        self.assertFalse(self.db.move_media_user_identity('plex', '14621895', '1', user_id=uid))
 
         self.assertEqual(self.db.get_media_user_identity('plex', '1')['id'], target['id'])
-        self.assertEqual(
-            self.db.get_media_user_identity('plex', '14621895')['id'], old['id'],
-        )
+        self.assertEqual(self.db.get_media_user_identity('plex', '14621895')['id'], old['id'])
+        self.assertEqual(self.db.get_user_media_profiles(uid)[0]['external_user_id'], '14621895')
 
-    def test_renaming_a_missing_identity_is_a_no_op(self):
-        self.assertIsNone(self.db.rename_media_user_identity('plex', 'ghost', '1'))
-
-    def test_renaming_to_the_same_id_is_a_no_op(self):
+    def test_an_empty_target_is_absorbed(self):
+        old = self.db.upsert_media_user_identity('plex', '14621895', 'Wirewraith')
         self.db.upsert_media_user_identity('plex', '1', 'Wirewraith')
-        self.assertIsNone(self.db.rename_media_user_identity('plex', '1', '1'))
 
-    def test_other_providers_are_untouched(self):
-        jelly = self.db.upsert_media_user_identity('jellyfin', '14621895', 'Wirewraith')
-        self.db.upsert_media_user_identity('plex', '14621895', 'Wirewraith')
-        self.db.rename_media_user_identity('plex', '14621895', '1')
-        self.assertEqual(
-            self.db.get_media_user_identity('jellyfin', '14621895')['id'], jelly['id'],
-        )
+        self.assertTrue(self.db.move_media_user_identity('plex', '14621895', '1'))
+        self.assertEqual(self.db.get_media_user_identity('plex', '1')['id'], old['id'])
 
-
-class TestUpdateMediaProfileExternalId(_DBBase):
-
-    def test_the_access_token_is_preserved(self):
+    def test_the_profile_moves_with_the_identity_and_keeps_its_token(self):
         # The full profile upsert rewrites every column, so using it here
         # would blank the Plex token and break server-side calls.
         uid = self._user()
         self.db.create_user_media_profile(uid, 'plex', '14621895', 'Wirewraith', access_token='tok')
+        self.db.upsert_media_user_identity('plex', '14621895', 'Wirewraith')
 
-        self.assertTrue(self.db.update_media_profile_external_id(uid, 'plex', '1'))
+        self.assertTrue(self.db.move_media_user_identity('plex', '14621895', '1', user_id=uid))
 
         self.assertEqual(self.db.get_user_media_profile_token(uid, 'plex'), 'tok')
-        self.assertEqual(
-            self.db.get_user_media_profiles(uid)[0]['external_user_id'], '1',
-        )
+        self.assertEqual(self.db.get_user_media_profiles(uid)[0]['external_user_id'], '1')
 
-    def test_updating_a_missing_profile_reports_no_change(self):
+    def test_moving_a_missing_identity_still_repoints_the_profile(self):
         uid = self._user()
-        self.assertFalse(self.db.update_media_profile_external_id(uid, 'plex', '1'))
+        self.db.create_user_media_profile(uid, 'plex', '14621895', 'Wirewraith')
+
+        self.assertTrue(self.db.move_media_user_identity('plex', '14621895', '1', user_id=uid))
+        self.assertEqual(self.db.get_user_media_profiles(uid)[0]['external_user_id'], '1')
+
+    def test_other_providers_are_untouched(self):
+        jelly = self.db.upsert_media_user_identity('jellyfin', '14621895', 'Wirewraith')
+        self.db.upsert_media_user_identity('plex', '14621895', 'Wirewraith')
+        self.db.move_media_user_identity('plex', '14621895', '1')
+        self.assertEqual(
+            self.db.get_media_user_identity('jellyfin', '14621895')['id'], jelly['id'],
+        )
 
     def test_profiles_are_listed_per_provider_without_tokens(self):
         uid = self._user()
@@ -307,6 +295,53 @@ class TestReconcilePlexProfiles(_DBBase):
         self._stranded_profile()
         self.assertEqual(reconcile_plex_profiles(self.db, lambda: SERVER_USERS), 1)
         self.assertEqual(reconcile_plex_profiles(self.db, lambda: SERVER_USERS), 0)
+
+    def test_a_failed_profile_update_rolls_back_the_identity_move(self):
+        """A failure mid-migration must not leave identity and profile apart."""
+        import sqlite3
+        uid, identity = self._stranded_profile()
+        self._fail_profile_updates()
+
+        with self.assertRaises(sqlite3.DatabaseError):
+            reconcile_plex_profiles(self.db, lambda: SERVER_USERS)
+
+        self.assertEqual(self.db.get_user_media_profiles(uid)[0]['external_user_id'], '14621895')
+        self.assertEqual(self.db.get_media_user_identity('plex', '14621895')['id'], identity['id'])
+
+        # Once the failure clears, the next run completes the repair.
+        self._allow_profile_updates()
+        self.assertEqual(reconcile_plex_profiles(self.db, lambda: SERVER_USERS), 1)
+        self.assertEqual(self.db.get_user_media_profiles(uid)[0]['external_user_id'], '1')
+        self.assertTrue(
+            self.db.get_simkl_account_link(
+                self.db.get_media_user_identity('plex', '1')['id'])['connected'],
+        )
+
+    def test_a_half_moved_profile_is_recovered(self):
+        """Identity already on the server id, profile still on the plex.tv id."""
+        uid, identity = self._stranded_profile()
+        with self.db.get_connection() as conn:
+            conn.execute(
+                "UPDATE media_user_identities SET external_user_id = '1' WHERE id = ?",
+                (identity['id'],),
+            )
+            conn.commit()
+
+        self.assertEqual(reconcile_plex_profiles(self.db, lambda: SERVER_USERS), 1)
+        self.assertEqual(self.db.get_user_media_profiles(uid)[0]['external_user_id'], '1')
+
+    def _fail_profile_updates(self):
+        with self.db.get_connection() as conn:
+            conn.execute(
+                "CREATE TRIGGER fail_profile_update BEFORE UPDATE ON user_media_profiles "
+                "BEGIN SELECT RAISE(ABORT, 'forced profile update failure'); END"
+            )
+            conn.commit()
+
+    def _allow_profile_updates(self):
+        with self.db.get_connection() as conn:
+            conn.execute("DROP TRIGGER fail_profile_update")
+            conn.commit()
 
 
 class TestReconcileCollisions(_DBBase):

@@ -332,6 +332,28 @@ def test_link_status_never_exposes_the_pending_pin_or_the_activities_blob():
     assert link["connected"] is True
 
 
+@pytest.mark.parametrize("path", ["/api/simkl/media-users", "/api/simkl/me"])
+def test_status_responses_never_expose_a_pending_authorization(path):
+    """Neither the device code nor its PKCE verifier may leave the server."""
+    db = make_db(
+        get_simkl_account_link={
+            "id": 5, "connected": False, "status": "pending",
+            "pending_device_code": "device-code-secret",
+            "pending_code_verifier": "verifier-secret",
+        },
+        get_user_media_profiles=[
+            {"provider": "jellyfin", "external_user_id": "jf-1", "external_username": "alice"},
+        ],
+    )
+    resp = run(db, "get", path)
+
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "device-code-secret" not in body
+    assert "verifier-secret" not in body
+    assert "pending_code_verifier" not in body
+
+
 def test_link_status_reports_whether_the_first_sync_has_finished():
     """Lets the UI distinguish "still syncing" from "no watch history"."""
     db = make_db(get_simkl_account_link={

@@ -111,11 +111,27 @@ class SimklWatchHistorySync:
                 )
                 return True
 
+            # The caller's link and token were read before the lock, so an
+            # account relink may have happened since. Only the row and token
+            # stored now may be used, or the old account's library and a
+            # refreshed old token would be written under the new account.
+            current = self.db.get_simkl_account_link_by_id(link_id) or {}
+            tokens = self.db.get_simkl_oauth_tokens(link_id) or {}
+            if (
+                str(current.get("simkl_user_id") or "") != str(link.get("simkl_user_id") or "")
+                or tokens.get("access_token") != access_token
+            ):
+                self.logger.info(
+                    "Simkl link %s changed account or token before its sync started; skipping",
+                    link_id,
+                )
+                return bool(self.db.get_simkl_watched_cache(link_id))
+
             async with SimklClient(
                 self.client_id,
-                access_token=access_token,
-                refresh_token=link.get("refresh_token", ""),
-                expires_at=link.get("expires_at"),
+                access_token=tokens["access_token"],
+                refresh_token=tokens.get("refresh_token") or "",
+                expires_at=tokens.get("expires_at"),
                 db=self.db,
                 link_id=link_id,
             ) as client:
