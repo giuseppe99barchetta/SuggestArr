@@ -20,13 +20,13 @@ class TestAiSearchInspiration(unittest.IsolatedAsyncioTestCase):
                 {'provider': 'jellyfin', 'external_user_id': 'unused'}, profile,
             ]
             database.return_value.upsert_media_user_identity.return_value = {'id': 42}
-            database.return_value.list_watched_media.return_value = [{'title': 'Saved'}]
+            database.return_value.list_watched_media.return_value = [{'title': 'Saved'}, {'title': 'Kids', 'excluded': True}]
             service.inspiration = AsyncMock(return_value=[{'title': 'Own title'}])
             response, status = await ai_search_inspiration.__wrapped__()
             self.assertEqual(status, 200)
             self.assertEqual(response.get_json()['items'], [{'title': 'Own title'}])
             database.return_value.get_user_media_profiles.assert_called_once_with(7)
-            database.return_value.list_watched_media.assert_called_once_with(42, limit=6)
+            database.return_value.list_watched_media.assert_called_once_with(42, limit=50)
             service.inspiration.assert_awaited_once_with(profile, [{'title': 'Saved'}])
 
     async def test_missing_profile_never_loads_all_server_history(self):

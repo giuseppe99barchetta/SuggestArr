@@ -32,6 +32,8 @@ class TestConfig(unittest.TestCase):
         "REQUEST_FIRST_SEASON_ONLY": False,
         "HONOR_JELLYSEER_DISCOVERY": "false",
         "JELLYFIN_API_URL": "",
+        "JELLYFIN_EXTERNAL_URL": "",
+        "SEER_EXTERNAL_URL": "",
         "JELLYFIN_LIBRARIES": [],
         "JELLYFIN_TOKEN": "",
         "MAX_CONTENT_CHECKS": 10,

@@ -244,6 +244,7 @@ const SettingsCleanup = defineAsyncComponent(() => import('./settings/SettingsCl
 const RequestsPage = defineAsyncComponent(() => import('./RequestsPage.vue'));
 const SettingsJobs = defineAsyncComponent(() => import('./settings/SettingsJobs.vue'));
 const AiSearchPage = defineAsyncComponent(() => import('./settings/AiSearchPage.vue'));
+const RatingsPage = defineAsyncComponent(() => import('./settings/RatingsPage.vue'));
 const LogsComponent = defineAsyncComponent(() => import('./LogsComponent.vue'));
 const UserManagement = defineAsyncComponent(() => import('./settings/UserManagement.vue'));
 const UserProfile = defineAsyncComponent(() => import('./settings/UserProfile.vue'));
@@ -266,6 +267,7 @@ export default {
     RequestsPage,
     SettingsJobs,
     AiSearchPage,
+    RatingsPage,
     LogsComponent,
     UserManagement,
     UserProfile,
@@ -316,6 +318,8 @@ export default {
         { id: 'home',      name: 'Home',        icon: 'fas fa-home',        group: 'main',     permission: 'requests' },
         { id: 'requests',  name: 'Requests',    icon: 'fas fa-inbox',       group: 'main',     tourId: 'tab-requests' },
         { id: 'ai_search', name: 'AI Search',   icon: 'fas fa-magic',       group: 'main',     tourId: 'tab-ai-search' },
+        // Personal data like Profile, so it follows the same per-user visibility.
+        { id: 'ratings',   name: 'Ratings',     icon: 'fas fa-star',        group: 'main',     permission: 'profile' },
         { id: 'jobs',      name: 'Jobs',        icon: 'fas fa-clock',       group: 'main',     tourId: 'tab-jobs' },
         { id: 'services',    name: 'Connections', icon: 'fas fa-plug',          group: 'settings', tourId: 'tab-services', adminOnly: true },
         { id: 'ai_provider', name: 'AI provider', icon: 'fas fa-robot',         group: 'settings', tourId: 'tab-advanced', adminOnly: true, section: 'ai' },
@@ -429,6 +433,7 @@ export default {
         cleanup: 'SettingsCleanup',
         logs: 'LogsComponent',
         ai_search: 'AiSearchPage',
+        ratings: 'RatingsPage',
         users: 'UserManagement',
         profile: 'UserProfile',
       };

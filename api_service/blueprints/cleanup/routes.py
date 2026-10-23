@@ -20,7 +20,7 @@ def cleanup_settings_get():
         return jsonify({"status": "success", "settings": DatabaseManager().get_cleanup_settings()}), 200
     except Exception as exc:
         logger.error("Failed to fetch cleanup settings: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        return jsonify({"status": "error", "message": "An internal error occurred"}), 500
 
 
 @cleanup_bp.route("/settings", methods=["POST"])
@@ -51,7 +51,7 @@ def cleanup_settings_set():
         return jsonify({"status": "success", "settings": settings}), 200
     except Exception as exc:
         logger.error("Failed to update cleanup settings: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        return jsonify({"status": "error", "message": "An internal error occurred"}), 500
 
 
 @cleanup_bp.route("/run", methods=["POST"])
@@ -75,7 +75,7 @@ def cleanup_run_now():
         return jsonify({"status": "success", "result": result}), 200
     except Exception as exc:
         logger.error("Manual cleanup run failed: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        return jsonify({"status": "error", "message": "An internal error occurred"}), 500
     finally:
         try:
             _run_lock.release()
@@ -95,4 +95,4 @@ def cleanup_log_list():
         return jsonify({"status": "success", "log": rows}), 200
     except Exception as exc:
         logger.error("Failed to fetch cleanup log: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        return jsonify({"status": "error", "message": "An internal error occurred"}), 500

@@ -625,7 +625,8 @@ async def test_jellyfin_handler_fetches_parent_series_tmdb_id_for_episode(test_l
         "Name": "Pilot",
         "SeriesName": "Severance",
         "SeriesId": "series-22",
-        "ProviderIds": {"Tvdb": "795681"},
+        # Episode-level TMDb ID must be ignored in favour of the series one (#539).
+        "ProviderIds": {"Tvdb": "795681", "Tmdb": "4678377"},
     }
 
     await handler.process_episode(deepcopy(USER), episode)

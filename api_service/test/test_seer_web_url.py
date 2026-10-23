@@ -10,6 +10,8 @@ from api_service.blueprints.seer import routes
 @pytest.fixture
 def client():
     routes._web_url_cache.update(url=None, at=0.0)
+    env = patch.object(routes, 'load_env_vars', return_value={})
+    env.start()
     app = Flask(__name__)
 
     @app.before_request
@@ -18,7 +20,14 @@ def client():
 
     app.register_blueprint(routes.seer_bp, url_prefix='/api/seer')
     yield app.test_client()
+    env.stop()
     routes._web_url_cache.update(url=None, at=0.0)
+
+
+def test_configured_external_url_wins_without_asking_seer(client):
+    with patch.object(routes, 'load_env_vars', return_value={'SEER_EXTERNAL_URL': 'https://seer.example.com/'}),             patch.object(routes, 'SeerClient') as factory:
+        assert client.get('/api/seer/web-url').get_json() == {'url': 'https://seer.example.com'}
+    factory.assert_not_called()
 
 
 def _seer(application_url):

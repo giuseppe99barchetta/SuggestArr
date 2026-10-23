@@ -161,7 +161,10 @@ def get_default_values():
         'TMDB_API_KEY': lambda: '',
         'JELLYFIN_API_URL': lambda: '',
         'JELLYFIN_TOKEN': lambda: '',
+        # Browser-facing addresses for links, when the API URL is internal (e.g. a Docker name)
+        'JELLYFIN_EXTERNAL_URL': lambda: '',
         'SEER_API_URL': lambda: '',
+        'SEER_EXTERNAL_URL': lambda: '',
         'SEER_TOKEN': lambda: '',
         'SEER_USER_NAME': lambda: None,
         'SEER_USER_PSW': lambda: None,
@@ -290,7 +293,7 @@ def save_env_vars(config_data):
     validate_seer_expiry_settings(config_data)
     from api_service.utils.ssrf_guard import normalize_base_url
     config_data = dict(config_data)
-    for key in ('PLEX_API_URL', 'JELLYFIN_API_URL', 'SEER_API_URL'):
+    for key in ('PLEX_API_URL', 'JELLYFIN_API_URL', 'SEER_API_URL', 'JELLYFIN_EXTERNAL_URL', 'SEER_EXTERNAL_URL'):
         if config_data.get(key):
             config_data[key] = normalize_base_url(config_data[key])
     logger.debug("Saving environment variables to config.yaml")
@@ -358,8 +361,8 @@ def get_config_sections():
     """
     return {
         'services': ['TMDB_API_KEY', 'OMDB_API_KEY', 'MDBLIST_API_KEY', 'SELECTED_SERVICE', 'PLEX_TOKEN', 'PLEX_API_URL', 'PLEX_CLIENT_ID',
-                    'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
-                    'SEER_API_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_USER_PSW',
+                    'PLEX_LIBRARIES', 'JELLYFIN_API_URL', 'JELLYFIN_EXTERNAL_URL', 'JELLYFIN_TOKEN', 'JELLYFIN_LIBRARIES',
+                    'SEER_API_URL', 'SEER_EXTERNAL_URL', 'SEER_TOKEN', 'SEER_USER_NAME', 'SEER_USER_PSW',
                     'SEER_SESSION_TOKEN', 'SEER_ANIME_PROFILE_CONFIG', 'SEER_REQUEST_DELAY',
                     'TRAKT_CLIENT_ID', 'TRAKT_CLIENT_SECRET', 'TRAKT_ACCESS_TOKEN',
                     'TRAKT_REFRESH_TOKEN', 'TRAKT_EXPIRES_AT', 'TRAKT_SYNC_SEEN_FEEDBACK',

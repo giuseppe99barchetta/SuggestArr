@@ -69,6 +69,12 @@ class TestGetAuthHeaders(unittest.TestCase):
         self.assertIn('X-Api-Key', headers)
         self.assertEqual(headers['X-Api-Key'], 'fake_key')
         self.assertEqual(cookies, {})
+        self.assertNotIn('X-Api-User', headers)
+
+    def test_api_user_sets_x_api_user_header(self):
+        client = _make_client()
+        headers, _ = client._get_auth_headers(use_cookie=False, api_user=5)
+        self.assertEqual(headers['X-Api-User'], '5')
 
     def test_returns_cookie_when_session_token_present(self):
         client = _make_client(session_token='tok123')
@@ -951,7 +957,8 @@ class TestSubmitQueuedRequest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result)
         login.assert_not_awaited()
         self.assertEqual(request.call_args.args, ('POST', 'api/v1/request'))
-        self.assertEqual(request.call_args.kwargs['data']['userId'], 5)
+        self.assertNotIn('userId', request.call_args.kwargs['data'])
+        self.assertEqual(request.call_args.kwargs['api_user'], 5)
         self.assertFalse(request.call_args.kwargs['use_cookie'])
 
     async def test_unmapped_user_keeps_technical_user_authentication(self):

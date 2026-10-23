@@ -119,7 +119,11 @@ class YearWatchActivity(BaseHTTPClient):
                     provider_ids = {} if plex else item.get('ProviderIds' if kind == 'movie' else 'SeriesProviderIds') or {}
                     entries.append({'account': account, 'kind': kind, 'id': str(item_id),
                                     'series_id': item.get('grandparentRatingKey' if plex else 'SeriesId'),
-                                    'date': date, 'tmdb': provider_ids.get('Tmdb')})
+                                    'date': date, 'tmdb': provider_ids.get('Tmdb'),
+                                    'title': item.get(('title' if plex else 'Name') if kind == 'movie'
+                                                      else ('grandparentTitle' if plex else 'SeriesName')),
+                                    # An episode's year is not its show's year.
+                                    'year': item.get('year' if plex else 'ProductionYear') if kind == 'movie' else None})
                 if not items or (dates and max(dates) < start):
                     break
                 offset += len(items)
@@ -245,7 +249,7 @@ class RecapWatchSync(YearWatchActivity):
 
         keys = sorted({lookup(entry) for entry in entries
                        if not entry['tmdb'] and (entry['kind'] == 'movie' or entry['series_id'])})
-        resolved = {}
+        resolved, failed = {}, set()
         for i in range(0, len(keys), RESOLVE_BATCH):
             batch = keys[i:i + RESOLVE_BATCH]
             try:
@@ -266,6 +270,61 @@ class RecapWatchSync(YearWatchActivity):
             except Exception as exc:
                 # Removed library items cannot be resolved; keep what the other batches found.
                 self.logger.debug('Recap watch sync could not resolve a metadata batch: %s', type(exc).__name__)
+                if getattr(exc, 'status', None) != 404:
+                    failed.update(batch)
         for entry in entries:
             if not entry['tmdb']:
                 entry['tmdb'] = resolved.get(lookup(entry))
+                # A transient failure, unlike a removed item, is worth retrying on the next sync.
+                entry['unresolved'] = lookup(entry) in failed
+
+
+class PlayedTitles(RecapWatchSync):
+    """Every movie and show one account played, newest first, for the Ratings page."""
+
+    async def titles(self, provider, account_id, env, since=None):
+        """Scan an account's play history on the media server.
+
+        :param provider: ``plex``, ``jellyfin`` or ``emby`` (Emby shares Jellyfin's API).
+        :param account_id: The account's ID on that server.
+        :param env: Runtime configuration with the media server credentials.
+        :param since: Only read plays from this aware datetime on; ``None`` reads everything.
+        :return: Tuple ``(titles, truncated)`` with one ``{tmdb_id, media_type, title, year,
+            watched_at}`` per title (``watched_at`` naive UTC), or ``None`` when the server is
+            not configured.
+        """
+        # Emby is configured under the Jellyfin keys.
+        prefix = 'JELLYFIN' if provider == 'emby' else provider.upper()
+        url, token = env.get(f'{prefix}_API_URL'), env.get(f'{prefix}_TOKEN')
+        if provider not in ('plex', 'jellyfin', 'emby') or not url or not token:
+            return None
+        plex = provider == 'plex'
+        url = normalize_base_url(url)
+        self.guard_outbound = True
+        self.private_urls = self.allowed_urls = (url,)
+        url = url.rstrip('/')
+        headers = self._headers(plex, token)
+        try:
+            async with asyncio.timeout(40):
+                entries, truncated = await self._scan(plex, [str(account_id)], url, headers,
+                                                      since or datetime.min.replace(tzinfo=timezone.utc),
+                                                      datetime.now(timezone.utc))
+                await self._resolve(plex, url, headers, entries)
+        finally:
+            await self.close()
+        # The next sync starts from the newest stored play, so keep everything after an
+        # unresolved play out of this one; it is read again once the server recovers.
+        cutoff = min((entry['date'] for entry in entries if entry.get('unresolved')), default=None)
+        if cutoff:
+            entries = [entry for entry in entries if entry['date'] < cutoff]
+            truncated = True
+        titles = {}
+        for entry in sorted(entries, key=lambda entry: entry['date'], reverse=True):
+            if not entry['tmdb'] or not entry['title']:
+                continue
+            media_type = 'movie' if entry['kind'] == 'movie' else 'tv'
+            titles.setdefault((media_type, str(entry['tmdb'])), {
+                'tmdb_id': str(entry['tmdb']), 'media_type': media_type, 'title': entry['title'],
+                'year': entry['year'], 'watched_at': entry['date'].replace(tzinfo=None),
+            })
+        return list(titles.values()), truncated

@@ -4,6 +4,7 @@ Runs on a schedule, reads Seer's media list once and stores only what changed.
 A title that becomes available fires the ``request.available`` webhook.
 """
 import threading
+from urllib.parse import urlsplit
 
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
@@ -16,6 +17,31 @@ _run_lock = threading.Lock()
 
 # Requested but not (yet) known to Seer, or known without a media status.
 REQUESTED = 'requested'
+
+
+def external_media_url(url, external_base):
+    """
+    Point Seer's play link at the browser-facing media server address.
+
+    Seer builds Jellyfin/Emby links from its own server address, often an internal
+    Docker name; everything before the ``/web/`` app path is swapped for the base.
+
+    Args:
+        url: Seer's play link, or None.
+        external_base: Configured external URL, or empty.
+
+    Returns:
+        The rewritten link, or ``url`` unchanged when there is nothing to rewrite.
+    """
+    if not url or not external_base:
+        return url
+    parts = urlsplit(url)
+    start = parts.path.find('/web/')
+    if start < 0:
+        return url
+    rewritten = external_base.rstrip('/') + url[len(f'{parts.scheme}://{parts.netloc}') + start:]
+    # Longer would not fit the stored column.
+    return rewritten if len(rewritten) <= 500 else url
 
 
 def plan_availability_changes(requested, known, statuses):
@@ -106,6 +132,9 @@ async def sync_availability():
             statuses = await seer.get_media_statuses()
         if statuses is None:
             return {'status': 'unavailable', 'changed': 0, 'available': 0}
+        if env.get('SELECTED_SERVICE') in ('jellyfin', 'emby'):
+            for state in statuses.values():
+                state['url'] = external_media_url(state['url'], env.get('JELLYFIN_EXTERNAL_URL'))
 
         changes, newly_available = plan_availability_changes(requested, db.get_media_availability(), statuses)
         db.save_media_availability(changes)

@@ -208,6 +208,21 @@ def test_managed_history_seeds_are_added_to_skip_set_and_keep_rating():
     assert '44' in handler.existing_content_sets['movie']
 
 
+def test_excluded_managed_history_is_skipped_as_seed_but_still_watched():
+    handler = _jellyfin_handler(None)
+    repository = MagicMock()
+    repository.get_watched_media_seeds.return_value = [{
+        'tmdb_id': '55', 'media_type': 'tv', 'title': 'Kids show', 'excluded': True,
+    }]
+    handler.watched_history_repository = repository
+
+    seeds = handler._augment_user_managed_history(12)
+    assert '55' in handler.existing_content_sets['tv']
+    server_copy = {'tmdb_id': '55', 'media_type': 'tv', 'title': 'Kids show', 'date': 999}
+    other = {'tmdb_id': '1', 'media_type': 'movie', 'title': 'Kept', 'date': 1}
+    assert handler._merge_seeds(seeds + [server_copy, other]) == [other]
+
+
 def test_merge_seeds_prioritizes_explicit_user_rating():
     handler = _jellyfin_handler(None)
     merged = handler._merge_seeds([

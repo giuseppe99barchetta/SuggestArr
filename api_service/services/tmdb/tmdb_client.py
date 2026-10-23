@@ -231,7 +231,7 @@ class TMDbClient(BaseHTTPClient):
         Fetches a single page of recommendations from TMDb API.
         """
         url = f"{self.tmdb_api_url}/{content_type}/{content_id}/recommendations?api_key={self.api_key}&page={page}"
-        self.logger.debug("Fetching data from URL: %s", url.replace(self.api_key, "***"))
+        self.logger.debug("Fetching TMDb recommendations for %s %s page %s", content_type, content_id, page)
         try:
             session = await self._get_session()
             async with session.get(url, timeout=self.REQUEST_TIMEOUT) as response:

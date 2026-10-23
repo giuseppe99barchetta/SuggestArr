@@ -43,7 +43,8 @@ async def ai_search_inspiration():
         if not profile:
             return jsonify({"status": "success", "items": []}), 200
         identity = db.upsert_media_user_identity(provider, str(profile["external_user_id"]), profile.get("external_username"))
-        saved_history = db.list_watched_media(identity["id"], limit=6)
+        saved_history = [item for item in db.list_watched_media(identity["id"], limit=50)
+                         if not item.get("excluded")][:6]
         items = await service.inspiration(profile, saved_history)
         return jsonify({"status": "success", "items": items}), 200
     except Exception:
@@ -276,7 +277,7 @@ def ai_search_feedback_list():
         return jsonify({"status": "success", "feedback": rows}), 200
     except Exception as exc:
         logger.error("Failed to list ai feedback: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        return jsonify({"status": "error", "message": "An internal error occurred"}), 500
 
 
 @ai_search_bp.route("/feedback", methods=["POST"])
@@ -313,7 +314,7 @@ def ai_search_feedback_set():
         return jsonify({"status": "success"}), 200
     except Exception as exc:
         logger.error("Failed to set ai feedback: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        return jsonify({"status": "error", "message": "An internal error occurred"}), 500
 
 
 @ai_search_bp.route("/feedback", methods=["DELETE"])
@@ -330,7 +331,7 @@ def ai_search_feedback_delete():
         return jsonify({"status": "success"}), 200
     except Exception as exc:
         logger.error("Failed to delete ai feedback: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        return jsonify({"status": "error", "message": "An internal error occurred"}), 500
 
 
 
@@ -347,7 +348,7 @@ def ai_search_seen_clear():
         return jsonify({"status": "success", "deleted": deleted}), 200
     except Exception as exc:
         logger.error("Failed to clear ai seen: %s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 500
+        return jsonify({"status": "error", "message": "An internal error occurred"}), 500
 
 
 @ai_search_bp.route("/history", methods=["GET"])

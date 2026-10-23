@@ -150,8 +150,13 @@ class SeerClient(BaseHTTPClient):
         self.logger.debug("Initializing SeerClient...")
         await self.fetch_all_requests()
 
-    def _get_auth_headers(self, use_cookie):
-        """Prepare headers and cookies based on `use_cookie` flag."""
+    def _get_auth_headers(self, use_cookie, api_user=None):
+        """Prepare headers and cookies based on `use_cookie` flag.
+
+        :param use_cookie: Authenticate with the session cookie instead of the API key.
+        :param api_user: Seer user id to act as when using the API key (``X-Api-User``).
+        :return: Tuple of (headers, cookies).
+        """
         headers = {'Content-Type': 'application/json', 'accept': 'application/json'}
         cookies = {}
 
@@ -159,17 +164,19 @@ class SeerClient(BaseHTTPClient):
             cookies['connect.sid'] = self.session_token
         elif not use_cookie:
             headers['X-Api-Key'] = self.api_key
+            if api_user is not None:
+                headers['X-Api-User'] = str(api_user)
 
         return headers, cookies
 
     async def _make_request(self, method, endpoint, data=None, use_cookie=False, retries=3, delay=2,
-                            raise_on_permission=False):
+                            raise_on_permission=False, api_user=None):
         """Unified API request handling with retry logic and error handling."""
         url = f"{self.api_url}/{endpoint}"
         for attempt in range(retries):
             self.logger.debug("Attempt %d for request to %s", attempt + 1, url)
 
-            headers, cookies = self._get_auth_headers(use_cookie)
+            headers, cookies = self._get_auth_headers(use_cookie, api_user)
 
             # Use shared session but override headers/cookies for this request
             # since aiohttp allows passing request-level headers/cookies
@@ -635,9 +642,12 @@ class SeerClient(BaseHTTPClient):
                 return False
 
         try:
-            # Explicit Seer ownership requires the API key, including Jellyfin-authenticated users.
+            # Act as the mapped user via X-Api-User: a body userId under the admin key
+            # makes Seer apply the admin's auto-approve permission (issue #535).
             if data.get('userId') is not None:
-                response = await self._make_request('POST', 'api/v1/request', data=data, use_cookie=False)
+                api_user = data.pop('userId')
+                response = await self._make_request('POST', 'api/v1/request', data=data, use_cookie=False,
+                                                     api_user=api_user)
             else:
                 response = await self._post_request_as_configured_user(data)
         except SeerPermissionError as exc:

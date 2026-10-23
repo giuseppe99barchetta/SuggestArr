@@ -629,18 +629,21 @@ export default {
       };
       this.profilesOpen = Object.values(this.form.request_profiles).some(profile => profile.serverId);
     }
+    // Ready for Escape and edits before the slower loads below (Seer can take seconds).
+    this.pristine = this.snapshot();
+    document.addEventListener('keydown', this.onKeydown);
     // For new jobs, pre-populate filters with global config defaults
     if (!this.isEditing) {
       try {
         const defaultsResponse = await jobsApi.getDefaultFilters();
         if (defaultsResponse.status === 'success') {
           const d = defaultsResponse.defaults;
-          this.form.filters = {
+          this.applyLoadedFilters({
             vote_average_gte: d.vote_average_gte,
             ...(d.vote_count_gte != null ? { vote_count_gte: d.vote_count_gte } : {}),
             request_first_season_only: d.request_first_season_only === true,
             ...this.form.filters
-          };
+          });
         }
       } catch {
         // fallback: leave filters as-is
@@ -651,7 +654,7 @@ export default {
       this.llmConfigured = llmStatus.configured === true;
       // For new jobs, auto-enable AI recommendations if ENABLE_ADVANCED_ALGORITHM is on
       if (!this.isEditing && this.llmConfigured && llmStatus.advanced_algorithm_enabled === true) {
-        this.form.filters = { ...this.form.filters, use_llm: true };
+        this.applyLoadedFilters({ ...this.form.filters, use_llm: true });
       }
     } catch {
       this.llmConfigured = false;
@@ -662,8 +665,6 @@ export default {
       this.radarrServers = radarr.data.servers || [];
       this.sonarrServers = sonarr.data.servers || [];
     } catch { /* Seer defaults remain available. */ }
-    this.pristine = this.snapshot();
-    document.addEventListener('keydown', this.onKeydown);
   },
   beforeUnmount() {
     document.removeEventListener('keydown', this.onKeydown);
@@ -671,6 +672,13 @@ export default {
   methods: {
     snapshot() {
       return JSON.stringify({ form: this.form, schedule: this.schedule });
+    },
+
+    // Loaded defaults are not edits, unless the user already changed something.
+    applyLoadedFilters(filters) {
+      const untouched = this.snapshot() === this.pristine;
+      this.form.filters = filters;
+      if (untouched) this.pristine = this.snapshot();
     },
 
     // Backdrop, Escape, the close button and Cancel all ask before throwing away edits.

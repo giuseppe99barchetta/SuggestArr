@@ -421,6 +421,8 @@ class SchemaManager:
                     year INTEGER,
                     rating REAL,
                     source TEXT NOT NULL DEFAULT 'manual',
+                    excluded INTEGER NOT NULL DEFAULT 0,
+                    watched_at TIMESTAMP NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
@@ -488,6 +490,7 @@ class SchemaManager:
         self._migrate_execution_history()
         self._migrate_request_expiry()
         self._migrate_media_availability()
+        self._migrate_watched_media()
         self._migrate_suggestion_feedback()
         self._widen_mysql_overview_columns()
         self._create_api_key_indexes()
@@ -551,6 +554,25 @@ class SchemaManager:
                 existing = {row[0] for row in cursor.fetchall()}
             if 'url' not in existing:
                 cursor.execute('ALTER TABLE media_availability ADD COLUMN url VARCHAR(512)')
+            conn.commit()
+
+    def _migrate_watched_media(self):
+        """Add the exclusion flag and play date to watched-history tables created before them."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type == 'sqlite':
+                cursor.execute('PRAGMA table_info(watched_media)')
+                existing = {row[1] for row in cursor.fetchall()}
+            elif self.db_type == 'postgres':
+                cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='watched_media'")
+                existing = {row[0] for row in cursor.fetchall()}
+            else:
+                cursor.execute('SHOW COLUMNS FROM watched_media')
+                existing = {row[0] for row in cursor.fetchall()}
+            if 'excluded' not in existing:
+                cursor.execute('ALTER TABLE watched_media ADD COLUMN excluded INTEGER NOT NULL DEFAULT 0')
+            if 'watched_at' not in existing:
+                cursor.execute('ALTER TABLE watched_media ADD COLUMN watched_at TIMESTAMP NULL')
             conn.commit()
 
     def _migrate_request_expiry(self):
