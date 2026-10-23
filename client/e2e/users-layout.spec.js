@@ -242,14 +242,13 @@ for (const width of [1280, 900, 390]) {
     const errors = [];
     page.on("pageerror", error => errors.push(error.message));
     await openPreview(page, "Profile");
-    for (const title of ["Account", "Appearance", "Notifications", "Title language", "API keys", "Linked accounts", "Watched elsewhere"]) {
+    for (const title of ["Account", "Appearance", "Notifications", "Title language", "API keys", "Linked accounts"]) {
       await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
     }
+    // Watch history moved to the Ratings page.
+    await expect(page.getByRole("heading", { name: "Watch history", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Rename", exact: true }).click();
     await page.getByLabel("New username", { exact: true }).fill("draft-name");
-    await page.getByLabel("Search TMDb").fill("Arrival");
-    await page.getByLabel("Media type", { exact: true }).selectOption("movie");
-    await expect(page.getByLabel("Media type", { exact: true })).toHaveValue("movie");
     await expect(page.getByLabel("New username", { exact: true })).toHaveValue("draft-name");
     await page.screenshot({ path: testInfo.outputPath("profile-cards.png"), fullPage: true, animations: "disabled" });
 
