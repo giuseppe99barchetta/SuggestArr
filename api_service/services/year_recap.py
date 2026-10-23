@@ -249,7 +249,7 @@ class RecapWatchSync(YearWatchActivity):
 
         keys = sorted({lookup(entry) for entry in entries
                        if not entry['tmdb'] and (entry['kind'] == 'movie' or entry['series_id'])})
-        resolved = {}
+        resolved, failed = {}, set()
         for i in range(0, len(keys), RESOLVE_BATCH):
             batch = keys[i:i + RESOLVE_BATCH]
             try:
@@ -270,9 +270,13 @@ class RecapWatchSync(YearWatchActivity):
             except Exception as exc:
                 # Removed library items cannot be resolved; keep what the other batches found.
                 self.logger.debug('Recap watch sync could not resolve a metadata batch: %s', type(exc).__name__)
+                if getattr(exc, 'status', None) != 404:
+                    failed.update(batch)
         for entry in entries:
             if not entry['tmdb']:
                 entry['tmdb'] = resolved.get(lookup(entry))
+                # A transient failure, unlike a removed item, is worth retrying on the next sync.
+                entry['unresolved'] = lookup(entry) in failed
 
 
 class PlayedTitles(RecapWatchSync):
@@ -289,7 +293,8 @@ class PlayedTitles(RecapWatchSync):
             watched_at}`` per title (``watched_at`` naive UTC), or ``None`` when the server is
             not configured.
         """
-        prefix = provider.upper()
+        # Emby is configured under the Jellyfin keys.
+        prefix = 'JELLYFIN' if provider == 'emby' else provider.upper()
         url, token = env.get(f'{prefix}_API_URL'), env.get(f'{prefix}_TOKEN')
         if provider not in ('plex', 'jellyfin', 'emby') or not url or not token:
             return None
@@ -307,6 +312,12 @@ class PlayedTitles(RecapWatchSync):
                 await self._resolve(plex, url, headers, entries)
         finally:
             await self.close()
+        # The next sync starts from the newest stored play, so keep everything after an
+        # unresolved play out of this one; it is read again once the server recovers.
+        cutoff = min((entry['date'] for entry in entries if entry.get('unresolved')), default=None)
+        if cutoff:
+            entries = [entry for entry in entries if entry['date'] < cutoff]
+            truncated = True
         titles = {}
         for entry in sorted(entries, key=lambda entry: entry['date'], reverse=True):
             if not entry['tmdb'] or not entry['title']:

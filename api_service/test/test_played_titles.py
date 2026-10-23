@@ -32,3 +32,24 @@ def test_episodes_collapse_to_their_show_and_keep_the_latest_play():
 
 def test_unconfigured_server_returns_none():
     assert asyncio.run(PlayedTitles().titles('jellyfin', 'u1', {})) is None
+
+
+def test_emby_reads_the_jellyfin_configuration():
+    with patch.object(PlayedTitles, '_scan', AsyncMock(return_value=([_entry('movie', '20', 'Arrival', 2)], False))), \
+         patch.object(PlayedTitles, '_resolve', AsyncMock()):
+        titles, _ = asyncio.run(PlayedTitles().titles('emby', 'u1', ENV))
+    assert [t['tmdb_id'] for t in titles] == ['20']
+
+
+def test_transient_resolve_failure_keeps_later_plays_for_the_next_sync():
+    entries = [
+        _entry('movie', '20', 'Arrival', 2),
+        _entry('movie', None, 'Dune', 4),
+        _entry('movie', '30', 'Heat', 6),
+    ]
+    failure = AsyncMock(side_effect=TimeoutError())
+    with patch.object(PlayedTitles, '_scan', AsyncMock(return_value=(entries, False))), \
+         patch.object(PlayedTitles, '_json', failure):
+        titles, truncated = asyncio.run(PlayedTitles().titles('jellyfin', 'u1', ENV))
+    assert truncated is True
+    assert [t['tmdb_id'] for t in titles] == ['20']
