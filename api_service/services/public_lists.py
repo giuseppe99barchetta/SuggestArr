@@ -16,8 +16,11 @@ def parse_list_url(provider, url):
     host = 'trakt.tv' if provider == 'trakt' else 'mdblist.com'
     try:
         parsed = urlsplit(url.strip())
-        prefix = 'users' if provider == 'trakt' else 'lists'
-        pattern = rf'/{prefix}/([A-Za-z0-9_-]+)/' + (r'lists/' if provider == 'trakt' else '') + r'([A-Za-z0-9_-]+)/?'
+        if provider == 'trakt':
+            pattern = r'/users/([A-Za-z0-9_-]+)/lists/([A-Za-z0-9_-]+)/?'
+        else:
+            # Official lists live at /lists/official/<movies|shows>/<slug>; the owner is returned as 'official/<media>'.
+            pattern = r'/lists/(official/(?:movies|shows)|[A-Za-z0-9_-]+)/([A-Za-z0-9_-]+)/?'
         match = re.fullmatch(pattern, parsed.path)
         valid = (parsed.scheme == 'https' and parsed.hostname in (host, f'www.{host}')
                  and parsed.port in (None, 443) and not parsed.username and not parsed.password

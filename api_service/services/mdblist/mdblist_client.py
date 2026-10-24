@@ -15,8 +15,19 @@ class MDBListClient(BaseHTTPClient):
         if not isinstance(data, dict) or not data or data.get('error'):
             raise PublicListError('MDBList API key could not be validated.')
 
+    @staticmethod
+    def _list_ref(url):
+        """Split an MDBList URL into API owner, slug and optional media filter.
+
+        :param url: Public MDBList list URL.
+        :return: Tuple (user, slug, mediatype) where mediatype is 'movie', 'show' or None.
+        """
+        owner, slug = parse_list_url('mdblist', url)
+        user, _, media = owner.partition('/')
+        return user, slug, {'movies': 'movie', 'shows': 'show'}.get(media)
+
     async def public_list_info(self, url):
-        user, slug = parse_list_url('mdblist', url)
+        user, slug, _ = self._list_ref(url)
         data, _ = await read_list_json(self, f'/lists/{user}/{slug}', params={'apikey': self.api_key})
         lists = data if isinstance(data, list) else [data]
         if not lists or any(not isinstance(item, dict) or not (
@@ -26,10 +37,11 @@ class MDBListClient(BaseHTTPClient):
         return {'name': lists[0].get('name') or slug, 'provider': 'mdblist'}
 
     async def public_list_page(self, url, offset, limit=100):
-        user, slug = parse_list_url('mdblist', url)
-        data, headers = await read_list_json(self, f'/lists/{user}/{slug}/items', params={
-            'apikey': self.api_key, 'limit': limit, 'offset': offset, 'unified': 'true',
-        })
+        user, slug, media = self._list_ref(url)
+        params = {'apikey': self.api_key, 'limit': limit, 'offset': offset, 'unified': 'true'}
+        if media:
+            params['mediatype'] = media
+        data, headers = await read_list_json(self, f'/lists/{user}/{slug}/items', params=params)
         if isinstance(data, dict) and isinstance(data.get('movies'), list) and isinstance(data.get('shows'), list):
             data = ([{**item, 'mediatype': 'movie'} for item in data['movies']]
                     + [{**item, 'mediatype': 'show'} for item in data['shows']])
