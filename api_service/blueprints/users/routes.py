@@ -35,7 +35,7 @@ from flask import Blueprint, jsonify, request, g
 
 from api_service.auth.auth_service import AuthService, MIN_PASSWORD_LENGTH
 from api_service.auth.limiter import limiter
-from api_service.auth.middleware import require_role
+from api_service.auth.middleware import TAB_ALIASES, require_role
 from api_service.blueprints.avatar import user_avatar_response
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
@@ -55,10 +55,7 @@ _VALID_PROVIDERS = {'jellyfin', 'plex', 'emby'}
 _VALID_VISIBLE_TABS = {
     'requests', 'ai_search', 'jobs', 'profile',
 }
-_TAB_ALIASES = {
-    'ai-search': 'ai_search',
-    'suggestions': 'requests',
-}
+_TAB_ALIASES = TAB_ALIASES
 
 # Plex application identifier — stable across instances.
 _PLEX_CLIENT_NAME = "SuggestArr"

@@ -8,6 +8,7 @@ import aiohttp
 from flask import Blueprint, g, jsonify, request
 
 from api_service.auth.limiter import limiter
+from api_service.auth.middleware import require_tab
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.ai_search.ai_search_service import AiSearchService
@@ -19,6 +20,14 @@ ai_search_bp = Blueprint("ai_search", __name__)
 logger = LoggerManager.get_logger("AiSearchRoute")
 _METADATA_FIELDS = ("title", "name", "overview", "release_date", "poster_path", "backdrop_path",
                     "logo_path", "rating", "votes", "genre_ids", "origin_country")
+
+
+@ai_search_bp.before_request
+def require_ai_search_page():
+    """Searching and requesting belong to the AI Search page; personal history stays open."""
+    if request.endpoint in ("ai_search.ai_search_query", "ai_search.ai_search_request"):
+        return require_tab("ai_search")
+    return None
 
 
 def _current_user_id():

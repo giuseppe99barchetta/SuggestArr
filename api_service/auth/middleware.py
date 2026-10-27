@@ -593,6 +593,39 @@ def enforce_authentication() -> Optional[tuple]:
 # Optional role-enforcement decorator
 # ---------------------------------------------------------------------------
 
+TAB_ALIASES = {
+    'ai-search': 'ai_search',
+    'suggestions': 'requests',
+}
+
+
+def require_tab(tab: str) -> Optional[tuple]:
+    """
+    Refuse a regular user whose allowed pages do not include ``tab``.
+
+    Mirrors the SPA rule (DashboardPage.visibleTabs): admins, and users with
+    no page list at all, may use every page.  Call it from a blueprint
+    before_request for the endpoints that belong to that page only.
+
+    Args:
+        tab: Canonical page id, e.g. 'jobs' or 'ai_search'.
+
+    Returns:
+        A 403 (Response, status) tuple when refused, otherwise None.
+    """
+    user = getattr(g, "current_user", None)
+    if not user or user.get("role") == "admin":
+        return None
+    allowed = {
+        TAB_ALIASES.get(name.strip(), name.strip())
+        for name in str(user.get("visible_tabs") or "").split(",")
+        if name.strip()
+    }
+    if allowed and tab not in allowed:
+        return jsonify({"error": "Insufficient permissions"}), 403
+    return None
+
+
 def require_role(*roles: str):
     """
     Route decorator that restricts access to users with a matching role.

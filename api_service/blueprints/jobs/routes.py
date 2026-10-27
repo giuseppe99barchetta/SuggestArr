@@ -6,7 +6,7 @@ import traceback
 from flask import Blueprint, jsonify, request, g
 
 from api_service.auth.limiter import limiter
-from api_service.auth.middleware import require_role
+from api_service.auth.middleware import require_role, require_tab
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
@@ -65,6 +65,22 @@ def _validate_request_limits(data):
 
 
 _SCANNING_JOB_TYPES = ('recommendation', 'trakt_recommendations')
+
+# Actions of the Jobs page; reads and suggestion decisions (Requests page) stay open.
+_JOBS_PAGE_ENDPOINTS = {
+    'jobs.create_job', 'jobs.update_job', 'jobs.delete_job', 'jobs.toggle_job',
+    'jobs.run_job_now', 'jobs.dry_run_job', 'jobs.verify_public_list',
+    'jobs.preview_public_list', 'jobs.resume_public_list_import',
+}
+
+
+@jobs_bp.before_request
+def require_jobs_page():
+    """Refuse Jobs-page actions to users the admin did not give that page."""
+    is_import_start = request.endpoint == 'jobs.import_public_list_once' and request.method == 'POST'
+    if request.endpoint in _JOBS_PAGE_ENDPOINTS or is_import_start:
+        return require_tab('jobs')
+    return None
 
 
 def _foreign_user_ids_error(job_type, user_ids, current_user, require_link=False):
