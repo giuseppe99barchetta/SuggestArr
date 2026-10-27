@@ -452,6 +452,34 @@ class TestTrustedHeaderAuth(unittest.TestCase):
 
     # --- The security boundary ---
 
+    def test_default_cidrs_do_not_let_any_lan_host_pick_an_identity(self):
+        """With the whole-private-network defaults, only loopback is trusted."""
+        server_default = '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7'
+        settings_page_default = '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16'
+        admin = {"id": 1, "username": "admin", "role": "admin", "is_active": True}
+        for cidrs in (server_default, settings_page_default):
+            os.environ['AUTH_TRUSTED_CIDRS'] = cidrs
+            result, current_user, _ = self._call(
+                headers={'X-Forwarded-User': 'admin'}, remote_addr='192.168.1.50', existing_user=admin,
+            )
+            self.assertEqual(result[1], 401)
+            self.assertIsNone(current_user)
+
+            result, current_user, _ = self._call(
+                headers={'X-Forwarded-User': 'admin'}, remote_addr='127.0.0.1', existing_user=admin,
+            )
+            self.assertIsNone(result)
+            self.assertEqual(current_user['username'], 'admin')
+
+    def test_default_cidrs_still_allow_local_bypass_on_the_lan(self):
+        """The fallback only narrows trusted_header; local_bypass keeps its defaults."""
+        from api_service.auth.middleware import _local_bypass_allowed
+        from flask import Flask
+        os.environ.pop('AUTH_TRUSTED_CIDRS', None)
+        with patch('api_service.auth.middleware.load_env_vars', return_value={}):
+            with Flask(__name__).test_request_context('/', environ_base={"REMOTE_ADDR": '192.168.1.50'}):
+                self.assertTrue(_local_bypass_allowed())
+
     def test_header_from_untrusted_ip_is_rejected(self):
         """A header from outside the trusted CIDRs must never be believed."""
         result, current_user, _ = self._call(
@@ -1025,6 +1053,12 @@ class _ExtendedAuthBlueprintBase(_AuthBlueprintBase):
 
                 return True
 
+            def revoke_user_refresh_tokens(self_inner, user_id):
+                for row in tokens.values():
+                    if row["user_id"] == user_id:
+                        row["revoked"] = True
+
+        tokens = self._refresh_tokens
         self.FakeDB = ExtendedFakeDB
 
 
@@ -1244,6 +1278,39 @@ class TestAuthMePatchEndpoint(_ExtendedAuthBlueprintBase):
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json()
         self.assertIn("message", data)
+
+    def test_password_change_revokes_old_sessions_and_keeps_this_browser_signed_in(self):
+        from api_service.auth.auth_service import AuthService
+        db = self.FakeDB()
+        far = datetime.now(timezone.utc) + timedelta(days=7)
+        db.store_refresh_token(self._uid, AuthService.hash_refresh_token("stolen"), far)
+        db.store_refresh_token(999, AuthService.hash_refresh_token("someone-else"), far)
+
+        resp = self.client.patch(
+            '/api/auth/me',
+            json={"current_password": "StrongPass1!", "new_password": "NewSecurePass2!"},
+            headers=self._auth_headers(),
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(db.get_refresh_token(AuthService.hash_refresh_token("stolen")))
+        self.assertIsNotNone(db.get_refresh_token(AuthService.hash_refresh_token("someone-else")))
+        cookie = resp.headers.get("Set-Cookie", "")
+        self.assertIn("suggestarr_refresh=", cookie)
+        self.assertIn("Path=/api/auth/refresh", cookie)
+        self.assertEqual(self.client.post('/api/auth/refresh').status_code, 200)
+
+    def test_username_change_alone_keeps_sessions(self):
+        from api_service.auth.auth_service import AuthService
+        db = self.FakeDB()
+        far = datetime.now(timezone.utc) + timedelta(days=7)
+        db.store_refresh_token(self._uid, AuthService.hash_refresh_token("other-device"), far)
+
+        resp = self.client.patch('/api/auth/me', json={"username": "alice2"}, headers=self._auth_headers())
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn("Set-Cookie", resp.headers)
+        self.assertIsNotNone(db.get_refresh_token(AuthService.hash_refresh_token("other-device")))
 
     def test_patch_me_wrong_current_password_returns_401(self):
         resp = self.client.patch(

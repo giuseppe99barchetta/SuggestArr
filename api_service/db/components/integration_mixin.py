@@ -12,6 +12,7 @@ _INTEGRATION_REQUIRED_FIELDS = {
     'omdb': ['api_key'],
     'mdblist': ['api_key'],
     'trakt': ['client_id'],
+    'simkl': ['client_id'],
     'openai': [],
 }
 class IntegrationMixin:
@@ -154,6 +155,9 @@ class IntegrationMixin:
                 'client_id': env_vars.get('TRAKT_CLIENT_ID', ''),
                 'client_secret': env_vars.get('TRAKT_CLIENT_SECRET', ''),
             },
+            'simkl': {
+                'client_id': env_vars.get('SIMKL_CLIENT_ID', ''),
+            },
         }
 
         # AI provider: only seed the DB when YAML already has a key or base_url configured.
@@ -170,7 +174,9 @@ class IntegrationMixin:
         for service, config in candidates.items():
             existing = self.get_integration(service)
 
-            if service == 'trakt' and existing is not None:
+            # Re-save through the sanitizer so rows written before the
+            # allow-list existed shed any per-user tokens they still carry.
+            if service in ('trakt', 'simkl') and existing is not None:
                 self.set_integration(service, existing)
 
             if existing is not None and self._is_integration_valid(service, existing):
@@ -192,4 +198,3 @@ class IntegrationMixin:
             # No values: legacy URLs may embed credentials, and a denylist misses new secret fields.
             self.logger.info("%s '%s' credentials from config.yaml -> integrations table", action, service)
             self.set_integration(service, config)
-

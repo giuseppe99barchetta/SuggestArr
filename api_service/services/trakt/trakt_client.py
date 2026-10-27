@@ -188,6 +188,29 @@ class TraktClient(BaseHTTPClient):
         )
         return self._normalize_recent_items(payload)
 
+    async def get_ratings(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Return the user's most recently rated movies and shows.
+
+        Args:
+            limit: Maximum number of rated titles to return, newest rating first.
+
+        Returns:
+            list[dict[str, Any]]: Items with ``tmdb_id``, ``media_type``, ``title``,
+            ``year``, ``rating`` (1-10) and ``watched_at`` (rating time, Unix seconds).
+        """
+        items = []
+        for path, key, media_type in (("/sync/ratings/movies", "movie", "movie"),
+                                      ("/sync/ratings/shows", "show", "tv")):
+            for entry in await self._request("GET", path, authenticated=True) or []:
+                normalized = self._normalize_media_item((entry or {}).get(key), media_type)
+                if not normalized or entry.get("rating") is None:
+                    continue
+                normalized["rating"] = entry["rating"]
+                normalized["watched_at"] = self._parse_iso(entry.get("rated_at"))
+                items.append(normalized)
+        items.sort(key=lambda item: item["watched_at"], reverse=True)
+        return items[:limit]
+
     async def add_to_history(self, media_type: str, tmdb_id: str) -> dict[str, Any]:
         """Mark a movie or a whole show as watched in the user's Trakt history.
 

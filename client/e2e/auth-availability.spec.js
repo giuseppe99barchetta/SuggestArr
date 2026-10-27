@@ -75,4 +75,38 @@ for (const width of [390, 1280]) {
     await expect.poll(() => page.evaluate(() => window.savedSettings?.data.AUTH_TRUSTED_CIDRS)).toBe('');
     expect(await page.evaluate(() => window.savedSettings.data.AUTH_TRUSTED_PROXY_CIDRS)).toBe('');
   });
+
+  test(`reverse proxy sign-in is configurable and kept on save (${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.route(url => url.pathname.startsWith('/api/'), route => route.fulfill({ json: { languages: [] } }));
+    await page.route('**/sso-settings-preview', route => route.fulfill({
+      contentType: 'text/html',
+      body: `<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+        <body><div id="app"></div><script type="module">
+        import { createApp, h } from '/node_modules/.vite/deps/vue.js';
+        import SettingsAdvanced from '/src/components/settings/SettingsAdvanced.vue';
+        import '/src/assets/main.css';
+        const app = createApp({ render: () => h(SettingsAdvanced, {
+          section: 'system', config: { AUTH_MODE: 'trusted_header', AUTH_TRUSTED_HEADER: 'Remote-User',
+            AUTH_TRUSTED_HEADER_AUTO_CREATE: 'false', SEER_AUTO_DECLINE_DAYS: 0 },
+          onSaveSection: value => { window.savedSettings = value; }
+        }) });
+        app.config.globalProperties.$toast = { error: message => { throw new Error(message); } };
+        app.mount('#app');
+        </script></body></html>`,
+    }));
+    await page.goto('/sso-settings-preview');
+    // Loading a hand-edited "false" must not silently switch account creation back on.
+    await expect(page.locator('#authMode')).toHaveValue('trusted_header');
+    await expect(page.locator('#authTrustedHeader')).toHaveValue('Remote-User');
+    await expect(page.locator('#authTrustedProxyCidrs')).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.locator('#authTrustedCidrs').fill('10.0.20.11/32');
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => window.savedSettings?.data.AUTH_MODE)).toBe('trusted_header');
+    const saved = await page.evaluate(() => window.savedSettings.data);
+    expect(saved.AUTH_TRUSTED_CIDRS).toBe('10.0.20.11/32');
+    expect(saved.AUTH_TRUSTED_HEADER).toBe('Remote-User');
+    expect(saved.AUTH_TRUSTED_HEADER_AUTO_CREATE).toBe(false);
+  });
 }

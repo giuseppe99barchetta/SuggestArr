@@ -59,6 +59,7 @@ class TraktWatchHistorySource:
         logger=None, max_content: int = 10,
         use_as_seed: Optional[bool] = None,
         use_as_exclusion: Optional[bool] = None,
+        use_ratings: bool = True,
     ):
         self.client_id = (client_id or "").strip()
         self.client_secret = (client_secret or "").strip()
@@ -68,6 +69,7 @@ class TraktWatchHistorySource:
         self.resolver = TraktAccountResolver(self.db)
         self._use_as_seed_override = use_as_seed
         self._use_as_exclusion_override = use_as_exclusion
+        self.use_ratings = use_ratings
 
     @property
     def enabled(self) -> bool:
@@ -96,10 +98,24 @@ class TraktWatchHistorySource:
                 link_id=resolved["id"],
                 token_source=resolved.get("token_source", "manual_oauth"),
             ) as client:
-                return await client.get_recent_items(self.max_content) or []
+                items = await client.get_recent_items(self.max_content) or []
+                if not self.use_ratings:
+                    return items
+                try:
+                    items += [self._rating_seed(item) for item in await client.get_ratings(self.max_content)]
+                except Exception as exc:
+                    self.logger.warning("Trakt ratings failed for media user %s: %s", media_user_identity_id, exc)
+                return items
         except Exception as exc:
             self.logger.warning("Trakt recent items failed for media user %s: %s", media_user_identity_id, exc)
             return []
+
+    @staticmethod
+    def _rating_seed(item: dict) -> dict:
+        """Tag a Trakt rating with the taste signal ``get_watched_media_seeds`` uses for local ratings."""
+        rating = item["rating"]
+        signal = "positive" if rating >= 7 else "negative" if rating <= 4 else "recent_watch"
+        return {**item, "preference_signal": signal}
 
     async def get_watched_ids(self, media_user_identity_id: int) -> dict:
         """Return {movie: set(), tv: set()} of watched TMDB IDs."""
@@ -150,18 +166,20 @@ class MediaUserTraktAugmentor:
     """
 
     def __init__(self, client_id: str, client_secret: str, db=None, logger=None, max_content: int = 10,
-                 use_as_seed: Optional[bool] = None, use_as_exclusion: Optional[bool] = None):
+                 use_as_seed: Optional[bool] = None, use_as_exclusion: Optional[bool] = None,
+                 use_ratings: bool = True):
         self.db = db or DatabaseManager()
         self.source = TraktWatchHistorySource(
             client_id, client_secret, db=self.db, logger=logger, max_content=max_content,
-            use_as_seed=use_as_seed, use_as_exclusion=use_as_exclusion,
+            use_as_seed=use_as_seed, use_as_exclusion=use_as_exclusion, use_ratings=use_ratings,
         )
         self.logger = logger or LoggerManager.get_logger("TraktAugmentor")
 
     @classmethod
     def from_env(cls, env_vars: dict, max_content: int = 10,
                  use_as_seed: Optional[bool] = None,
-                 use_as_exclusion: Optional[bool] = None):
+                 use_as_exclusion: Optional[bool] = None,
+                 use_ratings: bool = True):
         """Build an augmentor from app-level Trakt credentials.
 
         Reads ``TRAKT_CLIENT_ID`` and the optional ``TRAKT_CLIENT_SECRET``
@@ -170,7 +188,8 @@ class MediaUserTraktAugmentor:
 
         ``use_as_seed``/``use_as_exclusion`` override the per-user Trakt
         source settings when set (e.g. from a job filter). When ``None`` the
-        per-user DB settings are used.
+        per-user DB settings are used. ``use_ratings`` adds the user's Trakt
+        ratings to the seeds (only when Trakt is used as a seed at all).
         """
         env_vars = env_vars if isinstance(env_vars, dict) else {}
         integrations = env_vars.get('integrations') if isinstance(env_vars.get('integrations'), dict) else {}
@@ -178,7 +197,7 @@ class MediaUserTraktAugmentor:
         client_id = env_vars.get('TRAKT_CLIENT_ID') or trakt_cfg.get('client_id') or ''
         client_secret = env_vars.get('TRAKT_CLIENT_SECRET') or trakt_cfg.get('client_secret') or ''
         augmentor = cls(str(client_id).strip(), str(client_secret).strip(), max_content=max_content,
-                        use_as_seed=use_as_seed, use_as_exclusion=use_as_exclusion)
+                        use_as_seed=use_as_seed, use_as_exclusion=use_as_exclusion, use_ratings=use_ratings)
         return augmentor if augmentor.enabled else None
 
     @property

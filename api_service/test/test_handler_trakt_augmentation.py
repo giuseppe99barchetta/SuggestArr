@@ -223,6 +223,55 @@ def test_excluded_managed_history_is_skipped_as_seed_but_still_watched():
     assert handler._merge_seeds(seeds + [server_copy, other]) == [other]
 
 
+def test_merge_seeds_own_rating_wins_over_trakt_rating():
+    handler = _jellyfin_handler(None)
+    merged = handler._merge_seeds([
+        {'tmdb_id': '1', 'media_type': 'movie', 'date': 9, 'title': 'Trakt', 'rating': 10,
+         'source_origin': 'trakt_history'},
+        {'tmdb_id': '1', 'media_type': 'movie', 'date': 1, 'title': 'Own', 'rating': 2,
+         'source_origin': 'manual'},
+        {'tmdb_id': '2', 'media_type': 'tv', 'date': 5, 'title': 'Trakt only', 'rating': 8,
+         'source_origin': 'trakt_history'},
+    ])
+    assert [seed['title'] for seed in merged] == ['Trakt only', 'Own']
+
+
+def test_trakt_source_adds_ratings_as_seeds_and_survives_rating_failure():
+    from api_service.services.trakt import media_user_augmentor as module
+
+    class FakeClient:
+        ratings = [{'tmdb_id': '7', 'media_type': 'movie', 'title': 'Loved', 'rating': 9, 'watched_at': 5}]
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def get_recent_items(self, limit):
+            return [{'tmdb_id': '1', 'media_type': 'movie', 'title': 'Recent'}]
+
+        async def get_ratings(self, limit):
+            if self.ratings is None:
+                raise RuntimeError('trakt down')
+            return self.ratings
+
+    source = module.TraktWatchHistorySource('cid', '', db=MagicMock(), use_as_seed=True)
+    source.resolver = MagicMock(resolve=MagicMock(return_value={'id': 1, 'access_token': 'a'}))
+    with patch.object(module, 'TraktClient', FakeClient):
+        seeds = asyncio.run(source.get_recent_items(1))
+        assert [(s['title'], s.get('preference_signal')) for s in seeds] == [
+            ('Recent', None), ('Loved', 'positive')]
+        source.use_ratings = False
+        assert [s['title'] for s in asyncio.run(source.get_recent_items(1))] == ['Recent']
+        source.use_ratings = True
+        FakeClient.ratings = None
+        assert [s['title'] for s in asyncio.run(source.get_recent_items(1))] == ['Recent']
+
+
 def test_merge_seeds_prioritizes_explicit_user_rating():
     handler = _jellyfin_handler(None)
     merged = handler._merge_seeds([

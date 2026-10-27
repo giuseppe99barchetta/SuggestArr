@@ -8,14 +8,26 @@ import aiohttp
 from flask import Blueprint, g, jsonify, request
 
 from api_service.auth.limiter import limiter
+from api_service.auth.middleware import require_tab
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.ai_search.ai_search_service import AiSearchService
 from api_service.services.config_service import ConfigService
 from api_service.services.llm.llm_service import get_llm_client
+from api_service.utils.request_scope import scan_user_ids
 
 ai_search_bp = Blueprint("ai_search", __name__)
 logger = LoggerManager.get_logger("AiSearchRoute")
+_METADATA_FIELDS = ("title", "name", "overview", "release_date", "poster_path", "backdrop_path",
+                    "logo_path", "rating", "votes", "genre_ids", "origin_country")
+
+
+@ai_search_bp.before_request
+def require_ai_search_page():
+    """Searching and requesting belong to the AI Search page; personal history stays open."""
+    if request.endpoint in ("ai_search.ai_search_query", "ai_search.ai_search_request"):
+        return require_tab("ai_search")
+    return None
 
 
 def _current_user_id():
@@ -88,6 +100,13 @@ async def ai_search_query():
         if not isinstance(exclude_seen, bool):
             exclude_seen = False
 
+        # An empty list means "every server user", which only admins may use.
+        user = getattr(g, "current_user", None)
+        if user:
+            user_ids = scan_user_ids(DatabaseManager(), user, user_ids if isinstance(user_ids, list) else [])
+            if user_ids == []:
+                use_history = False  # no linked account: no history of their own
+
         # Check LLM is configured (not strictly required — service degrades gracefully,
         # but we surface a clear error before attempting if completely unconfigured)
         if not get_llm_client():
@@ -128,7 +147,7 @@ async def ai_search_query():
 
     except Exception as exc:
         logger.error("Error during AI search query: %s", str(exc))
-        return jsonify({"status": "error", "message": f"Search failed: {str(exc)}"}), 500
+        return jsonify({"status": "error", "message": "Search failed. Check the logs for details."}), 500
 
 
 @ai_search_bp.route("/request", methods=["POST"])
@@ -183,7 +202,6 @@ async def ai_search_request():
         req_payload = {"mediaType": media_type, "mediaId": int(tmdb_id)}
         if media_type == "tv":
             num_seasons = config.get("FILTER_NUM_SEASONS", "all")
-            req_payload["tvdbId"] = int(tmdb_id)
             first_season_only = config.get("REQUEST_FIRST_SEASON_ONLY", False)
             first_season_only = (
                 first_season_only if isinstance(first_season_only, bool)
@@ -219,8 +237,9 @@ async def ai_search_request():
                         db = DatabaseManager()
                         # Persist metadata using data supplied by the frontend so the
                         # title and poster are stored correctly in the local DB.
-                        media_dict = {"id": str(tmdb_id)}
-                        media_dict.update(metadata)
+                        # Only display fields, keyed to the requested id: the cache is shared by all users.
+                        media_dict = {key: metadata[key] for key in _METADATA_FIELDS if key in metadata}
+                        media_dict["id"] = str(tmdb_id)
                         db.save_metadata(media_dict, media_type)
                         # Tag with 'ai_search' source to keep these requests out of the
                         # "By Watched Content" view in the dashboard.
@@ -247,7 +266,7 @@ async def ai_search_request():
 
     except Exception as exc:
         logger.error("Error during AI search request: %s", str(exc))
-        return jsonify({"status": "error", "message": f"Request failed: {str(exc)}"}), 500
+        return jsonify({"status": "error", "message": "Request failed. Check the logs for details."}), 500
 
 
 @ai_search_bp.route("/status", methods=["GET"])

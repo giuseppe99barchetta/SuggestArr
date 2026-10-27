@@ -21,6 +21,7 @@ from api_service.services.seer.seer_client import SeerClient
 from api_service.services.trakt.media_user_augmentor import TraktAccountResolver
 from api_service.services.trakt.trakt_client import TraktClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
+from api_service.utils.request_scope import scan_user_ids
 from api_service.utils.tmdb_images import tmdb_image_url
 
 
@@ -252,6 +253,11 @@ class TraktRecommendationsAutomation:
 
         provider = str(self.env_vars.get("SELECTED_SERVICE") or "").lower()
         external_user_id = str(user_ids[0])
+        owner_id = self.job_data.get("owner_id")
+        if owner_id is not None:
+            owner = self.db_manager.get_auth_user_by_id(owner_id) or {"id": owner_id, "role": "user"}
+            if not scan_user_ids(self.db_manager, owner, [external_user_id]):
+                raise ValueError("A regular user's Trakt job can only use their own linked media account")
         identity = self.db_manager.get_media_user_identity(provider, external_user_id)
         resolved = TraktAccountResolver(self.db_manager).resolve(identity["id"])
         if not resolved:

@@ -103,7 +103,8 @@ async def _fetch_jellyfin_favorites_for_user(
                 response.status,
                 body,
             )
-            return []
+            # An unread favorites list must never look empty, or favorites get deleted.
+            raise RuntimeError(f"Could not read favorites for user {user_id} (HTTP {response.status})")
         data = await response.json()
         return data.get("Items", []) or []
 
@@ -228,7 +229,14 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
                                    last_run_status='ok', last_run_summary=summary)
         return {'status': 'ok', 'summary': summary, 'deleted': 0, 'kept': 0, 'missing': 0}
 
-    favorite_map = await _build_favorite_map(env_vars, media_service)
+    try:
+        favorite_map = await _build_favorite_map(env_vars, media_service)
+    except Exception as exc:
+        msg = f"Could not read favorites from {media_service.title()}; nothing was deleted."
+        logger.error("Cleanup aborted: %s (%s)", msg, exc)
+        db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
+                                   last_run_status='error', last_run_summary=msg)
+        return {'status': 'error', 'message': msg}
 
     seer_client = None
     if not dry_run:

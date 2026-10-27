@@ -3,8 +3,6 @@ Tests for the media profile linking endpoints in users/routes.py.
 
 Covers endpoints not tested by test_users_routes.py:
   GET    /api/users/me/links                   — list linked media accounts
-  POST   /api/users/me/link/jellyfin           — link Jellyfin account
-  POST   /api/users/me/link/emby               — link Emby account
   GET    /api/users/me/link/<prov>/users       — list users from provider server
   DELETE /api/users/me/link/<provider>         — unlink account
   GET    /api/users/me/link/plex/oauth-start   — start Plex OAuth PIN flow
@@ -194,82 +192,22 @@ class TestGetMyLinks(_MediaLinkBase):
 
 
 # ---------------------------------------------------------------------------
-# POST /api/users/me/link/jellyfin
+# POST /api/users/me/link/jellyfin|emby (removed)
 # ---------------------------------------------------------------------------
 
-class TestLinkJellyfin(_MediaLinkBase):
+class TestUnverifiedLinkRemoved(_MediaLinkBase):
+    """Picking any server account without a password let a user claim someone
+    else's identity; linking now goes through /api/integrations/<provider>/link."""
 
-    def test_link_success_returns_200(self):
-        resp = self.client.post('/api/users/me/link/jellyfin',
-                                json={"external_user_id": "jf-123",
-                                      "external_username": "alice"})
-        self.assertEqual(resp.status_code, 200)
+    _CALLER = {"id": "2", "username": "viewer", "role": "user"}
 
-    def test_link_success_response_contains_expected_fields(self):
-        resp = self.client.post('/api/users/me/link/jellyfin',
-                                json={"external_user_id": "jf-123",
-                                      "external_username": "alice"})
-        data = resp.get_json()
-        self.assertIn('message', data)
-        self.assertIn('external_username', data)
-        self.assertEqual(data['external_username'], 'alice')
-
-    def test_link_stores_profile_in_db(self):
-        self.client.post('/api/users/me/link/jellyfin',
-                         json={"external_user_id": "jf-123",
-                               "external_username": "alice"})
-        self.assertEqual(len(self._profiles), 1)
-        self.assertEqual(self._profiles[0]['provider'], 'jellyfin')
-        self.assertEqual(self._profiles[0]['external_user_id'], 'jf-123')
-
-    def test_a_picked_account_stays_unverified(self):
-        """Choosing an account from the server's user list proves nothing about
-        who the caller is, so the link must not grant ownership."""
-        self.client.post('/api/users/me/link/jellyfin',
-                         json={"external_user_id": "jf-123",
-                               "external_username": "alice"})
-        self.assertFalse(self._profiles[0]['verified'])
-
-    def test_missing_external_user_id_returns_400(self):
-        resp = self.client.post('/api/users/me/link/jellyfin',
-                                json={"external_username": "alice"})
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn('error', resp.get_json())
-
-    def test_missing_external_username_returns_400(self):
-        resp = self.client.post('/api/users/me/link/jellyfin',
-                                json={"external_user_id": "jf-123"})
-        self.assertEqual(resp.status_code, 400)
-
-    def test_empty_body_returns_400(self):
-        resp = self.client.post('/api/users/me/link/jellyfin', json={})
-        self.assertEqual(resp.status_code, 400)
-
-
-# ---------------------------------------------------------------------------
-# POST /api/users/me/link/emby
-# ---------------------------------------------------------------------------
-
-class TestLinkEmby(_MediaLinkBase):
-
-    def test_link_emby_success(self):
-        resp = self.client.post('/api/users/me/link/emby',
-                                json={"external_user_id": "emby-789",
-                                      "external_username": "alice"})
-        self.assertEqual(resp.status_code, 200)
-        data = resp.get_json()
-        self.assertIn('Emby', data.get('message', ''))
-        self.assertEqual(data['external_username'], 'alice')
-
-    def test_link_emby_stores_provider_correctly(self):
-        self.client.post('/api/users/me/link/emby',
-                         json={"external_user_id": "emby-789",
-                               "external_username": "alice"})
-        self.assertEqual(self._profiles[0]['provider'], 'emby')
-
-    def test_link_emby_missing_fields_returns_400(self):
-        resp = self.client.post('/api/users/me/link/emby', json={})
-        self.assertEqual(resp.status_code, 400)
+    def test_picking_an_account_without_password_is_rejected(self):
+        for provider in ('jellyfin', 'emby'):
+            resp = self.client.post(f'/api/users/me/link/{provider}',
+                                    json={"external_user_id": "admin-id",
+                                          "external_username": "admin"})
+            self.assertIn(resp.status_code, (404, 405))
+        self.assertEqual(self._profiles, [])
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +350,8 @@ class TestPlexOAuthStart(_MediaLinkBase):
         self.assertIn('auth_url', data)
         self.assertEqual(data['pin_id'], 12345)
         self.assertIn('ABCD', data['auth_url'])
+        from api_service.blueprints.users import routes
+        self.assertEqual(routes._issued_plex_pins.pop("12345")[0], 1)
 
     def test_start_http_error_returns_502(self):
         with patch('api_service.blueprints.users.routes.http_requests.post',
@@ -427,6 +367,58 @@ class TestPlexOAuthStart(_MediaLinkBase):
 # ---------------------------------------------------------------------------
 
 class TestPlexOAuthPoll(_MediaLinkBase):
+
+    def setUp(self):
+        super().setUp()
+        import time
+        from api_service.blueprints.users import routes
+        self._pins = routes._issued_plex_pins
+        self._pins.clear()
+        # PINs the caller (user 1) obtained from oauth-start.
+        for pin in ("12345", "99"):
+            self._pins[pin] = (1, time.monotonic())
+
+    def tearDown(self):
+        self._pins.clear()
+        super().tearDown()
+
+    def _poll_with_token(self, pin_id):
+        poll_response = MagicMock()
+        poll_response.json.return_value = {"authToken": "victim-token"}
+        user_response = MagicMock()
+        user_response.json.return_value = {"id": 5, "username": "victim"}
+        with patch('api_service.blueprints.users.routes.http_requests.get',
+                   side_effect=[poll_response, user_response]) as get:
+            resp = self.client.post('/api/users/me/link/plex/oauth-poll', json={"pin_id": pin_id})
+        return resp, get
+
+    def test_pin_issued_to_another_user_is_rejected(self):
+        import time
+        self._pins["777"] = (2, time.monotonic())
+        resp, get = self._poll_with_token(777)
+        self.assertEqual(resp.status_code, 400)
+        get.assert_not_called()
+        self.assertEqual(self._profiles, [])
+
+    def test_unknown_pin_is_rejected(self):
+        resp, get = self._poll_with_token(4242)
+        self.assertEqual(resp.status_code, 400)
+        get.assert_not_called()
+
+    def test_expired_pin_is_rejected(self):
+        import time
+        from api_service.blueprints.users import routes
+        self._pins["12345"] = (1, time.monotonic() - routes._PLEX_PIN_TTL_S - 1)
+        resp, get = self._poll_with_token(12345)
+        self.assertEqual(resp.status_code, 400)
+        get.assert_not_called()
+
+    def test_pin_cannot_be_redeemed_twice(self):
+        first, _ = self._poll_with_token(12345)
+        self.assertEqual(first.get_json()['status'], 'linked')
+        second, get = self._poll_with_token(12345)
+        self.assertEqual(second.status_code, 400)
+        get.assert_not_called()
 
     def test_missing_pin_id_returns_400(self):
         resp = self.client.post('/api/users/me/link/plex/oauth-poll', json={})

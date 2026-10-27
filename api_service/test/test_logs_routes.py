@@ -1,4 +1,5 @@
-from flask import Flask
+import pytest
+from flask import Flask, g
 
 from api_service.blueprints.logs import routes
 
@@ -22,8 +23,7 @@ def test_read_logs_returns_empty_when_offset_exceeds_file(tmp_path):
 
 
 def test_get_logs_passes_limit_and_offset_query_params(monkeypatch):
-    app = Flask(__name__)
-    app.register_blueprint(routes.logs_bp, url_prefix="/api")
+    app = _app_as("admin")
     captured = {}
 
     def fake_read_logs(limit, offset):
@@ -41,8 +41,7 @@ def test_get_logs_passes_limit_and_offset_query_params(monkeypatch):
 
 
 def test_get_logs_clamps_invalid_query_params(monkeypatch):
-    app = Flask(__name__)
-    app.register_blueprint(routes.logs_bp, url_prefix="/api")
+    app = _app_as("admin")
     captured = {}
 
     def fake_read_logs(limit, offset):
@@ -56,3 +55,24 @@ def test_get_logs_clamps_invalid_query_params(monkeypatch):
 
     assert response.status_code == 200
     assert captured == {"limit": routes.DEFAULT_LOG_LIMIT, "offset": 0}
+
+
+def _app_as(role):
+    app = Flask(__name__)
+    app.register_blueprint(routes.logs_bp, url_prefix="/api")
+
+    @app.before_request
+    def _set_user():
+        if role:
+            g.current_user = {"id": "1", "role": role}
+
+    return app
+
+
+@pytest.mark.parametrize("role,status", [("user", 403), (None, 401)])
+def test_get_logs_requires_admin(monkeypatch, role, status):
+    monkeypatch.setattr(routes, "read_logs", lambda **_: ["secret line"])
+
+    response = _app_as(role).test_client().get("/api/logs")
+
+    assert response.status_code == status

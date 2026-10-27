@@ -11,8 +11,6 @@ Admin endpoints (require role='admin'):
 Per-user media profile endpoints (any authenticated user):
   GET    /api/users/me/links                   — list current user's media links
   GET    /api/users/<id>/avatar                — own image, or any image for admins
-  POST   /api/users/me/link/jellyfin           — link a Jellyfin account
-  POST   /api/users/me/link/emby               — link an Emby account
   DELETE /api/users/me/link/<provider>         — unlink a media account
   GET    /api/users/me/link/plex/oauth-start   — begin Plex OAuth device flow
   POST   /api/users/me/link/plex/oauth-poll    — poll Plex OAuth completion
@@ -28,6 +26,8 @@ Security decisions
 - Plex tokens are stored to allow future server-side API calls on behalf of
   the user (e.g. personalised recommendations).
 """
+import time
+
 from api_service.services.http import sync_client as http_requests
 from api_service.utils.ssrf_guard import normalize_base_url
 
@@ -35,12 +35,16 @@ from flask import Blueprint, jsonify, request, g
 
 from api_service.auth.auth_service import AuthService, MIN_PASSWORD_LENGTH
 from api_service.auth.limiter import limiter
-from api_service.auth.middleware import require_role
+from api_service.auth.middleware import TAB_ALIASES, require_role
 from api_service.blueprints.avatar import user_avatar_response
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.notification_formats import notification_target_error
 from api_service.utils.ssrf_guard import validate_url
+from api_service.services.plex.account_resolver import (
+    canonical_plex_account_id,
+    list_plex_server_users,
+)
 
 logger = LoggerManager.get_logger("UsersRoute")
 
@@ -51,15 +55,19 @@ _VALID_PROVIDERS = {'jellyfin', 'plex', 'emby'}
 _VALID_VISIBLE_TABS = {
     'requests', 'ai_search', 'jobs', 'profile',
 }
-_TAB_ALIASES = {
-    'ai-search': 'ai_search',
-    'suggestions': 'requests',
-}
+_TAB_ALIASES = TAB_ALIASES
 
 # Plex application identifier — stable across instances.
 _PLEX_CLIENT_NAME = "SuggestArr"
 _PLEX_PRODUCT = "SuggestArr"
 _PLEX_VERSION = "1.0"
+
+# Every account shares one Plex client id, so a PIN may only be redeemed by the
+# user it was issued to: pin id -> (SuggestArr user id, issued at).
+# shortcut: kept in memory, fine for the single uvicorn process; move to the DB if
+# SuggestArr ever runs several workers. A restart mid-link just means linking again.
+_PLEX_PIN_TTL_S = 30 * 60
+_issued_plex_pins: dict = {}
 
 
 # ---------------------------------------------------------------------------
@@ -518,81 +526,6 @@ def get_my_links():
 
 
 # ---------------------------------------------------------------------------
-# Link Jellyfin
-# ---------------------------------------------------------------------------
-
-@users_bp.route('/me/link/jellyfin', methods=['POST'])
-def link_jellyfin():
-    """
-    Validate Jellyfin credentials and store the resulting profile link.
-
-    The password is used only for validation and is never stored.
-
-    Request JSON:
-      username    (str) — Jellyfin username
-      password    (str) — Jellyfin password
-      server_url  (str, optional) — Jellyfin server URL; falls back to
-                  JELLYFIN_API_URL from config if omitted
-
-    Response (200): { "message": "Jellyfin account linked", "external_username": <str> }
-    Response (400): { "error": "<validation message>" }
-    Response (401): { "error": "Jellyfin credentials invalid" }
-    """
-    return _link_jellyfin_or_emby('jellyfin')
-
-
-# ---------------------------------------------------------------------------
-# Link Emby
-# ---------------------------------------------------------------------------
-
-@users_bp.route('/me/link/emby', methods=['POST'])
-def link_emby():
-    """
-    Validate Emby credentials and store the resulting profile link.
-
-    Emby uses the same authentication API format as Jellyfin.
-
-    Request JSON:
-      username    (str) — Emby username
-      password    (str) — Emby password
-      server_url  (str, optional) — Emby server URL
-
-    Response (200): { "message": "Emby account linked", "external_username": <str> }
-    Response (400): { "error": "<validation message>" }
-    Response (401): { "error": "Emby credentials invalid" }
-    """
-    return _link_jellyfin_or_emby('emby')
-
-
-def _link_jellyfin_or_emby(provider: str):
-    """
-    Shared handler for Jellyfin and Emby profile linking.
-
-    The frontend fetches available users from the media server via the
-    /me/link/<provider>/users endpoint (using the admin token) and shows them
-    in a dropdown.  This endpoint simply persists the user's selection —
-    no password is required or stored — which is also why the link stays
-    unverified: nothing shows that the chosen account is the caller's.
-
-    Args:
-        provider: 'jellyfin' or 'emby'
-    """
-    data = request.get_json(silent=True) or {}
-    external_user_id = (data.get("external_user_id") or "").strip()
-    external_username = (data.get("external_username") or "").strip()
-
-    if not external_user_id or not external_username:
-        return jsonify({"error": "external_user_id and external_username are required"}), 400
-
-    db = DatabaseManager()
-    db.create_user_media_profile(
-        _current_user_id(), provider, external_user_id, external_username
-    )
-    logger.info("User id=%d linked %s account: %r", _current_user_id(), provider, external_username)
-    return jsonify({"message": f"{provider.capitalize()} account linked", "external_username": external_username}), 200
-
-
-# ---------------------------------------------------------------------------
 # List users from the configured media server (Jellyfin / Emby)
 # ---------------------------------------------------------------------------
 
@@ -703,7 +636,11 @@ def plex_oauth_start():
 
     pin_id = body["id"]
     pin_code = body["code"]
-    
+    now = time.monotonic()
+    for stale in [pin for pin, (_, at) in _issued_plex_pins.items() if now - at > _PLEX_PIN_TTL_S]:
+        _issued_plex_pins.pop(stale, None)
+    _issued_plex_pins[str(pin_id)] = (_current_user_id(), now)
+
     from api_service.services.config_service import ConfigService
     client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
     auth_url = (
@@ -715,6 +652,57 @@ def plex_oauth_start():
 
     logger.debug("Plex OAuth started: pin_id=%s for user id=%d", pin_id, _current_user_id())
     return jsonify({"pin_id": pin_id, "auth_url": auth_url}), 200
+
+
+def _reconcile_plex_account_id(db, plex_account_id: str, plex_username: str) -> str:
+    """Map a plex.tv account id onto the id this Plex server uses.
+
+    The server owner is a local account, so their plex.tv id is absent from
+    the server's user list and a profile stored under it matches no monitored
+    user. When the ids differ, any identity already created under the plex.tv
+    id is renamed rather than abandoned, so watch-tracker links made before
+    this reconciliation keep working without re-linking.
+    """
+    resolved = canonical_plex_account_id(
+        list_plex_server_users(), plex_account_id, plex_username
+    )
+    if resolved == str(plex_account_id):
+        return resolved
+
+    # The mapping can only be a username match, which is a heuristic. Handing
+    # this caller an id another account already holds would merge two people's
+    # requests and watch history, so the unmapped id — which resolves to
+    # nothing — is the safer of the two wrong answers.
+    current_user_id = _current_user_id()
+    for profile in db.get_media_profiles_by_provider("plex"):
+        held_by_someone_else = (
+            str(profile.get("external_user_id")) == resolved
+            and profile["user_id"] != current_user_id
+        )
+        if held_by_someone_else:
+            logger.warning(
+                "Plex account %s maps to server id %s, but user id=%s is already "
+                "linked to it; storing the plex.tv id instead",
+                plex_account_id, resolved, profile["user_id"],
+            )
+            return str(plex_account_id)
+
+    logger.info(
+        "Plex account %s is %s on this server; storing the server id",
+        plex_account_id, resolved,
+    )
+    # The caller's existing profile moves in the same transaction as the
+    # identity, so a failure later in the link cannot leave them apart.
+    if not db.move_media_user_identity(
+        "plex", plex_account_id, resolved, user_id=current_user_id,
+    ):
+        logger.warning(
+            "Could not move Plex identity from %s to existing destination %s; "
+            "keeping the Plex.tv id",
+            plex_account_id, resolved,
+        )
+        return str(plex_account_id)
+    return resolved
 
 
 # ---------------------------------------------------------------------------
@@ -741,6 +729,10 @@ def plex_oauth_poll():
     pin_id = data.get("pin_id")
     if not pin_id:
         return jsonify({"error": "pin_id is required"}), 400
+    issued = _issued_plex_pins.get(str(pin_id))
+    if (not issued or issued[0] != _current_user_id()
+            or time.monotonic() - issued[1] > _PLEX_PIN_TTL_S):
+        return jsonify({"error": "This Plex sign-in has expired. Please start linking again."}), 400
 
     try:
         resp = http_requests.get(
@@ -771,16 +763,18 @@ def plex_oauth_poll():
         logger.error("Failed to fetch Plex user info: %s", exc)
         return jsonify({"error": "Could not retrieve Plex user info"}), 502
 
-    external_user_id = str(user_body.get("id", ""))
+    plex_account_id = str(user_body.get("id", ""))
     external_username = user_body.get("username") or user_body.get("email") or "unknown"
 
     db = DatabaseManager()
+    external_user_id = _reconcile_plex_account_id(db, plex_account_id, external_username)
     db.create_user_media_profile(
         _current_user_id(), "plex", external_user_id, external_username, access_token=auth_token,
         verified=True,
     )
+    _issued_plex_pins.pop(str(pin_id), None)
     logger.info(
-        "User id=%d linked Plex account: %r (plex_id=%s)",
-        _current_user_id(), external_username, external_user_id,
+        "User id=%d linked Plex account: %r (plex_id=%s, stored_id=%s)",
+        _current_user_id(), external_username, plex_account_id, external_user_id,
     )
     return jsonify({"status": "linked", "external_username": external_username}), 200

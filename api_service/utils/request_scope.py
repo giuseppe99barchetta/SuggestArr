@@ -68,6 +68,32 @@ def linked_media_user_ids(db, user):
     return [str(profile['external_user_id']) for profile in db.get_user_media_profiles(int(user['id']))]
 
 
+def scan_user_ids(db, user, requested):
+    """
+    Media-user ids whose history a job or search run for this user may read.
+
+    Admins and ownerless jobs keep the ids they asked for (empty = everyone).
+    Anyone else only ever reaches their own linked accounts, so their jobs and
+    searches never read another person's history or request in their name.
+
+    Args:
+        db:        Database manager (for the user's linked media accounts).
+        user:      The account the work runs for, or None for ownerless jobs.
+        requested: Ids the job or request asked for; empty means "all".
+
+    Returns:
+        list[str] | None: None means every user (admins and ownerless jobs
+        that asked for no one in particular). Otherwise the ids to use; for a
+        regular user an empty request becomes all of their own ids, and an
+        empty list means nobody.
+    """
+    requested = [str(uid) for uid in (requested or [])]
+    if not user or _is_admin(user):
+        return requested or None
+    own = linked_media_user_ids(db, user)
+    return [uid for uid in requested if uid in own] if requested else own
+
+
 def visible_request_user_ids(db, user, env, selected=''):
     """
     Media-user ids whose requests this user may see.

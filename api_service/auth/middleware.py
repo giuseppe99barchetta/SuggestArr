@@ -122,6 +122,17 @@ _DEFAULT_AUTH_TRUSTED_CIDRS = [
 ]
 
 
+# The whole-private-network defaults (the server's and the one the settings page
+# saves) suit local_bypass but would let any LAN host pick an identity in
+# trusted_header mode, so there they fall back to loopback until narrowed.
+_PERMISSIVE_TRUSTED_CIDR_SETS = (
+    frozenset(_DEFAULT_AUTH_TRUSTED_CIDRS),
+    frozenset(["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]),
+)
+_LOOPBACK_CIDRS = [ipaddress.ip_network("127.0.0.0/8"), ipaddress.ip_network("::1/128")]
+_warned_default_trusted_cidrs = False
+
+
 def _get_database_manager():
     """Lazily resolve DatabaseManager to avoid circular imports."""
     global DatabaseManager
@@ -211,6 +222,38 @@ def _is_trusted_local_ip(client_ip: str) -> bool:
         if ip in network:
             return True
     return False
+
+
+def _is_trusted_header_peer(peer_ip: str) -> bool:
+    """
+    Return True when the trusted identity header may be believed from peer_ip.
+
+    Uses AUTH_TRUSTED_CIDRS, except while it is still one of the
+    whole-private-network defaults: then only loopback is trusted and a
+    warning explains how to list the proxy.
+
+    Args:
+        peer_ip: Address of the machine that opened the connection.
+
+    Returns:
+        bool: True if the peer may set the identity header.
+    """
+    global _warned_default_trusted_cidrs
+    networks = _load_trusted_cidrs()
+    if frozenset(str(network) for network in networks) not in _PERMISSIVE_TRUSTED_CIDR_SETS:
+        return _is_trusted_local_ip(peer_ip)
+    if not _warned_default_trusted_cidrs:
+        _warned_default_trusted_cidrs = True
+        logger.warning(
+            "AUTH_MODE=trusted_header with the default AUTH_TRUSTED_CIDRS (all private networks): "
+            "the identity header is accepted only from localhost. Set your reverse proxy's address "
+            "in Settings > Advanced > Access & routing, e.g. 10.0.20.11/32."
+        )
+    try:
+        ip = ipaddress.ip_address(peer_ip)
+    except ValueError:
+        return False
+    return any(ip in network for network in _LOOPBACK_CIDRS)
 
 
 def _resolve_client_address() -> tuple[str, bool]:
@@ -510,7 +553,7 @@ def enforce_authentication() -> Optional[tuple]:
         if (
             _resolve_auth_mode() == "trusted_header"
             and getattr(g, "current_user", None) is None
-            and _is_trusted_local_ip(_peer_address())
+            and _is_trusted_header_peer(_peer_address())
         ):
             trusted_user = _resolve_trusted_header_user()
             if trusted_user is not None:
@@ -567,7 +610,7 @@ def enforce_authentication() -> Optional[tuple]:
         # it here would let anyone who reaches the port send
         # `X-Forwarded-For: <proxy>` and be believed — see _peer_address().
         peer_ip = _peer_address()
-        if not _is_trusted_local_ip(peer_ip):
+        if not _is_trusted_header_peer(peer_ip):
             logger.warning(
                 "Trusted-header auth: rejecting request from untrusted peer=%s (claimed ip=%s)",
                 peer_ip,
@@ -592,6 +635,39 @@ def enforce_authentication() -> Optional[tuple]:
 # ---------------------------------------------------------------------------
 # Optional role-enforcement decorator
 # ---------------------------------------------------------------------------
+
+TAB_ALIASES = {
+    'ai-search': 'ai_search',
+    'suggestions': 'requests',
+}
+
+
+def require_tab(tab: str) -> Optional[tuple]:
+    """
+    Refuse a regular user whose allowed pages do not include ``tab``.
+
+    Mirrors the SPA rule (DashboardPage.visibleTabs): admins, and users with
+    no page list at all, may use every page.  Call it from a blueprint
+    before_request for the endpoints that belong to that page only.
+
+    Args:
+        tab: Canonical page id, e.g. 'jobs' or 'ai_search'.
+
+    Returns:
+        A 403 (Response, status) tuple when refused, otherwise None.
+    """
+    user = getattr(g, "current_user", None)
+    if not user or user.get("role") == "admin":
+        return None
+    allowed = {
+        TAB_ALIASES.get(name.strip(), name.strip())
+        for name in str(user.get("visible_tabs") or "").split(",")
+        if name.strip()
+    }
+    if allowed and tab not in allowed:
+        return jsonify({"error": "Insufficient permissions"}), 403
+    return None
+
 
 def require_role(*roles: str):
     """

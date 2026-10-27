@@ -92,6 +92,7 @@ SuggestArr can enrich recommendations with each user's own Trakt watch history. 
 ### What Trakt adds
 
 - Recent Trakt watches can be used as recommendation seeds.
+- Titles rated on Trakt (in the Trakt app, the site, or synced in from streaming services) steer recommendations as liked or disliked seeds; a rating set in SuggestArr wins. Toggle it per job with **Use Trakt ratings**.
 - Fully watched Trakt items can be added to the skip-watched set.
 - Each SuggestArr user links their own Trakt account from their profile.
 - Admins configure only the shared Trakt app credentials.

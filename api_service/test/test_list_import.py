@@ -90,6 +90,26 @@ async def test_mdblist_paging_and_mixed_rank():
     items, more = await client.public_list_page(URL, 100)
     assert more and [normalize_list_item(item)['media_type'] for item in items] == ['tv', 'movie']
     assert client.session.calls[1][2]['params']['offset'] == 100
+    assert 'mediatype' not in client.session.calls[1][2]['params']
+
+
+@pytest.mark.asyncio
+async def test_mdblist_official_list_uses_slug_and_media_filter():
+    client = MDBListClient('key')
+    client.session = FakeSession([FakeResponse(200, [{'name': 'Popular', 'private': False}]),
+                                  FakeResponse(200, [{'tmdb_id': 1, 'mediatype': 'movie'}])])
+    official = 'https://mdblist.com/lists/official/movies/popular'
+    assert (await client.public_list_info(official))['name'] == 'Popular'
+    await client.public_list_page(official, 0)
+    assert [call[1] for call in client.session.calls] == [
+        'https://api.mdblist.com/lists/official/popular', 'https://api.mdblist.com/lists/official/popular/items']
+    assert client.session.calls[1][2]['params']['mediatype'] == 'movie'
+
+
+@pytest.mark.parametrize('path', ['official/films/popular', 'alice/movies/popular', 'official/movies/popular/items'])
+def test_mdblist_official_url_shape_enforced(path):
+    with pytest.raises(PublicListError):
+        parse_list_url('mdblist', f'https://mdblist.com/lists/{path}')
 
 
 @pytest.mark.asyncio
