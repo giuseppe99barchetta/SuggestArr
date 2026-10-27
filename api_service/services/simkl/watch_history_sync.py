@@ -69,6 +69,9 @@ class SimklWatchHistorySync:
         # a failed lookup is worth remembering too: retrying it once per bucket
         # multiplies the cost of exactly the libraries that need it most.
         self._tvdb_to_tmdb: dict[str, Optional[str]] = {}
+        # Lookups that failed for a reason worth retrying (timeout, 429, 5xx),
+        # as opposed to TMDb answering that it knows no such title.
+        self._tvdb_transient_failures: set[str] = set()
 
     async def ensure_synced(self, link: dict, access_token: str) -> bool:
         """Bring the cache up to date if needed.
@@ -173,16 +176,24 @@ class SimklWatchHistorySync:
 
         total = 0
         dropped = 0
+        # (media_type, activities field) pairs whose stored clock must not move.
+        held_back: list[tuple[str, str]] = []
         for media_type, status, date_from in pulls:
             entries = await client.get_all_items(media_type, status, date_from=date_from)
             items, missed = self._normalize_entries(entries, media_type)
             items = await self._resolve_missing_tmdb_ids(items)
             usable = [i for i in items if i.get("tmdb_id")]
+            if any(
+                i.get("tvdb_id") in self._tvdb_transient_failures
+                for i in items if not i.get("tmdb_id")
+            ):
+                # Advancing this bucket's clock would make a passing TMDb
+                # outage permanent: the delta would never be pulled again.
+                held_back.append((media_type, status))
             dropped += missed + (len(items) - len(usable))
             total += self.db.upsert_simkl_watched_cache(link_id, usable)
 
         swept = []
-        skipped_sweeps = []
         for media_type in reconciles:
             entries = await client.get_all_items(media_type, "", ids_only=True)
             present = self._extract_simkl_ids(entries, media_type)
@@ -197,7 +208,7 @@ class SimklWatchHistorySync:
                     "skipping the removal sweep rather than dropping the cache",
                     link_id, len(entries), media_type,
                 )
-                skipped_sweeps.append(media_type)
+                held_back.append((media_type, "removed_from_list"))
                 continue
             removed = self.db.reconcile_simkl_watched_cache(link_id, media_type, present)
             swept.append(media_type)
@@ -212,7 +223,7 @@ class SimklWatchHistorySync:
         # deltas belonging to whichever bucket failed.
         self.db.update_simkl_sync_state(
             link_id,
-            activities=self._activities_to_store(activities, stored, skipped_sweeps),
+            activities=self._activities_to_store(activities, stored, held_back),
             mark_full_sync=first_sync or bool(swept),
             mark_activities_check=True,
         )
@@ -275,26 +286,27 @@ class SimklWatchHistorySync:
 
     @staticmethod
     def _activities_to_store(
-        activities: dict, stored: dict, skipped_sweeps: list[str]
+        activities: dict, stored: dict, held_back: list[tuple[str, str]]
     ) -> dict:
-        """Hold back the removal clock for any type whose sweep was skipped.
+        """Keep the stored clock for every ``(type, field)`` that was not fully handled.
 
-        ``removed_from_list`` advancing is the only signal that a sweep is due.
-        Persisting the new value for a type we declined to sweep would consume
-        that signal, so the removal would never be noticed again.
+        A timestamp advancing is the only signal that a pull or sweep is due.
+        Persisting the new value for a bucket whose sweep was skipped, or whose
+        entries could not all be enriched, would consume that signal, so the
+        work would never be retried.
         """
-        if not skipped_sweeps:
+        if not held_back:
             return activities
 
         held = dict(activities)
-        for media_type in skipped_sweeps:
+        for media_type, field in held_back:
             key = SimklClient.ACTIVITIES_KEY_BY_TYPE[media_type]
             bucket = dict(held.get(key) or {})
-            previous = (stored.get(key) or {}).get("removed_from_list")
+            previous = (stored.get(key) or {}).get(field)
             if previous is None:
-                bucket.pop("removed_from_list", None)
+                bucket.pop(field, None)
             else:
-                bucket["removed_from_list"] = previous
+                bucket[field] = previous
             held[key] = bucket
         return held
 
@@ -413,6 +425,8 @@ class SimklWatchHistorySync:
         try:
             async with session.get(url, params=params) as response:
                 if response.status != 200:
+                    if response.status == 429 or response.status >= 500:
+                        self._tvdb_transient_failures.add(tvdb_id)
                     return None
                 data = await response.json()
             for key in ("tv_results", "movie_results"):
@@ -421,6 +435,7 @@ class SimklWatchHistorySync:
                     return results[0].get("id")
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             self.logger.debug("TVDb->TMDb lookup failed for %s: %s", tvdb_id, exc)
+            self._tvdb_transient_failures.add(tvdb_id)
         return None
 
     @staticmethod

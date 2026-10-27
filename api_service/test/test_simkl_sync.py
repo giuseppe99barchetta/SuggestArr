@@ -665,6 +665,39 @@ def test_lookups_stay_within_the_concurrency_bound(monkeypatch):
     assert peak <= SimklWatchHistorySync.TVDB_LOOKUP_CONCURRENCY
 
 
+def _sync_with_unmapped_entry(monkeypatch, transient):
+    """Run a delta sync of one TMDb-less entry whose TVDb lookup fails."""
+    stored = activities(tv_shows={"watching": "2026-08-01T00:00:00Z"})
+    current = activities(tv_shows={"watching": "2026-08-05T00:00:00Z"})
+    entry = show_entry(1, tmdb=None)
+    client = FakeClient(current, items={("shows", "watching"): [entry]})
+    sync, db = make_sync(monkeypatch, client)
+    sync.tmdb_api_key = "tmdb-key"
+    db.get_simkl_sync_state.return_value = {
+        "activities": stored, "last_full_sync_at": 100, "last_activities_check_at": 0,
+    }
+
+    async def failing_lookup(_session, tvdb_id):
+        if transient:
+            sync._tvdb_transient_failures.add(tvdb_id)
+        return None
+
+    monkeypatch.setattr(sync, "_find_tmdb_from_tvdb", failing_lookup)
+    asyncio.run(sync.ensure_synced(LINK, "tok"))
+    return db.update_simkl_sync_state.call_args_list[-1].kwargs["activities"]
+
+
+def test_a_transient_tvdb_failure_holds_the_bucket_clock_so_it_retries(monkeypatch):
+    """A passing TMDb outage must not drop the title until its Simkl activity moves."""
+    saved = _sync_with_unmapped_entry(monkeypatch, transient=True)
+    assert saved["tv_shows"]["watching"] == "2026-08-01T00:00:00Z"
+
+
+def test_a_definitive_tvdb_miss_still_advances_the_bucket_clock(monkeypatch):
+    saved = _sync_with_unmapped_entry(monkeypatch, transient=False)
+    assert saved["tv_shows"]["watching"] == "2026-08-05T00:00:00Z"
+
+
 # ---- Failure handling --------------------------------------------------------
 
 def test_an_auth_error_propagates_so_the_link_can_be_flagged(monkeypatch):

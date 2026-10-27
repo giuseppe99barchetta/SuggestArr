@@ -50,7 +50,7 @@ import {
 } from '@/api/api';
 import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import InfoTip from '@/components/ui/InfoTip.vue';
-import { trackerState, trackerWarning } from './trackerState.js';
+import { trackerState, trackerWarning, trackerUsers } from './trackerState.js';
 
 const DEFAULTS = {
   use_llm: false,
@@ -156,14 +156,14 @@ export default {
     trackerUsable(tracker) {
       return this.trackerStates[tracker] === 'usable';
     },
-    /** Fetch linked accounts for one tracker, tolerating a failed lookup. */
+    /** Fetch linked accounts for one tracker; null when the list is unreadable (non-admin). */
     async loadTrackerUsers(configured, list) {
       if (!configured) return [];
       try {
         const res = await list();
         return res.data?.media_users || [];
       } catch {
-        return [];
+        return null;
       }
     },
     /**
@@ -175,13 +175,13 @@ export default {
      * is linked-but-unmonitored instead of claiming nothing is linked at all.
      * A caller with no media profile gets a 404, which is not an error here.
      */
-    async loadSelfConnected(configured, fetchStatus, key) {
-      if (!configured) return false;
+    async loadSelfProfile(configured, fetchStatus) {
+      if (!configured) return null;
       try {
         const res = await fetchStatus();
-        return res.data?.media_user?.[key]?.connected === true;
+        return res.data?.media_user || null;
       } catch {
-        return false;
+        return null;
       }
     },
   },
@@ -191,15 +191,16 @@ export default {
       const statusResponse = await axios.get('/api/config/status');
       this.traktConfigured = statusResponse.data?.trakt_app_configured === true;
       this.simklConfigured = statusResponse.data?.simkl_app_configured === true;
-      [
-        this.traktMediaUsers, this.simklMediaUsers,
-        this.traktSelfConnected, this.simklSelfConnected,
-      ] = await Promise.all([
+      const [traktUsers, simklUsers, traktSelf, simklSelf] = await Promise.all([
         this.loadTrackerUsers(this.traktConfigured, listTraktMediaUsers),
         this.loadTrackerUsers(this.simklConfigured, listSimklMediaUsers),
-        this.loadSelfConnected(this.traktConfigured, getMyTraktStatus, 'trakt'),
-        this.loadSelfConnected(this.simklConfigured, getMySimklStatus, 'simkl'),
+        this.loadSelfProfile(this.traktConfigured, getMyTraktStatus),
+        this.loadSelfProfile(this.simklConfigured, getMySimklStatus),
       ]);
+      this.traktMediaUsers = trackerUsers(traktUsers, traktSelf);
+      this.simklMediaUsers = trackerUsers(simklUsers, simklSelf);
+      this.traktSelfConnected = traktSelf?.trakt?.connected === true;
+      this.simklSelfConnected = simklSelf?.simkl?.connected === true;
     } catch {
       this.traktMediaUsers = [];
       this.simklMediaUsers = [];

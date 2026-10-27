@@ -40,7 +40,7 @@ _NOT_CONFIGURED = "Configure the Simkl client ID first"
 _NOT_LINKED = "Simkl account not linked"
 
 
-def _CLIENT_ID_FAILED(exc: Exception) -> dict:
+def _CLIENT_ID_FAILED() -> dict:
     """Body for a 412 from Simkl.
 
     Carries a stable ``code`` because this failure belongs on the integration
@@ -48,7 +48,12 @@ def _CLIENT_ID_FAILED(exc: Exception) -> dict:
     it, and the UI should not have to match on message text to tell the
     difference.
     """
-    return {"message": str(exc), "status": "error", "code": "client_id_failed"}
+    # A fixed message: exception text must never reach the client.
+    return {
+        "message": "Simkl rejected the client ID: wrong, suspended, or over its request limit",
+        "status": "error",
+        "code": "client_id_failed",
+    }
 
 
 def _get_json() -> dict:
@@ -266,7 +271,7 @@ def _start_pin(db: DatabaseManager, identity: dict, label: str):
         activation = async_to_sync(_request_pin)(client_id)
     except SimklClientIdError as exc:
         logger.warning("Simkl rejected the client ID while starting a PIN: %s", exc)
-        return jsonify(_CLIENT_ID_FAILED(exc)), 400
+        return jsonify(_CLIENT_ID_FAILED()), 400
     except Exception as exc:
         logger.error("Simkl device request failed for %s: %s", label, exc, exc_info=True)
         return jsonify({"message": "Error requesting Simkl authorization", "status": "error"}), 500
@@ -313,8 +318,8 @@ def _finish_pin(db: DatabaseManager, identity: dict, label: str):
     except SimklPinExpired:
         db.set_simkl_pending_device_code(identity["id"], None, None)
         return jsonify({"message": "Simkl authorization expired. Request a new one.", "status": "error"}), 400
-    except SimklClientIdError as exc:
-        return jsonify(_CLIENT_ID_FAILED(exc)), 400
+    except SimklClientIdError:
+        return jsonify(_CLIENT_ID_FAILED()), 400
     except Exception as exc:
         logger.error("Simkl device exchange failed for %s: %s", label, exc, exc_info=True)
         # Preserve an existing connection until the replacement account and
@@ -524,8 +529,8 @@ def _recent_response(db: DatabaseManager, identity_id: int, provider: str, exter
             "message": "Simkl access expired. Link the account again.",
             "status": "needs_reauth",
         }), 400
-    except SimklClientIdError as exc:
-        return jsonify(_CLIENT_ID_FAILED(exc)), 400
+    except SimklClientIdError:
+        return jsonify(_CLIENT_ID_FAILED()), 400
     except Exception as exc:
         logger.error(
             "Simkl preview failed for %s/%s: %s", provider, external_user_id, exc, exc_info=True

@@ -7,6 +7,18 @@
  * get subtly wrong and hard to see in the UI.
  */
 
+/**
+ * Users to judge a tracker against.
+ *
+ * The full list comes from an admin-only endpoint, so for a regular user it
+ * is `null` (403). Their own media profile is then the only account a job of
+ * theirs can read, so it stands in for the list.
+ */
+export function trackerUsers(list, self) {
+  if (list) return list;
+  return self ? [self] : [];
+}
+
 /** Whether any user this job actually reads from has the tracker linked. */
 export function monitoredConnected({ users, key, userMode, selectedIds }) {
   if (!users.length) return false;

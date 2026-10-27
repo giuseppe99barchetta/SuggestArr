@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { trackerState, trackerWarning } from './trackerState.js';
+import { trackerState, trackerWarning, trackerUsers } from './trackerState.js';
 
 const linked = { external_user_id: '1', simkl: { connected: true } };
 const unlinked = { external_user_id: '2', simkl: {} };
@@ -106,4 +106,10 @@ test('the linked-not-monitored warning does not tell the user to link again', ()
   const warning = trackerWarning('linked-not-monitored', 'Simkl', 'Client ID');
   assert.match(warning, /is linked/);
   assert.match(warning, /this job monitors/);
+});
+
+test('a regular user who cannot read the admin list is judged by their own profile', () => {
+  assert.equal(state({ users: trackerUsers(null, linked), userMode: 'selected', selectedIds: ['1'] }), 'usable');
+  assert.deepEqual(trackerUsers(null, null), []);
+  assert.deepEqual(trackerUsers([unlinked], linked), [unlinked]);
 });
