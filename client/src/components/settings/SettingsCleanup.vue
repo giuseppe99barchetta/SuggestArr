@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-col gap-5">
-    <PageHeader title="Cleanup" subtitle="Delete SuggestArr requests and their files when nobody favorited the title in your media server within a grace period." />
+    <PageHeader title="Cleanup" subtitle="Delete SuggestArr requests and their files when the title was not favorited in your media server within a grace period." />
 
     <div role="alert" class="flex items-start gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
       <i aria-hidden="true" class="fas fa-exclamation-triangle mt-0.5 text-caution"></i>
@@ -32,7 +32,7 @@
           <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-raised text-ink-3"><i aria-hidden="true" class="fas fa-hourglass-half"></i></span>
           <span class="flex min-w-0 flex-1 flex-col gap-0.5">
             <span class="text-sm font-semibold text-ink">Grace period (days)</span>
-            <span class="text-xs leading-snug text-ink-4">If a requested item has not been favorited in Plex, Jellyfin, or Emby within this many days of being requested, it becomes a deletion candidate.</span>
+            <span class="text-xs leading-snug text-ink-4">If a requested item has not been favorited in Plex, Jellyfin, or Emby within this many days of being requested, it becomes a deletion candidate. Plex counts only a 5-star rating from the server owner's account; Jellyfin and Emby count favorites of the users selected in Connections (all users when none are selected).</span>
           </span>
           <input v-model.number="form.grace_days" type="number" min="1" max="365" class="ui-input h-9 w-20 shrink-0 px-2.5" />
         </label>
