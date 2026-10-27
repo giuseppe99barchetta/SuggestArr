@@ -246,8 +246,8 @@ def _is_trusted_header_peer(peer_ip: str) -> bool:
         _warned_default_trusted_cidrs = True
         logger.warning(
             "AUTH_MODE=trusted_header with the default AUTH_TRUSTED_CIDRS (all private networks): "
-            "the identity header is accepted only from localhost. Set AUTH_TRUSTED_CIDRS to your "
-            "reverse proxy's address, e.g. AUTH_TRUSTED_CIDRS=10.0.20.11/32."
+            "the identity header is accepted only from localhost. Set your reverse proxy's address "
+            "in Settings > Advanced > Access & routing, e.g. 10.0.20.11/32."
         )
     try:
         ip = ipaddress.ip_address(peer_ip)

@@ -743,7 +743,12 @@ own role; only the password step is gone.
 > Since 3.2.0, while `AUTH_TRUSTED_CIDRS` is left at those defaults,
 > `trusted_header` only believes the header from localhost and logs a warning
 > at the first request. If your proxy runs elsewhere (another container or
-> host), set `AUTH_TRUSTED_CIDRS` to its address or sign-in will fail.
+> host), set its address or sign-in through the proxy will fail; password
+> sign-in keeps working.
+
+All of these can be set in **Settings → Advanced → Access & routing** by
+choosing *Sign In Through Reverse Proxy (SSO)*; the environment variables
+below still work and take precedence.
 
 Accounts created this way get a random, unusable password hash: they exist to
 carry an identity, and nobody can log into them with a password. Promote a user

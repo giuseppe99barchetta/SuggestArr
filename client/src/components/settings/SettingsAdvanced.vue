@@ -326,11 +326,30 @@ LLM_MODEL=gpt-4o-mini</code></pre>
               </p>
             </div>
 
+            <div v-if="localConfig.AUTH_MODE === 'trusted_header'" role="note" class="flex items-start gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
+              <i aria-hidden="true" class="fas fa-exclamation-triangle mt-0.5 text-caution"></i>
+              <p class="m-0 text-sm text-ink-2">
+                <strong class="text-ink">Your proxy signs people in.</strong>
+                SuggestArr trusts the username header only from the addresses below. Password sign-in keeps working for everyone else.
+              </p>
+            </div>
+
             <label v-if="localConfig.AUTH_MODE === 'local_bypass'" class="ui-label" for="authTrustedCidrs">
               Trusted CIDRs
               <input id="authTrustedCidrs" v-model="localConfig.AUTH_TRUSTED_CIDRS" type="text" placeholder="127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16" class="ui-input" :disabled="isLoading" />
               <span class="text-xs font-normal text-ink-4">Networks allowed to skip sign-in, separated by commas.</span>
             </label>
+            <label v-if="localConfig.AUTH_MODE === 'trusted_header'" class="ui-label" for="authTrustedCidrs">
+              Reverse proxy address
+              <input id="authTrustedCidrs" v-model="localConfig.AUTH_TRUSTED_CIDRS" type="text" placeholder="10.0.20.11/32" class="ui-input" :disabled="isLoading" />
+              <span class="text-xs font-normal text-ink-4">List only your proxy, e.g. <code>10.0.20.11/32</code>. While this is left at the whole-network default, only requests from this machine (localhost) are trusted.</span>
+            </label>
+            <label v-if="localConfig.AUTH_MODE === 'trusted_header'" class="ui-label" for="authTrustedHeader">
+              Username header
+              <input id="authTrustedHeader" v-model="localConfig.AUTH_TRUSTED_HEADER" type="text" placeholder="X-Forwarded-User" class="ui-input" :disabled="isLoading" />
+              <span class="text-xs font-normal text-ink-4">Authelia and Authentik usually send <code>Remote-User</code>; oauth2-proxy and Traefik <code>X-Forwarded-User</code>.</span>
+            </label>
+            <BaseCheckbox v-if="localConfig.AUTH_MODE === 'trusted_header'" v-model="localConfig.AUTH_TRUSTED_HEADER_AUTO_CREATE" :disabled="isLoading" label="Create accounts for new usernames" description="New people get a regular user account the first time they arrive. Turn off to allow only accounts you created." />
             <label v-if="localConfig.AUTH_MODE === 'local_bypass'" class="ui-label" for="authTrustedProxyCidrs">
               Trusted reverse proxy CIDRs
               <input id="authTrustedProxyCidrs" v-model="localConfig.AUTH_TRUSTED_PROXY_CIDRS" type="text" placeholder="10.0.20.11/32" class="ui-input" :disabled="isLoading" />
@@ -538,6 +557,7 @@ export default {
       authModeOptions: [
         { value: 'enabled', label: 'Require Login' },
         { value: 'local_bypass', label: 'Allow Local Network Without Login' },
+        { value: 'trusted_header', label: 'Sign In Through Reverse Proxy (SSO)' },
         { value: 'disabled', label: 'Disable Authentication' },
       ],
       requestVisibilityOptions: [
@@ -630,6 +650,8 @@ export default {
           AUTH_TRUSTED_PROXY_CIDRS: '',
           AUTH_TRUSTED_CIDRS: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
           AUTH_BYPASS_USERNAME: 'local_admin',
+          AUTH_TRUSTED_HEADER: 'X-Forwarded-User',
+          AUTH_TRUSTED_HEADER_AUTO_CREATE: true,
         };
 
         Object.keys(advancedDefaults).forEach(key => {
@@ -641,6 +663,9 @@ export default {
         if (!this.authModeOptions.some(option => option.value === this.localConfig.AUTH_MODE)) {
           this.localConfig.AUTH_MODE = 'enabled';
         }
+        // Hand-edited config may hold "false"; a checkbox would read that as on.
+        this.localConfig.AUTH_TRUSTED_HEADER_AUTO_CREATE = !['false', '0', 'no', 'off']
+          .includes(String(this.localConfig.AUTH_TRUSTED_HEADER_AUTO_CREATE).trim().toLowerCase());
 
         // Snapshot after defaults and normalisation, so an untouched page is not "dirty".
         this.originalConfig = { ...this.localConfig };
@@ -832,6 +857,8 @@ export default {
             AUTH_TRUSTED_CIDRS: cidrText,
             AUTH_TRUSTED_PROXY_CIDRS: String(this.localConfig.AUTH_TRUSTED_PROXY_CIDRS || '').trim(),
             AUTH_BYPASS_USERNAME: (this.localConfig.AUTH_BYPASS_USERNAME || '').trim() || 'local_admin',
+            AUTH_TRUSTED_HEADER: (this.localConfig.AUTH_TRUSTED_HEADER || '').trim() || 'X-Forwarded-User',
+            AUTH_TRUSTED_HEADER_AUTO_CREATE: this.localConfig.AUTH_TRUSTED_HEADER_AUTO_CREATE !== false,
             SUBPATH: this.localConfig.SUBPATH || null,
           },
         });
@@ -890,6 +917,8 @@ export default {
         AUTH_TRUSTED_PROXY_CIDRS: '',
         AUTH_TRUSTED_CIDRS: '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
         AUTH_BYPASS_USERNAME: 'local_admin',
+        AUTH_TRUSTED_HEADER: 'X-Forwarded-User',
+        AUTH_TRUSTED_HEADER_AUTO_CREATE: true,
         SUBPATH: null,
       };
 
