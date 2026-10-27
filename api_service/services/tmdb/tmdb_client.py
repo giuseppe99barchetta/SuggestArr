@@ -50,6 +50,9 @@ class TMDbClient(BaseHTTPClient):
         self.tmdb_threshold = tmdb_threshold
         self.tmdb_min_votes = tmdb_min_votes
         self.include_no_ratings = include_no_ratings
+        # Legacy/imported configs may store FILTER_LANGUAGE as a bare "es" string; iterating it would yield chars.
+        if isinstance(filter_language, str):
+            filter_language = [code.strip() for code in filter_language.split(',') if code.strip()]
         self.language_filter = filter_language
         self.release_year_filter = filter_release_year
         self.release_year_filter_to = int(filter_release_year_to) if filter_release_year_to is not None else None
@@ -650,7 +653,7 @@ class TMDbClient(BaseHTTPClient):
         """
         Logs the reason for excluding a content item.
         """
-        title = item.get('title' if content_type == 'movie' else 'name')
+        title = item.get('title') or item.get('name')
         self.logger.info(f"Excluding {title} due to {reason}.")
 
     def _format_result(self, item, content_type):

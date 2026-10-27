@@ -135,6 +135,12 @@ class TestApplyFilters(unittest.TestCase):
         client = _make_client(filter_language=[{'id': 'en', 'english_name': 'English'}])
         self.assertTrue(client._apply_filters(_MOVIE_ITEM, 'movie')['passed'])
 
+    def test_string_language_filter_is_not_split_into_chars(self):
+        client = _make_client(filter_language='es')
+        self.assertEqual(client.language_filter, ['es'])
+        self.assertTrue(client._apply_filters({**_MOVIE_ITEM, 'original_language': 'es'}, 'movie')['passed'])
+        self.assertFalse(client._apply_filters({**_MOVIE_ITEM, 'original_language': 'en'}, 'movie')['passed'])
+
     def test_excludes_when_release_year_before_filter(self):
         client = _make_client(filter_release_year=2020)
         item = {**_MOVIE_ITEM, 'release_date': '2010-01-01'}
