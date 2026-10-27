@@ -11,8 +11,6 @@ Admin endpoints (require role='admin'):
 Per-user media profile endpoints (any authenticated user):
   GET    /api/users/me/links                   — list current user's media links
   GET    /api/users/<id>/avatar                — own image, or any image for admins
-  POST   /api/users/me/link/jellyfin           — link a Jellyfin account
-  POST   /api/users/me/link/emby               — link an Emby account
   DELETE /api/users/me/link/<provider>         — unlink a media account
   GET    /api/users/me/link/plex/oauth-start   — begin Plex OAuth device flow
   POST   /api/users/me/link/plex/oauth-poll    — poll Plex OAuth completion
@@ -519,81 +517,6 @@ def get_my_links():
     db = DatabaseManager()
     links = db.get_user_media_profiles(_current_user_id())
     return jsonify(links), 200
-
-
-# ---------------------------------------------------------------------------
-# Link Jellyfin
-# ---------------------------------------------------------------------------
-
-@users_bp.route('/me/link/jellyfin', methods=['POST'])
-def link_jellyfin():
-    """
-    Validate Jellyfin credentials and store the resulting profile link.
-
-    The password is used only for validation and is never stored.
-
-    Request JSON:
-      username    (str) — Jellyfin username
-      password    (str) — Jellyfin password
-      server_url  (str, optional) — Jellyfin server URL; falls back to
-                  JELLYFIN_API_URL from config if omitted
-
-    Response (200): { "message": "Jellyfin account linked", "external_username": <str> }
-    Response (400): { "error": "<validation message>" }
-    Response (401): { "error": "Jellyfin credentials invalid" }
-    """
-    return _link_jellyfin_or_emby('jellyfin')
-
-
-# ---------------------------------------------------------------------------
-# Link Emby
-# ---------------------------------------------------------------------------
-
-@users_bp.route('/me/link/emby', methods=['POST'])
-def link_emby():
-    """
-    Validate Emby credentials and store the resulting profile link.
-
-    Emby uses the same authentication API format as Jellyfin.
-
-    Request JSON:
-      username    (str) — Emby username
-      password    (str) — Emby password
-      server_url  (str, optional) — Emby server URL
-
-    Response (200): { "message": "Emby account linked", "external_username": <str> }
-    Response (400): { "error": "<validation message>" }
-    Response (401): { "error": "Emby credentials invalid" }
-    """
-    return _link_jellyfin_or_emby('emby')
-
-
-def _link_jellyfin_or_emby(provider: str):
-    """
-    Shared handler for Jellyfin and Emby profile linking.
-
-    The frontend fetches available users from the media server via the
-    /me/link/<provider>/users endpoint (using the admin token) and shows them
-    in a dropdown.  This endpoint simply persists the user's selection —
-    no password is required or stored — which is also why the link stays
-    unverified: nothing shows that the chosen account is the caller's.
-
-    Args:
-        provider: 'jellyfin' or 'emby'
-    """
-    data = request.get_json(silent=True) or {}
-    external_user_id = (data.get("external_user_id") or "").strip()
-    external_username = (data.get("external_username") or "").strip()
-
-    if not external_user_id or not external_username:
-        return jsonify({"error": "external_user_id and external_username are required"}), 400
-
-    db = DatabaseManager()
-    db.create_user_media_profile(
-        _current_user_id(), provider, external_user_id, external_username
-    )
-    logger.info("User id=%d linked %s account: %r", _current_user_id(), provider, external_username)
-    return jsonify({"message": f"{provider.capitalize()} account linked", "external_username": external_username}), 200
 
 
 # ---------------------------------------------------------------------------
