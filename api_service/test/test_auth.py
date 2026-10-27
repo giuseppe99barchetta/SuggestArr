@@ -1025,6 +1025,12 @@ class _ExtendedAuthBlueprintBase(_AuthBlueprintBase):
 
                 return True
 
+            def revoke_user_refresh_tokens(self_inner, user_id):
+                for row in tokens.values():
+                    if row["user_id"] == user_id:
+                        row["revoked"] = True
+
+        tokens = self._refresh_tokens
         self.FakeDB = ExtendedFakeDB
 
 
@@ -1244,6 +1250,39 @@ class TestAuthMePatchEndpoint(_ExtendedAuthBlueprintBase):
         self.assertEqual(resp.status_code, 200)
         data = resp.get_json()
         self.assertIn("message", data)
+
+    def test_password_change_revokes_old_sessions_and_keeps_this_browser_signed_in(self):
+        from api_service.auth.auth_service import AuthService
+        db = self.FakeDB()
+        far = datetime.now(timezone.utc) + timedelta(days=7)
+        db.store_refresh_token(self._uid, AuthService.hash_refresh_token("stolen"), far)
+        db.store_refresh_token(999, AuthService.hash_refresh_token("someone-else"), far)
+
+        resp = self.client.patch(
+            '/api/auth/me',
+            json={"current_password": "StrongPass1!", "new_password": "NewSecurePass2!"},
+            headers=self._auth_headers(),
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(db.get_refresh_token(AuthService.hash_refresh_token("stolen")))
+        self.assertIsNotNone(db.get_refresh_token(AuthService.hash_refresh_token("someone-else")))
+        cookie = resp.headers.get("Set-Cookie", "")
+        self.assertIn("suggestarr_refresh=", cookie)
+        self.assertIn("Path=/api/auth/refresh", cookie)
+        self.assertEqual(self.client.post('/api/auth/refresh').status_code, 200)
+
+    def test_username_change_alone_keeps_sessions(self):
+        from api_service.auth.auth_service import AuthService
+        db = self.FakeDB()
+        far = datetime.now(timezone.utc) + timedelta(days=7)
+        db.store_refresh_token(self._uid, AuthService.hash_refresh_token("other-device"), far)
+
+        resp = self.client.patch('/api/auth/me', json={"username": "alice2"}, headers=self._auth_headers())
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn("Set-Cookie", resp.headers)
+        self.assertIsNotNone(db.get_refresh_token(AuthService.hash_refresh_token("other-device")))
 
     def test_patch_me_wrong_current_password_returns_401(self):
         resp = self.client.patch(

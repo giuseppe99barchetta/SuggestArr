@@ -286,10 +286,6 @@ def login():
 
     # Issue tokens
     access_token = AuthService.create_access_token(user["id"], user["username"], user["role"])
-    raw_refresh, hashed_refresh = AuthService.generate_refresh_token()
-    expires_at = datetime.now(tz=timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-
-    db.store_refresh_token(user["id"], hashed_refresh, expires_at)
     db.update_last_login(user["id"])
 
     logger.info("Successful login: %r from %s", username, request.remote_addr)
@@ -302,6 +298,22 @@ def login():
         }),
         200,
     )
+    _issue_refresh_cookie(db, response, user["id"])
+    return response
+
+
+def _issue_refresh_cookie(db, response, user_id):
+    """
+    Store a new refresh token for the user and set it as the refresh cookie.
+
+    Args:
+        db: DatabaseManager instance used to persist the token hash.
+        response: Flask response that receives the Set-Cookie header.
+        user_id: Primary key of the user the token belongs to.
+    """
+    raw_refresh, hashed_refresh = AuthService.generate_refresh_token()
+    expires_at = datetime.now(tz=timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    db.store_refresh_token(user_id, hashed_refresh, expires_at)
 
     # httpOnly — JavaScript cannot read this cookie (XSS protection).
     # SameSite=Strict — cookie is not sent on cross-site requests (CSRF protection).
@@ -309,7 +321,7 @@ def login():
     #   not to every API call, which limits its exposure window.
     subpath = str(load_env_vars().get('SUBPATH') or '').strip()
     refresh_path = f"{subpath}/api/auth/refresh" if subpath else "/api/auth/refresh"
-    
+
     response.set_cookie(
         _REFRESH_COOKIE,
         raw_refresh,
@@ -318,8 +330,6 @@ def login():
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
         path=refresh_path,
     )
-
-    return response
 
 
 # ---------------------------------------------------------------------------
@@ -596,4 +606,10 @@ def update_me():
         resp_body["access_token"] = new_token
 
     logger.info("User id=%d updated their profile: fields=%s", user_id, list(updates.keys()))
-    return jsonify(resp_body), 200
+    response = make_response(jsonify(resp_body), 200)
+    if "password_hash" in updates:
+        # Close every session opened with the old password, then give this
+        # browser a fresh one (its refresh cookie is never sent to this path).
+        db.revoke_user_refresh_tokens(user_id)
+        _issue_refresh_cookie(db, response, user_id)
+    return response

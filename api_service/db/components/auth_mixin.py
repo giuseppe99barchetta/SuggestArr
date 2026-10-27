@@ -269,6 +269,23 @@ class AuthMixin:
             cursor.execute(query, (token_hash,))
             conn.commit()
 
+    def revoke_user_refresh_tokens(self, user_id: int) -> None:
+        """
+        Revoke every refresh token of a user.
+
+        Called after a password change so that sessions opened with the old
+        password (for example a stolen cookie) stop working.
+
+        Args:
+            user_id: Primary key of the user whose sessions are closed.
+        """
+        ph = self._ph()
+        query = f"UPDATE refresh_tokens SET revoked = 1 WHERE user_id = {ph}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (user_id,))
+            conn.commit()
+
     def cleanup_expired_refresh_tokens(self) -> int:
         """
         Delete refresh tokens that have expired or been revoked.
