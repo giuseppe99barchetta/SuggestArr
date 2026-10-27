@@ -1,13 +1,13 @@
 """
 Admin blueprint: configuration export / import.
 
-Export: GET  /api/admin/export-config?include_secrets=true|false
+Export: GET  /api/admin/export-config?include_secrets=true|false  (admin only)
 Import: POST /api/admin/import-config  (admin only)
 
 The database is the single source of truth for integrations.
 Config-file writes are intentionally absent from this module.
 """
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, jsonify, request
 
 from api_service.auth.middleware import require_role
 from api_service.config.config import load_env_vars
@@ -82,23 +82,19 @@ def _integrations_from_v1(payload: dict) -> dict:
 
 
 @admin_bp.route('/export-config', methods=['GET'])
+@require_role('admin')
 def export_config():
     """
     Export the current DB-backed configuration as a portable backup.
 
     Query parameters:
         include_secrets (str): 'true' to include raw secret values in the
-            response.  Requires admin role.  Defaults to 'false'.
+            response.  Defaults to 'false'.
 
     Returns:
         JSON: {schema_version, integrations, settings}
     """
     include_secrets = request.args.get('include_secrets', 'false').lower() == 'true'
-
-    if include_secrets:
-        user = getattr(g, 'current_user', None)
-        if user is None or user.get('role') != 'admin':
-            return jsonify({'error': 'Admin role required to export secrets'}), 403
 
     db = DatabaseManager()
     integrations = db.get_all_integrations()

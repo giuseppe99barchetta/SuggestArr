@@ -84,6 +84,7 @@ def cleanup_run_now():
 
 
 @cleanup_bp.route("/log", methods=["GET"])
+@require_role("admin")
 def cleanup_log_list():
     try:
         try:
