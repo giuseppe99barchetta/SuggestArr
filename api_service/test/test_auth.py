@@ -452,6 +452,34 @@ class TestTrustedHeaderAuth(unittest.TestCase):
 
     # --- The security boundary ---
 
+    def test_default_cidrs_do_not_let_any_lan_host_pick_an_identity(self):
+        """With the whole-private-network defaults, only loopback is trusted."""
+        server_default = '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7'
+        settings_page_default = '127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16'
+        admin = {"id": 1, "username": "admin", "role": "admin", "is_active": True}
+        for cidrs in (server_default, settings_page_default):
+            os.environ['AUTH_TRUSTED_CIDRS'] = cidrs
+            result, current_user, _ = self._call(
+                headers={'X-Forwarded-User': 'admin'}, remote_addr='192.168.1.50', existing_user=admin,
+            )
+            self.assertEqual(result[1], 401)
+            self.assertIsNone(current_user)
+
+            result, current_user, _ = self._call(
+                headers={'X-Forwarded-User': 'admin'}, remote_addr='127.0.0.1', existing_user=admin,
+            )
+            self.assertIsNone(result)
+            self.assertEqual(current_user['username'], 'admin')
+
+    def test_default_cidrs_still_allow_local_bypass_on_the_lan(self):
+        """The fallback only narrows trusted_header; local_bypass keeps its defaults."""
+        from api_service.auth.middleware import _local_bypass_allowed
+        from flask import Flask
+        os.environ.pop('AUTH_TRUSTED_CIDRS', None)
+        with patch('api_service.auth.middleware.load_env_vars', return_value={}):
+            with Flask(__name__).test_request_context('/', environ_base={"REMOTE_ADDR": '192.168.1.50'}):
+                self.assertTrue(_local_bypass_allowed())
+
     def test_header_from_untrusted_ip_is_rejected(self):
         """A header from outside the trusted CIDRs must never be believed."""
         result, current_user, _ = self._call(

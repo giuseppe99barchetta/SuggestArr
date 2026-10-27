@@ -739,6 +739,11 @@ own role; only the password step is gone.
 > ranges can pick any identity by setting it themselves. The defaults cover
 > whole private networks, which is convenient for `local_bypass` but too wide
 > here — ideally list only the proxy, e.g. `AUTH_TRUSTED_CIDRS=10.0.20.11/32`.
+>
+> Since 3.2.0, while `AUTH_TRUSTED_CIDRS` is left at those defaults,
+> `trusted_header` only believes the header from localhost and logs a warning
+> at the first request. If your proxy runs elsewhere (another container or
+> host), set `AUTH_TRUSTED_CIDRS` to its address or sign-in will fail.
 
 Accounts created this way get a random, unusable password hash: they exist to
 carry an identity, and nobody can log into them with a password. Promote a user
