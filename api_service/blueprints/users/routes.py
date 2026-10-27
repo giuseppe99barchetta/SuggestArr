@@ -26,6 +26,8 @@ Security decisions
 - Plex tokens are stored to allow future server-side API calls on behalf of
   the user (e.g. personalised recommendations).
 """
+import time
+
 from api_service.services.http import sync_client as http_requests
 from api_service.utils.ssrf_guard import normalize_base_url
 
@@ -62,6 +64,13 @@ _TAB_ALIASES = {
 _PLEX_CLIENT_NAME = "SuggestArr"
 _PLEX_PRODUCT = "SuggestArr"
 _PLEX_VERSION = "1.0"
+
+# Every account shares one Plex client id, so a PIN may only be redeemed by the
+# user it was issued to: pin id -> (SuggestArr user id, issued at).
+# shortcut: kept in memory, fine for the single uvicorn process; move to the DB if
+# SuggestArr ever runs several workers. A restart mid-link just means linking again.
+_PLEX_PIN_TTL_S = 30 * 60
+_issued_plex_pins: dict = {}
 
 
 # ---------------------------------------------------------------------------
@@ -630,7 +639,11 @@ def plex_oauth_start():
 
     pin_id = body["id"]
     pin_code = body["code"]
-    
+    now = time.monotonic()
+    for stale in [pin for pin, (_, at) in _issued_plex_pins.items() if now - at > _PLEX_PIN_TTL_S]:
+        _issued_plex_pins.pop(stale, None)
+    _issued_plex_pins[str(pin_id)] = (_current_user_id(), now)
+
     from api_service.services.config_service import ConfigService
     client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
     auth_url = (
@@ -719,6 +732,10 @@ def plex_oauth_poll():
     pin_id = data.get("pin_id")
     if not pin_id:
         return jsonify({"error": "pin_id is required"}), 400
+    issued = _issued_plex_pins.get(str(pin_id))
+    if (not issued or issued[0] != _current_user_id()
+            or time.monotonic() - issued[1] > _PLEX_PIN_TTL_S):
+        return jsonify({"error": "This Plex sign-in has expired. Please start linking again."}), 400
 
     try:
         resp = http_requests.get(
@@ -758,6 +775,7 @@ def plex_oauth_poll():
         _current_user_id(), "plex", external_user_id, external_username, access_token=auth_token,
         verified=True,
     )
+    _issued_plex_pins.pop(str(pin_id), None)
     logger.info(
         "User id=%d linked Plex account: %r (plex_id=%s, stored_id=%s)",
         _current_user_id(), external_username, plex_account_id, external_user_id,

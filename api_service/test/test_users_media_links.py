@@ -350,6 +350,8 @@ class TestPlexOAuthStart(_MediaLinkBase):
         self.assertIn('auth_url', data)
         self.assertEqual(data['pin_id'], 12345)
         self.assertIn('ABCD', data['auth_url'])
+        from api_service.blueprints.users import routes
+        self.assertEqual(routes._issued_plex_pins.pop("12345")[0], 1)
 
     def test_start_http_error_returns_502(self):
         with patch('api_service.blueprints.users.routes.http_requests.post',
@@ -365,6 +367,58 @@ class TestPlexOAuthStart(_MediaLinkBase):
 # ---------------------------------------------------------------------------
 
 class TestPlexOAuthPoll(_MediaLinkBase):
+
+    def setUp(self):
+        super().setUp()
+        import time
+        from api_service.blueprints.users import routes
+        self._pins = routes._issued_plex_pins
+        self._pins.clear()
+        # PINs the caller (user 1) obtained from oauth-start.
+        for pin in ("12345", "99"):
+            self._pins[pin] = (1, time.monotonic())
+
+    def tearDown(self):
+        self._pins.clear()
+        super().tearDown()
+
+    def _poll_with_token(self, pin_id):
+        poll_response = MagicMock()
+        poll_response.json.return_value = {"authToken": "victim-token"}
+        user_response = MagicMock()
+        user_response.json.return_value = {"id": 5, "username": "victim"}
+        with patch('api_service.blueprints.users.routes.http_requests.get',
+                   side_effect=[poll_response, user_response]) as get:
+            resp = self.client.post('/api/users/me/link/plex/oauth-poll', json={"pin_id": pin_id})
+        return resp, get
+
+    def test_pin_issued_to_another_user_is_rejected(self):
+        import time
+        self._pins["777"] = (2, time.monotonic())
+        resp, get = self._poll_with_token(777)
+        self.assertEqual(resp.status_code, 400)
+        get.assert_not_called()
+        self.assertEqual(self._profiles, [])
+
+    def test_unknown_pin_is_rejected(self):
+        resp, get = self._poll_with_token(4242)
+        self.assertEqual(resp.status_code, 400)
+        get.assert_not_called()
+
+    def test_expired_pin_is_rejected(self):
+        import time
+        from api_service.blueprints.users import routes
+        self._pins["12345"] = (1, time.monotonic() - routes._PLEX_PIN_TTL_S - 1)
+        resp, get = self._poll_with_token(12345)
+        self.assertEqual(resp.status_code, 400)
+        get.assert_not_called()
+
+    def test_pin_cannot_be_redeemed_twice(self):
+        first, _ = self._poll_with_token(12345)
+        self.assertEqual(first.get_json()['status'], 'linked')
+        second, get = self._poll_with_token(12345)
+        self.assertEqual(second.status_code, 400)
+        get.assert_not_called()
 
     def test_missing_pin_id_returns_400(self):
         resp = self.client.post('/api/users/me/link/plex/oauth-poll', json={})
