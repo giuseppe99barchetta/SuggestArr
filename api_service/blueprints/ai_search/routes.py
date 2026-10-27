@@ -13,6 +13,7 @@ from api_service.db.database_manager import DatabaseManager
 from api_service.services.ai_search.ai_search_service import AiSearchService
 from api_service.services.config_service import ConfigService
 from api_service.services.llm.llm_service import get_llm_client
+from api_service.utils.request_scope import scan_user_ids
 
 ai_search_bp = Blueprint("ai_search", __name__)
 logger = LoggerManager.get_logger("AiSearchRoute")
@@ -89,6 +90,13 @@ async def ai_search_query():
         exclude_seen = data.get("exclude_seen", False)
         if not isinstance(exclude_seen, bool):
             exclude_seen = False
+
+        # An empty list means "every server user", which only admins may use.
+        user = getattr(g, "current_user", None)
+        if user:
+            user_ids = scan_user_ids(DatabaseManager(), user, user_ids if isinstance(user_ids, list) else [])
+            if user_ids == []:
+                use_history = False  # no linked account: no history of their own
 
         # Check LLM is configured (not strictly required — service degrades gracefully,
         # but we surface a clear error before attempting if completely unconfigured)

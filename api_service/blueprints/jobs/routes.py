@@ -64,6 +64,34 @@ def _validate_request_limits(data):
         )
 
 
+_SCANNING_JOB_TYPES = ('recommendation', 'trakt_recommendations')
+
+
+def _foreign_user_ids_error(job_type, user_ids, current_user, require_link=False):
+    """
+    Keep a regular user's job on their own linked media accounts.
+
+    Args:
+        job_type: Effective job type after the create/update.
+        user_ids: Effective media-user ids the job will scan.
+        current_user: The caller (``g.current_user``).
+        require_link: True on creation, where a job without a linked account
+            could never scan anything.
+
+    Returns:
+        (message, status) when the job is not allowed, otherwise None.
+    """
+    if job_type not in _SCANNING_JOB_TYPES or not current_user or current_user.get('role') == 'admin':
+        return None
+    from api_service.db.database_manager import DatabaseManager
+    own = request_scope.linked_media_user_ids(DatabaseManager(), current_user)
+    if require_link and not own:
+        return 'Link your media server account in your profile before creating this job.', 400
+    if any(str(uid) not in own for uid in (user_ids or [])):
+        return 'Jobs can only use your own linked media account.', 403
+    return None
+
+
 def get_job_manager() -> JobManager:
     """
     Get the JobManager instance and ensure it's configured.
@@ -469,6 +497,10 @@ def create_job():
                 'message': 'Trakt recommendations jobs require exactly one linked media user'
             }), 400
 
+        scope_error = _foreign_user_ids_error(job_type, data.get('user_ids'), current_user, require_link=True)
+        if scope_error:
+            return jsonify({'status': 'error', 'message': scope_error[0]}), scope_error[1]
+
         # Validate schedule_type
         if data['schedule_type'] not in ['preset', 'cron']:
             return jsonify({
@@ -585,6 +617,12 @@ def update_job(job_id: int):
                     'status': 'error',
                     'message': 'Trakt recommendations jobs require exactly one linked media user'
                 }), 400
+
+        scope_error = _foreign_user_ids_error(
+            job_type, data.get('user_ids', existing.get('user_ids')), current_user,
+        )
+        if scope_error:
+            return jsonify({'status': 'error', 'message': scope_error[0]}), scope_error[1]
 
         # Validate schedule_type if provided
         if 'schedule_type' in data and data['schedule_type'] not in ['preset', 'cron']:

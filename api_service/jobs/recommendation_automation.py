@@ -15,6 +15,7 @@ from api_service.handler.plex_handler import PlexHandler
 from api_service.services.trakt.media_user_augmentor import MediaUserTraktAugmentor
 from api_service.services.simkl.media_user_augmentor import MediaUserSimklAugmentor
 from api_service.services.filter_normalization import normalize_filters
+from api_service.utils.request_scope import scan_user_ids
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.seer.seer_client import SeerClient
 from api_service.services.plex.plex_client import PlexClient
@@ -125,6 +126,7 @@ class RecommendationAutomation:
         self.db_manager: Optional[DatabaseManager] = None
         self.media_handler = None
         self.env_vars: Optional[Dict[str, Any]] = None
+        self.no_users_reason: Optional[str] = None
 
     def _get_seer_discovered_tmdb_ids(self) -> set[str]:
         """Return TMDb IDs discovered/requested directly in Seer (non-SuggestArr source)."""
@@ -384,6 +386,9 @@ class RecommendationAutomation:
 
         # Determine which users to process
         selected_users = self._get_selected_users(job_user_ids)
+        if self.no_users_reason:
+            self.logger.warning(self.no_users_reason)
+            return
 
         # Initialize media service handler
         if selected_service in ('jellyfin', 'emby'):
@@ -440,13 +445,23 @@ class RecommendationAutomation:
             elif isinstance(user, str):
                 all_users.append({'id': user, 'name': user})
 
-        # If job specifies specific users, filter to only those
-        if job_user_ids:
-            job_user_id_set = set(str(uid) for uid in job_user_ids)
-            return [u for u in all_users if str(u['id']) in job_user_id_set]
+        # A regular user's job only ever reaches their own linked accounts.
+        owner_id = self.job_data.get('owner_id')
+        owner = None
+        if owner_id is not None:
+            owner = self.db_manager.get_auth_user_by_id(owner_id) or {'id': owner_id, 'role': 'user'}
+        scoped_ids = scan_user_ids(self.db_manager, owner, job_user_ids)
 
-        # Otherwise return all users
-        return all_users
+        # None = no restriction and no explicit choice: every monitored user
+        if scoped_ids is None:
+            return all_users
+        users = [u for u in all_users if str(u['id']) in set(scoped_ids)]
+        if not users:
+            # Handlers read every server user when given none, so stop before them.
+            self.no_users_reason = (
+                "No monitored media account linked to this job's owner; nothing to scan."
+            )
+        return users
 
     async def _init_jellyfin_handler(
         self, seer_client, tmdb_client, max_similar_movie, max_similar_tv,
@@ -594,6 +609,14 @@ class RecommendationAutomation:
             f"{'[DRY RUN] ' if dry_run else ''}Starting recommendation job: {self.job_data['name']}"
         )
         exec_id = None if dry_run else (execution_id or self.repository.log_execution_start(self.job_id))
+        if self.no_users_reason:
+            if not dry_run:
+                self.repository.log_execution_end(
+                    exec_id=exec_id, status='skipped', results_count=0,
+                    requested_count=0, error_message=self.no_users_reason,
+                )
+            return ExecutionResult(success=False, results_count=0, requested_count=0,
+                                   error_message=self.no_users_reason)
         if not dry_run and getattr(self.media_handler, 'seer_client', None):
             self.media_handler.seer_client.queue_context['execution_id'] = exec_id
             self.logger.info("Recommendation job run id=%s started.", exec_id)
