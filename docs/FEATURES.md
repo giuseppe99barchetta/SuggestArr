@@ -199,6 +199,7 @@ Type a natural-language description of what you feel like watching. The LLM inte
 
 ### Key capabilities
 
+- **Original language**: open **Search options** to choose **From prompt** (the default), **Any language**, or a specific language. A specific language overrides the prompt's language filter; **Any language** removes it. The selected language stays visible beside **Search options** when collapsed. The selection is remembered per account in the current browser and applies to movies and TV shows. AI Search no longer applies the legacy global `FILTER_LANGUAGE` setting. This filters the title's original language; displayed titles/descriptions use the profile's **Title language**, and dubbed audio is managed by your download setup.
 - **Search starters** — choose a mood or a title from your linked Plex/Jellyfin/Emby viewing history to prepare an editable query. Titles added to your watch history in Profile are also included. Missing posters use a placeholder, and an unavailable history service never blocks searching.
 - **Recent searches** — revisit up to five successful searches, saved per SuggestArr account in the current browser. Starters and recent searches fill the input; press **Search** when ready. These sections give way to results, with **Explore search ideas** to bring them back.
 - **Natural language queries** — describe mood, genre, decade, language, or specific themes

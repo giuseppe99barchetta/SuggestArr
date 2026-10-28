@@ -8,7 +8,7 @@ const watched = Array.from({ length: 6 }, (_, index) => ({
   poster_path: `/ai-search-poster-${index % 4}.svg`,
 }));
 
-async function openPreview(page, { items = watched, available = true, brokenHistory = false, userId = 7, corruptHistory = false } = {}) {
+async function openPreview(page, { items = watched, available = true, brokenHistory = false, brokenLanguages = false, userId = 7, corruptHistory = false } = {}) {
   const errors = [];
   const searches = [];
   // Stands in for the server's per-account history (newest first, five kept).
@@ -25,6 +25,10 @@ async function openPreview(page, { items = watched, available = true, brokenHist
     const index = Number(route.request().url().match(/poster-(\d)/)[1]);
     return route.fulfill({ contentType: 'image/svg+xml', body: posterFixture(index) });
   });
+  await page.route('**/api/tmdb/languages', route => route.fulfill({ status: brokenLanguages ? 502 : 200, json: { languages: [
+    { iso_639_1: 'en', english_name: 'English', name: 'English' },
+    { iso_639_1: 'es', english_name: 'Spanish', name: 'Español' },
+  ] } }));
   await page.route('**/api/ai-search/**', route => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/history')) {
@@ -34,9 +38,14 @@ async function openPreview(page, { items = watched, available = true, brokenHist
       return route.fulfill({ json: { status: 'success', history } });
     }
     if (path.endsWith('/query')) {
-      searches.push(route.request().postDataJSON());
+      const search = route.request().postDataJSON();
+      searches.push(search);
       remember(route.request().postDataJSON().query);
-      return route.fulfill({ json: { status: 'success', results: [{ id: 1, title: 'A new discovery', media_type: 'movie' }] } });
+      const reasoning = { genres: [], original_language: search.original_language === 'any' ? null : search.original_language === 'auto' ? 'en' : search.original_language };
+      return route.fulfill({ json: {
+        status: 'success', results: [{ id: 1, title: 'A new discovery', media_type: 'movie' }],
+        ai_reasoning: search.media_type === 'both' ? { movie: reasoning, tv: reasoning } : reasoning,
+      } });
     }
     if (path.endsWith('/status')) return route.fulfill({ json: { available } });
     if (path.endsWith('/inspiration')) return route.fulfill({ status: brokenHistory ? 503 : 200, json: { items } });
@@ -65,6 +74,63 @@ async function openPreview(page, { items = watched, available = true, brokenHist
   await expect(page.getByRole('heading', { name: 'AI Search', exact: true })).toBeVisible();
   return { errors, searches, history };
 }
+
+for (const width of [1440, 390]) {
+  test(`Original language is explicit, remembered and sent for every media type at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const { searches, errors } = await openPreview(page);
+    await expect(page.getByRole('combobox', { name: 'Original language', exact: true })).toBeHidden();
+    await page.getByText('Search options', { exact: true }).click();
+    const language = page.getByRole('combobox', { name: 'Original language', exact: true });
+    const input = page.getByRole('textbox', { name: 'What do you want to watch?' });
+    await expect(language).toBeEnabled();
+    await expect(language).toHaveValue('auto');
+    await input.fill('A thoughtful mystery');
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(page.getByText('EN', { exact: true })).toBeVisible();
+    expect(searches.at(-1)).toMatchObject({ original_language: 'auto', media_type: 'movie' });
+    await language.selectOption('es');
+    await page.getByText('Search options', { exact: true }).click();
+    await expect(language).toBeHidden();
+    await expect(page.locator('summary').getByText('Spanish (Español)', { exact: true })).toBeVisible();
+    await page.getByRole('radio', { name: 'Both', exact: true }).click();
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(page.getByText('ES', { exact: true })).toBeVisible();
+    expect(searches.at(-1)).toMatchObject({ original_language: 'es', media_type: 'both' });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.locator('form').screenshot({ path: testInfo.outputPath('ai-search-options-collapsed.png') });
+    await page.getByText('Search options', { exact: true }).click();
+    await page.locator('form').screenshot({ path: testInfo.outputPath('ai-search-language.png') });
+    await page.reload();
+    await page.getByText('Search options', { exact: true }).click();
+    await expect(language).toHaveValue('es');
+    await expect(language).toBeEnabled();
+    await language.selectOption('any');
+    await input.fill('A thoughtful mystery');
+    await page.getByRole('radio', { name: 'TV shows', exact: true }).click();
+    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '1 match', exact: true })).toBeVisible();
+    await expect(page.getByText('Understood as', { exact: true })).toHaveCount(0);
+    expect(searches.at(-1)).toMatchObject({ original_language: 'any', media_type: 'tv' });
+    expect(errors).toEqual([]);
+  });
+}
+
+test('Language loading can be retried without blocking prompt-based searches', async ({ page }) => {
+  await openPreview(page, { brokenLanguages: true });
+  await page.getByText('Search options', { exact: true }).click();
+  const language = page.getByRole('combobox', { name: 'Original language', exact: true });
+  await expect(page.getByText('Could not load languages.')).toBeVisible();
+  await expect(language).toBeEnabled();
+  await language.selectOption('any');
+  await page.route('**/api/tmdb/languages', route => route.fulfill({ json: { languages: [
+    { iso_639_1: 'es', english_name: 'Spanish', name: 'Español' },
+  ] } }));
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(language).toBeEnabled();
+  await language.selectOption('es');
+  await expect(language).toHaveValue('es');
+});
 
 for (const width of [1440, 900, 390]) {
   test(`Search starters and personal posters at ${width}px`, async ({ page }, testInfo) => {

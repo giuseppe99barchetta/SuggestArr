@@ -76,7 +76,7 @@ export const fetchSonarrServers = (payload = null) => {
 };
 
 // AI Search: semantic content search powered by LLM + TMDB
-export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 12, useHistory = true, excludeWatched = true, excludeSeen = false) => {
+export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 12, useHistory = true, excludeWatched = true, excludeSeen = false, originalLanguage = 'auto') => {
     return axios.post('/api/ai-search/query', {
         query,
         media_type: mediaType,
@@ -85,6 +85,7 @@ export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 
         use_history: useHistory,
         exclude_watched: excludeWatched,
         exclude_seen: excludeSeen,
+        original_language: originalLanguage,
     });
 };
 
@@ -145,6 +146,8 @@ export const aiSearchStatus = () => {
 };
 
 export const aiSearchInspiration = () => axios.get('/api/ai-search/inspiration');
+
+export const aiSearchLanguages = () => axios.get('/api/tmdb/languages', { timeout: 10000 });
 
 // Trakt OAuth device flow (admin, media-user scoped). App credentials are admin
 // settings; account tokens are stored per media-server user (provider + id).

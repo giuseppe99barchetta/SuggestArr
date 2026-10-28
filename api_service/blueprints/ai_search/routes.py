@@ -3,6 +3,7 @@ AI Search blueprint — semantic movie/TV search powered by LLM + TMDB.
 """
 
 import asyncio
+import re
 
 import aiohttp
 from flask import Blueprint, g, jsonify, request
@@ -74,6 +75,7 @@ async def ai_search_query():
         media_type (str): 'movie', 'tv', or 'both'. Defaults to 'movie'.
         user_ids (list): Optional list of media-server user IDs to scope history.
         max_results (int): Maximum results to return (default 12).
+        original_language (str): 'auto' (from prompt), 'any', or an ISO 639-1 code.
 
     Returns:
         JSON response with 'results', 'ai_reasoning', and 'total'.
@@ -87,6 +89,15 @@ async def ai_search_query():
         media_type = data.get("media_type", "movie")
         if media_type not in ("movie", "tv", "both"):
             media_type = "movie"
+
+        original_language = data.get("original_language", "auto")
+        if not isinstance(original_language, str) or not (
+            original_language in ("auto", "any") or re.fullmatch(r"[a-z]{2}", original_language)
+        ):
+            return jsonify({
+                "status": "error",
+                "message": "original_language must be 'auto', 'any', or a two-letter lowercase language code",
+            }), 400
 
         user_ids = data.get("user_ids") or []
         max_results = int(data.get("max_results") or 12)
@@ -128,6 +139,7 @@ async def ai_search_query():
             use_history=use_history,
             exclude_watched=exclude_watched,
             exclude_seen=exclude_seen,
+            original_language=original_language,
         )
 
         user_id = _current_user_id()

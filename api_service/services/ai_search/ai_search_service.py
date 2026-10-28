@@ -105,6 +105,7 @@ class AiSearchService:
         use_history: bool = True,
         exclude_watched: bool = True,
         exclude_seen: bool = False,
+        original_language: str = "auto",
     ) -> Dict[str, Any]:
         """Execute an AI-powered search.
 
@@ -114,6 +115,8 @@ class AiSearchService:
         :param max_results: Maximum number of results to return.
         :param use_history: Whether to fetch and pass viewing history to the LLM.
         :param exclude_watched: Whether to exclude already-watched titles from results.
+        :param original_language: 'auto' uses the prompt, 'any' removes language restrictions,
+            otherwise an ISO 639-1 code overrides the prompt's language filter.
         :return: Dict with 'results', 'ai_reasoning', and 'total'.
         """
         # Load the library in the background while the LLM interprets the query;
@@ -124,10 +127,12 @@ class AiSearchService:
                 movie_task = self._search_single(
                     query, "movie", user_ids, max_results, use_history, exclude_watched, exclude_seen,
                     record_seen=False, owned_ids=owned_ids,
+                    original_language=original_language,
                 )
                 tv_task = self._search_single(
                     query, "tv", user_ids, max_results, use_history, exclude_watched, exclude_seen,
                     record_seen=False, owned_ids=owned_ids,
+                    original_language=original_language,
                 )
                 movie_res, tv_res = await asyncio.gather(movie_task, tv_task)
 
@@ -161,6 +166,7 @@ class AiSearchService:
             return await self._search_single(
                 query, media_type, user_ids, max_results, use_history, exclude_watched, exclude_seen,
                 owned_ids=owned_ids,
+                original_language=original_language,
             )
         finally:
             owned_ids.cancel()  # no-op once the library has loaded
@@ -202,6 +208,7 @@ class AiSearchService:
         exclude_seen: bool = False,
         record_seen: bool = True,
         owned_ids: Optional[Union[Dict[str, set], Awaitable[Dict[str, set]]]] = None,
+        original_language: str = "auto",
     ) -> Dict[str, Any]:
         """Run the full search pipeline for a single media type.
 
@@ -247,10 +254,28 @@ class AiSearchService:
         # 3. LLM interpretation — request enough suggestions to fill max_results after
         # filtering; ask for slightly more than needed to absorb TMDB lookup misses.
         llm_suggestions_count = max(max_results, 12)
+        interpretation_query = query
+        if original_language == "any":
+            interpretation_query += "\nSearch option: recommend titles in any original language; do not apply an original-language restriction."
+        elif original_language != "auto":
+            interpretation_query += (
+                f"\nSearch option: ONLY recommend titles whose original language is '{original_language}' "
+                "(ISO 639-1). This selection overrides any language restriction in the prompt."
+            )
         interpretation = await interpret_search_query(
-            query, history, media_type, max_suggestions=llm_suggestions_count,
+            interpretation_query, history, media_type, max_suggestions=llm_suggestions_count,
             liked_titles=liked_titles,
         )
+        # Enforce the UI selection even if the LLM returns a conflicting language.
+        if original_language != "auto":
+            interpretation = {
+                **interpretation,
+                "discover_params": {
+                    **(interpretation.get("discover_params") or {}),
+                    "original_language": None if original_language == "any" else original_language,
+                },
+                "explanation": "",
+            }
         ai_reasoning = self._build_ai_reasoning(interpretation)
         discover_params = interpretation.get("discover_params", {})
         tmdb_discover_params = self._map_llm_discover_params(discover_params)
@@ -673,7 +698,6 @@ class AiSearchService:
         tmdb_min_votes = int(c.get("FILTER_TMDB_MIN_VOTES") or 20)
         include_no_ratings = c.get("FILTER_INCLUDE_NO_RATING", True) is True
         filter_release_year = int(c.get("FILTER_RELEASE_YEAR") or 0)
-        filter_language = c.get("FILTER_LANGUAGE", []) or []
         filter_genre = c.get("FILTER_GENRES_EXCLUDE", []) or []
         filter_min_runtime = c.get("FILTER_MIN_RUNTIME")
         rating_source = c.get("FILTER_RATING_SOURCE", "tmdb")
@@ -692,7 +716,8 @@ class AiSearchService:
             tmdb_min_votes=tmdb_min_votes,
             include_no_ratings=include_no_ratings,
             filter_release_year=filter_release_year,
-            filter_language=filter_language,
+            # AI Search uses its own prompt/selector filter, never the legacy job setting.
+            filter_language=[],
             filter_genre=filter_genre,
             filter_region_provider=None,
             filter_streaming_services=None,

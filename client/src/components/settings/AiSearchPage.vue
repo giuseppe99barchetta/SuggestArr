@@ -43,11 +43,30 @@
           <i aria-hidden="true" :class="isSearching ? 'fas fa-spinner fa-spin' : 'fas fa-magic'"></i>{{ isSearching ? 'Searching…' : 'Search' }}
         </button>
       </div>
-
       <details class="group border-t border-edge pt-3">
         <summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-ink-3 hover:text-ink">
-          <i aria-hidden="true" class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i>Search options
+          <i aria-hidden="true" class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i><span>Search options</span>
+          <span v-if="originalLanguage !== 'auto'" class="ml-auto inline-flex min-w-0 max-w-[50%] items-center gap-1.5 rounded-full border border-brand-ink/20 bg-brand-soft/40 px-2.5 py-1 text-xs font-medium text-brand-ink">
+            <i aria-hidden="true" class="fas fa-globe shrink-0"></i><span class="truncate">{{ originalLanguageLabel }}</span>
+          </span>
         </summary>
+        <div class="mt-4 grid gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,18rem)] sm:items-center">
+          <label for="aiOriginalLanguage" class="flex items-center gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-ctl bg-brand-soft/50 text-brand-ink"><i aria-hidden="true" class="fas fa-globe"></i></span>
+            <span class="flex min-w-0 flex-col gap-1">
+              <span id="aiOriginalLanguageLabel" class="text-sm font-semibold text-ink">Original language</span>
+              <span id="aiOriginalLanguageHint" class="text-xs leading-relaxed text-ink-4">Choose a title's original language, or let your prompt decide.</span>
+            </span>
+          </label>
+          <div class="flex min-w-0 flex-col gap-2">
+            <select id="aiOriginalLanguage" v-model="originalLanguage" class="ui-input" :disabled="!llmAvailable || isSearching || isLoadingLanguages" aria-labelledby="aiOriginalLanguageLabel" aria-describedby="aiOriginalLanguageHint">
+              <option value="auto">From prompt</option>
+              <option value="any">Any language</option>
+              <option v-for="option in originalLanguageOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+            <p v-if="languageError" role="alert" class="m-0 text-xs text-caution">Could not load languages. <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-inherit underline" @click="loadLanguages">Try again</button></p>
+          </div>
+        </div>
         <div class="mt-3 grid gap-2 sm:grid-cols-2">
           <button
             v-for="toggle in toggles"
@@ -234,8 +253,9 @@ import PageHeader from '@/components/ui/PageHeader.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
-import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchInspiration, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear, aiSearchHistory, aiSearchHistoryImport, aiSearchHistoryClear } from '@/api/api.js';
+import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchInspiration, aiSearchLanguages, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear, aiSearchHistory, aiSearchHistoryImport, aiSearchHistoryClear } from '@/api/api.js';
 import { useAuth } from '@/composables/useAuth.js';
+import { languageOptions } from '@/utils/titleLanguage.js';
 
 const MEDIA_TYPE_OPTIONS = [
   { value: 'movie', label: 'Movies', icon: 'fas fa-film' },
@@ -266,6 +286,15 @@ function readRecentSearches(key) {
   }
 }
 
+function readOriginalLanguage(key) {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved === 'any' || /^[a-z]{2}$/.test(saved || '') ? saved : 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
 export default {
   name: 'AiSearchPage',
   components: { PageHeader, MediaCard, MediaGridSkeleton, MediaDetailsModal },
@@ -275,6 +304,7 @@ export default {
   data() {
     const userId = useAuth().currentUser.value?.id;
     const historyKey = `suggestarr_ai_search_history:${userId ?? 'local'}`;
+    const languageKey = `suggestarr_ai_search_language:${userId ?? 'local'}`;
     return {
       query: '',
       mediaTypeOptions: MEDIA_TYPE_OPTIONS,
@@ -285,6 +315,11 @@ export default {
       inspirationError: false,
       failedPosters: [],
       mediaType: 'movie',
+      languageKey,
+      originalLanguage: readOriginalLanguage(languageKey),
+      languages: [],
+      isLoadingLanguages: true,
+      languageError: false,
       isSearching: false,
       hasSearched: false,
       results: [],
@@ -310,12 +345,30 @@ export default {
   },
 
   watch: {
+    originalLanguage(value) {
+      try {
+        localStorage.setItem(this.languageKey, value);
+      } catch {
+        // The current search still works when browser storage is unavailable.
+      }
+    },
     excludeSeen(val) {
       localStorage.setItem('suggestarr_ai_exclude_seen', JSON.stringify(!!val));
     },
   },
 
   computed: {
+    originalLanguageLabel() {
+      if (this.originalLanguage === 'any') return 'Any language';
+      return this.originalLanguageOptions.find(option => option.value === this.originalLanguage)?.label || this.originalLanguage.toUpperCase();
+    },
+    originalLanguageOptions() {
+      const options = languageOptions(this.languages).filter(option => option.value);
+      if (/^[a-z]{2}$/.test(this.originalLanguage) && !options.some(option => option.value === this.originalLanguage)) {
+        options.push({ value: this.originalLanguage, label: this.originalLanguage.toUpperCase() });
+      }
+      return options;
+    },
     hasInterpretation() {
       const qi = this.queryInterpretation;
       if (!qi) return false;
@@ -360,6 +413,19 @@ export default {
   },
 
   methods: {
+
+    async loadLanguages() {
+      this.isLoadingLanguages = true;
+      this.languageError = false;
+      try {
+        const { data } = await aiSearchLanguages();
+        this.languages = data.languages || [];
+      } catch {
+        this.languageError = true;
+      } finally {
+        this.isLoadingLanguages = false;
+      }
+    },
 
     async loadInspiration() {
       this.isLoadingInspiration = true;
@@ -474,7 +540,7 @@ export default {
       this.queryInterpretation = null;
 
       try {
-        const res = await aiSearch(this.query.trim(), this.mediaType, [], this.maxResults, this.useHistory, this.excludeWatched, this.excludeSeen);
+        const res = await aiSearch(this.query.trim(), this.mediaType, [], this.maxResults, this.useHistory, this.excludeWatched, this.excludeSeen, this.originalLanguage);
         const data = res.data;
 
         if (data.status === 'error') {
@@ -606,6 +672,7 @@ export default {
 
   mounted() {
     this.checkLlmStatus();
+    this.loadLanguages();
     this.loadFeedback();
     this.loadInspiration();
     this.loadHistory();

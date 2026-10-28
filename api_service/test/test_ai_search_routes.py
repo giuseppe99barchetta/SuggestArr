@@ -3,7 +3,38 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from flask import Flask, g
 
-from api_service.blueprints.ai_search.routes import ai_search_inspiration, ai_search_request
+from api_service.blueprints.ai_search.routes import ai_search_inspiration, ai_search_query, ai_search_request
+
+
+class TestAiSearchLanguage(unittest.IsolatedAsyncioTestCase):
+    async def test_passes_valid_language_choices_and_defaults_to_prompt(self):
+        app = Flask(__name__)
+        for choice in (None, 'auto', 'any', 'en', 'es'):
+            with self.subTest(choice=choice):
+                body = {'query': 'a mystery'}
+                if choice is not None:
+                    body['original_language'] = choice
+                with app.test_request_context(json=body), \
+                     patch('api_service.blueprints.ai_search.routes.get_llm_client', return_value=object()), \
+                     patch('api_service.blueprints.ai_search.routes.AiSearchService') as factory:
+                    factory.return_value.search = AsyncMock(return_value={'results': [], 'total': 0})
+                    response, status = await ai_search_query.__wrapped__()
+                self.assertEqual(status, 200)
+                self.assertEqual(response.get_json()['status'], 'success')
+                self.assertEqual(factory.return_value.search.await_args.kwargs['original_language'], choice or 'auto')
+
+    async def test_invalid_language_is_rejected_before_calling_external_services(self):
+        app = Flask(__name__)
+        for choice in (None, '', 'English', 'en-US', 'ES', ['es'], {'id': 'es'}, 42, True):
+            with self.subTest(choice=choice), \
+                 app.test_request_context(json={'query': 'a mystery', 'original_language': choice}), \
+                 patch('api_service.blueprints.ai_search.routes.get_llm_client') as llm, \
+                 patch('api_service.blueprints.ai_search.routes.AiSearchService') as factory:
+                response, status = await ai_search_query.__wrapped__()
+                self.assertEqual(status, 400)
+                self.assertIn('original_language', response.get_json()['message'])
+                llm.assert_not_called()
+                factory.assert_not_called()
 
 
 class TestAiSearchInspiration(unittest.IsolatedAsyncioTestCase):
