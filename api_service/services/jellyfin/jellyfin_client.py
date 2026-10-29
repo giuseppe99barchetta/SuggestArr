@@ -13,6 +13,7 @@ from api_service.config.logger_manager import LoggerManager
 
 # Constants
 LIBRARY_FETCH_TIMEOUT = 120  # Timeout in seconds for full-library bulk fetches
+RECENT_ITEMS_CONCURRENCY = 5
 
 
 class JellyfinClient(BaseHTTPClient):
@@ -218,7 +219,7 @@ class JellyfinClient(BaseHTTPClient):
 
         self.logger.debug(f'Fetching recent items for user {user_name} (id={user_id})')
 
-        for library in self.libraries:
+        async def fetch_library(library):
             library_id = library.get('id')
             library_name = library.get('name', library_id)
 
@@ -261,23 +262,7 @@ class JellyfinClient(BaseHTTPClient):
                             library_name, user_name, len(items)
                         )
 
-                        filtered_items = []
-                        for item in items:
-                            if len(filtered_items) >= int(self.max_content_fetch):
-                                break
-                            if item['Type'] == 'Episode':
-                                series_title = item['SeriesName']
-                                if series_title not in seen_series:
-                                    seen_series.add(series_title)
-                                    filtered_items.append(item)
-                            else:
-                                filtered_items.append(item)
-
-                        results_by_library[library_name] = filtered_items
-                        self.logger.info(
-                            "Retrieved %d watched items in %s for user %s",
-                            len(filtered_items), library_name, user_name
-                        )
+                        return items
 
                     elif response.status == 404:
                         raw_body = await response.text()
@@ -287,11 +272,9 @@ class JellyfinClient(BaseHTTPClient):
                             "URL=%s body=%.300s. Trying fallback query.",
                             library_name, user_name, url, raw_body
                         )
-                        fallback_items = await self._fallback_recent_items(
+                        return await self._fallback_recent_items(
                             user_id, user_name, library_id, library_name
                         )
-                        if fallback_items is not None:
-                            results_by_library[library_name] = fallback_items
 
                     else:
                         self.logger.error(
@@ -309,6 +292,40 @@ class JellyfinClient(BaseHTTPClient):
                     "Unexpected error retrieving recent items for library %s (user %s): %s",
                     library_name, user_name, str(e)
                 )
+
+        semaphore = asyncio.Semaphore(RECENT_ITEMS_CONCURRENCY)
+
+        async def fetch_with_limit(library):
+            async with semaphore:
+                return await fetch_library(library)
+
+        libraries = self.libraries or []
+        library_results = await asyncio.gather(*(fetch_with_limit(library) for library in libraries))
+        # Merge in configured library order so concurrency cannot change which
+        # episode represents a series appearing in multiple libraries.
+        for library, items in zip(libraries, library_results):
+            if items is None:
+                continue
+            library_name = library.get('name', library.get('id'))
+            filtered_items = []
+            try:
+                for item in items:
+                    if len(filtered_items) >= self.max_content_fetch:
+                        break
+                    if item['Type'] == 'Episode':
+                        series_title = item['SeriesName']
+                        if series_title in seen_series:
+                            continue
+                        seen_series.add(series_title)
+                    filtered_items.append(item)
+            except (KeyError, TypeError):
+                self.logger.warning("Invalid recent items in library %s for user %s", library_name, user_name)
+                continue
+            results_by_library[library_name] = filtered_items
+            self.logger.info(
+                "Retrieved %d watched items in %s for user %s",
+                len(filtered_items), library_name, user_name
+            )
 
         return results_by_library if results_by_library else None
 

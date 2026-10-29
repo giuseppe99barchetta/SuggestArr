@@ -767,18 +767,29 @@ class TestGetHistoryRouting(unittest.IsolatedAsyncioTestCase):
     async def test_routes_to_plex(self):
         service = self._service_with_service('plex')
         with patch.object(service, '_get_plex_history', AsyncMock(return_value=[])) as mock:
-            await service._get_history(None)
-        mock.assert_awaited_once()
+            await service._get_history(['own-id'])
+        mock.assert_awaited_once_with(['own-id'])
 
     async def test_emby_routes_to_jellyfin(self):
         service = self._service_with_service('emby')
         with patch.object(service, '_get_jellyfin_history', AsyncMock(return_value=[])) as mock:
-            await service._get_history(None)
-        mock.assert_awaited_once()
+            await service._get_history(['own-id'])
+        mock.assert_awaited_once_with(['own-id'])
+
+    async def test_empty_scope_never_accesses_any_media_server(self):
+        for provider in ('jellyfin', 'emby', 'plex'):
+            for user_ids in (None, []):
+                with self.subTest(provider=provider, user_ids=user_ids):
+                    service = self._service_with_service(provider)
+                    with patch.object(service, '_get_jellyfin_history', AsyncMock()) as jellyfin, \
+                         patch.object(service, '_get_plex_history', AsyncMock()) as plex:
+                        self.assertEqual(await service._get_history(user_ids), [])
+                        jellyfin.assert_not_awaited()
+                        plex.assert_not_awaited()
 
     async def test_no_service_returns_empty_list(self):
         service = self._service_with_service('')
-        result = await service._get_history(None)
+        result = await service._get_history(['own-id'])
         self.assertEqual(result, [])
 
 
@@ -802,7 +813,7 @@ class TestGetJellyfinHistory(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_credentials_returns_empty(self):
         service = self._service(api_url='', token='')
-        result = await service._get_jellyfin_history(None)
+        result = await service._get_jellyfin_history(['own-id'])
         self.assertEqual(result, [])
 
     async def test_movie_and_episode_items_with_user_ids(self):
@@ -826,16 +837,12 @@ class TestGetJellyfinHistory(unittest.IsolatedAsyncioTestCase):
         self.assertIn('movie', types)
         self.assertIn('tv', types)
 
-    async def test_get_all_users_exception_returns_empty(self):
+    async def test_empty_scope_never_creates_a_client_or_enumerates_users(self):
         service = self._service()
-        mock_client = MagicMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get_all_users = AsyncMock(side_effect=Exception('users fail'))
-        with patch('api_service.services.jellyfin.jellyfin_client.JellyfinClient',
-                   return_value=mock_client):
-            result = await service._get_jellyfin_history(None)
-        self.assertEqual(result, [])
+        with patch('api_service.services.jellyfin.jellyfin_client.JellyfinClient') as client:
+            for user_ids in (None, []):
+                self.assertEqual(await service._get_jellyfin_history(user_ids), [])
+            client.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -857,7 +864,7 @@ class TestGetPlexHistory(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_token_returns_empty(self):
         service = self._service(token='')
-        result = await service._get_plex_history(None)
+        result = await service._get_plex_history(['own-id'])
         self.assertEqual(result, [])
 
     async def test_movie_and_episode_items(self):
@@ -871,7 +878,7 @@ class TestGetPlexHistory(unittest.IsolatedAsyncioTestCase):
         ])
         with patch('api_service.services.plex.plex_client.PlexClient',
                    return_value=mock_client):
-            result = await service._get_plex_history(None)
+            result = await service._get_plex_history(['own-id'])
         titles = {r['title'] for r in result}
         types = {r['type'] for r in result}
         self.assertIn('movie', types)
@@ -887,8 +894,15 @@ class TestGetPlexHistory(unittest.IsolatedAsyncioTestCase):
         mock_client.get_recent_items = AsyncMock(side_effect=Exception('plex fail'))
         with patch('api_service.services.plex.plex_client.PlexClient',
                    return_value=mock_client):
-            result = await service._get_plex_history(None)
+            result = await service._get_plex_history(['own-id'])
         self.assertEqual(result, [])
+
+    async def test_empty_scope_never_creates_a_client(self):
+        service = self._service()
+        with patch('api_service.services.plex.plex_client.PlexClient') as client:
+            for user_ids in (None, []):
+                self.assertEqual(await service._get_plex_history(user_ids), [])
+            client.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

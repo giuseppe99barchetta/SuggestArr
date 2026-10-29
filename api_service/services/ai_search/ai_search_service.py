@@ -111,7 +111,7 @@ class AiSearchService:
 
         :param query: Natural language description of desired content.
         :param media_type: 'movie', 'tv', or 'both'.
-        :param user_ids: Optional list of media-server user IDs to scope history.
+        :param user_ids: Explicit media-server user IDs; empty means no history.
         :param max_results: Maximum number of results to return.
         :param use_history: Whether to fetch and pass viewing history to the LLM.
         :param exclude_watched: Whether to exclude already-watched titles from results.
@@ -577,9 +577,11 @@ class AiSearchService:
     async def _get_history(self, user_ids: Optional[List]) -> List[Dict]:
         """Fetch and normalise the user's viewing history from Jellyfin or Plex.
 
-        :param user_ids: Optional list of user dicts or IDs to scope the fetch.
+        :param user_ids: Explicit user dicts or IDs; empty means no history.
         :return: Flat list of dicts with 'title', 'year', and 'type'.
         """
+        if not user_ids:
+            return []
         selected_service = self.config.get("SELECTED_SERVICE", "").lower()
         history: List[Dict] = []
 
@@ -594,6 +596,8 @@ class AiSearchService:
 
     async def _get_jellyfin_history(self, user_ids: Optional[List]) -> List[Dict]:
         """Fetch history from Jellyfin."""
+        if not user_ids:
+            return []
         from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 
         api_url = self.config.get("JELLYFIN_API_URL", "")
@@ -614,23 +618,15 @@ class AiSearchService:
         )
 
         async with client:
-            # Determine which users to query
-            if user_ids:
-                users = [
-                    u if isinstance(u, dict) else {"id": u, "name": str(u)}
-                    for u in user_ids
-                ]
-            else:
-                try:
-                    users = await client.get_all_users()
-                except Exception as exc:
-                    logger.warning("Could not fetch Jellyfin users: %s", exc)
-                    return []
+            users = [
+                u if isinstance(u, dict) else {"id": u, "name": str(u)}
+                for u in user_ids
+            ]
 
             history: List[Dict] = []
             for user in users:
                 try:
-                    items_by_library = await client.get_recent_items(user)
+                    items_by_library = await client.get_recent_items(user) or {}
                     for items in items_by_library.values():
                         for item in items:
                             item_type_raw = item.get("Type", "").lower()
@@ -650,6 +646,8 @@ class AiSearchService:
 
     async def _get_plex_history(self, user_ids: Optional[List]) -> List[Dict]:
         """Fetch history from Plex."""
+        if not user_ids:
+            return []
         from api_service.services.plex.plex_client import PlexClient
 
         token = self.config.get("PLEX_TOKEN", "")

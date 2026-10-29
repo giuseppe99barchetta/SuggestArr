@@ -13,10 +13,11 @@ Covers:
 - init_existing_content(): delegates to get_all_library_items
 """
 
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from api_service.services.jellyfin.jellyfin_client import JellyfinClient
+from api_service.services.jellyfin.jellyfin_client import JellyfinClient, RECENT_ITEMS_CONCURRENCY
 
 
 # ---------------------------------------------------------------------------
@@ -478,6 +479,113 @@ class TestGetRecentItems(unittest.IsolatedAsyncioTestCase):
             result = await self.client.get_recent_items(self.user)
 
         self.assertIsNone(result)
+
+    async def test_fetches_libraries_concurrently_with_a_limit(self):
+        self.client.libraries = [{'id': str(i), 'name': str(i)} for i in range(8)]
+        batch_started = asyncio.Event()
+        release = asyncio.Event()
+        active, peak = 0, 0
+
+        async def payload():
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            if active == RECENT_ITEMS_CONCURRENCY:
+                batch_started.set()
+            try:
+                await release.wait()
+                return {'Items': [{'Type': 'Movie', 'Name': 'A movie'}]}
+            finally:
+                active -= 1
+
+        def response(*args, **kwargs):
+            result = _mock_response(200)
+            result.json = AsyncMock(side_effect=payload)
+            return result
+
+        session = MagicMock()
+        session.get.side_effect = response
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            task = asyncio.create_task(self.client.get_recent_items(self.user))
+            try:
+                await asyncio.wait_for(batch_started.wait(), timeout=1)
+                self.assertEqual(session.get.call_count, RECENT_ITEMS_CONCURRENCY)
+                release.set()
+                result = await asyncio.wait_for(task, timeout=1)
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+        self.assertEqual(peak, RECENT_ITEMS_CONCURRENCY)
+        self.assertEqual(active, 0)
+        self.assertEqual(list(result), [str(i) for i in range(8)])
+        for call in session.get.call_args_list:
+            self.assertEqual(call.args[0], f'{self.client.api_url}/Users/user1/Items')
+
+    async def test_invalid_items_in_one_library_do_not_discard_other_libraries(self):
+        self.client.libraries = [{'id': 'invalid', 'name': 'Invalid'}, {'id': 'valid', 'name': 'Valid'}]
+        session = MagicMock()
+        session.get.side_effect = [
+            _mock_response(200, {'Items': [{'Name': 'Missing type'}]}),
+            _mock_response(200, {'Items': [{'Type': 'Movie', 'Name': 'A movie'}]}),
+        ]
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            result = await self.client.get_recent_items(self.user)
+        self.assertEqual(result, {'Valid': [{'Type': 'Movie', 'Name': 'A movie'}]})
+
+    async def test_deduplicates_in_library_order_when_responses_finish_out_of_order(self):
+        self.client.libraries = [{'id': 'first', 'name': 'First'}, {'id': 'second', 'name': 'Second'}]
+        second_finished = asyncio.Event()
+
+        async def first_payload():
+            await second_finished.wait()
+            return {'Items': [{'Type': 'Episode', 'SeriesName': 'Shared series', 'Name': 'First episode'}]}
+
+        async def second_payload():
+            second_finished.set()
+            return {'Items': [{'Type': 'Episode', 'SeriesName': 'Shared series', 'Name': 'Second episode'}]}
+
+        first, second = _mock_response(200), _mock_response(200)
+        first.json = AsyncMock(side_effect=first_payload)
+        second.json = AsyncMock(side_effect=second_payload)
+        session = MagicMock()
+        session.get.side_effect = [first, second]
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            result = await asyncio.wait_for(self.client.get_recent_items(self.user), timeout=1)
+        self.assertEqual(result['First'][0]['Name'], 'First episode')
+        self.assertEqual(result['Second'], [])
+
+    async def test_cancelling_history_fetch_cancels_in_flight_library_requests(self):
+        self.client.libraries = [{'id': str(i), 'name': str(i)} for i in range(8)]
+        batch_started = asyncio.Event()
+        active = 0
+
+        async def payload():
+            nonlocal active
+            active += 1
+            if active == RECENT_ITEMS_CONCURRENCY:
+                batch_started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                active -= 1
+
+        def response(*args, **kwargs):
+            result = _mock_response(200)
+            result.json = AsyncMock(side_effect=payload)
+            return result
+
+        session = MagicMock()
+        session.get.side_effect = response
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            task = asyncio.create_task(self.client.get_recent_items(self.user))
+            try:
+                await asyncio.wait_for(batch_started.wait(), timeout=1)
+            finally:
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+        self.assertEqual(active, 0)
+        self.assertEqual(session.get.call_count, RECENT_ITEMS_CONCURRENCY)
 
 
 # ---------------------------------------------------------------------------

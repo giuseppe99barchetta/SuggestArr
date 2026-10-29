@@ -208,6 +208,8 @@ Type a natural-language description of what you feel like watching. The LLM inte
 - **One-click requesting** — send results directly to Seer without leaving the page
 - **Query interpretation badge** — see how the AI parsed your query (genres, year range, language, min rating)
 
+By default, AI Search and its viewing-history starters use only your **verified** linked account on the configured Plex/Jellyfin/Emby server. Without a verified link, searches run without viewing history and no history starters are loaded. Administrators may explicitly pass media-server `user_ids` to `POST /api/ai-search/query`; an omitted or empty list uses their own verified link and never selects every server user. Jellyfin/Emby history is fetched across libraries concurrently, with at most five library requests at a time.
+
 ### How to enable
 
 AI Search requires an LLM to be configured (same setup as AI-Powered Recommendations):

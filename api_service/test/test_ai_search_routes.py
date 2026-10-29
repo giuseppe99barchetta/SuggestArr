@@ -37,6 +37,61 @@ class TestAiSearchLanguage(unittest.IsolatedAsyncioTestCase):
                 factory.assert_not_called()
 
 
+class TestAiSearchHistoryScope(unittest.IsolatedAsyncioTestCase):
+    async def test_history_scope_uses_verified_provider_link_unless_admin_selects_ids(self):
+        app = Flask(__name__)
+        viewer = {'id': 7, 'role': 'user'}
+        admin = {'id': 7, 'role': 'admin'}
+        for provider in ('jellyfin', 'emby', 'plex'):
+            own = {'provider': provider, 'external_user_id': 'own-id', 'verified': True}
+            cases = [
+                (viewer, [], [own], ['own-id']),
+                (viewer, ['other-id'], [own], ['own-id']),
+                (viewer, [], [], None),
+                (viewer, ['other-id'], [], None),
+                (viewer, [], [{**own, 'verified': False}], None),
+                (viewer, [], [{'provider': provider, 'external_user_id': 'unproven'}], None),
+                (viewer, [], [{**own, 'provider': 'different-provider'}], None),
+                (viewer, [], [{**own, 'external_user_id': ''}], None),
+                (admin, ['other-id'], [], ['other-id']),
+                (admin, [], [own], ['own-id']),
+                (admin, [], [], None),
+                (None, ['other-id'], [own], None),
+            ]
+            for user, requested, profiles, expected in cases:
+                with self.subTest(provider=provider, user=user, requested=requested, profiles=profiles), \
+                     app.test_request_context(json={'query': 'a mystery', 'user_ids': requested}), \
+                     patch('api_service.blueprints.ai_search.routes.DatabaseManager') as database, \
+                     patch('api_service.blueprints.ai_search.routes.get_llm_client', return_value=object()), \
+                     patch('api_service.blueprints.ai_search.routes.AiSearchService') as factory:
+                    g.current_user = user
+                    database.return_value.get_user_media_profiles.return_value = profiles
+                    factory.return_value.config = {'SELECTED_SERVICE': provider}
+                    factory.return_value.search = AsyncMock(return_value={'results': [], 'total': 0})
+                    response, status = await ai_search_query.__wrapped__()
+                    self.assertEqual(status, 200)
+                    self.assertEqual(response.get_json()['status'], 'success')
+                    kwargs = factory.return_value.search.await_args.kwargs
+                    self.assertEqual(kwargs['user_ids'], expected)
+                    self.assertEqual(kwargs['use_history'], bool(expected))
+
+    async def test_history_opt_out_is_preserved_with_a_verified_link(self):
+        app = Flask(__name__)
+        with app.test_request_context(json={'query': 'a mystery', 'use_history': False}), \
+             patch('api_service.blueprints.ai_search.routes.DatabaseManager') as database, \
+             patch('api_service.blueprints.ai_search.routes.get_llm_client', return_value=object()), \
+             patch('api_service.blueprints.ai_search.routes.AiSearchService') as factory:
+            g.current_user = {'id': 7, 'role': 'user'}
+            database.return_value.get_user_media_profiles.return_value = [
+                {'provider': 'jellyfin', 'external_user_id': 'own-id', 'verified': True},
+            ]
+            factory.return_value.config = {'SELECTED_SERVICE': 'jellyfin'}
+            factory.return_value.search = AsyncMock(return_value={})
+            _, status = await ai_search_query.__wrapped__()
+            self.assertEqual(status, 200)
+            self.assertFalse(factory.return_value.search.await_args.kwargs['use_history'])
+
+
 class TestAiSearchInspiration(unittest.IsolatedAsyncioTestCase):
     async def test_only_uses_current_users_linked_profile(self):
         app = Flask(__name__)
@@ -46,9 +101,9 @@ class TestAiSearchInspiration(unittest.IsolatedAsyncioTestCase):
             g.current_user = {'id': 7, 'role': 'admin'}
             service = factory.return_value
             service.config = {'SELECTED_SERVICE': 'plex'}
-            profile = {'provider': 'plex', 'external_user_id': 'own-id'}
+            profile = {'provider': 'plex', 'external_user_id': 'own-id', 'verified': True}
             database.return_value.get_user_media_profiles.return_value = [
-                {'provider': 'jellyfin', 'external_user_id': 'unused'}, profile,
+                {'provider': 'jellyfin', 'external_user_id': 'unused', 'verified': True}, profile,
             ]
             database.return_value.upsert_media_user_identity.return_value = {'id': 42}
             database.return_value.list_watched_media.return_value = [{'title': 'Saved'}, {'title': 'Kids', 'excluded': True}]
@@ -81,6 +136,25 @@ class TestAiSearchInspiration(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(status, 200)
             self.assertEqual(response.get_json()['items'], [])
             database.assert_not_called()
+
+    async def test_unverified_profile_never_loads_live_or_saved_history(self):
+        app = Flask(__name__)
+        for role in ('user', 'admin'):
+            for verified in (False, None):
+                with self.subTest(role=role, verified=verified), app.test_request_context(), \
+                     patch('api_service.blueprints.ai_search.routes.DatabaseManager') as database, \
+                     patch('api_service.blueprints.ai_search.routes.AiSearchService') as factory:
+                    g.current_user = {'id': 7, 'role': role}
+                    factory.return_value.config = {'SELECTED_SERVICE': 'jellyfin'}
+                    database.return_value.get_user_media_profiles.return_value = [
+                        {'provider': 'jellyfin', 'external_user_id': 'other-id', 'verified': verified},
+                    ]
+                    response, status = await ai_search_inspiration.__wrapped__()
+                    self.assertEqual(status, 200)
+                    self.assertEqual(response.get_json()['items'], [])
+                    database.return_value.upsert_media_user_identity.assert_not_called()
+                    database.return_value.list_watched_media.assert_not_called()
+                    factory.return_value.inspiration.assert_not_called()
 
     async def test_errors_do_not_expose_internal_details(self):
         app = Flask(__name__)

@@ -15,7 +15,6 @@ from api_service.db.database_manager import DatabaseManager
 from api_service.services.ai_search.ai_search_service import AiSearchService
 from api_service.services.config_service import ConfigService
 from api_service.services.llm.llm_service import get_llm_client
-from api_service.utils.request_scope import scan_user_ids
 
 ai_search_bp = Blueprint("ai_search", __name__)
 logger = LoggerManager.get_logger("AiSearchRoute")
@@ -40,6 +39,16 @@ def _current_user_id():
         return None
 
 
+def _verified_media_profile(db, provider):
+    """Resolve the caller's proven link for the configured media server."""
+    user_id = _current_user_id()
+    if user_id is None:
+        return None
+    return next((profile for profile in db.get_user_media_profiles(user_id)
+                 if profile.get("provider") == provider and profile.get("verified")
+                 and profile.get("external_user_id")), None)
+
+
 @ai_search_bp.route("/inspiration", methods=["GET"])
 @limiter.limit("20 per minute")
 async def ai_search_inspiration():
@@ -51,8 +60,7 @@ async def ai_search_inspiration():
         service = AiSearchService()
         provider = str(service.config.get("SELECTED_SERVICE") or "").lower()
         db = DatabaseManager()
-        profile = next((p for p in db.get_user_media_profiles(int(user["id"]))
-                        if p.get("provider") == provider and p.get("external_user_id")), None)
+        profile = _verified_media_profile(db, provider)
         if not profile:
             return jsonify({"status": "success", "items": []}), 200
         identity = db.upsert_media_user_identity(provider, str(profile["external_user_id"]), profile.get("external_username"))
@@ -73,7 +81,8 @@ async def ai_search_query():
     Request body:
         query (str): Natural language description of desired content.
         media_type (str): 'movie', 'tv', or 'both'. Defaults to 'movie'.
-        user_ids (list): Optional list of media-server user IDs to scope history.
+        user_ids (list): Admin-only explicit media-server IDs. Otherwise history
+            uses the caller's verified link to the configured provider.
         max_results (int): Maximum results to return (default 12).
         original_language (str): 'auto' (from prompt), 'any', or an ISO 639-1 code.
 
@@ -100,6 +109,8 @@ async def ai_search_query():
             }), 400
 
         user_ids = data.get("user_ids") or []
+        if not isinstance(user_ids, list):
+            return jsonify({"status": "error", "message": "user_ids must be a list"}), 400
         max_results = int(data.get("max_results") or 12)
         use_history = data.get("use_history", True)
         if not isinstance(use_history, bool):
@@ -110,13 +121,6 @@ async def ai_search_query():
         exclude_seen = data.get("exclude_seen", False)
         if not isinstance(exclude_seen, bool):
             exclude_seen = False
-
-        # An empty list means "every server user", which only admins may use.
-        user = getattr(g, "current_user", None)
-        if user:
-            user_ids = scan_user_ids(DatabaseManager(), user, user_ids if isinstance(user_ids, list) else [])
-            if user_ids == []:
-                use_history = False  # no linked account: no history of their own
 
         # Check LLM is configured (not strictly required — service degrades gracefully,
         # but we surface a clear error before attempting if completely unconfigured)
@@ -131,6 +135,14 @@ async def ai_search_query():
             }), 400
 
         service = AiSearchService()
+        user = getattr(g, "current_user", None)
+        if not (user and user.get("role") == "admin" and user_ids):
+            provider = str(service.config.get("SELECTED_SERVICE") or "").lower()
+            profile = _verified_media_profile(DatabaseManager(), provider) if _current_user_id() is not None else None
+            user_ids = [str(profile["external_user_id"])] if profile else []
+        if not user_ids:
+            use_history = False
+
         result = await service.search(
             query=query,
             media_type=media_type,
