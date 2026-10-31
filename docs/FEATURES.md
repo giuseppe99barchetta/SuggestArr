@@ -150,6 +150,8 @@ SuggestArr includes an optional AI recommendation engine that analyzes your watc
 
 Recent watches are treated as neutral viewing context, not automatic proof that a user liked them. When TMDb metadata is available, the AI also receives each item's media type and genres.
 
+For AI recommendation jobs, the similar titles setting is a maximum per unique watched title, using up to 20 history titles. The model is asked for candidates for each title; duplicates, invalid source assignments, and subsequent eligibility checks can reduce the final count. Large budgets require longer model responses and may exceed a provider's output or context limits.
+
 The engine works with **any OpenAI-compatible API**, so you can use a cloud provider or a local model running on your own machine.
 
 ### How to enable

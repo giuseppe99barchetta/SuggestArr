@@ -506,6 +506,29 @@ class TestCallWithValidation(unittest.IsolatedAsyncioTestCase):
 
 class TestGetRecommendationsFromHistory(unittest.IsolatedAsyncioTestCase):
 
+    async def test_per_title_budget_and_deduplication(self):
+        recs = [
+            {"title": "First", "year": 2020, "source_title": "Film A", "rationale": "a"},
+            {"title": "Second", "year": 2021, "source_title": "Film A", "rationale": "a"},
+            {"title": "Over limit", "year": 2022, "source_title": "Film A", "rationale": "a"},
+            {"title": " first ", "year": 2020, "source_title": "Film B", "rationale": "duplicate"},
+            {"title": "Unknown", "year": 2020, "source_title": "Other", "rationale": "invalid source"},
+            {"title": "Missing", "year": 2020, "source_title": None, "rationale": "invalid source"},
+            {"title": "Third", "year": 2023, "source_title": "Film B", "rationale": "b"},
+            {"title": "Fourth", "year": 2024, "source_title": "Film B", "rationale": "b"},
+        ]
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=_mock_openai_response(_wrap_recs(recs)))
+        history = [{"title": "Film A"}, {"title": "Film A"}, {"title": "Film B"}]
+        with patch("api_service.services.llm.llm_service.get_llm_client", return_value=mock_client), \
+             patch("api_service.services.llm.llm_service.ConfigService.get_runtime_config", return_value=_DEFAULT_CONFIG):
+            result = await get_recommendations_from_history(history, max_results=2)
+
+        self.assertEqual([rec["title"] for rec in result], ["First", "Second", "Third", "Fourth"])
+        prompt = mock_client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        self.assertIn("up to 2 similar movies for EACH watched title", prompt)
+        self.assertIn("up to 4 recommendations in total", prompt)
+
     async def test_returns_empty_list_when_no_llm_client(self):
         with patch("api_service.services.llm.llm_service.get_llm_client", return_value=None):
             result = await get_recommendations_from_history([{"title": "Film A"}], max_results=3)
