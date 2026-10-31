@@ -159,6 +159,8 @@ class JellyfinClient(BaseHTTPClient):
         params = {
             "Recursive": "true",
             "IncludeItemTypes": "Movie,Series",
+            # User-scoped queries can otherwise replace collection members with BoxSets.
+            "CollapseBoxSetItems": "false",
             "Fields": "ProviderIds",
             "ParentID": library_id
         }

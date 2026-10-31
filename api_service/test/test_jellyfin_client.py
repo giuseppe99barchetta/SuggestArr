@@ -234,6 +234,32 @@ class TestGetAllLibraryItems(unittest.IsolatedAsyncioTestCase):
 
         self.assertNotIn('userId', session.get.call_args.kwargs['params'])
 
+    async def test_library_inventory_includes_collection_members(self):
+        self.client.libraries = [{'id': 'lib1', 'name': 'Movies'}]
+        movies = [
+            {'Type': 'Movie', 'ProviderIds': {'Tmdb': '101'}},
+            {'Type': 'Movie', 'ProviderIds': {'Tmdb': '102'}},
+        ]
+
+        def get_items(url, **kwargs):
+            params = kwargs['params']
+            self.assertEqual(params['CollapseBoxSetItems'], 'false')
+            self.assertEqual(params['ParentID'], 'lib1')
+            self.assertEqual(params['IncludeItemTypes'], 'Movie,Series')
+            self.assertEqual(params['Fields'], 'ProviderIds')
+            return _mock_response(200, {'Items': movies})
+
+        session = MagicMock()
+        session.get.side_effect = get_items
+        with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
+            await self.client.init_existing_content()
+
+        self.assertEqual(
+            [item['tmdb_id'] for item in self.client.existing_content['movie']],
+            ['101', '102'],
+        )
+        self.assertEqual(session.get.call_args.kwargs['params']['userId'], 'u1')
+
     async def test_user_lookup_is_cached(self):
         session = _mock_session(_mock_response(200, {'Items': []}))
         with patch.object(self.client, '_get_session', AsyncMock(return_value=session)):
