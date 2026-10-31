@@ -680,6 +680,38 @@ async def test_recommendation_automation_dry_run_preserves_async_flow_and_logs(m
 
 
 @pytest.mark.asyncio
+async def test_jellyfin_standard_job_without_simkl_uses_tmdb(monkeypatch):
+    runtime_config = build_runtime_config("jellyfin")
+    job_data = build_job_data("jellyfin-standard")
+    job_data["filters"]["use_llm"] = False
+    fake_tmdb = FakeTMDbClient()
+    fake_tmdb.get_metadata = AsyncMock(side_effect=lambda item_id, media_type: {"id": int(item_id)})
+    fake_tmdb.find_similar_movies = AsyncMock(return_value=[deepcopy(MOVIE_SEARCH_RESULTS["Blade Runner 2049"])])
+    fake_tmdb.find_similar_tvshows = AsyncMock(return_value=[deepcopy(TV_SEARCH_RESULTS["Silo"])])
+    fake_jellyfin = FakeJellyfinClient()
+
+    monkeypatch.setattr(recommendation_module.ConfigService, "get_runtime_config", lambda: deepcopy(runtime_config))
+    monkeypatch.setattr(recommendation_module, "JobRepository", lambda: FakeJobRepository(job_data))
+    monkeypatch.setattr(recommendation_module, "DatabaseManager", lambda: FakeDatabaseManager())
+    monkeypatch.setattr(recommendation_module, "SeerClient", lambda *args, **kwargs: FakeSeerClient())
+    monkeypatch.setattr(recommendation_module, "TMDbClient", lambda *args, **kwargs: fake_tmdb)
+    monkeypatch.setattr(recommendation_module, "JellyfinClient", lambda *args, **kwargs: fake_jellyfin)
+    monkeypatch.setattr(recommendation_module.MediaUserSimklAugmentor, "from_env", lambda *args, **kwargs: None)
+    monkeypatch.setattr(recommendation_module.MediaUserTraktAugmentor, "from_env", lambda *args, **kwargs: None)
+    monkeypatch.setattr(JellyfinHandler, "_collect_trakt_seeds_for_user", AsyncMock(return_value=[]))
+
+    automation = await RecommendationAutomation.create(job_id=1, dry_run=True)
+    result = await automation.run(dry_run=True)
+
+    assert automation.media_handler.simkl_augmentor is None
+    assert automation.media_handler.use_llm is False
+    assert result.success is True
+    assert {item["title"] for item in result.dry_run_items if item["would_request"]} == {"Blade Runner 2049", "Silo"}
+    fake_tmdb.find_similar_movies.assert_awaited_once_with("11", dry_run=True)
+    fake_tmdb.find_similar_tvshows.assert_awaited_once_with("22", dry_run=True)
+
+
+@pytest.mark.asyncio
 async def test_recommendation_automation_dry_run_respects_job_max_results(monkeypatch):
     runtime_config = build_runtime_config("jellyfin")
     job_data = build_job_data("jellyfin-capped-dry-run")

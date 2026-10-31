@@ -648,7 +648,7 @@ async def get_recommendations_from_history(
     """Generate recommendations based on a user's watch history using an LLM.
 
     :param history_items: List of dicts with 'title' and ideally 'year'.
-    :param max_results: Number of recommendations to generate.
+    :param max_results: Maximum recommendations per unique watched title.
     :param item_type: 'movie' or 'tv'.
     :param filters: Optional recommendation constraints (e.g. language/year/rating).
     :param taste_profile: Optional {'liked': [...], 'disliked': [...]} of recently rated
@@ -684,7 +684,7 @@ async def get_recommendations_from_history(
             return None
 
     try:
-        if not history_items:
+        if not history_items or max_results <= 0:
             logger.info("No history provided for LLM recommendations.")
             return []
 
@@ -702,6 +702,7 @@ async def get_recommendations_from_history(
             _normalize_title(item.get("title") or item.get("name") or "")
             for item in history_items
         }
+        recommendation_budget = max_results * len(history_titles_lower)
 
         list_type = "movies" if item_type == "movie" else "TV shows"
         history_text = "\n".join(
@@ -771,7 +772,9 @@ async def get_recommendations_from_history(
         Treat only items explicitly marked "strong positive signal" as preference evidence. Do not use
         negative signals to infer similar recommendations. Use the titles, genres, and viewing context to
         form a cautious taste profile.
-        Based on this profile, recommend exactly {max_results} similar {list_type} that the user is highly likely to enjoy.
+        Based on this profile, recommend up to {max_results} similar {list_type} for EACH watched title above,
+        for up to {recommendation_budget} recommendations in total. Distribute recommendations across the watched
+        titles, assigning each recommendation to the watched title that inspired it. Do not repeat recommendations.
 
         Follow these strict rules:
         1. Do NOT recommend any of the {list_type} that the user has already watched (listed above).
@@ -821,8 +824,13 @@ async def get_recommendations_from_history(
             return []
 
         valid_recommendations: List[Dict] = []
+        source_counts: Dict[str, int] = {}
+        seen_recommendations: set = set()
         for rec in validated.recommendations:
-            rec_title = rec.title.strip().lower()
+            rec_title = _normalize_title(rec.title)
+
+            if not rec_title or rec_title in seen_recommendations:
+                continue
 
             if _is_duplicate_of_history(rec_title, history_titles_lower):
                 logger.debug(
@@ -831,18 +839,15 @@ async def get_recommendations_from_history(
                 continue
 
             source_title = rec.source_title
-            if source_title:
-                clean_source = _normalize_title(source_title)
-                if clean_source not in history_titles_lower:
-                    logger.warning(
-                        "LLM returned source_title '%s' not found in history. Clearing.",
-                        source_title,
-                    )
-                    source_title = None
-                else:
-                    stripped = re.sub(r'\s*[-–]\s*S\d+E\d+.*', '', source_title, flags=re.IGNORECASE)
-                    stripped = re.sub(r'\s*\((19|20)\d{2}\)\s*$', '', stripped)
-                    source_title = stripped.strip()
+            clean_source = _normalize_title(source_title or "")
+            if clean_source not in history_titles_lower:
+                logger.warning("LLM returned an unknown or missing source_title: %s", source_title)
+                continue
+            if source_counts.get(clean_source, 0) >= max_results:
+                continue
+            stripped = re.sub(r'\s*[-–]\s*S\d+E\d+.*', '', source_title, flags=re.IGNORECASE)
+            stripped = re.sub(r'\s*\((19|20)\d{2}\)\s*$', '', stripped)
+            source_title = stripped.strip()
 
             rec_dict: Dict[str, Any] = {
                 "title": rec.title,
@@ -854,9 +859,11 @@ async def get_recommendations_from_history(
                 "[%s (%s)] LLM Rationale: %s", rec.title, rec.year, rec_dict["rationale"]
             )
             valid_recommendations.append(rec_dict)
+            seen_recommendations.add(rec_title)
+            source_counts[clean_source] = source_counts.get(clean_source, 0) + 1
 
         logger.info("Successfully generated %d LLM recommendations.", len(valid_recommendations))
-        return valid_recommendations[:max_results]
+        return valid_recommendations
     finally:
         await _close_llm_client(client)
 

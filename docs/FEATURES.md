@@ -150,6 +150,8 @@ SuggestArr includes an optional AI recommendation engine that analyzes your watc
 
 Recent watches are treated as neutral viewing context, not automatic proof that a user liked them. When TMDb metadata is available, the AI also receives each item's media type and genres.
 
+For AI recommendation jobs, the similar titles setting is a maximum per unique watched title, using up to 20 history titles. The model is asked for candidates for each title; duplicates, invalid source assignments, and subsequent eligibility checks can reduce the final count. Large budgets require longer model responses and may exceed a provider's output or context limits.
+
 The engine works with **any OpenAI-compatible API**, so you can use a cloud provider or a local model running on your own machine.
 
 ### How to enable
@@ -199,6 +201,7 @@ Type a natural-language description of what you feel like watching. The LLM inte
 
 ### Key capabilities
 
+- **Original language**: open **Search options** to choose **From prompt** (the default), **Any language**, or a specific language. A specific language overrides the prompt's language filter; **Any language** removes it. The selected language stays visible beside **Search options** when collapsed. The selection is remembered per account in the current browser and applies to movies and TV shows. AI Search no longer applies the legacy global `FILTER_LANGUAGE` setting. This filters the title's original language; displayed titles/descriptions use the profile's **Title language**, and dubbed audio is managed by your download setup.
 - **Search starters** — choose a mood or a title from your linked Plex/Jellyfin/Emby viewing history to prepare an editable query. Titles added to your watch history in Profile are also included. Missing posters use a placeholder, and an unavailable history service never blocks searching.
 - **Recent searches** — revisit up to five successful searches, saved per SuggestArr account in the current browser. Starters and recent searches fill the input; press **Search** when ready. These sections give way to results, with **Explore search ideas** to bring them back.
 - **Natural language queries** — describe mood, genre, decade, language, or specific themes
@@ -206,6 +209,8 @@ Type a natural-language description of what you feel like watching. The LLM inte
 - **Exclude already-watched titles** — hide content you've already seen
 - **One-click requesting** — send results directly to Seer without leaving the page
 - **Query interpretation badge** — see how the AI parsed your query (genres, year range, language, min rating)
+
+By default, AI Search and its viewing-history starters use only your **verified** linked account on the configured Plex/Jellyfin/Emby server. Without a verified link, searches run without viewing history and no history starters are loaded. Administrators may explicitly pass media-server `user_ids` to `POST /api/ai-search/query`; an omitted or empty list uses their own verified link and never selects every server user. Jellyfin/Emby history is fetched across libraries concurrently, with at most five library requests at a time.
 
 ### How to enable
 

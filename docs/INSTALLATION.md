@@ -169,6 +169,10 @@ Recommended defaults:
 - Enable job pausing when you want each automation batch reviewed in Seer before the next run starts.
 - Keep Cleanup Automation in dry-run mode until its audit log matches what you expect.
 
+When excluding downloaded titles, Jellyfin library scans include individual movies
+inside collections so those movies can be recognized as already owned. Matching
+requires the movies to have TMDb provider IDs in Jellyfin.
+
 ### Content Filters
 
 Good starting values:

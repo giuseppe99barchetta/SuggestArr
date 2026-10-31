@@ -27,7 +27,8 @@ class FakeDB:
         self.users = users or {}
 
     def get_user_media_profiles(self, user_id):
-        return [{"provider": "jellyfin", "external_user_id": uid} for uid in self.links.get(int(user_id), [])]
+        return [{"provider": "jellyfin", "external_user_id": uid, "verified": True}
+                for uid in self.links.get(int(user_id), [])]
 
     def get_auth_user_by_id(self, user_id):
         return self.users.get(int(user_id))
@@ -174,6 +175,7 @@ def test_unlinked_regular_user_can_still_edit_an_existing_job(monkeypatch):
 async def _search(user, db, user_ids=None):
     app = Flask(__name__)
     service = MagicMock()
+    service.config = {"SELECTED_SERVICE": "jellyfin"}
     service.search = AsyncMock(return_value={"results": [], "total": 0})
     with app.test_request_context(json={"query": "space", "user_ids": user_ids or []}), \
          patch("api_service.blueprints.ai_search.routes.get_llm_client", return_value=object()), \
@@ -194,7 +196,7 @@ async def test_ai_search_uses_only_the_callers_history():
 @pytest.mark.asyncio
 async def test_ai_search_ignores_someone_elses_id():
     kwargs = await _search(VIEWER, FakeDB(links={2: ["mine"]}), ["admin-id"])
-    assert kwargs["use_history"] is False
+    assert kwargs["user_ids"] == ["mine"]
 
 
 @pytest.mark.asyncio
@@ -204,6 +206,7 @@ async def test_ai_search_without_linked_account_uses_no_history():
 
 
 @pytest.mark.asyncio
-async def test_ai_search_for_admin_still_reads_every_user():
+async def test_ai_search_for_unlinked_admin_uses_no_history():
     kwargs = await _search(ADMIN, FakeDB())
     assert kwargs["user_ids"] is None
+    assert kwargs["use_history"] is False

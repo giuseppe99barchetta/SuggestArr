@@ -201,6 +201,52 @@ class TestResolveSuggestedTitle(unittest.IsolatedAsyncioTestCase):
 
 class TestSearchSingle(unittest.IsolatedAsyncioTestCase):
 
+    async def test_language_selection_filters_ai_and_similar_results_without_legacy_filter(self):
+        for media_type in ('movie', 'tv'):
+            for choice, expected_ids, expected_language in (
+                ('auto', {1, 3}, 'en'),
+                ('any', {1, 2, 3, 4}, None),
+                ('es', {2, 4}, 'es'),
+            ):
+                with self.subTest(media_type=media_type, choice=choice):
+                    service = _make_service()
+                    service.config = {**service.config, 'FILTER_LANGUAGE': 'es'}
+                    real_client = service._make_tmdb_client()
+                    client = self._make_tmdb_client()
+                    client._apply_filters = real_client._apply_filters
+                    english = _tmdb_item(1, 'English pick')
+                    spanish = {**_tmdb_item(2, 'Spanish pick'), 'original_language': 'es'}
+                    similar = [{**english, 'id': 3}, {**spanish, 'id': 4}]
+                    client.find_similar_movies = AsyncMock(return_value=similar)
+                    client.find_similar_tvshows = AsyncMock(return_value=similar)
+                    interpretation = {
+                        'discover_params': {'original_language': 'en'},
+                        'explanation': 'English titles only',
+                        'suggested_titles': [{'title': 'English pick'}, {'title': 'Spanish pick'}],
+                        'reference_titles': [{'title': 'Reference'}],
+                    }
+                    with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
+                               AsyncMock(return_value=interpretation)) as llm, \
+                         patch.object(service, '_make_tmdb_client', return_value=client), \
+                         patch.object(service, '_resolve_suggested_title', AsyncMock(side_effect=[english, spanish, {'id': 5}])), \
+                         patch.object(service, '_apply_suggestion_rationales', AsyncMock()), \
+                         patch('api_service.db.database_manager.DatabaseManager') as database:
+                        database.return_value.get_requested_tmdb_ids.return_value = set()
+                        database.return_value.get_ai_dislike_ids.return_value = set()
+                        result = await service._search_single(
+                            'a mystery', media_type, None, 12, use_history=False, original_language=choice,
+                        )
+                    self.assertEqual({item['id'] for item in result['results']}, expected_ids)
+                    self.assertEqual(result['ai_reasoning']['original_language'], expected_language)
+                    self.assertEqual(real_client.language_filter, [])
+                    self.assertEqual(service.config['FILTER_LANGUAGE'], 'es')
+                    self.assertEqual(interpretation['discover_params']['original_language'], 'en')
+                    if choice == 'auto':
+                        self.assertEqual(llm.await_args.args[0], 'a mystery')
+                    else:
+                        self.assertIn('Search option:', llm.await_args.args[0])
+                        self.assertNotEqual(result['ai_reasoning']['explanation'], 'English titles only')
+
     def _make_tmdb_client(self):
         """Return a TMDbClient-like mock that passes all filters."""
         mock_tmdb = MagicMock()
@@ -452,6 +498,18 @@ class TestSuggestionRationaleAssignment(unittest.IsolatedAsyncioTestCase):
 # ---------------------------------------------------------------------------
 
 class TestSearch(unittest.IsolatedAsyncioTestCase):
+
+    async def test_language_choice_is_forwarded_to_each_media_type(self):
+        service = _make_service()
+        empty = {'results': [], 'ai_reasoning': {}, 'total': 0}
+        for media_type, expected_types in (('movie', ['movie']), ('tv', ['tv']), ('both', ['movie', 'tv'])):
+            with self.subTest(media_type=media_type), \
+                 patch.object(service, '_get_owned_tmdb_ids', AsyncMock(return_value={})), \
+                 patch.object(service, '_search_single', AsyncMock(return_value=empty)) as search, \
+                 patch.object(service, '_record_seen_items'):
+                await service.search('a mystery', media_type=media_type, original_language='es')
+                self.assertEqual([call.args[1] for call in search.await_args_list], expected_types)
+                self.assertTrue(all(call.kwargs['original_language'] == 'es' for call in search.await_args_list))
 
     async def test_both_media_type_interleaves_movie_and_tv(self):
         service = _make_service()
@@ -709,18 +767,29 @@ class TestGetHistoryRouting(unittest.IsolatedAsyncioTestCase):
     async def test_routes_to_plex(self):
         service = self._service_with_service('plex')
         with patch.object(service, '_get_plex_history', AsyncMock(return_value=[])) as mock:
-            await service._get_history(None)
-        mock.assert_awaited_once()
+            await service._get_history(['own-id'])
+        mock.assert_awaited_once_with(['own-id'])
 
     async def test_emby_routes_to_jellyfin(self):
         service = self._service_with_service('emby')
         with patch.object(service, '_get_jellyfin_history', AsyncMock(return_value=[])) as mock:
-            await service._get_history(None)
-        mock.assert_awaited_once()
+            await service._get_history(['own-id'])
+        mock.assert_awaited_once_with(['own-id'])
+
+    async def test_empty_scope_never_accesses_any_media_server(self):
+        for provider in ('jellyfin', 'emby', 'plex'):
+            for user_ids in (None, []):
+                with self.subTest(provider=provider, user_ids=user_ids):
+                    service = self._service_with_service(provider)
+                    with patch.object(service, '_get_jellyfin_history', AsyncMock()) as jellyfin, \
+                         patch.object(service, '_get_plex_history', AsyncMock()) as plex:
+                        self.assertEqual(await service._get_history(user_ids), [])
+                        jellyfin.assert_not_awaited()
+                        plex.assert_not_awaited()
 
     async def test_no_service_returns_empty_list(self):
         service = self._service_with_service('')
-        result = await service._get_history(None)
+        result = await service._get_history(['own-id'])
         self.assertEqual(result, [])
 
 
@@ -744,7 +813,7 @@ class TestGetJellyfinHistory(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_credentials_returns_empty(self):
         service = self._service(api_url='', token='')
-        result = await service._get_jellyfin_history(None)
+        result = await service._get_jellyfin_history(['own-id'])
         self.assertEqual(result, [])
 
     async def test_movie_and_episode_items_with_user_ids(self):
@@ -768,16 +837,12 @@ class TestGetJellyfinHistory(unittest.IsolatedAsyncioTestCase):
         self.assertIn('movie', types)
         self.assertIn('tv', types)
 
-    async def test_get_all_users_exception_returns_empty(self):
+    async def test_empty_scope_never_creates_a_client_or_enumerates_users(self):
         service = self._service()
-        mock_client = MagicMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get_all_users = AsyncMock(side_effect=Exception('users fail'))
-        with patch('api_service.services.jellyfin.jellyfin_client.JellyfinClient',
-                   return_value=mock_client):
-            result = await service._get_jellyfin_history(None)
-        self.assertEqual(result, [])
+        with patch('api_service.services.jellyfin.jellyfin_client.JellyfinClient') as client:
+            for user_ids in (None, []):
+                self.assertEqual(await service._get_jellyfin_history(user_ids), [])
+            client.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -799,7 +864,7 @@ class TestGetPlexHistory(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_token_returns_empty(self):
         service = self._service(token='')
-        result = await service._get_plex_history(None)
+        result = await service._get_plex_history(['own-id'])
         self.assertEqual(result, [])
 
     async def test_movie_and_episode_items(self):
@@ -813,7 +878,7 @@ class TestGetPlexHistory(unittest.IsolatedAsyncioTestCase):
         ])
         with patch('api_service.services.plex.plex_client.PlexClient',
                    return_value=mock_client):
-            result = await service._get_plex_history(None)
+            result = await service._get_plex_history(['own-id'])
         titles = {r['title'] for r in result}
         types = {r['type'] for r in result}
         self.assertIn('movie', types)
@@ -829,8 +894,15 @@ class TestGetPlexHistory(unittest.IsolatedAsyncioTestCase):
         mock_client.get_recent_items = AsyncMock(side_effect=Exception('plex fail'))
         with patch('api_service.services.plex.plex_client.PlexClient',
                    return_value=mock_client):
-            result = await service._get_plex_history(None)
+            result = await service._get_plex_history(['own-id'])
         self.assertEqual(result, [])
+
+    async def test_empty_scope_never_creates_a_client(self):
+        service = self._service()
+        with patch('api_service.services.plex.plex_client.PlexClient') as client:
+            for user_ids in (None, []):
+                self.assertEqual(await service._get_plex_history(user_ids), [])
+            client.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

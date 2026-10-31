@@ -483,7 +483,7 @@ class BaseMediaHandler(ABC):
             user_or_history_items: User object (new call form) or history items (legacy call form)
             history_items_or_item_type: History items (new call form) or item_type (legacy call form)
             item_type_or_max_results: Item type (new call form) or max_results (legacy call form)
-            max_results: Maximum recommendations to process (new call form only)
+            max_results: Maximum recommendations per watched title (new call form only)
         """
         if max_results is None:
             # Backward-compatible call form:
@@ -508,7 +508,7 @@ class BaseMediaHandler(ABC):
             if item.get("source_origin")
         }
         
-        self.logger.info(f"Delegating {max_results} {item_type} recommendations to LLM service.")
+        self.logger.info(f"Delegating up to {max_results} {item_type} recommendations per watched title to LLM service.")
         
         llm_recommendations = await get_recommendations_from_history(
             history_items,
