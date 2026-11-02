@@ -20,8 +20,8 @@ concurrent-log-handler==0.9.31
 requests==2.34.2
 python-dotenv==1.2.4
 PyYAML==6.0.3
-pytz==2026.5
-tzdata==2026.5
+pytz==2026.6
+tzdata==2026.6
 
 PlexAPI==4.18.3
 simple-justwatch-python-api==1.4.0
@@ -30,5 +30,5 @@ xmltodict==1.0.4
 mysql-connector-python==26.10.0
 psycopg2-binary==2.9.13
 
-openai==3.37.0
+openai==3.41.0
 prometheus-client==0.26.0
