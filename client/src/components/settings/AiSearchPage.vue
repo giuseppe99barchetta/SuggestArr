@@ -17,7 +17,7 @@
           :disabled="!llmAvailable || isSearching"
           rows="3"
           placeholder="A psychological thriller from the 90s with a twist ending… or feel-good anime about friendship"
-          class="w-full resize-y rounded-ctl border border-edge-strong bg-canvas px-4 py-3 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-4 focus:border-brand-ink disabled:cursor-not-allowed"
+          class="w-full resize-y rounded-ctl border border-edge-strong bg-canvas px-4 py-3 text-[15px] leading-relaxed text-ink placeholder:text-ink-4 focus:border-brand-ink disabled:cursor-not-allowed"
           @keydown.enter.exact.prevent="runSearch"
         ></textarea>
         <span class="self-end text-xs text-ink-4">Enter to search · Shift + Enter for a new line</span>

@@ -11,7 +11,7 @@
               <i aria-hidden="true" :class="showMdblistKey ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
             </button>
           </div>
-          <small class="text-xs leading-normal text-ink-4">Get one from <a href="https://mdblist.com/preferences/" target="_blank" rel="noopener noreferrer" class="text-brand-ink no-underline hover:underline">MDBList Preferences</a></small>
+          <small class="text-xs leading-normal text-ink-4">Get one from <a href="https://mdblist.com/preferences/" target="_blank" rel="noopener noreferrer" class="text-brand-ink underline underline-offset-2 hover:no-underline">MDBList Preferences</a></small>
         </div>
         <button type="button" class="ui-btn mt-auto self-start" :disabled="isLoading || !localConfig.MDBLIST_API_KEY || mdblistTesting" @click="testMdblistConnection()">
           <i aria-hidden="true" :class="mdblistTesting ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>

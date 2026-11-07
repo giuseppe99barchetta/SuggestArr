@@ -35,7 +35,7 @@
     </div>
 
     <form role="search" class="flex flex-wrap items-center gap-2.5" @submit.prevent>
-      <label class="flex h-[42px] min-w-0 flex-[1_1_260px] items-center gap-2.5 rounded-ctl border border-edge-strong bg-panel px-3.5 text-ink-4 focus-within:border-brand-ink">
+      <label class="flex h-[42px] min-w-0 flex-[1_1_260px] items-center gap-2.5 rounded-ctl border border-edge-strong bg-panel px-3.5 text-ink-4 focus-within:border-brand-ink focus-within:outline-2 focus-within:outline-solid focus-within:outline-offset-2 focus-within:outline-brand">
         <i aria-hidden="true" class="fas fa-search text-sm"></i>
         <span class="sr-only">Search</span>
         <input v-model="searchQuery" type="search" :placeholder="viewMode === 'by-content' ? 'Search watched titles…' : 'Search by title…'" class="min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-4" />

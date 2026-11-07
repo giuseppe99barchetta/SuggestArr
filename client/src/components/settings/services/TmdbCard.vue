@@ -19,7 +19,7 @@
           </button>
         </div>
         <small class="text-xs leading-normal text-ink-4">
-          Get one from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="text-brand-ink no-underline hover:underline">TMDB Settings</a>
+          Get one from <a href="https://www.themoviedb.org/settings/api" target="_blank" class="text-brand-ink underline underline-offset-2 hover:no-underline">TMDB Settings</a>
         </small>
       </div>
 

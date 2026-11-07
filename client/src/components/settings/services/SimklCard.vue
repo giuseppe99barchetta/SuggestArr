@@ -14,7 +14,7 @@
             :disabled="isLoading"
           />
           <small class="text-xs leading-normal text-ink-4">
-            Create an AUTH V2 app at <a href="https://simkl.com/settings/developer/" target="_blank" rel="noopener noreferrer" class="text-brand-ink no-underline hover:underline">Simkl Developer Settings</a> and choose <strong>TV, devices &amp; command line</strong>. The device flow needs no client secret.
+            Create an AUTH V2 app at <a href="https://simkl.com/settings/developer/" target="_blank" rel="noopener noreferrer" class="text-brand-ink underline underline-offset-2 hover:no-underline">Simkl Developer Settings</a> and choose <strong>TV, devices &amp; command line</strong>. The device flow needs no client secret.
           </small>
         </div>
         <div class="mt-3 flex items-center gap-2 text-[13px] font-semibold text-good" v-if="isSimklAppConfigured">
