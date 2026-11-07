@@ -25,7 +25,7 @@
             <span class="text-sm font-semibold text-ink">{{ toggle.title }}</span>
             <span class="text-xs leading-snug text-ink-4">{{ toggle.hint }}</span>
           </span>
-          <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="form[toggle.key] ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="form[toggle.key] ? 'left-[21px]' : 'left-[3px]'"></span></span>
+          <ToggleTrack :on="!!(form[toggle.key])" />
         </button>
 
         <label class="flex items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5">
@@ -116,12 +116,13 @@
 </template>
 
 <script>
+import ToggleTrack from '@/components/common/ToggleTrack.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import SectionCard from '@/components/ui/SectionCard.vue';
 import { getCleanupSettings, setCleanupSettings, runCleanupNow, getCleanupLog } from '@/api/api.js';
 
 export default {
-  components: { PageHeader, SectionCard },
+  components: { ToggleTrack, PageHeader, SectionCard },
   name: 'SettingsCleanup',
 
   data() {

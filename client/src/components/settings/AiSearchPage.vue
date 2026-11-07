@@ -81,7 +81,7 @@
               <span class="text-sm font-semibold text-ink">{{ toggle.title }}</span>
               <span class="text-xs leading-snug text-ink-4">{{ toggle.hint }}</span>
             </span>
-            <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="$data[toggle.key] ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="$data[toggle.key] ? 'left-[21px]' : 'left-[3px]'"></span></span>
+            <ToggleTrack :on="!!($data[toggle.key])" />
           </button>
           <label class="flex items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3">
             <span class="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -249,6 +249,7 @@
 </template>
 
 <script>
+import ToggleTrack from '@/components/common/ToggleTrack.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
@@ -297,7 +298,7 @@ function readOriginalLanguage(key) {
 
 export default {
   name: 'AiSearchPage',
-  components: { PageHeader, MediaCard, MediaGridSkeleton, MediaDetailsModal },
+  components: { ToggleTrack, PageHeader, MediaCard, MediaGridSkeleton, MediaDetailsModal },
   // The dashboard shell passes settings props to every tab; this page does not use them.
   inheritAttrs: false,
 
