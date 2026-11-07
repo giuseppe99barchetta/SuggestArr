@@ -8,7 +8,7 @@
       <router-link :to="{ name: 'DashboardTab', params: { tab: 'ai_provider' } }" class="inline-flex h-9 items-center rounded-[8px] bg-caution px-3.5 text-[13px] font-bold text-on-caution no-underline hover:text-on-caution">Set up AI provider</router-link>
     </div>
 
-    <form class="flex flex-col gap-4 rounded-card border border-edge bg-panel p-4 sm:p-5" :class="{ 'opacity-60': !llmAvailable }" @submit.prevent="runSearch">
+    <form class="flex flex-col gap-4 rounded-card border border-edge bg-panel p-4 sm:p-5" :class="{ 'opacity-90': !llmAvailable }" @submit.prevent="runSearch">
       <label class="flex flex-col gap-1.5">
         <span class="sr-only">What do you want to watch?</span>
         <textarea

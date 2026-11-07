@@ -1,5 +1,5 @@
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-canvas bg-[radial-gradient(ellipse_at_top,var(--color-brand-soft),transparent_65%)]">
+  <main class="flex min-h-screen items-center justify-center bg-canvas bg-[radial-gradient(ellipse_at_top,var(--color-brand-soft),transparent_65%)]">
     <div class="w-full max-w-[380px] rounded-card border border-white/12 bg-panel/90 px-8 py-10 text-center shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-md">
       <img src="@/assets/logo.png" alt="SuggestArr" class="mx-auto mb-5 h-[60px]" />
 
@@ -80,7 +80,7 @@
         </span>
       </div>
     </div>
-  </div>
+  </main>
 </template>
 
 <script>

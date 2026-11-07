@@ -5,7 +5,7 @@
 
     <div class="mb-5 flex flex-col gap-5">
       <section :class="wizardMode ? '' : 'flex flex-col gap-2'">
-        <h3 v-if="!wizardMode" class="m-0 text-xs font-bold tracking-wider text-ink-4 uppercase">Required</h3>
+        <h2 v-if="!wizardMode" class="m-0 text-xs font-bold tracking-wider text-ink-4 uppercase">Required</h2>
         <div :class="listClass">
           <MediaServerCard v-if="showSection('media-server')" />
           <SeerCard v-if="showSection('seer')" />
@@ -14,7 +14,7 @@
       </section>
 
       <section v-if="showSection('omdb') || showSection('trakt') || showSection('simkl') || (!wizardMode && showSection('mdblist'))" :class="wizardMode ? '' : 'flex flex-col gap-2'">
-        <h3 v-if="!wizardMode" class="m-0 text-xs font-bold tracking-wider text-ink-4 uppercase">Optional extras</h3>
+        <h2 v-if="!wizardMode" class="m-0 text-xs font-bold tracking-wider text-ink-4 uppercase">Optional extras</h2>
         <div :class="listClass">
           <MdblistCard v-if="!wizardMode && showSection('mdblist')" />
           <OmdbCard v-if="showSection('omdb')" />

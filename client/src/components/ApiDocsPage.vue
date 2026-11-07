@@ -1,4 +1,9 @@
-<template><div ref="host"></div></template>
+<template>
+  <main>
+    <h1 class="sr-only">SuggestArr API</h1>
+    <div ref="host"></div>
+  </main>
+</template>
 
 <script>
 import axios from 'axios';
