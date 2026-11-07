@@ -48,3 +48,11 @@ test('a failed feedback save leaves the suggestion in the queue', () => {
   assert.match(method, /catch \(error\)[\s\S]*?return false;/);
   assert.match(method, /return true;/);
 });
+
+test('a failed load of recent requests says so instead of showing the empty state', () => {
+  assert.match(source, /<p v-else-if="recentError" role="alert"/);
+  assert.match(source, /recentError" role="alert"[\s\S]*?Try again[\s\S]*?v-else-if="!recentShown\.length"/);
+  const method = source.slice(source.indexOf('async loadRecentRequests('), source.indexOf('async loadReadyToWatch('));
+  assert.match(method, /this\.recentError = false;/);
+  assert.match(method, /catch \(error\) \{[\s\S]*this\.recentError = true;/);
+});
