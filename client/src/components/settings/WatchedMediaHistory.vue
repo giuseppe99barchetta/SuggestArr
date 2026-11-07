@@ -6,7 +6,7 @@
 
     <form class="flex flex-wrap gap-2" role="search" @submit.prevent="search">
       <label class="sr-only" for="watchedSearch">Search TMDb</label>
-      <input id="watchedSearch" v-model.trim="query" type="search" class="ui-input flex-[1_1_220px]" placeholder="Add a movie or series you watched elsewhere">
+      <input id="watchedSearch" v-model.trim="query" type="search" class="ui-input flex-[1_1_220px]" placeholder="Add a title you watched elsewhere">
       <label class="sr-only" for="watchedSearchType">Media type</label>
       <select id="watchedSearchType" v-model="searchType" class="ui-input w-auto">
         <option v-for="option in searchTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -75,7 +75,7 @@
     <p v-else-if="notLinked" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[13px] text-ink-4">Link your media server account in <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }">Profile</router-link> to rate your titles.</p>
     <p v-else-if="!items.length" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[13px] text-ink-4">Nothing watched yet. Titles you play on your media server, import or add here show up in this list.</p>
     <p v-else-if="!filteredItems.length" class="m-0 rounded-ctl border border-dashed border-edge-strong px-4 py-6 text-center text-[13px] text-ink-4">No titles match these filters.</p>
-    <div v-else class="overflow-x-auto rounded-ctl border border-edge">
+    <div v-else class="relative overflow-x-auto rounded-ctl border border-edge">
       <table class="w-full min-w-[640px] border-collapse text-sm">
         <thead><tr class="text-left text-xs text-ink-4"><th class="px-3 py-2.5 font-semibold">Title</th><th class="px-3 py-2.5 font-semibold">Type</th><th class="px-3 py-2.5 font-semibold">Rating</th><th class="px-3 py-2.5 font-semibold">Source</th><th class="px-3 py-2.5 font-semibold">Use for suggestions</th><th class="px-3 py-2.5"><span class="sr-only">Actions</span></th></tr></thead>
         <tbody>

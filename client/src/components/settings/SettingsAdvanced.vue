@@ -407,7 +407,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
                 <span class="text-sm font-semibold text-ink">{{ toggle.title }}</span>
                 <span class="text-xs leading-snug text-ink-4">{{ toggle.hint }}</span>
               </span>
-              <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="localConfig[toggle.key] ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="localConfig[toggle.key] ? 'left-[21px]' : 'left-[3px]'"></span></span>
+              <ToggleTrack :on="!!(localConfig[toggle.key])" />
             </button>
 
             <label class="flex min-h-20 items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 xl:h-[88px]" :class="{ 'opacity-50': !localConfig.REQUIRE_REQUEST_APPROVAL }">
@@ -494,6 +494,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 </template>
 
 <script>
+import ToggleTrack from '@/components/common/ToggleTrack.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import SectionCard from '@/components/ui/SectionCard.vue';
 import AppDialog from '@/components/ui/AppDialog.vue';
@@ -508,7 +509,7 @@ import RequestReplacementControls from './RequestReplacementControls.vue';
 export default {
   name: 'SettingsAdvanced',
   mixins: [unsavedChangesGuard],
-  components: { AppDialog, PageHeader, SectionCard,
+  components: { ToggleTrack, AppDialog, PageHeader, SectionCard,
     BaseCheckbox,
     RequestExpiryControls,
     RequestReplacementControls,

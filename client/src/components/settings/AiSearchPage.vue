@@ -8,7 +8,7 @@
       <router-link :to="{ name: 'DashboardTab', params: { tab: 'ai_provider' } }" class="inline-flex h-9 items-center rounded-[8px] bg-caution px-3.5 text-[13px] font-bold text-on-caution no-underline hover:text-on-caution">Set up AI provider</router-link>
     </div>
 
-    <form class="flex flex-col gap-4 rounded-card border border-edge bg-panel p-4 sm:p-5" :class="{ 'opacity-60': !llmAvailable }" @submit.prevent="runSearch">
+    <form class="flex flex-col gap-4 rounded-card border border-edge bg-panel p-4 sm:p-5" :class="{ 'opacity-90': !llmAvailable }" @submit.prevent="runSearch">
       <label class="flex flex-col gap-1.5">
         <span class="sr-only">What do you want to watch?</span>
         <textarea
@@ -17,7 +17,7 @@
           :disabled="!llmAvailable || isSearching"
           rows="3"
           placeholder="A psychological thriller from the 90s with a twist ending… or feel-good anime about friendship"
-          class="w-full resize-y rounded-ctl border border-edge-strong bg-canvas px-4 py-3 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-4 focus:border-brand-ink disabled:cursor-not-allowed"
+          class="w-full resize-y rounded-ctl border border-edge-strong bg-canvas px-4 py-3 text-[15px] leading-relaxed text-ink placeholder:text-ink-4 focus:border-brand-ink disabled:cursor-not-allowed"
           @keydown.enter.exact.prevent="runSearch"
         ></textarea>
         <span class="self-end text-xs text-ink-4">Enter to search · Shift + Enter for a new line</span>
@@ -81,7 +81,7 @@
               <span class="text-sm font-semibold text-ink">{{ toggle.title }}</span>
               <span class="text-xs leading-snug text-ink-4">{{ toggle.hint }}</span>
             </span>
-            <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="$data[toggle.key] ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="$data[toggle.key] ? 'left-[21px]' : 'left-[3px]'"></span></span>
+            <ToggleTrack :on="!!($data[toggle.key])" />
           </button>
           <label class="flex items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3">
             <span class="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -249,6 +249,7 @@
 </template>
 
 <script>
+import ToggleTrack from '@/components/common/ToggleTrack.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
@@ -297,7 +298,7 @@ function readOriginalLanguage(key) {
 
 export default {
   name: 'AiSearchPage',
-  components: { PageHeader, MediaCard, MediaGridSkeleton, MediaDetailsModal },
+  components: { ToggleTrack, PageHeader, MediaCard, MediaGridSkeleton, MediaDetailsModal },
   // The dashboard shell passes settings props to every tab; this page does not use them.
   inheritAttrs: false,
 

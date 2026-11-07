@@ -19,7 +19,7 @@
         <span>
           Simkl rejected this client ID — it may be wrong, suspended, or over its
           request limit. Check the app at
-          <a href="https://simkl.com/settings/developer/" target="_blank" rel="noopener noreferrer" class="text-brand-ink no-underline hover:underline">simkl.com developer settings</a>.
+          <a href="https://simkl.com/settings/developer/" target="_blank" rel="noopener noreferrer" class="text-brand-ink underline underline-offset-2 hover:no-underline">simkl.com developer settings</a>.
         </span>
       </p>
 
@@ -147,7 +147,7 @@
         <div class="flex flex-wrap items-center gap-2">
           <i aria-hidden="true" class="fas fa-key"></i>
           <span>Enter this PIN at</span>
-          <a :href="simklVerificationUri" target="_blank" rel="noopener noreferrer" class="break-all text-brand-ink no-underline hover:underline">
+          <a :href="simklVerificationUri" target="_blank" rel="noopener noreferrer" class="break-all text-brand-ink underline underline-offset-2 hover:no-underline">
             {{ displayVerificationUri }}
           </a>
         </div>
@@ -180,7 +180,7 @@
       <p class="m-0 mt-3 text-xs leading-relaxed text-ink-4">
         <i aria-hidden="true" class="fas fa-circle-info mr-1"></i>
         This removes SuggestArr's copy of the token. Legacy links can be revoked at
-        <a href="https://simkl.com/settings/connected-apps/" target="_blank" rel="noopener noreferrer" class="text-brand-ink no-underline hover:underline">simkl.com/settings/connected-apps</a>.
+        <a href="https://simkl.com/settings/connected-apps/" target="_blank" rel="noopener noreferrer" class="text-brand-ink underline underline-offset-2 hover:no-underline">simkl.com/settings/connected-apps</a>.
       </p>
       <template #footer>
         <button type="button" class="ui-btn" @click="cancelUnlink">Cancel</button>

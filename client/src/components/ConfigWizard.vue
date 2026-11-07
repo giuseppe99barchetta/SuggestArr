@@ -49,7 +49,7 @@
         <div v-if="hasExistingConfig" class="flex flex-wrap items-center justify-center gap-2 rounded-ctl border border-notice/30 bg-notice/12 px-5 py-3.5 text-[0.9rem] text-ink">
           <i aria-hidden="true" class="fas fa-info-circle"></i>
           Existing configuration detected.
-          <router-link to="/" class="font-semibold text-brand-ink no-underline hover:underline">Go to Dashboard →</router-link>
+          <router-link to="/" class="font-semibold text-brand-ink underline underline-offset-2 hover:no-underline">Go to Dashboard →</router-link>
         </div>
       </div>
       <AppFooter />

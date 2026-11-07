@@ -41,7 +41,7 @@
                         <span class="text-[0.9rem] font-semibold text-ink">{{ toggle.title }}</span>
                         <span class="text-[0.8125rem] text-ink-4">{{ toggle.hint }}</span>
                     </span>
-                    <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="config[toggle.key] ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="config[toggle.key] ? 'left-[21px]' : 'left-[3px]'"></span></span>
+                    <ToggleTrack :on="!!(config[toggle.key])" />
                 </button>
             </div>
         </section>
@@ -55,7 +55,10 @@
 
 
 <script>
+import ToggleTrack from '@/components/common/ToggleTrack.vue';
+
 export default {
+  components: { ToggleTrack },
     props: {
         config: { type: Object, required: true },
     },

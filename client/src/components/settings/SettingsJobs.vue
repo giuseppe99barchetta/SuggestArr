@@ -82,7 +82,7 @@
         v-for="(job, index) in jobs"
         :key="job.id"
         class="flex flex-wrap items-center gap-x-6 gap-y-4 rounded-card border border-edge bg-panel px-5 py-[18px] transition-colors hover:border-edge-strong"
-        :class="{ 'opacity-70': !job.enabled }"
+        :class="{ 'border-dashed': !job.enabled }"
         :data-tour-id="index === 0 ? 'jobs-first-card' : null"
       >
         <div class="flex min-w-0 flex-[1_1_260px] items-start gap-3.5">

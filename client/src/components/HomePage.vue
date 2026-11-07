@@ -100,6 +100,9 @@
         <router-link v-if="recentShown.length" :to="tabLink('requests')" class="text-sm font-semibold no-underline">See all {{ stats.total || '' }} →</router-link>
       </div>
       <MediaGridSkeleton v-if="loading" :count="6" label="Loading recent requests…" />
+      <p v-else-if="recentError" role="alert" class="m-0 rounded-card border border-dashed border-bad/40 px-6 py-10 text-center text-sm text-ink-2">
+        Couldn't load your requests. <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline underline-offset-2 hover:no-underline" @click="loadRecentRequests">Try again</button>
+      </p>
       <p v-else-if="!recentShown.length" class="m-0 rounded-card border border-dashed border-edge-strong px-6 py-10 text-center text-sm text-ink-3">
         Nothing requested yet. Requests appear here once a job has run.
       </p>
@@ -222,6 +225,7 @@ export default {
       approvalEnabled: false,
       selectedRequest: null,
       loading: false,
+      recentError: false,
     };
   },
   computed: {
@@ -336,6 +340,7 @@ export default {
 
     async loadRecentRequests() {
       this.loading = true;
+      this.recentError = false;
       try {
         const response = await axios.get('/api/automation/requests', {
           params: {
@@ -356,6 +361,7 @@ export default {
         this.recentRequests = allRequests.slice(0, 20).map(request => ({ ...request, _key: `sent-${request.request_id}` }));
       } catch (error) {
         console.error('Error loading recent requests:', error);
+        this.recentError = true;
       } finally {
         this.loading = false;
       }

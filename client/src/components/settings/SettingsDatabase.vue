@@ -135,7 +135,7 @@ export default {
       originalConfig: {},
       showPassword: false,
       engines: ENGINES,
-      inputClass: 'h-[42px] w-full rounded-ctl border border-edge-strong bg-canvas px-3 text-sm font-normal text-ink outline-none focus:border-brand-ink disabled:opacity-60',
+      inputClass: 'h-[42px] w-full rounded-ctl border border-edge-strong bg-canvas px-3 text-sm font-normal text-ink focus:border-brand-ink disabled:opacity-60',
     };
   },
   computed: {

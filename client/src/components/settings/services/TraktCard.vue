@@ -30,7 +30,7 @@
             </button>
           </div>
           <small class="text-xs leading-normal text-ink-4">
-            Create an app at <a href="https://developer.trakt.tv/apps/new" target="_blank" rel="noopener noreferrer" class="text-brand-ink no-underline hover:underline">Trakt Developer</a> with <code>urn:ietf:wg:oauth:2.0:oob</code> as Redirect URI (ignore the insecure-URI warning) and leave Allowed origins empty. New Trakt apps use the Client ID without issuing a Client Secret.
+            Create an app at <a href="https://developer.trakt.tv/apps/new" target="_blank" rel="noopener noreferrer" class="text-brand-ink underline underline-offset-2 hover:no-underline">Trakt Developer</a> with <code>urn:ietf:wg:oauth:2.0:oob</code> as Redirect URI (ignore the insecure-URI warning) and leave Allowed origins empty. New Trakt apps use the Client ID without issuing a Client Secret.
           </small>
         </div>
         <div class="mt-3 flex items-center gap-2 text-[13px] font-semibold text-good" v-if="isTraktAppConfigured">
