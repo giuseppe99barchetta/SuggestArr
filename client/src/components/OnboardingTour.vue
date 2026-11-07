@@ -14,8 +14,9 @@
         leave-active-class="transition duration-150"
         enter-from-class="opacity-0 scale-[0.94] translate-y-1.5"
         leave-to-class="opacity-0 scale-[0.94] -translate-y-1"
+        @after-enter="focusNext"
       >
-        <div :key="currentIndex" class="theme-dark fixed z-[9002] rounded-card border border-white/12 bg-[rgba(18,24,38,0.97)] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.05)] backdrop-blur-xl" :style="tooltipStyle" @click.stop>
+        <div :key="currentIndex" ref="card" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-description" class="theme-dark fixed z-[9002] rounded-card border border-white/12 bg-[rgba(18,24,38,0.97)] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.05)] backdrop-blur-xl" :style="tooltipStyle" @click.stop>
           <!-- Arrow indicator -->
           <div class="absolute h-0 w-0 border-8 border-transparent" :class="arrowClass"></div>
 
@@ -29,19 +30,19 @@
                 :class="i === currentIndex ? 'scale-[1.3] bg-brand' : i < currentIndex ? 'bg-good/70' : 'bg-white/20'"
               ></span>
             </div>
-            <span class="text-[0.72rem] text-white/35 tabular-nums">{{ currentIndex + 1 }} / {{ steps.length }}</span>
+            <span class="text-[0.72rem] text-white/60 tabular-nums">{{ currentIndex + 1 }} / {{ steps.length }}</span>
           </div>
 
-          <h3 class="m-0 mb-1.5 text-base font-bold text-white">{{ currentStep.title }}</h3>
-          <p class="m-0 mb-4 text-[0.85rem] leading-relaxed text-white/65">{{ currentStep.description }}</p>
+          <h3 id="tour-title" class="m-0 mb-1.5 text-base font-bold text-white">{{ currentStep.title }}</h3>
+          <p id="tour-description" class="m-0 mb-4 text-[0.85rem] leading-relaxed text-white/65">{{ currentStep.description }}</p>
 
           <div class="flex items-center justify-between gap-2">
-            <button class="cursor-pointer border-0 bg-transparent p-0 text-[0.78rem] text-white/35 transition-colors hover:text-white/65" @click="skip">Skip tour</button>
+            <button class="cursor-pointer border-0 bg-transparent p-0 text-[0.78rem] text-white/60 transition-colors hover:text-white" @click="skip">Skip tour</button>
             <div class="flex gap-2">
               <button v-if="currentIndex > 0" class="cursor-pointer rounded-lg border border-white/18 bg-transparent px-3.5 py-1.5 text-[0.82rem] font-medium text-white/70 transition hover:border-white/30 hover:bg-white/6" @click="prev">
                 ← Back
               </button>
-              <button class="cursor-pointer rounded-lg border-0 bg-brand px-4 py-1.5 text-[0.82rem] font-semibold text-white transition hover:-translate-y-px hover:brightness-110" @click="next">
+              <button ref="nextButton" class="cursor-pointer rounded-lg border-0 bg-brand px-4 py-1.5 text-[0.82rem] font-semibold text-white transition hover:-translate-y-px hover:brightness-110" @click="next">
                 {{ isLast ? 'Finish ✓' : 'Next →' }}
               </button>
             </div>
@@ -176,8 +177,14 @@ export default {
 
   watch: {
     active(val) {
+      if (!val) {
+        this.restoreFocus();
+        return;
+      }
       if (val) {
+        this.opener = document.activeElement;
         this.currentIndex = 0;
+        this.$nextTick(() => this.focusNext());
         this.$emit('step-changed', 0);
         this.$nextTick(() => this.scrollAndUpdate());
       }
@@ -188,6 +195,40 @@ export default {
   },
 
   methods: {
+    // Keyboard: focus moves to the current step, Tab stays inside the card, Escape skips the tour.
+    focusNext() {
+      this.$refs.nextButton?.focus();
+    },
+
+    restoreFocus() {
+      if (this.opener instanceof HTMLElement && document.contains(this.opener)) this.opener.focus();
+      this.opener = null;
+    },
+
+    onKeydown(event) {
+      if (!this.active || !this.currentStep) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.skip();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const buttons = [...(this.$refs.card?.querySelectorAll('button') ?? [])];
+      if (!buttons.length) return;
+      const first = buttons[0];
+      const last = buttons[buttons.length - 1];
+      if (!this.$refs.card.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    },
+
     scrollAndUpdate() {
       if (!this.currentStep) return;
       const el = document.querySelector(`[data-tour-id="${this.currentStep.targetId}"]`);
@@ -230,8 +271,11 @@ export default {
 
   mounted() {
     if (this.active) {
+      this.opener = document.activeElement;
       this.$nextTick(() => this.scrollAndUpdate());
+      this.$nextTick(() => this.focusNext());
     }
+    document.addEventListener('keydown', this.onKeydown);
     this.resizeHandler = () => { if (this.active) this.scrollAndUpdate(); };
     window.addEventListener('resize', this.resizeHandler);
 
@@ -246,6 +290,7 @@ export default {
   },
 
   beforeUnmount() {
+    document.removeEventListener('keydown', this.onKeydown);
     window.removeEventListener('resize', this.resizeHandler);
     window.removeEventListener('scroll', this.scrollHandler, { capture: true });
   },
