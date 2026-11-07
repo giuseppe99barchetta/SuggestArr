@@ -699,7 +699,7 @@ export default {
 
     onKeydown(event) {
       // A native dialog on top (list preview, confirmation) or the jobs tour handles its own keys.
-      if (document.querySelector('dialog[open], [aria-labelledby="tour-title"]')) return;
+      if (event.defaultPrevented || document.querySelector('dialog[open], [aria-labelledby="tour-title"]')) return;
       if (event.key === 'Tab') return this.keepFocusInside(event);
       if (event.key !== 'Escape') return;
       event.preventDefault();
@@ -711,7 +711,7 @@ export default {
       const root = this.$refs.dialog;
       if (!root) return;
       const stops = [...root.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])')]
-        .filter(el => !el.disabled && el.type !== 'hidden' && el.offsetParent !== null);
+        .filter(el => !el.matches(':disabled') && el.type !== 'hidden' && el.offsetParent !== null);
       if (!stops.length) return;
       const first = stops[0];
       const last = stops[stops.length - 1];

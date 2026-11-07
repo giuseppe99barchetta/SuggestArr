@@ -6,7 +6,7 @@
         <h2 class="m-0 text-[17px] font-bold text-ink">{{ title }}</h2>
         <p v-if="description" class="m-0 text-[13px] leading-relaxed text-ink-3">{{ description }}</p>
       </div>
-      <div v-if="$slots.actions" class="flex shrink-0 gap-2 max-sm:w-full"><slot name="actions" /></div>
+      <div v-if="$slots.actions" class="flex shrink-0 gap-2"><slot name="actions" /></div>
     </header>
     <slot />
   </section>

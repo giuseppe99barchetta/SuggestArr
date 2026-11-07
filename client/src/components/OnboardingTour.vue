@@ -206,7 +206,8 @@ export default {
     },
 
     onKeydown(event) {
-      if (!this.active || !this.currentStep) return;
+      // A native dialog on top (confirmation, details) takes its own Escape and Tab.
+      if (!this.active || !this.currentStep || document.querySelector('dialog[open]')) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         this.skip();
