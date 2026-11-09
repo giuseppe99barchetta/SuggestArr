@@ -2,7 +2,7 @@
 
 ## 🚀 SuggestArr - Media Automation Made Simple
 
-![ezgif com-optimize (2)](https://github.com/user-attachments/assets/d5c48bdb-3c11-4f35-bb55-849297d521e7)
+![SuggestArr: recommendations from what you watch, sent to Seer](docs/assets/suggestarr-hero.png)
 
 ![Build Status](https://img.shields.io/github/actions/workflow/status/giuseppe99barchetta/suggestarr/docker_hub_build.yml?branch=main&label=Build&logo=github)
 ![Platform Support](https://img.shields.io/badge/platforms-linux%2Famd64%20|%20linux%2Farm64-blue?logo=linux)
@@ -11,7 +11,7 @@
 [![](https://dcbadge.limes.pink/api/server/https://discord.com/invite/JXwFd3PnXY?style=flat)](https://discord.com/invite/JXwFd3PnXY)
 </div>
 
-SuggestArr automates media recommendations and download requests based on what your users watch on **Jellyfin**, **Plex** or **Emby**. It takes recently watched content, finds similar titles through TMDb (or an AI model), and sends the requests to **Seer**.
+SuggestArr automates media recommendations and download requests based on what you watch on **Jellyfin**, **Plex** or **Emby**. It takes recently watched content, finds similar titles through TMDb (or an AI model), and sends the requests to **Seer**.
 
 ## Features
 
@@ -29,6 +29,16 @@ SuggestArr automates media recommendations and download requests based on what y
 - **Public REST API** with Swagger UI.
 
 See the [Feature Guide](docs/FEATURES.md) for how each feature works.
+
+## Screenshots
+
+| Home | Requests |
+| --- | --- |
+| ![Home dashboard with request stats, recap and suggestions awaiting approval](docs/assets/screenshots/home.png) | ![Requests sent to Seer, with posters and availability](docs/assets/screenshots/requests.png) |
+| **AI Search** | **Jobs** |
+| ![AI Search results for a plain-language request](docs/assets/screenshots/ai-search.png) | ![Scheduled jobs and their recent runs](docs/assets/screenshots/jobs.png) |
+
+Users in these screenshots are fictional; titles, ratings and posters come from [TMDb](https://www.themoviedb.org/). This product uses the TMDB API but is not endorsed or certified by TMDB. Regenerate them with `cd client && TMDB_API_KEY=... npm run screenshots` (without a key, placeholder titles are used).
 
 ## Requirements
 
