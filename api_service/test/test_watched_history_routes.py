@@ -52,7 +52,7 @@ def test_list_my_watched_media_is_scoped_to_current_media_profile():
 def _sync(db, titles_result=None, side_effect=None):
     p1, p2 = _patches(db)
     with p1, p2, patch.dict(routes._last_sync, clear=True), \
-            patch('api_service.blueprints.watched_history.routes.PlayedTitles') as titles:
+            patch('api_service.services.watch_history_sync.PlayedTitles') as titles:
         titles.return_value.titles = AsyncMock(return_value=titles_result, side_effect=side_effect)
         client = make_app().test_client()
         first = client.post('/api/watched-history/me/sync')

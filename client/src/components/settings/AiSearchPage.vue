@@ -46,7 +46,24 @@
         <span class="self-end text-xs text-ink-4">Enter to search · Shift + Enter for a new line</span>
       </label>
 
-      <div v-if="showPeoplePicker" class="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+        <div role="radiogroup" aria-label="Media type" class="flex rounded-ctl border border-edge-strong bg-canvas p-1">
+          <button
+            v-for="option in mediaTypeOptions"
+            :key="option.value"
+            type="button"
+            role="radio"
+            :aria-checked="mediaType === option.value ? 'true' : 'false'"
+            :disabled="isSearching"
+            class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border-0 px-3.5 text-[13px] font-semibold"
+            :class="mediaType === option.value ? 'bg-raised text-ink' : 'bg-transparent text-ink-3 hover:text-ink'"
+            @click="mediaType = option.value"
+          >
+            <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
+          </button>
+        </div>
+        <template v-if="showPeoplePicker">
         <div role="group" aria-labelledby="aiPeopleLabel" class="flex flex-wrap items-center gap-1 rounded-ctl border border-edge-strong bg-canvas p-1">
           <span id="aiPeopleLabel" class="inline-flex h-9 items-center gap-2 px-2.5 text-[13px] font-semibold text-ink-4"><i aria-hidden="true" class="fas fa-user-friends"></i>For</span>
           <button
@@ -63,23 +80,7 @@
           </button>
         </div>
         <p role="status" aria-live="polite" class="m-0 text-xs text-ink-4">{{ peopleHint }}</p>
-      </div>
-
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div role="radiogroup" aria-label="Media type" class="flex rounded-ctl border border-edge-strong bg-canvas p-1">
-          <button
-            v-for="option in mediaTypeOptions"
-            :key="option.value"
-            type="button"
-            role="radio"
-            :aria-checked="mediaType === option.value ? 'true' : 'false'"
-            :disabled="isSearching"
-            class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border-0 px-3.5 text-[13px] font-semibold"
-            :class="mediaType === option.value ? 'bg-raised text-ink' : 'bg-transparent text-ink-3 hover:text-ink'"
-            @click="mediaType = option.value"
-          >
-            <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
-          </button>
+        </template>
         </div>
         <button type="submit" class="inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-ctl border-0 bg-brand px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="!llmAvailable || isSearching || !query.trim()">
           <i aria-hidden="true" :class="isSearching ? 'fas fa-spinner fa-spin' : 'fas fa-magic'"></i>{{ isSearching ? 'Searching…' : 'Search' }}

@@ -11,7 +11,9 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
 from api_service.services.tmdb.tmdb_client import TMDbClient
-from api_service.services.year_recap import PlayedTitles
+from api_service.services.watch_history_sync import (
+    SUPPORTED_PROVIDERS, identity_for_user, selected_provider, sync_identity_history,
+)
 from api_service.utils.asyncio_loop import run_coroutine_sync
 
 
@@ -21,31 +23,23 @@ CSV_COLUMNS = ('tmdb_id', 'media_type', 'title', 'year', 'rating')
 MAX_IMPORT_ROWS = 1000
 MAX_IMPORT_BYTES = 2 * 1024 * 1024
 SYNC_INTERVAL = timedelta(minutes=5)
-# Jellyfin only keeps the last play per item, so re-read a day back to catch replays.
-SYNC_OVERLAP = timedelta(days=1)
 _last_sync = {}
 _sync_lock = threading.Lock()
 
 
 def _provider() -> str:
-    return str(ConfigService.get_runtime_config().get('SELECTED_SERVICE') or '').lower()
+    return selected_provider()
 
 
 def _identity_for_current_user(db: DatabaseManager):
     """Resolve the media identity to act on: the caller's own, or ``?user=`` for admins."""
     provider = _provider()
-    if provider not in {'jellyfin', 'emby', 'plex'}:
+    if provider not in SUPPORTED_PROVIDERS:
         return None
     requested = str(request.args.get('user') or '').strip()
     if requested and g.current_user.get('role') == 'admin':
         return db.upsert_media_user_identity(provider, requested[:191])
-    user_id = int(g.current_user['id'])
-    for profile in db.get_user_media_profiles(user_id):
-        if profile.get('provider') == provider:
-            return db.upsert_media_user_identity(
-                provider, str(profile['external_user_id']), profile.get('external_username'),
-            )
-    return None
+    return identity_for_user(db, int(g.current_user['id']), provider)
 
 
 def _missing_profile():
@@ -87,11 +81,8 @@ def sync_my_server_history():
         if last and now - last < SYNC_INTERVAL:
             return jsonify({'status': 'success', 'server_status': 'skipped', 'added': 0}), 200
         _last_sync[identity['id']] = now
-    latest = db.latest_server_play(identity['id'])
-    since = latest.replace(tzinfo=timezone.utc) - SYNC_OVERLAP if latest else None
     try:
-        result = run_coroutine_sync(PlayedTitles().titles(
-            _provider(), identity['external_user_id'], ConfigService.get_runtime_config(), since=since), logger)
+        result = sync_identity_history(db, _provider(), identity, logger)
     except Exception as exc:
         with _sync_lock:
             _last_sync.pop(identity['id'], None)
@@ -99,8 +90,7 @@ def sync_my_server_history():
         return jsonify({'status': 'success', 'server_status': 'unavailable', 'added': 0}), 200
     if result is None:
         return jsonify({'status': 'success', 'server_status': 'not_configured', 'added': 0}), 200
-    played, truncated = result
-    added = db.record_server_plays(identity['id'], played)
+    played, truncated, added = result
     return jsonify({'status': 'success', 'server_status': 'partial' if truncated else 'ok',
                     'added': added, 'updated': len(played)}), 200
 

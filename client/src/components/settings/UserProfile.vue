@@ -81,6 +81,25 @@
           </form>
         </SectionCard>
 
+        <SectionCard icon="fas fa-star-half-alt" title="Rate what you watch" description="Get a Telegram message a while after you finish a title, with buttons 1 to 10. One tap saves the rating.">
+          <form class="flex flex-col gap-3" @submit.prevent="saveRatingPrompt">
+            <label class="flex items-center gap-2 text-sm font-semibold text-ink-2">
+              <input v-model="ratingPrompt.enabled" type="checkbox" :disabled="ratingPromptBusy || !ratingPromptEditable" />
+              Ask me to rate what I watched
+            </label>
+            <label class="ui-label">Wait this many hours after I watch it (0 to 48)
+              <input v-model.number="ratingPrompt.delay_hours" type="number" min="0" max="48" step="1" class="ui-input" required :disabled="ratingPromptBusy || !ratingPromptEditable" />
+              <span class="text-xs font-normal text-ink-4">Movies are asked once; a show is asked once, not per episode. Titles you already rated are skipped. Use a Telegram bot only SuggestArr reads, in a private chat with you.</span>
+            </label>
+            <p v-if="!ratingPrompt.available && ratingPrompt.reason" class="text-xs text-ink-3">{{ ratingPrompt.reason }}</p>
+            <div class="flex flex-wrap gap-2">
+              <button type="submit" class="ui-btn-primary" :disabled="ratingPromptBusy || !ratingPromptEditable">Save</button>
+            </div>
+            <p v-if="ratingPromptError" role="alert" class="ui-alert-bad">{{ ratingPromptError }}</p>
+            <p v-if="ratingPromptSuccess" role="status" class="ui-alert-good">{{ ratingPromptSuccess }}</p>
+          </form>
+        </SectionCard>
+
         <SectionCard icon="fas fa-user-friends" title="AI Search sharing" description="Let other accounts include you when they search for several people at once.">
           <div class="flex flex-col gap-2">
             <button type="button" role="switch" :aria-checked="aiSearchShareable ? 'true' : 'false'" :disabled="isSavingSharing" class="flex cursor-pointer items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3 text-left hover:border-edge-strong disabled:cursor-not-allowed disabled:opacity-60" @click="saveSharing">
@@ -208,6 +227,8 @@ import {
   saveMyNotifications,
   deleteMyNotifications,
   testMyNotifications,
+  getMyRatingPrompts,
+  saveMyRatingPrompts,
 } from '@/api/api';
 import { CHAT_FORMATS } from '@/utils/notificationFormats.js';
 import SectionCard from '@/components/ui/SectionCard.vue';
@@ -255,6 +276,11 @@ export default {
       notifyBusy: false,
       notifyError: '',
       notifySuccess: '',
+      ratingPrompt: { enabled: false, delay_hours: 12, available: false, reason: '' },
+      ratingPromptBusy: false,
+      ratingPromptSavedEnabled: false,
+      ratingPromptError: '',
+      ratingPromptSuccess: '',
       themeOptions: [
         { value: 'system', label: 'System', icon: 'fas fa-desktop' },
         { value: 'light', label: 'Light', icon: 'fas fa-sun' },
@@ -311,6 +337,10 @@ export default {
   },
 
   computed: {
+    // A saved-on setting can always be switched off, even when the destination or link behind it is gone.
+    ratingPromptEditable() {
+      return this.ratingPrompt.available || this.ratingPromptSavedEnabled;
+    },
     notifyFormat() {
       return CHAT_FORMATS.find(option => option.value === this.notify.format) || CHAT_FORMATS[0];
     },
@@ -405,6 +435,7 @@ export default {
 
   async mounted() {
     this.loadNotify();
+    this.loadRatingPrompt();
     this.loadLanguage();
     await this.loadConfigStatus();
     await this.loadLinks();
@@ -458,6 +489,7 @@ export default {
       return this.runNotify(async () => {
         await saveMyNotifications(this.notify);
         this.notifySaved = true;
+        await this.loadRatingPrompt();
       }, 'Saved. Use "Send test" to check it arrives.');
     },
     testNotify() {
@@ -468,7 +500,32 @@ export default {
         await deleteMyNotifications();
         this.notify = { format: 'discord', url: '' };
         this.notifySaved = false;
+        await this.loadRatingPrompt();
       }, 'Notifications turned off.');
+    },
+    // ── Rating prompts ─────────────────────────────────────────────────────
+    async loadRatingPrompt() {
+      try {
+        const { data } = await getMyRatingPrompts();
+        this.ratingPrompt = data;
+        this.ratingPromptSavedEnabled = data.enabled;
+      } catch {
+        // The card stays disabled when the settings cannot be read.
+      }
+    },
+    async saveRatingPrompt() {
+      this.ratingPromptBusy = true;
+      this.ratingPromptError = '';
+      this.ratingPromptSuccess = '';
+      try {
+        await saveMyRatingPrompts({ enabled: this.ratingPrompt.enabled, delay_hours: this.ratingPrompt.delay_hours });
+        this.ratingPromptSavedEnabled = this.ratingPrompt.enabled;
+        this.ratingPromptSuccess = this.ratingPrompt.enabled ? 'Saved. You will be asked about titles you watch from now on.' : 'Rating prompts are off.';
+      } catch (error) {
+        this.ratingPromptError = error.response?.data?.error || 'Something went wrong. Try again.';
+      } finally {
+        this.ratingPromptBusy = false;
+      }
     },
     // ── Title language ─────────────────────────────────────────────────────
 
@@ -537,6 +594,7 @@ export default {
         const res = await getMyLinks();
         this.links = res.data;
         if (refreshAvatar) refreshUserAvatar(this.profileUser?.id);
+        this.loadRatingPrompt(); // availability depends on the media link
       } catch (err) {
         console.error('Failed to load media links', err);
       }

@@ -39,7 +39,8 @@ from api_service.auth.middleware import TAB_ALIASES, require_role
 from api_service.blueprints.avatar import user_avatar_response
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
-from api_service.services.notification_formats import notification_target_error
+from api_service.services.notification_formats import notification_target_error, telegram_bot_base, telegram_chat_id
+from api_service.services.watch_history_sync import identity_for_user, selected_provider
 from api_service.utils.ssrf_guard import validate_url
 from api_service.services.plex.account_resolver import (
     canonical_plex_account_id,
@@ -494,8 +495,61 @@ def set_my_notifications():
 @users_bp.route('/me/notifications', methods=['DELETE'])
 def delete_my_notifications():
     """Stop personal notifications for the current user."""
-    DatabaseManager().set_personal_notification(_current_user_id(), None)
+    db = DatabaseManager()
+    db.set_personal_notification(_current_user_id(), None)
+    db.clear_rating_prompt_config(_current_user_id())  # nowhere left to ask
     return '', 204
+
+
+def _rating_prompt_blocker(db, user_id):
+    """Why rating prompts cannot work for this user yet, or None."""
+    config = db.get_personal_notification(user_id) or {}
+    if config.get('format') != 'telegram' or not telegram_chat_id(config.get('url')) or not telegram_bot_base(config.get('url')):
+        return ('Rating prompts need a Telegram destination: a sendMessage URL with your own numeric chat_id '
+                '(talk to the bot in a private chat).')
+    if not identity_for_user(db, user_id, selected_provider(), verified_only=True):
+        return 'Link your media server account first.'
+    return None
+
+
+@users_bp.route('/me/rating-prompts', methods=['GET'])
+def get_my_rating_prompts():
+    """
+    Return the current user's rating-prompt settings.
+
+    Response (200): { enabled, delay_hours, available, reason } where ``reason`` explains
+    why ``available`` is false.
+    """
+    db = DatabaseManager()
+    user_id = _current_user_id()
+    config = db.get_rating_prompt_config(user_id)
+    blocker = _rating_prompt_blocker(db, user_id)
+    return jsonify({'enabled': config['enabled'], 'delay_hours': config['delay_hours'],
+                    'available': blocker is None, 'reason': blocker}), 200
+
+
+@users_bp.route('/me/rating-prompts', methods=['PUT'])
+@limiter.limit('20 per minute')
+def set_my_rating_prompts():
+    """
+    Turn "ask me to rate what I watched" on or off and set how long to wait after a play.
+
+    Request JSON: { enabled: bool, delay_hours: int 0-48 }
+    """
+    data = request.get_json(silent=True) or {}
+    enabled, delay = data.get('enabled'), data.get('delay_hours', 12)
+    if not isinstance(enabled, bool):
+        return jsonify({'error': 'enabled must be true or false'}), 400
+    db = DatabaseManager()
+    user_id = _current_user_id()
+    blocker = _rating_prompt_blocker(db, user_id) if enabled else None
+    if blocker:
+        return jsonify({'error': blocker}), 400
+    try:
+        saved = db.set_rating_prompt_config(user_id, enabled, delay)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({'enabled': saved['enabled'], 'delay_hours': saved['delay_hours']}), 200
 
 
 @users_bp.route('/me/notifications/test', methods=['POST'])

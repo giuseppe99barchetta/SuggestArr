@@ -344,6 +344,17 @@ def _start_background_services():
             replace_existing=True,
         )
 
+        # Rating prompts: send due questions, then read button taps (no-ops for users who opted out).
+        from api_service.jobs.rating_prompts import run_rating_prompts, run_rating_answers
+        job_manager.scheduler.add_job(
+            run_rating_prompts, 'interval', minutes=15, id='rating_prompts',
+            max_instances=1, replace_existing=True,
+        )
+        job_manager.scheduler.add_job(
+            run_rating_answers, 'interval', seconds=20, id='rating_answers',
+            max_instances=1, replace_existing=True,
+        )
+
         # Daily cleanup job (no-op when disabled in cleanup_settings)
         from api_service.jobs.cleanup_automation import execute_cleanup_job, _run_lock as _cleanup_run_lock
         import asyncio as _asyncio

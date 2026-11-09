@@ -24,6 +24,7 @@ SuggestArr automates media recommendations and download requests based on what y
 - **Filters**: skip content already on streaming services in your country, plus quality and per-user filters.
 - **Web interface** for setup, scheduling, users, requests and live logs, with connection tests during setup.
 - **Recaps and milestones** you can share ([details](docs/RECAP.md)).
+- **One-tap rating prompts** on Telegram a while after you watch something ([details](docs/RATING_PROMPTS.md)).
 - **SQLite, PostgreSQL or MySQL** database.
 - **Public REST API** with Swagger UI.
 
