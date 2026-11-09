@@ -439,6 +439,7 @@ class SchemaManager:
                     title TEXT NOT NULL,
                     nonce TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'pending',
+                    generation INTEGER NOT NULL DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     answered_at TIMESTAMP NULL,
                     FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE,
@@ -818,6 +819,7 @@ class SchemaManager:
                         title VARCHAR(512) NOT NULL,
                         nonce VARCHAR(32) NOT NULL,
                         status VARCHAR(16) NOT NULL DEFAULT 'pending',
+                        generation INT NOT NULL DEFAULT 0,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         answered_at TIMESTAMP NULL,
                         FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE,
@@ -1210,6 +1212,15 @@ class SchemaManager:
                 # Per-user "ask me to rate what I watched" settings (JSON), see RatingPromptMixin.
                 if 'rating_prompt_config' not in existing_columns:
                     cursor.execute("ALTER TABLE auth_users ADD COLUMN rating_prompt_config TEXT")
+                    conn.commit()
+                # Monotonic counter bumped with every change of where rating prompts are delivered; never reset.
+                if 'rating_prompt_generation' not in existing_columns:
+                    cursor.execute("ALTER TABLE auth_users ADD COLUMN rating_prompt_generation INTEGER NOT NULL DEFAULT 0")
+                    conn.commit()
+                # Prompts claimed before delivery generations existed belong to generation 0.
+                cursor.execute("SELECT * FROM rating_prompts WHERE 1=0")
+                if 'generation' not in [col[0] for col in cursor.description]:
+                    cursor.execute("ALTER TABLE rating_prompts ADD COLUMN generation INTEGER NOT NULL DEFAULT 0")
                     conn.commit()
 
             except Exception as e:

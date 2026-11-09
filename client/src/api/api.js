@@ -307,6 +307,7 @@ export const deleteMyNotifications = () => axios.delete('/api/users/me/notificat
 export const testMyNotifications = () => axios.post('/api/users/me/notifications/test');
 export const getMyRatingPrompts = () => axios.get('/api/users/me/rating-prompts');
 export const saveMyRatingPrompts = (data) => axios.put('/api/users/me/rating-prompts', data);
+export const testMyRatingPrompts = () => axios.post('/api/users/me/rating-prompts/test');
 export const deleteWebhook = (id) => axios.delete(`/api/v1/webhooks/${id}`);
 export const getWebhookSettings = () => axios.get('/api/v1/webhooks/settings');
 export const updateWebhookSettings = (allowed_hosts) => axios.put('/api/v1/webhooks/settings', { allowed_hosts });

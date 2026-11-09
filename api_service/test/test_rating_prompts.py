@@ -85,13 +85,19 @@ def _ago(hours):
     return datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
 
 
+def _store_config(db, user_id, payload):
+    """Write a rating-prompt config straight into the row (tests need a start date in the past)."""
+    with db.get_connection() as conn:
+        conn.execute('UPDATE auth_users SET rating_prompt_config=? WHERE id=?', (json.dumps(payload), user_id))
+        conn.commit()
+
+
 def _setup(db, tg, user_id=2, chat_id='555', verified=True, delay=12, enabled_hours_ago=100):
     """Opt a user in: verified Jellyfin link, own Telegram chat, settings enabled in the past."""
     db.create_user_media_profile(user_id, 'jellyfin', f'jf-{user_id}', f'u{user_id}', verified=verified)
     db.set_personal_notification(user_id, {'format': 'telegram', 'url': f'{tg.base}/sendMessage?chat_id={chat_id}',
                                            'allow_private': True})
-    db._write_rating_prompt_config(user_id, {'enabled': True, 'delay_hours': delay,
-                                             'enabled_at': _ago(enabled_hours_ago).isoformat()})
+    _store_config(db, user_id, {'enabled': True, 'delay_hours': delay, 'enabled_at': _ago(enabled_hours_ago).isoformat()})
     return db.upsert_media_user_identity('jellyfin', f'jf-{user_id}')
 
 
@@ -396,9 +402,12 @@ def test_settings_are_validated_saved_and_cleared_with_the_destination(db, tg):
         assert client.put('/api/users/me/rating-prompts', json={'enabled': True, 'delay_hours': 49}).status_code == 400
         assert client.put('/api/users/me/rating-prompts', json={'enabled': True, 'delay_hours': True}).status_code == 400
         saved = client.put('/api/users/me/rating-prompts', json={'enabled': True, 'delay_hours': 0})
-        assert saved.status_code == 200 and saved.get_json() == {'enabled': True, 'delay_hours': 0}
+        no_discord = {'public_key': '', 'user_id': '', 'has_token': False}
+        assert saved.status_code == 200 and saved.get_json() == {
+            'enabled': True, 'delay_hours': 0, 'channel': 'telegram', 'discord': no_discord}
         assert client.get('/api/users/me/rating-prompts').get_json() == {
-            'enabled': True, 'delay_hours': 0, 'available': True, 'reason': None}
+            'enabled': True, 'delay_hours': 0, 'channel': 'telegram', 'discord': no_discord,
+            'available': True, 'reason': None}
         assert client.delete('/api/users/me/notifications').status_code == 204
         after = client.get('/api/users/me/rating-prompts').get_json()
     assert after['enabled'] is False and after['available'] is False and 'Telegram' in after['reason']

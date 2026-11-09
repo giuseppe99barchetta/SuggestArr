@@ -38,6 +38,7 @@ from api_service.blueprints.cleanup.routes import cleanup_bp
 from api_service.blueprints.trakt.routes import trakt_bp
 from api_service.blueprints.watched_history.routes import watched_history_bp
 from api_service.blueprints.simkl.routes import simkl_bp
+from api_service.blueprints.discord_interactions import discord_interactions_bp
 from api_service.api.v1 import public_api_v1_bp
 
 class SubpathMiddleware:
@@ -200,6 +201,7 @@ def create_app():
     application.register_blueprint(trakt_bp, url_prefix='/api/trakt')
     application.register_blueprint(watched_history_bp, url_prefix='/api/watched-history')
     application.register_blueprint(simkl_bp, url_prefix='/api/simkl')
+    application.register_blueprint(discord_interactions_bp, url_prefix='/api/discord')
     application.register_blueprint(public_api_v1_bp, url_prefix='/api/v1')
 
     def swagger_ui_directory():
