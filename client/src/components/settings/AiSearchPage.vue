@@ -46,23 +46,23 @@
         <span class="self-end text-xs text-ink-4">Enter to search · Shift + Enter for a new line</span>
       </label>
 
-      <div v-if="showPeoplePicker" role="group" aria-labelledby="aiPeopleLabel" class="flex flex-col gap-2">
-        <div class="flex flex-wrap items-center gap-2">
-          <span id="aiPeopleLabel" class="text-[13px] font-semibold text-ink-3"><i aria-hidden="true" class="fas fa-user-friends mr-1.5"></i>Searching for</span>
+      <div v-if="showPeoplePicker" class="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div role="group" aria-labelledby="aiPeopleLabel" class="flex flex-wrap items-center gap-1 rounded-ctl border border-edge-strong bg-canvas p-1">
+          <span id="aiPeopleLabel" class="inline-flex h-9 items-center gap-2 px-2.5 text-[13px] font-semibold text-ink-4"><i aria-hidden="true" class="fas fa-user-friends"></i>For</span>
           <button
             v-for="person in people"
             :key="person.id"
             type="button"
             :aria-pressed="isPersonSelected(person.id) ? 'true' : 'false'"
             :disabled="isSearching || (!isPersonSelected(person.id) && selectedPeople.length >= maxPeople)"
-            class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-            :class="isPersonSelected(person.id) ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong bg-transparent text-ink-3 hover:text-ink'"
+            class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border-0 px-3.5 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            :class="isPersonSelected(person.id) ? 'bg-raised text-ink' : 'bg-transparent text-ink-3 hover:text-ink'"
             @click="togglePerson(person.id)"
           >
-            <i aria-hidden="true" :class="isPersonSelected(person.id) ? 'fas fa-check' : 'fas fa-plus'" class="text-[11px]"></i>{{ person.self ? 'You' : person.name }}
+            <i aria-hidden="true" :class="isPersonSelected(person.id) ? 'fas fa-check text-brand-ink' : 'fas fa-plus'" class="text-[11px]"></i>{{ person.self ? 'You' : person.name }}
           </button>
         </div>
-        <p role="status" aria-live="polite" class="m-0 min-h-[1rem] text-xs text-ink-4">{{ peopleHint }}</p>
+        <p role="status" aria-live="polite" class="m-0 text-xs text-ink-4">{{ peopleHint }}</p>
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-3">
