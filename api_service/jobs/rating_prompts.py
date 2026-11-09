@@ -158,7 +158,7 @@ def describe_discord_failure(exc):
         return 'Discord rejected the bot token.'
     if exc.code is not None:
         return f'Discord refused the message (code {exc.code}).'
-    return str(exc)
+    return 'Discord refused the message.'
 
 
 def send_test_message(db, config):
