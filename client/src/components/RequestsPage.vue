@@ -160,6 +160,7 @@
         :search-query="searchQuery"
         :media-type="mediaTypeFilter"
         :requested-for="requestUserFilter"
+        :sort-by="sortBy"
         :show-header="false"
         :show-empty="false"
         :bulk-mode="workflowBulkMode"

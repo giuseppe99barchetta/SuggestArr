@@ -205,7 +205,8 @@ def request_workflow():
     items, total = db.list_suggestions(
         scope.owner_id, status, request.args.get('search', '').strip()[:100], page, per_page, media_type,
         scope.media_user_ids, int(g.current_user['id']), scope.include_unassigned,
-        include_owned_list_imports=scope.include_owned_list_imports)
+        include_owned_list_imports=scope.include_owned_list_imports,
+        sort_by=request.args.get('sort_by', 'date-desc'))
     _localize(db, (items, [('tmdb_id', 'media_type', 'title', 'overview')]))
     return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200

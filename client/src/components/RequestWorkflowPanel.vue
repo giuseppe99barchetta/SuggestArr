@@ -58,7 +58,7 @@
           <span class="font-semibold text-ink-2">{{ item.media_type === 'movie' ? 'Movie' : 'TV' }}<template v-if="item.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(item.rating) }}</template></span>
           <span v-if="item.rationale" class="line-clamp-2 italic leading-snug text-ink-3" :title="item.rationale">“{{ item.rationale }}”</span>
           <span v-if="item.name" class="line-clamp-2 leading-snug text-ink-3">From {{ item.name }}</span>
-          <span v-if="item.user_name || item.media_user_id" class="truncate text-ink-4" :title="`For ${item.user_name || item.media_user_id}`">For {{ item.user_name || item.media_user_id }}</span>
+          <span v-if="item.user_name" class="truncate text-ink-4" :title="`For ${item.user_name}`">For {{ item.user_name }}</span>
           <small v-if="item.status === 'failed'" class="text-bad">{{ item.last_error || `Failed after ${item.retry_count} attempts` }}</small>
         </div>
       </MediaCard>
@@ -107,7 +107,7 @@ import { keyDecision, swipeDecision, touchPoint } from '@/utils/quickDecision.js
 export default {
   name: 'RequestWorkflowPanel', components: { AppDialog, MediaCard, MediaGridSkeleton, ApprovalProfileChoice, SeenRatingDialog },
   emits: ['open', 'update:total'],
-  props: { statusFilter: { type: String, default: 'all' }, searchQuery: { type: String, default: '' }, mediaType: { type: String, default: 'all' }, requestedFor: { type: String, default: 'all' }, showHeader: { type: Boolean, default: true }, showEmpty: { type: Boolean, default: true }, bulkMode: { type: Boolean, default: false } },
+  props: { statusFilter: { type: String, default: 'all' }, searchQuery: { type: String, default: '' }, mediaType: { type: String, default: 'all' }, requestedFor: { type: String, default: 'all' }, sortBy: { type: String, default: 'date-desc' }, showHeader: { type: Boolean, default: true }, showEmpty: { type: Boolean, default: true }, bulkMode: { type: Boolean, default: false } },
   data() { return { items: [], selected: [], actionLoading: false, swipeStart: null, seenMenuId: null, seenOptions: SEEN_OPTIONS, seenRatingMode: false, seenRatingItem: null, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,
     statuses: [{ value: 'awaiting_approval', label: 'Awaiting approval' }, { value: 'queued', label: 'Queued' }, { value: 'submitted', label: 'Submitted' }, { value: 'rejected', label: 'Rejected' }, { value: 'failed', label: 'Failed' }, { value: 'blacklisted', label: 'Blacklisted' }] }; },
   computed: {
@@ -122,6 +122,7 @@ export default {
     searchQuery(value) { this.search = value; this.reloadSoon(); },
     mediaType() { this.load(1); },
     requestedFor() { this.load(1); },
+    sortBy() { this.load(1); },
     bulkMode(value) { if (!value) this.selected = []; this.seenMenuId = null; this.seenRatingItem = null; }
   },
   async mounted() { const requested = this.$route.query.status; if (this.statuses.some(option => option.value === requested)) this.status = requested; const response = await axios.get('/api/jobs'); this.jobs = (response.data.jobs || []).filter(job => job.delivery_mode === 'manual'); this.load(); loadSeenRatingMode(axios).then(enabled => { this.seenRatingMode = enabled; }); this.servers = await loadSeerServers(axios); },
@@ -131,7 +132,7 @@ export default {
       if (this.loading) return;
       this.loading = true;
       try {
-        const data = (await axios.get('/api/automation/requests/workflow', { params: { status: this.status, search: this.search, media_type: this.mediaType, user_id: this.requestedFor === 'all' ? undefined : this.requestedFor, page, per_page: 24 } })).data;
+        const data = (await axios.get('/api/automation/requests/workflow', { params: { status: this.status, search: this.search, media_type: this.mediaType, user_id: this.requestedFor === 'all' ? undefined : this.requestedFor, sort_by: this.sortBy, page, per_page: 24 } })).data;
         this.items = page === 1 ? data.items : [...this.items, ...data.items];
         Object.assign(this, { total: data.total, page: data.page, pages: data.pages });
         this.$emit('update:total', data.total);
@@ -197,7 +198,7 @@ export default {
       try {
         await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] });
         notifyRequestsChanged();
-        await this.load();
+        await this.load(1);
         this.$toast.open({ message: action === 'approve' ? 'Request queued for Seer' : 'Request updated', type: 'success' });
       } finally { this.actionLoading = false; }
     },
@@ -228,7 +229,7 @@ export default {
         await axios.post(`/api/automation/requests/workflow/${action}`, { ids, remove_blacklist: removeBlacklist, ...(profile ? { profile } : {}) });
         notifyRequestsChanged();
         this.confirmation = null;
-        await this.load();
+        await this.load(1);
         this.$toast.open({ message: 'Requests updated', type: 'success' });
       } catch (error) {
         // A rejected profile comes back as 400 with a reason. Swallowing it

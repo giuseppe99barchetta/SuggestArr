@@ -248,8 +248,17 @@ class RequestQueueMixin:
 
     def list_suggestions(self, owner_id=None, status='awaiting_approval', search='', page=1, per_page=24,
                          media_type='all', media_user_ids=None, feedback_user_id=None,
-                         include_unassigned=False, include_owned_list_imports=False):
+                         include_unassigned=False, include_owned_list_imports=False, sort_by='date-desc'):
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        # Unrated titles sort last in both directions.
+        sort_mapping = {
+            'date-asc': 'p.created_at ASC',
+            'title-asc': "LOWER(COALESCE(m.title,'')) ASC",
+            'title-desc': "LOWER(COALESCE(m.title,'')) DESC",
+            'rating-desc': '(m.rating IS NULL), m.rating DESC',
+            'rating-asc': '(m.rating IS NULL), m.rating ASC',
+        }
+        order_by = sort_mapping.get(sort_by, 'p.created_at DESC')
         query = """SELECT p.id,p.tmdb_id,p.media_type,p.status,p.created_at,p.job_id,p.execution_id,p.owner_id,
                           p.retry_count,p.last_attempt_at,p.last_error,p.payload,
                           m.title,m.poster_path,m.overview,m.rating,m.release_date,
@@ -289,7 +298,7 @@ class RequestQueueMixin:
         count_query = f"SELECT COUNT(*) FROM ({query}) suggestion_rows"
         query += (" ORDER BY CASE p.status WHEN 'awaiting_approval' THEN 0 WHEN 'queued' THEN 1 "
                   "WHEN 'submitting' THEN 2 WHEN 'failed' THEN 3 WHEN 'rejected' THEN 4 ELSE 5 END, "
-                  f"p.created_at DESC LIMIT {ph} OFFSET {ph}")
+                  f"{order_by}, p.id DESC LIMIT {ph} OFFSET {ph}")
         params.extend((per_page, (page - 1) * per_page))
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -310,7 +319,8 @@ class RequestQueueMixin:
                 item['user_name'] = None
                 if item['media_user_id'] is not None:
                     cursor.execute(
-                        f"SELECT user_name FROM users WHERE user_id={ph} "
+                        # users.user_name falls back to the raw id when no name was known; skip it.
+                        f"SELECT user_name FROM users WHERE user_id={ph} AND user_name<>user_id AND user_name IS NOT NULL "
                         f"UNION ALL SELECT external_username FROM media_user_identities WHERE external_user_id={ph} "
                         f"AND external_username IS NOT NULL "
                         f"UNION ALL SELECT external_username FROM user_media_profiles WHERE external_user_id={ph} "
