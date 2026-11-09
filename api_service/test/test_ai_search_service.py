@@ -1111,3 +1111,43 @@ class TestSearchSingleOwnedExclusion(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestSearchSinglePersonalFeedback(unittest.IsolatedAsyncioTestCase):
+
+    async def _run(self, signals):
+        from api_service.db.components.suggestion_feedback_mixin import SuggestionFeedbackMixin
+        service = _make_service()
+        interpretation = {
+            'discover_params': {},
+            'suggested_titles': [{'title': 'Se7en', 'year': 1995, 'rationale': 'great film'}],
+        }
+        mock_tmdb = MagicMock()
+        mock_tmdb.search_movie = AsyncMock(return_value=[_tmdb_item(1, 'Se7en')])
+        mock_tmdb._apply_filters = MagicMock(return_value={'passed': True})
+        mock_tmdb.omdb_client = None
+        mock_tmdb.__aenter__ = AsyncMock(return_value=mock_tmdb)
+        mock_tmdb.__aexit__ = AsyncMock(return_value=False)
+
+        with patch('api_service.services.ai_search.ai_search_service.interpret_search_query',
+                   AsyncMock(return_value=interpretation)), \
+             patch.object(service, '_get_history', AsyncMock(return_value=[])), \
+             patch.object(service, '_make_tmdb_client', return_value=mock_tmdb), \
+             patch('api_service.db.database_manager.DatabaseManager') as MockDB:
+            db = MockDB.return_value
+            db.get_requested_tmdb_ids.return_value = set()
+            db.get_ai_dislike_ids.return_value = []
+            db.get_ai_likes.return_value = []
+            db.NEGATIVE_FEEDBACK = SuggestionFeedbackMixin.NEGATIVE_FEEDBACK
+            db.get_suggestion_feedback_signals.return_value = signals
+            db.get_taste_profile.return_value = {'loved': [], 'interested': [], 'saved': [], 'disliked': [], 'uninterested': []}
+            result = await service._search_single('dark thriller', 'movie', None, 12, feedback_scope=(5, ''))
+            db.get_suggestion_feedback_signals.assert_called_once_with(5, '', 'movie')
+            return result
+
+    async def test_title_rated_already_seen_is_hidden(self):
+        self.assertEqual((await self._run({'1': 'already_seen'}))['results'], [])
+
+    async def test_title_saved_for_later_still_shows(self):
+        result = await self._run({'1': 'save_for_later'})
+        self.assertEqual([item['id'] for item in result['results']], [1])

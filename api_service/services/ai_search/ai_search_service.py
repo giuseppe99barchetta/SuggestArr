@@ -106,6 +106,7 @@ class AiSearchService:
         exclude_watched: bool = True,
         exclude_seen: bool = False,
         original_language: str = "auto",
+        feedback_scope: Optional[tuple] = None,
     ) -> Dict[str, Any]:
         """Execute an AI-powered search.
 
@@ -117,6 +118,8 @@ class AiSearchService:
         :param exclude_watched: Whether to exclude already-watched titles from results.
         :param original_language: 'auto' uses the prompt, 'any' removes language restrictions,
             otherwise an ISO 639-1 code overrides the prompt's language filter.
+        :param feedback_scope: ``(user_id, media_user_id)`` whose personal feedback hides
+            rated titles and steers the prompt; None applies only the legacy global feedback.
         :return: Dict with 'results', 'ai_reasoning', and 'total'.
         """
         # Load the library in the background while the LLM interprets the query;
@@ -127,12 +130,12 @@ class AiSearchService:
                 movie_task = self._search_single(
                     query, "movie", user_ids, max_results, use_history, exclude_watched, exclude_seen,
                     record_seen=False, owned_ids=owned_ids,
-                    original_language=original_language,
+                    original_language=original_language, feedback_scope=feedback_scope,
                 )
                 tv_task = self._search_single(
                     query, "tv", user_ids, max_results, use_history, exclude_watched, exclude_seen,
                     record_seen=False, owned_ids=owned_ids,
-                    original_language=original_language,
+                    original_language=original_language, feedback_scope=feedback_scope,
                 )
                 movie_res, tv_res = await asyncio.gather(movie_task, tv_task)
 
@@ -166,7 +169,7 @@ class AiSearchService:
             return await self._search_single(
                 query, media_type, user_ids, max_results, use_history, exclude_watched, exclude_seen,
                 owned_ids=owned_ids,
-                original_language=original_language,
+                original_language=original_language, feedback_scope=feedback_scope,
             )
         finally:
             owned_ids.cancel()  # no-op once the library has loaded
@@ -209,6 +212,7 @@ class AiSearchService:
         record_seen: bool = True,
         owned_ids: Optional[Union[Dict[str, set], Awaitable[Dict[str, set]]]] = None,
         original_language: str = "auto",
+        feedback_scope: Optional[tuple] = None,
     ) -> Dict[str, Any]:
         """Run the full search pipeline for a single media type.
 
@@ -245,6 +249,16 @@ class AiSearchService:
             disliked_ids = db.get_ai_dislike_ids(media_type)
             already_requested = already_requested | {str(i) for i in disliked_ids}
             liked_titles = db.get_ai_likes(media_type)
+            if feedback_scope:
+                # Personal ratings: anything the user dismissed or has watched stays out,
+                # and what they liked or saved steers the prompt like the legacy likes do.
+                signals = db.get_suggestion_feedback_signals(*feedback_scope, media_type)
+                already_requested = already_requested | {
+                    tmdb_id for tmdb_id, value in signals.items() if value in db.NEGATIVE_FEEDBACK}
+                taste = db.get_taste_profile(*feedback_scope, media_type)
+                liked_titles = liked_titles + [
+                    {**entry, 'media_type': media_type}
+                    for bucket in ('loved', 'interested', 'saved') for entry in taste[bucket]]
             if exclude_seen:
                 seen_ids = db.get_ai_seen_ids(media_type)
                 already_requested = already_requested | seen_ids

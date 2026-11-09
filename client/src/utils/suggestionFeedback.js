@@ -85,3 +85,41 @@ export function saveSeenFeedback (http, suggestionId, option, item, trakt = null
   }
   return http.put(`/api/automation/requests/workflow/${suggestionId}/feedback`, body)
 }
+
+/**
+ * The answers to "Good pick?", shared by the Requests page and AI Search.
+ * Values are the ones the server accepts for personal feedback.
+ */
+export const FEEDBACK_OPTIONS = [
+  { value: 'seen_liked', emoji: '👍', label: 'Seen it, liked it' },
+  { value: 'seen_disliked', emoji: '👎', label: 'Seen it, did not like it' },
+  { value: 'interested', emoji: '😍', label: 'Interested' },
+  { value: 'not_interested', emoji: '🙅', label: 'Not interested' },
+  { value: 'already_seen', emoji: '👀', label: 'Already seen' },
+  { value: 'too_similar', emoji: '🫠', label: 'Too similar' },
+  { value: 'save_for_later', emoji: '🔖', label: 'Save for later' }
+]
+
+/** Optional "mostly because of" chips shown once an answer is chosen. */
+export const FEEDBACK_REASONS = [
+  { value: 'genre', label: 'Genre' },
+  { value: 'provider', label: 'Provider' },
+  { value: 'content', label: 'Content' },
+  { value: 'title', label: 'Title' },
+  { value: 'other', label: 'Other' }
+]
+
+/** The answers shown before "More" is opened. */
+export const PRIMARY_FEEDBACK = ['interested', 'not_interested', 'already_seen']
+
+/**
+ * The answers to show: the primary ones, plus the current one when it is among the rest.
+ *
+ * @param {boolean} expanded Whether "More" is open.
+ * @param {string|undefined} current The saved answer, if any.
+ * @returns {object[]} Entries of FEEDBACK_OPTIONS.
+ */
+export function visibleFeedbackOptions (expanded, current) {
+  if (expanded) return FEEDBACK_OPTIONS
+  return FEEDBACK_OPTIONS.filter(option => PRIMARY_FEEDBACK.includes(option.value) || option.value === current)
+}

@@ -124,13 +124,14 @@ export const aiSearchFeedbackList = () => {
     return axios.get('/api/ai-search/feedback');
 };
 
-export const aiSearchFeedbackSet = (tmdbId, mediaType, feedback, title = null, year = null) => {
+export const aiSearchFeedbackSet = (tmdbId, mediaType, feedback, title = null, year = null, reasonType = null) => {
     return axios.post('/api/ai-search/feedback', {
         tmdb_id: tmdbId,
         media_type: mediaType,
         feedback,
         title,
         year,
+        reason_type: reasonType,
     });
 };
 

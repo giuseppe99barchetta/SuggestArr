@@ -9,6 +9,13 @@ import json
 from api_service.db.components.suggestion_ownership import ownership_clause
 
 
+# What a person can say about a title, and the optional reason they give. Shared by the
+# Requests and AI Search routes so the two pages accept exactly the same ratings.
+FEEDBACK_VALUES = {'interested', 'not_interested', 'already_seen', 'seen_liked',
+                   'seen_disliked', 'too_similar', 'save_for_later'}
+FEEDBACK_REASONS = {'genre', 'provider', 'content', 'title', 'other'}
+
+
 class SuggestionFeedbackMixin:
     # Feedback that stops a title being suggested again. The two "seen" verdicts belong
     # here even though one is positive: the user has already watched the title, so
@@ -234,6 +241,19 @@ class SuggestionFeedbackMixin:
                 (user_id, self._feedback_media_user_id(media_user_id), media_type),
             )
             return {str(row[0]): row[1] for row in cursor.fetchall()}
+
+    def list_media_feedback(self, user_id, media_user_id):
+        """Return every rating one user/profile has saved, with its optional reason."""
+        ph = self._feedback_placeholder()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT tmdb_id, media_type, feedback, reason_type, reason_text FROM suggestion_feedback "
+                f"WHERE user_id={ph} AND media_user_id={ph}",
+                (user_id, self._feedback_media_user_id(media_user_id)),
+            )
+            return [{'tmdb_id': str(row[0]), 'media_type': row[1], 'feedback': row[2],
+                     'reason_type': row[3], 'reason_text': row[4]} for row in cursor.fetchall()]
 
     @staticmethod
     def _empty_taste_profile():

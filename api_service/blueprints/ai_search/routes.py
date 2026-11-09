@@ -11,6 +11,7 @@ from flask import Blueprint, g, jsonify, request
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_tab
 from api_service.config.logger_manager import LoggerManager
+from api_service.db.components.suggestion_feedback_mixin import FEEDBACK_REASONS, FEEDBACK_VALUES
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.ai_search.ai_search_service import AiSearchService
 from api_service.services.config_service import ConfigService
@@ -18,6 +19,8 @@ from api_service.services.llm.llm_service import get_llm_client
 
 ai_search_bp = Blueprint("ai_search", __name__)
 logger = LoggerManager.get_logger("AiSearchRoute")
+# Legacy global like/dislike rows, read as the equivalent personal rating.
+_LEGACY_FEEDBACK = {"like": "interested", "dislike": "not_interested"}
 _METADATA_FIELDS = ("title", "name", "overview", "release_date", "poster_path", "backdrop_path",
                     "logo_path", "rating", "votes", "genre_ids", "origin_country")
 
@@ -152,6 +155,7 @@ async def ai_search_query():
             exclude_watched=exclude_watched,
             exclude_seen=exclude_seen,
             original_language=original_language,
+            feedback_scope=_feedback_scope(DatabaseManager()),
         )
 
         user_id = _current_user_id()
@@ -312,12 +316,32 @@ def ai_search_status():
     }), 200
 
 
+def _feedback_scope(db):
+    """``(user_id, media_user_id)`` that owns the caller's ratings, taken from the session.
+
+    The media profile is never read from the request body: it comes from the caller's
+    verified link, or is empty, so one user cannot rate on behalf of another profile.
+    """
+    user_id = _current_user_id()
+    if user_id is None:
+        return None
+    provider = str(ConfigService.get_runtime_config().get("SELECTED_SERVICE") or "").lower()
+    profile = _verified_media_profile(db, provider)
+    return user_id, str(profile["external_user_id"]) if profile else ""
+
+
 @ai_search_bp.route("/feedback", methods=["GET"])
 def ai_search_feedback_list():
-    """Return all stored like/dislike feedback so the frontend can render state."""
+    """Return the caller's ratings (and legacy global likes/dislikes) so the page can show state."""
     try:
-        rows = DatabaseManager().get_all_ai_feedback()
-        return jsonify({"status": "success", "feedback": rows}), 200
+        db = DatabaseManager()
+        scope = _feedback_scope(db)
+        rows = {(r["media_type"], str(r["tmdb_id"])): {"feedback": _LEGACY_FEEDBACK[r["feedback"]]}
+                for r in db.get_all_ai_feedback() if r["feedback"] in _LEGACY_FEEDBACK}
+        for r in (db.list_media_feedback(*scope) if scope else []):
+            rows[(r["media_type"], r["tmdb_id"])] = r
+        return jsonify({"status": "success", "feedback": [
+            {**row, "media_type": mt, "tmdb_id": tid} for (mt, tid), row in rows.items()]}), 200
     except Exception as exc:
         logger.error("Failed to list ai feedback: %s", exc)
         return jsonify({"status": "error", "message": "An internal error occurred"}), 500
@@ -326,12 +350,14 @@ def ai_search_feedback_list():
 @ai_search_bp.route("/feedback", methods=["POST"])
 @limiter.limit("60 per minute")
 def ai_search_feedback_set():
-    """Record a like or dislike for an AI search result.
+    """Record the caller's rating of an AI search result.
 
     Request body:
         tmdb_id (int|str): TMDB id.
         media_type (str): 'movie' or 'tv'.
-        feedback (str): 'like' or 'dislike'.
+        feedback (str): any value the Requests page offers (interested, not_interested,
+            already_seen, seen_liked, seen_disliked, too_similar, save_for_later).
+        reason_type (str, optional): genre, provider, content, title or other.
         title (str, optional)
         year (int, optional)
     """
@@ -340,7 +366,7 @@ def ai_search_feedback_set():
         tmdb_id = data.get("tmdb_id")
         media_type = data.get("media_type")
         feedback = data.get("feedback")
-        title = data.get("title")
+        reason_type = data.get("reason_type")
         year = data.get("year")
         if year is not None:
             try:
@@ -351,10 +377,20 @@ def ai_search_feedback_set():
             return jsonify({"status": "error", "message": "tmdb_id is required"}), 400
         if media_type not in ("movie", "tv"):
             return jsonify({"status": "error", "message": "media_type must be 'movie' or 'tv'"}), 400
-        if feedback not in ("like", "dislike"):
-            return jsonify({"status": "error", "message": "feedback must be 'like' or 'dislike'"}), 400
-        DatabaseManager().set_ai_feedback(str(tmdb_id), media_type, feedback, title=title, year=year)
-        return jsonify({"status": "success"}), 200
+        if feedback not in FEEDBACK_VALUES:
+            return jsonify({"status": "error", "message": "Invalid feedback value"}), 400
+        if reason_type is not None and reason_type not in FEEDBACK_REASONS:
+            return jsonify({"status": "error", "message": "Invalid feedback reason"}), 400
+        title = data.get("title")
+        if title is not None and not isinstance(title, str):
+            return jsonify({"status": "error", "message": "title must be a string"}), 400
+        db = DatabaseManager()
+        scope = _feedback_scope(db)
+        if not scope:
+            return jsonify({"status": "error", "message": "Sign in to rate results"}), 403
+        saved = db.set_media_feedback(*scope, str(tmdb_id), media_type, feedback, reason_type, None, title, year)
+        db.delete_ai_feedback(str(tmdb_id), media_type)  # the new rating replaces a legacy one
+        return jsonify({"status": "success", "feedback": saved}), 200
     except Exception as exc:
         logger.error("Failed to set ai feedback: %s", exc)
         return jsonify({"status": "error", "message": "An internal error occurred"}), 500
@@ -363,19 +399,22 @@ def ai_search_feedback_set():
 @ai_search_bp.route("/feedback", methods=["DELETE"])
 @limiter.limit("60 per minute")
 def ai_search_feedback_delete():
-    """Remove feedback for a TMDB item."""
+    """Remove the caller's rating (and any legacy like/dislike) for a TMDB item."""
     try:
         data = request.json or {}
         tmdb_id = data.get("tmdb_id")
         media_type = data.get("media_type")
         if not tmdb_id or media_type not in ("movie", "tv"):
             return jsonify({"status": "error", "message": "tmdb_id and media_type required"}), 400
-        DatabaseManager().delete_ai_feedback(str(tmdb_id), media_type)
+        db = DatabaseManager()
+        scope = _feedback_scope(db)
+        if scope:
+            db.clear_media_feedback(*scope, str(tmdb_id), media_type)
+        db.delete_ai_feedback(str(tmdb_id), media_type)
         return jsonify({"status": "success"}), 200
     except Exception as exc:
         logger.error("Failed to delete ai feedback: %s", exc)
         return jsonify({"status": "error", "message": "An internal error occurred"}), 500
-
 
 
 @ai_search_bp.route("/seen", methods=["DELETE"])

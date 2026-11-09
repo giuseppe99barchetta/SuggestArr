@@ -141,8 +141,8 @@
             >
               <i aria-hidden="true" :class="requestButtonIcon(item)" class="mr-1"></i>{{ requestButtonLabel(item) }}
             </button>
-            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border hover:text-good" :class="feedbackOf(item) === 'like' ? 'border-good bg-good/15 text-good' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(item) === 'like' ? 'true' : 'false'" aria-label="More like this" title="More like this" @click="toggleFeedback(item, 'like')"><i aria-hidden="true" class="fas fa-thumbs-up"></i></button>
-            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border hover:text-bad" :class="feedbackOf(item) === 'dislike' ? 'border-bad bg-bad/15 text-bad' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(item) === 'dislike' ? 'true' : 'false'" aria-label="Don't show this again" title="Don't show this again" @click="toggleFeedback(item, 'dislike')"><i aria-hidden="true" class="fas fa-thumbs-down"></i></button>
+            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border hover:text-good" :class="feedbackOf(item) === 'interested' ? 'border-good bg-good/15 text-good' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(item) === 'interested' ? 'true' : 'false'" aria-label="Interested" title="Interested" @click="toggleFeedback(item, 'interested')"><i aria-hidden="true" class="fas fa-thumbs-up"></i></button>
+            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border hover:text-bad" :class="feedbackOf(item) === 'not_interested' ? 'border-bad bg-bad/15 text-bad' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(item) === 'not_interested' ? 'true' : 'false'" aria-label="Not interested" title="Not interested" @click="toggleFeedback(item, 'not_interested')"><i aria-hidden="true" class="fas fa-thumbs-down"></i></button>
           </template>
         </MediaCard>
       </div>
@@ -240,10 +240,49 @@
           >
             <i aria-hidden="true" :class="requestButtonIcon(selectedItem)" class="mr-1"></i>{{ requestButtonLabel(selectedItem) }}
           </button>
-          <button type="button" class="h-10 w-10 cursor-pointer rounded-ctl border" :class="feedbackOf(selectedItem) === 'like' ? 'border-good bg-good/15 text-good' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(selectedItem) === 'like' ? 'true' : 'false'" aria-label="More like this" title="More like this" @click="toggleFeedback(selectedItem, 'like')"><i aria-hidden="true" class="fas fa-thumbs-up"></i></button>
-          <button type="button" class="h-10 w-10 cursor-pointer rounded-ctl border" :class="feedbackOf(selectedItem) === 'dislike' ? 'border-bad bg-bad/15 text-bad' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(selectedItem) === 'dislike' ? 'true' : 'false'" aria-label="Don't show this again" title="Don't show this again" @click="toggleFeedback(selectedItem, 'dislike')"><i aria-hidden="true" class="fas fa-thumbs-down"></i></button>
         </div>
       </template>
+
+      <section aria-labelledby="ai-feedback-title" class="flex flex-col gap-3">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h3 id="ai-feedback-title" class="m-0 text-sm font-semibold text-ink-3">Good pick?</h3>
+          <div role="group" aria-labelledby="ai-feedback-title" class="flex flex-wrap gap-1.5">
+            <button
+              v-for="option in visibleFeedbackOptions"
+              :key="option.value"
+              type="button"
+              class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold disabled:opacity-50"
+              :class="feedbackOf(selectedItem) === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong bg-transparent text-ink-2 hover:border-ink-4'"
+              :aria-pressed="(feedbackOf(selectedItem) === option.value).toString()"
+              :disabled="feedbackSaving"
+              @click="toggleFeedback(selectedItem, option.value, { inModal: true })"
+            >
+              <span aria-hidden="true">{{ option.emoji }}</span>{{ option.label }}
+            </button>
+            <button v-if="!feedbackExpanded" type="button" class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-[13px] font-semibold text-ink-4 hover:text-ink" @click="feedbackExpanded = true">
+              More <i aria-hidden="true" class="fas fa-chevron-down text-[10px]"></i>
+            </button>
+          </div>
+          <p class="m-0 basis-full text-xs text-ink-4">Your answers steer future AI Search results and recommendations.</p>
+        </div>
+        <div v-if="feedbackOf(selectedItem)" class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p id="ai-feedback-reason" class="m-0 text-xs font-semibold text-ink-4">Mostly because of <span class="font-normal">(optional)</span></p>
+          <div role="group" aria-labelledby="ai-feedback-reason" class="flex flex-wrap gap-1.5">
+            <button
+              v-for="reason in feedbackReasons"
+              :key="reason.value"
+              type="button"
+              class="h-7 cursor-pointer rounded-full border px-2.5 text-xs font-semibold disabled:opacity-50"
+              :class="reasonOf(selectedItem) === reason.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge bg-transparent text-ink-3 hover:border-ink-4'"
+              :aria-pressed="(reasonOf(selectedItem) === reason.value).toString()"
+              :disabled="feedbackSaving"
+              @click="setFeedbackReason(selectedItem, reason.value)"
+            >
+              {{ reason.label }}
+            </button>
+          </div>
+        </div>
+      </section>
     </MediaDetailsModal>
   </div>
 </template>
@@ -257,6 +296,10 @@ import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
 import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchInspiration, aiSearchLanguages, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear, aiSearchHistory, aiSearchHistoryImport, aiSearchHistoryClear } from '@/api/api.js';
 import { useAuth } from '@/composables/useAuth.js';
 import { languageOptions } from '@/utils/titleLanguage.js';
+import { FEEDBACK_REASONS, visibleFeedbackOptions } from '@/utils/suggestionFeedback.js';
+
+// Answers that mean "not this one": the card leaves the results once they are chosen.
+const HIDING_FEEDBACK = ['not_interested', 'already_seen', 'seen_liked', 'seen_disliked', 'too_similar'];
 
 const MEDIA_TYPE_OPTIONS = [
   { value: 'movie', label: 'Movies', icon: 'fas fa-film' },
@@ -337,6 +380,9 @@ export default {
       excludeWatched: true,
       maxResults: 12,
       feedbackMap: {},
+      feedbackExpanded: false,
+      feedbackSaving: false,
+      feedbackReasons: FEEDBACK_REASONS,
       excludeSeen: localStorage.getItem('suggestarr_ai_exclude_seen') === 'true',
       isResettingSeen: false,
       // Recent searches live on the server; historyKey only finds older browser-stored ones to import.
@@ -359,6 +405,9 @@ export default {
   },
 
   computed: {
+    visibleFeedbackOptions() {
+      return visibleFeedbackOptions(this.feedbackExpanded, this.feedbackOf(this.selectedItem || {}));
+    },
     originalLanguageLabel() {
       if (this.originalLanguage === 'any') return 'Any language';
       return this.originalLanguageOptions.find(option => option.value === this.originalLanguage)?.label || this.originalLanguage.toUpperCase();
@@ -473,39 +522,65 @@ export default {
       }
     },
 
-    feedbackOf(item) {
-      return this.feedbackMap[item.media_type + ':' + item.id] || null;
+    reasonOf(item) {
+      return this.feedbackMap[item.media_type + ':' + item.id]?.reason_type || null;
     },
 
-    async toggleFeedback(item, kind) {
+    feedbackOf(item) {
+      return this.feedbackMap[item.media_type + ':' + item.id]?.feedback || null;
+    },
+
+    /** Take a rated-away title out of the results. */
+    dropResult(item) {
+      this.results = this.results.filter(r => !(r.id === item.id && r.media_type === item.media_type));
+    },
+
+    /**
+     * Save, change or clear (same answer twice) the user's answer for a result.
+     * Hiding answers drop the card straight away from the grid; from the modal they wait
+     * until it closes so the reason chips can still be picked.
+     */
+    async toggleFeedback(item, kind, { inModal = false } = {}) {
       const key = item.media_type + ':' + item.id;
       const current = this.feedbackMap[key] || null;
+      this.feedbackSaving = true;
       try {
-        if (current === kind) {
+        if (current?.feedback === kind) {
           await aiSearchFeedbackDelete(item.id, item.media_type);
           const next = { ...this.feedbackMap };
           delete next[key];
           this.feedbackMap = next;
         } else {
           const year = this.releaseYear(item);
-          await aiSearchFeedbackSet(
-            item.id,
-            item.media_type,
-            kind,
-            item.title || null,
-            year ? Number(year) : null,
-          );
-          this.feedbackMap = { ...this.feedbackMap, [key]: kind };
-          if (kind === 'dislike') {
-            this.results = this.results.filter(r => !(r.id === item.id && r.media_type === item.media_type));
-            if (this.selectedItem && this.selectedItem.id === item.id && this.selectedItem.media_type === item.media_type) {
-              this.closeModal();
-            }
+          await aiSearchFeedbackSet(item.id, item.media_type, kind, item.title || null, year ? Number(year) : null);
+          this.feedbackMap = { ...this.feedbackMap, [key]: { feedback: kind, reason_type: null } };
+          if (!inModal && HIDING_FEEDBACK.includes(kind)) {
+            this.dropResult(item);
+            if (this.selectedItem?.id === item.id && this.selectedItem.media_type === item.media_type) this.closeModal();
           }
         }
       } catch (err) {
-        const msg = err.response?.data?.message || err.message || 'Failed to save feedback.';
-        this.errorMessage = msg;
+        this.errorMessage = err.response?.data?.message || err.message || 'Failed to save feedback.';
+      } finally {
+        this.feedbackSaving = false;
+      }
+    },
+
+    /** Add or remove the optional "mostly because of" reason on the saved answer. */
+    async setFeedbackReason(item, reasonType) {
+      const key = item.media_type + ':' + item.id;
+      const current = this.feedbackMap[key];
+      if (!current) return;
+      const next = current.reason_type === reasonType ? null : reasonType;
+      this.feedbackSaving = true;
+      try {
+        const year = this.releaseYear(item);
+        await aiSearchFeedbackSet(item.id, item.media_type, current.feedback, item.title || null, year ? Number(year) : null, next);
+        this.feedbackMap = { ...this.feedbackMap, [key]: { ...current, reason_type: next } };
+      } catch (err) {
+        this.errorMessage = err.response?.data?.message || err.message || 'Failed to save feedback.';
+      } finally {
+        this.feedbackSaving = false;
       }
     },
 
@@ -514,7 +589,7 @@ export default {
         const res = await aiSearchFeedbackList();
         const map = {};
         for (const row of res.data.feedback || []) {
-          map[row.media_type + ':' + row.tmdb_id] = row.feedback;
+          map[row.media_type + ':' + row.tmdb_id] = { feedback: row.feedback, reason_type: row.reason_type || null };
         }
         this.feedbackMap = map;
       } catch {
@@ -625,7 +700,10 @@ export default {
     },
 
     closeModal() {
+      const item = this.selectedItem;
       this.selectedItem = null;
+      this.feedbackExpanded = false;
+      if (item && HIDING_FEEDBACK.includes(this.feedbackOf(item))) this.dropResult(item);
     },
 
     releaseYear(item) {

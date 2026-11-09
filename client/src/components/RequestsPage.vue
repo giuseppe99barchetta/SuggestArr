@@ -311,8 +311,7 @@ import { tmdbImage } from '@/utils/tmdbImage.js';
 import RequestWorkflowPanel from './RequestWorkflowPanel.vue';
 import { approvalEnabled } from '@/utils/requestApproval.js';
 
-// Shown up front in the details modal; the other answers sit behind "More".
-const PRIMARY_FEEDBACK = ['interested', 'not_interested', 'already_seen'];
+import { FEEDBACK_REASONS, visibleFeedbackOptions } from '@/utils/suggestionFeedback.js';
 
 export default {
   name: "RequestsPage",
@@ -371,22 +370,7 @@ export default {
       workflowBulkMode: false,
       feedbackSaving: {},
       feedbackExpanded: false,
-      feedbackOptions: [
-        { value: 'seen_liked', emoji: '👍', label: 'Seen it, liked it' },
-        { value: 'seen_disliked', emoji: '👎', label: 'Seen it, did not like it' },
-        { value: 'interested', emoji: '😍', label: 'Interested' },
-        { value: 'not_interested', emoji: '🙅', label: 'Not interested' },
-        { value: 'already_seen', emoji: '👀', label: 'Already seen' },
-        { value: 'too_similar', emoji: '🫠', label: 'Too similar' },
-        { value: 'save_for_later', emoji: '🔖', label: 'Save for later' },
-      ],
-      feedbackReasons: [
-        { value: 'genre', label: 'Genre' },
-        { value: 'provider', label: 'Provider' },
-        { value: 'content', label: 'Content' },
-        { value: 'title', label: 'Title' },
-        { value: 'other', label: 'Other' },
-      ],
+      feedbackReasons: FEEDBACK_REASONS,
       requestStatusOptions: [
         { value: 'all', label: 'All statuses' },
         { value: 'awaiting_approval', label: 'Waiting approval' },
@@ -399,11 +383,8 @@ export default {
     };
   },
   computed: {
-    /** The three common answers, plus the current one when it is among the rest. */
     visibleFeedbackOptions() {
-      if (this.feedbackExpanded) return this.feedbackOptions;
-      const current = this.selectedSource?.feedback?.feedback;
-      return this.feedbackOptions.filter((option) => PRIMARY_FEEDBACK.includes(option.value) || option.value === current);
+      return visibleFeedbackOptions(this.feedbackExpanded, this.selectedSource?.feedback?.feedback);
     },
     canFeedbackSelected() {
       return Boolean(

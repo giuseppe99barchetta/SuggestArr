@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { SEEN_OPTIONS, loadSeenRatingMode, ratedSeenOption, saveSeenFeedback } from './suggestionFeedback.js';
+import { FEEDBACK_OPTIONS, SEEN_OPTIONS, loadSeenRatingMode, ratedSeenOption, saveSeenFeedback, visibleFeedbackOptions } from './suggestionFeedback.js';
 
 test('every rating offered on a card records a watched or seen verdict', () => {
   assert.deepEqual(
@@ -74,4 +74,17 @@ test('the star picker is used only when the server says the rating reaches Trakt
   assert.equal(await loadSeenRatingMode(reply({ sync_seen_feedback: false })), false);
   assert.equal(await loadSeenRatingMode(reply({})), false);
   assert.equal(await loadSeenRatingMode({ get: () => Promise.reject(new Error('404')) }), false);
+});
+
+test('the details modal offers the answers the server accepts, with the primary three up front', () => {
+  assert.deepEqual(
+    FEEDBACK_OPTIONS.map(option => option.value).sort(),
+    ['already_seen', 'interested', 'not_interested', 'save_for_later', 'seen_disliked', 'seen_liked', 'too_similar'],
+  );
+  assert.deepEqual(visibleFeedbackOptions(false).map(option => option.value), ['interested', 'not_interested', 'already_seen']);
+  assert.equal(visibleFeedbackOptions(true).length, FEEDBACK_OPTIONS.length);
+});
+
+test('a saved answer outside the primary three stays visible while "More" is closed', () => {
+  assert.ok(visibleFeedbackOptions(false, 'save_for_later').some(option => option.value === 'save_for_later'));
 });
