@@ -69,7 +69,7 @@ for (const width of [1440, 900, 390]) {
     await dialog.getByRole('button', { name: 'Create job', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.savedJob)).not.toBeNull();
     const saved = await page.evaluate(() => window.savedJob);
-    expect(saved).toMatchObject({ job_type: 'list_import', media_type: 'both', max_results: 20, user_ids: [],
+    await expect.poll(() => saved).toMatchObject({ job_type: 'list_import', media_type: 'both', max_results: 20, user_ids: [],
       prevent_suggestions_if_unwatched: false, filters: { list_provider: 'mdblist', list_url: 'https://mdblist.com/lists/alice/favorites' } });
     await page.route('**/api/jobs/lists/verify', route => route.fulfill({ status: 400, json: { message: 'Only public lists are supported.' } }));
     await source.getByRole('button', { name: 'Verify list' }).click();

@@ -105,8 +105,8 @@ for (const width of [390, 1280]) {
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.savedSettings?.data.AUTH_MODE)).toBe('trusted_header');
     const saved = await page.evaluate(() => window.savedSettings.data);
-    expect(saved.AUTH_TRUSTED_CIDRS).toBe('10.0.20.11/32');
-    expect(saved.AUTH_TRUSTED_HEADER).toBe('Remote-User');
-    expect(saved.AUTH_TRUSTED_HEADER_AUTO_CREATE).toBe(false);
+    await expect.poll(() => saved?.AUTH_TRUSTED_CIDRS).toBe('10.0.20.11/32');
+    await expect.poll(() => saved?.AUTH_TRUSTED_HEADER).toBe('Remote-User');
+    await expect.poll(() => saved?.AUTH_TRUSTED_HEADER_AUTO_CREATE).toBe(false);
   });
 }

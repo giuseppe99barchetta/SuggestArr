@@ -124,7 +124,7 @@ test('real yearly activity loads watch data automatically and follows scope and 
   await page.getByLabel('Data source').selectOption('real');
   await expect(page.getByRole('button', { name: 'Download this story', exact: true })).toBeEnabled();
   // Watch activity comes with the recap; there is no manual loading step.
-  expect(calls[0].include_playback).toBe('true');
+  await expect.poll(() => calls[0]?.include_playback).toBe('true');
   await expect(page.getByRole('button', { name: /watch activity/ })).toHaveCount(0);
   await page.getByRole('button', { name: /Go to story 2:/ }).click();
   await expect(page.getByRole('img')).toHaveAttribute('aria-label', /7 titles first recorded this year: 5 movies and 2 TV series/);
