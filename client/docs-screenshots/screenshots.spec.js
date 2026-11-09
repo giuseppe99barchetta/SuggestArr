@@ -208,7 +208,7 @@ test("README hero image", async ({ page }) => {
     </style></head><body>
     <div class="copy">
       <div class="brand"><img src="${logo}" alt="">SuggestArr</div>
-      <h1>Your users watch.<br><span>SuggestArr finds what's next.</span></h1>
+      <h1>You watch.<br><span>SuggestArr finds what's next.</span></h1>
       <p>Recommendations from real watch history, sent straight to Seer, on a schedule or one click at a time.</p>
       <div class="flow"><span class="chip">Jellyfin · Plex · Emby</span><span class="arrow">→</span><span class="chip">TMDb or AI</span><span class="arrow">→</span><span class="chip">Seer</span></div>
     </div>

@@ -2,7 +2,7 @@
 
 ## 🚀 SuggestArr - Media Automation Made Simple
 
-![SuggestArr: recommendations from your users' watch history, sent to Seer](docs/assets/suggestarr-hero.png)
+![SuggestArr: recommendations from what you watch, sent to Seer](docs/assets/suggestarr-hero.png)
 
 ![Build Status](https://img.shields.io/github/actions/workflow/status/giuseppe99barchetta/suggestarr/docker_hub_build.yml?branch=main&label=Build&logo=github)
 ![Platform Support](https://img.shields.io/badge/platforms-linux%2Famd64%20|%20linux%2Farm64-blue?logo=linux)
@@ -11,7 +11,7 @@
 [![](https://dcbadge.limes.pink/api/server/https://discord.com/invite/JXwFd3PnXY?style=flat)](https://discord.com/invite/JXwFd3PnXY)
 </div>
 
-SuggestArr automates media recommendations and download requests based on what your users watch on **Jellyfin**, **Plex** or **Emby**. It takes recently watched content, finds similar titles through TMDb (or an AI model), and sends the requests to **Seer**.
+SuggestArr automates media recommendations and download requests based on what you watch on **Jellyfin**, **Plex** or **Emby**. It takes recently watched content, finds similar titles through TMDb (or an AI model), and sends the requests to **Seer**.
 
 ## Features
 
