@@ -11,17 +11,59 @@
     <form class="flex flex-col gap-4 rounded-card border border-edge bg-panel p-4 sm:p-5" :class="{ 'opacity-90': !llmAvailable }" @submit.prevent="runSearch">
       <label class="flex flex-col gap-1.5">
         <span class="sr-only">What do you want to watch?</span>
-        <textarea
-          ref="queryInput"
-          v-model="query"
-          :disabled="!llmAvailable || isSearching"
-          rows="3"
-          placeholder="A psychological thriller from the 90s with a twist ending… or feel-good anime about friendship"
-          class="w-full resize-y rounded-ctl border border-edge-strong bg-canvas px-4 py-3 text-[15px] leading-relaxed text-ink placeholder:text-ink-4 focus:border-brand-ink disabled:cursor-not-allowed"
-          @keydown.enter.exact.prevent="runSearch"
-        ></textarea>
+        <div class="relative">
+          <textarea
+            ref="queryInput"
+            v-model="query"
+            :disabled="!llmAvailable || isSearching"
+            rows="3"
+            :placeholder="showPeoplePicker ? 'A comedy we would both enjoy… type @ to mention someone' : 'A psychological thriller from the 90s with a twist ending… or feel-good anime about friendship'"
+            :role="showPeoplePicker ? 'combobox' : null"
+            :aria-autocomplete="showPeoplePicker ? 'list' : null"
+            :aria-expanded="showPeoplePicker ? (mentionOptions.length ? 'true' : 'false') : null"
+            :aria-controls="showPeoplePicker ? 'aiMentionList' : null"
+            :aria-activedescendant="mentionOptions.length ? 'aiMention' + mentionOptions[mentionIndex].id : null"
+            class="w-full resize-y rounded-ctl border border-edge-strong bg-canvas px-4 py-3 text-[15px] leading-relaxed text-ink placeholder:text-ink-4 focus:border-brand-ink disabled:cursor-not-allowed"
+            @keydown="onQueryKeydown"
+            @keyup="onQueryKeyup"
+            @input="updateMention"
+            @click="updateMention"
+            @blur="mention = null"
+          ></textarea>
+          <ul v-if="mentionOptions.length" id="aiMentionList" role="listbox" aria-label="People" class="absolute inset-x-0 top-full z-10 m-0 mt-1 max-h-48 list-none overflow-auto rounded-ctl border border-edge-strong bg-panel p-1 shadow-lg">
+            <li
+              v-for="(person, index) in mentionOptions"
+              :id="'aiMention' + person.id"
+              :key="person.id"
+              role="option"
+              :aria-selected="index === mentionIndex ? 'true' : 'false'"
+              class="cursor-pointer rounded-[8px] px-3 py-2 text-sm text-ink"
+              :class="index === mentionIndex ? 'bg-brand-soft text-brand-ink' : 'hover:bg-raised'"
+              @mousedown.prevent="chooseMention(person)"
+            >{{ person.name }}<span v-if="person.self" class="ml-1.5 text-xs text-ink-4">(you)</span></li>
+          </ul>
+        </div>
         <span class="self-end text-xs text-ink-4">Enter to search · Shift + Enter for a new line</span>
       </label>
+
+      <div v-if="showPeoplePicker" role="group" aria-labelledby="aiPeopleLabel" class="flex flex-col gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <span id="aiPeopleLabel" class="text-[13px] font-semibold text-ink-3"><i aria-hidden="true" class="fas fa-user-friends mr-1.5"></i>Searching for</span>
+          <button
+            v-for="person in people"
+            :key="person.id"
+            type="button"
+            :aria-pressed="isPersonSelected(person.id) ? 'true' : 'false'"
+            :disabled="isSearching || (!isPersonSelected(person.id) && selectedPeople.length >= maxPeople)"
+            class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            :class="isPersonSelected(person.id) ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong bg-transparent text-ink-3 hover:text-ink'"
+            @click="togglePerson(person.id)"
+          >
+            <i aria-hidden="true" :class="isPersonSelected(person.id) ? 'fas fa-check' : 'fas fa-plus'" class="text-[11px]"></i>{{ person.self ? 'You' : person.name }}
+          </button>
+        </div>
+        <p role="status" aria-live="polite" class="m-0 min-h-[1rem] text-xs text-ink-4">{{ peopleHint }}</p>
+      </div>
 
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div role="radiogroup" aria-label="Media type" class="flex rounded-ctl border border-edge-strong bg-canvas p-1">
@@ -293,10 +335,11 @@ import PageHeader from '@/components/ui/PageHeader.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
-import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchInspiration, aiSearchLanguages, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear, aiSearchHistory, aiSearchHistoryImport, aiSearchHistoryClear } from '@/api/api.js';
+import { aiSearch, aiSearchPeople, aiSearchRequest, aiSearchStatus, aiSearchInspiration, aiSearchLanguages, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear, aiSearchHistory, aiSearchHistoryImport, aiSearchHistoryClear } from '@/api/api.js';
 import { useAuth } from '@/composables/useAuth.js';
 import { languageOptions } from '@/utils/titleLanguage.js';
 import { FEEDBACK_REASONS, visibleFeedbackOptions } from '@/utils/suggestionFeedback.js';
+import { LIMIT_MESSAGE, MAX_PEOPLE, addSelected, applyMention, filterPeople, findMentionQuery, toggleSelected } from '@/utils/aiSearchMentions.js';
 
 // Answers that mean "not this one": the card leaves the results once they are chosen.
 const HIDING_FEEDBACK = ['not_interested', 'already_seen', 'seen_liked', 'seen_disliked', 'too_similar'];
@@ -351,6 +394,13 @@ export default {
     const languageKey = `suggestarr_ai_search_language:${userId ?? 'local'}`;
     return {
       query: '',
+      // Who the search is for: everyone listed here may be mentioned with @ or picked as a chip.
+      people: [],
+      selectedPeople: [],
+      peopleNotice: '',
+      maxPeople: MAX_PEOPLE,
+      mention: null,
+      mentionIndex: 0,
       mediaTypeOptions: MEDIA_TYPE_OPTIONS,
       toggles: TOGGLES,
       moods: MOODS,
@@ -405,6 +455,16 @@ export default {
   },
 
   computed: {
+    showPeoplePicker() {
+      return this.people.length > 1;
+    },
+    mentionOptions() {
+      return this.mention && this.showPeoplePicker && !this.isSearching ? filterPeople(this.people, this.mention.query) : [];
+    },
+    peopleHint() {
+      if (this.peopleNotice) return this.peopleNotice;
+      return this.selectedPeople.length >= this.maxPeople ? LIMIT_MESSAGE : '';
+    },
     visibleFeedbackOptions() {
       return visibleFeedbackOptions(this.feedbackExpanded, this.feedbackOf(this.selectedItem || {}));
     },
@@ -606,6 +666,88 @@ export default {
       }
     },
 
+    async loadPeople() {
+      try {
+        const res = await aiSearchPeople();
+        this.people = res.data?.people || [];
+      } catch {
+        this.people = []; // the page works as a single-person search without the picker
+      }
+      const own = this.people.find(person => person.self);
+      const stillThere = this.selectedPeople.filter(id => this.people.some(person => person.id === id));
+      this.selectedPeople = stillThere.length ? stillThere : own ? [own.id] : [];
+    },
+
+    isPersonSelected(id) {
+      return this.selectedPeople.includes(id);
+    },
+
+    togglePerson(id) {
+      const { ids, reason } = toggleSelected(this.selectedPeople, id, this.maxPeople);
+      this.selectedPeople = ids;
+      this.peopleNotice = reason === 'last' ? 'Keep at least one person selected.' : reason === 'limit' ? LIMIT_MESSAGE : '';
+    },
+
+    // The "@name" being typed at the caret opens the suggestion list.
+    updateMention() {
+      const field = this.$refs.queryInput;
+      this.mention = this.showPeoplePicker && field ? findMentionQuery(field.value, field.selectionStart) : null;
+      this.mentionIndex = 0;
+    },
+
+    onQueryKeyup(event) {
+      if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) return;
+      this.updateMention();
+    },
+
+    onQueryKeydown(event) {
+      if (event.isComposing) return;
+      const options = this.mentionOptions;
+      if (options.length) {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          const step = event.key === 'ArrowDown' ? 1 : options.length - 1;
+          this.mentionIndex = (this.mentionIndex + step) % options.length;
+          return;
+        }
+        if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab') {
+          event.preventDefault();
+          this.chooseMention(options[this.mentionIndex]);
+          return;
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          this.mention = null;
+          return;
+        }
+      }
+      if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        event.preventDefault();
+        this.runSearch();
+      }
+    },
+
+    chooseMention(person) {
+      const field = this.$refs.queryInput;
+      const mention = this.mention;
+      this.mention = null;
+      if (!person || !mention || !field) return;
+      const { ids, reason } = addSelected(this.selectedPeople, person.id, this.maxPeople);
+      if (reason === 'limit') {
+        // Nothing is inserted: the text must not name someone the search is not for.
+        this.peopleNotice = LIMIT_MESSAGE;
+        return;
+      }
+      this.selectedPeople = ids;
+      this.peopleNotice = '';
+      const next = applyMention(field.value, mention, field.selectionStart, person.name);
+      this.query = next.text;
+      this.$nextTick(() => {
+        field.focus();
+        field.setSelectionRange(next.caret, next.caret);
+      });
+    },
+
     async runSearch() {
       if (!this.query.trim() || this.isSearching || !this.llmAvailable) return;
 
@@ -616,7 +758,7 @@ export default {
       this.queryInterpretation = null;
 
       try {
-        const res = await aiSearch(this.query.trim(), this.mediaType, [], this.maxResults, this.useHistory, this.excludeWatched, this.excludeSeen, this.originalLanguage);
+        const res = await aiSearch(this.query.trim(), this.mediaType, [], this.maxResults, this.useHistory, this.excludeWatched, this.excludeSeen, this.originalLanguage, this.showPeoplePicker ? this.selectedPeople : []);
         const data = res.data;
 
         if (data.status === 'error') {
@@ -631,6 +773,8 @@ export default {
       } catch (err) {
         const msg = err.response?.data?.message || err.message || 'Unexpected error.';
         this.errorMessage = msg;
+        // Someone may have just opted out: show who is still available.
+        if (err.response?.status === 403) this.loadPeople();
       } finally {
         this.isSearching = false;
       }
@@ -755,6 +899,7 @@ export default {
     this.loadFeedback();
     this.loadInspiration();
     this.loadHistory();
+    this.loadPeople();
   },
 };
 </script>

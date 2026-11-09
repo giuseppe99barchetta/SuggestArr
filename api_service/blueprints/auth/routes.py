@@ -489,16 +489,20 @@ def me():
 
     Response (200):
       { "id": "<user_id>", "username": "<name>", "role": "<role>",
-        "language": "<code or null>", "display_language": "<code>" }
+        "language": "<code or null>", "display_language": "<code>",
+        "ai_search_shareable": <bool> }
 
     `language` is the person's own choice (null = the default);
     `display_language` is what titles are actually shown in.
     """
     body = dict(g.current_user)
     try:
-        own = DatabaseManager().get_user_language(int(g.current_user["id"]))
+        db = DatabaseManager()
+        own = db.get_user_language(int(g.current_user["id"]))
+        body["ai_search_shareable"] = bool(db.get_ai_search_shareable(int(g.current_user["id"])))
     except Exception:
         own = None
+        body["ai_search_shareable"] = True
     body["language"] = own
     body["display_language"] = display_language(own, load_env_vars())
     return jsonify(body), 200
@@ -536,6 +540,8 @@ def update_me():
     Request JSON (all fields optional, at least one required):
       language          (str|null) — display language for titles, e.g. "de";
                                      null or "" returns to the default
+      ai_search_shareable (bool) — whether other accounts may include this
+                                     person in their AI Search
       username          (str) — desired new login name
       current_password  (str) — required when new_password is provided
       new_password      (str) — must be >= MIN_PASSWORD_LENGTH characters
@@ -566,6 +572,11 @@ def update_me():
             updates["language"] = normalize_language(requested_language)
             if updates["language"] is None:
                 return jsonify({"error": "language must look like 'de' or 'pt-BR'"}), 400
+
+    if "ai_search_shareable" in data:
+        if not isinstance(data["ai_search_shareable"], bool):
+            return jsonify({"error": "ai_search_shareable must be true or false"}), 400
+        updates["ai_search_shareable"] = int(data["ai_search_shareable"])
 
     new_username = (data.get("username") or "").strip()
     if new_username:

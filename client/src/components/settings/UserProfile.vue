@@ -81,6 +81,19 @@
           </form>
         </SectionCard>
 
+        <SectionCard icon="fas fa-user-friends" title="AI Search sharing" description="Let other accounts include you when they search for several people at once.">
+          <div class="flex flex-col gap-2">
+            <button type="button" role="switch" :aria-checked="aiSearchShareable ? 'true' : 'false'" :disabled="isSavingSharing" class="flex cursor-pointer items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3 text-left hover:border-edge-strong disabled:cursor-not-allowed disabled:opacity-60" @click="saveSharing">
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="text-sm font-semibold text-ink">Allow others to include me in AI Search</span>
+                <span class="text-xs leading-snug text-ink-4">Your recent watches and ratings (titles only) guide their picks and are sent to the AI provider. A reason shown to them may mention a title you watched or rated.</span>
+              </span>
+              <ToggleTrack :on="aiSearchShareable" />
+            </button>
+            <p v-if="sharingError" role="alert" class="ui-alert-bad">{{ sharingError }}</p>
+          </div>
+        </SectionCard>
+
         <SectionCard icon="fas fa-language" title="Title language" description="Titles and descriptions of suggestions and requests are shown in this language.">
           <form class="flex flex-col gap-3" @submit.prevent="saveLanguage">
             <div class="flex gap-2">
@@ -198,6 +211,7 @@ import {
 } from '@/api/api';
 import { CHAT_FORMATS } from '@/utils/notificationFormats.js';
 import SectionCard from '@/components/ui/SectionCard.vue';
+import ToggleTrack from '@/components/common/ToggleTrack.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
 import SimklMediaUsers from './SimklMediaUsers.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
@@ -216,7 +230,7 @@ export default {
   name: 'UserProfile',
   emits: ['profile-updated'],
 
-  components: { PageHeader, SectionCard, TraktMediaUsers, SimklMediaUsers, ApiKeysPanel, RecapPreferences, UserAvatar },
+  components: { PageHeader, SectionCard, ToggleTrack, TraktMediaUsers, SimklMediaUsers, ApiKeysPanel, RecapPreferences, UserAvatar },
 
   // The dashboard shell passes props this page does not declare.
   inheritAttrs: false,
@@ -284,6 +298,9 @@ export default {
 
       // Title language
       languages: [],
+      aiSearchShareable: true,
+      isSavingSharing: false,
+      sharingError: null,
       languageForm: { value: '' },
       displayLanguage: '',
       isSavingLanguage: false,
@@ -464,10 +481,25 @@ export default {
         if (me.status === 'fulfilled') {
           this.languageForm.value = me.value.data?.language || '';
           this.displayLanguage = me.value.data?.display_language || '';
+          this.aiSearchShareable = me.value.data?.ai_search_shareable !== false;
         }
         if (list.status === 'fulfilled') this.languages = list.value.data?.languages || [];
       } catch (err) {
         console.error('Failed to load title language', err);
+      }
+    },
+
+    async saveSharing() {
+      this.sharingError = null;
+      this.isSavingSharing = true;
+      const next = !this.aiSearchShareable;
+      try {
+        await updateMyProfile({ ai_search_shareable: next });
+        this.aiSearchShareable = next;
+      } catch (err) {
+        this.sharingError = err.response?.data?.error || 'Could not save this setting.';
+      } finally {
+        this.isSavingSharing = false;
       }
     },
 

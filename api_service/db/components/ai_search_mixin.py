@@ -402,4 +402,35 @@ class AiSearchMixin:
                 **counts['current'],
                 "previous": counts['previous'],
             }
-    
+
+    def list_ai_search_people(self, provider: str) -> List[Dict[str, Any]]:
+        """Accounts that can be added to someone's AI Search.
+
+        Active, not opted out and holding a *verified* link to ``provider``; the same
+        proof of identity AI Search already demands before it reads a person's history.
+
+        :param provider: Configured media server ('plex', 'jellyfin', 'emby').
+        :return: ``[{'id', 'username', 'external_user_id', 'external_username'}]`` ordered by username.
+        """
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT u.id, u.username, p.external_user_id, p.external_username "
+                "FROM auth_users u JOIN user_media_profiles p ON p.user_id = u.id "
+                f"WHERE u.is_active = 1 AND u.ai_search_shareable = 1 AND p.provider = {ph} "
+                "AND p.verified = 1 AND p.external_user_id IS NOT NULL AND p.external_user_id <> '' "
+                "ORDER BY u.username",
+                (str(provider).lower(),),
+            )
+            return [{'id': row[0], 'username': row[1], 'external_user_id': str(row[2]),
+                     'external_username': row[3]} for row in cursor.fetchall()]
+
+    def get_ai_search_shareable(self, user_id: int) -> bool:
+        """Whether other accounts may include this person in their AI Search (default yes)."""
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT ai_search_shareable FROM auth_users WHERE id = {ph}", (user_id,))
+            row = cursor.fetchone()
+        return bool(row[0]) if row and row[0] is not None else True

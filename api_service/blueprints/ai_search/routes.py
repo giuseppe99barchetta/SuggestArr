@@ -15,7 +15,7 @@ from api_service.db.components.suggestion_feedback_mixin import FEEDBACK_REASONS
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.ai_search.ai_search_service import AiSearchService
 from api_service.services.config_service import ConfigService
-from api_service.services.llm.llm_service import get_llm_client
+from api_service.services.llm.llm_service import MAX_GROUP_PEOPLE, get_llm_client
 
 ai_search_bp = Blueprint("ai_search", __name__)
 logger = LoggerManager.get_logger("AiSearchRoute")
@@ -28,7 +28,7 @@ _METADATA_FIELDS = ("title", "name", "overview", "release_date", "poster_path", 
 @ai_search_bp.before_request
 def require_ai_search_page():
     """Searching and requesting belong to the AI Search page; personal history stays open."""
-    if request.endpoint in ("ai_search.ai_search_query", "ai_search.ai_search_request"):
+    if request.endpoint in ("ai_search.ai_search_query", "ai_search.ai_search_request", "ai_search.ai_search_people"):
         return require_tab("ai_search")
     return None
 
@@ -50,6 +50,71 @@ def _verified_media_profile(db, provider):
     return next((profile for profile in db.get_user_media_profiles(user_id)
                  if profile.get("provider") == provider and profile.get("verified")
                  and profile.get("external_user_id")), None)
+
+
+def _configured_provider(config=None):
+    """Lower-cased media server AI Search reads history from."""
+    config = config if config is not None else ConfigService.get_runtime_config()
+    return str(config.get("SELECTED_SERVICE") or "").lower()
+
+
+@ai_search_bp.route("/people", methods=["GET"])
+@limiter.limit("30 per minute")
+def ai_search_people():
+    """People a search can be for: the caller first, then others who allow it.
+
+    Only display names are returned, never media-server ids. Others need a verified link to the
+    configured media server (the proof AI Search already requires before reading anyone's
+    history) and must not have opted out in their profile.
+    """
+    user_id = _current_user_id()
+    if user_id is None:
+        return jsonify({"status": "success", "people": []}), 200
+    try:
+        others = [person for person in DatabaseManager().list_ai_search_people(_configured_provider())
+                  if person["id"] != user_id]
+        me = {"id": user_id, "name": g.current_user.get("username") or "You", "self": True}
+        return jsonify({"status": "success", "people": [me] + [
+            {"id": person["id"], "name": person["username"], "self": False} for person in others]}), 200
+    except Exception:
+        logger.warning("Could not list people for AI Search", exc_info=True)
+        return jsonify({"status": "error", "message": "Could not load people"}), 503
+
+
+def _resolve_people(db, raw_ids, provider):
+    """Turn requested account ids into the people a search is for, or an error.
+
+    The caller is always allowed (ratings and, when linked, history); anyone else must be
+    in the opted-in, verified-link list. Nothing here trusts a name or media id from the client.
+
+    :return: ``(people, None)`` or ``(None, (message, status))``.
+    """
+    ids = []
+    for value in raw_ids:
+        if isinstance(value, bool) or not isinstance(value, int):
+            return None, ("people must be a list of account ids", 400)
+        if value not in ids:
+            ids.append(value)
+    if len(ids) > MAX_GROUP_PEOPLE:
+        return None, (f"You can pick up to {MAX_GROUP_PEOPLE} people", 400)
+    user_id = _current_user_id()
+    if user_id is None:
+        return None, ("Sign in to search for people", 403)
+    available = {person["id"]: person for person in db.list_ai_search_people(provider)}
+    people = []
+    for account_id in ids:
+        if account_id == user_id:
+            profile = _verified_media_profile(db, provider)
+            people.append({"user_id": user_id, "name": g.current_user.get("username") or "You",
+                           "external_user_id": str(profile["external_user_id"]) if profile else None,
+                           "requester": True})
+        elif account_id in available:
+            person = available[account_id]
+            people.append({"user_id": account_id, "name": person["username"],
+                           "external_user_id": person["external_user_id"], "requester": False})
+        else:
+            return None, ("A selected person is not available", 403)
+    return people, None
 
 
 @ai_search_bp.route("/inspiration", methods=["GET"])
@@ -86,6 +151,9 @@ async def ai_search_query():
         media_type (str): 'movie', 'tv', or 'both'. Defaults to 'movie'.
         user_ids (list): Admin-only explicit media-server IDs. Otherwise history
             uses the caller's verified link to the configured provider.
+        people (list): SuggestArr account ids the search is for (the caller and/or others who
+            allow it, at most 4). When given, each person's own history and ratings are used and
+            ``user_ids`` is ignored; omitted keeps the single-user behaviour.
         max_results (int): Maximum results to return (default 12).
         original_language (str): 'auto' (from prompt), 'any', or an ISO 639-1 code.
 
@@ -114,6 +182,9 @@ async def ai_search_query():
         user_ids = data.get("user_ids") or []
         if not isinstance(user_ids, list):
             return jsonify({"status": "error", "message": "user_ids must be a list"}), 400
+        raw_people = data.get("people")
+        if raw_people is not None and not isinstance(raw_people, list):
+            return jsonify({"status": "error", "message": "people must be a list"}), 400
         max_results = int(data.get("max_results") or 12)
         use_history = data.get("use_history", True)
         if not isinstance(use_history, bool):
@@ -139,11 +210,16 @@ async def ai_search_query():
 
         service = AiSearchService()
         user = getattr(g, "current_user", None)
-        if not (user and user.get("role") == "admin" and user_ids):
+        people = None
+        if raw_people:
+            people, failure = _resolve_people(DatabaseManager(), raw_people, _configured_provider(service.config))
+            if failure:
+                return jsonify({"status": "error", "message": failure[0]}), failure[1]
+        elif not (user and user.get("role") == "admin" and user_ids):
             provider = str(service.config.get("SELECTED_SERVICE") or "").lower()
             profile = _verified_media_profile(DatabaseManager(), provider) if _current_user_id() is not None else None
             user_ids = [str(profile["external_user_id"])] if profile else []
-        if not user_ids:
+        if not people and not user_ids:
             use_history = False
 
         result = await service.search(
@@ -156,6 +232,7 @@ async def ai_search_query():
             exclude_seen=exclude_seen,
             original_language=original_language,
             feedback_scope=_feedback_scope(DatabaseManager()),
+            people=people,
         )
 
         user_id = _current_user_id()

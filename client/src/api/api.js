@@ -76,8 +76,12 @@ export const fetchSonarrServers = (payload = null) => {
 };
 
 // AI Search: semantic content search powered by LLM + TMDB
-export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 12, useHistory = true, excludeWatched = true, excludeSeen = false, originalLanguage = 'auto') => {
+export const aiSearchPeople = () => axios.get('/api/ai-search/people');
+
+// `people` are SuggestArr account ids the search is for; empty keeps the single-user search.
+export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 12, useHistory = true, excludeWatched = true, excludeSeen = false, originalLanguage = 'auto', people = []) => {
     return axios.post('/api/ai-search/query', {
+        ...(people.length ? { people } : {}),
         query,
         media_type: mediaType,
         user_ids: userIds,

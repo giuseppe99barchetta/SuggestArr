@@ -1166,6 +1166,10 @@ class SchemaManager:
                 if 'notify_config' not in existing_columns:
                     cursor.execute("ALTER TABLE auth_users ADD COLUMN notify_config TEXT")
                     conn.commit()
+                # Whether other accounts may include this person in a group AI Search.
+                if 'ai_search_shareable' not in existing_columns:
+                    cursor.execute("ALTER TABLE auth_users ADD COLUMN ai_search_shareable INTEGER NOT NULL DEFAULT 1")
+                    conn.commit()
 
             except Exception as e:
                 self.logger.error(f"Failed to migrate auth_users table: {e}")

@@ -428,7 +428,7 @@ class AuthMixin:
             Exception: Propagates DB-level unique-constraint violations
                        (e.g. duplicate username) so the caller can handle them.
         """
-        allowed = {'username', 'password_hash', 'language'}
+        allowed = {'username', 'password_hash', 'language', 'ai_search_shareable'}
         fields = {k: v for k, v in updates.items() if k in allowed}
         if not fields:
             return False

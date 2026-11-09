@@ -17,8 +17,10 @@ from api_service.services.llm.llm_service import (
     MAX_EXCLUSION_ITEMS,
     MAX_HISTORY_ITEMS,
     _deduplicate_history,
+    _unique_person_labels,
     clean_excluded_title,
     generate_search_result_rationales,
+    group_history_slices,
     interpret_search_query,
 )
 from api_service.services.tmdb.tmdb_client import TMDbClient
@@ -116,6 +118,7 @@ class AiSearchService:
         exclude_seen: bool = False,
         original_language: str = "auto",
         feedback_scope: Optional[tuple] = None,
+        people: Optional[List[Dict]] = None,
     ) -> Dict[str, Any]:
         """Execute an AI-powered search.
 
@@ -129,6 +132,9 @@ class AiSearchService:
             otherwise an ISO 639-1 code overrides the prompt's language filter.
         :param feedback_scope: ``(user_id, media_user_id)`` whose personal feedback hides
             rated titles and steers the prompt; None applies only the legacy global feedback.
+        :param people: People the search is for, each ``{'user_id', 'name', 'external_user_id'}``
+            (already authorised by the caller). Non-empty means per-person history and ratings
+            replace ``user_ids``/``feedback_scope``; two or more make it a group search.
         :return: Dict with 'results', 'ai_reasoning', and 'total'.
         """
         # Load the library in the background while the LLM interprets the query;
@@ -139,12 +145,12 @@ class AiSearchService:
                 movie_task = self._search_single(
                     query, "movie", user_ids, max_results, use_history, exclude_watched, exclude_seen,
                     record_seen=False, owned_ids=owned_ids,
-                    original_language=original_language, feedback_scope=feedback_scope,
+                    original_language=original_language, feedback_scope=feedback_scope, people=people,
                 )
                 tv_task = self._search_single(
                     query, "tv", user_ids, max_results, use_history, exclude_watched, exclude_seen,
                     record_seen=False, owned_ids=owned_ids,
-                    original_language=original_language, feedback_scope=feedback_scope,
+                    original_language=original_language, feedback_scope=feedback_scope, people=people,
                 )
                 movie_res, tv_res = await asyncio.gather(movie_task, tv_task)
 
@@ -178,7 +184,7 @@ class AiSearchService:
             return await self._search_single(
                 query, media_type, user_ids, max_results, use_history, exclude_watched, exclude_seen,
                 owned_ids=owned_ids,
-                original_language=original_language, feedback_scope=feedback_scope,
+                original_language=original_language, feedback_scope=feedback_scope, people=people,
             )
         finally:
             owned_ids.cancel()  # no-op once the library has loaded
@@ -222,6 +228,7 @@ class AiSearchService:
         owned_ids: Optional[Union[Dict[str, set], Awaitable[Dict[str, set]]]] = None,
         original_language: str = "auto",
         feedback_scope: Optional[tuple] = None,
+        people: Optional[List[Dict]] = None,
     ) -> Dict[str, Any]:
         """Run the full search pipeline for a single media type.
 
@@ -231,7 +238,11 @@ class AiSearchService:
         """
         # 1. Fetch history (best-effort — never crash the search if unavailable)
         history: List[Dict] = []
-        if use_history:
+        people_data: Optional[Dict[str, Any]] = None
+        if people:
+            people_data = await self._load_people(people, media_type, use_history, exclude_watched)
+            history = people_data["watched_history"]
+        elif use_history:
             try:
                 history = await self._get_history(user_ids)
             except Exception as exc:
@@ -240,7 +251,8 @@ class AiSearchService:
         watched_titles = {
             (item.get("title") or item.get("name") or "").strip().lower()
             for item in history
-        }
+        } | ({title.lower() for title in people_data["stored_titles"]} if people_data else set())
+        watched_ids = people_data["watched_ids"] if people_data else set()
 
         # 2. Fetch already-requested TMDB IDs to exclude from results (best-effort)
         already_requested: set = set()
@@ -257,8 +269,11 @@ class AiSearchService:
             db = DatabaseManager()
             disliked_ids = db.get_ai_dislike_ids(media_type)
             already_requested = already_requested | {str(i) for i in disliked_ids}
-            liked_titles = db.get_ai_likes(media_type)
-            if feedback_scope:
+            liked_titles = [] if people_data else db.get_ai_likes(media_type)
+            if people_data:
+                # Everyone selected: what any of them dismissed or marked seen stays out.
+                already_requested = already_requested | people_data["negative_ids"]
+            elif feedback_scope:
                 # Personal ratings: anything the user dismissed or has watched stays out,
                 # and what they liked or saved steers the prompt like the legacy likes do.
                 signals = db.get_suggestion_feedback_signals(*feedback_scope, media_type)
@@ -279,7 +294,7 @@ class AiSearchService:
         llm_suggestions_count = max(
             max_results, 12, min((3 * max_results + 1) // 2, _CANDIDATE_HEADROOM_CAP))
         excluded_titles = await self._excluded_titles_for_prompt(
-            media_type, history, exclude_watched, exclude_seen, feedback_scope, owned_ids)
+            media_type, history, exclude_watched, exclude_seen, feedback_scope, owned_ids, people_data)
         interpretation_query = query
         if original_language == "any":
             interpretation_query += "\nSearch option: recommend titles in any original language; do not apply an original-language restriction."
@@ -289,8 +304,9 @@ class AiSearchService:
                 "(ISO 639-1). This selection overrides any language restriction in the prompt."
             )
         interpretation = await interpret_search_query(
-            interpretation_query, history, media_type, max_suggestions=llm_suggestions_count,
-            liked_titles=liked_titles, excluded_titles=excluded_titles,
+            interpretation_query, [] if people_data else history, media_type,
+            max_suggestions=llm_suggestions_count, liked_titles=liked_titles, excluded_titles=excluded_titles,
+            people_profiles=people_data["profiles"] if people_data else None,
         )
         # Enforce the UI selection even if the LLM returns a conflicting language.
         if original_language != "auto":
@@ -326,9 +342,11 @@ class AiSearchService:
                 for t in suggested_titles
             ]
             title_results: List[Optional[Dict]] = list(await asyncio.gather(*title_tasks))
+            # A group search does not use TMDb "similar" titles, so it never asks for them.
+            skip_similar = bool(people_data) and len(people_data["profiles"]) >= 2
             reference_tasks = [
                 self._resolve_suggested_title(t, media_type, tmdb_client)
-                for t in reference_titles
+                for t in ([] if skip_similar else reference_titles)
             ]
             reference_results: List[Optional[Dict]] = list(await asyncio.gather(*reference_tasks))
 
@@ -358,8 +376,29 @@ class AiSearchService:
         seen_ids: set = set()
         final: List[Dict] = []
 
-        for similar_results in similar_result_groups:
-            for tmdb_item in similar_results:
+        def add_similar() -> None:
+            for similar_results in similar_result_groups:
+                for tmdb_item in similar_results:
+                    if len(final) >= max_results:
+                        break
+                    self._append_candidate_result(
+                        final=final,
+                        seen_ids=seen_ids,
+                        item=tmdb_item,
+                        media_type=media_type,
+                        tmdb_client=tmdb_client,
+                        already_requested=already_requested,
+                        watched_titles=watched_titles,
+                        exclude_watched=exclude_watched,
+                        source="tmdb_similar",
+                        rationale="",
+                        tmdb_discover_params=tmdb_discover_params,
+                        apply_discover_filters=True,
+                        watched_ids=watched_ids,
+                    )
+
+        def add_suggestions() -> None:
+            for tmdb_item, suggestion in zip(title_results, suggested_titles):
                 if len(final) >= max_results:
                     break
                 self._append_candidate_result(
@@ -371,29 +410,22 @@ class AiSearchService:
                     already_requested=already_requested,
                     watched_titles=watched_titles,
                     exclude_watched=exclude_watched,
-                    source="tmdb_similar",
-                    rationale="",
+                    source="ai_suggestion",
+                    rationale=suggestion.get("rationale", ""),
                     tmdb_discover_params=tmdb_discover_params,
                     apply_discover_filters=True,
+                    watched_ids=watched_ids,
                 )
 
-        for tmdb_item, suggestion in zip(title_results, suggested_titles):
-            if len(final) >= max_results:
-                break
-            self._append_candidate_result(
-                final=final,
-                seen_ids=seen_ids,
-                item=tmdb_item,
-                media_type=media_type,
-                tmdb_client=tmdb_client,
-                already_requested=already_requested,
-                watched_titles=watched_titles,
-                exclude_watched=exclude_watched,
-                source="ai_suggestion",
-                rationale=suggestion.get("rationale", ""),
-                tmdb_discover_params=tmdb_discover_params,
-                apply_discover_filters=True,
-            )
+        # TMDb "similar" titles are chosen by similarity to the reference alone, so a group
+        # search leaves them out: only titles the group-aware LLM picked are returned, even if
+        # that means fewer results. shortcut: upgrade to an LLM fit check on similar titles
+        # if groups with a named reference title come back too short.
+        if skip_similar:
+            add_suggestions()
+        else:
+            add_similar()
+            add_suggestions()
 
         await self._apply_suggestion_rationales(
             final,
@@ -402,6 +434,9 @@ class AiSearchService:
             discover_params,
             media_type,
             reference_titles=reference_titles,
+            people_context=[{"name": person["name"], "taste": person["taste"], "requester": person["requester"]}
+                            for person in people_data["profiles"]]
+            if people_data else None,
         )
 
         final_slice = final[:max_results]
@@ -422,6 +457,7 @@ class AiSearchService:
         exclude_seen: bool,
         feedback_scope: Optional[tuple],
         owned_ids: Optional[Union[Dict[str, set], Awaitable[Dict[str, set]]]],
+        people_data: Optional[Dict[str, Any]] = None,
     ) -> List[Dict]:
         """Titles the post-filter would drop, named so the LLM can avoid them up front.
 
@@ -441,7 +477,7 @@ class AiSearchService:
             from api_service.db.database_manager import DatabaseManager  # local import avoids circular deps
             return self._build_excluded_titles(
                 DatabaseManager(), media_type, history, exclude_watched, exclude_seen,
-                feedback_scope, (owned or {}).get(media_type, set()))
+                feedback_scope, (owned or {}).get(media_type, set()), people_data)
         except Exception as exc:
             logger.warning("Could not build the already-handled list for the prompt: %s", exc)
             return []
@@ -449,7 +485,7 @@ class AiSearchService:
     @staticmethod
     def _build_excluded_titles(
         db, media_type: str, history: List[Dict], exclude_watched: bool, exclude_seen: bool,
-        feedback_scope: Optional[tuple], owned_ids: set,
+        feedback_scope: Optional[tuple], owned_ids: set, people: Optional[Dict[str, Any]] = None,
     ) -> List[Dict]:
         """Assemble the ordered, deduplicated, capped list of already-handled titles.
 
@@ -458,13 +494,20 @@ class AiSearchService:
         requested, owned, then titles shown in earlier searches (only when that toggle is on).
         shortcut: arbitrary order inside a group; upgrade to recency ordering if big
         libraries still waste results.
+
+        :param people: Per-person data from :meth:`_load_people` for a people search: every
+            person's dismissed titles are listed, the "already in the prompt" set comes from the
+            exact per-person slices the prompt renders, and their stored watched titles join the list.
         """
         result: List[Dict] = []
         keys: set = set()
         # The prompt already lists these (even when watched titles are not excluded), so
         # repeating them would waste slots. Same dedupe + cut-off as interpret_search_query.
-        rendered = {(item.get("title") or item.get("name") or "").strip().lower()
-                    for item in _deduplicate_history(history)[:MAX_HISTORY_ITEMS]}
+        if people:
+            rendered_items = [item for part in group_history_slices(people["prompt_histories"]) for item in part]
+        else:
+            rendered_items = _deduplicate_history(history)[:MAX_HISTORY_ITEMS]
+        rendered = {(item.get("title") or item.get("name") or "").strip().lower() for item in rendered_items}
 
         def add(title, year) -> None:
             clean = clean_excluded_title(title)
@@ -481,24 +524,94 @@ class AiSearchService:
                 for entry in db.get_titles_for_tmdb_ids(media_type, ids, len(ids)):
                     add(entry["title"], entry["year"])
 
-        if feedback_scope:
-            unnamed = set()
-            for row in db.list_negative_feedback_titles(*feedback_scope, media_type):
+        scopes = people["scopes"] if people else ([feedback_scope] if feedback_scope else [])
+        unnamed = set()
+        for scope in scopes:
+            for row in db.list_negative_feedback_titles(*scope, media_type):
                 if row["title"]:
                     add(row["title"], row["year"])
                 else:
                     unnamed.add(row["tmdb_id"])
-            add_ids(unnamed)
+        add_ids(unnamed)
         for row in db.get_ai_dislikes(media_type):
             add(row["title"], row["year"])
         if exclude_watched:
-            for item in _deduplicate_history(history)[MAX_HISTORY_ITEMS:]:
+            # Titles the prompt already renders are skipped by add(); the rest are listed here.
+            for item in _deduplicate_history(history):
                 add(item.get("title") or item.get("name"), item.get("year"))
+            for title in people["stored_titles"] if people else []:
+                add(title, None)
         add_ids(db.get_requested_tmdb_ids_by_type(media_type))
         add_ids(owned_ids)
         if exclude_seen:
             add_ids(db.get_ai_seen_ids(media_type))
         return result
+
+    async def _load_people(
+        self, people: List[Dict], media_type: str, use_history: bool, exclude_watched: bool,
+    ) -> Dict[str, Any]:
+        """Gather what each selected person has watched and rated, best-effort.
+
+        Recent provider history is fetched when it personalises the prompt or filters watched
+        titles; stored watched records (all of them, via a read-only identity lookup) are
+        added for filtering because the provider only returns the latest 20 titles. A failure
+        for one person leaves that part empty rather than failing the search.
+
+        :return: ``profiles`` (name/history/taste per person for the prompt, history empty when
+            personalisation is off), ``prompt_histories``, ``watched_history`` (everyone's recent
+            history), ``stored_titles`` (sorted, as stored), ``watched_ids`` (TMDB ids of stored titles),
+            ``negative_ids`` (dismissed or seen by anyone) and ``scopes``.
+        """
+        from api_service.db.database_manager import DatabaseManager  # local import avoids circular deps
+        db = DatabaseManager()
+        provider = str(self.config.get("SELECTED_SERVICE") or "").lower()
+
+        async def load(person: Dict) -> Dict[str, Any]:
+            external_id = person.get("external_user_id")
+            history: List[Dict] = []
+            if external_id and (use_history or exclude_watched):
+                try:
+                    # A TV series and a film can share a title: only the searched type counts,
+                    # for the prompt as much as for filtering (ratings are per type already).
+                    history = [entry for entry in await self._get_history([external_id])
+                               if entry.get("type") in (media_type, None)]
+                except Exception as exc:
+                    logger.warning("Could not fetch viewing history for a selected person: %s", exc)
+            stored: List[Dict] = []
+            if external_id and exclude_watched:
+                try:
+                    identity = db.get_media_user_identity(provider, str(external_id))
+                    stored = [row for row in db.list_watched_media_ids(identity["id"])
+                              if row["media_type"] == media_type]
+                except ValueError:
+                    pass  # no identity yet: nothing stored for this person
+                except Exception as exc:
+                    logger.warning("Could not load stored watched titles for a selected person: %s", exc)
+            scope = (person["user_id"], str(external_id) if external_id else "")
+            signals: Dict[str, str] = {}
+            taste: Dict[str, List] = {}
+            try:
+                signals = db.get_suggestion_feedback_signals(*scope, media_type)
+                taste = db.get_taste_profile(*scope, media_type)
+            except Exception as exc:
+                logger.warning("Could not load ratings for a selected person: %s", exc)
+            return {"scope": scope, "history": history, "stored": stored, "signals": signals, "taste": taste}
+
+        loaded = await asyncio.gather(*(load(person) for person in people))
+        return {
+            "profiles": [
+                {"name": person["name"], "history": item["history"] if use_history else [], "taste": item["taste"],
+                 "requester": bool(person.get("requester"))}
+                for person, item in zip(people, loaded)
+            ],
+            "prompt_histories": [item["history"] if use_history else [] for item in loaded],
+            "watched_history": [entry for item in loaded for entry in item["history"]] if exclude_watched else [],
+            "stored_titles": sorted({str(row["title"] or "").strip() for item in loaded for row in item["stored"]} - {""}),
+            "watched_ids": {row["tmdb_id"] for item in loaded for row in item["stored"]},
+            "negative_ids": {tmdb_id for item in loaded for tmdb_id, value in item["signals"].items()
+                             if value in db.NEGATIVE_FEEDBACK},
+            "scopes": [item["scope"] for item in loaded],
+        }
 
     def _record_seen_items(self, items: List[Dict], media_type: str) -> None:
         try:
@@ -856,6 +969,7 @@ class AiSearchService:
         rationale: str,
         tmdb_discover_params: Dict[str, Any],
         apply_discover_filters: bool,
+        watched_ids: Optional[set] = None,
     ) -> None:
         """Append a candidate result when it survives local filtering."""
         if item is None:
@@ -873,6 +987,9 @@ class AiSearchService:
             return
         if str(item_id) in already_requested:
             logger.debug("Skipping already requested %s result: %s (%s)", source, title, item_id)
+            return
+        if exclude_watched and str(item_id) in (watched_ids or ()):
+            logger.debug("Skipping stored-watched %s result: %s (%s)", source, title, item_id)
             return
         if exclude_watched and self._is_watched(item, watched_titles):
             logger.debug("Skipping watched %s result: %s (%s)", source, title, item_id)
@@ -913,6 +1030,7 @@ class AiSearchService:
         discover_params: Dict[str, Any],
         media_type: str,
         reference_titles: Optional[List[Dict[str, Any]]] = None,
+        people_context: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
         """Set per-item rationale from exact matches, then LLM-generated one-liners, then contextual fallback."""
         llm_rationale_map: Dict[str, str] = {}
@@ -931,6 +1049,7 @@ class AiSearchService:
                 media_type=media_type,
                 discover_params=discover_params,
                 results=unresolved_results,
+                **({"people_context": people_context} if people_context else {}),
             )
 
         seen_rationales: set = set()
@@ -948,6 +1067,9 @@ class AiSearchService:
                         discover_params=discover_params,
                         media_type=media_type,
                         reference_titles=reference_titles,
+                        people_names=_unique_person_labels([p["name"] for p in people_context])
+                        if people_context and (len(people_context) >= 2 or not people_context[0].get("requester"))
+                        else None,
                     )
 
             # Keep rationale strings distinct even if two items resolve to identical text.
@@ -981,15 +1103,27 @@ class AiSearchService:
         discover_params: Dict[str, Any],
         media_type: str,
         reference_titles: Optional[List[Dict[str, Any]]] = None,
+        people_names: Optional[List[str]] = None,
     ) -> str:
-        """Generate a per-result rationale aligned to interpreted discover filters."""
+        """Generate a per-result rationale aligned to interpreted discover filters.
+
+        With ``people_names`` (a group search) the generic sentence is neutral: it must not
+        claim a fit for people it has no evidence about.
+        """
         title = str(result.get("title") or result.get("name") or "This title").strip() or "This title"
         reference_title = next(
             (str(item.get("title") or "").strip() for item in reference_titles or [] if item.get("title")),
             "",
         )
-        if reference_title:
-            return f"TMDb recommends {title} as similar to {reference_title}."
+        who = (people_names[0] if len(people_names) == 1
+               else f"{', '.join(people_names[:-1])} and {people_names[-1]}") if people_names else ""
+        # In a people search only TMDb "similar" results may claim a TMDb recommendation.
+        if reference_title and (not who or result.get("source") == "tmdb_similar"):
+            suffix = f", picked for {who}" if who else ""
+            return f"TMDb recommends {title} as similar to {reference_title}{suffix}."
+
+        if who:
+            return f"Picked for {who} based on your search."
 
         genres = discover_params.get("genres") or []
         if isinstance(genres, list) and genres:
