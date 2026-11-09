@@ -191,26 +191,24 @@ test("README hero image", async ({ page }) => {
       * { margin: 0; box-sizing: border-box; }
       body { width: 1600px; height: 800px; overflow: hidden; position: relative; background: #0b0d12; color: #e8eaf0;
         font-family: "Plus Jakarta Sans", sans-serif; }
-      .copy { position: absolute; left: 96px; top: 88px; bottom: 88px; width: 540px; display: flex; flex-direction: column; }
+      .copy { position: absolute; left: 96px; top: 80px; bottom: 80px; width: 620px; display: flex; flex-direction: column; }
       .brand { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 800; }
       .brand img { height: 32px; }
       .main { margin-top: auto; margin-bottom: auto; }
-      h1 { font-size: 58px; line-height: 1.08; font-weight: 800; letter-spacing: -1.6px; }
+      h1 { font-size: 80px; line-height: 1; font-weight: 800; letter-spacing: -3px; white-space: nowrap; }
+      h1 .lead { display: block; margin-bottom: 18px; }
       h1 span { color: #b3a9ff; }
-      p { margin-top: 24px; font-size: 20px; line-height: 1.55; color: #9aa3b5; font-weight: 500; max-width: 470px; }
-      .meta { font-size: 15px; color: #8790a3; font-weight: 600; }
-      .meta b { color: #c5cbd8; font-weight: 600; }
-      .window { position: absolute; left: 720px; top: 112px; width: 1200px; border-radius: 14px; overflow: hidden;
+      h1 .lead { color: #e8eaf0; }
+      .window { position: absolute; left: 830px; top: 64px; width: 1000px; height: 900px; border-radius: 14px; overflow: hidden;
         border: 1px solid #2a3042; box-shadow: 0 30px 60px rgba(0, 0, 0, .45); }
-      .window img { display: block; width: 100%; }
+      /* Crop the sidebar away so the posters carry the image. */
+      .window img { display: block; width: 1700px; margin-left: -300px; margin-top: -20px; }
     </style></head><body>
     <div class="copy">
       <div class="brand"><img src="${logo}" alt="">SuggestArr</div>
       <div class="main">
-        <h1>You watch.<br><span>SuggestArr finds what's next.</span></h1>
-        <p>It picks movies and shows like the ones you watched and requests them in Seer, automatically or after you approve them.</p>
+        <h1><span class="lead">You watch.</span><span>SuggestArr<br>finds what's next.</span></h1>
       </div>
-      <div class="meta">Works with <b>Jellyfin</b>, <b>Plex</b>, <b>Emby</b> and <b>Seer</b> · Self-hosted · Open source</div>
     </div>
     <div class="window"><img src="${data(join(OUT, "requests.png"))}" alt=""></div>
     </body></html>`);
