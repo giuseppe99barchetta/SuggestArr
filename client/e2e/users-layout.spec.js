@@ -184,7 +184,7 @@ test('Own role and the last admin are locked, overview chips filter, list view k
   const viewer = page.getByRole('article', { name: 'Account viewer', exact: true });
   await expect(viewer.getByText('never signed in')).toBeVisible();
   await viewer.getByRole('button', { name: 'Deactivate viewer', exact: true }).click();
-  expect(mutations[0]).toMatchObject({ method: 'PATCH', path: '/api/users/2', body: { is_active: false } });
+  await expect.poll(() => mutations[0]).toMatchObject({ method: 'PATCH', path: '/api/users/2', body: { is_active: false } });
   await page.reload();
   await expect(page.getByRole('button', { name: 'List view', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });

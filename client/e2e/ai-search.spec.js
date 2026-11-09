@@ -135,7 +135,7 @@ test('Language loading can be retried without blocking prompt-based searches', a
 for (const width of [1440, 900, 390]) {
   test(`Search starters and personal posters at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1100 });
-    const { errors, searches } = await openPreview(page);
+    const { errors, searches, history } = await openPreview(page);
     const input = page.getByRole('textbox', { name: 'What do you want to watch?' });
     await expect(page.getByRole('button', { name: 'Find more like AFTERLIGHT', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Feel-good', exact: false }).click();
@@ -162,6 +162,7 @@ for (const width of [1440, 900, 390]) {
     expect(searches).toHaveLength(1);
     await page.getByRole('button', { name: 'Clear recent searches' }).click();
     await expect(page.getByRole('heading', { name: 'Recent searches' })).toHaveCount(0);
+    await expect.poll(() => history).toEqual([]); // the DELETE must land before the reload
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Recent searches' })).toHaveCount(0);
     expect(errors).toEqual([]);
@@ -201,7 +202,7 @@ test('Searches kept in this browser move to the account once, other accounts sta
   expect(history).toEqual(['My query 0', 'My query 1', 'My query 2', 'My query 3', 'My query 4']);
   expect(await page.evaluate(() => localStorage.getItem('suggestarr_ai_search_history:7'))).toBeNull();
   await page.getByRole('button', { name: 'Clear recent searches' }).click();
-  expect(history).toEqual([]);
+  await expect.poll(() => history).toEqual([]);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('suggestarr_ai_search_history:8')))).toEqual(['Another account query']);
 });
 
