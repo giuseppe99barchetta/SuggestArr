@@ -75,6 +75,8 @@ PUBLIC_ROUTES: frozenset[str] = frozenset({
                             # SPA on every cold start (no secrets returned).
     "/api/auth/logout",     # Token revocation (guarded internally by user-count check).
     "/api/auth/register",   # Self-registration (gated by ALLOW_REGISTRATION config flag).
+    "/api/discord/interactions",  # Discord button taps; no login, every request is Ed25519-signed
+                            # and checked against the keys of users who saved Discord credentials.
 })
 
 PUBLIC_V1_ROUTES = frozenset({"/api/v1/status", "/api/v1/openapi.yaml", "/api/v1/openapi.json"})

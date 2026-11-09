@@ -114,15 +114,6 @@ class WebhookMixin:
         except (TypeError, ValueError):
             return None
 
-    def set_personal_notification(self, user_id, config):
-        """Save (or with None, remove) a user's own notification destination."""
-        ph = "%s" if self.db_type in ("mysql", "mariadb", "postgres") else "?"
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(f"UPDATE auth_users SET notify_config={ph} WHERE id={ph}",
-                           (json.dumps(config) if config else None, user_id))
-            conn.commit()
-
     def enqueue_personal_notification(self, user_id, event, text):
         """Queue a chat message to one user's own destination, if they set one.
 

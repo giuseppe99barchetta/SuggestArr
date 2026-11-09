@@ -81,6 +81,60 @@
           </form>
         </SectionCard>
 
+        <SectionCard icon="fas fa-star-half-alt" title="Rate what you watch" description="Get a message a while after you finish a title, with buttons 1 to 10. One tap saves the rating.">
+          <form class="flex flex-col gap-3" @submit.prevent="saveRatingPrompt">
+            <div role="radiogroup" aria-label="Where to ask" class="grid grid-cols-2 gap-2">
+              <label v-for="option in ratingChannels" :key="option.value" class="flex cursor-pointer items-center justify-center gap-2 rounded-ctl border px-3 py-2.5 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-ink" :class="ratingPrompt.channel === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong text-ink-2 hover:border-ink-4'">
+                <input v-model="ratingPrompt.channel" type="radio" name="rating-channel" :value="option.value" class="sr-only" :disabled="ratingPromptBusy" />
+                <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
+              </label>
+            </div>
+            <template v-if="ratingPrompt.channel === 'discord'">
+              <label class="ui-label">Bot token
+                <input v-model.trim="discordToken" type="password" autocomplete="off" class="ui-input" maxlength="120" :placeholder="ratingPrompt.discord.has_token ? 'Saved. Type a new token to replace it' : 'Bot token from the Developer Portal'" :disabled="ratingPromptBusy" />
+              </label>
+              <label class="ui-label">Application public key
+                <input v-model.trim="ratingPrompt.discord.public_key" type="text" autocomplete="off" class="ui-input" maxlength="64" placeholder="64 hexadecimal characters" :disabled="ratingPromptBusy" />
+              </label>
+              <label class="ui-label">Your Discord user ID
+                <input v-model.trim="ratingPrompt.discord.user_id" type="text" inputmode="numeric" autocomplete="off" class="ui-input" maxlength="20" placeholder="Turn on Developer Mode, right-click yourself, Copy User ID" :disabled="ratingPromptBusy" />
+              </label>
+              <label class="ui-label">Interactions Endpoint URL
+                <input :value="discordEndpoint" type="text" readonly class="ui-input" @focus="$event.target.select()" />
+                <span class="text-xs font-normal text-ink-4">Save these settings first, then paste this URL in the Developer Portal under General Information. Discord must be able to reach it over HTTPS. The bot must be able to message you directly.</span>
+              </label>
+            </template>
+            <label class="flex items-center gap-2 text-sm font-semibold text-ink-2">
+              <input v-model="ratingPrompt.enabled" type="checkbox" :disabled="ratingPromptBusy || !ratingPromptEditable" />
+              Ask me to rate what I watched
+            </label>
+            <label class="ui-label">Wait this many hours after I watch it (0 to 48)
+              <input v-model.number="ratingPrompt.delay_hours" type="number" min="0" max="48" step="1" class="ui-input" required :disabled="ratingPromptBusy" />
+              <span class="text-xs font-normal text-ink-4">Movies are asked once; a show is asked once, not per episode. Titles you already rated are skipped. Use a bot only SuggestArr uses, in a private chat with you.</span>
+            </label>
+            <p v-if="!ratingPrompt.available && ratingPrompt.reason" class="text-xs text-ink-3">{{ ratingPrompt.reason }}</p>
+            <div class="flex flex-wrap gap-2">
+              <button type="submit" class="ui-btn-primary" :disabled="ratingPromptBusy">Save</button>
+              <button v-if="ratingPrompt.channel === 'discord'" type="button" class="ui-btn" :disabled="ratingPromptBusy || !ratingPrompt.discord.has_token" @click="testRatingPrompt"><i aria-hidden="true" class="fas fa-paper-plane"></i>Send test message</button>
+            </div>
+            <p v-if="ratingPromptError" role="alert" class="ui-alert-bad">{{ ratingPromptError }}</p>
+            <p v-if="ratingPromptSuccess" role="status" class="ui-alert-good">{{ ratingPromptSuccess }}</p>
+          </form>
+        </SectionCard>
+
+        <SectionCard icon="fas fa-user-friends" title="AI Search sharing" description="Let other accounts include you when they search for several people at once.">
+          <div class="flex flex-col gap-2">
+            <button type="button" role="switch" :aria-checked="aiSearchShareable ? 'true' : 'false'" :disabled="isSavingSharing" class="flex cursor-pointer items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3 text-left hover:border-edge-strong disabled:cursor-not-allowed disabled:opacity-60" @click="saveSharing">
+              <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span class="text-sm font-semibold text-ink">Allow others to include me in AI Search</span>
+                <span class="text-xs leading-snug text-ink-4">Your recent watches and ratings (titles only) guide their picks and are sent to the AI provider. A reason shown to them may mention a title you watched or rated.</span>
+              </span>
+              <ToggleTrack :on="aiSearchShareable" />
+            </button>
+            <p v-if="sharingError" role="alert" class="ui-alert-bad">{{ sharingError }}</p>
+          </div>
+        </SectionCard>
+
         <SectionCard icon="fas fa-language" title="Title language" description="Titles and descriptions of suggestions and requests are shown in this language.">
           <form class="flex flex-col gap-3" @submit.prevent="saveLanguage">
             <div class="flex gap-2">
@@ -195,9 +249,14 @@ import {
   saveMyNotifications,
   deleteMyNotifications,
   testMyNotifications,
+  getMyRatingPrompts,
+  saveMyRatingPrompts,
+  testMyRatingPrompts,
 } from '@/api/api';
 import { CHAT_FORMATS } from '@/utils/notificationFormats.js';
+import { discordEndpointUrl } from '@/utils/discordEndpoint.js';
 import SectionCard from '@/components/ui/SectionCard.vue';
+import ToggleTrack from '@/components/common/ToggleTrack.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
 import SimklMediaUsers from './SimklMediaUsers.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
@@ -216,7 +275,7 @@ export default {
   name: 'UserProfile',
   emits: ['profile-updated'],
 
-  components: { PageHeader, SectionCard, TraktMediaUsers, SimklMediaUsers, ApiKeysPanel, RecapPreferences, UserAvatar },
+  components: { PageHeader, SectionCard, ToggleTrack, TraktMediaUsers, SimklMediaUsers, ApiKeysPanel, RecapPreferences, UserAvatar },
 
   // The dashboard shell passes props this page does not declare.
   inheritAttrs: false,
@@ -241,6 +300,16 @@ export default {
       notifyBusy: false,
       notifyError: '',
       notifySuccess: '',
+      ratingChannels: [
+        { value: 'telegram', label: 'Telegram', icon: 'fab fa-telegram-plane' },
+        { value: 'discord', label: 'Discord', icon: 'fab fa-discord' },
+      ],
+      ratingPrompt: { enabled: false, delay_hours: 12, channel: 'telegram', discord: { public_key: '', user_id: '', has_token: false }, available: false, reason: '' },
+      discordToken: '',
+      ratingPromptBusy: false,
+      ratingPromptSavedEnabled: false,
+      ratingPromptError: '',
+      ratingPromptSuccess: '',
       themeOptions: [
         { value: 'system', label: 'System', icon: 'fas fa-desktop' },
         { value: 'light', label: 'Light', icon: 'fas fa-sun' },
@@ -284,6 +353,9 @@ export default {
 
       // Title language
       languages: [],
+      aiSearchShareable: true,
+      isSavingSharing: false,
+      sharingError: null,
       languageForm: { value: '' },
       displayLanguage: '',
       isSavingLanguage: false,
@@ -294,6 +366,14 @@ export default {
   },
 
   computed: {
+    // Only the "ask me" switch is gated: setup fields stay open so credentials can be saved first, and a
+    // saved-on setting can always be switched off, even when the destination or link behind it is gone.
+    ratingPromptEditable() {
+      return this.ratingPrompt.available || this.ratingPromptSavedEnabled;
+    },
+    discordEndpoint() {
+      return discordEndpointUrl(window.location.origin, axios.defaults.baseURL);
+    },
     notifyFormat() {
       return CHAT_FORMATS.find(option => option.value === this.notify.format) || CHAT_FORMATS[0];
     },
@@ -388,6 +468,7 @@ export default {
 
   async mounted() {
     this.loadNotify();
+    this.loadRatingPrompt();
     this.loadLanguage();
     await this.loadConfigStatus();
     await this.loadLinks();
@@ -441,6 +522,7 @@ export default {
       return this.runNotify(async () => {
         await saveMyNotifications(this.notify);
         this.notifySaved = true;
+        await this.loadRatingPrompt();
       }, 'Saved. Use "Send test" to check it arrives.');
     },
     testNotify() {
@@ -451,7 +533,50 @@ export default {
         await deleteMyNotifications();
         this.notify = { format: 'discord', url: '' };
         this.notifySaved = false;
+        await this.loadRatingPrompt();
       }, 'Notifications turned off.');
+    },
+    // ── Rating prompts ─────────────────────────────────────────────────────
+    async loadRatingPrompt() {
+      try {
+        const { data } = await getMyRatingPrompts();
+        this.ratingPrompt = data;
+        this.ratingPromptSavedEnabled = data.enabled;
+        this.discordToken = '';
+      } catch {
+        // The card stays disabled when the settings cannot be read.
+      }
+    },
+    async testRatingPrompt() {
+      this.ratingPromptBusy = true;
+      this.ratingPromptError = '';
+      this.ratingPromptSuccess = '';
+      try {
+        await testMyRatingPrompts();
+        this.ratingPromptSuccess = 'Test message sent. Check your Discord DMs.';
+      } catch (error) {
+        this.ratingPromptError = error.response?.data?.error || 'Something went wrong. Try again.';
+      } finally {
+        this.ratingPromptBusy = false;
+      }
+    },
+    async saveRatingPrompt() {
+      this.ratingPromptBusy = true;
+      this.ratingPromptError = '';
+      this.ratingPromptSuccess = '';
+      try {
+        const discord = this.ratingPrompt.channel === 'discord'
+          ? { public_key: this.ratingPrompt.discord.public_key, user_id: this.ratingPrompt.discord.user_id, ...(this.discordToken ? { bot_token: this.discordToken } : {}) }
+          : undefined;
+        await saveMyRatingPrompts({ enabled: this.ratingPrompt.enabled, delay_hours: this.ratingPrompt.delay_hours, channel: this.ratingPrompt.channel, discord });
+        this.ratingPromptSavedEnabled = this.ratingPrompt.enabled;
+        await this.loadRatingPrompt();
+        this.ratingPromptSuccess = this.ratingPrompt.enabled ? 'Saved. You will be asked about titles you watch from now on.' : 'Rating prompts are off.';
+      } catch (error) {
+        this.ratingPromptError = error.response?.data?.error || 'Something went wrong. Try again.';
+      } finally {
+        this.ratingPromptBusy = false;
+      }
     },
     // ── Title language ─────────────────────────────────────────────────────
 
@@ -464,10 +589,25 @@ export default {
         if (me.status === 'fulfilled') {
           this.languageForm.value = me.value.data?.language || '';
           this.displayLanguage = me.value.data?.display_language || '';
+          this.aiSearchShareable = me.value.data?.ai_search_shareable !== false;
         }
         if (list.status === 'fulfilled') this.languages = list.value.data?.languages || [];
       } catch (err) {
         console.error('Failed to load title language', err);
+      }
+    },
+
+    async saveSharing() {
+      this.sharingError = null;
+      this.isSavingSharing = true;
+      const next = !this.aiSearchShareable;
+      try {
+        await updateMyProfile({ ai_search_shareable: next });
+        this.aiSearchShareable = next;
+      } catch (err) {
+        this.sharingError = err.response?.data?.error || 'Could not save this setting.';
+      } finally {
+        this.isSavingSharing = false;
       }
     },
 
@@ -505,6 +645,7 @@ export default {
         const res = await getMyLinks();
         this.links = res.data;
         if (refreshAvatar) refreshUserAvatar(this.profileUser?.id);
+        this.loadRatingPrompt(); // availability depends on the media link
       } catch (err) {
         console.error('Failed to load media links', err);
       }

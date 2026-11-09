@@ -20,7 +20,7 @@
           </div>
           <small class="text-xs leading-normal text-ink-4">
             Optional — needed only when rating source is set to IMDB or Both.
-            Free key (1,000 req/day) at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" class="text-brand-ink no-underline hover:underline">omdbapi.com</a>
+            Free key (1,000 req/day) at <a href="https://www.omdbapi.com/apikey.aspx" target="_blank" class="text-brand-ink underline underline-offset-2 hover:no-underline">omdbapi.com</a>
           </small>
           <details class="group text-xs leading-relaxed text-ink-3">
             <summary class="flex min-h-10 w-fit cursor-pointer list-none items-center gap-2 rounded-ctl text-brand-ink hover:text-ink [&::-webkit-details-marker]:hidden">

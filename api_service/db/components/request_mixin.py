@@ -424,6 +424,21 @@ class RequestMixin:
             cursor.execute(query)
             return {str(row[0]) for row in cursor.fetchall()}
 
+    def get_requested_tmdb_ids_by_type(self, media_type: str) -> set:
+        """Like :meth:`get_requested_tmdb_ids`, but only for one media type.
+
+        Used to name requested titles in an AI prompt, where a movie and a show that
+        happen to share a numeric id must never be mixed up.
+        """
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT DISTINCT tmdb_request_id FROM requests WHERE requested_by = 'SuggestArr' AND media_type = {ph}",
+                (media_type,),
+            )
+            return {str(row[0]) for row in cursor.fetchall()}
+
     def save_requests_batch(self, requests: List[Dict[str, Any]]) -> None:
             """Save a batch of media requests to the database, handling different DB types."""
             if not requests:

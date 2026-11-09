@@ -556,3 +556,33 @@ def test_owner_without_media_link_sees_and_rates_only_own_list_suggestions(repo)
     assert result and db.should_skip_feedback(7, '1', 'movie', None)
     assert db.set_suggestion_feedback(2, 7, 7, 'not_interested', media_user_ids=[], include_owned_list_imports=True) is None
     assert db.clear_suggestion_feedback(1, 7, 7, media_user_ids=[], include_owned_list_imports=True)
+
+
+def test_list_suggestions_sorts_by_rating_and_title_with_unrated_last(repo):
+    from api_service.db.components.request_queue_mixin import RequestQueueMixin
+    class Queue(MemoryDB, RequestQueueMixin):
+        pass
+    db = object.__new__(Queue)
+    db.connection = repo.db.connection
+    for row_id, title, rating in [(1, 'Bravo', 5.0), (2, 'alpha', None), (3, 'Charlie', 9.0)]:
+        db.connection.execute("INSERT INTO pending_requests(id,tmdb_id,media_type,payload,status) VALUES(?,?,'movie','{}','awaiting_approval')",
+                              (row_id, str(row_id)))
+        db.connection.execute("INSERT INTO metadata(media_id,media_type,title,rating) VALUES(?,'movie',?,?)", (str(row_id), title, rating))
+    db.connection.commit()
+    order = lambda sort: [i['id'] for i in db.list_suggestions(sort_by=sort)[0]]
+    assert order('rating-desc') == [3, 1, 2] and order('rating-asc') == [1, 3, 2]
+    assert order('title-asc') == [2, 1, 3] and order('title-desc') == [3, 1, 2]
+
+
+def test_media_feedback_round_trips_without_a_request(repo):
+    from api_service.db.components.suggestion_feedback_mixin import SuggestionFeedbackMixin
+    class Feedback(MemoryDB, SuggestionFeedbackMixin):
+        pass
+    db = object.__new__(Feedback)
+    db.connection = repo.db.connection
+    db.connection.execute("INSERT INTO auth_users(id,username,password_hash) VALUES(5,'rater','test')")
+    db.set_media_feedback(5, '', '42', 'movie', 'save_for_later', 'genre', None, 'Se7en', 1995)
+    assert db.list_media_feedback(5, '') == [
+        {'tmdb_id': '42', 'media_type': 'movie', 'feedback': 'save_for_later', 'reason_type': 'genre', 'reason_text': None}]
+    assert db.list_media_feedback(6, '') == []
+    assert db.get_suggestion_feedback_signals(5, '', 'movie') == {'42': 'save_for_later'}

@@ -39,7 +39,11 @@ from api_service.auth.middleware import TAB_ALIASES, require_role
 from api_service.blueprints.avatar import user_avatar_response
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
-from api_service.services.notification_formats import notification_target_error
+from api_service.exceptions.database_exceptions import RatingPromptConfigError
+from api_service.services.notification_formats import notification_target_error, telegram_bot_base, telegram_chat_id
+from api_service.db.components.rating_prompt_mixin import TELEGRAM_DESTINATION_HINT, discord_credentials_complete
+from api_service.jobs.rating_prompts import send_test_message
+from api_service.services.watch_history_sync import identity_for_user, selected_provider
 from api_service.utils.ssrf_guard import validate_url
 from api_service.services.plex.account_resolver import (
     canonical_plex_account_id,
@@ -493,9 +497,92 @@ def set_my_notifications():
 
 @users_bp.route('/me/notifications', methods=['DELETE'])
 def delete_my_notifications():
-    """Stop personal notifications for the current user."""
+    """Stop personal notifications for the current user.
+
+    While rating prompts go to Telegram the writer also switches them off (and invalidates their
+    buttons) in the same statement; Discord rating-prompt settings are untouched.
+    """
     DatabaseManager().set_personal_notification(_current_user_id(), None)
     return '', 204
+
+
+def _rating_prompt_blocker(db, user_id, channel, discord):
+    """Why rating prompts cannot work for this user yet, or None."""
+    if channel == 'discord':
+        if not discord_credentials_complete(discord):
+            return 'Discord needs the bot token, the application public key and your user id.'
+    else:
+        config = db.get_personal_notification(user_id) or {}
+        if config.get('format') != 'telegram' or not telegram_chat_id(config.get('url')) or not telegram_bot_base(config.get('url')):
+            return TELEGRAM_DESTINATION_HINT
+    if not identity_for_user(db, user_id, selected_provider(), verified_only=True):
+        return 'Link your media server account first.'
+    return None
+
+
+@users_bp.route('/me/rating-prompts', methods=['GET'])
+def get_my_rating_prompts():
+    """
+    Return the current user's rating-prompt settings.
+
+    Response (200): { enabled, delay_hours, channel, discord: {public_key, user_id, has_token},
+    available, reason } where ``reason`` explains why ``available`` is false. The Discord bot
+    token is never returned.
+    """
+    db = DatabaseManager()
+    user_id = _current_user_id()
+    config = db.get_rating_prompt_config(user_id)
+    blocker = _rating_prompt_blocker(db, user_id, config['channel'], config['discord'])
+    return jsonify({**db.public_rating_prompt_config(config), 'available': blocker is None, 'reason': blocker}), 200
+
+
+@users_bp.route('/me/rating-prompts', methods=['PUT'])
+@limiter.limit('20 per minute')
+def set_my_rating_prompts():
+    """
+    Turn "ask me to rate what I watched" on or off, and choose where and how long after a play.
+
+    Request JSON: { enabled: bool, delay_hours: int 0-48, channel: 'telegram'|'discord',
+    discord: { bot_token?, public_key, user_id } }. Discord fields are saved even with
+    ``enabled: false`` so setup can happen in steps; an omitted ``bot_token`` keeps the stored one.
+    """
+    data = request.get_json(silent=True) or {}
+    enabled, delay = data.get('enabled'), data.get('delay_hours', 12)
+    if not isinstance(enabled, bool):
+        return jsonify({'error': 'enabled must be true or false'}), 400
+    db = DatabaseManager()
+    user_id = _current_user_id()
+    channel = data.get('channel', db.get_rating_prompt_config(user_id)['channel'])
+    discord = data.get('discord')
+    if enabled and channel == 'telegram':
+        blocker = _rating_prompt_blocker(db, user_id, 'telegram', {})
+    elif enabled:
+        blocker = (None if identity_for_user(db, user_id, selected_provider(), verified_only=True)
+                   else 'Link your media server account first.')
+    else:
+        blocker = None
+    if blocker:
+        return jsonify({'error': blocker}), 400
+    try:
+        saved = db.set_rating_prompt_config(user_id, enabled, delay, channel, discord)
+    except RatingPromptConfigError as exc:
+        logger.warning("Invalid rating prompt configuration for user_id=%s: %s", user_id, exc.user_message)
+        return jsonify({'error': exc.user_message}), 400
+    return jsonify(db.public_rating_prompt_config(saved)), 200
+
+
+@users_bp.route('/me/rating-prompts/test', methods=['POST'])
+@limiter.limit('5 per minute')
+def test_my_rating_prompts():
+    """Send a plain test DM through the saved Discord bot, or explain why Discord refused."""
+    db = DatabaseManager()
+    config = db.get_rating_prompt_config(_current_user_id())
+    if config['channel'] != 'discord':
+        return jsonify({'error': 'Choose Discord and save its settings first.'}), 400
+    ok, reason = send_test_message(db, config)
+    if not ok:
+        return jsonify({'error': reason}), 400
+    return jsonify({'ok': True}), 200
 
 
 @users_bp.route('/me/notifications/test', methods=['POST'])

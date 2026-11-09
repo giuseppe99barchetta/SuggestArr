@@ -126,7 +126,7 @@
             <span class="text-sm font-semibold text-ink">Allow sign-ups</span>
             <span class="text-xs leading-snug text-ink-4">Anyone who can reach the login page can create a User account.</span>
           </span>
-          <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="localAllowRegistration ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="localAllowRegistration ? 'left-[21px]' : 'left-[3px]'"></span></span>
+          <ToggleTrack :on="!!(localAllowRegistration)" />
         </button>
 
         <fieldset v-if="localAllowRegistration" class="m-0 mt-4 flex flex-col gap-2 border-0 p-0" :disabled="isSavingRegistration">
@@ -281,6 +281,7 @@
 </template>
 
 <script>
+import ToggleTrack from '@/components/common/ToggleTrack.vue';
 import { useAuth } from '@/composables/useAuth';
 import {
   adminLinkProvider,
@@ -314,7 +315,7 @@ function readViewMode() {
 export default {
   name: 'UserManagement',
 
-  components: { AppDialog, BaseCheckbox, PageHeader, SectionCard, UserAvatar },
+  components: { ToggleTrack, AppDialog, BaseCheckbox, PageHeader, SectionCard, UserAvatar },
 
   props: {
     config: Object,

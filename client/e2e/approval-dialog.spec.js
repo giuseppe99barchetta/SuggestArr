@@ -87,7 +87,7 @@ for (const [place, open] of Object.entries(places)) {
     await dialog.getByRole("button", { name: "Send", exact: true }).click();
 
     await expect.poll(() => calls.approve.length).toBe(1);
-    expect(calls.approve[0].profile).toEqual({ movie: { serverId: 0, profileId: 7, rootFolder: "/movies", is4k: false } });
+    await expect.poll(() => calls.approve[0]?.profile).toEqual({ movie: { serverId: 0, profileId: 7, rootFolder: "/movies", is4k: false } });
   });
 
   test(`on ${place}, a failed server lookup still asks before approving`, async ({ page }) => {

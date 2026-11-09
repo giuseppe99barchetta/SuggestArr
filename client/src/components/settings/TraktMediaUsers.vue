@@ -120,7 +120,7 @@
       <div v-if="traktUserCode" class="break-all rounded-ctl border border-good/20 bg-good/10 px-4 py-3 text-[0.9rem] leading-relaxed text-good">
         <i aria-hidden="true" class="fas fa-key mr-1.5"></i>
         Enter <strong>{{ traktUserCode }}</strong> at
-        <a :href="traktVerificationUrl" target="_blank" rel="noopener noreferrer" class="text-brand-ink no-underline hover:underline">{{ traktVerificationUrl }}</a>
+        <a :href="traktVerificationUrl" target="_blank" rel="noopener noreferrer" class="text-brand-ink underline underline-offset-2 hover:no-underline">{{ traktVerificationUrl }}</a>
         <p v-if="traktPopupBlocked" :class="[emptyClass, 'mt-3']">
           <i aria-hidden="true" class="fas fa-exclamation-circle"></i>
           Pop-up blocked. Open the link above manually to authorize.

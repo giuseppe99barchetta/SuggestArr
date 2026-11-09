@@ -8,22 +8,46 @@
       <router-link :to="{ name: 'DashboardTab', params: { tab: 'ai_provider' } }" class="inline-flex h-9 items-center rounded-[8px] bg-caution px-3.5 text-[13px] font-bold text-on-caution no-underline hover:text-on-caution">Set up AI provider</router-link>
     </div>
 
-    <form class="flex flex-col gap-4 rounded-card border border-edge bg-panel p-4 sm:p-5" :class="{ 'opacity-60': !llmAvailable }" @submit.prevent="runSearch">
+    <form class="flex flex-col gap-4 rounded-card border border-edge bg-panel p-4 sm:p-5" :class="{ 'opacity-90': !llmAvailable }" @submit.prevent="runSearch">
       <label class="flex flex-col gap-1.5">
         <span class="sr-only">What do you want to watch?</span>
-        <textarea
-          ref="queryInput"
-          v-model="query"
-          :disabled="!llmAvailable || isSearching"
-          rows="3"
-          placeholder="A psychological thriller from the 90s with a twist ending… or feel-good anime about friendship"
-          class="w-full resize-y rounded-ctl border border-edge-strong bg-canvas px-4 py-3 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-4 focus:border-brand-ink disabled:cursor-not-allowed"
-          @keydown.enter.exact.prevent="runSearch"
-        ></textarea>
+        <div class="relative">
+          <textarea
+            ref="queryInput"
+            v-model="query"
+            :disabled="!llmAvailable || isSearching"
+            rows="3"
+            :placeholder="showPeoplePicker ? 'A comedy we would both enjoy… type @ to mention someone' : 'A psychological thriller from the 90s with a twist ending… or feel-good anime about friendship'"
+            :role="showPeoplePicker ? 'combobox' : null"
+            :aria-autocomplete="showPeoplePicker ? 'list' : null"
+            :aria-expanded="showPeoplePicker ? (mentionOptions.length ? 'true' : 'false') : null"
+            :aria-controls="showPeoplePicker ? 'aiMentionList' : null"
+            :aria-activedescendant="mentionOptions.length ? 'aiMention' + mentionOptions[mentionIndex].id : null"
+            class="w-full resize-y rounded-ctl border border-edge-strong bg-canvas px-4 py-3 text-[15px] leading-relaxed text-ink placeholder:text-ink-4 focus:border-brand-ink disabled:cursor-not-allowed"
+            @keydown="onQueryKeydown"
+            @keyup="onQueryKeyup"
+            @input="updateMention"
+            @click="updateMention"
+            @blur="mention = null"
+          ></textarea>
+          <ul v-if="mentionOptions.length" id="aiMentionList" role="listbox" aria-label="People" class="absolute inset-x-0 top-full z-10 m-0 mt-1 max-h-48 list-none overflow-auto rounded-ctl border border-edge-strong bg-panel p-1 shadow-lg">
+            <li
+              v-for="(person, index) in mentionOptions"
+              :id="'aiMention' + person.id"
+              :key="person.id"
+              role="option"
+              :aria-selected="index === mentionIndex ? 'true' : 'false'"
+              class="cursor-pointer rounded-[8px] px-3 py-2 text-sm text-ink"
+              :class="index === mentionIndex ? 'bg-brand-soft text-brand-ink' : 'hover:bg-raised'"
+              @mousedown.prevent="chooseMention(person)"
+            >{{ person.name }}<span v-if="person.self" class="ml-1.5 text-xs text-ink-4">(you)</span></li>
+          </ul>
+        </div>
         <span class="self-end text-xs text-ink-4">Enter to search · Shift + Enter for a new line</span>
       </label>
 
       <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-3">
         <div role="radiogroup" aria-label="Media type" class="flex rounded-ctl border border-edge-strong bg-canvas p-1">
           <button
             v-for="option in mediaTypeOptions"
@@ -38,6 +62,25 @@
           >
             <i aria-hidden="true" :class="option.icon"></i>{{ option.label }}
           </button>
+        </div>
+        <template v-if="showPeoplePicker">
+        <div role="group" aria-labelledby="aiPeopleLabel" class="flex flex-wrap items-center gap-1 rounded-ctl border border-edge-strong bg-canvas p-1">
+          <span id="aiPeopleLabel" class="inline-flex h-9 items-center gap-2 px-2.5 text-[13px] font-semibold text-ink-4"><i aria-hidden="true" class="fas fa-user-friends"></i>For</span>
+          <button
+            v-for="person in people"
+            :key="person.id"
+            type="button"
+            :aria-pressed="isPersonSelected(person.id) ? 'true' : 'false'"
+            :disabled="isSearching || (!isPersonSelected(person.id) && selectedPeople.length >= maxPeople)"
+            class="inline-flex h-9 cursor-pointer items-center gap-2 rounded-[8px] border-0 px-3.5 text-[13px] font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            :class="isPersonSelected(person.id) ? 'bg-raised text-ink' : 'bg-transparent text-ink-3 hover:text-ink'"
+            @click="togglePerson(person.id)"
+          >
+            <i aria-hidden="true" :class="isPersonSelected(person.id) ? 'fas fa-check text-brand-ink' : 'fas fa-plus'" class="text-[11px]"></i>{{ person.self ? 'You' : person.name }}
+          </button>
+        </div>
+        <p role="status" aria-live="polite" class="m-0 text-xs text-ink-4">{{ peopleHint }}</p>
+        </template>
         </div>
         <button type="submit" class="inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-ctl border-0 bg-brand px-5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="!llmAvailable || isSearching || !query.trim()">
           <i aria-hidden="true" :class="isSearching ? 'fas fa-spinner fa-spin' : 'fas fa-magic'"></i>{{ isSearching ? 'Searching…' : 'Search' }}
@@ -81,7 +124,7 @@
               <span class="text-sm font-semibold text-ink">{{ toggle.title }}</span>
               <span class="text-xs leading-snug text-ink-4">{{ toggle.hint }}</span>
             </span>
-            <span class="relative inline-block h-[22px] w-10 shrink-0 rounded-full transition-colors" :class="$data[toggle.key] ? 'bg-brand' : 'bg-edge-strong'"><span class="absolute top-[3px] h-4 w-4 rounded-full bg-white transition-all" :class="$data[toggle.key] ? 'left-[21px]' : 'left-[3px]'"></span></span>
+            <ToggleTrack :on="!!($data[toggle.key])" />
           </button>
           <label class="flex items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3">
             <span class="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -141,8 +184,8 @@
             >
               <i aria-hidden="true" :class="requestButtonIcon(item)" class="mr-1"></i>{{ requestButtonLabel(item) }}
             </button>
-            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border hover:text-good" :class="feedbackOf(item) === 'like' ? 'border-good bg-good/15 text-good' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(item) === 'like' ? 'true' : 'false'" aria-label="More like this" title="More like this" @click="toggleFeedback(item, 'like')"><i aria-hidden="true" class="fas fa-thumbs-up"></i></button>
-            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border hover:text-bad" :class="feedbackOf(item) === 'dislike' ? 'border-bad bg-bad/15 text-bad' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(item) === 'dislike' ? 'true' : 'false'" aria-label="Don't show this again" title="Don't show this again" @click="toggleFeedback(item, 'dislike')"><i aria-hidden="true" class="fas fa-thumbs-down"></i></button>
+            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border hover:text-good" :class="feedbackOf(item) === 'interested' ? 'border-good bg-good/15 text-good' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(item) === 'interested' ? 'true' : 'false'" aria-label="Interested" title="Interested" @click="toggleFeedback(item, 'interested')"><i aria-hidden="true" class="fas fa-thumbs-up"></i></button>
+            <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border hover:text-bad" :class="feedbackOf(item) === 'not_interested' ? 'border-bad bg-bad/15 text-bad' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(item) === 'not_interested' ? 'true' : 'false'" aria-label="Not interested" title="Not interested" @click="toggleFeedback(item, 'not_interested')"><i aria-hidden="true" class="fas fa-thumbs-down"></i></button>
           </template>
         </MediaCard>
       </div>
@@ -240,22 +283,67 @@
           >
             <i aria-hidden="true" :class="requestButtonIcon(selectedItem)" class="mr-1"></i>{{ requestButtonLabel(selectedItem) }}
           </button>
-          <button type="button" class="h-10 w-10 cursor-pointer rounded-ctl border" :class="feedbackOf(selectedItem) === 'like' ? 'border-good bg-good/15 text-good' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(selectedItem) === 'like' ? 'true' : 'false'" aria-label="More like this" title="More like this" @click="toggleFeedback(selectedItem, 'like')"><i aria-hidden="true" class="fas fa-thumbs-up"></i></button>
-          <button type="button" class="h-10 w-10 cursor-pointer rounded-ctl border" :class="feedbackOf(selectedItem) === 'dislike' ? 'border-bad bg-bad/15 text-bad' : 'border-edge-strong bg-transparent text-ink-3'" :aria-pressed="feedbackOf(selectedItem) === 'dislike' ? 'true' : 'false'" aria-label="Don't show this again" title="Don't show this again" @click="toggleFeedback(selectedItem, 'dislike')"><i aria-hidden="true" class="fas fa-thumbs-down"></i></button>
         </div>
       </template>
+
+      <section aria-labelledby="ai-feedback-title" class="flex flex-col gap-3">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h3 id="ai-feedback-title" class="m-0 text-sm font-semibold text-ink-3">Good pick?</h3>
+          <div role="group" aria-labelledby="ai-feedback-title" class="flex flex-wrap gap-1.5">
+            <button
+              v-for="option in visibleFeedbackOptions"
+              :key="option.value"
+              type="button"
+              class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold disabled:opacity-50"
+              :class="feedbackOf(selectedItem) === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong bg-transparent text-ink-2 hover:border-ink-4'"
+              :aria-pressed="(feedbackOf(selectedItem) === option.value).toString()"
+              :disabled="feedbackSaving"
+              @click="toggleFeedback(selectedItem, option.value, { inModal: true })"
+            >
+              <span aria-hidden="true">{{ option.emoji }}</span>{{ option.label }}
+            </button>
+            <button v-if="!feedbackExpanded" type="button" class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-[13px] font-semibold text-ink-4 hover:text-ink" @click="feedbackExpanded = true">
+              More <i aria-hidden="true" class="fas fa-chevron-down text-[10px]"></i>
+            </button>
+          </div>
+          <p class="m-0 basis-full text-xs text-ink-4">Your answers steer future AI Search results and recommendations.</p>
+        </div>
+        <div v-if="feedbackOf(selectedItem)" class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p id="ai-feedback-reason" class="m-0 text-xs font-semibold text-ink-4">Mostly because of <span class="font-normal">(optional)</span></p>
+          <div role="group" aria-labelledby="ai-feedback-reason" class="flex flex-wrap gap-1.5">
+            <button
+              v-for="reason in feedbackReasons"
+              :key="reason.value"
+              type="button"
+              class="h-7 cursor-pointer rounded-full border px-2.5 text-xs font-semibold disabled:opacity-50"
+              :class="reasonOf(selectedItem) === reason.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge bg-transparent text-ink-3 hover:border-ink-4'"
+              :aria-pressed="(reasonOf(selectedItem) === reason.value).toString()"
+              :disabled="feedbackSaving"
+              @click="setFeedbackReason(selectedItem, reason.value)"
+            >
+              {{ reason.label }}
+            </button>
+          </div>
+        </div>
+      </section>
     </MediaDetailsModal>
   </div>
 </template>
 
 <script>
+import ToggleTrack from '@/components/common/ToggleTrack.vue';
 import PageHeader from '@/components/ui/PageHeader.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
-import { aiSearch, aiSearchRequest, aiSearchStatus, aiSearchInspiration, aiSearchLanguages, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear, aiSearchHistory, aiSearchHistoryImport, aiSearchHistoryClear } from '@/api/api.js';
+import { aiSearch, aiSearchPeople, aiSearchRequest, aiSearchStatus, aiSearchInspiration, aiSearchLanguages, aiSearchFeedbackList, aiSearchFeedbackSet, aiSearchFeedbackDelete, aiSearchSeenClear, aiSearchHistory, aiSearchHistoryImport, aiSearchHistoryClear } from '@/api/api.js';
 import { useAuth } from '@/composables/useAuth.js';
 import { languageOptions } from '@/utils/titleLanguage.js';
+import { FEEDBACK_REASONS, visibleFeedbackOptions } from '@/utils/suggestionFeedback.js';
+import { LIMIT_MESSAGE, MAX_PEOPLE, addSelected, applyMention, filterPeople, findMentionQuery, toggleSelected } from '@/utils/aiSearchMentions.js';
+
+// Answers that mean "not this one": the card leaves the results once they are chosen.
+const HIDING_FEEDBACK = ['not_interested', 'already_seen', 'seen_liked', 'seen_disliked', 'too_similar'];
 
 const MEDIA_TYPE_OPTIONS = [
   { value: 'movie', label: 'Movies', icon: 'fas fa-film' },
@@ -297,7 +385,7 @@ function readOriginalLanguage(key) {
 
 export default {
   name: 'AiSearchPage',
-  components: { PageHeader, MediaCard, MediaGridSkeleton, MediaDetailsModal },
+  components: { ToggleTrack, PageHeader, MediaCard, MediaGridSkeleton, MediaDetailsModal },
   // The dashboard shell passes settings props to every tab; this page does not use them.
   inheritAttrs: false,
 
@@ -307,6 +395,13 @@ export default {
     const languageKey = `suggestarr_ai_search_language:${userId ?? 'local'}`;
     return {
       query: '',
+      // Who the search is for: everyone listed here may be mentioned with @ or picked as a chip.
+      people: [],
+      selectedPeople: [],
+      peopleNotice: '',
+      maxPeople: MAX_PEOPLE,
+      mention: null,
+      mentionIndex: 0,
       mediaTypeOptions: MEDIA_TYPE_OPTIONS,
       toggles: TOGGLES,
       moods: MOODS,
@@ -336,6 +431,9 @@ export default {
       excludeWatched: true,
       maxResults: 12,
       feedbackMap: {},
+      feedbackExpanded: false,
+      feedbackSaving: false,
+      feedbackReasons: FEEDBACK_REASONS,
       excludeSeen: localStorage.getItem('suggestarr_ai_exclude_seen') === 'true',
       isResettingSeen: false,
       // Recent searches live on the server; historyKey only finds older browser-stored ones to import.
@@ -358,6 +456,19 @@ export default {
   },
 
   computed: {
+    showPeoplePicker() {
+      return this.people.length > 1;
+    },
+    mentionOptions() {
+      return this.mention && this.showPeoplePicker && !this.isSearching ? filterPeople(this.people, this.mention.query) : [];
+    },
+    peopleHint() {
+      if (this.peopleNotice) return this.peopleNotice;
+      return this.selectedPeople.length >= this.maxPeople ? LIMIT_MESSAGE : '';
+    },
+    visibleFeedbackOptions() {
+      return visibleFeedbackOptions(this.feedbackExpanded, this.feedbackOf(this.selectedItem || {}));
+    },
     originalLanguageLabel() {
       if (this.originalLanguage === 'any') return 'Any language';
       return this.originalLanguageOptions.find(option => option.value === this.originalLanguage)?.label || this.originalLanguage.toUpperCase();
@@ -472,39 +583,65 @@ export default {
       }
     },
 
-    feedbackOf(item) {
-      return this.feedbackMap[item.media_type + ':' + item.id] || null;
+    reasonOf(item) {
+      return this.feedbackMap[item.media_type + ':' + item.id]?.reason_type || null;
     },
 
-    async toggleFeedback(item, kind) {
+    feedbackOf(item) {
+      return this.feedbackMap[item.media_type + ':' + item.id]?.feedback || null;
+    },
+
+    /** Take a rated-away title out of the results. */
+    dropResult(item) {
+      this.results = this.results.filter(r => !(r.id === item.id && r.media_type === item.media_type));
+    },
+
+    /**
+     * Save, change or clear (same answer twice) the user's answer for a result.
+     * Hiding answers drop the card straight away from the grid; from the modal they wait
+     * until it closes so the reason chips can still be picked.
+     */
+    async toggleFeedback(item, kind, { inModal = false } = {}) {
       const key = item.media_type + ':' + item.id;
       const current = this.feedbackMap[key] || null;
+      this.feedbackSaving = true;
       try {
-        if (current === kind) {
+        if (current?.feedback === kind) {
           await aiSearchFeedbackDelete(item.id, item.media_type);
           const next = { ...this.feedbackMap };
           delete next[key];
           this.feedbackMap = next;
         } else {
           const year = this.releaseYear(item);
-          await aiSearchFeedbackSet(
-            item.id,
-            item.media_type,
-            kind,
-            item.title || null,
-            year ? Number(year) : null,
-          );
-          this.feedbackMap = { ...this.feedbackMap, [key]: kind };
-          if (kind === 'dislike') {
-            this.results = this.results.filter(r => !(r.id === item.id && r.media_type === item.media_type));
-            if (this.selectedItem && this.selectedItem.id === item.id && this.selectedItem.media_type === item.media_type) {
-              this.closeModal();
-            }
+          await aiSearchFeedbackSet(item.id, item.media_type, kind, item.title || null, year ? Number(year) : null);
+          this.feedbackMap = { ...this.feedbackMap, [key]: { feedback: kind, reason_type: null } };
+          if (!inModal && HIDING_FEEDBACK.includes(kind)) {
+            this.dropResult(item);
+            if (this.selectedItem?.id === item.id && this.selectedItem.media_type === item.media_type) this.closeModal();
           }
         }
       } catch (err) {
-        const msg = err.response?.data?.message || err.message || 'Failed to save feedback.';
-        this.errorMessage = msg;
+        this.errorMessage = err.response?.data?.message || err.message || 'Failed to save feedback.';
+      } finally {
+        this.feedbackSaving = false;
+      }
+    },
+
+    /** Add or remove the optional "mostly because of" reason on the saved answer. */
+    async setFeedbackReason(item, reasonType) {
+      const key = item.media_type + ':' + item.id;
+      const current = this.feedbackMap[key];
+      if (!current) return;
+      const next = current.reason_type === reasonType ? null : reasonType;
+      this.feedbackSaving = true;
+      try {
+        const year = this.releaseYear(item);
+        await aiSearchFeedbackSet(item.id, item.media_type, current.feedback, item.title || null, year ? Number(year) : null, next);
+        this.feedbackMap = { ...this.feedbackMap, [key]: { ...current, reason_type: next } };
+      } catch (err) {
+        this.errorMessage = err.response?.data?.message || err.message || 'Failed to save feedback.';
+      } finally {
+        this.feedbackSaving = false;
       }
     },
 
@@ -513,7 +650,7 @@ export default {
         const res = await aiSearchFeedbackList();
         const map = {};
         for (const row of res.data.feedback || []) {
-          map[row.media_type + ':' + row.tmdb_id] = row.feedback;
+          map[row.media_type + ':' + row.tmdb_id] = { feedback: row.feedback, reason_type: row.reason_type || null };
         }
         this.feedbackMap = map;
       } catch {
@@ -530,6 +667,88 @@ export default {
       }
     },
 
+    async loadPeople() {
+      try {
+        const res = await aiSearchPeople();
+        this.people = res.data?.people || [];
+      } catch {
+        this.people = []; // the page works as a single-person search without the picker
+      }
+      const own = this.people.find(person => person.self);
+      const stillThere = this.selectedPeople.filter(id => this.people.some(person => person.id === id));
+      this.selectedPeople = stillThere.length ? stillThere : own ? [own.id] : [];
+    },
+
+    isPersonSelected(id) {
+      return this.selectedPeople.includes(id);
+    },
+
+    togglePerson(id) {
+      const { ids, reason } = toggleSelected(this.selectedPeople, id, this.maxPeople);
+      this.selectedPeople = ids;
+      this.peopleNotice = reason === 'last' ? 'Keep at least one person selected.' : reason === 'limit' ? LIMIT_MESSAGE : '';
+    },
+
+    // The "@name" being typed at the caret opens the suggestion list.
+    updateMention() {
+      const field = this.$refs.queryInput;
+      this.mention = this.showPeoplePicker && field ? findMentionQuery(field.value, field.selectionStart) : null;
+      this.mentionIndex = 0;
+    },
+
+    onQueryKeyup(event) {
+      if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape'].includes(event.key)) return;
+      this.updateMention();
+    },
+
+    onQueryKeydown(event) {
+      if (event.isComposing) return;
+      const options = this.mentionOptions;
+      if (options.length) {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          const step = event.key === 'ArrowDown' ? 1 : options.length - 1;
+          this.mentionIndex = (this.mentionIndex + step) % options.length;
+          return;
+        }
+        if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab') {
+          event.preventDefault();
+          this.chooseMention(options[this.mentionIndex]);
+          return;
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          this.mention = null;
+          return;
+        }
+      }
+      if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        event.preventDefault();
+        this.runSearch();
+      }
+    },
+
+    chooseMention(person) {
+      const field = this.$refs.queryInput;
+      const mention = this.mention;
+      this.mention = null;
+      if (!person || !mention || !field) return;
+      const { ids, reason } = addSelected(this.selectedPeople, person.id, this.maxPeople);
+      if (reason === 'limit') {
+        // Nothing is inserted: the text must not name someone the search is not for.
+        this.peopleNotice = LIMIT_MESSAGE;
+        return;
+      }
+      this.selectedPeople = ids;
+      this.peopleNotice = '';
+      const next = applyMention(field.value, mention, field.selectionStart, person.name);
+      this.query = next.text;
+      this.$nextTick(() => {
+        field.focus();
+        field.setSelectionRange(next.caret, next.caret);
+      });
+    },
+
     async runSearch() {
       if (!this.query.trim() || this.isSearching || !this.llmAvailable) return;
 
@@ -540,7 +759,7 @@ export default {
       this.queryInterpretation = null;
 
       try {
-        const res = await aiSearch(this.query.trim(), this.mediaType, [], this.maxResults, this.useHistory, this.excludeWatched, this.excludeSeen, this.originalLanguage);
+        const res = await aiSearch(this.query.trim(), this.mediaType, [], this.maxResults, this.useHistory, this.excludeWatched, this.excludeSeen, this.originalLanguage, this.showPeoplePicker ? this.selectedPeople : []);
         const data = res.data;
 
         if (data.status === 'error') {
@@ -555,6 +774,8 @@ export default {
       } catch (err) {
         const msg = err.response?.data?.message || err.message || 'Unexpected error.';
         this.errorMessage = msg;
+        // Someone may have just opted out: show who is still available.
+        if (err.response?.status === 403) this.loadPeople();
       } finally {
         this.isSearching = false;
       }
@@ -624,7 +845,10 @@ export default {
     },
 
     closeModal() {
+      const item = this.selectedItem;
       this.selectedItem = null;
+      this.feedbackExpanded = false;
+      if (item && HIDING_FEEDBACK.includes(this.feedbackOf(item))) this.dropResult(item);
     },
 
     releaseYear(item) {
@@ -676,6 +900,7 @@ export default {
     this.loadFeedback();
     this.loadInspiration();
     this.loadHistory();
+    this.loadPeople();
   },
 };
 </script>

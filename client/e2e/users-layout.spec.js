@@ -141,7 +141,7 @@ test('User controls still update status, role, permissions and media links', asy
   const viewer = page.getByRole('article', { name: 'Account viewer', exact: true });
   await viewer.getByRole('button', { name: 'Deactivate viewer', exact: true }).click();
   await expect(viewer.getByRole('button', { name: 'Activate viewer', exact: true })).toBeVisible();
-  expect(mutations[0]).toMatchObject({ method: 'PATCH', path: '/api/users/2', body: { is_active: false } });
+  await expect.poll(() => mutations[0]).toMatchObject({ method: 'PATCH', path: '/api/users/2', body: { is_active: false } });
   await viewer.getByRole('button', { name: 'Edit permissions for viewer', exact: true }).click();
   const permissions = page.getByRole('dialog', { name: 'Permissions', exact: true });
   await expect(permissions).toBeVisible();
@@ -149,8 +149,8 @@ test('User controls still update status, role, permissions and media links', asy
   await expect(permissions.getByText('Visible pages')).toHaveCount(0);
   await permissions.getByRole('button', { name: 'Save permissions' }).click();
   await expect(permissions).toHaveCount(0);
-  expect(mutations[1]).toMatchObject({ method: 'PATCH', path: '/api/users/2', body: { role: 'admin' } });
-  expect(mutations[2].body.allowed_tabs).toEqual(expect.arrayContaining(['requests', 'ai_search', 'profile']));
+  await expect.poll(() => mutations[1]).toMatchObject({ method: 'PATCH', path: '/api/users/2', body: { role: 'admin' } });
+  await expect.poll(() => mutations[2]?.body.allowed_tabs).toEqual(expect.arrayContaining(['requests', 'ai_search', 'profile']));
   await expect(viewer.getByText('Administrator', { exact: true })).toBeVisible();
   await expect(viewer.getByText('All pages', { exact: true })).toBeVisible();
   await viewer.getByRole('button', { name: 'Assign Jellyfin account to viewer' }).click();
@@ -159,7 +159,7 @@ test('User controls still update status, role, permissions and media links', asy
   await link.getByRole('button', { name: 'Save link', exact: true }).click();
   await expect(link).toHaveCount(0);
   await expect(viewer.getByText('Cinema viewer', { exact: true })).toBeVisible();
-  expect(mutations[3]).toMatchObject({ path: '/api/users/2/link/jellyfin', body: { external_user_id: 'media-2', external_username: 'Cinema viewer' } });
+  await expect.poll(() => mutations[3]).toMatchObject({ path: '/api/users/2/link/jellyfin', body: { external_user_id: 'media-2', external_username: 'Cinema viewer' } });
   await viewer.getByRole('button', { name: 'Assign Jellyfin account to viewer' }).click();
   await expect(page.getByRole('dialog').getByRole('combobox').locator('option:checked')).toHaveText('Cinema viewer');
 });
@@ -184,7 +184,7 @@ test('Own role and the last admin are locked, overview chips filter, list view k
   const viewer = page.getByRole('article', { name: 'Account viewer', exact: true });
   await expect(viewer.getByText('never signed in')).toBeVisible();
   await viewer.getByRole('button', { name: 'Deactivate viewer', exact: true }).click();
-  expect(mutations[0]).toMatchObject({ method: 'PATCH', path: '/api/users/2', body: { is_active: false } });
+  await expect.poll(() => mutations[0]).toMatchObject({ method: 'PATCH', path: '/api/users/2', body: { is_active: false } });
   await page.reload();
   await expect(page.getByRole('button', { name: 'List view', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
@@ -193,7 +193,7 @@ test('Self-registration switch saves sign-up pages', async ({ page }) => {
   const { mutations } = await openPreview(page, 'Users');
   await page.getByRole('switch', { name: /Allow sign-ups/ }).click();
   await expect(page.getByRole('switch', { name: /Allow sign-ups/ })).toHaveAttribute('aria-checked', 'true');
-  expect(mutations[0]).toMatchObject({ path: '/api/config/section/advanced', body: { ALLOW_REGISTRATION: true, REGISTRATION_DEFAULT_TABS: 'requests,jobs,profile' } });
+  await expect.poll(() => mutations[0]).toMatchObject({ path: '/api/config/section/advanced', body: { ALLOW_REGISTRATION: true, REGISTRATION_DEFAULT_TABS: 'requests,jobs,profile' } });
   await page.getByRole('group', { name: 'Pages for new accounts' }).getByLabel('Jobs').uncheck();
   await expect.poll(() => mutations[1]?.body.REGISTRATION_DEFAULT_TABS).toBe('requests,profile');
 });

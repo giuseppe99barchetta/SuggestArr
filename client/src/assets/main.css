@@ -53,7 +53,7 @@
   --color-ink: #151926;
   --color-ink-2: #343b4f;
   --color-ink-3: #555e72;
-  --color-ink-4: #656e82;
+  --color-ink-4: #5d6679;
   --color-brand: #6a5ae0;
   --color-brand-soft: #ebe8ff;
   --color-brand-ink: #5141cf;
@@ -144,6 +144,18 @@
   ::selection { @apply bg-brand/20 text-ink; }
   *:focus-visible { @apply outline-2 outline-offset-2 outline-brand; }
 
+  /* Reduced motion: stop movement (transforms, sliding, entrance animations) but keep colour and
+     opacity fades. Spinners stay: they show that something is loading. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      scroll-behavior: auto !important;
+      transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, outline-color !important;
+    }
+    *:not(.animate-spin), *:not(.animate-spin)::before, *:not(.animate-spin)::after {
+      animation: none !important;
+    }
+  }
+
   /* "Disable visual effects" setting: DashboardPage toggles this class on <body>. */
   body.no-blur * { backdrop-filter: none !important; }
 }
@@ -225,7 +237,7 @@ select:disabled { cursor: not-allowed; }
 /* Form controls shared by the settings screens. */
 @layer components {
   .ui-input {
-    @apply h-[42px] w-full min-w-0 rounded-ctl border border-edge-strong bg-canvas px-3 text-sm font-normal text-ink outline-none placeholder:text-ink-4 focus:border-brand-ink disabled:opacity-60;
+    @apply h-[42px] w-full min-w-0 rounded-ctl border border-edge-strong bg-canvas px-3 text-sm font-normal text-ink placeholder:text-ink-4 focus:border-brand-ink disabled:opacity-60;
   }
   .ui-label {
     @apply flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2;

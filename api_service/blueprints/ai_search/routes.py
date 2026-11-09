@@ -11,13 +11,16 @@ from flask import Blueprint, g, jsonify, request
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_tab
 from api_service.config.logger_manager import LoggerManager
+from api_service.db.components.suggestion_feedback_mixin import FEEDBACK_REASONS, FEEDBACK_VALUES
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.ai_search.ai_search_service import AiSearchService
 from api_service.services.config_service import ConfigService
-from api_service.services.llm.llm_service import get_llm_client
+from api_service.services.llm.llm_service import MAX_GROUP_PEOPLE, get_llm_client
 
 ai_search_bp = Blueprint("ai_search", __name__)
 logger = LoggerManager.get_logger("AiSearchRoute")
+# Legacy global like/dislike rows, read as the equivalent personal rating.
+_LEGACY_FEEDBACK = {"like": "interested", "dislike": "not_interested"}
 _METADATA_FIELDS = ("title", "name", "overview", "release_date", "poster_path", "backdrop_path",
                     "logo_path", "rating", "votes", "genre_ids", "origin_country")
 
@@ -25,7 +28,7 @@ _METADATA_FIELDS = ("title", "name", "overview", "release_date", "poster_path", 
 @ai_search_bp.before_request
 def require_ai_search_page():
     """Searching and requesting belong to the AI Search page; personal history stays open."""
-    if request.endpoint in ("ai_search.ai_search_query", "ai_search.ai_search_request"):
+    if request.endpoint in ("ai_search.ai_search_query", "ai_search.ai_search_request", "ai_search.ai_search_people"):
         return require_tab("ai_search")
     return None
 
@@ -47,6 +50,71 @@ def _verified_media_profile(db, provider):
     return next((profile for profile in db.get_user_media_profiles(user_id)
                  if profile.get("provider") == provider and profile.get("verified")
                  and profile.get("external_user_id")), None)
+
+
+def _configured_provider(config=None):
+    """Lower-cased media server AI Search reads history from."""
+    config = config if config is not None else ConfigService.get_runtime_config()
+    return str(config.get("SELECTED_SERVICE") or "").lower()
+
+
+@ai_search_bp.route("/people", methods=["GET"])
+@limiter.limit("30 per minute")
+def ai_search_people():
+    """People a search can be for: the caller first, then others who allow it.
+
+    Only display names are returned, never media-server ids. Others need a verified link to the
+    configured media server (the proof AI Search already requires before reading anyone's
+    history) and must not have opted out in their profile.
+    """
+    user_id = _current_user_id()
+    if user_id is None:
+        return jsonify({"status": "success", "people": []}), 200
+    try:
+        others = [person for person in DatabaseManager().list_ai_search_people(_configured_provider())
+                  if person["id"] != user_id]
+        me = {"id": user_id, "name": g.current_user.get("username") or "You", "self": True}
+        return jsonify({"status": "success", "people": [me] + [
+            {"id": person["id"], "name": person["username"], "self": False} for person in others]}), 200
+    except Exception:
+        logger.warning("Could not list people for AI Search", exc_info=True)
+        return jsonify({"status": "error", "message": "Could not load people"}), 503
+
+
+def _resolve_people(db, raw_ids, provider):
+    """Turn requested account ids into the people a search is for, or an error.
+
+    The caller is always allowed (ratings and, when linked, history); anyone else must be
+    in the opted-in, verified-link list. Nothing here trusts a name or media id from the client.
+
+    :return: ``(people, None)`` or ``(None, (message, status))``.
+    """
+    ids = []
+    for value in raw_ids:
+        if isinstance(value, bool) or not isinstance(value, int):
+            return None, ("people must be a list of account ids", 400)
+        if value not in ids:
+            ids.append(value)
+    if len(ids) > MAX_GROUP_PEOPLE:
+        return None, (f"You can pick up to {MAX_GROUP_PEOPLE} people", 400)
+    user_id = _current_user_id()
+    if user_id is None:
+        return None, ("Sign in to search for people", 403)
+    available = {person["id"]: person for person in db.list_ai_search_people(provider)}
+    people = []
+    for account_id in ids:
+        if account_id == user_id:
+            profile = _verified_media_profile(db, provider)
+            people.append({"user_id": user_id, "name": g.current_user.get("username") or "You",
+                           "external_user_id": str(profile["external_user_id"]) if profile else None,
+                           "requester": True})
+        elif account_id in available:
+            person = available[account_id]
+            people.append({"user_id": account_id, "name": person["username"],
+                           "external_user_id": person["external_user_id"], "requester": False})
+        else:
+            return None, ("A selected person is not available", 403)
+    return people, None
 
 
 @ai_search_bp.route("/inspiration", methods=["GET"])
@@ -83,6 +151,9 @@ async def ai_search_query():
         media_type (str): 'movie', 'tv', or 'both'. Defaults to 'movie'.
         user_ids (list): Admin-only explicit media-server IDs. Otherwise history
             uses the caller's verified link to the configured provider.
+        people (list): SuggestArr account ids the search is for (the caller and/or others who
+            allow it, at most 4). When given, each person's own history and ratings are used and
+            ``user_ids`` is ignored; omitted keeps the single-user behaviour.
         max_results (int): Maximum results to return (default 12).
         original_language (str): 'auto' (from prompt), 'any', or an ISO 639-1 code.
 
@@ -111,6 +182,9 @@ async def ai_search_query():
         user_ids = data.get("user_ids") or []
         if not isinstance(user_ids, list):
             return jsonify({"status": "error", "message": "user_ids must be a list"}), 400
+        raw_people = data.get("people")
+        if raw_people is not None and not isinstance(raw_people, list):
+            return jsonify({"status": "error", "message": "people must be a list"}), 400
         max_results = int(data.get("max_results") or 12)
         use_history = data.get("use_history", True)
         if not isinstance(use_history, bool):
@@ -136,11 +210,16 @@ async def ai_search_query():
 
         service = AiSearchService()
         user = getattr(g, "current_user", None)
-        if not (user and user.get("role") == "admin" and user_ids):
+        people = None
+        if raw_people:
+            people, failure = _resolve_people(DatabaseManager(), raw_people, _configured_provider(service.config))
+            if failure:
+                return jsonify({"status": "error", "message": failure[0]}), failure[1]
+        elif not (user and user.get("role") == "admin" and user_ids):
             provider = str(service.config.get("SELECTED_SERVICE") or "").lower()
             profile = _verified_media_profile(DatabaseManager(), provider) if _current_user_id() is not None else None
             user_ids = [str(profile["external_user_id"])] if profile else []
-        if not user_ids:
+        if not people and not user_ids:
             use_history = False
 
         result = await service.search(
@@ -152,6 +231,8 @@ async def ai_search_query():
             exclude_watched=exclude_watched,
             exclude_seen=exclude_seen,
             original_language=original_language,
+            feedback_scope=_feedback_scope(DatabaseManager()),
+            people=people,
         )
 
         user_id = _current_user_id()
@@ -312,12 +393,32 @@ def ai_search_status():
     }), 200
 
 
+def _feedback_scope(db):
+    """``(user_id, media_user_id)`` that owns the caller's ratings, taken from the session.
+
+    The media profile is never read from the request body: it comes from the caller's
+    verified link, or is empty, so one user cannot rate on behalf of another profile.
+    """
+    user_id = _current_user_id()
+    if user_id is None:
+        return None
+    provider = str(ConfigService.get_runtime_config().get("SELECTED_SERVICE") or "").lower()
+    profile = _verified_media_profile(db, provider)
+    return user_id, str(profile["external_user_id"]) if profile else ""
+
+
 @ai_search_bp.route("/feedback", methods=["GET"])
 def ai_search_feedback_list():
-    """Return all stored like/dislike feedback so the frontend can render state."""
+    """Return the caller's ratings (and legacy global likes/dislikes) so the page can show state."""
     try:
-        rows = DatabaseManager().get_all_ai_feedback()
-        return jsonify({"status": "success", "feedback": rows}), 200
+        db = DatabaseManager()
+        scope = _feedback_scope(db)
+        rows = {(r["media_type"], str(r["tmdb_id"])): {"feedback": _LEGACY_FEEDBACK[r["feedback"]]}
+                for r in db.get_all_ai_feedback() if r["feedback"] in _LEGACY_FEEDBACK}
+        for r in (db.list_media_feedback(*scope) if scope else []):
+            rows[(r["media_type"], r["tmdb_id"])] = r
+        return jsonify({"status": "success", "feedback": [
+            {**row, "media_type": mt, "tmdb_id": tid} for (mt, tid), row in rows.items()]}), 200
     except Exception as exc:
         logger.error("Failed to list ai feedback: %s", exc)
         return jsonify({"status": "error", "message": "An internal error occurred"}), 500
@@ -326,12 +427,14 @@ def ai_search_feedback_list():
 @ai_search_bp.route("/feedback", methods=["POST"])
 @limiter.limit("60 per minute")
 def ai_search_feedback_set():
-    """Record a like or dislike for an AI search result.
+    """Record the caller's rating of an AI search result.
 
     Request body:
         tmdb_id (int|str): TMDB id.
         media_type (str): 'movie' or 'tv'.
-        feedback (str): 'like' or 'dislike'.
+        feedback (str): any value the Requests page offers (interested, not_interested,
+            already_seen, seen_liked, seen_disliked, too_similar, save_for_later).
+        reason_type (str, optional): genre, provider, content, title or other.
         title (str, optional)
         year (int, optional)
     """
@@ -340,7 +443,7 @@ def ai_search_feedback_set():
         tmdb_id = data.get("tmdb_id")
         media_type = data.get("media_type")
         feedback = data.get("feedback")
-        title = data.get("title")
+        reason_type = data.get("reason_type")
         year = data.get("year")
         if year is not None:
             try:
@@ -351,10 +454,20 @@ def ai_search_feedback_set():
             return jsonify({"status": "error", "message": "tmdb_id is required"}), 400
         if media_type not in ("movie", "tv"):
             return jsonify({"status": "error", "message": "media_type must be 'movie' or 'tv'"}), 400
-        if feedback not in ("like", "dislike"):
-            return jsonify({"status": "error", "message": "feedback must be 'like' or 'dislike'"}), 400
-        DatabaseManager().set_ai_feedback(str(tmdb_id), media_type, feedback, title=title, year=year)
-        return jsonify({"status": "success"}), 200
+        if feedback not in FEEDBACK_VALUES:
+            return jsonify({"status": "error", "message": "Invalid feedback value"}), 400
+        if reason_type is not None and reason_type not in FEEDBACK_REASONS:
+            return jsonify({"status": "error", "message": "Invalid feedback reason"}), 400
+        title = data.get("title")
+        if title is not None and not isinstance(title, str):
+            return jsonify({"status": "error", "message": "title must be a string"}), 400
+        db = DatabaseManager()
+        scope = _feedback_scope(db)
+        if not scope:
+            return jsonify({"status": "error", "message": "Sign in to rate results"}), 403
+        saved = db.set_media_feedback(*scope, str(tmdb_id), media_type, feedback, reason_type, None, title, year)
+        db.delete_ai_feedback(str(tmdb_id), media_type)  # the new rating replaces a legacy one
+        return jsonify({"status": "success", "feedback": saved}), 200
     except Exception as exc:
         logger.error("Failed to set ai feedback: %s", exc)
         return jsonify({"status": "error", "message": "An internal error occurred"}), 500
@@ -363,19 +476,22 @@ def ai_search_feedback_set():
 @ai_search_bp.route("/feedback", methods=["DELETE"])
 @limiter.limit("60 per minute")
 def ai_search_feedback_delete():
-    """Remove feedback for a TMDB item."""
+    """Remove the caller's rating (and any legacy like/dislike) for a TMDB item."""
     try:
         data = request.json or {}
         tmdb_id = data.get("tmdb_id")
         media_type = data.get("media_type")
         if not tmdb_id or media_type not in ("movie", "tv"):
             return jsonify({"status": "error", "message": "tmdb_id and media_type required"}), 400
-        DatabaseManager().delete_ai_feedback(str(tmdb_id), media_type)
+        db = DatabaseManager()
+        scope = _feedback_scope(db)
+        if scope:
+            db.clear_media_feedback(*scope, str(tmdb_id), media_type)
+        db.delete_ai_feedback(str(tmdb_id), media_type)
         return jsonify({"status": "success"}), 200
     except Exception as exc:
         logger.error("Failed to delete ai feedback: %s", exc)
         return jsonify({"status": "error", "message": "An internal error occurred"}), 500
-
 
 
 @ai_search_bp.route("/seen", methods=["DELETE"])

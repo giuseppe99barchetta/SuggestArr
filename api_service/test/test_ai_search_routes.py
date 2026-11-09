@@ -234,3 +234,14 @@ class TestAiSearchRequest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(status, 500)
         self.assertNotIn("internal", response.get_data(as_text=True))
+
+
+class TestAiSearchFeedbackValidation(unittest.IsolatedAsyncioTestCase):
+    async def test_feedback_values_match_requests_page_and_unknown_is_rejected(self):
+        from flask import Flask
+        from api_service.blueprints.ai_search import routes
+        app = Flask(__name__)
+        with app.test_request_context('/feedback', method='POST',
+                                      json={'tmdb_id': 1, 'media_type': 'movie', 'feedback': 'loved_it'}):
+            response, status = routes.ai_search_feedback_set.__wrapped__() if hasattr(routes.ai_search_feedback_set, '__wrapped__') else routes.ai_search_feedback_set()
+        self.assertEqual(status, 400)

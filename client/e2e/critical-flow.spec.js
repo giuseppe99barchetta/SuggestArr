@@ -538,14 +538,14 @@ test("a user sets, tests and turns off their personal notifications", async ({ p
   await card.getByRole("textbox", { name: /Topic URL/ }).fill("https://ntfy.sh/giuseppe");
   await card.getByRole("button", { name: "Save" }).click();
   await expect(card.getByRole("status")).toContainText("Saved");
-  expect(saved).toEqual({ format: "ntfy", url: "https://ntfy.sh/giuseppe" });
+  await expect.poll(() => saved).toEqual({ format: "ntfy", url: "https://ntfy.sh/giuseppe" });
 
   await card.getByRole("button", { name: "Send test" }).click();
   await expect(card.getByRole("status")).toContainText("Test sent");
   await card.getByRole("button", { name: "Turn off" }).click();
   await expect(card.getByRole("status")).toContainText("turned off");
   await expect(card.getByRole("button", { name: "Send test" })).toHaveCount(0);
-  expect(calls).toContain("POST /api/users/me/notifications/test");
+  await expect.poll(() => calls).toContain("POST /api/users/me/notifications/test");
 });
 
 test("a long Ready to watch row pages by whole cards with arrows instead of a scrollbar", async ({ page }, testInfo) => {

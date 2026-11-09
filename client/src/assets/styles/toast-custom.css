@@ -16,7 +16,9 @@
   font-size: 0.875rem !important;
   min-width: 280px !important;
   border: 1px solid !important;
-  transition: all 200ms ease !important;
+  transition-property: opacity, transform !important;
+  transition-duration: 200ms !important;
+  transition-timing-function: ease !important;
 }
 
 /* Toast Success */
@@ -109,7 +111,9 @@
 /* Animations */
 .v-toast__item.v-toast--fade-enter-active,
 .v-toast__item.v-toast--fade-leave-active {
-  transition: all 200ms ease !important;
+  transition-property: opacity, transform !important;
+  transition-duration: 200ms !important;
+  transition-timing-function: ease !important;
 }
 
 .v-toast__item.v-toast--fade-enter-from {

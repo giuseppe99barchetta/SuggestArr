@@ -66,7 +66,7 @@ class AiSearchMixin:
         """
         if feedback not in ('like', 'dislike'):
             raise ValueError("feedback must be 'like' or 'dislike'")
-        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if self.db_type in ('mysql', 'mariadb'):
@@ -82,7 +82,7 @@ class AiSearchMixin:
             conn.commit()
 
     def delete_ai_feedback(self, tmdb_id: str, media_type: str) -> None:
-        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -109,7 +109,7 @@ class AiSearchMixin:
             return out
 
     def get_ai_dislike_ids(self, media_type: str = None) -> set:
-        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if media_type:
@@ -123,7 +123,7 @@ class AiSearchMixin:
 
     def get_ai_likes(self, media_type: str = None):
         """Return liked items as list of {title, year, media_type} dicts."""
-        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if media_type:
@@ -136,7 +136,7 @@ class AiSearchMixin:
             return [{'title': r[0], 'year': r[1], 'media_type': r[2]} for r in cursor.fetchall()]
 
     def get_ai_dislikes(self, media_type: str = None):
-        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if media_type:
@@ -152,7 +152,7 @@ class AiSearchMixin:
         """Record a batch of (tmdb_id, media_type) tuples as already-recommended."""
         if not items:
             return
-        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         rows = [(str(t), m) for t, m in items if t]
         if not rows:
             return
@@ -170,8 +170,42 @@ class AiSearchMixin:
                 )
             conn.commit()
 
+    def get_titles_for_tmdb_ids(self, media_type: str, ids, limit: int = 150) -> List[Dict[str, Any]]:
+        """Return ``{'title', 'year'}`` for the ids whose title is cached in ``metadata``.
+
+        Only titles actually known are returned: ids with no cached row, a NULL/empty title
+        or the ``'Unknown Title'`` placeholder written by ``save_metadata`` are skipped, so
+        the AI is never told to avoid a title we cannot name.
+
+        :param media_type: 'movie' or 'tv'; ``metadata`` is looked up per type.
+        :param ids: Iterable of TMDB ids.
+        :param limit: Stop once this many titles were found.
+        """
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        wanted = sorted({str(i) for i in ids if i})
+        found: List[Dict[str, Any]] = []
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            for start in range(0, len(wanted), 500):
+                if len(found) >= limit:
+                    break
+                chunk = wanted[start:start + 500]
+                marks = ','.join([placeholder] * len(chunk))
+                cursor.execute(
+                    f"SELECT title, release_date FROM metadata "
+                    f"WHERE media_type = {placeholder} AND media_id IN ({marks})",
+                    (media_type, *chunk),
+                )
+                for title, released in cursor.fetchall():
+                    title = (title or '').strip()
+                    if not title or title == 'Unknown Title':
+                        continue
+                    year = str(released or '')[:4]
+                    found.append({'title': title, 'year': int(year) if year.isdigit() else None})
+        return found[:limit]
+
     def get_ai_seen_ids(self, media_type: str = None) -> set:
-        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if media_type:
@@ -184,7 +218,7 @@ class AiSearchMixin:
             return {str(r[0]) for r in cursor.fetchall()}
 
     def clear_ai_seen(self, media_type: str = None) -> int:
-        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         with self.get_connection() as conn:
             cursor = conn.cursor()
             if media_type:
@@ -270,7 +304,7 @@ class AiSearchMixin:
             'title-desc': 'm.title DESC',
         }
         order_by_clause = sort_mapping.get(sort_by, 'r.requested_at DESC')
-        placeholder = '%s' if self.db_type in ('mysql', 'postgres') else '?'
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
 
         count_query = """
             SELECT COUNT(*)
@@ -368,4 +402,35 @@ class AiSearchMixin:
                 **counts['current'],
                 "previous": counts['previous'],
             }
-    
+
+    def list_ai_search_people(self, provider: str) -> List[Dict[str, Any]]:
+        """Accounts that can be added to someone's AI Search.
+
+        Active, not opted out and holding a *verified* link to ``provider``; the same
+        proof of identity AI Search already demands before it reads a person's history.
+
+        :param provider: Configured media server ('plex', 'jellyfin', 'emby').
+        :return: ``[{'id', 'username', 'external_user_id', 'external_username'}]`` ordered by username.
+        """
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT u.id, u.username, p.external_user_id, p.external_username "
+                "FROM auth_users u JOIN user_media_profiles p ON p.user_id = u.id "
+                f"WHERE u.is_active = 1 AND u.ai_search_shareable = 1 AND p.provider = {ph} "
+                "AND p.verified = 1 AND p.external_user_id IS NOT NULL AND p.external_user_id <> '' "
+                "ORDER BY u.username",
+                (str(provider).lower(),),
+            )
+            return [{'id': row[0], 'username': row[1], 'external_user_id': str(row[2]),
+                     'external_username': row[3]} for row in cursor.fetchall()]
+
+    def get_ai_search_shareable(self, user_id: int) -> bool:
+        """Whether other accounts may include this person in their AI Search (default yes)."""
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT ai_search_shareable FROM auth_users WHERE id = {ph}", (user_id,))
+            row = cursor.fetchone()
+        return bool(row[0]) if row and row[0] is not None else True

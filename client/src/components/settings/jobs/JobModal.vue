@@ -2,7 +2,7 @@
   <!-- Not AppDialog: a native modal <dialog> would make the jobs tour, which highlights fields in here, inert. -->
   <Teleport to="body">
     <div class="fixed inset-0 z-[1050] flex bg-black/70 p-4 backdrop-blur-sm max-sm:p-2" @click.self="requestClose">
-      <div role="dialog" aria-modal="true" aria-labelledby="job-modal-title" class="m-auto flex max-h-full sm:max-h-[min(80dvh,52rem)] w-full max-w-4xl flex-col overflow-hidden rounded-card border border-edge bg-panel text-ink shadow-2xl">
+      <div ref="dialog" role="dialog" aria-modal="true" aria-labelledby="job-modal-title" tabindex="-1" class="m-auto outline-none flex max-h-full sm:max-h-[min(80dvh,52rem)] w-full max-w-4xl flex-col overflow-hidden rounded-card border border-edge bg-panel text-ink shadow-2xl">
       <header class="flex shrink-0 items-start gap-3 border-b border-edge px-6 py-4 max-sm:px-4">
         <span aria-hidden="true" class="grid h-9 w-9 shrink-0 place-items-center rounded-ctl bg-brand-soft text-sm text-brand-ink"><i aria-hidden="true" :class="jobTypeInfoIcon"></i></span>
         <div class="min-w-0 flex-1 self-center">
@@ -632,6 +632,8 @@ export default {
     // Ready for Escape and edits before the slower loads below (Seer can take seconds).
     this.pristine = this.snapshot();
     document.addEventListener('keydown', this.onKeydown);
+    this.opener = document.activeElement;
+    this.$refs.dialog?.focus();
     // For new jobs, pre-populate filters with global config defaults
     if (!this.isEditing) {
       try {
@@ -668,6 +670,7 @@ export default {
   },
   beforeUnmount() {
     document.removeEventListener('keydown', this.onKeydown);
+    if (this.opener instanceof HTMLElement && document.contains(this.opener)) this.opener.focus();
   },
   methods: {
     snapshot() {
@@ -695,10 +698,34 @@ export default {
     },
 
     onKeydown(event) {
-      // A native dialog on top (list preview, confirmation) handles its own Escape.
-      if (event.key !== 'Escape' || document.querySelector('dialog[open]')) return;
+      // A native dialog on top (list preview, confirmation) or the jobs tour handles its own keys.
+      if (event.defaultPrevented || document.querySelector('dialog[open], [aria-labelledby="tour-title"]')) return;
+      if (event.key === 'Tab') return this.keepFocusInside(event);
+      if (event.key !== 'Escape') return;
       event.preventDefault();
       this.requestClose();
+    },
+
+    // Not a native dialog, so Tab would otherwise walk out into the page behind the backdrop.
+    keepFocusInside(event) {
+      const root = this.$refs.dialog;
+      if (!root) return;
+      const stops = [...root.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+        .filter(el => !el.matches(':disabled') && el.type !== 'hidden' && el.offsetParent !== null);
+      if (!stops.length) return;
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      const active = document.activeElement;
+      if (!root.contains(active) || active === root) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     },
 
     listConfig() {

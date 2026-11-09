@@ -76,8 +76,12 @@ export const fetchSonarrServers = (payload = null) => {
 };
 
 // AI Search: semantic content search powered by LLM + TMDB
-export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 12, useHistory = true, excludeWatched = true, excludeSeen = false, originalLanguage = 'auto') => {
+export const aiSearchPeople = () => axios.get('/api/ai-search/people');
+
+// `people` are SuggestArr account ids the search is for; empty keeps the single-user search.
+export const aiSearch = (query, mediaType = 'movie', userIds = [], maxResults = 12, useHistory = true, excludeWatched = true, excludeSeen = false, originalLanguage = 'auto', people = []) => {
     return axios.post('/api/ai-search/query', {
+        ...(people.length ? { people } : {}),
         query,
         media_type: mediaType,
         user_ids: userIds,
@@ -124,13 +128,14 @@ export const aiSearchFeedbackList = () => {
     return axios.get('/api/ai-search/feedback');
 };
 
-export const aiSearchFeedbackSet = (tmdbId, mediaType, feedback, title = null, year = null) => {
+export const aiSearchFeedbackSet = (tmdbId, mediaType, feedback, title = null, year = null, reasonType = null) => {
     return axios.post('/api/ai-search/feedback', {
         tmdb_id: tmdbId,
         media_type: mediaType,
         feedback,
         title,
         year,
+        reason_type: reasonType,
     });
 };
 
@@ -300,6 +305,9 @@ export const getMyNotifications = () => axios.get('/api/users/me/notifications')
 export const saveMyNotifications = (data) => axios.put('/api/users/me/notifications', data);
 export const deleteMyNotifications = () => axios.delete('/api/users/me/notifications');
 export const testMyNotifications = () => axios.post('/api/users/me/notifications/test');
+export const getMyRatingPrompts = () => axios.get('/api/users/me/rating-prompts');
+export const saveMyRatingPrompts = (data) => axios.put('/api/users/me/rating-prompts', data);
+export const testMyRatingPrompts = () => axios.post('/api/users/me/rating-prompts/test');
 export const deleteWebhook = (id) => axios.delete(`/api/v1/webhooks/${id}`);
 export const getWebhookSettings = () => axios.get('/api/v1/webhooks/settings');
 export const updateWebhookSettings = (allowed_hosts) => axios.put('/api/v1/webhooks/settings', { allowed_hosts });

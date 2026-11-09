@@ -114,6 +114,22 @@ class WatchedMediaMixin:
             )
             return [self._watched_media_row(row) for row in cursor.fetchall()]
 
+    def list_watched_media_ids(self, media_user_identity_id: int) -> List[Dict[str, Any]]:
+        """Every stored title of an identity as ``{tmdb_id, media_type, title}``, no row limit.
+
+        For filtering only: rows flagged ``excluded`` are included because that flag only
+        removes a title from taste, it was still watched.
+        """
+        ph = self._watched_media_placeholder()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT tmdb_id, media_type, title FROM watched_media WHERE media_user_identity_id={ph}",
+                (media_user_identity_id,),
+            )
+            return [{'tmdb_id': str(row[0]), 'media_type': row[1], 'title': row[2]}
+                    for row in cursor.fetchall()]
+
     def update_watched_media(self, media_user_identity_id: int, item_id: int,
                              changes: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Change the rating and/or exclusion flag of one title, keeping its source.

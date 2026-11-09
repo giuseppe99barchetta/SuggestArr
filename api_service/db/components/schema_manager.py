@@ -429,6 +429,24 @@ class SchemaManager:
                     UNIQUE (media_user_identity_id, tmdb_id, media_type)
                 )
             """,
+            'rating_prompts': """
+                CREATE TABLE IF NOT EXISTS rating_prompts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    media_user_identity_id INTEGER NOT NULL,
+                    tmdb_id TEXT NOT NULL,
+                    media_type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    nonce TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    generation INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    answered_at TIMESTAMP NULL,
+                    FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
+                    UNIQUE (user_id, media_user_identity_id, tmdb_id, media_type)
+                )
+            """,
             'simkl_account_links': """
                 CREATE TABLE IF NOT EXISTS simkl_account_links (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -786,6 +804,27 @@ class SchemaManager:
                         rationale VARCHAR(512),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         PRIMARY KEY (tmdb_id, media_type)
+                    ) ENGINE=InnoDB
+                """
+            elif table_name == 'rating_prompts':
+                # Sized explicitly: the generic TEXT -> VARCHAR(512) rewrite would push the
+                # four-column unique key past InnoDB's 3072-byte limit under utf8mb4.
+                query = """
+                    CREATE TABLE IF NOT EXISTS rating_prompts (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NOT NULL,
+                        media_user_identity_id INT NOT NULL,
+                        tmdb_id VARCHAR(64) NOT NULL,
+                        media_type VARCHAR(16) NOT NULL,
+                        title VARCHAR(512) NOT NULL,
+                        nonce VARCHAR(32) NOT NULL,
+                        status VARCHAR(16) NOT NULL DEFAULT 'pending',
+                        generation INT NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        answered_at TIMESTAMP NULL,
+                        FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE,
+                        FOREIGN KEY (media_user_identity_id) REFERENCES media_user_identities(id) ON DELETE CASCADE,
+                        UNIQUE KEY uniq_rating_prompt (user_id, media_user_identity_id, tmdb_id, media_type)
                     ) ENGINE=InnoDB
                 """
             elif table_name == 'simkl_sources':
@@ -1165,6 +1204,23 @@ class SchemaManager:
                 # account so it is private, removed with it and never in config exports.
                 if 'notify_config' not in existing_columns:
                     cursor.execute("ALTER TABLE auth_users ADD COLUMN notify_config TEXT")
+                    conn.commit()
+                # Whether other accounts may include this person in a group AI Search.
+                if 'ai_search_shareable' not in existing_columns:
+                    cursor.execute("ALTER TABLE auth_users ADD COLUMN ai_search_shareable INTEGER NOT NULL DEFAULT 1")
+                    conn.commit()
+                # Per-user "ask me to rate what I watched" settings (JSON), see RatingPromptMixin.
+                if 'rating_prompt_config' not in existing_columns:
+                    cursor.execute("ALTER TABLE auth_users ADD COLUMN rating_prompt_config TEXT")
+                    conn.commit()
+                # Monotonic counter bumped with every change of where rating prompts are delivered; never reset.
+                if 'rating_prompt_generation' not in existing_columns:
+                    cursor.execute("ALTER TABLE auth_users ADD COLUMN rating_prompt_generation INTEGER NOT NULL DEFAULT 0")
+                    conn.commit()
+                # Prompts claimed before delivery generations existed belong to generation 0.
+                cursor.execute("SELECT * FROM rating_prompts WHERE 1=0")
+                if 'generation' not in [col[0] for col in cursor.description]:
+                    cursor.execute("ALTER TABLE rating_prompts ADD COLUMN generation INTEGER NOT NULL DEFAULT 0")
                     conn.commit()
 
             except Exception as e:

@@ -135,7 +135,7 @@ test('Language loading can be retried without blocking prompt-based searches', a
 for (const width of [1440, 900, 390]) {
   test(`Search starters and personal posters at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1100 });
-    const { errors, searches } = await openPreview(page);
+    const { errors, searches, history } = await openPreview(page);
     const input = page.getByRole('textbox', { name: 'What do you want to watch?' });
     await expect(page.getByRole('button', { name: 'Find more like AFTERLIGHT', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Feel-good', exact: false }).click();
@@ -151,17 +151,18 @@ for (const width of [1440, 900, 390]) {
     await page.screenshot({ path: testInfo.outputPath('ai-search-inspiration.png'), fullPage: true });
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await expect(page.getByRole('heading', { name: '1 match', exact: true })).toBeVisible();
-    expect(searches).toHaveLength(1);
-    expect(searches[0]).toMatchObject({ query: 'A thoughtful mystery with a hopeful ending', media_type: 'tv' });
+    await expect.poll(() => searches).toHaveLength(1);
+    await expect.poll(() => searches[0]).toMatchObject({ query: 'A thoughtful mystery with a hopeful ending', media_type: 'tv' });
     await expect(page.getByRole('heading', { name: 'Set the mood' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Explore search ideas' }).click();
     await expect(page.getByRole('heading', { name: 'Recent searches' })).toBeVisible();
     await page.reload();
     await page.getByRole('button', { name: 'A thoughtful mystery with a hopeful ending', exact: true }).click();
     await expect(input).toHaveValue('A thoughtful mystery with a hopeful ending');
-    expect(searches).toHaveLength(1);
+    await expect.poll(() => searches).toHaveLength(1);
     await page.getByRole('button', { name: 'Clear recent searches' }).click();
     await expect(page.getByRole('heading', { name: 'Recent searches' })).toHaveCount(0);
+    await expect.poll(() => history).toEqual([]); // the DELETE must land before the reload
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Recent searches' })).toHaveCount(0);
     expect(errors).toEqual([]);
@@ -198,10 +199,10 @@ test('Searches kept in this browser move to the account once, other accounts sta
   await expect(page.getByRole('button', { name: 'Another account query', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^My query/ })).toHaveCount(5);
   await expect(page.getByRole('button', { name: /^My query/ }).first()).toHaveText(/My query 0/);
-  expect(history).toEqual(['My query 0', 'My query 1', 'My query 2', 'My query 3', 'My query 4']);
+  await expect.poll(() => history).toEqual(['My query 0', 'My query 1', 'My query 2', 'My query 3', 'My query 4']);
   expect(await page.evaluate(() => localStorage.getItem('suggestarr_ai_search_history:7'))).toBeNull();
   await page.getByRole('button', { name: 'Clear recent searches' }).click();
-  expect(history).toEqual([]);
+  await expect.poll(() => history).toEqual([]);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('suggestarr_ai_search_history:8')))).toEqual(['Another account query']);
 });
 

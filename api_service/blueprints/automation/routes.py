@@ -6,6 +6,7 @@ from api_service.auth.middleware import require_role
 from api_service.automate_process import ContentAutomation
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
+from api_service.db.components.suggestion_feedback_mixin import FEEDBACK_REASONS, FEEDBACK_VALUES
 from api_service.db.database_manager import DatabaseManager
 from api_service.utils.asyncio_loop import close_event_loop
 from api_service.utils.request_profiles import (
@@ -25,9 +26,8 @@ automation_bp = Blueprint('automation', __name__)
 
 _force_run_lock = threading.Lock()
 _force_run_running = False
-_FEEDBACK_VALUES = {'interested', 'not_interested', 'already_seen', 'seen_liked',
-                    'seen_disliked', 'too_similar', 'save_for_later'}
-_FEEDBACK_REASONS = {'genre', 'provider', 'content', 'title', 'other'}
+_FEEDBACK_VALUES = FEEDBACK_VALUES
+_FEEDBACK_REASONS = FEEDBACK_REASONS
 
 
 @automation_bp.route('/requests/expiry/run', methods=['POST'])
@@ -205,7 +205,8 @@ def request_workflow():
     items, total = db.list_suggestions(
         scope.owner_id, status, request.args.get('search', '').strip()[:100], page, per_page, media_type,
         scope.media_user_ids, int(g.current_user['id']), scope.include_unassigned,
-        include_owned_list_imports=scope.include_owned_list_imports)
+        include_owned_list_imports=scope.include_owned_list_imports,
+        sort_by=request.args.get('sort_by', 'date-desc'))
     _localize(db, (items, [('tmdb_id', 'media_type', 'title', 'overview')]))
     return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
