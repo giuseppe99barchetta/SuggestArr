@@ -182,37 +182,37 @@ for (const shot of shots) {
 
 test("README hero image", async ({ page }) => {
   const data = (file) => `data:image/png;base64,${readFileSync(file).toString("base64")}`;
-  const shot = (name) => data(join(OUT, `${name}.png`));
   const logo = data(join(__dirname, "..", "src", "assets", "logo.png"));
-  await page.setViewportSize({ width: 1600, height: 840 });
+  // Same tokens as src/assets/main.css (dark theme): flat canvas, one accent, the app's own font.
+  await page.setViewportSize({ width: 1600, height: 800 });
   await page.setContent(`<!doctype html><html><head><meta charset="utf-8">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;800&display=swap" rel="stylesheet">
     <style>
       * { margin: 0; box-sizing: border-box; }
-      body { width: 1600px; height: 840px; overflow: hidden; font-family: "Plus Jakarta Sans", sans-serif; color: #f4f2ff;
-        background: radial-gradient(900px 600px at 78% 30%, #4b33b866, transparent 70%), radial-gradient(700px 500px at 10% 100%, #1c9aa633, transparent 70%), #0b0a14; }
-      .copy { position: absolute; left: 88px; top: 0; bottom: 0; width: 560px; display: flex; flex-direction: column; justify-content: center; gap: 26px; }
-      .brand { display: flex; align-items: center; gap: 16px; font-size: 40px; font-weight: 800; letter-spacing: -.5px; }
-      .brand img { height: 52px; }
-      h1 { font-size: 54px; line-height: 1.08; font-weight: 800; letter-spacing: -1.5px; }
-      h1 span { background: linear-gradient(90deg, #a996ff, #6fe3ec); -webkit-background-clip: text; color: transparent; }
-      p { font-size: 21px; line-height: 1.5; color: #b9b4d6; font-weight: 500; }
-      .flow { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: #d9d4f5; flex-wrap: wrap; }
-      .chip { padding: 8px 14px; border-radius: 999px; background: #ffffff10; border: 1px solid #ffffff1f; }
-      .arrow { color: #8e7cff; }
-      .stack { position: absolute; left: 700px; top: 70px; width: 1000px; height: 700px; perspective: 2200px; }
-      .stack img { position: absolute; width: 860px; border-radius: 14px; border: 1px solid #ffffff22;
-        box-shadow: 0 40px 90px #000000aa, 0 0 0 1px #00000066; transform-origin: left center; }
-      .back { left: 140px; top: 0; transform: rotateY(-14deg) scale(.86); opacity: .55; }
-      .front { left: 40px; top: 150px; transform: rotateY(-14deg); }
+      body { width: 1600px; height: 800px; overflow: hidden; position: relative; background: #0b0d12; color: #e8eaf0;
+        font-family: "Plus Jakarta Sans", sans-serif; }
+      .copy { position: absolute; left: 96px; top: 88px; bottom: 88px; width: 540px; display: flex; flex-direction: column; }
+      .brand { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 800; }
+      .brand img { height: 32px; }
+      .main { margin-top: auto; margin-bottom: auto; }
+      h1 { font-size: 58px; line-height: 1.08; font-weight: 800; letter-spacing: -1.6px; }
+      h1 span { color: #b3a9ff; }
+      p { margin-top: 24px; font-size: 20px; line-height: 1.55; color: #9aa3b5; font-weight: 500; max-width: 470px; }
+      .meta { font-size: 15px; color: #8790a3; font-weight: 600; }
+      .meta b { color: #c5cbd8; font-weight: 600; }
+      .window { position: absolute; left: 720px; top: 112px; width: 1200px; border-radius: 14px; overflow: hidden;
+        border: 1px solid #2a3042; box-shadow: 0 30px 60px rgba(0, 0, 0, .45); }
+      .window img { display: block; width: 100%; }
     </style></head><body>
     <div class="copy">
       <div class="brand"><img src="${logo}" alt="">SuggestArr</div>
-      <h1>You watch.<br><span>SuggestArr finds what's next.</span></h1>
-      <p>Recommendations from real watch history, sent straight to Seer, on a schedule or one click at a time.</p>
-      <div class="flow"><span class="chip">Jellyfin · Plex · Emby</span><span class="arrow">→</span><span class="chip">TMDb or AI</span><span class="arrow">→</span><span class="chip">Seer</span></div>
+      <div class="main">
+        <h1>You watch.<br><span>SuggestArr finds what's next.</span></h1>
+        <p>It picks movies and shows like the ones you watched and requests them in Seer, automatically or after you approve them.</p>
+      </div>
+      <div class="meta">Works with <b>Jellyfin</b>, <b>Plex</b>, <b>Emby</b> and <b>Seer</b> · Self-hosted · Open source</div>
     </div>
-    <div class="stack"><img class="back" src="${shot("ai-search")}" alt=""><img class="front" src="${shot("requests")}" alt=""></div>
+    <div class="window"><img src="${data(join(OUT, "requests.png"))}" alt=""></div>
     </body></html>`);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(300);
