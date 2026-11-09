@@ -565,7 +565,8 @@ def set_my_rating_prompts():
     try:
         saved = db.set_rating_prompt_config(user_id, enabled, delay, channel, discord)
     except ValueError as exc:
-        return jsonify({'error': str(exc)}), 400
+        logger.warning("Invalid rating prompt configuration for user_id=%s", user_id, exc_info=True)
+        return jsonify({'error': 'Invalid rating prompt configuration.'}), 400
     return jsonify(db.public_rating_prompt_config(saved)), 200
 
 
