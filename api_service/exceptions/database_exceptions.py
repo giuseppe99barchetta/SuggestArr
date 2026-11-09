@@ -15,3 +15,11 @@ class DatabaseError(Exception):
             return f"MySQL error: {str(self.error)}"
         else:
             return f"Unknown DB error: {str(self.error)}"
+
+class RatingPromptConfigError(ValueError):
+    """Invalid rating-prompt settings; ``user_message`` is our own validation text, safe to show the user."""
+
+    def __init__(self, user_message):
+        """:param user_message: the human-readable reason the settings were refused."""
+        self.user_message = user_message
+        super().__init__(user_message)

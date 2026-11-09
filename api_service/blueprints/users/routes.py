@@ -39,6 +39,7 @@ from api_service.auth.middleware import TAB_ALIASES, require_role
 from api_service.blueprints.avatar import user_avatar_response
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.exceptions.database_exceptions import RatingPromptConfigError
 from api_service.services.notification_formats import notification_target_error, telegram_bot_base, telegram_chat_id
 from api_service.db.components.rating_prompt_mixin import TELEGRAM_DESTINATION_HINT, discord_credentials_complete
 from api_service.jobs.rating_prompts import send_test_message
@@ -564,9 +565,9 @@ def set_my_rating_prompts():
         return jsonify({'error': blocker}), 400
     try:
         saved = db.set_rating_prompt_config(user_id, enabled, delay, channel, discord)
-    except ValueError as exc:
-        logger.warning("Invalid rating prompt configuration for user_id=%s", user_id, exc_info=True)
-        return jsonify({'error': 'Invalid rating prompt configuration.'}), 400
+    except RatingPromptConfigError as exc:
+        logger.warning("Invalid rating prompt configuration for user_id=%s: %s", user_id, exc.user_message)
+        return jsonify({'error': exc.user_message}), 400
     return jsonify(db.public_rating_prompt_config(saved)), 200
 
 

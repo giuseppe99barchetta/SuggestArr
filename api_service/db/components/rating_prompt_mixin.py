@@ -18,6 +18,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+from api_service.exceptions.database_exceptions import RatingPromptConfigError
 from api_service.services.notification_formats import telegram_bot_base, telegram_chat_id
 
 DEFAULT_DELAY_HOURS = 12
@@ -177,11 +178,11 @@ class RatingPromptMixin:
             complete credentials.
         """
         if isinstance(delay_hours, bool) or not isinstance(delay_hours, int) or not 0 <= delay_hours <= MAX_DELAY_HOURS:
-            raise ValueError(f'delay_hours must be a whole number from 0 to {MAX_DELAY_HOURS}')
+            raise RatingPromptConfigError(f'delay_hours must be a whole number from 0 to {MAX_DELAY_HOURS}')
         if channel not in CHANNELS:
-            raise ValueError('channel must be telegram or discord')
+            raise RatingPromptConfigError('channel must be telegram or discord')
         if discord is not None and not isinstance(discord, dict):
-            raise ValueError('discord must be an object')
+            raise RatingPromptConfigError('discord must be an object')
 
         def change(notify, raw_config, _generation):
             current = normalize_rating_prompt_config(raw_config)
@@ -192,20 +193,20 @@ class RatingPromptMixin:
                 if value is not None and (key != 'bot_token' or value != ''):
                     merged[key] = str(value).strip()
             if merged['public_key'] and not _HEX64.fullmatch(merged['public_key']):
-                raise ValueError('The application public key must be 64 hexadecimal characters')
+                raise RatingPromptConfigError('The application public key must be 64 hexadecimal characters')
             merged['public_key'] = merged['public_key'].lower()
             if merged['user_id'] and not _SNOWFLAKE.fullmatch(merged['user_id']):
-                raise ValueError('The Discord user id must be 17 to 20 digits')
+                raise RatingPromptConfigError('The Discord user id must be 17 to 20 digits')
             if merged['bot_token'] and not _TOKEN.fullmatch(merged['bot_token']):
-                raise ValueError('The bot token looks invalid')
+                raise RatingPromptConfigError('The bot token looks invalid')
             if channel == 'discord' and not discord_credentials_complete(merged):
-                raise ValueError('Discord needs the bot token, the application public key and your user id')
+                raise RatingPromptConfigError('Discord needs the bot token, the application public key and your user id')
             # Checked here, under the owner-row lock: a destination removed after the route's own check
             # (which only gives the friendly message first) must not end up with prompts switched on.
             if enabled and channel == 'telegram':
                 _, base, chat_id = delivery_identity(notify, {'channel': 'telegram', 'discord': merged})
                 if not base or not chat_id:
-                    raise ValueError(TELEGRAM_DESTINATION_HINT)
+                    raise RatingPromptConfigError(TELEGRAM_DESTINATION_HINT)
             enabled_at = current['enabled_at'] if current['enabled'] else _utcnow()
             updated = {'enabled': bool(enabled), 'delay_hours': delay_hours, 'enabled_at': enabled_at.isoformat(),
                        'channel': channel, 'discord': merged}
@@ -214,7 +215,7 @@ class RatingPromptMixin:
             return _KEEP, updated, bump
 
         if self._change_delivery_identity(user_id, change) is None:
-            raise ValueError('Unknown account')
+            raise RatingPromptConfigError('Unknown account')
         return self.get_rating_prompt_config(user_id)
 
     def active_rating_prompt_config(self, user_id: int) -> Optional[Dict[str, Any]]:
