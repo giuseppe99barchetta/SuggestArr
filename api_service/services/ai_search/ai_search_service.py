@@ -14,12 +14,21 @@ from api_service.services.config_service import ConfigService
 from api_service.services.filter_normalization import build_tmdb_params, normalize_filters
 from api_service.services.library_content import load_library_content
 from api_service.services.llm.llm_service import (
+    MAX_EXCLUSION_ITEMS,
+    MAX_HISTORY_ITEMS,
+    _deduplicate_history,
+    clean_excluded_title,
     generate_search_result_rationales,
     interpret_search_query,
 )
 from api_service.services.tmdb.tmdb_client import TMDbClient
 
 logger = LoggerManager.get_logger("AiSearchService")
+
+# How long the prompt waits for the library before searching without its titles.
+_OWNED_PROMPT_TIMEOUT = 5.0
+# Candidates asked from the LLM: 1.5x headroom for post-filtering (capped), never below max_results.
+_CANDIDATE_HEADROOM_CAP = 36
 
 # Maximum total results returned to the caller
 _RESULTS_MAX = 12
@@ -267,7 +276,10 @@ class AiSearchService:
 
         # 3. LLM interpretation — request enough suggestions to fill max_results after
         # filtering; ask for slightly more than needed to absorb TMDB lookup misses.
-        llm_suggestions_count = max(max_results, 12)
+        llm_suggestions_count = max(
+            max_results, 12, min((3 * max_results + 1) // 2, _CANDIDATE_HEADROOM_CAP))
+        excluded_titles = await self._excluded_titles_for_prompt(
+            media_type, history, exclude_watched, exclude_seen, feedback_scope, owned_ids)
         interpretation_query = query
         if original_language == "any":
             interpretation_query += "\nSearch option: recommend titles in any original language; do not apply an original-language restriction."
@@ -278,7 +290,7 @@ class AiSearchService:
             )
         interpretation = await interpret_search_query(
             interpretation_query, history, media_type, max_suggestions=llm_suggestions_count,
-            liked_titles=liked_titles,
+            liked_titles=liked_titles, excluded_titles=excluded_titles,
         )
         # Enforce the UI selection even if the LLM returns a conflicting language.
         if original_language != "auto":
@@ -336,7 +348,11 @@ class AiSearchService:
         # 6. Build result list: AI suggestions only, filtered & deduped.
         # Titles already in the library are excluded like already-requested ones.
         if inspect.isawaitable(owned_ids):
-            owned_ids = await owned_ids
+            try:
+                owned_ids = await owned_ids
+            except Exception as exc:  # a failed library load never breaks a search
+                logger.warning("Could not load the library for AI Search: %s", exc)
+                owned_ids = {}
         already_requested = already_requested | (owned_ids or {}).get(media_type, set())
 
         seen_ids: set = set()
@@ -397,6 +413,92 @@ class AiSearchService:
             "ai_reasoning": ai_reasoning,
             "total": len(final_slice),
         }
+
+    async def _excluded_titles_for_prompt(
+        self,
+        media_type: str,
+        history: List[Dict],
+        exclude_watched: bool,
+        exclude_seen: bool,
+        feedback_scope: Optional[tuple],
+        owned_ids: Optional[Union[Dict[str, set], Awaitable[Dict[str, set]]]],
+    ) -> List[Dict]:
+        """Titles the post-filter would drop, named so the LLM can avoid them up front.
+
+        Best-effort and read-only: the post-filter stays the source of truth, so any
+        failure here just means a prompt without the list. The library is awaited for at
+        most ``_OWNED_PROMPT_TIMEOUT`` seconds; it is still awaited later for the filter.
+        """
+        try:
+            owned: Dict[str, set] = {}
+            if inspect.isawaitable(owned_ids):
+                try:
+                    owned = await asyncio.wait_for(asyncio.shield(owned_ids), _OWNED_PROMPT_TIMEOUT) or {}
+                except Exception:  # timeout or failed load: search without library titles
+                    owned = {}
+            elif owned_ids:
+                owned = owned_ids
+            from api_service.db.database_manager import DatabaseManager  # local import avoids circular deps
+            return self._build_excluded_titles(
+                DatabaseManager(), media_type, history, exclude_watched, exclude_seen,
+                feedback_scope, (owned or {}).get(media_type, set()))
+        except Exception as exc:
+            logger.warning("Could not build the already-handled list for the prompt: %s", exc)
+            return []
+
+    @staticmethod
+    def _build_excluded_titles(
+        db, media_type: str, history: List[Dict], exclude_watched: bool, exclude_seen: bool,
+        feedback_scope: Optional[tuple], owned_ids: set,
+    ) -> List[Dict]:
+        """Assemble the ordered, deduplicated, capped list of already-handled titles.
+
+        Priority: personal dismissed/seen feedback, legacy dislikes, watched history past
+        the 20 titles the prompt already lists (only when watched titles are excluded),
+        requested, owned, then titles shown in earlier searches (only when that toggle is on).
+        shortcut: arbitrary order inside a group; upgrade to recency ordering if big
+        libraries still waste results.
+        """
+        result: List[Dict] = []
+        keys: set = set()
+        # The prompt already lists these (even when watched titles are not excluded), so
+        # repeating them would waste slots. Same dedupe + cut-off as interpret_search_query.
+        rendered = {(item.get("title") or item.get("name") or "").strip().lower()
+                    for item in _deduplicate_history(history)[:MAX_HISTORY_ITEMS]}
+
+        def add(title, year) -> None:
+            clean = clean_excluded_title(title)
+            key = (clean.lower(), year or None)
+            # 'Unknown Title' is the placeholder save_metadata stores when a title is missing.
+            if clean and clean != "Unknown Title" and clean.lower() not in rendered                     and key not in keys and len(result) < MAX_EXCLUSION_ITEMS:
+                keys.add(key)
+                result.append({"title": clean, "year": year or None})
+
+        def add_ids(ids) -> None:
+            # Fetch every known title: entries already listed by an earlier group are
+            # dropped by add(), so a limit of the remaining room could starve the list.
+            if len(result) < MAX_EXCLUSION_ITEMS and ids:
+                for entry in db.get_titles_for_tmdb_ids(media_type, ids, len(ids)):
+                    add(entry["title"], entry["year"])
+
+        if feedback_scope:
+            unnamed = set()
+            for row in db.list_negative_feedback_titles(*feedback_scope, media_type):
+                if row["title"]:
+                    add(row["title"], row["year"])
+                else:
+                    unnamed.add(row["tmdb_id"])
+            add_ids(unnamed)
+        for row in db.get_ai_dislikes(media_type):
+            add(row["title"], row["year"])
+        if exclude_watched:
+            for item in _deduplicate_history(history)[MAX_HISTORY_ITEMS:]:
+                add(item.get("title") or item.get("name"), item.get("year"))
+        add_ids(db.get_requested_tmdb_ids_by_type(media_type))
+        add_ids(owned_ids)
+        if exclude_seen:
+            add_ids(db.get_ai_seen_ids(media_type))
+        return result
 
     def _record_seen_items(self, items: List[Dict], media_type: str) -> None:
         try:

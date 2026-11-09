@@ -255,6 +255,24 @@ class SuggestionFeedbackMixin:
             return [{'tmdb_id': str(row[0]), 'media_type': row[1], 'feedback': row[2],
                      'reason_type': row[3], 'reason_text': row[4]} for row in cursor.fetchall()]
 
+    def list_negative_feedback_titles(self, user_id, media_user_id, media_type):
+        """Return ``{'tmdb_id', 'title', 'year'}`` for titles this user dismissed or has seen.
+
+        Only values in ``NEGATIVE_FEEDBACK`` count (never interested / saved for later).
+        The title may be None for feedback saved before the column existed.
+        """
+        ph = self._feedback_placeholder()
+        marks = ','.join([ph] * len(self.NEGATIVE_FEEDBACK))
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT tmdb_id, title, year FROM suggestion_feedback "
+                f"WHERE user_id={ph} AND media_user_id={ph} AND media_type={ph} AND feedback IN ({marks}) "
+                f"ORDER BY updated_at DESC",
+                (user_id, self._feedback_media_user_id(media_user_id), media_type, *sorted(self.NEGATIVE_FEEDBACK)),
+            )
+            return [{'tmdb_id': str(row[0]), 'title': row[1], 'year': row[2]} for row in cursor.fetchall()]
+
     @staticmethod
     def _empty_taste_profile():
         return {'loved': [], 'interested': [], 'saved': [], 'disliked': [], 'uninterested': []}
