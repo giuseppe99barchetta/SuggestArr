@@ -2,7 +2,7 @@
 
 ## 🚀 SuggestArr - Media Automation Made Simple
 
-![ezgif com-optimize (2)](https://github.com/user-attachments/assets/d5c48bdb-3c11-4f35-bb55-849297d521e7)
+![SuggestArr: recommendations from your users' watch history, sent to Seer](docs/assets/suggestarr-hero.png)
 
 ![Build Status](https://img.shields.io/github/actions/workflow/status/giuseppe99barchetta/suggestarr/docker_hub_build.yml?branch=main&label=Build&logo=github)
 ![Platform Support](https://img.shields.io/badge/platforms-linux%2Famd64%20|%20linux%2Farm64-blue?logo=linux)
@@ -29,6 +29,16 @@ SuggestArr automates media recommendations and download requests based on what y
 - **Public REST API** with Swagger UI.
 
 See the [Feature Guide](docs/FEATURES.md) for how each feature works.
+
+## Screenshots
+
+| Home | Requests |
+| --- | --- |
+| ![Home dashboard with request stats, recap and suggestions awaiting approval](docs/assets/screenshots/home.png) | ![Requests sent to Seer, with posters and availability](docs/assets/screenshots/requests.png) |
+| **AI Search** | **Jobs** |
+| ![AI Search results for a plain-language request](docs/assets/screenshots/ai-search.png) | ![Scheduled jobs and their recent runs](docs/assets/screenshots/jobs.png) |
+
+Titles, posters and users in these screenshots are fictional. Regenerate them with `cd client && npm run screenshots`.
 
 ## Requirements
 
