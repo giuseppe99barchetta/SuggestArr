@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { test } from "@playwright/test";
 
 // Documentation screenshots of the real dashboard against a mocked API.
-// Every title, poster and user here is fictional, so the images can be published anywhere.
+// With TMDB_API_KEY set, titles, ratings and posters come from TMDb (real movies and shows);
+// without it every title and poster is a fictional placeholder. Users are always fictional.
 const OUT = join(__dirname, "..", "..", "docs", "assets", "screenshots");
 mkdirSync(OUT, { recursive: true });
 // Deliberately unsigned fixture token, as in e2e/critical-flow.spec.js. Every API request is intercepted.
@@ -36,29 +37,89 @@ function poster(i, wide = false) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600" viewBox="0 0 400 600"><defs><linearGradient id="g" x2="0" y2="1"><stop stop-color="${d}"/><stop offset="1" stop-color="${m}"/></linearGradient></defs><rect width="400" height="600" fill="url(#g)"/>${scene}<text x="200" y="525" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="bold" font-size="${title.length > 12 ? 26 : 34}" letter-spacing="3">${title}</text></svg>`;
 }
 
-const img = (i) => `https://image.tmdb.org/t/p/w500/docs-poster-${i}.svg`;
-const backdrop = (i) => `https://image.tmdb.org/t/p/w1280/docs-backdrop-${i}.svg`;
 const ago = (hours) => new Date(Date.now() - hours * 3600_000).toISOString().slice(0, 19).replace("T", " ");
 const users = ["alex", "sam", "jordan"];
-const overview = "A fictional title made up for the SuggestArr documentation, with an overview long enough to fill the card.";
 
-function request(i, source, extra = {}) {
+// Slots: 0-11 requested titles (title i comes from watched title 12 + i % 4), 12-15 the watched titles, 16-18 awaiting approval, 19-26 AI Search results.
+const REAL = [
+  ["movie", "Dune: Part Two", 2024], ["tv", "Severance", 2022], ["movie", "Oppenheimer", 2023],
+  ["movie", "Everything Everywhere All at Once", 2022], ["tv", "The Bear", 2022], ["movie", "Spider-Man: Across the Spider-Verse", 2023],
+  ["tv", "Shōgun", 2024], ["movie", "Blade Runner 2049", 2017], ["movie", "Past Lives", 2023],
+  ["tv", "Arcane", 2021], ["movie", "The Grand Budapest Hotel", 2014], ["tv", "Dark", 2017],
+  ["movie", "Arrival", 2016], ["tv", "Mr. Robot", 2015], ["movie", "Dunkirk", 2017], ["movie", "Parasite", 2019],
+  ["tv", "Andor", 2022], ["movie", "Poor Things", 2023], ["movie", "The Holdovers", 2023],
+  ["movie", "Interstellar", 2014], ["movie", "Ad Astra", 2019], ["movie", "The Martian", 2015], ["tv", "Foundation", 2021],
+  ["movie", "Moon", 2009], ["tv", "For All Mankind", 2019], ["movie", "Gravity", 2013], ["movie", "Sunshine", 2007],
+];
+
+const placeholderOverview = "A fictional title made up for the SuggestArr documentation, with an overview long enough to fill the card.";
+let catalog = REAL.map(([type], i) => ({
+  title: titles[i % titles.length], type, year: 2014 + (i % 11), rating: 6.8 + ((i * 7) % 25) / 10,
+  poster: `https://image.tmdb.org/t/p/w500/docs-poster-${i}.svg`, backdrop: `https://image.tmdb.org/t/p/w1280/docs-backdrop-${i}.svg`,
+  overview: placeholderOverview,
+}));
+
+async function loadRealCatalog(key) {
+  // v3 keys go in the query string, v4 read tokens in the Authorization header.
+  const bearer = key.length > 40;
+  const found = await Promise.all(REAL.map(async ([type, title, year]) => {
+    const url = new URL(`https://api.themoviedb.org/3/search/${type}`);
+    url.searchParams.set("query", title);
+    url.searchParams.set(type === "tv" ? "first_air_date_year" : "year", String(year));
+    if (!bearer) url.searchParams.set("api_key", key);
+    const res = await fetch(url, { headers: bearer ? { Authorization: `Bearer ${key}` } : {} });
+    if (!res.ok) throw new Error(`TMDb search for "${title}" failed: HTTP ${res.status}`);
+    const hit = (await res.json()).results?.[0];
+    if (!hit?.poster_path) throw new Error(`TMDb has no poster for "${title}" (${year})`);
+    return {
+      title: hit.title || hit.name, type, year, rating: Math.round(hit.vote_average * 10) / 10,
+      poster: `https://image.tmdb.org/t/p/w500${hit.poster_path}`,
+      backdrop: hit.backdrop_path ? `https://image.tmdb.org/t/p/w1280${hit.backdrop_path}` : null,
+      overview: hit.overview || placeholderOverview,
+    };
+  }));
+  catalog = found;
+}
+
+function request(i, source) {
+  const c = catalog[i];
   return {
-    request_id: 100 + i, media_type: i % 3 === 1 ? "tv" : "movie", requested_at: ago(i * 5 + 1),
-    title: titles[i % titles.length], overview, release_date: `${2018 + (i % 7)}-0${1 + (i % 9)}-12`,
-    poster_path: img(i), backdrop_path: backdrop(i), rating: 6.8 + ((i * 7) % 25) / 10, logo_path: null,
+    request_id: 100 + i, media_type: c.type, requested_at: ago(i * 5 + 1),
+    title: c.title, overview: c.overview, release_date: `${c.year}-03-01`,
+    poster_path: c.poster, backdrop_path: c.backdrop, rating: c.rating, logo_path: null,
     rationale: `Because ${users[i % 3]} watched ${source}`, user_id: 2 + (i % 3), user_name: users[i % 3],
     source_origin: "media_server", feedback: null, watched_at: null,
-    availability: ["available", "processing", "requested", "available", "partial"][i % 5], media_url: null, ...extra,
+    availability: ["available", "processing", "requested", "available", "partial"][i % 5], media_url: null,
   };
 }
 
-const sources = [0, 1, 2, 3].map((s) => ({
-  source_id: 900 + s, source_title: titles[(s + 8) % 12], source_overview: overview, source_release_date: "2021-05-01",
-  source_poster_path: img(s + 8), rating: 7.9, media_type: s === 1 ? "tv" : "movie", logo_path: null,
-  backdrop_path: backdrop(s + 8), is_anime: false, max_requested_at: ago(s * 6),
-  requests: [0, 1, 2].map((k) => request(s * 3 + k, titles[(s + 8) % 12])),
-}));
+let sources, pending, aiResults;
+function buildData() {
+  sources = [0, 1, 2, 3].map((s) => {
+    const src = catalog[12 + s];
+    return {
+      source_id: 900 + s, source_title: src.title, source_overview: src.overview, source_release_date: `${src.year}-05-01`,
+      source_poster_path: src.poster, rating: src.rating, media_type: src.type, logo_path: null,
+      backdrop_path: src.backdrop, is_anime: false, max_requested_at: ago(s * 6),
+      requests: [0, 1, 2].map((k) => request(s + k * 4, src.title)),
+    };
+  });
+  pending = [16, 17, 18].map((i, k) => ({
+    id: 50 + k, tmdb_id: String(500 + k), title: catalog[i].title, media_type: catalog[i].type, rating: catalog[i].rating,
+    name: "Weekly picks", status: "awaiting_approval", poster_path: catalog[i].poster.replace(/^https:\/\/image\.tmdb\.org\/t\/p\/w500/, ""),
+    created_at: ago(k + 1), user_name: users[k], overview: catalog[i].overview, rationale: `Because ${users[k]} watched ${catalog[12 + k].title}`,
+  }));
+  aiResults = catalog.slice(19, 27).map((c, k) => ({
+    id: 700 + k, title: c.title, media_type: c.type, year: c.year, release_date: `${c.year}-03-01`,
+    poster_path: c.poster, rating: c.rating, overview: c.overview,
+    rationale: ["Slow-burn space drama with a lonely crew", "Quiet sci-fi about memory and loss", "A crew stranded far from home", "Character-driven survival story"][k % 4],
+  }));
+}
+
+test.beforeAll(async () => {
+  if (process.env.TMDB_API_KEY) await loadRealCatalog(process.env.TMDB_API_KEY);
+  buildData();
+});
 
 const jobs = [
   { id: 1, name: "Nightly discovery", job_type: "discover", media_type: "movie", enabled: true, max_results: 10, filters: {}, schedule_type: "preset", schedule_value: "daily", delivery_mode: "auto", last_run: ago(3), next_run: ago(-21) },
@@ -71,12 +132,6 @@ const history = [
   { id: 29, job_id: 1, job_name: "Nightly discovery", status: "completed", results_count: 11, requested_count: 4, started_at: ago(27.1), finished_at: ago(27) },
   { id: 28, job_id: 3, job_name: "Trending lists import", status: "completed", results_count: 20, requested_count: 9, started_at: ago(80.3), finished_at: ago(80) },
 ];
-const pending = [4, 7, 10].map((i) => ({
-  id: 50 + i, tmdb_id: String(500 + i), title: titles[i], media_type: i % 2 ? "tv" : "movie", rating: 7.6,
-  name: "Weekly TV picks", status: "awaiting_approval", poster_path: `/docs-poster-${i}.svg`, created_at: ago(i), user_name: users[i % 3],
-  overview, rationale: `Because ${users[i % 3]} watched ${titles[(i + 3) % 12]}`,
-}));
-
 const badgeLabels = { 10: "First discoveries", 50: "Half-century", 100: "Century club", 250: "Film buff", 500: "Discovery enthusiast", 1000: "A thousand discoveries", 2500: "Marathon curator" };
 const recap = {
   scope: "installation", has_linked_profiles: true, total: 1284, movies: 902, tv: 382,
@@ -89,19 +144,17 @@ const recap = {
   next_badge: { id: "titles_2500", threshold: 2500, label: "Marathon curator" },
   preferences: { reminder_mode: "enabled" }, posters: [], can_support: false,
 };
-const aiResults = [5, 0, 9, 2, 6, 11, 3, 8].map((i, k) => ({
-  id: 700 + i, title: titles[i], media_type: k % 3 === 1 ? "tv" : "movie", year: 2015 + k, release_date: `${2015 + k}-03-01`,
-  poster_path: img(i), rating: 7.1 + (k % 4) / 2, overview,
-  rationale: ["Slow-burn space drama with a lonely crew", "Quiet sci-fi about memory and loss", "A crew stranded far from home", "Character-driven survival story"][k % 4],
-}));
-
 async function mockApi(page, unmocked) {
   await page.addInitScript(() => {
     localStorage.setItem("suggestarr_tour_done", "1");
     localStorage.setItem("suggestarr_jobs_tour_done", "1");
+    // Keep the seasonal "year in stories" banner out of the screenshots.
+    const year = new Date().getFullYear();
+    [year - 1, year].forEach((y) => localStorage.setItem(`suggestarr-year-recap-announced:${y}`, "1"));
   });
   await page.route("https://image.tmdb.org/**", (route) => {
     const url = route.request().url();
+    if (!url.includes("/docs-")) return route.continue();
     const i = Number(url.match(/-(\d+)\.svg/)?.[1] ?? 0);
     return route.fulfill({ contentType: "image/svg+xml", body: poster(i, url.includes("backdrop")) });
   });
@@ -132,7 +185,7 @@ async function mockApi(page, unmocked) {
     if (p === "/api/recap") return json({ status: "success", data: recap });
     if (p === "/api/ai-search/status") return json({ available: true });
     if (p === "/api/ai-search/history") return json({ status: "success", history: ["A cozy mystery series set in a small town"] });
-    if (p === "/api/ai-search/inspiration") return json({ items: [0, 1, 2, 3].map((i) => ({ title: titles[i], year: 2019 + i, media_type: i === 1 ? "tv" : "movie", poster_path: `/docs-poster-${i}.svg` })) });
+    if (p === "/api/ai-search/inspiration") return json({ items: [12, 13, 14, 15].map((i) => ({ title: catalog[i].title, year: catalog[i].year, media_type: catalog[i].type, poster_path: catalog[i].poster })) });
     if (p === "/api/ai-search/query") return json({ status: "success", results: aiResults, ai_reasoning: { genres: ["Science Fiction", "Drama"], original_language: null } });
     if (p === "/api/tmdb/languages") return json({ languages: [{ iso_639_1: "en", english_name: "English", name: "English" }] });
     if (p.startsWith("/api/ai-search")) return json({ status: "success", feedback: [], people: [] });
@@ -158,7 +211,7 @@ const shots = [
     async act(page) {
       await page.getByRole("textbox").first().fill("A slow-burn space drama about a crew far from home");
       await page.getByRole("button", { name: "Search", exact: true }).click();
-      await page.getByText(titles[5], { exact: true }).first().waitFor();
+      await page.getByText(aiResults[0].title, { exact: true }).first().waitFor();
     },
   },
 ];
@@ -180,9 +233,25 @@ for (const shot of shots) {
   });
 }
 
-test("README hero image", async ({ page }) => {
+test("README hero image", async ({ page, browser }) => {
   const data = (file) => `data:image/png;base64,${readFileSync(file).toString("base64")}`;
   const logo = data(join(__dirname, "..", "src", "assets", "logo.png"));
+
+  // Hero-only capture: three complete request cards at 2x, without tabs or filters,
+  // so the UI stays legible at the ~830px GitHub shows the banner at.
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, colorScheme: "dark" });
+  const app = await ctx.newPage();
+  await mockApi(app, new Set());
+  await signIn(app);
+  await app.goto("/requests?status=sent");
+  await app.waitForLoadState("networkidle");
+  const card = (n) => app.getByText(catalog[n].title, { exact: true }).last().locator("xpath=ancestor::*[contains(@class,'rounded')][1]");
+  // One card per watched title (slots 0-2 come from three different sources), captured one by one
+  // because the page groups cards by source.
+  const cards = [];
+  for (const n of [0, 1, 2]) cards.push((await card(n).screenshot()).toString("base64"));
+  await ctx.close();
+
   // Same tokens as src/assets/main.css (dark theme): flat canvas, one accent, the app's own font.
   await page.setViewportSize({ width: 1600, height: 800 });
   await page.setContent(`<!doctype html><html><head><meta charset="utf-8">
@@ -191,26 +260,24 @@ test("README hero image", async ({ page }) => {
       * { margin: 0; box-sizing: border-box; }
       body { width: 1600px; height: 800px; overflow: hidden; position: relative; background: #0b0d12; color: #e8eaf0;
         font-family: "Plus Jakarta Sans", sans-serif; }
-      .copy { position: absolute; left: 96px; top: 80px; bottom: 80px; width: 620px; display: flex; flex-direction: column; }
-      .brand { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 800; }
+      /* Text column and product frame share the same vertical centre; 64px gutter between them. */
+      .copy { position: absolute; left: 96px; top: 0; bottom: 0; width: 560px; display: flex; flex-direction: column; justify-content: center; }
+      .brand { display: flex; align-items: center; gap: 12px; height: 32px; font-size: 24px; font-weight: 800; }
       .brand img { height: 32px; }
-      .main { margin-top: auto; margin-bottom: auto; }
-      h1 { font-size: 80px; line-height: 1; font-weight: 800; letter-spacing: -3px; white-space: nowrap; }
-      h1 .lead { display: block; margin-bottom: 18px; }
-      h1 span { color: #b3a9ff; }
-      h1 .lead { color: #e8eaf0; }
-      .window { position: absolute; left: 830px; top: 64px; width: 1000px; height: 900px; border-radius: 14px; overflow: hidden;
-        border: 1px solid #2a3042; box-shadow: 0 30px 60px rgba(0, 0, 0, .45); }
-      /* Crop the sidebar away so the posters carry the image. */
-      .window img { display: block; width: 1700px; margin-left: -300px; margin-top: -20px; }
+      h1 { margin-top: 40px; font-size: 80px; line-height: 84px; font-weight: 800; letter-spacing: -1px; }
+      h1 span { display: block; }
+      h1 .accent { color: #b3a9ff; }
+      .meta { margin-top: 32px; font-size: 24px; line-height: 32px; font-weight: 500; color: #9aa3b5; }
+      .meta b { color: #c5cbd8; font-weight: 600; }
+      .frame { position: absolute; left: 720px; top: 0; bottom: 0; width: 800px; display: flex; align-items: center; gap: 24px; }
+      .frame img { width: calc((800px - 48px) / 3); }
     </style></head><body>
     <div class="copy">
       <div class="brand"><img src="${logo}" alt="">SuggestArr</div>
-      <div class="main">
-        <h1><span class="lead">You watch.</span><span>SuggestArr<br>finds what's next.</span></h1>
-      </div>
+      <h1><span>You watch.</span><span>Your library</span><span class="accent">fills itself.</span></h1>
+      <div class="meta">Works with <b>Jellyfin</b>, <b>Plex</b> and <b>Emby</b></div>
     </div>
-    <div class="window"><img src="${data(join(OUT, "requests.png"))}" alt=""></div>
+    <div class="frame">${cards.map((c) => `<img src="data:image/png;base64,${c}" alt="">`).join("")}</div>
     </body></html>`);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(300);

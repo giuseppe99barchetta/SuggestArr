@@ -38,7 +38,7 @@ See the [Feature Guide](docs/FEATURES.md) for how each feature works.
 | **AI Search** | **Jobs** |
 | ![AI Search results for a plain-language request](docs/assets/screenshots/ai-search.png) | ![Scheduled jobs and their recent runs](docs/assets/screenshots/jobs.png) |
 
-Titles, posters and users in these screenshots are fictional. Regenerate them with `cd client && npm run screenshots`.
+Users in these screenshots are fictional; titles, ratings and posters come from [TMDb](https://www.themoviedb.org/). This product uses the TMDB API but is not endorsed or certified by TMDB. Regenerate them with `cd client && TMDB_API_KEY=... npm run screenshots` (without a key, placeholder titles are used).
 
 ## Requirements
 
