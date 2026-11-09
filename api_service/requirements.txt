@@ -9,9 +9,9 @@ asgiref==3.13.0
 
 redis==8.1.0
 aiohttp==3.14.5
-amqp==5.4.1
-billiard==4.3.1
-kombu==5.6.2
+amqp==5.4.2
+billiard==4.3.2
+kombu==5.7.0
 
 APScheduler==3.11.3
 croniter==6.2.4
@@ -30,5 +30,5 @@ xmltodict==1.0.4
 mysql-connector-python==26.10.0
 psycopg2-binary==2.9.13
 
-openai==3.41.0
+openai==3.46.0
 prometheus-client==0.26.0
