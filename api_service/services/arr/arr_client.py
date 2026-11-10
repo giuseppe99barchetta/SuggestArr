@@ -42,6 +42,7 @@ class ArrClient(BaseHTTPClient):
         self._tag_ids = {}  # label -> id, cached for this client's lifetime
         self._library = None  # tmdb id -> title, read once per client by find_owned
         self._tags_loaded = False
+        self._options = None  # (quality profile ids, root folder paths), read once per client by add
 
     async def _request(self, method, path, **kwargs):
         """Call the API and return ``(status, decoded JSON or None)``; never raises on HTTP status."""
@@ -151,6 +152,17 @@ class ArrClient(BaseHTTPClient):
         endpoint, _ = SERVICES[self.service]
         tmdb_id = int(payload['mediaId'])
         tag_ids = await self._tag_ids_for([SUGGESTARR_TAG, *extra_labels])
+        # The profile may come from a job or an approval saved while another backend was active:
+        # only send what this instance really offers (a root folder is a path on its host).
+        if self._options is None:
+            self._options = ({item.get('id') for item in await self._get('qualityprofile') or [] if isinstance(item, dict)},
+                             {item.get('path') for item in await self._get('rootfolder') or [] if isinstance(item, dict)})
+        profiles, folders = self._options
+        # _tag_ids holds every tag of the instance (read in full on the first lookup) plus the ones created.
+        if payload.get('profileId') not in profiles or payload.get('rootFolder') not in folders \
+                or not set(payload.get('tags') or []) <= set(self._tag_ids.values()):
+            raise RuntimeError(f'{self.service.capitalize()} does not offer the quality profile, root folder '
+                               f'or tags chosen for tmdb:{tmdb_id}; choose them again')
         found = await self._get(f'{endpoint}/lookup', params={'term': f'tmdb:{tmdb_id}'})
         item = next((i for i in found if isinstance(i, dict) and i.get('tmdbId') == tmdb_id), None) \
             if isinstance(found, list) else None

@@ -11,6 +11,7 @@ from api_service.db.database_manager import DatabaseManager
 from api_service.utils.asyncio_loop import close_event_loop
 from api_service.utils.request_profiles import (
     validate_request_profiles,
+    validate_request_profiles_with_arr,
     validate_request_profiles_with_seer,
 )
 from api_service.utils import request_scope
@@ -243,9 +244,12 @@ def _decide_workflow(approve, blacklist=False):
     if approve:
         try:
             profile = _requested_profiles()
-            # Seer only knows (and only needs to validate) profiles for the rows it will deliver.
-            if profile and 'seer' in db.awaiting_backends(ids, scope.owner_id, scope.include_unassigned):
+            # Each backend only knows (and only needs to validate) profiles for the rows it will deliver.
+            backends = db.awaiting_backends(ids, scope.owner_id, scope.include_unassigned) if profile else set()
+            if 'seer' in backends:
                 validate_request_profiles_with_seer(profile)
+            if 'arr' in backends:
+                validate_request_profiles_with_arr(profile, load_env_vars())
         except ValueError:
             logger.warning("Invalid request profile supplied in workflow decision", exc_info=True)
             return jsonify({'status': 'error', 'message': 'Invalid profile request'}), 400

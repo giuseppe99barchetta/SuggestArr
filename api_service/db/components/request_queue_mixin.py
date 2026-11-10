@@ -356,7 +356,7 @@ class RequestQueueMixin:
         fields_by_type = {}
         for media_type, profile in (profiles or {}).items():
             fields = {key: value for key, value in (profile or {}).items()
-                      if key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId')
+                      if key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId', 'tags')
                       and value is not None}
             if fields:
                 fields_by_type[media_type] = fields
@@ -493,8 +493,9 @@ class RequestQueueMixin:
             fields_by_type: Output of _profile_fields_by_media_type().
 
         Returns:
-            int: Rows left untouched because they are delivered straight to
-            Radarr/Sonarr (Seer profile ids mean nothing there).
+            int: Rows left untouched because the profile is for the other backend:
+            a Seer-shape profile (with ``serverId``) only applies to rows delivered
+            by Seer, a Radarr/Sonarr-shape one only to direct-delivery rows.
         """
         cursor.execute(f"SELECT id,media_type,payload FROM pending_requests "
                        f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}",
@@ -511,7 +512,7 @@ class RequestQueueMixin:
                 data = json.loads(payload) if payload else {}
             except (TypeError, ValueError):
                 continue
-            if (data.get('_backend') or 'seer') != 'seer':
+            if ((data.get('_backend') or 'seer') == 'seer') != (fields.get('serverId') is not None):
                 ignored += 1
                 continue
             data.update(fields)

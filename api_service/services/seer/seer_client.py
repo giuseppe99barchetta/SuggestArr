@@ -502,8 +502,13 @@ class SeerClient(BaseHTTPClient):
 
     @staticmethod
     def _job_profile_overrides(context, media_type):
-        """Per-job Seer profile values (server, profile, root folder...) to merge into the payload."""
+        """Per-job Seer profile values (server, profile, root folder...) to merge into the payload.
+
+        A profile without ``serverId`` is meant for direct Radarr/Sonarr delivery and is ignored here.
+        """
         profile = (context.get('request_profiles') or {}).get(media_type) or {}
+        if profile.get('serverId') is None:
+            return {}
         return {key: profile[key] for key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId')
                 if profile.get(key) is not None}
 

@@ -16,7 +16,15 @@ from api_service.utils.asyncio_loop import run_coroutine_sync
 logger = LoggerManager.get_logger("RequestProfiles")
 
 MEDIA_TYPES = ('movie', 'tv')
-PROFILE_KEYS = ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId')
+PROFILE_KEYS = ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId', 'tags')
+# A profile with serverId names a Seer server (Seer shape); without it, it is applied straight
+# by Radarr/Sonarr with direct delivery (Arr shape: profileId, rootFolder, tags).
+SEER_ONLY_KEYS = ('serverId', 'is4k', 'languageProfileId')
+
+
+def is_seer_profile(profile):
+    """Whether a per-media-type profile is in Seer shape (it names a Seer server)."""
+    return isinstance(profile, dict) and profile.get('serverId') is not None
 
 
 class UnknownSeerProfileError(ValueError):
@@ -60,13 +68,73 @@ def validate_request_profiles(value):
             raise ValueError('is4k must be a boolean')
         if profile.get('languageProfileId') is not None and not isinstance(profile['languageProfileId'], int):
             raise ValueError('languageProfileId must be an integer')
+        if profile.get('tags') is not None and (not isinstance(profile['tags'], list) or any(
+                type(tag) is not int for tag in profile['tags'])):
+            raise ValueError('tags must be a list of integers')
         # A quality profile id only means something together with the server it
         # belongs to, and Radarr refuses an item without a root folder — so the
-        # three are all-or-nothing.
-        present = [profile.get(key) is not None for key in ('serverId', 'profileId', 'rootFolder')]
+        # three are all-or-nothing (the two, for a profile applied straight by Radarr/Sonarr).
+        if is_seer_profile(profile):
+            if profile.get('tags') is not None:
+                raise ValueError('tags are only set on Radarr/Sonarr profiles')
+            required = ('serverId', 'profileId', 'rootFolder')
+        else:
+            if any(profile.get(key) is not None for key in SEER_ONLY_KEYS):
+                raise ValueError('is4k and languageProfileId need a Seer server')
+            required = ('profileId', 'rootFolder')
+        present = [profile.get(key) is not None for key in required]
         if any(present) and not all(present):
-            raise ValueError('serverId, profileId and rootFolder must be selected together')
+            raise ValueError(', '.join(required) + ' must be selected together')
+        if profile.get('tags') and not all(present):
+            raise ValueError('tags need a quality profile and a root folder')
     return value
+
+
+def validate_request_profiles_with_arr(profiles, env):
+    """
+    Check Radarr/Sonarr-shape profiles against what the instance serving each type offers.
+
+    Seer-shape profiles are skipped (they are ignored with direct delivery).
+
+    Args:
+        profiles: Output of validate_request_profiles().
+        env: Runtime configuration with the RADARR_* / SONARR_* settings.
+
+    Raises:
+        ValueError: When an id is unknown, or the instance cannot be asked.
+    """
+    from api_service.config.config import ARR_INSTANCES
+    from api_service.services.arr.arr_client import ArrClient
+
+    wanted = {media_type: profile for media_type, profile in (profiles or {}).items()
+              if profile and not is_seer_profile(profile) and profile.get('profileId') is not None}
+    if not wanted:
+        return
+
+    async def check():
+        for service, (url_key, token_key, media_type) in ARR_INSTANCES.items():
+            profile = wanted.get(media_type)
+            if profile is None:
+                continue
+            name = service.capitalize()
+            if not env.get(url_key) or not env.get(token_key):
+                raise UnknownSeerProfileError(f"{name} is not configured")
+            async with ArrClient(service, env[url_key], env[token_key]) as client:
+                options = await client.get_options()
+            if profile['profileId'] not in {item['id'] for item in options['profiles']}:
+                raise UnknownSeerProfileError(f"Unknown {name} quality profile")
+            if profile['rootFolder'] not in {item['path'] for item in options['rootFolders']}:
+                raise UnknownSeerProfileError(f"Unknown {name} root folder")
+            if not set(profile.get('tags') or []) <= {item['id'] for item in options['tags']}:
+                raise UnknownSeerProfileError(f"Unknown {name} tag")
+
+    try:
+        _run_async(check())
+    except UnknownSeerProfileError:
+        raise
+    except Exception:
+        logger.warning('Could not verify request profiles with Radarr/Sonarr', exc_info=True)
+        raise ValueError('Could not verify request profiles with Radarr/Sonarr') from None
 
 
 def validate_request_profiles_with_seer(profiles):

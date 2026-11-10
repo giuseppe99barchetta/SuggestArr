@@ -26,9 +26,10 @@ async function preview(page, { modules, mount, extraApi = {} }) {
       <body><div id="preview" style="padding:16px;max-width:1200px;margin:auto"></div><script type="module">
       import {createApp,h} from '/node_modules/.vite/deps/vue.js';
       ${modules}
-      import {useAuth,markAuthReady} from '/src/composables/useAuth.js';
+      import {useAuth,initializeAuthReady,markAuthReady} from '/src/composables/useAuth.js';
       import '/src/assets/main.css';
       useAuth().currentUser.value={id:7,username:'owner',role:'admin'};
+      initializeAuthReady();
       markAuthReady();
       window.events=[];
       const app=createApp({render:()=>${mount}});
@@ -167,4 +168,39 @@ test("What's new offers a chooser once there are several release notes", async (
   await dialog.getByLabel('Release notes').selectOption('older');
   await expect(dialog.getByRole('heading', { name: 'Older heading' })).toBeVisible();
   await expect(dialog.getByText("What's new · 1 of 1")).toBeVisible();
+});
+
+const SEER_JOB_PROFILE = { serverId: 0, profileId: 7, rootFolder: '/seer', is4k: false };
+const jobModal = (page, job) => preview(page, {
+  modules: `import JobModal from '/src/components/settings/jobs/JobModal.vue';`,
+  mount: `h(JobModal,{job:${JSON.stringify(job)},requestBackend:'arr',onSave:value=>{window.savedJob=value;}})`,
+  extraApi: { '/api/jobs/genres/movie': { status: 'success', genres: [] }, '/api/jobs/genres/tv': { status: 'success', genres: [] },
+    '/api/jobs/watch-regions': { status: 'success', regions: [] }, '/api/jobs/languages': { status: 'success', languages: [] } },
+});
+const arrJob = { id: 5, name: 'Weekly', job_type: 'discover', media_type: 'movie', max_results: 5,
+  delivery_mode: 'automatic', request_profiles: { movie: SEER_JOB_PROFILE, tv: {} } };
+
+test('Job dialog: direct delivery picks a Radarr profile per job', async ({ page }, testInfo) => {
+  const errors = await jobModal(page, arrJob);
+  const dialog = page.getByRole('dialog');
+  const overrides = dialog.getByRole('button', { name: /Radarr \/ Sonarr overrides/ });
+  await expect(overrides).toContainText('Using the default quality profile, root folder and tags from Services.');
+  await overrides.click();
+  const profiles = page.getByTestId('job-arr-profiles');
+  await profiles.getByRole('combobox', { name: /Quality profile/ }).selectOption({ label: 'HD-1080p' });
+  await profiles.getByRole('combobox', { name: /Root folder/ }).selectOption('/movies');
+  await profiles.getByLabel('kids').check();
+  await expect(overrides).toContainText('Custom Radarr profile.');
+  await profiles.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('job-arr-profiles.png') });
+  await dialog.getByRole('button', { name: 'Save job' }).click();
+  await expect.poll(() => page.evaluate(() => window.savedJob?.request_profiles)).toEqual({
+    movie: { profileId: 4, rootFolder: '/movies', tags: [1] }, tv: {} });
+  expect(errors).toEqual([]);
+});
+
+test('Job dialog: direct delivery keeps an untouched Seer profile as stored', async ({ page }) => {
+  await jobModal(page, arrJob);
+  await page.getByRole('dialog').getByRole('button', { name: 'Save job' }).click();
+  await expect.poll(() => page.evaluate(() => window.savedJob?.request_profiles)).toEqual({ movie: SEER_JOB_PROFILE, tv: {} });
 });

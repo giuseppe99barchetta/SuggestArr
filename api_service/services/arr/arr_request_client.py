@@ -68,7 +68,15 @@ class ArrRequestClient(SeerClient):
 
     @staticmethod
     def _job_profile_overrides(context, media_type):
-        return {}  # per-job profiles name Seer servers; direct delivery uses ARR_PROFILE_CONFIG
+        """Per-job Radarr/Sonarr profile (``profileId``, ``rootFolder``, ``tags``), replacing ARR_PROFILE_CONFIG.
+
+        A profile naming a Seer server (``serverId``) is kept for Seer and ignored here.
+        """
+        profile = (context.get('request_profiles') or {}).get(media_type) or {}
+        if profile.get('serverId') is not None or profile.get('profileId') is None or not profile.get('rootFolder'):
+            return {}
+        return {'profileId': profile['profileId'], 'rootFolder': profile['rootFolder'],
+                'tags': list(profile.get('tags') or [])}
 
     async def init(self):
         """Nothing to synchronise: there is no remote request list."""

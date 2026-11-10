@@ -27,6 +27,7 @@ from api_service.jobs.trakt_recommendations_automation import (
 from api_service.utils.asyncio_loop import run_coroutine_sync
 from api_service.utils.request_profiles import (
     validate_request_profiles,
+    validate_request_profiles_with_arr,
     validate_request_profiles_with_seer,
 )
 
@@ -129,12 +130,16 @@ def get_job_manager() -> JobManager:
 
 
 def _validate_job_profiles(profiles):
-    """Check job request profiles against Seer, unless requests go straight to Radarr/Sonarr.
+    """Check job request profiles against the backend that will use them.
 
-    Direct delivery ignores per-job Seer profiles, so they are neither checked (Seer may not be
-    configured) nor altered: the stored values stay valid if Seer is used again.
+    Seer-shape profiles (with serverId) are checked against Seer, Radarr/Sonarr-shape ones against
+    Radarr/Sonarr with direct delivery. The other shape is ignored by the active backend, so it is
+    neither checked (that service may not be configured) nor altered.
     """
-    if get_request_backend(ConfigService.get_runtime_config()) != 'arr':
+    env = ConfigService.get_runtime_config()
+    if get_request_backend(env) == 'arr':
+        validate_request_profiles_with_arr(profiles, env)
+    else:
         validate_request_profiles_with_seer(profiles)
 
 

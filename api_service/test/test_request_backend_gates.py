@@ -198,11 +198,21 @@ def test_awaiting_rows_report_their_recorded_backend_and_legacy_rows_are_seer():
     assert queue.awaiting_backends([3], 1) == {'seer'}
 
 
-def test_a_profile_override_is_applied_to_seer_rows_only_and_reported():
+def test_a_seer_profile_override_is_applied_to_seer_rows_only_and_reported():
     queue = _Queue()
     report = {}
-    changed = queue.decide_suggestions([1, 2, 3], 1, 9, True, profiles={'movie': {'profileId': 7, 'rootFolder': '/x'}},
-                                       report=report)
+    changed = queue.decide_suggestions([1, 2, 3], 1, 9, True, report=report,
+                                       profiles={'movie': {'serverId': 2, 'profileId': 7, 'rootFolder': '/x'}})
     assert changed == 3 and report['ignored_overrides'] == 1
     assert queue.payload(1)['profileId'] == 7 and queue.payload(3)['profileId'] == 7  # seer and legacy rows
     assert queue.payload(2)['profileId'] == 1 and queue.payload(2)['rootFolder'] == '/own'  # arr row keeps its own
+
+
+def test_a_radarr_profile_override_is_applied_to_direct_rows_only_and_reported():
+    queue = _Queue()
+    report = {}
+    queue.decide_suggestions([1, 2, 3], 1, 9, True, report=report,
+                             profiles={'movie': {'profileId': 7, 'rootFolder': '/x', 'tags': [5]}})
+    assert report['ignored_overrides'] == 2
+    assert (queue.payload(2)['profileId'], queue.payload(2)['rootFolder'], queue.payload(2)['tags']) == (7, '/x', [5])
+    assert 'tags' not in queue.payload(1) and queue.payload(1).get('profileId') != 7  # Seer rows keep theirs

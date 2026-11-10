@@ -93,3 +93,28 @@ export async function loadSeerServers(http) {
     failed: radarr.status === 'rejected' || sonarr.status === 'rejected',
   };
 }
+
+// A job's per-type profile has two shapes: with serverId it names a Seer server; without it,
+// direct Radarr/Sonarr delivery applies its profileId / rootFolder / tags. The shape the active
+// backend does not use is passed through exactly as stored, so switching back finds it intact.
+export function jobProfilePayload(profile, backend) {
+  const p = profile || {};
+  const forSeer = isChosen(p.serverId);
+  if (forSeer !== (backend !== 'arr')) {
+    return forSeer || (isChosen(p.profileId) && p.rootFolder) ? { ...p } : {};
+  }
+  if (!isChosen(p.profileId) || !p.rootFolder) return {};
+  if (!forSeer) {
+    return { profileId: Number(p.profileId), rootFolder: p.rootFolder, ...(p.tags?.length ? { tags: p.tags.map(Number) } : {}) };
+  }
+  return {
+    serverId: Number(p.serverId), profileId: Number(p.profileId), rootFolder: p.rootFolder, is4k: p.is4k === true,
+    ...(isChosen(p.languageProfileId) ? { languageProfileId: Number(p.languageProfileId) } : {}),
+  };
+}
+
+// Whether a job profile is a custom choice for the active backend (drives the summary and the open state).
+export function hasJobProfile(profile, backend) {
+  const p = profile || {};
+  return backend === 'arr' ? !isChosen(p.serverId) && isChosen(p.profileId) : isChosen(p.serverId);
+}

@@ -302,13 +302,40 @@
                 </div>
               </div>
 
-              <button v-if="requestBackend !== 'arr'" type="button" :class="disclosureClass" :aria-expanded="profilesOpen.toString()" aria-controls="job-request-profiles" @click="profilesOpen = !profilesOpen">
+              <button type="button" :class="disclosureClass" :aria-expanded="profilesOpen.toString()" aria-controls="job-request-profiles" @click="profilesOpen = !profilesOpen">
                 <span class="flex min-w-0 flex-col items-start gap-0.5">
                   <span class="text-[13px] font-semibold text-ink">Radarr / Sonarr overrides</span>
                   <span class="text-xs font-normal text-ink-4">{{ profilesSummary }}</span>
                 </span>
                 <i aria-hidden="true" class="fas fa-chevron-down ml-auto text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': profilesOpen }"></i>
               </button>
+              <div v-if="profilesOpen && requestBackend === 'arr'" id="job-request-profiles" class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]" data-testid="job-arr-profiles">
+                <div v-for="type in visibleProfileTypes" :key="type" class="grid gap-2 rounded-ctl border border-edge bg-panel-2 p-4">
+                  <div class="flex items-center gap-2 text-[0.85rem] font-semibold text-ink"><i aria-hidden="true" :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'" class="text-ink-4"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
+                  <template v-if="arrOptions[type]">
+                    <label class="ui-label">Quality profile
+                      <select :value="arrField(type, 'profileId')" class="ui-input" @change="setArrField(type, 'profileId', $event.target.value === '' ? '' : Number($event.target.value))">
+                        <option value="">Use the default profile</option>
+                        <option v-for="option in arrOptions[type].profiles" :key="option.id" :value="option.id">{{ option.name }}</option>
+                      </select>
+                    </label>
+                    <template v-if="arrField(type, 'profileId') !== ''">
+                      <label class="ui-label">Root folder
+                        <select :value="arrField(type, 'rootFolder')" class="ui-input" @change="setArrField(type, 'rootFolder', $event.target.value)">
+                          <option value="" disabled>Select root folder</option>
+                          <option v-for="folder in arrOptions[type].rootFolders" :key="folder.path" :value="folder.path">{{ folder.path }}</option>
+                        </select>
+                      </label>
+                      <div v-if="arrOptions[type].tags.length" class="flex flex-wrap gap-2" role="group" :aria-label="`${type === 'movie' ? 'Radarr' : 'Sonarr'} tags`">
+                        <label v-for="tag in arrOptions[type].tags" :key="tag.id" class="flex cursor-pointer items-center gap-1.5 rounded-full border border-edge px-2.5 py-1 text-xs text-ink-3">
+                          <input type="checkbox" :checked="(form.request_profiles[type].tags || []).includes(tag.id)" @change="toggleArrTag(type, tag.id)" />{{ tag.label }}
+                        </label>
+                      </div>
+                    </template>
+                  </template>
+                  <p v-else class="m-0 text-xs text-ink-4">{{ type === 'movie' ? 'Radarr' : 'Sonarr' }} is not configured or not reachable: the default profile from Services is used.</p>
+                </div>
+              </div>
               <div v-if="profilesOpen && requestBackend !== 'arr'" id="job-request-profiles" class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
                 <div v-for="type in visibleProfileTypes" :key="type" class="grid gap-2 rounded-ctl border border-edge bg-panel-2 p-4">
                   <div class="flex items-center gap-2 text-[0.85rem] font-semibold text-ink"><i aria-hidden="true" :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'" class="text-ink-4"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
@@ -369,7 +396,8 @@ import TraktRecommendationFilters from './TraktRecommendationFilters.vue';
 import SchedulePicker from './SchedulePicker.vue';
 import DryRunResultModal from './DryRunResultModal.vue';
 import { jobsApi } from '@/api/jobsApi';
-import { listTraktJobUsers } from '@/api/api';
+import { getArrOptionsApi, listTraktJobUsers } from '@/api/api';
+import { hasJobProfile, isChosen, jobProfilePayload } from '@/utils/requestProfiles.js';
 import { waitForAuthReady, useAuth } from '@/composables/useAuth';
 import { getJobTypeIcon, formatJobSchedule } from '@/utils/jobTypeVisuals.js';
 import { jobRequiresApproval } from '@/utils/requestApproval.js';
@@ -400,7 +428,7 @@ export default {
     requestApprovalDefault: { type: [Boolean, String], default: null },
     /** Global PAUSE_JOBS_WITH_PENDING_APPROVALS, shown on the "Global" pause option; null when unknown. */
     approvalPauseDefault: { type: Boolean, default: null },
-    /** REQUEST_BACKEND: Seer-only options (pending-request pause, per-job server profiles) are hidden for 'arr'. */
+    /** REQUEST_BACKEND: with 'arr' the per-job profiles are Radarr/Sonarr ones and the Seer pause is hidden. */
     requestBackend: { type: String, default: 'seer' }
   },
   emits: ['close', 'save'],
@@ -462,7 +490,8 @@ export default {
       traktConfigured: false,
       traktLoading: false,
       radarrServers: [],
-      sonarrServers: []
+      sonarrServers: [],
+      arrOptions: { movie: null, tv: null }
     };
   },
   computed: {
@@ -532,8 +561,11 @@ export default {
       return 'Most suggestions requested each run, across all monitored users (1–100).';
     },
     profilesSummary() {
-      const set = this.visibleProfileTypes.filter(type => this.form.request_profiles[type]?.serverId);
-      if (!set.length) return "Using Seer's default server, quality profile and root folder.";
+      const set = this.visibleProfileTypes.filter(type => hasJobProfile(this.form.request_profiles[type], this.requestBackend));
+      if (!set.length) {
+        return this.requestBackend === 'arr' ? 'Using the default quality profile, root folder and tags from Services.'
+          : "Using Seer's default server, quality profile and root folder.";
+      }
       return `Custom ${set.map(type => (type === 'movie' ? 'Radarr' : 'Sonarr')).join(' and ')} profile.`;
     },
     sections() {
@@ -629,7 +661,7 @@ export default {
         type: this.job.schedule_type || 'preset',
         value: this.job.schedule_value || 'daily'
       };
-      this.profilesOpen = Object.values(this.form.request_profiles).some(profile => profile.serverId);
+      this.profilesOpen = Object.values(this.form.request_profiles).some(profile => hasJobProfile(profile, this.requestBackend));
     }
     // Ready for Escape and edits before the slower loads below (Seer can take seconds).
     this.pristine = this.snapshot();
@@ -664,6 +696,16 @@ export default {
       this.llmConfigured = false;
     }
     await this.refreshTraktSetup();
+    if (this.requestBackend === 'arr') {
+      // Each instance on its own: one missing or unreachable must not hide the other.
+      const [radarr, sonarr] = await Promise.allSettled([getArrOptionsApi({ service: 'radarr' }), getArrOptionsApi({ service: 'sonarr' })]);
+      const options = (result) => {
+        const data = result.status === 'fulfilled' ? result.value?.data : null;
+        return data ? { profiles: data.profiles || [], rootFolders: data.rootFolders || [], tags: data.tags || [] } : null;
+      };
+      this.arrOptions = { movie: options(radarr), tv: options(sonarr) };
+      return;
+    }
     try {
       const [radarr, sonarr] = await Promise.all([axios.get('/api/seer/radarr-servers'), axios.get('/api/seer/sonarr-servers')]);
       this.radarrServers = radarr.data.servers || [];
@@ -736,13 +778,7 @@ export default {
         media_type: this.form.media_type,
         delivery_mode: this.form.delivery_mode,
         seer_identity_mode: this.form.seer_identity_mode,
-        request_profiles: Object.fromEntries(Object.entries(this.form.request_profiles).map(([type, profile]) => [type,
-          profile.serverId !== '' && profile.serverId != null && profile.profileId !== '' && profile.profileId != null && profile.rootFolder ? {
-            serverId: Number(profile.serverId), profileId: Number(profile.profileId), rootFolder: profile.rootFolder,
-            is4k: profile.is4k === true,
-            ...(profile.languageProfileId !== '' && profile.languageProfileId != null ? { languageProfileId: Number(profile.languageProfileId) } : {})
-          } : {}
-        ]))
+        request_profiles: this.requestProfilesPayload()
       };
     },
     async previewList(more = false) {
@@ -788,6 +824,23 @@ export default {
           ? 'border-brand bg-brand-soft text-ink [&>i]:text-brand-ink'
           : 'border-edge-strong bg-panel-2 text-ink-2 hover:enabled:border-ink-4 hover:enabled:text-ink [&>i]:text-ink-4',
       ];
+    },
+    requestProfilesPayload() {
+      return Object.fromEntries(Object.entries(this.form.request_profiles).map(([type, profile]) => [type, jobProfilePayload(profile, this.requestBackend)]));
+    },
+    // Direct delivery: a stored Seer profile (serverId) is only replaced once a Radarr/Sonarr value is chosen.
+    arrField(type, key) {
+      const profile = this.form.request_profiles[type] || {};
+      return isChosen(profile.serverId) ? '' : (profile[key] ?? '');
+    },
+    setArrField(type, key, value) {
+      const profile = this.form.request_profiles[type] || {};
+      const base = isChosen(profile.serverId) ? {} : profile;
+      this.form.request_profiles[type] = key === 'profileId' && value === '' ? {} : { rootFolder: '', tags: [], ...base, [key]: value };
+    },
+    toggleArrTag(type, tagId) {
+      const tags = this.form.request_profiles[type].tags || [];
+      this.form.request_profiles[type] = { ...this.form.request_profiles[type], tags: tags.includes(tagId) ? tags.filter(id => id !== tagId) : [...tags, tagId] };
     },
     serversFor(type) { return type === 'movie' ? this.radarrServers : this.sonarrServers; },
     selectedServer(type) { return this.serversFor(type).find(server => String(server.id) === String(this.form.request_profiles[type].serverId)); },
@@ -868,16 +921,7 @@ export default {
       try {
         const jobData = {
           ...this.form,
-          request_profiles: Object.fromEntries(Object.entries(this.form.request_profiles).map(([type, profile]) => [
-            type,
-            profile.serverId && profile.profileId && profile.rootFolder ? {
-              serverId: Number(profile.serverId),
-              profileId: Number(profile.profileId),
-              rootFolder: profile.rootFolder,
-              is4k: profile.is4k === true,
-              ...(profile.languageProfileId !== '' && profile.languageProfileId != null ? { languageProfileId: Number(profile.languageProfileId) } : {})
-            } : {}
-          ])),
+          request_profiles: this.requestProfilesPayload(),
           schedule_type: this.schedule.type,
           schedule_value: this.schedule.value
         };

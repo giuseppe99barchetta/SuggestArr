@@ -42,14 +42,19 @@ class FakeArr:
         return [path for m, path, _ in self.calls if m == method]
 
 
+# What the instance offers; add() refuses anything else.
+OFFERED = {('GET', 'qualityprofile'): (200, [{'id': 4}]), ('GET', 'rootfolder'): (200, [{'path': '/movies'}])}
+
+
 def _client(service, routes):
+    routes = {**OFFERED, **routes}
     client = ArrClient(service, 'http://arr.test/', 'k')
     client._request = FakeArr(routes)
     return client
 
 
 LOOKUP = [{'title': 'Inception', 'tmdbId': 27205}]
-PAYLOAD = {'mediaType': 'movie', 'mediaId': 27205, 'profileId': 4, 'rootFolder': '/movies', 'tags': [1, 9]}
+PAYLOAD = {'mediaType': 'movie', 'mediaId': 27205, 'profileId': 4, 'rootFolder': '/movies', 'tags': [9]}
 
 
 def _posted_tags(client):
@@ -63,18 +68,19 @@ def test_an_existing_suggestarr_tag_is_reused_and_merged_without_duplicates():
                                 ('GET', 'movie/lookup'): (200, LOOKUP), ('POST', 'movie'): (201, {})})
     assert asyncio.run(client.add(PAYLOAD)) is True
     assert client._request.paths('POST') == ['movie']  # no tag created
-    assert _posted_tags(client) == [1, 9]
+    assert _posted_tags(client) == [9]
 
 
 def test_a_missing_tag_is_created_once_per_client():
-    client = _client('radarr', {('GET', 'tag'): (200, []), ('POST', 'tag'): lambda kw: (201, {'id': 12, **kw['json']}),
+    client = _client('radarr', {('GET', 'tag'): (200, [{'id': 9, 'label': 'kids'}]),
+                                ('POST', 'tag'): lambda kw: (201, {'id': 12, **kw['json']}),
                                 ('GET', 'movie/lookup'): (200, LOOKUP), ('POST', 'movie'): (201, {})})
     asyncio.run(client.add(PAYLOAD, ['suggestarr-user-mario']))
     asyncio.run(client.add(PAYLOAD, ['suggestarr-user-mario']))
     labels = [kw['json']['label'] for m, path, kw in client._request.calls if (m, path) == ('POST', 'tag')]
     assert labels == ['suggestarr', 'suggestarr-user-mario']  # created once, then cached
     assert client._request.paths('GET').count('tag') == 1
-    assert _posted_tags(client) == [1, 9, 12]
+    assert _posted_tags(client) == [9, 12]
 
 
 def test_a_tag_that_cannot_be_created_fails_the_delivery():
@@ -120,6 +126,15 @@ def test_the_request_client_reuses_one_arr_client_per_instance_and_closes_it():
         asyncio.run(deliver_twice())
     factory.assert_called_once_with('radarr', 'http://radarr:7878', 'k')
     fake.close.assert_awaited_once()
+
+
+@pytest.mark.parametrize('change', [{'profileId': 99}, {'rootFolder': '/etc'}, {'tags': [9, 77]}])
+def test_a_profile_the_instance_does_not_offer_is_never_sent(change):
+    client = _client('radarr', {('GET', 'tag'): (200, [{'id': 9, 'label': 'suggestarr'}]),
+                                ('GET', 'movie/lookup'): (200, LOOKUP), ('POST', 'movie'): (201, {})})
+    with pytest.raises(RuntimeError, match='choose them again'):
+        asyncio.run(client.add({**PAYLOAD, **change}))
+    assert 'movie' not in client._request.paths('POST')
 
 
 # --- 2. availability ---------------------------------------------------------
@@ -401,3 +416,90 @@ def test_direct_cleanup_without_an_instance_is_not_configured():
     env = {'REQUEST_BACKEND': 'arr', 'SELECTED_SERVICE': 'jellyfin', 'JELLYFIN_API_URL': 'http://jf', 'JELLYFIN_TOKEN': 't'}
     result, db, radarr = _cleanup(dry_run=False, env=env)
     assert result['status'] == 'not_configured' and radarr._request.calls == []
+
+
+# --- 5. per-job profiles in both shapes ----------------------------------------
+
+from api_service.services.seer.seer_client import SeerClient  # noqa: E402
+from api_service.utils import request_profiles  # noqa: E402
+
+SEER_PROFILE = {'serverId': 0, 'profileId': 99, 'rootFolder': '/seer', 'is4k': False}
+ARR_PROFILE = {'profileId': 7, 'rootFolder': '/movies-4k', 'tags': [5]}
+
+
+@pytest.mark.parametrize('profiles', [
+    {'movie': SEER_PROFILE, 'tv': {'serverId': 1, 'profileId': 2, 'rootFolder': '/tv', 'languageProfileId': 1}},
+    {'movie': ARR_PROFILE, 'tv': {'profileId': 2, 'rootFolder': '/tv'}},
+    {'movie': SEER_PROFILE, 'tv': {'profileId': 2, 'rootFolder': '/tv', 'tags': []}},
+    {'movie': {}, 'tv': {}},
+])
+def test_both_profile_shapes_are_valid(profiles):
+    assert request_profiles.validate_request_profiles(profiles) == profiles
+
+
+@pytest.mark.parametrize('profile', [
+    {'profileId': 7},                                      # Arr shape needs a root folder too
+    {'rootFolder': '/x', 'tags': [1]},
+    {'tags': [1]},                                         # tags without a profile
+    {'profileId': 7, 'rootFolder': '/x', 'is4k': True},    # Seer-only keys without a server
+    {'profileId': 7, 'rootFolder': '/x', 'languageProfileId': 1},
+    {**SEER_PROFILE, 'tags': [1]},                         # tags are not sent to Seer
+    {'profileId': 7, 'rootFolder': '/x', 'tags': ['1']},
+    {'profileId': 7, 'rootFolder': '/x', 'tags': 1},
+    {'serverId': 0, 'profileId': 7},                       # Seer triple still all-or-nothing
+])
+def test_mixed_or_partial_profiles_are_refused(profile):
+    with pytest.raises(ValueError):
+        request_profiles.validate_request_profiles({'movie': profile})
+
+
+def test_seer_ignores_a_radarr_profile_and_direct_delivery_ignores_a_seer_profile():
+    assert SeerClient._job_profile_overrides({'request_profiles': {'movie': ARR_PROFILE}}, 'movie') == {}
+    assert SeerClient._job_profile_overrides({'request_profiles': {'movie': SEER_PROFILE}}, 'movie') == SEER_PROFILE
+    assert ArrRequestClient._job_profile_overrides({'request_profiles': {'movie': SEER_PROFILE}}, 'movie') == {}
+    assert ArrRequestClient._job_profile_overrides({'request_profiles': {'movie': ARR_PROFILE}}, 'movie') == ARR_PROFILE
+    assert ArrRequestClient._job_profile_overrides({'request_profiles': {'movie': {'profileId': 7}}}, 'movie') == {}
+
+
+def test_a_job_radarr_profile_replaces_the_default_at_enqueue():
+    client = ArrRequestClient(ARR_ENV, queue_context={'job_id': 1, 'request_profiles': {'movie': ARR_PROFILE}})
+    with patch('api_service.services.seer.seer_client.DatabaseManager') as manager, \
+            patch('api_service.services.seer.seer_client.load_env_vars', return_value=ARR_ENV):
+        db = manager.return_value
+        db.check_request_exists.return_value = False
+        db.enqueue_request.return_value = True
+        assert asyncio.run(client.request_media('movie', {'id': 27205, 'title': 'Inception'})) is True
+    payload = db.enqueue_request.call_args.args[3]
+    assert (payload['profileId'], payload['rootFolder'], payload['tags']) == (7, '/movies-4k', [5])
+
+
+OPTIONS = {'profiles': [{'id': 7, 'name': 'UHD'}], 'rootFolders': [{'path': '/movies-4k'}], 'tags': [{'id': 5, 'label': 'kids'}]}
+
+
+def _validate_with_arr(profiles, env=ARR_ENV, options=OPTIONS):
+    fake = MagicMock(get_options=AsyncMock(side_effect=options) if isinstance(options, Exception)
+                     else AsyncMock(return_value=options))
+    fake.__aenter__ = AsyncMock(return_value=fake)
+    fake.__aexit__ = AsyncMock(return_value=False)
+    with patch('api_service.services.arr.arr_client.ArrClient', return_value=fake) as factory:
+        request_profiles.validate_request_profiles_with_arr(profiles, env)
+    return factory
+
+
+def test_radarr_profiles_are_checked_against_the_instance_and_seer_profiles_skipped():
+    factory = _validate_with_arr({'movie': ARR_PROFILE, 'tv': SEER_PROFILE})
+    factory.assert_called_once_with('radarr', 'http://radarr:7878', 'k')
+    assert _validate_with_arr({'movie': SEER_PROFILE, 'tv': {}}).call_count == 0
+
+
+@pytest.mark.parametrize('profile', [{**ARR_PROFILE, 'profileId': 8}, {**ARR_PROFILE, 'rootFolder': '/other'},
+                                     {**ARR_PROFILE, 'tags': [5, 6]}])
+def test_an_unknown_radarr_id_is_refused(profile):
+    with pytest.raises(request_profiles.UnknownSeerProfileError):
+        _validate_with_arr({'movie': profile})
+
+
+@pytest.mark.parametrize('env,options', [(ARR_ENV, RuntimeError('down')), ({'REQUEST_BACKEND': 'arr'}, OPTIONS)])
+def test_a_radarr_profile_that_cannot_be_verified_is_refused(env, options):
+    with pytest.raises(ValueError):
+        _validate_with_arr({'movie': ARR_PROFILE}, env=env, options=options)
