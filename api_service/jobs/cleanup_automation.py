@@ -9,9 +9,10 @@ import threading
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
-from api_service.config.config import get_request_backend
+from api_service.config.config import ARR_INSTANCES, get_request_backend
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.arr.arr_client import ArrClient
 from api_service.services.config_service import ConfigService
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.services.plex.plex_client import PlexClient
@@ -219,12 +220,18 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
                                    last_run_status='not_configured', last_run_summary=msg)
         return {'status': 'not_configured', 'message': msg}
 
+    # Direct delivery deletes in Radarr/Sonarr, and only titles tagged suggestarr (see ArrClient.delete).
+    arr_clients = None
     if get_request_backend(env_vars) == 'arr':
-        msg = "Cleanup deletes titles through Seer and is not available with direct Radarr/Sonarr."
-        logger.warning(msg)
-        db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
-                                   last_run_status='unsupported', last_run_summary=msg)
-        return {'status': 'unsupported', 'message': msg}
+        arr_clients = {media_type: (service, env_vars[url_key], env_vars[token_key])
+                       for service, (url_key, token_key, media_type) in ARR_INSTANCES.items()
+                       if env_vars.get(url_key) and env_vars.get(token_key)}
+        if not arr_clients:
+            msg = "Radarr/Sonarr is not configured."
+            logger.warning(msg)
+            db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
+                                       last_run_status='not_configured', last_run_summary=msg)
+            return {'status': 'not_configured', 'message': msg}
 
     cutoff = _format_utc_timestamp(datetime.utcnow() - timedelta(days=grace_days))
     candidates: List[Dict] = db.get_suggestarr_requests_older_than(cutoff)
@@ -247,7 +254,10 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
         return {'status': 'error', 'message': msg}
 
     seer_client = None
-    if not dry_run:
+    if arr_clients is not None:
+        # Built for dry runs too (read-only), so a dry run reports exactly what a real run would delete.
+        arr_clients = {media_type: ArrClient(*args) for media_type, args in arr_clients.items()}
+    elif not dry_run:
         seer_client = SeerClient(
             env_vars['SEER_API_URL'],
             env_vars['SEER_TOKEN'],
@@ -261,7 +271,7 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
             False,
         )
 
-    deleted = kept = missing = errors = 0
+    deleted = kept = missing = errors = untagged = 0
     for cand in candidates:
         tmdb_id = cand['tmdb_id']
         media_type = cand['media_type']
@@ -281,6 +291,40 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
             db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
                                action='kept_favorited', was_dry_run=dry_run,
                                user_rating=rating, reason='Favorited (userRating >= 10).')
+            continue
+
+        if arr_clients is not None:
+            client = arr_clients.get(media_type)
+            service = client.service.capitalize() if client else 'Radarr/Sonarr'
+            try:
+                if client is None:
+                    outcome = 'not_found'
+                elif dry_run:
+                    outcome, _ = await client.find_owned(tmdb_id)
+                    outcome = 'would_delete' if outcome == 'ok' else outcome
+                else:
+                    outcome = await client.delete(tmdb_id)
+            except Exception as exc:
+                errors += 1
+                logger.error("Cleanup: error deleting tmdb_id=%s media_type=%s: %s", tmdb_id, media_type, exc)
+                db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
+                                   action='error', was_dry_run=dry_run, user_rating=rating, reason=str(exc)[:500])
+                continue
+            if outcome == 'not_found':
+                missing += 1
+                action, reason = 'skipped_not_in_arr', f'Not in {service}; nothing to delete there.'
+            elif outcome == 'not_tagged':
+                untagged += 1
+                action, reason = 'skipped_not_tagged', f'Not tagged suggestarr in {service}: never deleted.'
+            else:
+                deleted += 1
+                if outcome == 'deleted':
+                    db.delete_request_row(tmdb_id, media_type)
+                action = 'deleted' if outcome == 'deleted' else 'would_delete'
+                verb = 'deleted from' if outcome == 'deleted' else 'would delete from'
+                reason = f'Not favorited after {grace_days} days; {verb} {service} with its files.'
+            db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title, action=action,
+                               was_dry_run=dry_run, user_rating=rating, reason=reason)
             continue
 
         if dry_run:
@@ -318,10 +362,13 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
             await seer_client.close()
         except Exception:
             pass
+    for client in (arr_clients or {}).values():
+        await client.close()
 
     summary = (f"Candidates={len(candidates)} "
                f"{'would_delete' if dry_run else 'deleted'}={deleted} "
-               f"kept_favorited={kept} not_in_library={missing} errors={errors}")
+               f"kept_favorited={kept} not_in_library={missing} errors={errors}"
+               + (f" not_tagged={untagged}" if arr_clients is not None else ''))
     db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
                                last_run_status=('dry_run' if dry_run else 'ok'),
                                last_run_summary=summary)

@@ -294,3 +294,110 @@ def test_direct_replacements_wait_while_seer_is_the_backend(memdb):
         asyncio.run(request_replacement.execute_request_replacements())
     executor.assert_not_awaited()
     assert _replacements(memdb) == {1: 'pending'}
+
+
+# --- 4. cleanup only of titles tagged suggestarr ---------------------------
+
+from api_service.jobs import cleanup_automation  # noqa: E402
+
+LIBRARY = [{'id': 11, 'tmdbId': 1, 'tags': [9]},        # added by SuggestArr
+           {'id': 12, 'tmdbId': 2, 'tags': [3]},        # added by hand
+           {'id': 13, 'tmdbId': 3}]                     # no tags at all
+
+
+def _library_client(service='radarr', tags=((9, 'suggestarr'),), delete_status=200):
+    endpoint = 'movie' if service == 'radarr' else 'series'
+    routes = {('GET', endpoint): (200, LIBRARY), ('GET', 'tag'): (200, [{'id': i, 'label': l} for i, l in tags])}
+    routes.update({('DELETE', f'{endpoint}/{item["id"]}'): (delete_status, None) for item in LIBRARY})
+    return _client(service, routes)
+
+
+def test_only_a_tagged_title_is_deleted_with_its_files():
+    client = _library_client()
+    assert asyncio.run(client.delete(1)) == 'deleted'
+    assert [(p, kw['params']) for m, p, kw in client._request.calls if m == 'DELETE'] == [('movie/11', {'deleteFiles': 'true'})]
+    assert asyncio.run(client.delete(1)) == 'not_found'  # gone from the cached library
+    assert client._request.paths('GET').count('movie') == 1
+
+
+@pytest.mark.parametrize('tmdb_id', [2, 3])
+def test_a_title_without_the_suggestarr_tag_is_never_deleted(tmdb_id):
+    client = _library_client('sonarr')
+    assert asyncio.run(client.delete(tmdb_id)) == 'not_tagged'
+    assert client._request.paths('DELETE') == []
+
+
+def test_without_a_suggestarr_tag_on_the_instance_nothing_is_deleted():
+    client = _library_client(tags=((3, 'other'),))
+    assert [asyncio.run(client.delete(i)) for i in (1, 2, 3, 99)] == ['not_tagged'] * 3 + ['not_found']
+    assert client._request.paths('DELETE') == []
+    assert client._request.paths('POST') == []  # the tag is never created by cleanup
+    assert client._request.paths('GET').count('tag') == 1
+
+
+def test_a_refused_deletion_raises():
+    with pytest.raises(RuntimeError):
+        asyncio.run(_library_client(delete_status=500).delete(1))
+
+
+class CleanupDB:
+    def __init__(self, candidates, dry_run):
+        self.settings = {'enabled': True, 'dry_run': dry_run, 'grace_days': 7}
+        self.candidates = candidates
+        self.logs, self.deleted_rows, self.updates = [], [], []
+
+    def get_cleanup_settings(self):
+        return self.settings
+
+    def get_suggestarr_requests_older_than(self, cutoff):
+        return self.candidates
+
+    def update_cleanup_settings(self, **kwargs):
+        self.updates.append(kwargs)
+
+    def add_cleanup_log(self, **kwargs):
+        self.logs.append(kwargs)
+
+    def delete_request_row(self, tmdb_id, media_type):
+        self.deleted_rows.append((tmdb_id, media_type))
+
+
+def _cleanup(dry_run, env=None, favorites=None):
+    candidates = [{'tmdb_id': str(i), 'media_type': 'movie', 'title': f'm{i}'} for i in (1, 2, 4)] + \
+                 [{'tmdb_id': '1', 'media_type': 'tv', 'title': 'no sonarr'}]
+    db = CleanupDB(candidates, dry_run)
+    favorites = favorites or {('movie', '1'): 0.0, ('movie', '2'): 0.0, ('movie', '4'): 10.0, ('tv', '1'): 0.0}
+    radarr = _library_client()
+    env = env or {**RADARR, 'ARR_PROFILE_CONFIG': PROFILES, 'REQUEST_BACKEND': 'arr',
+                  'SELECTED_SERVICE': 'jellyfin', 'JELLYFIN_API_URL': 'http://jf', 'JELLYFIN_TOKEN': 't'}
+    with patch.object(cleanup_automation, 'DatabaseManager', return_value=db), \
+            patch.object(cleanup_automation.ConfigService, 'get_runtime_config', return_value=env), \
+            patch.object(cleanup_automation, '_build_favorite_map', AsyncMock(return_value=favorites)), \
+            patch.object(cleanup_automation, 'ArrClient', return_value=radarr), \
+            patch.object(cleanup_automation, 'SeerClient', side_effect=AssertionError('Seer must not be contacted')):
+        result = asyncio.run(cleanup_automation.execute_cleanup_job())
+    return result, db, radarr
+
+
+def test_direct_cleanup_deletes_only_tagged_unfavorited_titles():
+    result, db, radarr = _cleanup(dry_run=False)
+    actions = {(log['media_type'], log['tmdb_id']): log['action'] for log in db.logs}
+    assert actions == {('movie', '1'): 'deleted', ('movie', '2'): 'skipped_not_tagged',
+                       ('movie', '4'): 'kept_favorited', ('tv', '1'): 'skipped_not_in_arr'}
+    assert radarr._request.paths('DELETE') == ['movie/11']
+    assert db.deleted_rows == [('1', 'movie')]
+    assert result['status'] == 'ok' and 'not_tagged=1' in result['summary']
+
+
+def test_direct_dry_run_reports_what_a_real_run_would_delete_without_deleting():
+    result, db, radarr = _cleanup(dry_run=True)
+    actions = {(log['media_type'], log['tmdb_id']): log['action'] for log in db.logs}
+    assert actions[('movie', '1')] == 'would_delete' and actions[('movie', '2')] == 'skipped_not_tagged'
+    assert radarr._request.paths('DELETE') == [] and db.deleted_rows == []
+    assert all(log['was_dry_run'] for log in db.logs)
+
+
+def test_direct_cleanup_without_an_instance_is_not_configured():
+    env = {'REQUEST_BACKEND': 'arr', 'SELECTED_SERVICE': 'jellyfin', 'JELLYFIN_API_URL': 'http://jf', 'JELLYFIN_TOKEN': 't'}
+    result, db, radarr = _cleanup(dry_run=False, env=env)
+    assert result['status'] == 'not_configured' and radarr._request.calls == []

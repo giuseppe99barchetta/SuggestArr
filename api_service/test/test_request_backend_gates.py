@@ -55,15 +55,16 @@ def test_availability_sync_reads_radarr_not_seer_in_direct_mode():
     radarr.get_media_statuses.assert_awaited_once()
 
 
-def test_cleanup_is_unsupported_in_direct_mode():
+def test_cleanup_does_not_contact_seer_in_direct_mode():
     db = MagicMock()
     db.get_cleanup_settings.return_value = {'enabled': True, 'grace_days': 30, 'dry_run': False}
+    db.get_suggestarr_requests_older_than.return_value = []
     env = {**ARR_WITH_SEER, 'SELECTED_SERVICE': 'jellyfin', 'JELLYFIN_API_URL': 'http://jf', 'JELLYFIN_TOKEN': 't'}
     with patch.object(cleanup_automation, 'DatabaseManager', return_value=db), \
             patch.object(cleanup_automation.ConfigService, 'get_runtime_config', return_value=env), \
             _no_seer(cleanup_automation):
         result = asyncio.run(cleanup_automation.execute_cleanup_job())
-    assert result['status'] == 'unsupported' and 'Radarr/Sonarr' in result['message']
+    assert result['status'] == 'ok'
 
 
 @pytest.mark.parametrize('env,paused', [(ARR_WITH_SEER, False), ({}, None)])

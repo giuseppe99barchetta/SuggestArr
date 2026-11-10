@@ -40,6 +40,8 @@ class ArrClient(BaseHTTPClient):
         self.guard_outbound = True
         self.private_urls = self.allowed_urls = (self.api_url,)
         self._tag_ids = {}  # label -> id, cached for this client's lifetime
+        self._library = None  # tmdb id -> title, read once per client by find_owned
+        self._tags_loaded = False
 
     async def _request(self, method, path, **kwargs):
         """Call the API and return ``(status, decoded JSON or None)``; never raises on HTTP status."""
@@ -114,16 +116,20 @@ class ArrClient(BaseHTTPClient):
             'tags': [{'id': t['id'], 'label': t.get('label')} for t in tags if isinstance(t, dict) and 'id' in t],
         }
 
+    async def _load_tags(self):
+        """Cache the id of every tag the instance has, by lowercase label."""
+        self._tags_loaded = True
+        for tag in await self._get('tag') or []:
+            if isinstance(tag, dict) and 'id' in tag and isinstance(tag.get('label'), str):
+                self._tag_ids.setdefault(tag['label'].lower(), tag['id'])
+
     async def _tag_ids_for(self, labels):
         """Return the ids of the tags with these labels, creating the missing ones.
 
         :raises RuntimeError: When the tags cannot be read or created.
         """
-        missing = [label for label in labels if label not in self._tag_ids]
-        if missing:
-            for tag in await self._get('tag') or []:
-                if isinstance(tag, dict) and 'id' in tag and isinstance(tag.get('label'), str):
-                    self._tag_ids.setdefault(tag['label'].lower(), tag['id'])
+        if any(label not in self._tag_ids for label in labels):
+            await self._load_tags()
         for label in labels:
             if label not in self._tag_ids:
                 status, data = await self._request('POST', 'tag', json={'label': label})
@@ -172,3 +178,42 @@ class ArrClient(BaseHTTPClient):
                 isinstance(e, dict) and e.get('errorCode') in _EXISTS_CODES for e in data):
             return True  # already added: delivery is idempotent
         raise RuntimeError(f'{self.service.capitalize()} rejected tmdb:{tmdb_id} (HTTP {status})')
+
+    async def find_owned(self, tmdb_id):
+        """Find a title and tell whether SuggestArr added it (it carries the ``suggestarr`` tag).
+
+        The library and the tags are read once per client. The tag is never created here.
+
+        :return: ``(status, item)``: ``'ok'``, ``'not_tagged'`` or ``'not_found'`` (item None).
+        """
+        endpoint, _ = SERVICES[self.service]
+        if self._library is None:
+            self._library = {str(item['tmdbId']): item for item in await self._get(endpoint) or []
+                             if isinstance(item, dict) and item.get('tmdbId') and 'id' in item}
+        item = self._library.get(str(tmdb_id))
+        if item is None:
+            return 'not_found', None
+        if not self._tags_loaded:
+            await self._load_tags()
+        tag_id = self._tag_ids.get(SUGGESTARR_TAG)
+        if tag_id is None or tag_id not in (item.get('tags') or []):
+            return 'not_tagged', item
+        return 'ok', item
+
+    async def delete(self, tmdb_id):
+        """Delete a title and its files, only if SuggestArr added it.
+
+        A title without the ``suggestarr`` tag was added by someone else and is never deleted.
+
+        :return: ``'deleted'``, ``'not_tagged'`` or ``'not_found'``.
+        :raises RuntimeError: When the instance refuses the deletion.
+        """
+        status, item = await self.find_owned(tmdb_id)
+        if status != 'ok':
+            return status
+        endpoint, _ = SERVICES[self.service]
+        code, _ = await self._request('DELETE', f"{endpoint}/{int(item['id'])}", params={'deleteFiles': 'true'})
+        if code not in (200, 202, 204):
+            raise RuntimeError(f'{self.service.capitalize()} refused to delete tmdb:{tmdb_id} (HTTP {code})')
+        self._library.pop(str(tmdb_id), None)
+        return 'deleted'

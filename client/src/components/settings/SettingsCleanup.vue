@@ -4,7 +4,7 @@
 
     <div role="alert" class="flex items-start gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3.5">
       <i aria-hidden="true" class="fas fa-exclamation-triangle mt-0.5 text-caution"></i>
-      <p class="m-0 text-sm text-ink-2"><strong class="block text-ink">Destructive action</strong>When enabled and not in dry-run, this asks Seer to delete the matched media files. Always run in dry-run first to verify the candidate list.</p>
+      <p class="m-0 text-sm text-ink-2"><strong class="block text-ink">Destructive action</strong>When enabled and not in dry-run, this deletes the matched media files: through Seer, or straight in Radarr/Sonarr with direct delivery, where only titles tagged suggestarr are ever deleted. Always run in dry-run first to verify the candidate list.</p>
     </div>
 
     <p v-if="loading" class="m-0 py-2 text-sm italic text-ink-4">Loading…</p>
@@ -141,7 +141,7 @@ export default {
       lastResult: null,
       toggles: [
         { key: 'enabled', icon: 'fas fa-power-off', title: 'Enable cleanup automation', hint: 'When off, no scans happen.' },
-        { key: 'dry_run', icon: 'fas fa-vial', title: 'Dry-run mode', hint: 'Logs which items would be sent to Seer for deletion without touching files. Strongly recommended before flipping to real deletion.' },
+        { key: 'dry_run', icon: 'fas fa-vial', title: 'Dry-run mode', hint: 'Logs which items would be deleted without touching files. Strongly recommended before flipping to real deletion.' },
       ],
     };
   },
