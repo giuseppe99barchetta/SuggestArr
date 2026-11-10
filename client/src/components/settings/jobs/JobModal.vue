@@ -210,8 +210,9 @@
                   <InfoTip text="Pause rules only affect scheduled runs. “Run now” always works." />
                 </div>
                 <div class="flex flex-col divide-y divide-edge rounded-ctl border border-edge">
-                  <div v-if="requestBackend !== 'arr'" class="flex items-center gap-1.5 px-4 py-3">
-                    <BaseCheckbox v-model="form.pause_if_pending_requests" label="Seer still has requests waiting for approval" />
+                  <div class="flex items-center gap-1.5 px-4 py-3">
+                    <BaseCheckbox v-model="form.pause_if_pending_requests" :label="requestBackend === 'arr' ? 'Radarr/Sonarr still has downloads in the queue' : 'Seer still has requests waiting for approval'"
+                      :description="requestBackend === 'arr' ? 'Stalled or failed downloads count too, until you clear them in Radarr/Sonarr.' : ''" />
                     <InfoTip text="Avoids piling up new requests while Seer admins haven't reviewed the previous ones." />
                   </div>
 
@@ -428,7 +429,7 @@ export default {
     requestApprovalDefault: { type: [Boolean, String], default: null },
     /** Global PAUSE_JOBS_WITH_PENDING_APPROVALS, shown on the "Global" pause option; null when unknown. */
     approvalPauseDefault: { type: Boolean, default: null },
-    /** REQUEST_BACKEND: with 'arr' the per-job profiles are Radarr/Sonarr ones and the Seer pause is hidden. */
+    /** REQUEST_BACKEND: with 'arr' the per-job profiles and the pending-request pause refer to Radarr/Sonarr. */
     requestBackend: { type: String, default: 'seer' }
   },
   emits: ['close', 'save'],

@@ -81,6 +81,14 @@ class ArrClient(BaseHTTPClient):
                                 '(Sonarr v4) or its titles cannot be excluded.', self.service.capitalize())
         return ids
 
+    async def queue_busy(self):
+        """Whether the download queue holds anything (stalled or failed items included).
+
+        :raises RuntimeError: When the queue cannot be read.
+        """
+        queue = await self._get('queue', params={'page': 1, 'pageSize': 1})
+        return isinstance(queue, dict) and (queue.get('totalRecords') or 0) > 0
+
     async def get_media_statuses(self):
         """Where each title of the instance stands, in the shape of ``SeerClient.get_media_statuses``.
 

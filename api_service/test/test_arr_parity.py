@@ -503,3 +503,69 @@ def test_an_unknown_radarr_id_is_refused(profile):
 def test_a_radarr_profile_that_cannot_be_verified_is_refused(env, options):
     with pytest.raises(ValueError):
         _validate_with_arr({'movie': ARR_PROFILE}, env=env, options=options)
+
+
+# --- 6. pause while Radarr/Sonarr still downloads ---------------------------------
+
+from api_service.jobs.job_manager import JobManager  # noqa: E402
+
+
+@pytest.mark.parametrize('total,busy', [(0, False), (3, True)])
+def test_the_queue_is_busy_when_it_holds_records(total, busy):
+    client = _client('radarr', {('GET', 'queue'): (200, {'page': 1, 'pageSize': 1, 'totalRecords': total, 'records': []})})
+    assert asyncio.run(client.queue_busy()) is busy
+    assert client._request.calls[0][2]['params'] == {'page': 1, 'pageSize': 1}
+
+
+@pytest.mark.parametrize('radarr,sonarr,expected', [
+    (False, False, False),
+    (False, True, True),
+    (RuntimeError('down'), False, False),   # unreachable counts as idle
+    (RuntimeError('down'), True, True),
+])
+def test_pending_requests_means_any_instance_still_downloading(radarr, sonarr, expected):
+    answers = {'radarr': radarr, 'sonarr': sonarr}
+
+    def build(service, url, token):
+        fake = MagicMock(service=service)
+        answer = answers[service]
+        fake.queue_busy = AsyncMock(side_effect=answer) if isinstance(answer, Exception) else AsyncMock(return_value=answer)
+        return fake
+    with patch('api_service.services.arr.arr_request_client.ArrClient', side_effect=build):
+        assert asyncio.run(ArrRequestClient(ARR_ENV).has_pending_requests()) is expected
+
+
+def test_without_instances_nothing_is_pending():
+    assert asyncio.run(ArrRequestClient({'REQUEST_BACKEND': 'arr'}).has_pending_requests()) is False
+
+
+@pytest.mark.parametrize('busy', [True, False])
+def test_a_job_pauses_while_radarr_still_downloads(busy):
+    manager = object.__new__(JobManager)
+    manager.logger = MagicMock()
+    with patch('api_service.jobs.job_manager.ConfigService.get_runtime_config', return_value=ARR_ENV), \
+            patch('api_service.services.arr.arr_client.ArrClient.queue_busy', AsyncMock(return_value=busy)), \
+            patch('api_service.jobs.job_manager.SeerClient', side_effect=AssertionError('Seer must not be contacted')):
+        assert asyncio.run(manager._should_pause_for_pending_requests({'pause_if_pending_requests': True})) is busy
+        assert asyncio.run(manager._should_pause_for_pending_requests({})) is False
+        assert JobManager._pending_reason() == 'Radarr/Sonarr still has downloads in the queue'
+
+
+@pytest.mark.parametrize('approvals,busy,message', [
+    (True, True, 'Paused: suggestions are awaiting approval in SuggestArr.'),
+    (False, True, 'Paused: Radarr/Sonarr still has downloads in the queue.'),
+])
+def test_the_skip_message_names_the_check_that_paused_the_job(approvals, busy, message):
+    manager = object.__new__(JobManager)
+    manager.logger = MagicMock()
+    manager.repository = MagicMock()
+    manager.repository.get_job.return_value = {'id': 1, 'name': 'Weekly', 'job_type': 'discover'}
+    manager._job_executors = {'discover': AsyncMock()}
+    with patch('api_service.jobs.job_manager.ConfigService.get_runtime_config', return_value=ARR_ENV), \
+            patch.object(JobManager, '_should_pause_for_suggestarr_approvals', return_value=approvals), \
+            patch.object(JobManager, '_should_pause_for_pending_requests', AsyncMock(return_value=busy)), \
+            patch.object(JobManager, '_queue_webhook') as webhook:
+        manager._execute_job(1)
+    assert manager.repository.log_execution_end.call_args.kwargs['error_message'] == message
+    assert webhook.call_args.args[-1] == 'pending_requests_awaiting_approval'  # reason code unchanged
+    manager._job_executors['discover'].assert_not_awaited()

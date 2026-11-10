@@ -191,12 +191,14 @@ test('Job dialog: direct delivery picks a Radarr profile per job', async ({ page
   await profiles.getByRole('combobox', { name: /Root folder/ }).selectOption('/movies');
   await profiles.getByLabel('kids').check();
   await expect(overrides).toContainText('Custom Radarr profile.');
+  await dialog.getByText('Radarr/Sonarr still has downloads in the queue').click();
   await profiles.scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath('job-arr-profiles.png') });
   await dialog.getByRole('button', { name: 'Save job' }).click();
   await expect.poll(() => page.evaluate(() => window.savedJob?.request_profiles)).toEqual({
     movie: { profileId: 4, rootFolder: '/movies', tags: [1] }, tv: {} });
   expect(errors).toEqual([]);
+  expect(await page.evaluate(() => window.savedJob.pause_if_pending_requests)).toBe(true);
 });
 
 test('Job dialog: direct delivery keeps an untouched Seer profile as stored', async ({ page }) => {

@@ -68,10 +68,11 @@ def test_cleanup_does_not_contact_seer_in_direct_mode():
 
 
 @pytest.mark.parametrize('env,paused', [(ARR_WITH_SEER, False), ({}, None)])
-def test_pending_request_pause_does_not_apply_to_direct_delivery(env, paused):
+def test_pending_request_pause_asks_radarr_not_seer_with_direct_delivery(env, paused):
     manager = object.__new__(JobManager)
     manager.logger = MagicMock()
     with patch('api_service.jobs.job_manager.ConfigService.get_runtime_config', return_value=env), \
+            patch('api_service.services.arr.arr_client.ArrClient.queue_busy', AsyncMock(return_value=False)), \
             patch('api_service.jobs.job_manager.SeerClient') as seer:
         if paused is None:  # seer mode: the Seer check still runs
             seer.return_value.__aenter__ = AsyncMock(return_value=seer.return_value)

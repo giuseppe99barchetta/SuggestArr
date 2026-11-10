@@ -12,6 +12,7 @@ from apscheduler.triggers.cron import CronTrigger
 from api_service.utils.cron import cron_trigger
 
 from api_service.config.config import get_request_backend
+from api_service.services.arr.arr_request_client import ArrRequestClient
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
 from api_service.services.config_service import ConfigService
@@ -210,20 +211,22 @@ class JobManager:
             try:
                 if execution_id is not None:
                     self.repository.mark_execution_running(execution_id)
-                if (self._should_pause_for_suggestarr_approvals(job_data) or
-                        loop.run_until_complete(self._should_pause_for_pending_requests(job_data))):
+                if self._should_pause_for_suggestarr_approvals(job_data):
+                    pause_reason = 'suggestions are awaiting approval in SuggestArr'
+                elif loop.run_until_complete(self._should_pause_for_pending_requests(job_data)):
+                    pause_reason = self._pending_reason()
+                else:
+                    pause_reason = None
+                if pause_reason:
                     exec_id = execution_id or self.repository.log_execution_start(job_id)
                     self.repository.log_execution_end(
                         exec_id=exec_id,
                         status='skipped',
                         results_count=0,
                         requested_count=0,
-                        error_message='Paused: Seer has pending requests awaiting approval or denial.'
+                        error_message=f'Paused: {pause_reason}.'
                     )
-                    self.logger.info(
-                        "Job %s paused because Seer has pending requests awaiting approval or denial.",
-                        job_id,
-                    )
+                    self.logger.info("Job %s paused: %s.", job_id, pause_reason)
                     self._queue_webhook("job.skipped", job_id, job_type, execution_id,
                                         "pending_requests_awaiting_approval")
                     outcome = 'skipped'
@@ -317,16 +320,15 @@ class JobManager:
             self.logger.error("Unable to queue %s webhook: %s", event, exc)
 
     async def _should_pause_for_pending_requests(self, job_data: Dict[str, Any]) -> bool:
-        """Return True when this job should skip because Seer has pending requests."""
+        """Return True when this job should skip because Seer has pending requests or, with direct
+        delivery, Radarr/Sonarr still has downloads in its queue."""
         if not job_data.get('pause_if_pending_requests'):
             return False
 
         env_vars = ConfigService.get_runtime_config()
         if get_request_backend(env_vars) == 'arr':
-            # Radarr/Sonarr have no pending-approval concept: the pause does not apply.
-            self.logger.info("Job '%s': pause_if_pending_requests does not apply to direct Radarr/Sonarr.",
-                             job_data.get('name') or job_data.get('id'))
-            return False
+            async with ArrRequestClient(env_vars) as arr_client:
+                return await arr_client.has_pending_requests()
         seer_client = SeerClient(
             env_vars['SEER_API_URL'],
             env_vars['SEER_TOKEN'],
@@ -337,6 +339,13 @@ class JobManager:
 
         async with seer_client:
             return await seer_client.has_pending_requests()
+
+    @staticmethod
+    def _pending_reason():
+        """Why a job with pause_if_pending_requests was skipped, for the backend in use."""
+        if get_request_backend(ConfigService.get_runtime_config()) == 'arr':
+            return 'Radarr/Sonarr still has downloads in the queue'
+        return 'Seer has pending requests awaiting approval or denial'
 
     def _should_pause_for_suggestarr_approvals(self, job_data: Dict[str, Any]) -> bool:
         mode = job_data.get('approval_pause_mode', 'inherit')

@@ -177,7 +177,8 @@ def test_a_type_without_instance_or_default_profile_is_refused_at_enqueue(env):
 
 def test_direct_backend_has_no_pending_requests_and_no_seer_calls():
     client = ArrRequestClient(ARR_ENV)
-    assert asyncio.run(client.has_pending_requests()) is False
+    with patch.object(ArrClient, 'queue_busy', AsyncMock(return_value=False)):
+        assert asyncio.run(client.has_pending_requests()) is False
     assert asyncio.run(client.get_available_tmdb_ids()) == {}
     asyncio.run(client.init())  # must not touch the network
 

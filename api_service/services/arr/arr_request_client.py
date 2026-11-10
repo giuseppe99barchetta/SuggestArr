@@ -82,7 +82,20 @@ class ArrRequestClient(SeerClient):
         """Nothing to synchronise: there is no remote request list."""
 
     async def has_pending_requests(self) -> bool:
-        return False  # Radarr/Sonarr have no pending-approval concept; the job pause does not apply
+        """Whether any configured Radarr/Sonarr still has downloads in its queue.
+
+        An instance that cannot be asked counts as idle: an unreachable instance must not pause
+        jobs forever, and deliveries to it fail and retry on their own.
+        """
+        for service, (url_key, token_key, _) in ARR_INSTANCES.items():
+            if not self.env_vars.get(url_key) or not self.env_vars.get(token_key):
+                continue
+            try:
+                if await self._arr_client(service, self.env_vars[url_key], self.env_vars[token_key]).queue_busy():
+                    return True
+            except Exception as exc:
+                self.logger.warning("Could not read %s's queue; not pausing for it: %s", service.capitalize(), exc)
+        return False
 
     async def get_available_tmdb_ids(self):
         return {}  # Radarr/Sonarr titles are merged separately by load_library_content
