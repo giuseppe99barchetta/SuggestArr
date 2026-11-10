@@ -78,21 +78,22 @@ SONARR_LOOKUP = [{'title': 'GoT', 'tmdbId': 1399, 'tvdbId': 121361,
                   'seasons': [{'seasonNumber': 0, 'monitored': False}, {'seasonNumber': 1, 'monitored': False},
                               {'seasonNumber': 2, 'monitored': False}]}]
 PAYLOAD = {'mediaType': 'movie', 'mediaId': 27205, 'profileId': 4, 'rootFolder': '/movies', 'tags': [1]}
+TAGS = (200, [{'id': 9, 'label': 'suggestarr'}])  # GET /tag: the suggestarr tag already exists
 
 
 def test_add_movie_posts_the_lookup_object_with_profile_and_search():
-    client = _client('radarr', [(200, RADARR_LOOKUP), (201, {})])
+    client = _client('radarr', [TAGS, (200, RADARR_LOOKUP), (201, {})])
     assert asyncio.run(client.add(PAYLOAD)) is True
     method, path = client._request.call_args.args
     body = client._request.call_args.kwargs['json']
     assert (method, path) == ('POST', 'movie')
-    assert (body['qualityProfileId'], body['rootFolderPath'], body['tags'], body['monitored']) == (4, '/movies', [1], True)
+    assert (body['qualityProfileId'], body['rootFolderPath'], body['tags'], body['monitored']) == (4, '/movies', [1, 9], True)
     assert body['addOptions'] == {'searchForMovie': True} and body['title'] == 'Inception'
 
 
 @pytest.mark.parametrize('seasons,expected', [('all', [False, True, True]), ([1], [False, True, False])])
 def test_add_series_monitors_the_requested_seasons_only(seasons, expected):
-    client = _client('sonarr', [(200, SONARR_LOOKUP), (201, {})])
+    client = _client('sonarr', [TAGS, (200, SONARR_LOOKUP), (201, {})])
     payload = {'mediaType': 'tv', 'mediaId': 1399, 'profileId': 6, 'rootFolder': '/tv', 'seasons': seasons,
                '_is_anime': True}
     assert asyncio.run(client.add(payload)) is True
@@ -103,13 +104,13 @@ def test_add_series_monitors_the_requested_seasons_only(seasons, expected):
 
 def test_already_added_titles_are_a_successful_delivery():
     exists = [{'errorCode': 'MovieExistsValidator', 'errorMessage': 'This movie has already been added'}]
-    assert asyncio.run(_client('radarr', [(200, RADARR_LOOKUP), (400, exists)]).add(PAYLOAD)) is True
+    assert asyncio.run(_client('radarr', [TAGS, (200, RADARR_LOOKUP), (400, exists)]).add(PAYLOAD)) is True
 
 
 @pytest.mark.parametrize('responses', [
-    [(200, RADARR_LOOKUP), (500, None)],
-    [(200, RADARR_LOOKUP), (400, [{'errorCode': 'RootFolderValidator'}])],
-    [(200, [])],  # not found by lookup
+    [TAGS, (200, RADARR_LOOKUP), (500, None)],
+    [TAGS, (200, RADARR_LOOKUP), (400, [{'errorCode': 'RootFolderValidator'}])],
+    [TAGS, (200, [])],  # not found by lookup
 ])
 def test_other_failures_raise(responses):
     with pytest.raises(RuntimeError):
@@ -337,7 +338,7 @@ def test_adding_radarr_credentials_on_a_seer_install_without_seer_is_not_validat
 
 
 def test_an_already_added_conflict_is_a_successful_delivery():
-    assert asyncio.run(_client('radarr', [(200, RADARR_LOOKUP), (409, None)]).add(PAYLOAD)) is True
+    assert asyncio.run(_client('radarr', [TAGS, (200, RADARR_LOOKUP), (409, None)]).add(PAYLOAD)) is True
 
 
 def test_health_reports_configured_arr_instances_without_failing_readiness():

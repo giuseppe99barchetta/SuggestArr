@@ -164,6 +164,7 @@ export default {
           SONARR_TOKEN: this._secretValue('SONARR_TOKEN') || '',
           REQUEST_BACKEND: this.localConfig.REQUEST_BACKEND || 'seer',
           ARR_PROFILE_CONFIG: this.localConfig.ARR_PROFILE_CONFIG || {},
+          ARR_TAG_BY_USER: this.localConfig.ARR_TAG_BY_USER === true,
           SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE,
           TRAKT_CLIENT_ID: this.localConfig.TRAKT_CLIENT_ID || '',
           TRAKT_CLIENT_SECRET: traktClientSecret,
@@ -204,7 +205,7 @@ export default {
 
     async resetToDefaults() {
       const defaults = {
-        TMDB_API_KEY: '', OMDB_API_KEY: '', MDBLIST_API_KEY: '', RADARR_API_URL: '', RADARR_TOKEN: '', SONARR_API_URL: '', SONARR_TOKEN: '', REQUEST_BACKEND: 'seer', ARR_PROFILE_CONFIG: {}, SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
+        TMDB_API_KEY: '', OMDB_API_KEY: '', MDBLIST_API_KEY: '', RADARR_API_URL: '', RADARR_TOKEN: '', SONARR_API_URL: '', SONARR_TOKEN: '', REQUEST_BACKEND: 'seer', ARR_PROFILE_CONFIG: {}, ARR_TAG_BY_USER: false, SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
         JELLYFIN_API_URL: '', JELLYFIN_EXTERNAL_URL: '', JELLYFIN_TOKEN: '', JELLYFIN_LIBRARIES: [],
         TRAKT_CLIENT_ID: '', TRAKT_CLIENT_SECRET: '', TRAKT_SYNC_SEEN_FEEDBACK: false, SIMKL_CLIENT_ID: '',
         SEER_API_URL: '', SEER_EXTERNAL_URL: '', SEER_TOKEN: '', SEER_USER_NAME: null, SEER_USER_PSW: null,

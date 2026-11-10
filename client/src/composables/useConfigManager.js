@@ -23,6 +23,7 @@ export function useConfigManager() {
       SELECTED_SERVICE: '',
       REQUEST_BACKEND: 'seer',
       ARR_PROFILE_CONFIG: {},
+      ARR_TAG_BY_USER: false,
       RADARR_API_URL: '',
       RADARR_TOKEN: '',
       SONARR_API_URL: '',

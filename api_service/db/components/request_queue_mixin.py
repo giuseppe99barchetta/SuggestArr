@@ -5,6 +5,16 @@ from typing import Any, Dict, List, Optional, Set
 
 from api_service.db.components.suggestion_ownership import ownership_clause, payload_user_expression
 
+
+def _media_user_name_sql(ph):
+    """Query for a media user's display name; users.user_name falls back to the raw id, so that is skipped."""
+    return (f"SELECT user_name FROM users WHERE user_id={ph} AND user_name<>user_id AND user_name IS NOT NULL "
+            f"UNION ALL SELECT external_username FROM media_user_identities WHERE external_user_id={ph} "
+            f"AND external_username IS NOT NULL "
+            f"UNION ALL SELECT external_username FROM user_media_profiles WHERE external_user_id={ph} "
+            f"AND external_username IS NOT NULL LIMIT 1")
+
+
 class RequestQueueMixin:
     def try_acquire_submission_lock(self, tmdb_id: str, media_type: str, ttl_seconds: int = 60) -> bool:
         """Attempt to acquire a per-media submission lock to prevent cross-process duplicates.
@@ -319,15 +329,7 @@ class RequestQueueMixin:
                 item['rationale'] = payload.get('_rationale')
                 item['user_name'] = None
                 if item['media_user_id'] is not None:
-                    cursor.execute(
-                        # users.user_name falls back to the raw id when no name was known; skip it.
-                        f"SELECT user_name FROM users WHERE user_id={ph} AND user_name<>user_id AND user_name IS NOT NULL "
-                        f"UNION ALL SELECT external_username FROM media_user_identities WHERE external_user_id={ph} "
-                        f"AND external_username IS NOT NULL "
-                        f"UNION ALL SELECT external_username FROM user_media_profiles WHERE external_user_id={ph} "
-                        f"AND external_username IS NOT NULL LIMIT 1",
-                        (str(item['media_user_id']),) * 3,
-                    )
+                    cursor.execute(_media_user_name_sql(ph), (str(item['media_user_id']),) * 3)
                     user = cursor.fetchone()
                     item['user_name'] = user[0] if user else None
                 item['feedback'] = (
@@ -491,6 +493,17 @@ class RequestQueueMixin:
                            f"WHERE id={ph} AND status='awaiting_approval'",
                            (json.dumps(data), row_id))
         return ignored
+
+    def get_media_user_name(self, media_user_id):
+        """Return the display name of a media user, or None when only the id is known."""
+        if media_user_id is None:
+            return None
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(_media_user_name_sql(ph), (str(media_user_id),) * 3)
+            row = cursor.fetchone()
+            return row[0] if row else None
 
     def has_pending_approvals(self, job_id) -> bool:
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'

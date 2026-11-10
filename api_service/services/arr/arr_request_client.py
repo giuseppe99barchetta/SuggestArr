@@ -1,6 +1,7 @@
 """Request client that adds titles straight to Radarr/Sonarr instead of going through Seer."""
 from api_service.config.config import ARR_INSTANCES, arr_default_profile
-from api_service.services.arr.arr_client import ArrClient
+from api_service.db.database_manager import DatabaseManager
+from api_service.services.arr.arr_client import ArrClient, SUGGESTARR_TAG, arr_tag_label
 from api_service.services.seer.seer_client import SeerClient
 
 
@@ -16,6 +17,7 @@ class ArrRequestClient(SeerClient):
         :param env_vars: Runtime configuration (``RADARR_*``, ``SONARR_*``, ``ARR_PROFILE_CONFIG``).
         """
         self.env_vars = env_vars
+        self._arr_clients = {}  # service -> ArrClient, reused across deliveries (tag ids are cached per client)
         profiles = env_vars.get('ARR_PROFILE_CONFIG')
         profiles = dict(profiles) if isinstance(profiles, dict) else {}
         for media_type in ('movie', 'tv'):  # each empty anime field falls back to the default one
@@ -36,6 +38,24 @@ class ArrRequestClient(SeerClient):
             if served == media_type and self.env_vars.get(url_key) and self.env_vars.get(token_key):
                 return service, self.env_vars[url_key], self.env_vars[token_key]
         return None
+
+    def _arr_client(self, service, url, token):
+        """Return this client's ArrClient for ``service``, created on first use and closed with it."""
+        if service not in self._arr_clients:
+            self._arr_clients[service] = ArrClient(service, url, token)
+        return self._arr_clients[service]
+
+    async def close(self):
+        for client in self._arr_clients.values():
+            await client.close()
+        await super().close()
+
+    def _extra_tag_labels(self, payload):
+        """``suggestarr-user-<name>`` when ARR_TAG_BY_USER is on and the media user's name is known."""
+        if self.env_vars.get('ARR_TAG_BY_USER') is not True:
+            return []
+        name = arr_tag_label(DatabaseManager().get_media_user_name(payload.get('_user_id')))
+        return [f'{SUGGESTARR_TAG}-user-{name}'] if name else []
 
     def _can_enqueue(self, media_type):
         if self._instance(media_type) is None:
@@ -72,8 +92,7 @@ class ArrRequestClient(SeerClient):
             return False
         service, url, token = instance
         try:
-            async with ArrClient(service, url, token) as client:
-                return await client.add(payload)
+            return await self._arr_client(service, url, token).add(payload, self._extra_tag_labels(payload))
         except Exception as exc:
             self.logger.error("%s rejected the request for tmdb:%s: %s", service.capitalize(),
                               payload.get('mediaId'), exc)

@@ -27,6 +27,7 @@ class TestConfig(unittest.TestCase):
         "SONARR_TOKEN": "",
         "REQUEST_BACKEND": "seer",
         "ARR_PROFILE_CONFIG": {},
+        "ARR_TAG_BY_USER": False,
         "CRON_TIMES": "0 4 * * *",
         "FILTER_LANGUAGE": [{"id": "en", "english_name": "English"}],
         "FILTER_GENRES_EXCLUDE": [{"id": 27, "name": "Horror"}, {"id": 10752, "name": "War"}],

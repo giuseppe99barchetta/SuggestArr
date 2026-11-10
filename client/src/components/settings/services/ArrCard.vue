@@ -46,12 +46,15 @@
         </div>
       </div>
       <p v-if="backend === 'arr' && unavailableTypes.length" class="ui-alert-bad m-0 text-xs" role="status">Requests for {{ unavailableTypes.join(' and ') }} will be skipped until the matching instance is configured.</p>
+      <BaseCheckbox v-if="usesDirectDelivery" v-model="localConfig.ARR_TAG_BY_USER" :disabled="isLoading" label="Also tag each title with who it was suggested for"
+        description="Every title SuggestArr adds is tagged suggestarr (cleanup only removes those). This adds suggestarr-user-&lt;name&gt; too." data-testid="arr-tag-by-user" />
     </div>
   </div>
 </template>
 
 <script>
 import ServiceCardHeader from '../ServiceCardHeader.vue';
+import BaseCheckbox from '@/components/common/BaseCheckbox.vue';
 import { getArrOptionsApi, testArrApi } from '@/api/api';
 import serviceCard from './serviceCard.js';
 
@@ -69,7 +72,7 @@ const KINDS = [{ id: 'default', label: 'Default' }, { id: 'anime', label: 'Anime
 export default {
   name: 'ArrCard',
   mixins: [serviceCard],
-  components: { ServiceCardHeader },
+  components: { ServiceCardHeader, BaseCheckbox },
   data() {
     return {
       arrServices: ARR_SERVICES,

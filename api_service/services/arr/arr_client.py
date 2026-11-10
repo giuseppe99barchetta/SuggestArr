@@ -1,4 +1,6 @@
 """Read and add the titles Radarr and Sonarr manage (monitored or not)."""
+import re
+
 from api_service.services.http.base_client import BaseHTTPClient
 from api_service.utils.ssrf_guard import normalize_base_url
 
@@ -6,6 +8,16 @@ from api_service.utils.ssrf_guard import normalize_base_url
 SERVICES = {'radarr': ('movie', 'movie'), 'sonarr': ('series', 'tv')}
 # Radarr and Sonarr answer 400 with these validator codes when the title is already added.
 _EXISTS_CODES = ('MovieExistsValidator', 'SeriesExistsValidator')
+# Tag put on every title SuggestArr adds; cleanup only ever deletes titles carrying it.
+SUGGESTARR_TAG = 'suggestarr'
+
+
+def arr_tag_label(text):
+    """Turn free text into a Radarr/Sonarr tag label (only ``a-z``, ``0-9`` and ``-`` are accepted).
+
+    :return: The label, or '' when nothing usable is left.
+    """
+    return re.sub(r'[^a-z0-9]+', '-', str(text or '').lower()).strip('-')
 
 
 class ArrClient(BaseHTTPClient):
@@ -27,6 +39,7 @@ class ArrClient(BaseHTTPClient):
         self.api_key = api_key
         self.guard_outbound = True
         self.private_urls = self.allowed_urls = (self.api_url,)
+        self._tag_ids = {}  # label -> id, cached for this client's lifetime
 
     async def _request(self, method, path, **kwargs):
         """Call the API and return ``(status, decoded JSON or None)``; never raises on HTTP status."""
@@ -76,16 +89,37 @@ class ArrClient(BaseHTTPClient):
             'tags': [{'id': t['id'], 'label': t.get('label')} for t in tags if isinstance(t, dict) and 'id' in t],
         }
 
-    async def add(self, payload):
-        """Add the title described by a queued request payload.
+    async def _tag_ids_for(self, labels):
+        """Return the ids of the tags with these labels, creating the missing ones.
+
+        :raises RuntimeError: When the tags cannot be read or created.
+        """
+        missing = [label for label in labels if label not in self._tag_ids]
+        if missing:
+            for tag in await self._get('tag') or []:
+                if isinstance(tag, dict) and 'id' in tag and isinstance(tag.get('label'), str):
+                    self._tag_ids.setdefault(tag['label'].lower(), tag['id'])
+        for label in labels:
+            if label not in self._tag_ids:
+                status, data = await self._request('POST', 'tag', json={'label': label})
+                if status not in (200, 201) or not isinstance(data, dict) or 'id' not in data:
+                    raise RuntimeError(f'{self.service.capitalize()} could not create the tag {label} (HTTP {status})')
+                self._tag_ids[label] = data['id']
+        return [self._tag_ids[label] for label in labels]
+
+    async def add(self, payload, extra_labels=()):
+        """Add the title described by a queued request payload, tagged ``suggestarr``.
 
         :param payload: Queue payload: ``mediaType``, ``mediaId`` (TMDB ID), ``profileId``,
             ``rootFolder``, optional ``tags``, ``seasons`` (TV) and ``_is_anime``.
+        :param extra_labels: Further tag labels to put on the title (already normalized).
         :return: True when the title was added or was already in the instance.
-        :raises RuntimeError: When the instance rejects the request.
+        :raises RuntimeError: When the instance rejects the request or the tags cannot be set
+            (an untagged title could never be cleaned up, so the delivery is retried instead).
         """
         endpoint, _ = SERVICES[self.service]
         tmdb_id = int(payload['mediaId'])
+        tag_ids = await self._tag_ids_for([SUGGESTARR_TAG, *extra_labels])
         found = await self._get(f'{endpoint}/lookup', params={'term': f'tmdb:{tmdb_id}'})
         item = next((i for i in found if isinstance(i, dict) and i.get('tmdbId') == tmdb_id), None) \
             if isinstance(found, list) else None
@@ -93,7 +127,7 @@ class ArrClient(BaseHTTPClient):
             raise RuntimeError(f'{self.service.capitalize()} could not find tmdb:{tmdb_id}')
 
         item.update(qualityProfileId=payload['profileId'], rootFolderPath=payload['rootFolder'],
-                    tags=list(payload.get('tags') or []), monitored=True)
+                    tags=list(dict.fromkeys([*(payload.get('tags') or []), *tag_ids])), monitored=True)
         if self.service == 'radarr':
             item.update(minimumAvailability='released', addOptions={'searchForMovie': True})
         else:
