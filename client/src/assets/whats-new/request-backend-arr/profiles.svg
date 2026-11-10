@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- quality profile, root folder and tags as sliders, plus a spark for anime -->
+  <path d="M16 32h88M16 60h88M16 88h88" stroke-opacity=".35"/>
+  <path d="M16 32h36M16 60h58M16 88h24"/>
+  <circle cx="58" cy="32" r="8" fill="currentColor" fill-opacity=".2"/>
+  <circle cx="80" cy="60" r="8" fill="currentColor" fill-opacity=".2"/>
+  <circle cx="46" cy="88" r="8" fill="currentColor" fill-opacity=".2"/>
+  <path d="M98 14l2.6 6.4 6.4 2.6-6.4 2.6L98 32l-2.6-6.4L89 23l6.4-2.6z" fill="currentColor" fill-opacity=".25"/>
+  <path d="M16 104h18M40 104h10" stroke-opacity=".5"/>
+</svg>

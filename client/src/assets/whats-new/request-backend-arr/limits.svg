@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Seer-only features switched off: clock, loop and toggle -->
+  <circle cx="34" cy="38" r="20" fill="currentColor" fill-opacity=".08"/>
+  <path d="M34 26v12l8 5"/>
+  <path d="M84 24a18 18 0 1 1-12 6" stroke-opacity=".7"/>
+  <path d="M72 20v10h10" stroke-opacity=".7"/>
+  <rect x="14" y="76" width="44" height="22" rx="11" fill="currentColor" fill-opacity=".1"/>
+  <circle cx="25" cy="87" r="7" fill="currentColor" fill-opacity=".3"/>
+  <rect x="68" y="76" width="44" height="22" rx="11" fill="currentColor" fill-opacity=".1" stroke-dasharray="3 5"/>
+  <path d="M82 87h16" stroke-opacity=".55"/>
+</svg>

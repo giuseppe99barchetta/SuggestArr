@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- a suggested title flying straight into the library -->
+  <rect x="8" y="22" width="30" height="44" rx="5" fill="currentColor" fill-opacity=".1"/>
+  <path d="M15 34h16M15 42h16M15 50h9"/>
+  <path d="M44 44h28" stroke-dasharray="3 6"/>
+  <path d="M64 36l10 8-10 8"/>
+  <rect x="80" y="14" width="32" height="20" rx="5" fill="currentColor" fill-opacity=".14"/>
+  <rect x="80" y="40" width="32" height="20" rx="5" fill="currentColor" fill-opacity=".14"/>
+  <rect x="80" y="66" width="32" height="20" rx="5" fill="currentColor" fill-opacity=".14"/>
+  <circle cx="90" cy="24" r="2" fill="currentColor"/>
+  <circle cx="90" cy="50" r="2" fill="currentColor"/>
+  <circle cx="90" cy="76" r="2" fill="currentColor"/>
+  <path d="M98 24h8M98 50h8M98 76h8" stroke-opacity=".6"/>
+  <circle cx="28" cy="94" r="12" fill="currentColor" fill-opacity=".16"/>
+  <path d="M22 94l4.5 4.5L35 89"/>
+  <path d="M50 94h62" stroke-opacity=".35" stroke-dasharray="2 6"/>
+</svg>

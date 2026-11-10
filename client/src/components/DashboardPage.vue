@@ -64,7 +64,10 @@
                 {{ currentUser.role === 'admin' ? 'Admin' : 'User' }} · {{ currentVersion }}<span v-if="currentImageTag === 'nightly'"> (nightly)</span>
               </button>
             </div>
-            <button type="button" class="ml-auto w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="Replay the onboarding tour" title="Replay the onboarding tour" @click="restartTour">
+            <button v-if="latestWhatsNew" type="button" class="ml-auto w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="What's new" title="What's new" data-testid="open-whats-new" @click="openWhatsNew">
+              <i aria-hidden="true" class="fas fa-gift"></i>
+            </button>
+            <button type="button" class="w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" :class="latestWhatsNew ? '' : 'ml-auto'" aria-label="Replay the onboarding tour" title="Replay the onboarding tour" @click="restartTour">
               <i aria-hidden="true" class="fas fa-question-circle"></i>
             </button>
             <button v-if="authSetupComplete && !authBypass" type="button" class="w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="Log out" title="Log out" @click="handleLogout">
@@ -209,11 +212,22 @@
       </div>
     </div>
 
+    <WhatsNewDialog
+      v-if="whatsNewEntries.length"
+      :entries="whatsNewEntries"
+      :start-id="whatsNewStart"
+      :available-tabs="visibleTabs.map(tab => tab.id)"
+      show-all-link
+      @close="closeWhatsNew"
+      @navigate="whatsNewGoTo"
+      @all-notes="whatsNewAllNotes"
+    />
+
     <!-- Onboarding Tour -->
     <OnboardingTour
       :active="showTour"
       :steps="visibleTourSteps"
-      @done="showTour = false"
+      @done="tourDone"
     />
   </div>
 </template>
@@ -225,6 +239,9 @@ import AppFooter from './AppFooter.vue';
 import AppDialog from './ui/AppDialog.vue';
 import UserAvatar from './ui/UserAvatar.vue';
 import OnboardingTour from './OnboardingTour.vue';
+import WhatsNewDialog from './WhatsNewDialog.vue';
+import { RELEASE_NOTES } from '@/data/releaseNotes.js';
+import { markSeen, pendingEntry, readSeen, unseenIds, visibleSlides } from '@/utils/whatsNew.js';
 import { useVersionCheck } from '@/composables/useVersionCheck';
 import { useAuth } from '@/composables/useAuth';
 import { approvalEnabled } from '@/utils/requestApproval';
@@ -258,6 +275,7 @@ export default {
     AppDialog,
     AppFooter,
     OnboardingTour,
+    WhatsNewDialog,
     SettingsServices,
     SettingsDatabase,
     SettingsAdvanced,
@@ -307,6 +325,9 @@ export default {
       requestCountCall: 0,
       showMobileNav: false,
       showTour: false,
+      whatsNewEntries: [],
+      whatsNewStart: '',
+      queuedWhatsNew: null,
       testingConnections: {
         tmdb: false,
         plex: false,
@@ -395,6 +416,14 @@ export default {
       const date = new Date(release.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
       const name = release.name && release.name !== release.tag_name ? `${release.name} · ` : '';
       return `${name}Released ${date}${release.prerelease ? ' · Pre-release' : ''}`;
+    },
+    /** Every release note with something for this viewer, newest first; drives the reopen button and chooser. */
+    viewerWhatsNew() {
+      const isAdmin = this.currentUser?.role === 'admin';
+      return RELEASE_NOTES.map(entry => ({ ...entry, slides: visibleSlides(entry, isAdmin) })).filter(entry => entry.slides.length);
+    },
+    latestWhatsNew() {
+      return this.viewerWhatsNew[0] || null;
     },
     visibleTabs() {
       if (!this.currentUser) {
@@ -509,6 +538,13 @@ export default {
       if (!tourDone || tourForced) {
         setTimeout(() => { this.showTour = true; }, 900);
       }
+      // Release notes do not depend on this browser's tour key (an existing user on a new browser still
+      // gets them); a fresh install marks them seen when setup completes. After a tour, they wait for it to end.
+      const entry = pendingEntry(RELEASE_NOTES, readSeen(), this.currentUser.role === 'admin');
+      if (entry) {
+        if (!tourDone || tourForced) this.queuedWhatsNew = entry;
+        else setTimeout(() => this.showWhatsNew(entry), 900);
+      }
     } catch (error) {
       if (error?.response?.status !== 403) {
         console.error('Error during component mount:', error);
@@ -566,6 +602,34 @@ export default {
     async handleLogout() {
       await this.logout();
       this.$router.push('/login');
+    },
+    showWhatsNew(entry) {
+      this.whatsNewEntries = this.viewerWhatsNew;
+      this.whatsNewStart = entry.id;
+    },
+    openWhatsNew() {
+      if (this.latestWhatsNew) this.showWhatsNew(this.latestWhatsNew);
+    },
+    tourDone() {
+      this.showTour = false;
+      if (this.queuedWhatsNew) {
+        const entry = this.queuedWhatsNew;
+        this.queuedWhatsNew = null;
+        setTimeout(() => this.showWhatsNew(entry), 400);
+      }
+    },
+    // Closing marks every unseen note as seen, so older ones never resurface after an upgrade across releases.
+    closeWhatsNew() {
+      markSeen(unseenIds(RELEASE_NOTES, readSeen()));
+      this.whatsNewEntries = [];
+    },
+    whatsNewGoTo(tab) {
+      this.closeWhatsNew();
+      this.$router.push({ name: 'DashboardTab', params: { tab } });
+    },
+    whatsNewAllNotes() {
+      this.closeWhatsNew();
+      this.showChangelog();
     },
     restartTour() {
       localStorage.removeItem(TOUR_STORAGE_KEY);
