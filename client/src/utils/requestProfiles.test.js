@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  approvalNeedsDialog, approvalProfileNotice, buildProfilePayload, choiceForServer, defaultChoice, hasJobProfile, hasServers, isChosen, jobProfilePayload, loadSeerServers, mediaTypesOf, profileTypes,
+  approvalNeedsDialog, approvalProfileNotice, buildProfilePayload, choiceForServer, defaultChoice, hasJobProfile, hasServers, isChosen, jobProfilePayload, loadSeerServers, mediaTypesOf, profileTypes, serversForItems,
 } from './requestProfiles.js';
 
 const servers = {
@@ -145,4 +145,13 @@ test('a custom profile only counts for the backend that uses it', () => {
   assert.equal(hasJobProfile(seerProfile, 'arr'), false);
   assert.equal(hasJobProfile(seerProfile, 'seer'), true);
   assert.equal(hasJobProfile(arrProfile, 'seer'), false);
+});
+
+test('approving direct Radarr/Sonarr rows never asks for a Seer profile, even when Seer is unreachable', () => {
+  const failed = { movie: [], tv: [], failed: true };
+  assert.equal(approvalNeedsDialog(failed), true);
+  assert.equal(approvalNeedsDialog(serversForItems(failed, [{ backend: 'arr' }])), false);
+  assert.equal(approvalProfileNotice(serversForItems(failed, [{ backend: 'arr' }])), '');
+  assert.equal(serversForItems(failed, [{ backend: 'arr' }, { backend: 'seer' }]), failed);
+  assert.equal(serversForItems(servers, [{}]), servers);  // rows from before the field are Seer's
 });

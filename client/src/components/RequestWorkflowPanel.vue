@@ -83,7 +83,7 @@
           </ul>
           <p class="m-0 rounded-ctl bg-panel-2 p-3 text-sm leading-relaxed text-ink-3"><i aria-hidden="true" class="fas fa-info-circle mr-1.5 text-brand-ink"></i>Rejected items are archived, not blacklisted. Filter requests by <strong>Rejected</strong> to find and request them again.</p>
         </template>
-        <ApprovalProfileChoice v-if="confirmation.action === 'approve'" ref="profileChoice" :servers="servers" :media-types="confirmationMediaTypes" />
+        <ApprovalProfileChoice v-if="confirmation.action === 'approve'" ref="profileChoice" :servers="serversForItems(servers, confirmation.items)" :media-types="confirmationMediaTypes" />
         <div class="mt-2 flex justify-end gap-2">
           <button type="button" class="h-10 cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink" @click="confirmation = null">Cancel</button>
           <button type="button" class="h-10 cursor-pointer rounded-ctl border-0 px-4 text-sm font-bold disabled:opacity-50" :class="confirmation.action === 'reject' || confirmation.action === 'blacklist' ? 'bg-bad text-on-bad' : 'bg-brand text-white'" :disabled="actionLoading" @click="decide">{{ confirmation.confirmLabel }}</button>
@@ -99,7 +99,7 @@ import AppDialog from '@/components/ui/AppDialog.vue';
 import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
-import { approvalNeedsDialog, loadSeerServers, mediaTypesOf } from '@/utils/requestProfiles.js';
+import { approvalNeedsDialog, loadSeerServers, mediaTypesOf, serversForItems } from '@/utils/requestProfiles.js';
 import { approvalNotice, deliveryLabel } from '@/utils/deliveryTarget.js';
 import { SEEN_OPTIONS, loadSeenRatingMode, ratedSeenOption, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
 import SeenRatingDialog from '@/components/SeenRatingDialog.vue';
@@ -194,10 +194,10 @@ export default {
       // Approving is the one action that spends bandwidth and disk and cannot
       // be taken back, so when there is a profile to pick it asks first —
       // rejecting already does. Only a loaded, empty server list skips it.
-      if (action === 'approve' && approvalNeedsDialog(this.servers)) { this.confirmSingle('approve', id); return; }
+      const item = this.items.find(request => request.id === id);
+      if (action === 'approve' && approvalNeedsDialog(serversForItems(this.servers, [item]))) { this.confirmSingle('approve', id); return; }
       this.actionLoading = true;
       try {
-        const item = this.items.find(request => request.id === id);
         await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] });
         notifyRequestsChanged();
         await this.load(1);
@@ -205,6 +205,7 @@ export default {
       } finally { this.actionLoading = false; }
     },
     confirmAction(action) { const labels = { approve: [`Send to ${deliveryLabel(this.selectedItems)}`, `Send ${this.selected.length} selected items using the identity and profiles shown on each card?`, 'fas fa-paper-plane', 'Send'], reject: ['Reject requests', `${this.selected.length} selected items will be removed from the approval queue.`, 'fas fa-archive', 'Reject requests'], blacklist: ['Blacklist requests', `Permanently prevent ${this.selected.length} items from being suggested again?`, 'fas fa-ban', 'Blacklist'], retry: ['Retry failed requests', `Queue ${this.selected.length} failed items for another delivery attempt?`, 'fas fa-redo', 'Retry'], 'request-again': ['Request again', `Remove any blacklist and send ${this.selected.length} selected items to ${deliveryLabel(this.selectedItems)}?`, 'fas fa-paper-plane', 'Request again'] }; this.confirmation = { action, ids: [...this.selected], items: [...this.selectedItems], removeBlacklist: action === 'request-again' && this.selectedItems.some(item => item.status === 'blacklisted'), title: labels[action][0], message: labels[action][1], icon: labels[action][2], confirmLabel: labels[action][3] }; },
+    serversForItems,
     keyDecision,
     swipeDecision,
     touchPoint,

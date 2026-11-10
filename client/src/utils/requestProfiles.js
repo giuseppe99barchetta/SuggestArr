@@ -2,6 +2,8 @@
 // approving a suggestion. Shared by every place that can approve — the
 // Requests page and the dashboard — so the rules live once.
 
+import { deliveryCounts } from './deliveryTarget.js';
+
 const MEDIA_TYPES = ['movie', 'tv'];
 
 // Jellyseerr numbers its first server 0, so "not chosen" must mean empty or
@@ -22,6 +24,13 @@ export function hasServers(servers) {
 export function approvalNeedsDialog(servers) {
   if (!servers || servers.failed) return true;
   return hasServers(servers);
+}
+
+// Only rows delivered by Seer take a Seer profile. For rows going straight to Radarr/Sonarr
+// there is nothing to choose (they use the job's or Connections' profile), so they are treated
+// like a loaded, empty server list: no dialog, and no "could not be loaded" notice without Seer.
+export function serversForItems(servers, items) {
+  return deliveryCounts(items).seer ? servers : { movie: [], tv: [], failed: false };
 }
 
 // What the dialog says when there is nothing (yet) to choose from.

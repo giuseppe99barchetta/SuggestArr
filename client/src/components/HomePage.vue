@@ -180,7 +180,7 @@ import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import MediaDetailsModal from '@/components/MediaDetailsModal.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
-import { approvalNeedsDialog, loadSeerServers } from '@/utils/requestProfiles.js';
+import { approvalNeedsDialog, loadSeerServers, serversForItems } from '@/utils/requestProfiles.js';
 import { SEEN_OPTIONS, loadSeenRatingMode, ratedSeenOption, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
 import SeenRatingDialog from '@/components/SeenRatingDialog.vue';
 import { approvalEnabled } from '@/utils/requestApproval.js';
@@ -420,7 +420,7 @@ export default {
     },
 
     requestApprove(request) {
-      if (approvalNeedsDialog(this.servers)) { this.approveItem = request; return; }
+      if (approvalNeedsDialog(serversForItems(this.servers, [request]))) { this.approveItem = request; return; }
       this.decidePending('approve', request.id);
     },
 

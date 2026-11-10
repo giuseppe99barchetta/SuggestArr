@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test";
 const token = "eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIiwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiJ9.";
 const radarr = [{ id: 0, name: "Radarr", is4k: false, profiles: [{ id: 7, name: "HD" }], rootFolders: [{ path: "/movies" }] }];
 
-async function mockApi(page, { servers }) {
+async function mockApi(page, { servers, backend }) {
   const calls = { approve: [] };
   // Hermetic: posters and fonts from the internet would hold up the page's
   // load event, and a slow network then looks like a failing test.
@@ -35,11 +35,12 @@ async function mockApi(page, { servers }) {
     if (apiPath === "/api/config/status") return json({ setup_completed: true, is_complete: true });
     if (apiPath === "/api/jobs") return json({ status: "success", jobs: [{ id: 7, name: "Manual job", job_type: "discover", media_type: "movie", enabled: true, delivery_mode: "manual" }] });
     if (apiPath === "/api/seer/radarr-servers") {
+      if (servers === "down") return json({ message: "Seer is not configured" }, 503);
       if (servers === "slow") await new Promise((resolve) => setTimeout(resolve, 4000));
       return json({ servers: radarr });
     }
     if (apiPath === "/api/seer/sonarr-servers") {
-      if (servers === "sonarr-fails") return json({ message: "unavailable" }, 503);
+      if (servers === "sonarr-fails" || servers === "down") return json({ message: "unavailable" }, 503);
       return json({ servers: [] });
     }
     if (apiPath === "/api/automation/requests/workflow/approve" && request.method() === "POST") {
@@ -48,7 +49,7 @@ async function mockApi(page, { servers }) {
     }
     if (apiPath.startsWith("/api/automation/requests/workflow")) {
       return json({
-        items: calls.approve.length ? [] : [{ id: 42, tmdb_id: "42", title: "Smoke title", media_type: "movie", rating: 8.1, name: "Manual job", status: "awaiting_approval" }],
+        items: calls.approve.length ? [] : [{ id: 42, tmdb_id: "42", title: "Smoke title", media_type: "movie", rating: 8.1, name: "Manual job", status: "awaiting_approval", ...(backend ? { backend } : {}) }],
         total: calls.approve.length ? 0 : 1, page: 1, pages: 1,
       });
     }
@@ -104,6 +105,19 @@ for (const [place, open] of Object.entries(places)) {
     // Radarr answered, so its choice is still offered despite Sonarr failing.
     await expect(dialog.getByText("Quality profile").first()).toBeVisible();
     expect(calls.approve).toHaveLength(0);
+  });
+
+  test(`on ${place}, a direct Radarr/Sonarr item is approved at once even without Seer`, async ({ page }) => {
+    const calls = await mockApi(page, { servers: "down", backend: "arr" });
+    await signIn(page);
+    await open(page);
+    await expect(page.getByText("Smoke title").first()).toBeVisible();
+    await page.waitForTimeout(500); // let the failing Seer lookup settle
+    await page.getByRole("button", { name: "Approve request" }).first().click();
+
+    await expect.poll(() => calls.approve.length).toBe(1);
+    expect(calls.approve[0].ids).toEqual([42]);
+    await expect(page.getByText("Quality profiles could not be loaded")).toHaveCount(0);
   });
 
   test(`on ${place}, a click while the servers are still loading does not approve`, async ({ page }) => {
