@@ -74,6 +74,35 @@ Keep `config_files` backed up. It contains:
 - `secret.key`: JWT signing key. Losing it signs users out.
 - `app.log`: rotating application log.
 
+## TrueNAS SCALE
+
+SuggestArr is available in the TrueNAS **community** catalog ([catalog page](https://apps.truenas.com/catalog/suggestarr_community/)).
+
+1. Open **Apps → Discover Apps** and search for *SuggestArr*.
+2. Click **Install** and set the time zone.
+3. Keep the default **WebUI Port** (`30566`) or choose another free port.
+4. For **Config Storage**, keep *ixVolume* or choose a *Host Path*. A host path must be writable by the `apps` user (UID/GID 568), which the app runs as.
+5. Save, wait until the app is **Running**, then open the Web UI from the app page and follow the setup wizard.
+
+Updates of the SuggestArr image reach the catalog automatically; update the app from the **Installed** apps page.
+
+## Unraid
+
+SuggestArr is listed in **Community Applications**:
+
+1. Open the **Apps** tab and search for *SuggestArr*.
+2. Click **Install**, check the **Config** path (default `/mnt/user/appdata/suggestarr`) and the Web UI port, and apply.
+3. Open the Web UI from the Docker tab and follow the setup wizard.
+
+The repository also ships an official template, [`unraid/template.xml`](../unraid/template.xml): bridge networking, port `5000`, `TZ` and `LOG_LEVEL`. To use it, run this in the Unraid terminal, then pick **SuggestArr** under **Docker → Add Container → Template**:
+
+```bash
+wget -O /boot/config/plugins/dockerMan/templates-user/my-SuggestArr.xml \
+  https://raw.githubusercontent.com/giuseppe99barchetta/SuggestArr/main/unraid/template.xml
+```
+
+The container runs on Alpine, so use `sh` (not `bash`) when opening its console.
+
 ## First-Run Setup
 
 When opening SuggestArr for the first time:
@@ -110,15 +139,13 @@ http://192.168.1.10:5055
 
 ## Configuration Screenshots
 
-The screenshots below show the main configuration areas. Values shown in the images are examples or masked placeholders.
+The main configuration areas are described below. More screenshots are in the [README](../README.md#screenshots).
 
 ### Services
 
 Use this page to configure TMDb, optional OMDb, optional MDBList, your media server, Trakt and Simkl app credentials, and Seer.
 
 For Trakt and Simkl, Services stores only the shared app-level credentials. Individual accounts are linked by each user from their Profile page. Simkl needs only a Client ID, because its device flow has no client secret.
-
-![SuggestArr services configuration](docs/assets/suggestarr-config-services.png)
 
 ### Users and Profile
 
@@ -138,19 +165,15 @@ Use this page to create, preview, run, enable, or disable automated recommendati
 
 Jobs can also pause automatically while Seer has pending requests awaiting approval or denial.
 
-![SuggestArr jobs configuration](docs/assets/suggestarr-config-jobs.png)
+![SuggestArr jobs](assets/screenshots/jobs.png)
 
 ### Database
 
 SQLite is the recommended default. PostgreSQL, MySQL, and MariaDB are available for larger or more advanced deployments.
 
-![SuggestArr database configuration](docs/assets/suggestarr-config-database.png)
-
 ### Advanced
 
 Use this page for AI provider setup, logging, caching, API timeouts, reverse-proxy subpath, registration, authentication, and Cleanup Automation.
-
-![SuggestArr advanced configuration](docs/assets/suggestarr-config-advanced.png)
 
 ## Best Configuration
 

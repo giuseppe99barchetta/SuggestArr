@@ -3,20 +3,21 @@
     <Name>SuggestArr</Name>
     <Repository>ciuse99/suggestarr:latest</Repository>
     <Registry>https://hub.docker.com/r/ciuse99/suggestarr</Registry>
-    <Network>host</Network>
-    <Shell>bash</Shell>
+    <Network>bridge</Network>
+    <Shell>sh</Shell>
     <Privileged>false</Privileged>
-    <Support>https://github.com/giuseppe99barchetta/suggestarr/issues</Support>
-    <Project>https://github.com/giuseppe99barchetta/suggestarr</Project>
-    <Overview>Automatically request suggested movies and TV shows to Seer based on recently watched. </Overview>
+    <Support>https://github.com/giuseppe99barchetta/SuggestArr/issues</Support>
+    <Project>https://github.com/giuseppe99barchetta/SuggestArr</Project>
+    <Overview>Finds movies and TV shows similar to what you watch on Jellyfin, Plex or Emby, and requests them to Seer automatically. Open the Web UI after the first start and follow the setup wizard.</Overview>
     <Category>Downloaders: MediaApp:Video</Category>
     <WebUI>http://[IP]:[PORT:5000]</WebUI>
-    <Icon>https://raw.githubusercontent.com/giuseppe99barchetta/SuggestArr/master/unraid/logo.png</Icon>
-    <TemplateURL>https://raw.githubusercontent.com/giuseppe99barchetta/SuggestArr/master/unraid/suggestarr.xml</TemplateURL>
+    <Icon>https://raw.githubusercontent.com/giuseppe99barchetta/SuggestArr/main/unraid/logo.png</Icon>
+    <TemplateURL>https://raw.githubusercontent.com/giuseppe99barchetta/SuggestArr/main/unraid/template.xml</TemplateURL>
     <Maintainer>
         <WebPage>https://github.com/giuseppe99barchetta/SuggestArr</WebPage>
     </Maintainer>
-    <Config Name="Web UI Port" Target="5000" Default="5000" Mode="tcp" Description="Port for SuggestArr Web UI" Type="Port" Display="always" Required="true" Mask="false">5155</Config>
-    <Config Name="SUGGESTARR_PORT" Target="SUGGESTARR_PORT" Default="5000" Mode="" Description="Internal port for SuggestArr (should match Web UI Port)" Type="Variable" Display="advanced" Required="false" Mask="false">5000</Config>
-    <Config Name="config" Target="/app/config/config_files" Default="" Mode="rw" Description="" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/suggestarr</Config>
+    <Config Name="Web UI Port" Target="5000" Default="5000" Mode="tcp" Description="Host port for the SuggestArr Web UI. Change only this value to use another port." Type="Port" Display="always" Required="true" Mask="false">5000</Config>
+    <Config Name="Config" Target="/app/config/config_files" Default="/mnt/user/appdata/suggestarr" Mode="rw" Description="Settings, SQLite database, secret key and logs. Back this folder up." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/suggestarr</Config>
+    <Config Name="TZ" Target="TZ" Default="Etc/UTC" Mode="" Description="Time zone used for job schedules, e.g. Europe/Rome." Type="Variable" Display="always" Required="false" Mask="false">Etc/UTC</Config>
+    <Config Name="LOG_LEVEL" Target="LOG_LEVEL" Default="info" Mode="" Description="debug, info, warning or error." Type="Variable" Display="advanced" Required="false" Mask="false">info</Config>
 </Container>

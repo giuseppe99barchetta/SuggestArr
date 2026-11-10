@@ -71,7 +71,11 @@ docker compose up -d
 
 Then open http://localhost:5000 and follow the setup wizard.
 
-For Unraid, source install, reverse proxy, authentication, backups and recommended settings, see the [Installation Guide](docs/INSTALLATION.md).
+**TrueNAS SCALE**: SuggestArr is in the [community catalog](https://apps.truenas.com/catalog/suggestarr_community/). Open **Apps → Discover Apps**, search for *SuggestArr* and install it.
+
+**Unraid**: open the **Apps** tab (Community Applications), search for *SuggestArr* and install it. An official template is also available in [`unraid/template.xml`](unraid/template.xml).
+
+For TrueNAS and Unraid details, source install, reverse proxy, authentication, backups and recommended settings, see the [Installation Guide](docs/INSTALLATION.md).
 
 ## Public API
 
