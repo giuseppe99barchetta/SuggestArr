@@ -145,7 +145,8 @@ export default {
       const items = (this.art.items || []).slice(0, 6);
       return {
         locked: this.art.locked !== false,
-        chips: items.map((item, i) => ({ ...item, x: i % 2 ? 164 : 12, y: 20 + Math.floor(i / 2) * 74 })),
+        // A chip alone on its row (odd count) sits centred under the pair above.
+        chips: items.map((item, i) => ({ ...item, x: i % 2 ? 164 : i === items.length - 1 ? 88 : 12, y: 20 + Math.floor(i / 2) * 74 })),
       };
     },
     height() {

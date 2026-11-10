@@ -289,7 +289,7 @@
                   <div class="flex flex-col gap-1.5">
                     <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
                       <label for="maxRequestsPerUser">Per user</label>
-                      <InfoTip text="Most automatic requests credited to one Seer user within the window. 0 means no extra limit; the per-run limit still applies." />
+                      <InfoTip :text="`Most automatic requests ${requestBackend === 'arr' ? 'made for one user' : 'credited to one Seer user'} within the window. 0 means no extra limit; the per-run limit still applies.`" />
                     </div>
                     <input id="maxRequestsPerUser" v-model.number="form.max_requests_per_user" class="ui-input" type="number" min="0" max="1000" required />
                   </div>
