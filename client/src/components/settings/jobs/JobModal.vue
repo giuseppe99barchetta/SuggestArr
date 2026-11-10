@@ -267,7 +267,7 @@
                 </div>
               </div>
 
-              <div class="mb-6">
+              <div v-if="requestBackend !== 'arr'" class="mb-6">
                 <label class="ui-label">Request as
                   <select v-model="form.seer_identity_mode" class="ui-input">
                     <option v-for="option in seerIdentityOptions" :key="option.value" :value="option.value" :disabled="option.disabled">{{ option.label }}</option>
@@ -517,7 +517,7 @@ export default {
       const global = this.requestApprovalDefault === null ? null : jobRequiresApproval({ delivery_mode: 'inherit' }, this.requestApprovalDefault);
       return [
         { value: 'inherit', label: 'Use global setting', hint: global === null ? 'Follow Advanced settings' : global ? 'Currently: approval required' : 'Currently: sent automatically', icon: 'fas fa-sliders' },
-        { value: 'automatic', label: 'Send automatically', hint: 'Request in Seer right away', icon: 'fas fa-paper-plane' },
+        { value: 'automatic', label: 'Send automatically', hint: this.requestBackend === 'arr' ? 'Add to Radarr/Sonarr right away' : 'Request in Seer right away', icon: 'fas fa-paper-plane' },
         { value: 'manual', label: 'Approve first', hint: 'Review in Requests', icon: 'fas fa-user-check' },
       ];
     },

@@ -391,7 +391,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 
       <!-- Request Workflow -->
       <div v-if="section === 'workflow'" class="grid gap-5 xl:grid-cols-2">
-        <SectionCard icon="fas fa-check-double" title="Approval flow" description="Review suggestions before they are sent to Seer.">
+        <SectionCard icon="fas fa-check-double" title="Approval flow" :description="`Review suggestions before they are sent to ${requestTarget}.`">
           <div class="flex flex-1 flex-col gap-2.5">
             <button
               v-for="toggle in approvalToggles"
@@ -419,7 +419,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
                 <input id="autoRejectApprovalDays" v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS" type="number" min="0" max="365" class="ui-input h-9 w-20 px-2.5 tabular-nums" :disabled="isLoading || !localConfig.REQUIRE_REQUEST_APPROVAL" />days
               </span>
             </label>
-            <p class="m-0 mt-auto pt-2 text-xs leading-relaxed text-ink-4">{{ localConfig.REQUIRE_REQUEST_APPROVAL ? 'Suggestions wait here before they reach Seer.' : 'Suggestions go straight to Seer, so the queue options are off.' }}</p>
+            <p class="m-0 mt-auto pt-2 text-xs leading-relaxed text-ink-4">{{ localConfig.REQUIRE_REQUEST_APPROVAL ? `Suggestions wait here before they reach ${requestTarget}. Auto-rejected ones are not replaced.` : `Suggestions go straight to ${requestTarget}, so the queue options are off.` }}</p>
           </div>
         </SectionCard>
 
@@ -579,6 +579,10 @@ export default {
     };
   },
   computed: {
+    /** Where approved suggestions go: Radarr/Sonarr with direct delivery, Seer otherwise. */
+    requestTarget() {
+      return this.localConfig.REQUEST_BACKEND === 'arr' ? 'Radarr/Sonarr' : 'Seer';
+    },
     sectionMeta() {
       return {
         ai: { title: 'AI provider', subtitle: 'The language model behind AI Search and AI recommendations.' },

@@ -13,6 +13,45 @@
  */
 export const RELEASE_NOTES = [
   {
+    id: 'arr-feature-parity',
+    title: 'Radarr & Sonarr delivery catches up with Seer',
+    slides: [
+      {
+        art: { type: 'form', fields: [{ label: 'Tag', value: 'suggestarr' }], optional: { label: 'User', value: 'suggestarr-user-anna' } },
+        tone: 'brand',
+        heading: 'Every title SuggestArr adds is tagged',
+        changes: 'With direct delivery, titles added to Radarr or Sonarr carry the suggestarr tag. An option in Connections also tags them with who they were suggested for.',
+        impact: 'You can filter SuggestArr\'s additions in Radarr and Sonarr, by person too. Cleanup only ever deletes tagged titles. Titles added before this update are not tagged.',
+        cta: { label: 'Open Connections', tab: 'services' },
+        adminOnly: true,
+      },
+      {
+        art: { type: 'flow', source: { label: 'Radarr' }, targets: [{ label: 'Requests', sub: 'available', done: true }], arrow: 'file found' },
+        tone: 'good',
+        heading: 'Know when it is ready',
+        changes: 'Requested titles now move from requested to processing, partial and available by reading Radarr and Sonarr, as they do with Seer.',
+        impact: 'The Requests page shows the badges, the request.available webhook fires and personal notifications arrive without Seer. There is no play link: Radarr and Sonarr do not know one.',
+      },
+      {
+        art: { type: 'features', locked: false, items: [{ label: 'Replace rejected', sub: 'approval queue' }, { label: 'Cleanup', sub: 'tagged only' }] },
+        tone: 'caution',
+        heading: 'Replacements and cleanup',
+        changes: 'Rejecting a suggestion in the approval queue can bring one alternative from the same job. Cleanup deletes unfavorited titles straight in Radarr or Sonarr, files included.',
+        impact: 'Cleanup never touches a title without the suggestarr tag, so what you added yourself is safe. Run a dry run first: it lists exactly what a real run would delete.',
+        cta: { label: 'Open Cleanup', tab: 'cleanup' },
+        adminOnly: true,
+      },
+      {
+        art: { type: 'form', fields: [{ label: 'Quality profile', value: 'UHD-2160p' }, { label: 'Pause while', value: 'downloads queued' }] },
+        tone: 'brand',
+        heading: 'Profiles and pause, per job',
+        changes: 'A job can use its own Radarr or Sonarr quality profile, root folder and tags, and wait while Radarr or Sonarr still has downloads in the queue.',
+        impact: 'Jobs without their own profile keep the one from Connections. A stalled download keeps those jobs waiting until you clear it in Radarr or Sonarr.',
+        cta: { label: 'Open Jobs', tab: 'jobs' },
+      },
+    ],
+  },
+  {
     id: 'request-backend-arr',
     title: 'Radarr & Sonarr can now take your requests',
     slides: [
@@ -42,11 +81,11 @@ export const RELEASE_NOTES = [
         cta: { label: 'Choose profiles', tab: 'services' },
       },
       {
-        art: { type: 'features', items: [{ label: 'Auto-decline', sub: 'Seer only' }, { label: 'Replace rejected', sub: 'Seer only' }, { label: 'Availability', sub: 'Seer only' }, { label: 'Cleanup', sub: 'Seer only' }] },
+        art: { type: 'features', items: [{ label: 'Auto-decline', sub: 'Seer only' }] },
         tone: 'caution',
-        heading: 'What is not available without Seer',
-        changes: 'Auto-decline of old pending requests, replacing rejected requests, availability notifications, cleanup and "pause while Seer has pending requests" depend on Seer.',
-        impact: 'In Radarr & Sonarr mode these options are hidden or switched off. Requests already queued for Seer are still delivered to Seer, so switching never reroutes anything in flight.',
+        heading: 'What still needs Seer',
+        changes: 'Only auto-decline of old pending requests depends on Seer: it declines requests waiting in Seer, and direct delivery has none.',
+        impact: 'Replacing rejected requests, availability notifications, cleanup and the pause for pending downloads work with Radarr & Sonarr too. Requests already queued for Seer are still delivered to Seer, so switching never reroutes anything in flight.',
         adminOnly: true,
       },
     ],
