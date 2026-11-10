@@ -1,14 +1,15 @@
-"""Follow requested titles through Seer: requested, processing, available.
+"""Follow requested titles through Seer (or Radarr/Sonarr with direct delivery): requested, processing, available.
 
-Runs on a schedule, reads Seer's media list once and stores only what changed.
+Runs on a schedule, reads the media list once and stores only what changed.
 A title that becomes available fires the ``request.available`` webhook.
 """
 import threading
 from urllib.parse import urlsplit
 
-from api_service.config.config import get_request_backend
+from api_service.config.config import ARR_INSTANCES, get_request_backend
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.arr.arr_client import ArrClient
 from api_service.services.config_service import ConfigService
 from api_service.services.seer.seer_client import SeerClient, normalize_seer_url
 from api_service.utils.asyncio_loop import run_coroutine_sync
@@ -106,9 +107,23 @@ def notify_owners(db, env, media_type, tmdb_id, play_url=None):
     return sent
 
 
+async def _arr_media_statuses(instances):
+    """Merge the statuses of every configured Radarr/Sonarr, or None when any of them cannot be read."""
+    statuses = {}
+    for service, url, token, _ in instances:
+        try:
+            async with ArrClient(service, url, token) as client:
+                statuses.update(await client.get_media_statuses())
+        except Exception as exc:
+            logger.warning("Could not read %s's library; availability not updated: %s", service.capitalize(), exc)
+            return None
+    return statuses
+
+
 async def sync_availability():
     """
-    Update the stored Seer status of every requested title.
+    Update the stored status of every requested title, from Seer or, with direct
+    delivery, from Radarr/Sonarr.
 
     Returns:
         Dict with 'status' ('ok', 'not_configured', 'unavailable' or 'already_running'),
@@ -119,27 +134,40 @@ async def sync_availability():
     try:
         env = ConfigService.get_runtime_config()
         if get_request_backend(env) == 'arr':
-            return {'status': 'not_configured', 'changed': 0, 'available': 0}  # availability comes from Seer
-        try:
-            url = normalize_seer_url(env.get('SEER_API_URL', ''))
-        except (ValueError, AttributeError):
-            url = None
-        token = env.get('SEER_TOKEN')
-        if not url or not token:
-            return {'status': 'not_configured', 'changed': 0, 'available': 0}
+            instances = [(service, env[url_key], env[token_key], media_type)
+                         for service, (url_key, token_key, media_type) in ARR_INSTANCES.items()
+                         if env.get(url_key) and env.get(token_key)]
+            if not instances:
+                return {'status': 'not_configured', 'changed': 0, 'available': 0}
+        else:
+            try:
+                url = normalize_seer_url(env.get('SEER_API_URL', ''))
+            except (ValueError, AttributeError):
+                url = None
+            token = env.get('SEER_TOKEN')
+            if not url or not token:
+                return {'status': 'not_configured', 'changed': 0, 'available': 0}
         db = DatabaseManager()
         requested = db.get_requested_media_keys()
         if not requested:
             return {'status': 'ok', 'changed': 0, 'available': 0}
-        async with SeerClient(url, token) as seer:
-            statuses = await seer.get_media_statuses()
+        known = db.get_media_availability()
+        if get_request_backend(env) == 'arr':
+            statuses = await _arr_media_statuses(instances)
+            # A type without an instance is left alone: its stored states are neither reset nor removed.
+            served = {media_type for *_, media_type in instances}
+            requested = {key for key in requested if key[0] in served}
+            known = {key: value for key, value in known.items() if key[0] in served}
+        else:
+            async with SeerClient(url, token) as seer:
+                statuses = await seer.get_media_statuses()
         if statuses is None:
             return {'status': 'unavailable', 'changed': 0, 'available': 0}
         if env.get('SELECTED_SERVICE') in ('jellyfin', 'emby'):
             for state in statuses.values():
                 state['url'] = external_media_url(state['url'], env.get('JELLYFIN_EXTERNAL_URL'))
 
-        changes, newly_available = plan_availability_changes(requested, db.get_media_availability(), statuses)
+        changes, newly_available = plan_availability_changes(requested, known, statuses)
         db.save_media_availability(changes)
         for media_type, tmdb_id in newly_available:
             try:

@@ -78,6 +78,31 @@ class ArrClient(BaseHTTPClient):
                                 '(Sonarr v4) or its titles cannot be excluded.', self.service.capitalize())
         return ids
 
+    async def get_media_statuses(self):
+        """Where each title of the instance stands, in the shape of ``SeerClient.get_media_statuses``.
+
+        Radarr: a downloaded file means available, otherwise the title is being fetched.
+        Sonarr: files for every monitored aired episode mean available, some files partial.
+        There is no play link, so ``url`` is always None.
+
+        :return: Dict ``{(media_type, tmdb_id): {'status', 'url'}}``.
+        :raises RuntimeError: When the library cannot be read (a partial read must not
+            make titles look as if they had left the instance).
+        """
+        endpoint, media_type = SERVICES[self.service]
+        statuses = {}
+        for item in await self._get(endpoint) or []:
+            if not isinstance(item, dict) or not item.get('tmdbId'):
+                continue
+            if self.service == 'radarr':
+                status = 'available' if item.get('hasFile') else 'processing'
+            else:
+                stats = item.get('statistics') or {}
+                files, wanted = stats.get('episodeFileCount') or 0, stats.get('episodeCount') or 0
+                status = 'available' if files and files >= wanted else 'partial' if files else 'processing'
+            statuses[(media_type, str(item['tmdbId']))] = {'status': status, 'url': None}
+        return statuses
+
     async def get_options(self):
         """Return the quality profiles, root folders and tags the instance offers (no secrets)."""
         profiles = await self._get('qualityprofile')

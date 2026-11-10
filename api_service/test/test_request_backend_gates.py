@@ -38,10 +38,17 @@ def test_expiry_and_replacement_are_disabled_for_direct_delivery_even_with_seer_
         assert asyncio.run(request_replacement.execute_request_replacements())['status'] == 'disabled_backend'
 
 
-def test_availability_sync_does_not_contact_seer_in_direct_mode():
+def test_availability_sync_reads_radarr_not_seer_in_direct_mode():
+    radarr = MagicMock(get_media_statuses=AsyncMock(return_value={}))
+    radarr.__aenter__ = AsyncMock(return_value=radarr)
+    radarr.__aexit__ = AsyncMock(return_value=False)
+    db = MagicMock(get_requested_media_keys=MagicMock(return_value={('movie', '1')}),
+                   get_media_availability=MagicMock(return_value={}))
     with patch.object(availability_sync.ConfigService, 'get_runtime_config', return_value=ARR_WITH_SEER), \
-            _no_seer(availability_sync):
-        assert asyncio.run(availability_sync.sync_availability())['status'] == 'not_configured'
+            patch.object(availability_sync, 'DatabaseManager', return_value=db), \
+            patch.object(availability_sync, 'ArrClient', return_value=radarr), _no_seer(availability_sync):
+        assert asyncio.run(availability_sync.sync_availability())['status'] == 'ok'
+    radarr.get_media_statuses.assert_awaited_once()
 
 
 def test_cleanup_is_unsupported_in_direct_mode():

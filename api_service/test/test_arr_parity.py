@@ -120,3 +120,81 @@ def test_the_request_client_reuses_one_arr_client_per_instance_and_closes_it():
         asyncio.run(deliver_twice())
     factory.assert_called_once_with('radarr', 'http://radarr:7878', 'k')
     fake.close.assert_awaited_once()
+
+
+# --- 2. availability ---------------------------------------------------------
+
+from api_service.jobs import availability_sync  # noqa: E402
+
+
+def test_radarr_statuses_follow_the_downloaded_file():
+    client = _client('radarr', {('GET', 'movie'): (200, [
+        {'tmdbId': 1, 'hasFile': True}, {'tmdbId': 2, 'hasFile': False}, {'title': 'no tmdb id', 'hasFile': True}])})
+    assert asyncio.run(client.get_media_statuses()) == {
+        ('movie', '1'): {'status': 'available', 'url': None}, ('movie', '2'): {'status': 'processing', 'url': None}}
+
+
+def test_sonarr_statuses_compare_downloaded_and_monitored_episodes():
+    series = [{'tmdbId': 1, 'statistics': {'episodeFileCount': 20, 'episodeCount': 20}},
+              {'tmdbId': 2, 'statistics': {'episodeFileCount': 3, 'episodeCount': 20}},
+              {'tmdbId': 3, 'statistics': {'episodeFileCount': 0, 'episodeCount': 20}},
+              {'tmdbId': 4}]  # statistics missing: nothing downloaded yet
+    statuses = asyncio.run(_client('sonarr', {('GET', 'series'): (200, series)}).get_media_statuses())
+    assert {key[1]: value['status'] for key, value in statuses.items()} == {
+        '1': 'available', '2': 'partial', '3': 'processing', '4': 'processing'}
+    assert all(key[0] == 'tv' for key in statuses)
+
+
+def _sync(env, db, clients):
+    """Run sync_availability with fake Radarr/Sonarr clients keyed by service."""
+    def build(service, url, token):
+        fake = MagicMock()
+        fake.__aenter__ = AsyncMock(return_value=fake)
+        fake.__aexit__ = AsyncMock(return_value=False)
+        answer = clients[service]
+        fake.get_media_statuses = AsyncMock(side_effect=answer) if isinstance(answer, Exception) \
+            else AsyncMock(return_value=answer)
+        return fake
+    with patch.object(availability_sync.ConfigService, 'get_runtime_config', return_value=env), \
+            patch.object(availability_sync, 'DatabaseManager', return_value=db), \
+            patch.object(availability_sync, 'ArrClient', side_effect=build), \
+            patch.object(availability_sync, 'SeerClient', side_effect=AssertionError('Seer must not be contacted')):
+        return asyncio.run(availability_sync.sync_availability())
+
+
+def _db(requested, known):
+    return MagicMock(get_requested_media_keys=MagicMock(return_value=set(requested)),
+                     get_media_availability=MagicMock(return_value=dict(known)),
+                     get_title_owner_ids=MagicMock(return_value=[]))
+
+
+def test_direct_sync_stores_changes_and_announces_titles_that_became_available():
+    known = {('movie', '1'): {'status': 'processing', 'url': None}, ('tv', '5'): {'status': 'processing', 'url': None}}
+    db = _db(known, known)
+    result = _sync(ARR_ENV, db, {'radarr': {('movie', '1'): {'status': 'available', 'url': None}},
+                                 'sonarr': {('tv', '5'): {'status': 'partial', 'url': None}}})
+    assert result == {'status': 'ok', 'changed': 2, 'available': 1}
+    db.save_media_availability.assert_called_once_with({('movie', '1'): {'status': 'available', 'url': None},
+                                                        ('tv', '5'): {'status': 'partial', 'url': None}})
+    db.enqueue_webhook_event.assert_called_once_with('request.available', {'tmdb_id': '1', 'media_type': 'movie'})
+
+
+def test_one_unreadable_instance_updates_nothing():
+    db = _db({('movie', '1'), ('tv', '5')}, {('movie', '1'): {'status': 'processing', 'url': None}})
+    result = _sync(ARR_ENV, db, {'radarr': {('movie', '1'): {'status': 'available', 'url': None}},
+                                 'sonarr': RuntimeError('down')})
+    assert result['status'] == 'unavailable'
+    db.save_media_availability.assert_not_called()
+    db.enqueue_webhook_event.assert_not_called()
+
+
+def test_a_type_without_an_instance_keeps_its_stored_states():
+    known = {('movie', '1'): {'status': 'processing', 'url': None}, ('tv', '5'): {'status': 'available', 'url': 'http://jf/5'}}
+    db = _db(known, known)
+    env = {**RADARR, 'ARR_PROFILE_CONFIG': PROFILES, 'REQUEST_BACKEND': 'arr'}  # no Sonarr
+    _sync(env, db, {'radarr': {('movie', '1'): {'status': 'available', 'url': None}}})
+    db.save_media_availability.assert_called_once_with({('movie', '1'): {'status': 'available', 'url': None}})
+
+
+def test_direct_sync_without_any_instance_is_not_configured():
+    assert _sync({'REQUEST_BACKEND': 'arr'}, _db([], {}), {})['status'] == 'not_configured'
