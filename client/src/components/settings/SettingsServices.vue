@@ -4,18 +4,25 @@
     <PageHeader v-if="!wizardMode" title="Connections" subtitle="The services SuggestArr reads from and sends requests to. Working ones are folded: open one to change it, test it, then save." />
 
     <div class="mb-5 flex flex-col gap-5">
+      <section v-if="!wizardMode" class="flex flex-col gap-2">
+        <h2 class="m-0 text-xs font-bold tracking-wider text-ink-4 uppercase">Where requests go</h2>
+        <RequestBackendChoice v-model="localConfig.REQUEST_BACKEND" :disabled="isLoading" />
+      </section>
+
       <section :class="wizardMode ? '' : 'flex flex-col gap-2'">
         <h2 v-if="!wizardMode" class="m-0 text-xs font-bold tracking-wider text-ink-4 uppercase">Required</h2>
         <div :class="listClass">
           <MediaServerCard v-if="showSection('media-server')" />
-          <SeerCard v-if="showSection('seer')" />
+          <SeerCard v-if="showSection('seer') && (wizardMode || requestBackend !== 'arr')" />
+          <ArrCard v-if="showSection('arr') && (wizardMode || requestBackend !== 'seer')" />
           <TmdbCard v-if="showSection('tmdb')" />
         </div>
       </section>
 
-      <section v-if="showSection('omdb') || showSection('trakt') || showSection('simkl') || (!wizardMode && showSection('mdblist'))" :class="wizardMode ? '' : 'flex flex-col gap-2'">
+      <section v-if="showSection('omdb') || showSection('trakt') || showSection('simkl') || (!wizardMode && showSection('mdblist')) || (!wizardMode && requestBackend === 'seer')" :class="wizardMode ? '' : 'flex flex-col gap-2'">
         <h2 v-if="!wizardMode" class="m-0 text-xs font-bold tracking-wider text-ink-4 uppercase">Optional extras</h2>
         <div :class="listClass">
+          <ArrCard v-if="!wizardMode && requestBackend === 'seer'" />
           <MdblistCard v-if="!wizardMode && showSection('mdblist')" />
           <OmdbCard v-if="showSection('omdb')" />
           <TraktCard v-if="showSection('trakt')" />
@@ -39,6 +46,8 @@ import unsavedChangesGuard from './mixins/unsavedChangesGuard';
 import MediaServerCard from './services/MediaServerCard.vue';
 import SeerCard from './services/SeerCard.vue';
 import TmdbCard from './services/TmdbCard.vue';
+import ArrCard from './services/ArrCard.vue';
+import RequestBackendChoice from './services/RequestBackendChoice.vue';
 import MdblistCard from './services/MdblistCard.vue';
 import OmdbCard from './services/OmdbCard.vue';
 import TraktCard from './services/TraktCard.vue';
@@ -51,7 +60,7 @@ import SimklCard from './services/SimklCard.vue';
 export default {
   name: 'SettingsServices',
   mixins: [unsavedChangesGuard],
-  components: { PageHeader, MediaServerCard, SeerCard, TmdbCard, MdblistCard, OmdbCard, TraktCard, SimklCard },
+  components: { PageHeader, MediaServerCard, SeerCard, TmdbCard, ArrCard, RequestBackendChoice, MdblistCard, OmdbCard, TraktCard, SimklCard },
   provide() {
     return { services: this };
   },
@@ -94,6 +103,9 @@ export default {
     // Dashboard: each group is one panel with a row per service.
     listClass() {
       return this.wizardMode ? '' : 'flex flex-col divide-y divide-edge rounded-card border border-edge bg-panel';
+    },
+    requestBackend() {
+      return this.localConfig.REQUEST_BACKEND || 'seer';
     },
     hasChanges() {
       return JSON.stringify(this.localConfig) !== JSON.stringify(this.originalConfig);
@@ -146,6 +158,12 @@ export default {
           TMDB_API_KEY: this._secretValue('TMDB_API_KEY'),
           OMDB_API_KEY: this._secretValue('OMDB_API_KEY') || '',
           MDBLIST_API_KEY: this._secretValue('MDBLIST_API_KEY') || '',
+          RADARR_API_URL: this.localConfig.RADARR_API_URL || '',
+          RADARR_TOKEN: this._secretValue('RADARR_TOKEN') || '',
+          SONARR_API_URL: this.localConfig.SONARR_API_URL || '',
+          SONARR_TOKEN: this._secretValue('SONARR_TOKEN') || '',
+          REQUEST_BACKEND: this.localConfig.REQUEST_BACKEND || 'seer',
+          ARR_PROFILE_CONFIG: this.localConfig.ARR_PROFILE_CONFIG || {},
           SELECTED_SERVICE: this.localConfig.SELECTED_SERVICE,
           TRAKT_CLIENT_ID: this.localConfig.TRAKT_CLIENT_ID || '',
           TRAKT_CLIENT_SECRET: traktClientSecret,
@@ -186,13 +204,13 @@ export default {
 
     async resetToDefaults() {
       const defaults = {
-        TMDB_API_KEY: '', OMDB_API_KEY: '', MDBLIST_API_KEY: '', SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
+        TMDB_API_KEY: '', OMDB_API_KEY: '', MDBLIST_API_KEY: '', RADARR_API_URL: '', RADARR_TOKEN: '', SONARR_API_URL: '', SONARR_TOKEN: '', REQUEST_BACKEND: 'seer', ARR_PROFILE_CONFIG: {}, SELECTED_SERVICE: '', PLEX_TOKEN: '', PLEX_API_URL: '', PLEX_LIBRARIES: [],
         JELLYFIN_API_URL: '', JELLYFIN_EXTERNAL_URL: '', JELLYFIN_TOKEN: '', JELLYFIN_LIBRARIES: [],
         TRAKT_CLIENT_ID: '', TRAKT_CLIENT_SECRET: '', TRAKT_SYNC_SEEN_FEEDBACK: false, SIMKL_CLIENT_ID: '',
         SEER_API_URL: '', SEER_EXTERNAL_URL: '', SEER_TOKEN: '', SEER_USER_NAME: null, SEER_USER_PSW: null,
         SEER_SESSION_TOKEN: null, SEER_ANIME_PROFILE_CONFIG: {}, SEER_REQUEST_DELAY: 2, SELECTED_USERS: [],
       };
-      if (await confirmDialog({ title: 'Reset service settings?', message: 'All connections are cleared and saved: TMDb, your media server, Seer, Trakt, Simkl, OMDb and MDBList.', confirmLabel: 'Reset', danger: true })) {
+      if (await confirmDialog({ title: 'Reset service settings?', message: 'All connections are cleared and saved: TMDb, your media server, Seer, Trakt, Simkl, OMDb, MDBList, Radarr and Sonarr.', confirmLabel: 'Reset', danger: true })) {
         this.localConfig = { ...this.localConfig, ...defaults };
         this.resetCount += 1; // each card forgets its connection state (serviceCard onReset)
         await this.saveSettings();

@@ -423,7 +423,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           </div>
         </SectionCard>
 
-        <SectionCard icon="fas fa-hourglass-end" title="Seerr pending requests" description="Expire requests still waiting for approval in Seerr.">
+        <SectionCard v-if="localConfig.REQUEST_BACKEND !== 'arr'" icon="fas fa-hourglass-end" title="Seerr pending requests" description="Expire requests still waiting for approval in Seerr.">
           <div class="flex flex-col gap-2.5">
             <label class="flex min-h-20 items-center gap-3 rounded-ctl border border-edge bg-panel-2 p-3.5 xl:h-[88px]">
               <span class="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -442,7 +442,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           <p class="m-0 mt-auto pt-3 text-xs leading-relaxed text-ink-4">Checked daily at 04:30 server time. Only new SuggestArr deliveries are tracked; media files stay untouched.</p>
         </SectionCard>
 
-        <SectionCard icon="fas fa-sync-alt" title="Replace rejected requests" description="Offer an alternative when a request is declined in Seerr or Overseerr." class="xl:col-span-2">
+        <SectionCard v-if="localConfig.REQUEST_BACKEND !== 'arr'" icon="fas fa-sync-alt" title="Replace rejected requests" description="Offer an alternative when a request is declined in Seerr or Overseerr." class="xl:col-span-2">
           <BaseCheckbox v-model="localConfig.REPLACE_REJECTED_REQUESTS" label="Generate an alternative after rejection" description="Try one new title using the same job, user and media type. Approval rules still apply." :disabled="isLoading" />
           <RequestReplacementControls :enabled="originalConfig.REPLACE_REJECTED_REQUESTS" :disabled="isLoading || hasChanges" />
           <p class="m-0 mt-3 text-xs leading-relaxed text-ink-4">Checked every 15 minutes for tracked SuggestArr requests. Deleted requests and automatic expiry declines do not trigger alternatives. Disabled or paused jobs wait.</p>

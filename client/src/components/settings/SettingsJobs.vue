@@ -179,10 +179,11 @@
       :job="editingJob"
       :request-approval-default="jobDefaults.requestApproval"
       :approval-pause-default="jobDefaults.approvalPause"
+      :request-backend="jobDefaults.requestBackend"
       @close="closeModal"
       @save="saveJob"
     />
-    <JobModal v-if="showImportModal" one-time :request-approval-default="jobDefaults.requestApproval" @close="showImportModal = false" @save="importListOnce" />
+    <JobModal v-if="showImportModal" one-time :request-approval-default="jobDefaults.requestApproval" :request-backend="jobDefaults.requestBackend" @close="showImportModal = false" @save="importListOnce" />
 
     <AppDialog v-if="jobToDelete" labelledby="delete-job-title" @close="jobToDelete = null">
       <div class="flex flex-col gap-4 p-6">
@@ -254,7 +255,7 @@ export default {
     return {
       jobs: [],
       // Global settings that jobs set to "inherit" follow, shown inside the job modal.
-      jobDefaults: { requestApproval: null, approvalPause: null },
+      jobDefaults: { requestApproval: null, approvalPause: null, requestBackend: 'seer' },
       recentHistory: [],
       allHistory: [],
       isLoading: false,
@@ -442,6 +443,7 @@ export default {
           this.jobDefaults = {
             requestApproval: response.request_approval_default ?? null,
             approvalPause: typeof response.approval_pause_default === 'boolean' ? response.approval_pause_default : null,
+            requestBackend: response.request_backend || 'seer',
           };
         }
       } catch (error) {

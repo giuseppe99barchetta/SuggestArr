@@ -16,6 +16,16 @@ export const testMdblistApi = (apiKey) => {
     return axios.post('/api/mdblist/test', { api_key: apiKey });
 };
 
+// Test a Radarr/Sonarr connection: { service } uses the saved credentials, or pass URL + key
+export const testArrApi = (payload) => {
+    return axios.post('/api/arr/test', payload);
+};
+
+// Quality profiles, root folders and tags of a Radarr/Sonarr instance (same payload as testArrApi)
+export const getArrOptionsApi = (payload) => {
+    return axios.post('/api/arr/options', payload);
+};
+
 // Function to test Jellyfin configuration
 export const testJellyfinApi = (url, token) => {
     return axios.post('/api/jellyfin/test', { JELLYFIN_API_URL: url, JELLYFIN_TOKEN: token });

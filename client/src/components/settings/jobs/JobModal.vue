@@ -210,7 +210,7 @@
                   <InfoTip text="Pause rules only affect scheduled runs. “Run now” always works." />
                 </div>
                 <div class="flex flex-col divide-y divide-edge rounded-ctl border border-edge">
-                  <div class="flex items-center gap-1.5 px-4 py-3">
+                  <div v-if="requestBackend !== 'arr'" class="flex items-center gap-1.5 px-4 py-3">
                     <BaseCheckbox v-model="form.pause_if_pending_requests" label="Seer still has requests waiting for approval" />
                     <InfoTip text="Avoids piling up new requests while Seer admins haven't reviewed the previous ones." />
                   </div>
@@ -302,14 +302,14 @@
                 </div>
               </div>
 
-              <button type="button" :class="disclosureClass" :aria-expanded="profilesOpen.toString()" aria-controls="job-request-profiles" @click="profilesOpen = !profilesOpen">
+              <button v-if="requestBackend !== 'arr'" type="button" :class="disclosureClass" :aria-expanded="profilesOpen.toString()" aria-controls="job-request-profiles" @click="profilesOpen = !profilesOpen">
                 <span class="flex min-w-0 flex-col items-start gap-0.5">
                   <span class="text-[13px] font-semibold text-ink">Radarr / Sonarr overrides</span>
                   <span class="text-xs font-normal text-ink-4">{{ profilesSummary }}</span>
                 </span>
                 <i aria-hidden="true" class="fas fa-chevron-down ml-auto text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': profilesOpen }"></i>
               </button>
-              <div v-if="profilesOpen" id="job-request-profiles" class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
+              <div v-if="profilesOpen && requestBackend !== 'arr'" id="job-request-profiles" class="mt-4 grid gap-3 md:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
                 <div v-for="type in visibleProfileTypes" :key="type" class="grid gap-2 rounded-ctl border border-edge bg-panel-2 p-4">
                   <div class="flex items-center gap-2 text-[0.85rem] font-semibold text-ink"><i aria-hidden="true" :class="type === 'movie' ? 'fas fa-film' : 'fas fa-tv'" class="text-ink-4"></i><span>{{ type === 'movie' ? 'Radarr movie profile' : 'Sonarr TV profile' }}</span></div>
                   <label class="ui-label">Server
@@ -399,7 +399,9 @@ export default {
     /** Global REQUIRE_REQUEST_APPROVAL, shown on the "Use global setting" delivery option; null when unknown. */
     requestApprovalDefault: { type: [Boolean, String], default: null },
     /** Global PAUSE_JOBS_WITH_PENDING_APPROVALS, shown on the "Global" pause option; null when unknown. */
-    approvalPauseDefault: { type: Boolean, default: null }
+    approvalPauseDefault: { type: Boolean, default: null },
+    /** REQUEST_BACKEND: Seer-only options (pending-request pause, per-job server profiles) are hidden for 'arr'. */
+    requestBackend: { type: String, default: 'seer' }
   },
   emits: ['close', 'save'],
   setup() { const { currentUser } = useAuth(); return { currentUser }; },

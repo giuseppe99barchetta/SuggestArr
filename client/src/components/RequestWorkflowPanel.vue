@@ -1,7 +1,7 @@
 <template>
   <section class="flex flex-col gap-4">
     <div v-if="showHeader" class="flex flex-wrap items-center justify-between gap-3">
-      <div><h2 class="m-0 text-lg font-bold text-ink">Request approval</h2><p class="m-0 text-sm text-ink-3">Review requests before they are sent to Seer.</p></div>
+      <div><h2 class="m-0 text-lg font-bold text-ink">Request approval</h2><p class="m-0 text-sm text-ink-3">Review requests before they are sent to Seer or added to Radarr/Sonarr.</p></div>
       <div class="flex gap-2">
         <select v-model="jobId" aria-label="Manual job" class="h-10 rounded-ctl border border-edge-strong bg-panel px-3 text-sm text-ink"><option :value="null">Choose job</option><option v-for="job in jobs" :key="job.id" :value="job.id">{{ job.name }}</option></select>
         <button type="button" class="h-10 cursor-pointer rounded-ctl border-0 bg-brand px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" :disabled="!jobId || running" @click="runJob">Run now</button>
@@ -100,6 +100,7 @@ import MediaCard from '@/components/ui/MediaCard.vue';
 import MediaGridSkeleton from '@/components/ui/MediaGridSkeleton.vue';
 import ApprovalProfileChoice from '@/components/ApprovalProfileChoice.vue';
 import { approvalNeedsDialog, loadSeerServers, mediaTypesOf } from '@/utils/requestProfiles.js';
+import { approvalNotice, deliveryLabel } from '@/utils/deliveryTarget.js';
 import { SEEN_OPTIONS, loadSeenRatingMode, ratedSeenOption, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
 import SeenRatingDialog from '@/components/SeenRatingDialog.vue';
 import { notifyRequestsChanged } from '@/utils/requestEvents.js';
@@ -196,13 +197,14 @@ export default {
       if (action === 'approve' && approvalNeedsDialog(this.servers)) { this.confirmSingle('approve', id); return; }
       this.actionLoading = true;
       try {
+        const item = this.items.find(request => request.id === id);
         await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] });
         notifyRequestsChanged();
         await this.load(1);
-        this.$toast.open({ message: action === 'approve' ? 'Request queued for Seer' : 'Request updated', type: 'success' });
+        this.$toast.open({ message: action === 'approve' ? approvalNotice([item]) : 'Request updated', type: 'success' });
       } finally { this.actionLoading = false; }
     },
-    confirmAction(action) { const labels = { approve: ['Send to Seer', `Send ${this.selected.length} selected items using the identity and profiles shown on each card?`, 'fas fa-paper-plane', 'Send'], reject: ['Reject requests', `${this.selected.length} selected items will be removed from the approval queue.`, 'fas fa-archive', 'Reject requests'], blacklist: ['Blacklist requests', `Permanently prevent ${this.selected.length} items from being suggested again?`, 'fas fa-ban', 'Blacklist'], retry: ['Retry failed requests', `Queue ${this.selected.length} failed items for another delivery attempt?`, 'fas fa-redo', 'Retry'], 'request-again': ['Request again', `Remove any blacklist and send ${this.selected.length} selected items to Seer?`, 'fas fa-paper-plane', 'Request again'] }; this.confirmation = { action, ids: [...this.selected], items: [...this.selectedItems], removeBlacklist: action === 'request-again' && this.selectedItems.some(item => item.status === 'blacklisted'), title: labels[action][0], message: labels[action][1], icon: labels[action][2], confirmLabel: labels[action][3] }; },
+    confirmAction(action) { const labels = { approve: [`Send to ${deliveryLabel(this.selectedItems)}`, `Send ${this.selected.length} selected items using the identity and profiles shown on each card?`, 'fas fa-paper-plane', 'Send'], reject: ['Reject requests', `${this.selected.length} selected items will be removed from the approval queue.`, 'fas fa-archive', 'Reject requests'], blacklist: ['Blacklist requests', `Permanently prevent ${this.selected.length} items from being suggested again?`, 'fas fa-ban', 'Blacklist'], retry: ['Retry failed requests', `Queue ${this.selected.length} failed items for another delivery attempt?`, 'fas fa-redo', 'Retry'], 'request-again': ['Request again', `Remove any blacklist and send ${this.selected.length} selected items to ${deliveryLabel(this.selectedItems)}?`, 'fas fa-paper-plane', 'Request again'] }; this.confirmation = { action, ids: [...this.selected], items: [...this.selectedItems], removeBlacklist: action === 'request-again' && this.selectedItems.some(item => item.status === 'blacklisted'), title: labels[action][0], message: labels[action][1], icon: labels[action][2], confirmLabel: labels[action][3] }; },
     keyDecision,
     swipeDecision,
     touchPoint,
@@ -217,20 +219,21 @@ export default {
     confirmSingle(action, id) {
       const item = this.items.find(request => request.id === id);
       this.confirmation = action === 'approve'
-        ? { action, ids: [id], items: [item], title: 'Send to Seer', message: `Send ${item?.title || 'this item'} to Seer?`, icon: 'fas fa-paper-plane', confirmLabel: 'Send' }
+        ? { action, ids: [id], items: [item], title: `Send to ${deliveryLabel([item])}`, message: `Send ${item?.title || 'this item'} to ${deliveryLabel([item])}?`, icon: 'fas fa-paper-plane', confirmLabel: 'Send' }
         : { action, ids: [id], items: [item], title: 'Reject request', message: 'This item will be removed from the approval queue.', icon: 'fas fa-archive', confirmLabel: 'Reject request' };
     },
-    confirmRequestAgain(item) { this.confirmation = { action: 'request-again', ids: [item.id], removeBlacklist: item.status === 'blacklisted', title: 'Request again', message: item.status === 'blacklisted' ? 'Remove this item from the blacklist and send it to Seer?' : 'Send this rejected item to Seer?', icon: 'fas fa-paper-plane', confirmLabel: 'Request again' }; },
+    confirmRequestAgain(item) { this.confirmation = { action: 'request-again', ids: [item.id], items: [item], removeBlacklist: item.status === 'blacklisted', title: 'Request again', message: item.status === 'blacklisted' ? `Remove this item from the blacklist and send it to ${deliveryLabel([item])}?` : `Send this rejected item to ${deliveryLabel([item])}?`, icon: 'fas fa-paper-plane', confirmLabel: 'Request again' }; },
     async decide() {
       const { action, ids, removeBlacklist } = this.confirmation;
       const profile = action === 'approve' ? this.$refs.profileChoice?.payload() : null;
       this.actionLoading = true;
       try {
-        await axios.post(`/api/automation/requests/workflow/${action}`, { ids, remove_blacklist: removeBlacklist, ...(profile ? { profile } : {}) });
+        const { data } = await axios.post(`/api/automation/requests/workflow/${action}`, { ids, remove_blacklist: removeBlacklist, ...(profile ? { profile } : {}) });
         notifyRequestsChanged();
+        const decided = [...(this.confirmation.items || [])];
         this.confirmation = null;
         await this.load(1);
-        this.$toast.open({ message: 'Requests updated', type: 'success' });
+        this.$toast.open({ message: action === 'approve' ? approvalNotice(decided, data?.ignored_overrides || 0) : 'Requests updated', type: 'success' });
       } catch (error) {
         // A rejected profile comes back as 400 with a reason. Swallowing it
         // would leave the dialog looking as if nothing had happened.

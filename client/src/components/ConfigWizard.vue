@@ -236,7 +236,10 @@ import MediaServiceSelection from './configWizard/MediaServiceSelection.vue';
 import ContentFilterSettings from './configWizard/ContentFilterSettings.vue';
 import SchedulingStep from './configWizard/SchedulingStep.vue';
 import SettingsServices from './settings/SettingsServices.vue';
+import { RELEASE_NOTES } from '@/data/releaseNotes.js';
+import { markSeen, readSeen, unseenIds } from '@/utils/whatsNew.js';
 import SettingsDatabase from './settings/SettingsDatabase.vue';
+import RequestBackendChoice from './settings/services/RequestBackendChoice.vue';
 
 const SETUP_DEFAULTS = {
   DB_TYPE: 'sqlite',
@@ -262,6 +265,7 @@ export default {
     SchedulingStep,
     SettingsServices,
     SettingsDatabase,
+    RequestBackendChoice,
   },
   setup() {
     const router = useRouter();
@@ -278,6 +282,8 @@ export default {
       tmdb: false,
       'media-server': false,
       seer: false,
+      arr: false,
+      backend: true,    // 'seer' is pre-selected
       scheduling: true, // always valid — default 'daily' is pre-selected
       omdb: true,       // optional — always passable
       database: true,   // optional — SQLite is default
@@ -290,6 +296,7 @@ export default {
     const { bg1Url, bg2Url, activeBg, startBackgroundImageRotation, stopBackgroundImageRotation } = useBackgroundImage();
 
     // ─── Step Definitions ────────────────────────────────────────────────────
+    const requestBackend = computed(() => config.value.REQUEST_BACKEND || 'seer');
     const allSteps = computed(() => {
       return [
         {
@@ -308,13 +315,30 @@ export default {
           optional: false,
         },
         {
+          id: 'backend',
+          label: 'Request backend',
+          description: 'Choose where requests go: through Seer, straight to Radarr and Sonarr, or both.',
+          component: RequestBackendChoice,
+          optional: false,
+        },
+        ...(requestBackend.value !== 'arr' ? [{
           id: 'seer',
           label: 'Seer',
           description: 'Connect your media request manager to submit suggestions.',
           component: SettingsServices,
           wizardSection: 'seer',
           optional: false,
-        },
+        }] : []),
+        ...(requestBackend.value !== 'seer' ? [{
+          id: 'arr',
+          label: 'Radarr & Sonarr',
+          description: requestBackend.value === 'arr'
+            ? 'Connect Radarr and/or Sonarr: SuggestArr adds the titles straight to them.'
+            : 'Connect Radarr and/or Sonarr so SuggestArr knows what you already own.',
+          component: SettingsServices,
+          wizardSection: 'arr',
+          optional: false,
+        }] : []),
         {
           id: 'trakt',
           label: 'Trakt',
@@ -386,6 +410,11 @@ export default {
       }
       if (step.id === 'tmdb') return 'Test your TMDB connection above to continue.';
       if (step.id === 'seer') return 'Test your Seer connection above to continue.';
+      if (step.id === 'arr') {
+        return requestBackend.value === 'arr'
+          ? 'Test each Radarr/Sonarr connection and choose its quality profile and root folder to continue.'
+          : 'Test your Radarr/Sonarr connection above to continue.';
+      }
       return '';
     });
 
@@ -463,6 +492,8 @@ export default {
         const result = await saveConfigFn(null, SETUP_DEFAULTS);
         if (result.success) {
           await createDefaultJob(wizardSchedule);
+          // A fresh install has nothing to be told about: what is new now is simply how it works.
+          markSeen(unseenIds(RELEASE_NOTES, readSeen()));
           toast.success('Setup completed successfully!');
           screen.value = 'complete';
         } else {
@@ -525,6 +556,7 @@ export default {
       const cfg = config.value;
       if (cfg.TMDB_API_KEY) stepValidity.value.tmdb = true;
       if (cfg.SEER_API_URL && cfg.SEER_TOKEN) stepValidity.value.seer = true;
+      if ((cfg.RADARR_API_URL && cfg.RADARR_TOKEN) || (cfg.SONARR_API_URL && cfg.SONARR_TOKEN)) stepValidity.value.arr = true;
       const svc = cfg.SELECTED_SERVICE;
       if (svc) {
         if (svc === 'plex' && cfg.PLEX_TOKEN && cfg.PLEX_API_URL) {
