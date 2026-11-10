@@ -12,6 +12,7 @@ from typing import Any, Awaitable, Dict, List, Optional, Union
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
 from api_service.services.filter_normalization import build_tmdb_params, normalize_filters
+from api_service.config.config import get_request_backend
 from api_service.services.library_content import load_library_content
 from api_service.services.llm.llm_service import (
     MAX_EXCLUSION_ITEMS,
@@ -206,7 +207,8 @@ class AiSearchService:
         if not self.config.get("EXCLUDE_DOWNLOADED", True):
             return {}
         try:
-            if not self.config.get("SEER_API_URL"):
+            # Direct Radarr/Sonarr delivery never contacts Seer, even if its credentials are still saved.
+            if not self.config.get("SEER_API_URL") or get_request_backend(self.config) == "arr":
                 return await load_library_content(self.config)
             from api_service.services.seer.seer_client import SeerClient  # local import avoids circular deps
             async with SeerClient(self.config["SEER_API_URL"], self.config.get("SEER_TOKEN")) as seer_client:

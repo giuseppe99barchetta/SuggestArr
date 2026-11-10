@@ -6,11 +6,13 @@ max_instances=1 to prevent overlap).
 """
 import asyncio
 import json
+from contextlib import AsyncExitStack
 from datetime import datetime, timedelta, timezone
 
 from api_service.config.logger_manager import LoggerManager
 from api_service.services.config_service import ConfigService
 from api_service.db.database_manager import DatabaseManager
+from api_service.services.arr.arr_request_client import ArrRequestClient
 from api_service.services.seer.seer_client import SeerClient, normalize_seer_url, parse_seer_timestamp
 from api_service.utils.asyncio_loop import close_event_loop
 from api_service.observability.metrics import INTEGRATION_ERRORS, QUEUE_RETRIES
@@ -61,20 +63,37 @@ async def _run_worker() -> int:
 
     logger.info("Queue worker: processing %d item(s).", len(items))
 
-    seer = SeerClient(
-        env.get('SEER_API_URL', ''),
-        env.get('SEER_TOKEN', ''),
-        seer_user_name=env.get('SEER_USER_NAME'),
-        seer_password=env.get('SEER_USER_PSW'),
-        session_token=env.get('SEER_SESSION_TOKEN'),
-        number_of_seasons=env.get('FILTER_NUM_SEASONS') or 'all',
-        exclude_downloaded=False,
-        exclude_watched=False,  # pre-checks already done at enqueue time
-        request_first_season_only=env.get('REQUEST_FIRST_SEASON_ONLY', False),
-    )
-    async with seer:
-        await seer.init()
+    # Each row is delivered by the backend recorded when it was enqueued, never by the
+    # current setting, so switching REQUEST_BACKEND cannot reroute queued requests.
+    clients = {}
 
+    async def client_for(backend, stack):
+        if backend not in clients:
+            try:
+                if backend == 'arr':
+                    client = ArrRequestClient(env, env.get('FILTER_NUM_SEASONS') or 'all', False, False,
+                                              env.get('REQUEST_FIRST_SEASON_ONLY', False))
+                else:
+                    client = SeerClient(
+                        env.get('SEER_API_URL', ''),
+                        env.get('SEER_TOKEN', ''),
+                        seer_user_name=env.get('SEER_USER_NAME'),
+                        seer_password=env.get('SEER_USER_PSW'),
+                        session_token=env.get('SEER_SESSION_TOKEN'),
+                        number_of_seasons=env.get('FILTER_NUM_SEASONS') or 'all',
+                        exclude_downloaded=False,
+                        exclude_watched=False,  # pre-checks already done at enqueue time
+                        request_first_season_only=env.get('REQUEST_FIRST_SEASON_ONLY', False),
+                    )
+                await stack.enter_async_context(client)
+                await client.init()
+                clients[backend] = client
+            except Exception as exc:
+                logger.error("Queue worker: the %s backend is not usable: %s", backend, exc)
+                clients[backend] = None
+        return clients[backend]
+
+    async with AsyncExitStack() as stack:
         submitted = 0
 
         for item in items:
@@ -116,8 +135,10 @@ async def _run_worker() -> int:
             # Mark in-flight so a concurrent worker invocation skips this row
             db.mark_pending_submitting(row_id, retry_count)
 
+            backend = payload.get('_backend') or 'seer'  # rows queued before the field existed are Seer's
             try:
-                success = await seer.submit_queued_request(payload)
+                client = await client_for(backend, stack)
+                success = await client.submit_queued_request(payload) if client else False
             except Exception as exc:
                 logger.error("Queue worker: unexpected error submitting %s tmdb:%s — %s",
                              media_type, tmdb_id, exc, exc_info=True)
@@ -159,10 +180,11 @@ async def _run_worker() -> int:
                     logger.error("Unable to queue request.submitted webhook: %s", exc)
                 submitted += 1
             else:
-                INTEGRATION_ERRORS.labels(service="seer").inc()
+                INTEGRATION_ERRORS.labels(service=backend).inc()
                 new_retry = retry_count + 1
                 if new_retry >= MAX_RETRIES:
-                    db.mark_pending_failed(row_id, new_retry, "Seer rejected the request after maximum retries")
+                    db.mark_pending_failed(row_id, new_retry, "%s rejected the request after maximum retries"
+                                           % ("Seer" if backend == 'seer' else "Radarr/Sonarr"))
                     try:
                         db.enqueue_webhook_event("request.failed", {
                             "tmdb_id": str(tmdb_id), "media_type": media_type,

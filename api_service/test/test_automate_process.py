@@ -131,7 +131,7 @@ class _BaseCreateTest(unittest.IsolatedAsyncioTestCase):
             return_value=self.mock_env,
         ).start()
         self.MockSeer = patch(
-            'api_service.automate_process.SeerClient',
+            'api_service.utils.clients.SeerClient',
             return_value=self.seer,
         ).start()
         self.MockTmdb = patch(
@@ -420,13 +420,13 @@ class TestContentAutomationCreateListNormalization(_BaseCreateTest):
 def _make_handler(**attrs):
     """
     Build a SimpleNamespace media handler.
-    process_recent_items and add_seer_available_content default to AsyncMocks if not provided.
+    process_recent_items and add_available_content default to AsyncMocks if not provided.
     """
     ns = SimpleNamespace(**attrs)
     if not hasattr(ns, 'process_recent_items'):
         ns.process_recent_items = AsyncMock()
-    if not hasattr(ns, 'add_seer_available_content'):
-        ns.add_seer_available_content = AsyncMock()
+    if not hasattr(ns, 'add_available_content'):
+        ns.add_available_content = AsyncMock()
     return ns
 
 
@@ -456,7 +456,7 @@ class TestContentAutomationRun(unittest.IsolatedAsyncioTestCase):
             seer_client=_make_async_cm(),
             tmdb_client=_mock_tmdb(),
             jellyfin_client=_make_async_cm(),
-            add_seer_available_content=AsyncMock(side_effect=lambda: calls.append('seer')),
+            add_available_content=AsyncMock(side_effect=lambda: calls.append('seer')),
             process_recent_items=AsyncMock(side_effect=lambda: calls.append('process')),
         )
 

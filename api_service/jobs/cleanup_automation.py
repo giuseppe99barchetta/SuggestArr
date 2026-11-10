@@ -9,6 +9,7 @@ import threading
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
+from api_service.config.config import get_request_backend
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
@@ -217,6 +218,13 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
         db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
                                    last_run_status='not_configured', last_run_summary=msg)
         return {'status': 'not_configured', 'message': msg}
+
+    if get_request_backend(env_vars) == 'arr':
+        msg = "Cleanup deletes titles through Seer and is not available with direct Radarr/Sonarr."
+        logger.warning(msg)
+        db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
+                                   last_run_status='unsupported', last_run_summary=msg)
+        return {'status': 'unsupported', 'message': msg}
 
     cutoff = _format_utc_timestamp(datetime.utcnow() - timedelta(days=grace_days))
     candidates: List[Dict] = db.get_suggestarr_requests_older_than(cutoff)

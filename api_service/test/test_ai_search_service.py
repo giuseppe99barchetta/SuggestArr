@@ -1006,6 +1006,16 @@ class TestGetOwnedTmdbIds(unittest.IsolatedAsyncioTestCase):
         load.assert_awaited_once_with(service.config)
         MockSeer.assert_not_called()
 
+    async def test_direct_radarr_sonarr_mode_never_contacts_seer_even_with_saved_credentials(self):
+        service = _make_service_with_seer(REQUEST_BACKEND='arr')
+        with patch('api_service.services.ai_search.ai_search_service.load_library_content',
+                   AsyncMock(return_value={'movie': {'27205'}})) as load,              patch('api_service.services.seer.seer_client.SeerClient') as MockSeer:
+            result = await service._get_owned_tmdb_ids()
+
+        self.assertEqual(result, {'movie': {'27205'}})
+        load.assert_awaited_once_with(service.config)
+        MockSeer.assert_not_called()
+
     async def test_skipped_when_exclude_downloaded_is_off(self):
         service = _make_service_with_seer(EXCLUDE_DOWNLOADED=False)
         with patch('api_service.services.ai_search.ai_search_service.load_library_content', AsyncMock()) as load, \

@@ -13,6 +13,7 @@ from api_service.db.job_repository import JobRepository
 from api_service.services.filter_normalization import normalize_filters
 from api_service.services.library_content import load_library_content
 from api_service.services.seer.seer_client import SeerClient
+from api_service.utils.clients import build_request_client
 from api_service.services.request_sources import DISCOVER_SOURCE
 from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
@@ -85,20 +86,9 @@ class DiscoverAutomation:
             request_first_season_only = env_vars.get('REQUEST_FIRST_SEASON_ONLY', False)
         exclude_downloaded = env_vars.get('EXCLUDE_DOWNLOADED', True)
         exclude_requested = env_vars.get('EXCLUDE_REQUESTED', True)
-        anime_profile_config = env_vars.get('SEER_ANIME_PROFILE_CONFIG', {})
-        if not isinstance(anime_profile_config, dict):
-            anime_profile_config = {}
 
-        instance.seer_client = SeerClient(
-            env_vars['SEER_API_URL'],
-            env_vars['SEER_TOKEN'],
-            env_vars['SEER_USER_NAME'],
-            env_vars['SEER_USER_PSW'],
-            env_vars['SEER_SESSION_TOKEN'],
-            number_of_seasons,
-            exclude_downloaded,
-            exclude_requested,
-            anime_profile_config,
+        instance.seer_client = build_request_client(
+            env_vars, number_of_seasons, exclude_downloaded, exclude_requested,
             request_first_season_only,
             queue_context={**instance.job_data, 'job_id': instance.job_data['id']}
         )

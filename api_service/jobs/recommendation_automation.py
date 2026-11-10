@@ -17,7 +17,7 @@ from api_service.services.simkl.media_user_augmentor import MediaUserSimklAugmen
 from api_service.services.filter_normalization import normalize_filters
 from api_service.utils.request_scope import scan_user_ids
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
-from api_service.services.seer.seer_client import SeerClient
+from api_service.utils.clients import build_request_client
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
 
@@ -335,22 +335,10 @@ class RecommendationAutomation:
                 self.logger.warning("Job has AI enhancement enabled but LLM is not configured. Falling back to standard algorithm.")
                 job_use_llm = False
 
-        # Anime profile configuration
-        anime_profile_config_raw = self.env_vars.get('SEER_ANIME_PROFILE_CONFIG', {})
-        anime_profile_config = anime_profile_config_raw if isinstance(anime_profile_config_raw, dict) else {}
-
-        # Initialize Seer service client
-        self.logger.info("Initializing Seer service client")
-        seer_client = SeerClient(
-            self.env_vars['SEER_API_URL'],
-            self.env_vars['SEER_TOKEN'],
-            self.env_vars['SEER_USER_NAME'],
-            self.env_vars['SEER_USER_PSW'],
-            self.env_vars['SEER_SESSION_TOKEN'],
-            number_of_seasons,
-            exclude_downloaded,
-            exclude_requested,
-            anime_profile_config,
+        # Initialize the request client (Seer or direct Radarr/Sonarr, per REQUEST_BACKEND)
+        self.logger.info("Initializing request client")
+        seer_client = build_request_client(
+            self.env_vars, number_of_seasons, exclude_downloaded, exclude_requested,
             request_first_season_only,
             queue_context={**self.job_data, 'job_id': self.job_data['id']}
         )
@@ -638,7 +626,7 @@ class RecommendationAutomation:
                 elif hasattr(self.media_handler, 'plex_client'):
                     await stack.enter_async_context(self.media_handler.plex_client)
 
-                await self.media_handler.add_seer_available_content()
+                await self.media_handler.add_available_content()
                 await self.media_handler.process_recent_items()
 
             requested_count = getattr(self.media_handler, 'request_count', 0)

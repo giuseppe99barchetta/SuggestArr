@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, ANY
 
 from flask import Flask, g
 
@@ -65,4 +65,4 @@ def test_setup_preview_and_approval_smoke_flow(monkeypatch):
     assert approval_response.status_code == 200
     assert approval_response.get_json()["updated"] == 1
     queue.decide_suggestions.assert_called_once_with(
-        [42], None, 1, True, False, profiles={}, include_unassigned=False)
+        [42], None, 1, True, False, profiles={}, include_unassigned=False, report=ANY)

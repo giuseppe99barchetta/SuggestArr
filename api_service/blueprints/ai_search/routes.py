@@ -10,10 +10,12 @@ from flask import Blueprint, g, jsonify, request
 
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_tab
+from api_service.config.config import ARR_INSTANCES, arr_default_profile, get_request_backend
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.components.suggestion_feedback_mixin import FEEDBACK_REASONS, FEEDBACK_VALUES
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.ai_search.ai_search_service import AiSearchService
+from api_service.services.arr.arr_client import ArrClient
 from api_service.services.config_service import ConfigService
 from api_service.services.llm.llm_service import MAX_GROUP_PEOPLE, get_llm_client
 
@@ -296,14 +298,15 @@ async def ai_search_request():
         seer_url = (config.get("SEER_API_URL") or "").rstrip("/")
         seer_token = config.get("SEER_TOKEN", "")
         seer_session = config.get("SEER_SESSION_TOKEN", "")
+        direct_arr = get_request_backend(config) == "arr"  # decided by the setting, never by leftover Seer credentials
 
-        if not seer_url or not seer_token:
+        if not direct_arr and (not seer_url or not seer_token):
             return jsonify({
                 "status": "error",
                 "message": "Seer is not configured.",
             }), 400
 
-        # Build Seer request payload
+        # Build the request payload (Seer-shaped; Radarr/Sonarr reuse the same fields)
         req_payload = {"mediaType": media_type, "mediaId": int(tmdb_id)}
         if media_type == "tv":
             num_seasons = config.get("FILTER_NUM_SEASONS", "all")
@@ -318,6 +321,31 @@ async def ai_search_request():
                 req_payload["seasons"] = "all"
             else:
                 req_payload["seasons"] = list(range(1, int(num_seasons) + 1))
+
+        if direct_arr:
+            # Parity with the Seer path: no anime classification here, default profiles only.
+            service, url_key, token_key = next(
+                ((name, u, t) for name, (u, t, served) in ARR_INSTANCES.items() if served == media_type), (None, None, None))
+            profile = arr_default_profile(config, media_type)
+            if not service or not config.get(url_key) or not config.get(token_key) or profile is None:
+                return jsonify({
+                    "status": "error",
+                    "message": "Radarr/Sonarr is not configured for this media type.",
+                }), 400
+            req_payload.update(profileId=profile["profileId"], rootFolder=profile["rootFolder"],
+                               tags=profile.get("tags") or [])
+            try:
+                async with ArrClient(service, config[url_key], config[token_key]) as arr:
+                    await arr.add(req_payload)
+            except Exception as exc:
+                logger.error("%s request failed: %s", service.capitalize(), exc)
+                return jsonify({"status": "error", "message": f"{service.capitalize()} could not add the title."}), 500
+            db = DatabaseManager()
+            media_dict = {key: metadata[key] for key in _METADATA_FIELDS if key in metadata}
+            media_dict["id"] = str(tmdb_id)
+            db.save_metadata(media_dict, media_type)
+            db.save_request(media_type, str(tmdb_id), "ai_search", None, rationale=db_rationale)
+            return jsonify({"status": "success", "message": "Request submitted successfully."}), 200
 
         # A stored Seer session can be valid but belong to a user without request
         # permission. Retry once with the configured technical API key in that case.

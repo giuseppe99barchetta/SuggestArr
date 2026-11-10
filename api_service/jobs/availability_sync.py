@@ -6,6 +6,7 @@ A title that becomes available fires the ``request.available`` webhook.
 import threading
 from urllib.parse import urlsplit
 
+from api_service.config.config import get_request_backend
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
@@ -117,6 +118,8 @@ async def sync_availability():
         return {'status': 'already_running'}
     try:
         env = ConfigService.get_runtime_config()
+        if get_request_backend(env) == 'arr':
+            return {'status': 'not_configured', 'changed': 0, 'available': 0}  # availability comes from Seer
         try:
             url = normalize_seer_url(env.get('SEER_API_URL', ''))
         except (ValueError, AttributeError):

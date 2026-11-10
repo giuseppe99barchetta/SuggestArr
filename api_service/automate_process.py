@@ -4,7 +4,7 @@ from api_service.db.database_manager import DatabaseManager
 from api_service.handler.jellyfin_handler import JellyfinHandler
 from api_service.handler.plex_handler import PlexHandler
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
-from api_service.services.seer.seer_client import SeerClient
+from api_service.utils.clients import build_request_client
 from api_service.services.omdb.omdb_client import OmdbClient
 from api_service.services.plex.plex_client import PlexClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
@@ -109,26 +109,14 @@ class ContentAutomation:
         exclude_requested = env_vars.get('EXCLUDE_REQUESTED', True)
         request_delay = int(env_vars.get('SEER_REQUEST_DELAY', 0) or 0)
 
-        # Anime profile configuration
-        anime_profile_config_raw = env_vars.get('SEER_ANIME_PROFILE_CONFIG', {})
-        anime_profile_config = anime_profile_config_raw if isinstance(anime_profile_config_raw, dict) else {}
-
-        # Seer service client
-        instance.logger.info("Initializing Seer service client")
-        seer_client = SeerClient(
-            env_vars['SEER_API_URL'],
-            env_vars['SEER_TOKEN'],
-            env_vars['SEER_USER_NAME'],
-            env_vars['SEER_USER_PSW'],
-            env_vars['SEER_SESSION_TOKEN'],
-            instance.number_of_seasons,
-            exclude_downloaded,
-            exclude_requested,
-            anime_profile_config,
+        # Request client (Seer or direct Radarr/Sonarr, per REQUEST_BACKEND)
+        instance.logger.info("Initializing request client")
+        seer_client = build_request_client(
+            env_vars, instance.number_of_seasons, exclude_downloaded, exclude_requested,
             instance.request_first_season_only
         )
         await seer_client.init()
-        instance.logger.info("Seer service client initialized successfully")
+        instance.logger.info("Request client initialized successfully")
 
         # TMDb client
         instance.logger.info("Initializing TMDb client")
@@ -257,7 +245,7 @@ class ContentAutomation:
                 elif hasattr(self.media_handler, 'plex_client'):
                     await stack.enter_async_context(self.media_handler.plex_client)
 
-                await self.media_handler.add_seer_available_content()
+                await self.media_handler.add_available_content()
                 await self.media_handler.process_recent_items()
             self.logger.info("Content automation process completed successfully")
         except Exception as e:

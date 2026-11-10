@@ -493,6 +493,20 @@ class SeerClient(BaseHTTPClient):
 
         return data
 
+    # Delivery backend recorded on each queued row (see queue_worker).
+    BACKEND = 'seer'
+
+    def _can_enqueue(self, media_type):
+        """Whether this client can deliver ``media_type``; direct backends override it."""
+        return True
+
+    @staticmethod
+    def _job_profile_overrides(context, media_type):
+        """Per-job Seer profile values (server, profile, root folder...) to merge into the payload."""
+        profile = (context.get('request_profiles') or {}).get(media_type) or {}
+        return {key: profile[key] for key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId')
+                if profile.get(key) is not None}
+
     async def request_media(self, media_type, media, source=None, tvdb_id=None, user=None, is_anime=False, rationale=None):
         """Enqueue a Seer submission for reliable background delivery.
 
@@ -504,6 +518,9 @@ class SeerClient(BaseHTTPClient):
             already submitted).
         """
         tmdb_id = str(media['id'])
+
+        if not self._can_enqueue(media_type):
+            return False
 
         # Fast intra-process guard (asyncio is single-threaded: check+add are atomic)
         if (media_type, tmdb_id) in self.pending_requests:
@@ -545,13 +562,13 @@ class SeerClient(BaseHTTPClient):
         context = self.queue_context
         if context.get('_replacement_for') is not None:
             payload['_replacement_for'] = context['_replacement_for']
-        profile = (context.get('request_profiles') or {}).get(media_type) or {}
-        for key in ('serverId', 'profileId', 'rootFolder', 'is4k', 'languageProfileId'):
-            if profile.get(key) is not None:
-                payload[key] = profile[key]
+        payload['_backend'] = self.BACKEND
+        payload.update(self._job_profile_overrides(context, media_type))
         payload['_seer_identity_mode'] = context.get('seer_identity_mode', 'technical_user')
         env = load_env_vars()
-        if (context.get('seer_identity_mode') == 'matching_user'
+        if self.BACKEND != 'seer':
+            pass  # direct delivery has no Seer users to attribute the request to
+        elif (context.get('seer_identity_mode') == 'matching_user'
                 and context.get('job_type') == 'recommendation'
                 and env.get('SELECTED_SERVICE') in ('jellyfin', 'emby')):
             seer_user_id = await self._resolve_jellyfin_seer_user_id(user_id) if user_id else None

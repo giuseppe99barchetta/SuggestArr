@@ -1,4 +1,5 @@
 """Observe explicit Seerr rejections and generate at most one alternative each."""
+from api_service.config.config import get_request_backend
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.jobs.job_manager import JobManager
@@ -18,6 +19,8 @@ async def execute_request_replacements():
         result = dict(status='ok', checked=0, queued=0, exhausted=0, ignored=0, pending=0, errors=0)
         if env.get('REPLACE_REJECTED_REQUESTS') is not True:
             return {**result, 'status': 'disabled'}
+        if get_request_backend(env) == 'arr':
+            return {**result, 'status': 'disabled_backend'}
         try:
             instance = normalize_seer_url(env.get('SEER_API_URL', ''))
         except (ValueError, AttributeError):

@@ -312,6 +312,7 @@ class RequestQueueMixin:
                     payload = json.loads(item.pop('payload') or '{}')
                 except (TypeError, json.JSONDecodeError):
                     payload = {}
+                item['backend'] = payload.get('_backend') or 'seer'  # rows queued before the field existed are Seer's
                 item['seer_identity_mode'] = payload.get('_seer_identity_mode', 'technical_user')
                 item['request_profile'] = {key: payload.get(key) for key in ('serverId', 'profileId', 'rootFolder')}
                 item['media_user_id'] = payload.get('_user_id')
@@ -359,8 +360,25 @@ class RequestQueueMixin:
                 fields_by_type[media_type] = fields
         return fields_by_type
 
+    def awaiting_backends(self, ids, owner_id, include_unassigned=False):
+        """Return the set of recorded delivery backends of the rows in ``ids`` still awaiting approval."""
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        marks = ','.join([ph] * len(ids))
+        owner_clause, owner_params = ownership_clause(self.db_type, owner_id, include_unassigned)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT payload FROM pending_requests WHERE status='awaiting_approval' "
+                           f"AND id IN ({marks}){owner_clause}", tuple([*ids, *owner_params]))
+            backends = set()
+            for (payload,) in cursor.fetchall():
+                try:
+                    backends.add((json.loads(payload) if payload else {}).get('_backend') or 'seer')
+                except (TypeError, ValueError):
+                    backends.add('seer')
+            return backends
+
     def decide_suggestions(self, ids, owner_id, decided_by, approve, blacklist=False, profiles=None,
-                           include_unassigned=False):
+                           include_unassigned=False, report=None):
         """
         Approve or reject suggestions that are awaiting approval.
 
@@ -381,6 +399,8 @@ class RequestQueueMixin:
                         present fields through instead of Jellyseerr's defaults).
             include_unassigned: With ``owner_id``, also decide rows without
                         an owner (an admin under ``REQUEST_VISIBILITY=own_all``).
+            report:     Optional dict; receives ``ignored_overrides``, the number of
+                        direct-delivery rows that kept their own profile.
 
         Returns:
             int: Number of rows whose status changed.
@@ -400,8 +420,10 @@ class RequestQueueMixin:
                            tuple(select_params))
             eligible = cursor.fetchall()
             if fields_by_type:
-                self._write_profiles_to_payloads(cursor, ph, marks, owner_clause,
-                                                 select_params, fields_by_type)
+                ignored = self._write_profiles_to_payloads(cursor, ph, marks, owner_clause,
+                                                           select_params, fields_by_type)
+                if report is not None:
+                    report['ignored_overrides'] = ignored
             cursor.execute(f"UPDATE pending_requests SET status={ph},decided_by={ph},decided_at=CURRENT_TIMESTAMP "
                            f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}", tuple(params))
             changed = cursor.rowcount
@@ -441,6 +463,10 @@ class RequestQueueMixin:
             owner_clause:   Owner restriction, possibly empty.
             select_params:  Ids followed by the owner, if any.
             fields_by_type: Output of _profile_fields_by_media_type().
+
+        Returns:
+            int: Rows left untouched because they are delivered straight to
+            Radarr/Sonarr (Seer profile ids mean nothing there).
         """
         cursor.execute(f"SELECT id,media_type,payload FROM pending_requests "
                        f"WHERE status='awaiting_approval' AND id IN ({marks}){owner_clause}",
@@ -448,6 +474,7 @@ class RequestQueueMixin:
         # media_type per row, not per call: a bulk approval may mix movies and
         # series, and a quality profile id from Radarr means something else in
         # Sonarr.
+        ignored = 0
         for row_id, media_type, payload in cursor.fetchall():
             fields = fields_by_type.get(media_type)
             if not fields:
@@ -456,10 +483,14 @@ class RequestQueueMixin:
                 data = json.loads(payload) if payload else {}
             except (TypeError, ValueError):
                 continue
+            if (data.get('_backend') or 'seer') != 'seer':
+                ignored += 1
+                continue
             data.update(fields)
             cursor.execute(f"UPDATE pending_requests SET payload={ph} "
                            f"WHERE id={ph} AND status='awaiting_approval'",
                            (json.dumps(data), row_id))
+        return ignored
 
     def has_pending_approvals(self, job_id) -> bool:
         ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'

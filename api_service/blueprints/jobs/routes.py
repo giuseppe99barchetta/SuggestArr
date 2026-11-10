@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request, g
 
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_role, require_tab
-from api_service.config.config import load_env_vars
+from api_service.config.config import get_request_backend, load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
 from api_service.utils import request_scope
@@ -128,6 +128,17 @@ def get_job_manager() -> JobManager:
     return manager
 
 
+def _validate_job_profiles(profiles):
+    """Check job request profiles against Seer, unless requests go straight to Radarr/Sonarr.
+
+    Direct delivery ignores per-job Seer profiles, so they are neither checked (Seer may not be
+    configured) nor altered: the stored values stay valid if Seer is used again.
+    """
+    if get_request_backend(ConfigService.get_runtime_config()) != 'arr':
+        validate_request_profiles_with_seer(profiles)
+
+
+
 @jobs_bp.route('/lists/verify', methods=['POST'])
 @limiter.limit('10 per minute')
 def verify_public_list():
@@ -166,7 +177,7 @@ def _list_import_config(data):
         raise PublicListError('Admin Seer identity requires an administrator.')
     try:
         config['request_profiles'] = validate_request_profiles(config.get('request_profiles'))
-        validate_request_profiles_with_seer(config['request_profiles'])
+        _validate_job_profiles(config['request_profiles'])
     except ValueError as exc:
         raise PublicListError(str(exc)) from None
     return config
@@ -284,6 +295,7 @@ def get_jobs():
             'status': 'success',
             'jobs': jobs,
             'request_approval_default': env_vars.get('REQUIRE_REQUEST_APPROVAL', False),
+            'request_backend': get_request_backend(env_vars),
             'approval_pause_default': env_vars.get('PAUSE_JOBS_WITH_PENDING_APPROVALS', False) is True,
         }), 200
     except Exception as e:
@@ -472,7 +484,7 @@ def create_job():
         data['approval_pause_mode'] = approval_pause_mode
         try:
             data['request_profiles'] = validate_request_profiles(data.get('request_profiles'))
-            validate_request_profiles_with_seer(data['request_profiles'])
+            _validate_job_profiles(data['request_profiles'])
         except ValueError as exc:
             return jsonify({'status': 'error', 'message': str(exc)}), 400
         identity_mode = data.get('seer_identity_mode', 'technical_user')
@@ -581,7 +593,7 @@ def update_job(job_id: int):
         if 'request_profiles' in data:
             try:
                 data['request_profiles'] = validate_request_profiles(data['request_profiles'])
-                validate_request_profiles_with_seer(data['request_profiles'])
+                _validate_job_profiles(data['request_profiles'])
             except ValueError as exc:
                 return jsonify({'status': 'error', 'message': str(exc)}), 400
         if 'delivery_mode' in data and data['delivery_mode'] not in ('inherit', 'automatic', 'manual'):

@@ -11,6 +11,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from api_service.utils.cron import cron_trigger
 
+from api_service.config.config import get_request_backend
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.job_repository import JobRepository
 from api_service.services.config_service import ConfigService
@@ -321,6 +322,11 @@ class JobManager:
             return False
 
         env_vars = ConfigService.get_runtime_config()
+        if get_request_backend(env_vars) == 'arr':
+            # Radarr/Sonarr have no pending-approval concept: the pause does not apply.
+            self.logger.info("Job '%s': pause_if_pending_requests does not apply to direct Radarr/Sonarr.",
+                             job_data.get('name') or job_data.get('id'))
+            return False
         seer_client = SeerClient(
             env_vars['SEER_API_URL'],
             env_vars['SEER_TOKEN'],

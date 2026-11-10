@@ -7,7 +7,7 @@ through a *verified* media link only — and stored.
 """
 import json
 import sqlite3
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, ANY
 
 import pytest
 from flask import Flask, g
@@ -344,7 +344,7 @@ def test_an_admin_under_own_all_approves_their_own_and_unassigned(monkeypatch):
     response = client.post('/api/automation/requests/workflow/approve', json={'ids': [1, 3], 'profile': profile})
     assert response.status_code == 200
     db.decide_suggestions.assert_called_once_with(
-        [1, 3], ADMIN_ID, ADMIN_ID, True, False, profiles=profile, include_unassigned=True)
+        [1, 3], ADMIN_ID, ADMIN_ID, True, False, profiles=profile, include_unassigned=True, report=ANY)
 
 
 def test_an_admin_under_own_all_lists_their_own_and_unassigned(monkeypatch):
@@ -364,4 +364,4 @@ def test_a_regular_user_approves_only_what_they_own(monkeypatch):
     client = _client(monkeypatch, USER, 'own', db)
     assert client.post('/api/automation/requests/workflow/approve', json={'ids': [2]}).status_code == 200
     db.decide_suggestions.assert_called_once_with(
-        [2], ROBERT_ID, ROBERT_ID, True, False, profiles={}, include_unassigned=False)
+        [2], ROBERT_ID, ROBERT_ID, True, False, profiles={}, include_unassigned=False, report=ANY)

@@ -229,9 +229,7 @@ def _requested_profiles():
                     that means something else on the server it ends up on.
     """
     requested = (request.get_json(silent=True) or {}).get('profile')
-    profile = validate_request_profiles(requested)
-    validate_request_profiles_with_seer(profile)
-    return profile
+    return validate_request_profiles(requested)
 
 
 def _decide_workflow(approve, blacklist=False):
@@ -239,10 +237,15 @@ def _decide_workflow(approve, blacklist=False):
     if ids is None:
         return jsonify({'status': 'error', 'message': 'ids must contain 1 to 100 integers'}), 400
 
+    db = DatabaseManager()
+    scope = _suggestion_scope(db)
     profile = {}
     if approve:
         try:
             profile = _requested_profiles()
+            # Seer only knows (and only needs to validate) profiles for the rows it will deliver.
+            if profile and 'seer' in db.awaiting_backends(ids, scope.owner_id, scope.include_unassigned):
+                validate_request_profiles_with_seer(profile)
         except ValueError:
             logger.warning("Invalid request profile supplied in workflow decision", exc_info=True)
             return jsonify({'status': 'error', 'message': 'Invalid profile request'}), 400
@@ -250,12 +253,12 @@ def _decide_workflow(approve, blacklist=False):
     # The profile and the status change are committed together: the worker
     # never picks up a queued row without its profile, and a failed approval
     # leaves no profile behind.
-    db = DatabaseManager()
-    scope = _suggestion_scope(db)
+    report = {}
     changed = db.decide_suggestions(
         ids, scope.owner_id, int(g.current_user['id']), approve, blacklist, profiles=profile,
-        include_unassigned=scope.include_unassigned)
-    return jsonify({'status': 'success', 'updated': changed}), 200
+        include_unassigned=scope.include_unassigned, report=report)
+    return jsonify({'status': 'success', 'updated': changed,
+                    'ignored_overrides': report.get('ignored_overrides', 0)}), 200
 
 
 @automation_bp.route('/requests/workflow/approve', methods=['POST'])

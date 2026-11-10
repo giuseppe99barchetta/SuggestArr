@@ -18,6 +18,7 @@ from api_service.services.filter_normalization import normalize_filters
 from api_service.services.library_content import load_library_content
 from api_service.services.request_sources import TRAKT_RECOMMENDATIONS_SOURCE
 from api_service.services.seer.seer_client import SeerClient
+from api_service.utils.clients import build_request_client
 from api_service.services.trakt.media_user_augmentor import TraktAccountResolver
 from api_service.services.trakt.trakt_client import TraktClient
 from api_service.services.tmdb.tmdb_client import TMDbClient
@@ -97,20 +98,8 @@ class TraktRecommendationsAutomation:
         if exclude_requested is None:
             exclude_requested = self.env_vars.get("EXCLUDE_REQUESTED", True)
 
-        anime_profile_config = self.env_vars.get("SEER_ANIME_PROFILE_CONFIG", {})
-        if not isinstance(anime_profile_config, dict):
-            anime_profile_config = {}
-
-        self.seer_client = SeerClient(
-            self.env_vars["SEER_API_URL"],
-            self.env_vars["SEER_TOKEN"],
-            self.env_vars["SEER_USER_NAME"],
-            self.env_vars["SEER_USER_PSW"],
-            self.env_vars["SEER_SESSION_TOKEN"],
-            number_of_seasons,
-            exclude_downloaded,
-            exclude_requested,
-            anime_profile_config,
+        self.seer_client = build_request_client(
+            self.env_vars, number_of_seasons, exclude_downloaded, exclude_requested,
             request_first_season_only,
             queue_context={**self.job_data, 'job_id': self.job_id},
         )
