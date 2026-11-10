@@ -49,7 +49,7 @@ const whatsNew = (page) => preview(page, {
 
 for (const width of [1440, 390]) {
   test(`What's new popup steps through the slides at ${width}px`, async ({ page }, testInfo) => {
-    await page.setViewportSize({ width, height: 800 });
+    await page.setViewportSize({ width, height: 900 });
     const errors = await whatsNew(page);
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: 'Choose where requests go' })).toBeVisible();
@@ -60,6 +60,8 @@ for (const width of [1440, 390]) {
 
     await dialog.getByRole('button', { name: 'Next' }).click();
     await expect(dialog.getByRole('heading', { name: 'Titles added straight to your libraries' })).toBeVisible();
+    await page.waitForTimeout(400); // let the slide transition finish before the screenshot
+    await page.screenshot({ path: testInfo.outputPath(`whats-new-2-${width}.png`) });
     await expect(dialog.getByText('What it means for you')).toBeVisible();
     await dialog.getByRole('button', { name: 'Back' }).click();
     await expect(dialog.getByRole('heading', { name: 'Choose where requests go' })).toBeVisible();
@@ -67,12 +69,15 @@ for (const width of [1440, 390]) {
     await page.keyboard.press('ArrowRight');
     await page.keyboard.press('ArrowRight');
     await expect(dialog.getByRole('heading', { name: 'Profiles, folders and anime' })).toBeVisible();
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: testInfo.outputPath(`whats-new-3-${width}.png`) });
     await page.keyboard.press('ArrowLeft');
     await expect(dialog.getByRole('heading', { name: 'Titles added straight to your libraries' })).toBeVisible();
 
     await dialog.getByRole('button', { name: /Go to slide 4 of 4/ }).click();
     await expect(dialog.getByRole('heading', { name: 'What is not available without Seer' })).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Next' })).toHaveCount(0);
+    await page.waitForTimeout(400);
     await page.screenshot({ path: testInfo.outputPath(`whats-new-4-${width}.png`) });
     await dialog.getByRole('button', { name: 'Done' }).click();
     expect(await page.evaluate(() => window.events)).toContain('close');

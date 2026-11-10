@@ -51,3 +51,33 @@ export function markSeen(ids, storage = globalThis.localStorage) {
     // storage unavailable (private window): nothing to remember with
   }
 }
+
+const text = (value) => typeof value === 'string' && value.trim() !== '';
+
+/**
+ * Problems with a slide's `art` spec, as readable strings (empty when it is valid).
+ * The shapes are those drawn by components/WhatsNewArt.vue.
+ */
+export function artProblems(art) {
+  if (!art || typeof art !== 'object') return ['art must be an object'];
+  const problems = [];
+  const list = (value, min, max, name) => {
+    if (!Array.isArray(value) || value.length < min || value.length > max) problems.push(`${name} needs ${min}-${max} entries`);
+    return Array.isArray(value) ? value : [];
+  };
+  if (art.type === 'flow') {
+    if (!art.source || (!art.source.poster && !text(art.source.label))) problems.push('source needs a label or poster: true');
+    for (const target of list(art.targets, 1, 3, 'targets')) if (!text(target?.label)) problems.push('every target needs a label');
+    if (art.via !== undefined && !text(art.via)) problems.push('via must be a label');
+    if (art.via && art.targets?.length > 2) problems.push('a flow with via fits at most 2 targets');
+  } else if (art.type === 'form') {
+    const max = art.optional ? 2 : 3;
+    for (const field of list(art.fields, 1, max, 'fields')) if (!text(field?.label) || !text(field?.value)) problems.push('every field needs a label and a value');
+    if (art.optional && (!text(art.optional.label) || !text(art.optional.value))) problems.push('optional needs a label and a value');
+  } else if (art.type === 'features') {
+    for (const item of list(art.items, 1, 6, 'items')) if (!text(item?.label)) problems.push('every item needs a label');
+  } else {
+    problems.push(`unknown art type ${art.type}`);
+  }
+  return problems;
+}

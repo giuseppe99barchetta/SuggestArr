@@ -1,21 +1,27 @@
 <template>
   <AppDialog width="max-w-2xl" :title="entry.title" :subtitle="`What's new · ${position}`" icon="fas fa-gift" body-class="p-0" @close="$emit('close')">
-    <div class="flex min-h-[19rem] flex-col gap-5 p-6 max-sm:p-4 sm:flex-row sm:items-start" aria-live="polite" data-testid="whats-new-slide">
+    <div class="flex flex-col sm:min-h-[26rem]" aria-live="polite" data-testid="whats-new-slide">
       <transition mode="out-in" enter-active-class="transition duration-200 motion-reduce:transition-none" leave-active-class="transition duration-150 motion-reduce:transition-none" :enter-from-class="enterFrom" :leave-to-class="leaveTo">
-        <div :key="index" class="flex min-w-0 flex-1 flex-col gap-5 sm:flex-row sm:items-start">
-          <div class="grid h-32 w-32 shrink-0 place-items-center self-center rounded-card border sm:h-40 sm:w-40" :class="toneClass(slide.tone)" aria-hidden="true">
-            <span class="block h-24 w-24 sm:h-28 sm:w-28 [&>svg]:h-full [&>svg]:w-full" v-html="iconSvg(slide.icon)"></span>
+        <div :key="index" class="flex min-w-0 flex-1 flex-col">
+          <!-- The illustration is the point of each slide: big, labelled, tinted by what kind of change it is. -->
+          <div class="relative flex h-56 shrink-0 items-center justify-center overflow-hidden border-b border-edge px-4 max-sm:h-40" :class="toneClass(slide.tone)" aria-hidden="true">
+            <span class="pointer-events-none absolute -top-16 -right-10 h-56 w-56 rounded-full bg-current opacity-[0.08] blur-2xl"></span>
+            <span class="pointer-events-none absolute -bottom-20 -left-10 h-48 w-48 rounded-full bg-current opacity-[0.06] blur-2xl"></span>
+            <WhatsNewArt v-if="slide.art" :art="slide.art" class="relative block h-52 w-full max-w-lg max-sm:h-36" />
+            <span v-else class="relative block h-52 w-full max-w-lg max-sm:h-36 [&>svg]:h-full [&>svg]:w-full" v-html="iconSvg(slide.icon)"></span>
           </div>
-          <div class="flex min-w-0 flex-1 flex-col gap-4">
-            <h3 class="m-0 text-lg font-bold text-ink">{{ slide.heading }}</h3>
-            <section>
-              <p class="m-0 mb-1 text-[11px] font-bold tracking-wider text-ink-4 uppercase">What changed</p>
-              <p class="m-0 text-sm leading-relaxed text-ink-2">{{ slide.changes }}</p>
-            </section>
-            <section>
-              <p class="m-0 mb-1 text-[11px] font-bold tracking-wider text-ink-4 uppercase">What it means for you</p>
-              <p class="m-0 text-sm leading-relaxed text-ink-2">{{ slide.impact }}</p>
-            </section>
+          <div class="flex flex-col gap-4 p-5 max-sm:p-4">
+            <h3 class="m-0 text-xl font-bold text-ink">{{ slide.heading }}</h3>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <section class="rounded-ctl border border-edge bg-panel-2/60 p-3.5">
+                <p class="m-0 mb-1.5 flex items-center gap-1.5 text-[11px] font-bold tracking-wider text-ink-4 uppercase"><i aria-hidden="true" class="fas fa-bolt text-brand-ink"></i>What changed</p>
+                <p class="m-0 text-sm leading-relaxed text-ink-2">{{ slide.changes }}</p>
+              </section>
+              <section class="rounded-ctl border border-edge bg-panel-2/60 p-3.5">
+                <p class="m-0 mb-1.5 flex items-center gap-1.5 text-[11px] font-bold tracking-wider text-ink-4 uppercase"><i aria-hidden="true" class="fas fa-user-check text-good"></i>What it means for you</p>
+                <p class="m-0 text-sm leading-relaxed text-ink-2">{{ slide.impact }}</p>
+              </section>
+            </div>
             <button v-if="ctaVisible" type="button" class="ui-btn self-start" @click="$emit('navigate', slide.cta.tab)">
               <i aria-hidden="true" class="fas fa-arrow-right"></i>{{ slide.cta.label }}
             </button>
@@ -50,14 +56,16 @@
 
 <script>
 import AppDialog from '@/components/ui/AppDialog.vue';
+import WhatsNewArt from '@/components/WhatsNewArt.vue';
 
-// Slide art lives in src/assets/whats-new/<entry id>/<icon>.svg and is inlined so `currentColor` follows the tone.
+// Most slides are drawn from data (WhatsNewArt). The rare `icon` slide uses a file in
+// src/assets/whats-new/<entry id>/<icon>.svg, inlined so `currentColor` follows the tone.
 const ICONS = import.meta.glob('../assets/whats-new/*/*.svg', { eager: true, query: '?raw', import: 'default' });
 
 const TONES = {
-  brand: 'border-brand-soft bg-brand-soft/40 text-brand-ink',
-  good: 'border-good/30 bg-good/10 text-good',
-  caution: 'border-caution/30 bg-caution/10 text-caution',
+  brand: 'bg-gradient-to-br from-brand/25 via-brand/10 to-transparent text-brand-ink',
+  good: 'bg-gradient-to-br from-good/25 via-good/10 to-transparent text-good',
+  caution: 'bg-gradient-to-br from-caution/25 via-caution/10 to-transparent text-caution',
 };
 
 /**
@@ -66,7 +74,7 @@ const TONES = {
  */
 export default {
   name: 'WhatsNewDialog',
-  components: { AppDialog },
+  components: { AppDialog, WhatsNewArt },
   props: {
     /** Release entries, newest first, whose `slides` were already filtered for this viewer. */
     entries: { type: Array, required: true },
