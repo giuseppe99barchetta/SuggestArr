@@ -94,6 +94,18 @@ class IntegrationMixin:
         from api_service.config.config import invalidate_config_cache
         invalidate_config_cache()
 
+    def delete_integration(self, service: str) -> None:
+        """Remove the stored config row for a service (used to roll back a failed import)."""
+        query = "DELETE FROM integrations WHERE service = ?"
+        if self.db_type in ['mysql', 'mariadb', 'postgres']:
+            query = query.replace("?", "%s")
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (service,))
+            conn.commit()
+        from api_service.config.config import invalidate_config_cache
+        invalidate_config_cache()
+
     @staticmethod
     def _is_integration_valid(service: str, config: dict) -> bool:
         """

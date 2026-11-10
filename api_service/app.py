@@ -29,6 +29,7 @@ from api_service.blueprints.config.routes import config_bp
 from api_service.blueprints.tmdb.routes import tmdb_bp
 from api_service.blueprints.omdb.routes import omdb_bp
 from api_service.blueprints.mdblist.routes import mdblist_bp
+from api_service.blueprints.arr.routes import arr_bp
 from api_service.blueprints.jobs.routes import jobs_bp
 from api_service.blueprints.ai_search.routes import ai_search_bp
 from api_service.blueprints.health.routes import health_bp
@@ -192,6 +193,7 @@ def create_app():
     application.register_blueprint(tmdb_bp, url_prefix='/api/tmdb')
     application.register_blueprint(omdb_bp, url_prefix='/api/omdb')
     application.register_blueprint(mdblist_bp, url_prefix='/api/mdblist')
+    application.register_blueprint(arr_bp, url_prefix='/api/arr')
     application.register_blueprint(jobs_bp, url_prefix='/api/jobs')
     application.register_blueprint(ai_search_bp, url_prefix='/api/ai-search')
     application.register_blueprint(health_bp, url_prefix='/api/health')

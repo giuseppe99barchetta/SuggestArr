@@ -87,7 +87,8 @@ def _parse_json_fields(config_data):
         'FILTER_LANGUAGE',
         'FILTER_GENRES_EXCLUDE',
         'FILTER_STREAMING_SERVICES',
-        'SEER_ANIME_PROFILE_CONFIG'
+        'SEER_ANIME_PROFILE_CONFIG',
+        'ARR_PROFILE_CONFIG'
     ]
 
     for field in json_fields:
@@ -219,6 +220,12 @@ def get_default_values():
         'STATIC_BACKGROUND_COLOR': lambda: '#2E3440',
         'OMDB_API_KEY': lambda: '',
         'MDBLIST_API_KEY': lambda: '',
+        'RADARR_API_URL': lambda: '',
+        'RADARR_TOKEN': lambda: '',
+        'SONARR_API_URL': lambda: '',
+        'SONARR_TOKEN': lambda: '',
+        'REQUEST_BACKEND': lambda: 'seer',
+        'ARR_PROFILE_CONFIG': lambda: {},
         'FILTER_RATING_SOURCE': lambda: 'tmdb',
         'FILTER_IMDB_THRESHOLD': lambda: None,
         'FILTER_IMDB_MIN_VOTES': lambda: None,
@@ -289,24 +296,96 @@ def validate_seer_expiry_settings(config_data):
         raise ValueError('REPLACE_REJECTED_REQUESTS must be a boolean')
 
 
+REQUEST_BACKENDS = ('seer', 'arr', 'both')
+# Keys whose change can invalidate the active request backend's prerequisites.
+_SEER_PREREQ_KEYS = ('SEER_API_URL', 'SEER_TOKEN')
+_ARR_PREREQ_KEYS = ('RADARR_API_URL', 'RADARR_TOKEN', 'SONARR_API_URL', 'SONARR_TOKEN', 'ARR_PROFILE_CONFIG')
+_BACKEND_PREREQ_KEYS = {'seer': _SEER_PREREQ_KEYS, 'arr': _ARR_PREREQ_KEYS, 'both': _SEER_PREREQ_KEYS + _ARR_PREREQ_KEYS}
+# service -> (URL key, token key, media type it serves)
+ARR_INSTANCES = {'radarr': ('RADARR_API_URL', 'RADARR_TOKEN', 'movie'),
+                 'sonarr': ('SONARR_API_URL', 'SONARR_TOKEN', 'tv')}
+
+
+def get_request_backend(config_data):
+    """Return the configured request backend; a missing or empty value means 'seer'."""
+    return (config_data or {}).get('REQUEST_BACKEND') or 'seer'
+
+
+def arr_default_profile(config_data, media_type):
+    """Return the default ``{profileId, rootFolder, ...}`` for a media type, or None when incomplete."""
+    profiles = (config_data or {}).get('ARR_PROFILE_CONFIG')
+    profile = profiles.get(f'default_{media_type}') if isinstance(profiles, dict) else None
+    if isinstance(profile, dict) and profile.get('profileId') and profile.get('rootFolder'):
+        return profile
+    return None
+
+
+def validate_request_backend(new_config, current_config=None):
+    """Reject a request-backend configuration that could not deliver requests.
+
+    An invalid backend value is always rejected. Prerequisites are checked only
+    when the backend itself changes, or when a key that feeds the active backend
+    changes after setup is complete. "Changed" is decided by comparing values
+    with ``current_config``, not by key presence, so a full settings form that
+    resubmits unchanged fields never triggers validation (an existing install
+    without Seer keeps saving unrelated settings).
+
+    :param new_config: Prospective effective configuration.
+    :param current_config: Configuration currently in force (None means empty).
+    :raises ValueError: With a user-facing message when the configuration is invalid.
+    """
+    def norm(value):
+        return value or None
+
+    current_config = current_config or {}
+    backend = get_request_backend(new_config)
+    if backend not in REQUEST_BACKENDS:
+        raise ValueError(f"REQUEST_BACKEND must be one of: {', '.join(REQUEST_BACKENDS)}")
+    explicit = backend != get_request_backend(current_config)
+    prereq_changed = new_config.get('SETUP_COMPLETED') is True and any(
+        norm(new_config.get(key)) != norm(current_config.get(key)) for key in _BACKEND_PREREQ_KEYS[backend])
+    if not (explicit or prereq_changed):
+        return
+
+    if backend in ('seer', 'both') and not (new_config.get('SEER_API_URL') and new_config.get('SEER_TOKEN')):
+        raise ValueError('Seer URL and API key are required for this request backend.')
+    if backend == 'seer':
+        return
+    instances = [(service, media_type) for service, (url_key, token_key, media_type) in ARR_INSTANCES.items()
+                 if new_config.get(url_key) and new_config.get(token_key)]
+    if not instances:
+        raise ValueError('Configure at least one Radarr or Sonarr instance (URL and API key).')
+    if backend == 'arr':
+        for service, media_type in instances:
+            if not arr_default_profile(new_config, media_type):
+                raise ValueError(f'Choose a default quality profile and root folder for {service.capitalize()}.')
+
+
+def validate_cron_times(config_data):
+    """Raise ValueError when ``CRON_TIMES`` is neither a known preset nor a valid cron expression."""
+    cron_times = config_data.get('CRON_TIMES', '0 0 * * *')
+    valid_presets = {'daily', 'weekly', 'every_12h', 'every_6h', 'every_hour'}
+    if cron_times not in valid_presets and not croniter.is_valid(cron_times):
+        logger.error("Invalid cron time provided.")
+        raise ValueError("Invalid cron time provided.")
+
+
 def save_env_vars(config_data):
     """
     Save environment variables from the web interface to the config.yaml file.
     Also validates cron times and updates them if needed.
     """
     validate_seer_expiry_settings(config_data)
+    # Keys missing from the payload are stored as their defaults, so validate that effective view.
+    validate_request_backend({**get_config_values(), **config_data}, load_env_vars())
     from api_service.utils.ssrf_guard import normalize_base_url
     config_data = dict(config_data)
-    for key in ('PLEX_API_URL', 'JELLYFIN_API_URL', 'SEER_API_URL', 'JELLYFIN_EXTERNAL_URL', 'SEER_EXTERNAL_URL'):
+    for key in ('PLEX_API_URL', 'JELLYFIN_API_URL', 'SEER_API_URL', 'JELLYFIN_EXTERNAL_URL', 'SEER_EXTERNAL_URL',
+                'RADARR_API_URL', 'SONARR_API_URL'):
         if config_data.get(key):
             config_data[key] = normalize_base_url(config_data[key])
     logger.debug("Saving environment variables to config.yaml")
-    cron_times = config_data.get('CRON_TIMES', '0 0 * * *')
-
-    valid_presets = {'daily', 'weekly', 'every_12h', 'every_6h', 'every_hour'}
-    if cron_times not in valid_presets and not croniter.is_valid(cron_times):
-        logger.error("Invalid cron time provided.")
-        raise ValueError("Invalid cron time provided.")
+    validate_cron_times(config_data)
 
     try:
         # Prepare environment variables to be saved
@@ -370,7 +449,8 @@ def get_config_sections():
                     'SEER_SESSION_TOKEN', 'SEER_ANIME_PROFILE_CONFIG', 'SEER_REQUEST_DELAY',
                     'TRAKT_CLIENT_ID', 'TRAKT_CLIENT_SECRET', 'TRAKT_ACCESS_TOKEN',
                     'TRAKT_REFRESH_TOKEN', 'TRAKT_EXPIRES_AT', 'TRAKT_SYNC_SEEN_FEEDBACK',
-                    'SIMKL_CLIENT_ID',
+                    'SIMKL_CLIENT_ID', 'RADARR_API_URL', 'RADARR_TOKEN', 'SONARR_API_URL', 'SONARR_TOKEN',
+                    'REQUEST_BACKEND', 'ARR_PROFILE_CONFIG',
                     'SELECTED_USERS'],
         'database': ['DB_TYPE', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
                     'DB_MIN_CONNECTIONS', 'DB_MAX_CONNECTIONS', 'DB_MAX_IDLE_TIME', 

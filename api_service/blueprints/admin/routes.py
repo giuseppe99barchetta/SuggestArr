@@ -10,7 +10,12 @@ Config-file writes are intentionally absent from this module.
 from flask import Blueprint, jsonify, request
 
 from api_service.auth.middleware import require_role
-from api_service.config.config import load_env_vars
+from api_service.config.config import (
+    INTEGRATION_TO_FLAT,
+    get_config_values,
+    load_env_vars,
+    validate_request_backend,
+)
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_secrets import (
@@ -154,14 +159,39 @@ def import_config():
     else:
         return jsonify({'error': f'Unsupported schema_version: {schema_version}'}), 400
 
+    # Validate the prospective configuration before writing anything: an import
+    # must not leave the active request backend without its credentials.
+    current = load_env_vars()
+    prospective = dict(current)
+    for service, cfg in integrations.items():
+        for field, flat_key in INTEGRATION_TO_FLAT.get(service, {}).items():
+            if field in cfg:
+                prospective[flat_key] = cfg[field]
+    try:
+        validate_request_backend({**get_config_values(), **prospective}, current)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
     db = DatabaseManager()
     written = []
-    for service, cfg in integrations.items():
-        if not isinstance(service, str) or not service:
-            continue
-        db.set_integration(service, cfg)
-        written.append(service)
-        logger.info("import-config: wrote integration '%s'", service)
+    previous = {}
+    try:
+        for service, cfg in integrations.items():
+            if not isinstance(service, str) or not service:
+                continue
+            previous[service] = db.get_integration(service)
+            db.set_integration(service, cfg)
+            written.append(service)
+            logger.info("import-config: wrote integration '%s'", service)
+    except Exception:
+        # Do not leave a half-applied import: put back what was there before.
+        logger.error("import-config failed; restoring the previous integrations", exc_info=True)
+        for service, old_cfg in previous.items():
+            if old_cfg is None:
+                db.delete_integration(service)
+            else:
+                db.set_integration(service, old_cfg)
+        raise
 
     logger.info("import-config: import complete — %d service(s) written", len(written))
     return jsonify({

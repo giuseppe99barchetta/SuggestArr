@@ -21,6 +21,12 @@ class TestConfig(unittest.TestCase):
     # This should be kept in sync with mock data for save/load config structure.
     config_data = {
         "MDBLIST_API_KEY": "",
+        "RADARR_API_URL": "",
+        "RADARR_TOKEN": "",
+        "SONARR_API_URL": "",
+        "SONARR_TOKEN": "",
+        "REQUEST_BACKEND": "seer",
+        "ARR_PROFILE_CONFIG": {},
         "CRON_TIMES": "0 4 * * *",
         "FILTER_LANGUAGE": [{"id": "en", "english_name": "English"}],
         "FILTER_GENRES_EXCLUDE": [{"id": 27, "name": "Horror"}, {"id": 10752, "name": "War"}],
