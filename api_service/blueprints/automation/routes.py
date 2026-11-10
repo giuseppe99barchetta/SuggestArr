@@ -256,7 +256,9 @@ def _decide_workflow(approve, blacklist=False):
     report = {}
     changed = db.decide_suggestions(
         ids, scope.owner_id, int(g.current_user['id']), approve, blacklist, profiles=profile,
-        include_unassigned=scope.include_unassigned, report=report)
+        include_unassigned=scope.include_unassigned, report=report,
+        # Blacklisting bans this title, not the job's slot: an alternative is still offered.
+        replace_rejected=not approve and load_env_vars().get('REPLACE_REJECTED_REQUESTS') is True)
     return jsonify({'status': 'success', 'updated': changed,
                     'ignored_overrides': report.get('ignored_overrides', 0)}), 200
 

@@ -380,7 +380,7 @@ class RequestQueueMixin:
             return backends
 
     def decide_suggestions(self, ids, owner_id, decided_by, approve, blacklist=False, profiles=None,
-                           include_unassigned=False, report=None):
+                           include_unassigned=False, report=None, replace_rejected=False):
         """
         Approve or reject suggestions that are awaiting approval.
 
@@ -403,6 +403,10 @@ class RequestQueueMixin:
                         an owner (an admin under ``REQUEST_VISIBILITY=own_all``).
             report:     Optional dict; receives ``ignored_overrides``, the number of
                         direct-delivery rows that kept their own profile.
+            replace_rejected: On a rejection, open a pending replacement for each
+                        rejected direct-delivery row of a job, so the replacement
+                        cycle suggests one alternative (Seer rows are replaced from
+                        Seer's own decision instead).
 
         Returns:
             int: Number of rows whose status changed.
@@ -438,6 +442,8 @@ class RequestQueueMixin:
                     if self.db_type == 'postgres':
                         sql += " ON CONFLICT DO NOTHING"
                     cursor.execute(sql, (tmdb_id, media_type, decided_by))
+            if replace_rejected and not approve and eligible:
+                self._open_replacements_for_rejected(cursor, ph, [row[0] for row in eligible])
             conn.commit()
         event = "suggestion.approved" if approve else "suggestion.rejected"
         try:
@@ -449,6 +455,26 @@ class RequestQueueMixin:
         except Exception as exc:
             self.logger.error("Unable to queue %s webhook: %s", event, exc)
         return changed
+
+    def _open_replacements_for_rejected(self, cursor, ph, row_ids):
+        """Open a pending replacement for each rejected direct-delivery row that came from a job.
+
+        Runs on the caller's cursor; decide_suggestions commits it with the rejection.
+        """
+        marks = ','.join([ph] * len(row_ids))
+        cursor.execute(f"SELECT id,job_id,payload FROM pending_requests WHERE id IN ({marks})", tuple(row_ids))
+        insert = {'sqlite': 'INSERT OR IGNORE', 'postgres': 'INSERT'}.get(self.db_type, 'INSERT IGNORE')
+        sql = (f"{insert} INTO request_replacements(delivery_id,remote_status,status,reason) "
+               f"VALUES ({ph},3,'pending','Rejected in SuggestArr; awaiting an alternative')")
+        if self.db_type == 'postgres':
+            sql += " ON CONFLICT DO NOTHING"
+        for row_id, job_id, payload in cursor.fetchall():
+            try:
+                backend = (json.loads(payload) if payload else {}).get('_backend') or 'seer'
+            except (TypeError, ValueError):
+                continue
+            if backend == 'arr' and job_id is not None:
+                cursor.execute(sql, (row_id,))
 
     @staticmethod
     def _write_profiles_to_payloads(cursor, ph, marks, owner_clause, select_params, fields_by_type):
@@ -554,6 +580,11 @@ class RequestQueueMixin:
             cursor.execute(f"SELECT tmdb_id,media_type FROM pending_requests WHERE status='rejected' "
                            f"AND id IN ({marks}){owner_clause}", tuple(params))
             eligible = cursor.fetchall()
+            # The title itself is requested again: a pending alternative for it must not follow.
+            cursor.execute(f"UPDATE request_replacements SET status='ignored',"
+                           f"reason='Requested again; no alternative needed',checked_at=CURRENT_TIMESTAMP "
+                           f"WHERE status='pending' AND delivery_id IN (SELECT id FROM pending_requests "
+                           f"WHERE status='rejected' AND id IN ({marks}){owner_clause})", tuple(params))
             if remove_blacklist:
                 for tmdb_id, media_type in eligible:
                     cursor.execute(f"DELETE FROM suggestion_blacklist WHERE tmdb_id={ph} AND media_type={ph}",

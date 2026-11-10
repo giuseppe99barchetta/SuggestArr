@@ -54,6 +54,8 @@ def _queue():
         CREATE TABLE user_media_profiles (external_user_id TEXT, external_username TEXT);
         CREATE TABLE suggestion_blacklist (tmdb_id TEXT, media_type TEXT, created_by INTEGER,
             PRIMARY KEY (tmdb_id, media_type));
+        CREATE TABLE request_replacements (delivery_id INTEGER PRIMARY KEY, remote_status INTEGER, status TEXT,
+            reason TEXT, replacement_delivery_id INTEGER, checked_at TIMESTAMP);
     """)
     rows = [
         # id, tmdb, status, owner (as stored when queued), _user_id
@@ -344,7 +346,7 @@ def test_an_admin_under_own_all_approves_their_own_and_unassigned(monkeypatch):
     response = client.post('/api/automation/requests/workflow/approve', json={'ids': [1, 3], 'profile': profile})
     assert response.status_code == 200
     db.decide_suggestions.assert_called_once_with(
-        [1, 3], ADMIN_ID, ADMIN_ID, True, False, profiles=profile, include_unassigned=True, report=ANY)
+        [1, 3], ADMIN_ID, ADMIN_ID, True, False, profiles=profile, include_unassigned=True, report=ANY, replace_rejected=False)
 
 
 def test_an_admin_under_own_all_lists_their_own_and_unassigned(monkeypatch):
@@ -364,4 +366,4 @@ def test_a_regular_user_approves_only_what_they_own(monkeypatch):
     client = _client(monkeypatch, USER, 'own', db)
     assert client.post('/api/automation/requests/workflow/approve', json={'ids': [2]}).status_code == 200
     db.decide_suggestions.assert_called_once_with(
-        [2], ROBERT_ID, ROBERT_ID, True, False, profiles={}, include_unassigned=False, report=ANY)
+        [2], ROBERT_ID, ROBERT_ID, True, False, profiles={}, include_unassigned=False, report=ANY, replace_rejected=False)

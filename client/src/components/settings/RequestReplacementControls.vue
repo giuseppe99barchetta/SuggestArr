@@ -17,7 +17,7 @@
         <ul v-else class="m-0 max-h-64 list-none space-y-2 overflow-y-auto p-0" aria-label="Request replacement log">
           <li v-for="entry in log" :key="entry.delivery_id" class="rounded-ctl bg-panel-2 p-3 text-sm">
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-ink">
-              <span>Seerr #{{ entry.seer_request_id }}</span>
+              <span>{{ entry.seer_request_id ? `Seerr #${entry.seer_request_id}` : `Delivery #${entry.delivery_id}` }}</span>
               <span class="text-xs text-ink-3">{{ entry.media_type }} · TMDb {{ entry.tmdb_id }}</span>
               <span class="ml-auto rounded-md bg-raised px-2 py-0.5 text-xs">{{ entry.status }}</span>
             </div>

@@ -1,4 +1,8 @@
-"""Observe explicit Seerr rejections and generate at most one alternative each."""
+"""Observe explicit Seerr rejections and generate at most one alternative each.
+
+With direct Radarr/Sonarr delivery the rejection happens in SuggestArr's approval queue,
+which opens the pending replacement itself (decide_suggestions); only generation runs here.
+"""
 from api_service.config.config import get_request_backend
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
@@ -11,6 +15,40 @@ from api_service.utils.asyncio_loop import run_coroutine_sync
 logger = LoggerManager.get_logger('RequestReplacement')
 
 
+async def _observe_seer_rejections(db, instance, token, result):
+    """Record Seer's decision on each tracked delivery; explicit rejections become pending replacements."""
+    async with SeerClient(instance, token) as seer:
+        for item in db.get_seer_requests_to_check(instance):
+            try:
+                http_status, remote = await seer.request_expiry_action(item['seer_request_id'])
+                if http_status == 404:
+                    remote_status, state, reason = -1, 'ignored', 'Request was removed; no explicit rejection'
+                elif http_status != 200:
+                    remote_status, state, reason = 1, 'observing', f'Seerr lookup failed (HTTP {http_status})'
+                    result['errors'] += 1
+                elif not _matches_request(item, remote):
+                    remote_status, state, reason = -1, 'ignored', 'Remote request identity could not be verified'
+                elif type(remote.get('status')) is not int or remote['status'] not in range(1, 6):
+                    remote_status, state, reason = 1, 'observing', 'Unrecognized remote request status'
+                    result['errors'] += 1
+                else:
+                    remote_status = remote['status']
+                    if remote_status == 3:
+                        automatic = db.was_automatically_declined(item['delivery_id'])
+                        state = 'ignored' if automatic else 'pending'
+                        reason = 'Automatic expiry decline' if automatic else 'Rejected in Seerr; awaiting an alternative'
+                    else:
+                        state = 'observing' if remote_status == 1 else 'ignored'
+                        reason = 'Awaiting Seerr decision' if remote_status == 1 else 'Request was not rejected'
+                db.record_seer_request_check(item['delivery_id'], remote_status, state, reason)
+                result['checked'] += 1
+                if state == 'ignored':
+                    result['ignored'] += 1
+            except Exception:
+                logger.warning('Could not check delivery %s', item['delivery_id'], exc_info=True)
+                result['errors'] += 1
+
+
 async def execute_request_replacements():
     if not _run_lock.acquire(blocking=False):
         return {'status': 'already_running'}
@@ -19,45 +57,17 @@ async def execute_request_replacements():
         result = dict(status='ok', checked=0, queued=0, exhausted=0, ignored=0, pending=0, errors=0)
         if env.get('REPLACE_REJECTED_REQUESTS') is not True:
             return {**result, 'status': 'disabled'}
-        if get_request_backend(env) == 'arr':
-            return {**result, 'status': 'disabled_backend'}
-        try:
-            instance = normalize_seer_url(env.get('SEER_API_URL', ''))
-        except (ValueError, AttributeError):
-            return {**result, 'status': 'not_configured', 'errors': 1}
-        if not env.get('SEER_TOKEN'):
-            return {**result, 'status': 'not_configured', 'errors': 1}
         db = DatabaseManager()
-        async with SeerClient(instance, env['SEER_TOKEN']) as seer:
-            for item in db.get_seer_requests_to_check(instance):
-                try:
-                    http_status, remote = await seer.request_expiry_action(item['seer_request_id'])
-                    if http_status == 404:
-                        remote_status, state, reason = -1, 'ignored', 'Request was removed; no explicit rejection'
-                    elif http_status != 200:
-                        remote_status, state, reason = 1, 'observing', f'Seerr lookup failed (HTTP {http_status})'
-                        result['errors'] += 1
-                    elif not _matches_request(item, remote):
-                        remote_status, state, reason = -1, 'ignored', 'Remote request identity could not be verified'
-                    elif type(remote.get('status')) is not int or remote['status'] not in range(1, 6):
-                        remote_status, state, reason = 1, 'observing', 'Unrecognized remote request status'
-                        result['errors'] += 1
-                    else:
-                        remote_status = remote['status']
-                        if remote_status == 3:
-                            automatic = db.was_automatically_declined(item['delivery_id'])
-                            state = 'ignored' if automatic else 'pending'
-                            reason = 'Automatic expiry decline' if automatic else 'Rejected in Seerr; awaiting an alternative'
-                        else:
-                            state = 'observing' if remote_status == 1 else 'ignored'
-                            reason = 'Awaiting Seerr decision' if remote_status == 1 else 'Request was not rejected'
-                    db.record_seer_request_check(item['delivery_id'], remote_status, state, reason)
-                    result['checked'] += 1
-                    if state == 'ignored':
-                        result['ignored'] += 1
-                except Exception:
-                    logger.warning('Could not check delivery %s', item['delivery_id'], exc_info=True)
-                    result['errors'] += 1
+        if get_request_backend(env) == 'arr':
+            instance = None  # direct deliveries: no Seer instance, nothing to observe remotely
+        else:
+            try:
+                instance = normalize_seer_url(env.get('SEER_API_URL', ''))
+            except (ValueError, AttributeError):
+                return {**result, 'status': 'not_configured', 'errors': 1}
+            if not env.get('SEER_TOKEN'):
+                return {**result, 'status': 'not_configured', 'errors': 1}
+            await _observe_seer_rejections(db, instance, env['SEER_TOKEN'], result)
         manager = JobManager.get_instance()
         attempts_by_job = {}
         for item in db.get_pending_request_replacements(instance):

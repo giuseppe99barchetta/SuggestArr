@@ -442,7 +442,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           <p class="m-0 mt-auto pt-3 text-xs leading-relaxed text-ink-4">Checked daily at 04:30 server time. Only new SuggestArr deliveries are tracked; media files stay untouched.</p>
         </SectionCard>
 
-        <SectionCard v-if="localConfig.REQUEST_BACKEND !== 'arr'" icon="fas fa-sync-alt" title="Replace rejected requests" description="Offer an alternative when a request is declined in Seerr or Overseerr." class="xl:col-span-2">
+        <SectionCard icon="fas fa-sync-alt" title="Replace rejected requests" :description="localConfig.REQUEST_BACKEND === 'arr' ? 'Offer an alternative when you reject a suggestion in the approval queue.' : 'Offer an alternative when a request is declined in Seerr or Overseerr.'" class="xl:col-span-2">
           <BaseCheckbox v-model="localConfig.REPLACE_REJECTED_REQUESTS" label="Generate an alternative after rejection" description="Try one new title using the same job, user and media type. Approval rules still apply." :disabled="isLoading" />
           <RequestReplacementControls :enabled="originalConfig.REPLACE_REJECTED_REQUESTS" :disabled="isLoading || hasChanges" />
           <p class="m-0 mt-3 text-xs leading-relaxed text-ink-4">Checked every 15 minutes for tracked SuggestArr requests. Deleted requests and automatic expiry declines do not trigger alternatives. Disabled or paused jobs wait.</p>

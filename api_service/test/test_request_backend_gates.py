@@ -27,15 +27,19 @@ def _no_seer(module):
     return patch.object(module, 'SeerClient', side_effect=AssertionError('Seer must not be contacted'))
 
 
-def test_expiry_and_replacement_are_disabled_for_direct_delivery_even_with_seer_saved():
+def test_expiry_is_disabled_and_replacement_skips_seer_for_direct_delivery_even_with_seer_saved():
     env = {**ARR_WITH_SEER, 'SEER_AUTO_DECLINE_DAYS': 3, 'SEER_AUTO_DECLINE_DRY_RUN': False,
            'REPLACE_REJECTED_REQUESTS': True}
     with patch.object(request_expiry.ConfigService, 'get_runtime_config', return_value=env), \
             _no_seer(request_expiry):
         assert asyncio.run(request_expiry.execute_request_expiry())['status'] == 'disabled_backend'
+    db = MagicMock(get_pending_request_replacements=MagicMock(return_value=[]))
     with patch.object(request_replacement.ConfigService, 'get_runtime_config', return_value=env), \
-            _no_seer(request_replacement):
-        assert asyncio.run(request_replacement.execute_request_replacements())['status'] == 'disabled_backend'
+            patch.object(request_replacement, 'DatabaseManager', return_value=db), \
+            patch.object(request_replacement.JobManager, 'get_instance'), _no_seer(request_replacement):
+        assert asyncio.run(request_replacement.execute_request_replacements())['status'] == 'ok'
+    db.get_pending_request_replacements.assert_called_once_with(None)
+    db.get_seer_requests_to_check.assert_not_called()
 
 
 def test_availability_sync_reads_radarr_not_seer_in_direct_mode():

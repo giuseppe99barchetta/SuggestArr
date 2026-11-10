@@ -198,3 +198,99 @@ def test_a_type_without_an_instance_keeps_its_stored_states():
 
 def test_direct_sync_without_any_instance_is_not_configured():
     assert _sync({'REQUEST_BACKEND': 'arr'}, _db([], {}), {})['status'] == 'not_configured'
+
+
+# --- 3. replace rejected -------------------------------------------------------
+
+import json  # noqa: E402
+
+from api_service.jobs import request_replacement  # noqa: E402
+from api_service.test.test_request_replacement import MemoryDB, make_manager  # noqa: E402
+from api_service.db.components.schema_manager import SchemaManager  # noqa: E402
+
+
+@pytest.fixture
+def memdb():
+    database = MemoryDB()
+    SchemaManager(database).initialize_db()
+    yield database
+    database.connection.close()
+
+
+def _awaiting(db, row_id, backend='arr', job_id=1):
+    db.connection.execute(
+        'INSERT INTO pending_requests(id,tmdb_id,media_type,payload,status,job_id,owner_id,user_id) '
+        "VALUES(?,?,'movie',?,'awaiting_approval',?,7,'u1')",
+        (row_id, str(row_id + 100), json.dumps({'_backend': backend} if backend else {}), job_id))
+    db.connection.commit()
+
+
+def _replacements(db):
+    return dict(db.connection.execute('SELECT delivery_id,status FROM request_replacements').fetchall())
+
+
+@pytest.mark.parametrize('blacklist', [False, True])
+def test_rejecting_a_direct_suggestion_opens_one_pending_replacement(memdb, blacklist):
+    _awaiting(memdb, 1)
+    _awaiting(memdb, 2, backend='seer')   # Seer rows are replaced from Seer's own decision
+    _awaiting(memdb, 3, backend=None)     # rows queued before _backend existed are Seer's
+    _awaiting(memdb, 4, job_id=None)      # not from a job: nothing to generate an alternative with
+    assert memdb.decide_suggestions([1, 2, 3, 4], None, 9, False, blacklist, replace_rejected=True) == 4
+    assert _replacements(memdb) == {1: 'pending'}
+    assert memdb.get_pending_request_replacements(None)[0]['delivery_id'] == 1
+    assert memdb.get_pending_request_replacements('http://seer.local') == []
+
+
+def test_no_replacement_without_the_setting_or_on_approval(memdb):
+    _awaiting(memdb, 1)
+    memdb.decide_suggestions([1], None, 9, False, replace_rejected=False)
+    _awaiting(memdb, 2)
+    memdb.decide_suggestions([2], None, 9, True, replace_rejected=True)
+    assert _replacements(memdb) == {}
+
+
+def test_requesting_a_rejected_title_again_cancels_its_pending_alternative(memdb):
+    _awaiting(memdb, 1)
+    memdb.decide_suggestions([1], None, 9, False, replace_rejected=True)
+    assert memdb.request_rejected([1], None) == 1
+    assert _replacements(memdb) == {1: 'ignored'}
+    assert memdb.get_pending_request_replacements(None) == []
+
+
+def _run_replacements(db, manager, env):
+    with patch.object(request_replacement, 'DatabaseManager', return_value=db), \
+            patch.object(request_replacement.ConfigService, 'get_runtime_config', return_value=env), \
+            patch.object(request_replacement, 'SeerClient', side_effect=AssertionError('Seer must not be contacted')), \
+            patch.object(request_replacement.JobManager, 'get_instance', return_value=manager):
+        return asyncio.run(request_replacement.execute_request_replacements())
+
+
+def test_direct_mode_generates_the_alternative_without_seer(memdb):
+    _awaiting(memdb, 1)
+    memdb.decide_suggestions([1], None, 9, False, replace_rejected=True)
+    manager, _, executor = make_manager(memdb)
+    result = _run_replacements(memdb, manager, {**ARR_ENV, 'REPLACE_REJECTED_REQUESTS': True})
+    assert result['status'] == 'ok' and result['queued'] == 1
+    executor.assert_awaited_once()
+    assert executor.await_args.kwargs['overrides']['_replacement_for'] == 1
+    assert _replacements(memdb)[1] == 'queued'
+    # one alternative per rejection: a second run generates nothing
+    _run_replacements(memdb, manager, {**ARR_ENV, 'REPLACE_REJECTED_REQUESTS': True})
+    executor.assert_awaited_once()
+
+
+def test_direct_replacements_wait_while_seer_is_the_backend(memdb):
+    _awaiting(memdb, 1)
+    memdb.decide_suggestions([1], None, 9, False, replace_rejected=True)
+    manager, _, executor = make_manager(memdb)
+    seer = MagicMock(request_expiry_action=AsyncMock())
+    seer.__aenter__ = AsyncMock(return_value=seer)
+    seer.__aexit__ = AsyncMock(return_value=False)
+    with patch.object(request_replacement, 'DatabaseManager', return_value=memdb), \
+            patch.object(request_replacement.ConfigService, 'get_runtime_config', return_value={
+                'REPLACE_REJECTED_REQUESTS': True, 'SEER_API_URL': 'http://seer.local/', 'SEER_TOKEN': 'k'}), \
+            patch.object(request_replacement, 'SeerClient', return_value=seer), \
+            patch.object(request_replacement.JobManager, 'get_instance', return_value=manager):
+        asyncio.run(request_replacement.execute_request_replacements())
+    executor.assert_not_awaited()
+    assert _replacements(memdb) == {1: 'pending'}
