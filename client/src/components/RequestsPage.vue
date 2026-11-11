@@ -3,7 +3,7 @@
     <header class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="m-0 text-3xl font-extrabold tracking-tight text-ink">Requests</h1>
-        <p class="m-0 mt-1.5 text-[15px] text-ink-3">Approve suggestions and follow what has been sent to Seer.</p>
+        <p class="m-0 mt-1.5 text-[15px] text-ink-3">Approve suggestions and follow what has been sent to Seer or Radarr/Sonarr.</p>
       </div>
       <button
         v-if="viewMode === 'all-requests' && approvalEnabled"
@@ -172,7 +172,7 @@
         <h2 class="m-0 text-lg font-bold text-ink">You're all caught up</h2>
         <p class="m-0 text-sm text-ink-3">New suggestions that need your approval will show up here.</p>
       </div>
-      <h2 v-if="approvalEnabled && requestStatusFilter === 'all' && workflowTotal > 0" class="m-0 mt-4 text-lg font-bold text-ink">Sent to Seer</h2>
+      <h2 v-if="approvalEnabled && requestStatusFilter === 'all' && workflowTotal > 0" class="m-0 mt-4 text-lg font-bold text-ink">Sent</h2>
       <div v-if="!approvalEnabled || requestStatusFilter === 'all' || requestStatusFilter === 'sent'" class="grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4">
         <MediaCard
           v-for="request in filteredAndSortedRequests"

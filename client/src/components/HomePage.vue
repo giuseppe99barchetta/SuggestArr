@@ -263,7 +263,7 @@ export default {
         return { delta, title: `${delta > 0 ? '+' : ''}${delta} vs the same time ${period} (${previous})` };
       };
       const tiles = [
-        { label: 'Requested today', value: this.stats.today || 0, hint: 'Sent to Seer since midnight', trend: trend('today', 'yesterday') },
+        { label: 'Requested today', value: this.stats.today || 0, hint: 'Sent since midnight', trend: trend('today', 'yesterday') },
         { label: 'This week', value: this.stats.this_week || 0, hint: 'Requests since Monday', trend: trend('this_week', 'last week') },
         { label: 'This month', value: this.stats.this_month || 0, hint: 'Requests this month', trend: trend('this_month', 'last month') },
         { label: 'All time', value: this.stats.total || 0, hint: 'Every request SuggestArr made' },

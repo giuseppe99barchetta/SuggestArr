@@ -2,7 +2,7 @@
   <div>
     <p class="mb-6 text-[0.9rem] leading-relaxed text-ink-4">
       Choose how often SuggestArr should run automatically. Each run it will scan your recently
-      watched content, find similar titles via TMDB, and submit requests to Seer —
+      watched content, find similar titles via TMDB, and submit requests to Seer or Radarr/Sonarr —
       so new content keeps appearing in your request queue without any manual effort.
     </p>
 

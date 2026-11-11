@@ -3,7 +3,7 @@
     <header class="flex flex-wrap items-end justify-between gap-4" data-tour-id="jobs-section-header">
       <div>
         <h1 class="m-0 text-3xl font-extrabold tracking-tight text-ink">Jobs</h1>
-        <p class="m-0 mt-1.5 max-w-2xl text-[15px] text-ink-3">Discover titles, find recommendations or import a public list. Each job runs on its own schedule and sends requests to Seer.</p>
+        <p class="m-0 mt-1.5 max-w-2xl text-[15px] text-ink-3">Discover titles, find recommendations or import a public list. Each job runs on its own schedule and sends requests to Seer or Radarr/Sonarr.</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Replay the Jobs tour" aria-label="Replay the Jobs tour" @click="restartJobsTour"><i aria-hidden="true" class="fas fa-question-circle"></i></button>
@@ -28,7 +28,7 @@
     <div v-if="queueStatus.total_pending > 0 && !queueBannerDismissed" role="status" class="flex items-center gap-3 rounded-card border border-notice/40 bg-notice/10 px-4 py-3">
       <i aria-hidden="true" class="fas fa-circle-notch fa-spin text-notice"></i>
       <div class="flex flex-1 flex-col text-sm">
-        <strong class="text-ink">Delivering to Seer…</strong>
+        <strong class="text-ink">Delivering requests…</strong>
         <span class="text-ink-3">
           {{ queueStatus.total_pending }} item{{ queueStatus.total_pending !== 1 ? 's' : '' }} queued
           <template v-if="queueStatus.submitting > 0"> · {{ queueStatus.submitting }} sending</template>
@@ -41,7 +41,7 @@
       <i aria-hidden="true" class="fas fa-check-circle text-good"></i>
       <div class="flex flex-1 flex-col text-sm">
         <strong class="text-ink">All requests delivered</strong>
-        <span class="text-ink-3">{{ queueStatus.submitted }} item{{ queueStatus.submitted !== 1 ? 's' : '' }} sent to Seer successfully</span>
+        <span class="text-ink-3">{{ queueStatus.submitted }} item{{ queueStatus.submitted !== 1 ? 's' : '' }} delivered successfully</span>
       </div>
       <button type="button" class="h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Dismiss" @click="dismissQueueBanner"><i aria-hidden="true" class="fas fa-times"></i></button>
     </div>
@@ -354,7 +354,7 @@ export default {
         {
           targetId: 'job-modal-requests',
           title: 'Requests',
-          description: 'Choose whether suggestions go straight to Seer or wait for your approval, and which Seer user they are credited to.',
+          description: 'Choose whether suggestions are sent right away or wait for your approval, and (with Seer) which Seer user they are credited to.',
           position: 'top'
         },
         {

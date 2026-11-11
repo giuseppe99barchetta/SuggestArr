@@ -28,9 +28,9 @@
  */
 export const REQUEST_BACKENDS = [
   { value: 'seer', label: 'Seer', icon: 'fas fa-inbox',
-    description: 'Requests go through Seer: users, approvals in Seer, expiry and replacement of rejected requests.' },
+    description: 'Requests go through Seer: its users and approvals, and auto-decline of requests still pending there.' },
   { value: 'arr', label: 'Radarr & Sonarr', icon: 'fas fa-bolt',
-    description: 'Titles are added straight to Radarr and Sonarr. No Seer needed; Seer-only features are off.' },
+    description: 'Titles are added straight to Radarr and Sonarr, tagged suggestarr. No Seer needed; only auto-decline of pending Seer requests is not available.' },
   { value: 'both', label: 'Both', icon: 'fas fa-layer-group',
     description: 'Seer keeps handling requests; Radarr and Sonarr also tell SuggestArr what you already own.' },
 ];
