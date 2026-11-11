@@ -642,3 +642,29 @@ def test_the_worker_does_not_deliver_a_row_it_could_not_claim():
         assert asyncio.run(queue_worker._run_worker()) == 0
     client.submit_queued_request.assert_not_awaited()
     db.mark_pending_submitted.assert_not_called()
+
+
+def test_rejecting_again_after_requesting_again_reopens_one_replacement(memdb):
+    _awaiting(memdb, 1)
+    memdb.decide_suggestions([1], None, 9, False, replace_rejected=True)
+    manager, _, executor = make_manager(memdb)
+    _run_replacements(memdb, manager, {**ARR_ENV, 'REPLACE_REJECTED_REQUESTS': True})
+    alternative = memdb.connection.execute('SELECT replacement_delivery_id FROM request_replacements').fetchone()[0]
+    memdb.request_rejected([1], None)                  # alternative cancelled, slot ignored
+    memdb.connection.execute("UPDATE pending_requests SET status='awaiting_approval' WHERE id=1")
+    memdb.connection.commit()
+    memdb.decide_suggestions([1], None, 9, False, replace_rejected=True)
+    assert _replacements(memdb)[1] == 'pending'
+    assert memdb.connection.execute(
+        'SELECT replacement_delivery_id FROM request_replacements WHERE delivery_id=1').fetchone()[0] is None
+    assert _status(memdb, alternative) == 'rejected'   # the cancelled alternative stays cancelled
+
+
+def test_a_slot_whose_alternative_was_delivered_is_not_reopened(memdb):
+    _awaiting(memdb, 1)
+    memdb.decide_suggestions([1], None, 9, False, replace_rejected=True)
+    memdb.connection.execute("UPDATE request_replacements SET status='queued',replacement_delivery_id=99 WHERE delivery_id=1")
+    memdb.connection.execute("UPDATE pending_requests SET status='awaiting_approval' WHERE id=1")
+    memdb.connection.commit()
+    memdb.decide_suggestions([1], None, 9, False, replace_rejected=True)
+    assert _replacements(memdb)[1] == 'queued'

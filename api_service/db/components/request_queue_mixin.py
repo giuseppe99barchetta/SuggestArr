@@ -460,6 +460,9 @@ class RequestQueueMixin:
         """Open a pending replacement for each rejected direct-delivery row that came from a job.
 
         Runs on the caller's cursor; decide_suggestions commits it with the rejection.
+        A row rejected again after being requested again reopens its slot: an ``ignored``
+        slot never had an alternative delivered (none was generated, or it was cancelled),
+        so at most one alternative per delivery still holds.
         """
         marks = ','.join([ph] * len(row_ids))
         cursor.execute(f"SELECT id,job_id,payload FROM pending_requests WHERE id IN ({marks})", tuple(row_ids))
@@ -468,6 +471,9 @@ class RequestQueueMixin:
                f"VALUES ({ph},3,'pending','Rejected in SuggestArr; awaiting an alternative')")
         if self.db_type == 'postgres':
             sql += " ON CONFLICT DO NOTHING"
+        reopen = ("UPDATE request_replacements SET status='pending',replacement_delivery_id=NULL,"
+                  "reason='Rejected in SuggestArr; awaiting an alternative',checked_at=CURRENT_TIMESTAMP "
+                  f"WHERE delivery_id={ph} AND status='ignored'")
         for row_id, job_id, payload in cursor.fetchall():
             try:
                 backend = (json.loads(payload) if payload else {}).get('_backend') or 'seer'
@@ -475,6 +481,7 @@ class RequestQueueMixin:
                 continue
             if backend == 'arr' and job_id is not None:
                 cursor.execute(sql, (row_id,))
+                cursor.execute(reopen, (row_id,))
 
     @staticmethod
     def _write_profiles_to_payloads(cursor, ph, marks, owner_clause, select_params, fields_by_type):
