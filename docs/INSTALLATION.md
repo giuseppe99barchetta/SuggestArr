@@ -242,6 +242,23 @@ every_12h
 Use standard cron only if presets are not enough.
 Numeric weekdays follow standard cron: `0` and `7` are Sunday, `1` is Monday.
 
+### Where Requests Go: Seer or Radarr & Sonarr
+
+**Connections → Where requests go** (`REQUEST_BACKEND`) chooses how approved suggestions are delivered:
+
+- **Seer** (default): requests are created in Seer/Jellyseerr/Overseerr.
+- **Radarr & Sonarr**: titles are added straight to Radarr (movies) or Sonarr (TV) and searched for. Seer is not needed. Requires Radarr v5+ and Sonarr v4+, and a default quality profile and root folder for each configured instance (optional anime overrides fall back to the default).
+- **Both**: Seer delivers the requests; Radarr and Sonarr are only read to skip titles you already own.
+
+Switching never reroutes requests already in the queue: each one is delivered by the backend it was queued for.
+
+With **Radarr & Sonarr**:
+
+- Every title SuggestArr adds is tagged `suggestarr`. **Also tag each title with who it was suggested for** (`ARR_TAG_BY_USER`) adds `suggestarr-user-<name>` as well. Titles that were already in Radarr or Sonarr keep their own tags. Titles added before this tag existed are not tagged.
+- A job can override the quality profile, root folder and tags in **Radarr / Sonarr overrides**. Radarr and Sonarr only ever receive values the instance offers; otherwise the delivery fails and asks you to choose them again.
+- Availability badges, the `request.available` webhook and personal notifications come from Radarr (a downloaded file) and Sonarr (files for every monitored, aired episode; some files mean partial). There is no play link.
+- Auto-decline of pending requests is the only feature that still needs Seer.
+
 ### Pause Jobs While Seer Requests Are Pending
 
 Each discover or recommendation job has a schedule option:
@@ -267,6 +284,8 @@ Paused: Seer has pending requests awaiting approval or denial.
 Use this option when you review or approve Seer requests manually. It prevents a second automation run from adding more requests before the previous batch has been accepted or rejected.
 
 If you want SuggestArr to keep requesting even while Seer has pending approvals, leave this option disabled.
+
+With **Radarr & Sonarr** delivery the option reads **Radarr/Sonarr still has downloads in the queue**: the job is skipped while any configured instance has something in its download queue (`Paused: Radarr/Sonarr still has downloads in the queue.`). Stalled or failed items count until you clear them in Radarr or Sonarr. An instance that cannot be reached counts as idle, so it never pauses jobs forever. A job paused because SuggestArr approvals are waiting logs `Paused: suggestions are awaiting approval in SuggestArr.`
 
 ### AI Recommendations and AI Search
 
@@ -462,6 +481,8 @@ Each rejection can produce at most one alternative, recorded atomically with its
 
 Each check examines up to 50 tracked requests and attempts up to 10 replacements, respecting each job's maximum request count within that check. Discover and Trakt jobs search up to 100 candidates for a single alternative; no match is recorded as `exhausted` and is not retried. Generation failures are deferred to a later check. A replacement that is later explicitly declined can itself produce one alternative. The setting creates suggestions; Seerr/Sonarr/Radarr still control approval and downloading.
 
+With **Radarr & Sonarr** delivery there is no Seer decision to watch: rejecting (or blacklisting) a suggestion of a job in SuggestArr's approval queue asks for one alternative. Approvals that expire automatically are not replaced. **Request again** on the rejected suggestion cancels its alternative while that is still awaiting approval or queued; rejecting it again asks for a new one. Pending alternatives of direct deliveries wait while Seer or Both is selected and resume when Radarr & Sonarr is selected again.
+
 Admins can inspect recent decisions in the same settings card, or call `GET /api/automation/requests/replacements/log?limit=100` (maximum 500). `POST /api/automation/requests/replacements/run` runs the enabled check and returns counts for checked requests, queued alternatives, deferred attempts, exhausted searches, ignored decisions and errors. Both endpoints require an administrator; manual checks are limited to five per minute and return `409` if expiry or another replacement check is already running. Turning the setting off stops checks and new alternatives; existing queued suggestions retain their normal lifecycle.
 
 ## Simkl Integration
@@ -560,6 +581,8 @@ It is designed as a safety valve for automated requests:
 
 Cleanup supports Plex, Jellyfin, and Emby.
 
+With **Radarr & Sonarr** delivery, step 7 deletes the title and its files straight in Radarr or Sonarr, and only titles tagged `suggestarr`. A title added by hand, or added before the tag existed, is logged as `skipped_not_tagged` and never deleted; without the `suggestarr` tag on the instance nothing is deleted. A dry run reads Radarr and Sonarr too, so it lists exactly what a real run would delete.
+
 ### Where to configure
 
 Open:
@@ -613,13 +636,15 @@ Common audit actions:
 - `kept_favorited`: item is favorited and was kept.
 - `skipped_not_in_library`: item was not found in the media library.
 - `delete_failed`: Seer did not accept the deletion request.
+- `skipped_not_tagged`: Radarr & Sonarr delivery only; the title is not tagged `suggestarr`, so it is never deleted.
+- `skipped_not_in_arr`: Radarr & Sonarr delivery only; the title is not in the instance serving its media type.
 - `error`: unexpected cleanup error for that item.
 
 ### Notes and limits
 
 - Cleanup only considers requests tracked by SuggestArr.
 - Cleanup does not run when disabled, except manual Run now can force a dry-run or real run.
-- Cleanup requires Seer URL/token and a configured Plex, Jellyfin, or Emby server.
+- Cleanup requires a configured Plex, Jellyfin, or Emby server, and Seer URL/token (or, with Radarr & Sonarr delivery, the Radarr/Sonarr instances).
 - Only admins can change cleanup settings or run cleanup manually.
 
 ## External Database

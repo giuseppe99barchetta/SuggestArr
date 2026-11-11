@@ -125,6 +125,8 @@ Recommendation and Trakt Recommendation jobs can also enable **Pause if suggesti
 
 Use this when Seer approvals are part of your workflow and you want new automation runs to wait until the previous batch has been reviewed.
 
+With Radarr & Sonarr delivery (no Seer), the same option pauses the job while Radarr or Sonarr still has downloads in its queue.
+
 ### Auto-decline pending Seerr requests
 
 Under **Approvals -> Seerr pending requests**, set **Auto-decline after (days)** to expire requests still waiting for approval in Seerr. `0` disables the feature; preview-only mode is enabled by default. Runs happen daily at 04:30 server time, or manually from the same page, which also shows the audit log.
@@ -140,7 +142,7 @@ It looks at requests created by SuggestArr, waits for the configured grace perio
 - keeps favorited items
 - skips items no longer present in the media library
 - logs what would be deleted in dry-run mode
-- asks Seer to delete matching media files when real mode is enabled
+- asks Seer to delete matching media files when real mode is enabled, or, with Radarr & Sonarr delivery, deletes them straight in Radarr/Sonarr, only for titles tagged `suggestarr`
 
 Cleanup is off by default and starts safely in dry-run mode. Always run dry-run first and review the audit log before enabling real deletions.
 
