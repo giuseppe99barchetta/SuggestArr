@@ -15,7 +15,7 @@ async function mockApi(page, { servers, backend }) {
   // load event, and a slow network then looks like a failing test.
   await page.route((url) => !["127.0.0.1", "localhost"].includes(url.hostname), (route) => route.abort());
   // Not about release notes: the "What's new" popup would cover the dashboard.
-  await page.route(/\/src\/data\/releaseNotes\.js/, route => route.fulfill({ contentType: 'application/javascript', body: 'export const RELEASE_NOTES = [];' }));
+  await page.route(/\/src\/data\/releaseNotes\.js/, route => route.fulfill({ contentType: 'application/javascript', body: 'export const RELEASES_URL = ""; export const WHATS_NEW = {id:"none",title:"none",slides:[]};' }));
   await page.addInitScript(() => {
     localStorage.setItem("suggestarr_tour_done", "1");
     localStorage.setItem("suggestarr_jobs_tour_done", "1");

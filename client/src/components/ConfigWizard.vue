@@ -236,8 +236,8 @@ import MediaServiceSelection from './configWizard/MediaServiceSelection.vue';
 import ContentFilterSettings from './configWizard/ContentFilterSettings.vue';
 import SchedulingStep from './configWizard/SchedulingStep.vue';
 import SettingsServices from './settings/SettingsServices.vue';
-import { RELEASE_NOTES } from '@/data/releaseNotes.js';
-import { markSeen, readSeen, unseenIds } from '@/utils/whatsNew.js';
+import { WHATS_NEW } from '@/data/releaseNotes.js';
+import { markSeen } from '@/utils/whatsNew.js';
 import SettingsDatabase from './settings/SettingsDatabase.vue';
 import RequestBackendChoice from './settings/services/RequestBackendChoice.vue';
 
@@ -493,7 +493,7 @@ export default {
         if (result.success) {
           await createDefaultJob(wizardSchedule);
           // A fresh install has nothing to be told about: what is new now is simply how it works.
-          markSeen(unseenIds(RELEASE_NOTES, readSeen()));
+          markSeen([WHATS_NEW.id]);
           toast.success('Setup completed successfully!');
           screen.value = 'complete';
         } else {

@@ -41,11 +41,10 @@ async function preview(page, { modules, mount, extraApi = {} }) {
   return errors;
 }
 
-const whatsNew = (page, id = 'request-backend-arr') => preview(page, {
+const whatsNew = (page) => preview(page, {
   modules: `import Dialog from '/src/components/WhatsNewDialog.vue';
-    import {RELEASE_NOTES} from '/src/data/releaseNotes.js';`,
-  mount: `h(Dialog,{entries:RELEASE_NOTES.filter(e=>e.id==='${id}'),availableTabs:['services','cleanup','jobs'],showAllLink:true,
-    onClose:()=>window.events.push('close'),onNavigate:t=>window.events.push('navigate:'+t),onAllNotes:()=>window.events.push('all')})`,
+    import {WHATS_NEW} from '/src/data/releaseNotes.js';`,
+  mount: `h(Dialog,{entry:WHATS_NEW,onClose:()=>window.events.push('close')})`,
 });
 
 for (const width of [1440, 390]) {
@@ -53,71 +52,29 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     const errors = await whatsNew(page);
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('heading', { name: 'Choose where requests go' })).toBeVisible();
-    await expect(dialog.getByText("What's new · 1 of 4")).toBeVisible();
+    const headings = ['Choose where requests go', 'Titles added straight to your libraries', 'Know when it is ready', 'Replacements and cleanup', 'Profiles and pause, per job'];
     await expect(dialog.getByRole('button', { name: 'Back' })).toHaveCount(0);
-    await expect(dialog.locator('[data-testid=whats-new-slide] svg')).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(`whats-new-1-${width}.png`) });
-
-    await dialog.getByRole('button', { name: 'Next' }).click();
-    await expect(dialog.getByRole('heading', { name: 'Titles added straight to your libraries' })).toBeVisible();
-    await page.waitForTimeout(400); // let the slide transition finish before the screenshot
-    await page.screenshot({ path: testInfo.outputPath(`whats-new-2-${width}.png`) });
-    await expect(dialog.getByText('What it means for you')).toBeVisible();
-    await dialog.getByRole('button', { name: 'Back' }).click();
-    await expect(dialog.getByRole('heading', { name: 'Choose where requests go' })).toBeVisible();
-
-    await page.keyboard.press('ArrowRight');
-    await page.keyboard.press('ArrowRight');
-    await expect(dialog.getByRole('heading', { name: 'Profiles, folders and anime' })).toBeVisible();
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: testInfo.outputPath(`whats-new-3-${width}.png`) });
-    await page.keyboard.press('ArrowLeft');
-    await expect(dialog.getByRole('heading', { name: 'Titles added straight to your libraries' })).toBeVisible();
-
-    await dialog.getByRole('button', { name: /Go to slide 4 of 4/ }).click();
-    await expect(dialog.getByRole('heading', { name: 'What still needs Seer' })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Next' })).toHaveCount(0);
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: testInfo.outputPath(`whats-new-4-${width}.png`) });
-    await dialog.getByRole('button', { name: 'Done' }).click();
-    expect(await page.evaluate(() => window.events)).toContain('close');
-    expect(errors).toEqual([]);
-  });
-
-  test(`What's new shows the Radarr & Sonarr catch-up slides at ${width}px`, async ({ page }, testInfo) => {
-    await page.setViewportSize({ width, height: 900 });
-    const errors = await whatsNew(page, 'arr-feature-parity');
-    const dialog = page.getByRole('dialog');
-    const headings = ['Every title SuggestArr adds is tagged', 'Know when it is ready', 'Replacements and cleanup', 'Profiles and pause, per job'];
     for (const [index, heading] of headings.entries()) {
       if (index) await dialog.getByRole('button', { name: 'Next' }).click();
       await expect(dialog.getByRole('heading', { name: heading })).toBeVisible();
-      await expect(dialog.getByText(`What's new · ${index + 1} of 4`)).toBeVisible();
+      await expect(dialog.getByText(`What's new · ${index + 1} of 5`)).toBeVisible();
       await page.waitForTimeout(400); // let the slide transition finish before the screenshot
-      await page.screenshot({ path: testInfo.outputPath(`arr-parity-${index + 1}-${width}.png`) });
+      await page.screenshot({ path: testInfo.outputPath(`whats-new-${index + 1}-${width}.png`) });
     }
-    await dialog.getByRole('button', { name: 'Open Jobs' }).click();
-    expect(await page.evaluate(() => window.events)).toEqual(['navigate:jobs']);
+    await expect(dialog.getByRole('button', { name: 'Next' })).toHaveCount(0);
+    await page.keyboard.press('ArrowLeft');
+    await expect(dialog.getByRole('heading', { name: 'Replacements and cleanup' })).toBeVisible();
+    await dialog.getByRole('button', { name: /Go to slide 1 of 5/ }).click();
+    await expect(dialog.getByRole('heading', { name: 'Choose where requests go' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    expect(await page.evaluate(() => window.events)).toContain('close');
     expect(errors).toEqual([]);
   });
 }
 
-test("What's new slide buttons open the settings tab and the full changelog stays reachable", async ({ page }) => {
+test("What's new links to every past release note", async ({ page }) => {
   await whatsNew(page);
-  const dialog = page.getByRole('dialog');
-  await dialog.getByRole('button', { name: 'Open Connections' }).click();
-  await dialog.getByRole('link', { name: 'All release notes' }).click();
-  expect(await page.evaluate(() => window.events)).toEqual(['navigate:services', 'all']);
-});
-
-test("What's new hides a slide button whose tab the viewer cannot open", async ({ page }) => {
-  await preview(page, {
-    modules: `import Dialog from '/src/components/WhatsNewDialog.vue';
-      import {RELEASE_NOTES} from '/src/data/releaseNotes.js';`,
-    mount: `h(Dialog,{entries:RELEASE_NOTES,availableTabs:[]})`,
-  });
-  await expect(page.getByRole('button', { name: 'Open Connections' })).toHaveCount(0);
+  await expect(page.getByRole('dialog').getByRole('link', { name: 'All release notes' })).toHaveAttribute('href', /github\.com\/.*\/releases$/);
 });
 
 const services = (page, config) => preview(page, {
@@ -171,20 +128,6 @@ test('Connections: with Seer only, Radarr & Sonarr is an optional extra for the 
   await services(page, BASE);
   await expect(page.getByText('Optional extras')).toBeVisible();
   await expect(page.getByTestId('arr-connection').getByText('Skip titles already in your Radarr or Sonarr')).toBeVisible();
-});
-
-test("What's new offers a chooser once there are several release notes", async ({ page }) => {
-  await preview(page, {
-    modules: `import Dialog from '/src/components/WhatsNewDialog.vue';
-      import {RELEASE_NOTES} from '/src/data/releaseNotes.js';
-      const older={id:'older',title:'An older release',slides:[{icon:'choice.svg',tone:'good',heading:'Older heading',changes:'c',impact:'i'}]};`,
-    mount: `h(Dialog,{entries:[RELEASE_NOTES.find(e=>e.id==='request-backend-arr'),older],availableTabs:[]})`,
-  });
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Choose where requests go' })).toBeVisible();
-  await dialog.getByLabel('Release notes').selectOption('older');
-  await expect(dialog.getByRole('heading', { name: 'Older heading' })).toBeVisible();
-  await expect(dialog.getByText("What's new · 1 of 1")).toBeVisible();
 });
 
 const SEER_JOB_PROFILE = { serverId: 0, profileId: 7, rootFolder: '/seer', is4k: false };

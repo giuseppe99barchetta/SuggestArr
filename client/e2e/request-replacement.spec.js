@@ -15,7 +15,7 @@ for (const width of [1440, 900, 390]) {
     page.on('pageerror', error => errors.push(error.message));
     await page.route(url => !['127.0.0.1', 'localhost'].includes(url.hostname), route => route.abort());
     // These flows are not about release notes: the "What's new" popup would cover the dashboard.
-    await page.route(/\/src\/data\/releaseNotes\.js/, route => route.fulfill({ contentType: 'application/javascript', body: 'export const RELEASE_NOTES = [];' }));
+    await page.route(/\/src\/data\/releaseNotes\.js/, route => route.fulfill({ contentType: 'application/javascript', body: 'export const RELEASES_URL = ""; export const WHATS_NEW = {id:"none",title:"none",slides:[]};' }));
     await page.addInitScript(() => {
       localStorage.setItem('suggestarr_tour_done', '1');
       localStorage.setItem('suggestarr_jobs_tour_done', '1');

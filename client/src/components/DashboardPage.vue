@@ -60,14 +60,11 @@
             <UserAvatar :user="currentUser" class="h-8 w-8 text-[32px]" />
             <div class="flex flex-col min-w-0">
               <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }" class="text-[13px] font-semibold truncate text-ink no-underline hover:text-brand-ink" title="Your profile" @click="showMobileNav = false">{{ currentUser.username }}</router-link>
-              <button type="button" class="text-left text-xs text-ink-4 hover:text-ink-2 bg-transparent border-0 p-0 cursor-pointer" title="View changelog" @click="showChangelog">
+              <button type="button" class="text-left text-xs text-ink-4 hover:text-ink-2 bg-transparent border-0 p-0 cursor-pointer" title="What's new" data-testid="open-whats-new" @click="openVersionNotes">
                 {{ currentUser.role === 'admin' ? 'Admin' : 'User' }} · {{ currentVersion }}<span v-if="currentImageTag === 'nightly'"> (nightly)</span>
               </button>
             </div>
-            <button v-if="latestWhatsNew" type="button" class="ml-auto w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="What's new" title="What's new" data-testid="open-whats-new" @click="openWhatsNew">
-              <i aria-hidden="true" class="fas fa-gift"></i>
-            </button>
-            <button type="button" class="w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" :class="latestWhatsNew ? '' : 'ml-auto'" aria-label="Replay the onboarding tour" title="Replay the onboarding tour" @click="restartTour">
+            <button type="button" class="ml-auto w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="Replay the onboarding tour" title="Replay the onboarding tour" @click="restartTour">
               <i aria-hidden="true" class="fas fa-question-circle"></i>
             </button>
             <button v-if="authSetupComplete && !authBypass" type="button" class="w-9 h-9 shrink-0 rounded-[8px] text-ink-4 hover:text-ink hover:bg-panel bg-transparent border-0 cursor-pointer" aria-label="Log out" title="Log out" @click="handleLogout">
@@ -134,34 +131,6 @@
         </div>
       </transition>
 
-      <AppDialog v-if="showChangelogModal" width="max-w-3xl" :title="`What's new in ${currentVersion}`" :subtitle="changelogSubtitle" icon="fas fa-gift" @close="showChangelogModal = false">
-        <div v-if="isLoadingChangelog" class="flex flex-col gap-3 py-2" aria-busy="true" aria-label="Loading changelog">
-          <div class="h-3 w-4/5 animate-pulse rounded bg-panel-2"></div>
-          <div class="h-3 w-3/5 animate-pulse rounded bg-panel-2"></div>
-          <div class="mt-4 h-4 w-2/5 animate-pulse rounded bg-panel-2"></div>
-          <div class="h-3 w-11/12 animate-pulse rounded bg-panel-2"></div>
-          <div class="h-3 w-3/4 animate-pulse rounded bg-panel-2"></div>
-          <div class="h-3 w-5/6 animate-pulse rounded bg-panel-2"></div>
-        </div>
-        <div v-else-if="changelogError" class="flex flex-col items-center gap-3 py-10 text-center">
-          <p class="ui-alert-bad">{{ changelogError }}</p>
-          <button type="button" class="ui-btn" @click="showChangelog">
-            <i aria-hidden="true" class="fas fa-redo"></i>Retry
-          </button>
-        </div>
-        <div v-else-if="changelogData" class="release-notes" v-html="changelogData"></div>
-        <div v-else class="flex flex-col items-center gap-2 py-10 text-center text-sm text-ink-3">
-          <i aria-hidden="true" class="fas fa-file-alt text-2xl text-ink-4"></i>
-          No changelog available for this version.
-        </div>
-        <template #footer>
-          <a :href="changelogUrl" target="_blank" rel="noopener" class="ui-btn mr-auto no-underline">
-            <i aria-hidden="true" class="fas fa-external-link-alt"></i>View on GitHub
-          </a>
-          <button type="button" class="ui-btn-primary" @click="showChangelogModal = false">Close</button>
-        </template>
-      </AppDialog>
-
       <!-- Hidden file input for import -->
       <input
         type="file"
@@ -213,14 +182,10 @@
     </div>
 
     <WhatsNewDialog
-      v-if="whatsNewEntries.length"
-      :entries="whatsNewEntries"
-      :start-id="whatsNewStart"
-      :available-tabs="visibleTabs.map(tab => tab.id)"
+      v-if="whatsNewEntry"
+      :entry="whatsNewEntry"
       show-all-link
       @close="closeWhatsNew"
-      @navigate="whatsNewGoTo"
-      @all-notes="whatsNewAllNotes"
     />
 
     <!-- Onboarding Tour -->
@@ -240,16 +205,14 @@ import AppDialog from './ui/AppDialog.vue';
 import UserAvatar from './ui/UserAvatar.vue';
 import OnboardingTour from './OnboardingTour.vue';
 import WhatsNewDialog from './WhatsNewDialog.vue';
-import { RELEASE_NOTES } from '@/data/releaseNotes.js';
-import { markSeen, pendingEntry, readSeen, unseenIds, visibleSlides } from '@/utils/whatsNew.js';
+import { RELEASES_URL, WHATS_NEW } from '@/data/releaseNotes.js';
+import { markSeen, pendingEntry, readSeen, visibleSlides } from '@/utils/whatsNew.js';
 import { useVersionCheck } from '@/composables/useVersionCheck';
 import { useAuth } from '@/composables/useAuth';
 import { approvalEnabled } from '@/utils/requestApproval';
-import { releaseNotesToHtml } from '@/utils/markdown';
 
 import HomePage from './HomePage.vue';
 import { exportConfig, importConfig } from '@/api/api';
-import { getReleaseByTag } from '@/api/githubReleasesApi';
 import { REQUESTS_CHANGED } from '@/utils/requestEvents.js';
 
 // Tabs load on first visit to keep the dashboard chunk small.
@@ -316,17 +279,11 @@ export default {
       showResetModal: false,
       showExportModal: false,
       exportIncludeSecrets: false,
-      showChangelogModal: false,
-      changelogData: null,
-      changelogRelease: null,
-      isLoadingChangelog: false,
-      changelogError: null,
       requestCount: 0,
       requestCountCall: 0,
       showMobileNav: false,
       showTour: false,
-      whatsNewEntries: [],
-      whatsNewStart: '',
+      whatsNewEntry: null,
       queuedWhatsNew: null,
       testingConnections: {
         tmdb: false,
@@ -406,24 +363,10 @@ export default {
     };
   },
   computed: {
-    changelogUrl() {
-      return this.changelogRelease?.html_url
-        || `https://github.com/giuseppe99barchetta/SuggestArr/releases/tag/${this.currentVersion}`;
-    },
-    changelogSubtitle() {
-      const release = this.changelogRelease;
-      if (!release?.published_at) return '';
-      const date = new Date(release.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-      const name = release.name && release.name !== release.tag_name ? `${release.name} · ` : '';
-      return `${name}Released ${date}${release.prerelease ? ' · Pre-release' : ''}`;
-    },
-    /** Every release note with something for this viewer, newest first; drives the reopen button and chooser. */
-    viewerWhatsNew() {
-      const isAdmin = this.currentUser?.role === 'admin';
-      return RELEASE_NOTES.map(entry => ({ ...entry, slides: visibleSlides(entry, isAdmin) })).filter(entry => entry.slides.length);
-    },
+    /** The release note with the slides this viewer can see, or null when there is nothing for them; drives the reopen button. */
     latestWhatsNew() {
-      return this.viewerWhatsNew[0] || null;
+      const slides = visibleSlides(WHATS_NEW, this.currentUser?.role === 'admin');
+      return slides.length ? { ...WHATS_NEW, slides } : null;
     },
     visibleTabs() {
       if (!this.currentUser) {
@@ -540,7 +483,7 @@ export default {
       }
       // Release notes do not depend on this browser's tour key (an existing user on a new browser still
       // gets them); a fresh install marks them seen when setup completes. After a tour, they wait for it to end.
-      const entry = pendingEntry(RELEASE_NOTES, readSeen(), this.currentUser.role === 'admin');
+      const entry = pendingEntry(WHATS_NEW, readSeen(), this.currentUser.role === 'admin');
       if (entry) {
         if (!tourDone || tourForced) this.queuedWhatsNew = entry;
         else setTimeout(() => this.showWhatsNew(entry), 900);
@@ -604,11 +547,12 @@ export default {
       this.$router.push('/login');
     },
     showWhatsNew(entry) {
-      this.whatsNewEntries = this.viewerWhatsNew;
-      this.whatsNewStart = entry.id;
+      this.whatsNewEntry = entry;
     },
-    openWhatsNew() {
+    // The version label is the one entry point: this release's slides when there are some for the viewer, else the GitHub releases page.
+    openVersionNotes() {
       if (this.latestWhatsNew) this.showWhatsNew(this.latestWhatsNew);
+      else window.open(RELEASES_URL, '_blank', 'noopener');
     },
     tourDone() {
       this.showTour = false;
@@ -618,18 +562,9 @@ export default {
         setTimeout(() => this.showWhatsNew(entry), 400);
       }
     },
-    // Closing marks every unseen note as seen, so older ones never resurface after an upgrade across releases.
     closeWhatsNew() {
-      markSeen(unseenIds(RELEASE_NOTES, readSeen()));
-      this.whatsNewEntries = [];
-    },
-    whatsNewGoTo(tab) {
-      this.closeWhatsNew();
-      this.$router.push({ name: 'DashboardTab', params: { tab } });
-    },
-    whatsNewAllNotes() {
-      this.closeWhatsNew();
-      this.showChangelog();
+      markSeen([WHATS_NEW.id]);
+      this.whatsNewEntry = null;
     },
     restartTour() {
       localStorage.removeItem(TOUR_STORAGE_KEY);
@@ -685,31 +620,6 @@ export default {
         if (call === this.requestCountCall) this.requestCount = response.data.total || 0;
       } catch (error) {
         console.error('Error loading request count:', error);
-      }
-    },
-
-    async showChangelog() {
-      this.showChangelogModal = true;
-      this.changelogError = null;
-      
-      if (!this.changelogData) {
-        this.isLoadingChangelog = true;
-        try {
-          // Get release info from GitHub API
-          const response = await getReleaseByTag(this.currentVersion);
-          
-          this.changelogRelease = response.data || null;
-          if (response.data && response.data.body) {
-            this.changelogData = releaseNotesToHtml(response.data.body);
-          } else {
-            this.changelogData = null;
-          }
-        } catch (error) {
-          console.error('Error fetching changelog:', error);
-          this.changelogError = 'Failed to load changelog from GitHub. Please check your internet connection.';
-        } finally {
-          this.isLoadingChangelog = false;
-        }
       }
     },
 
