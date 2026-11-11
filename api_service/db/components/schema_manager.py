@@ -763,6 +763,23 @@ class SchemaManager:
                     "UNIQUE(tmdb_id, media_type)",
                     "UNIQUE KEY uniq_pending_tmdb_media_type (tmdb_id(191), media_type(191))"
                 )
+            # MariaDB turns an over-long UNIQUE into a hash index on its own; MySQL refuses it
+            # (error 1071), so these keys are prefixed too.
+            elif table_name == 'media_user_identities':
+                query = query.replace(
+                    "UNIQUE (provider, external_user_id)",
+                    "UNIQUE KEY uniq_media_user_identity (provider(64), external_user_id(191))"
+                )
+            elif table_name == 'trakt_sources':
+                query = query.replace(
+                    "UNIQUE (media_user_identity_id, source_type, source_key)",
+                    "UNIQUE KEY uniq_trakt_sources (media_user_identity_id, source_type(64), source_key(191))"
+                )
+            elif table_name == 'watched_media':
+                query = query.replace(
+                    "UNIQUE (media_user_identity_id, tmdb_id, media_type)",
+                    "UNIQUE KEY uniq_watched_media (media_user_identity_id, tmdb_id(64), media_type(16))"
+                )
             elif table_name == 'suggestion_blacklist':
                 query = """
                     CREATE TABLE IF NOT EXISTS suggestion_blacklist (
