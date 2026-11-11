@@ -137,11 +137,16 @@ class ArrClient(BaseHTTPClient):
         }
 
     async def _load_tags(self):
-        """Cache the id of every tag the instance has, by lowercase label."""
-        self._tags_loaded = True
-        for tag in await self._get_list('tag'):
+        """Cache the id of every tag the instance has, by lowercase label.
+
+        Marked as loaded only after a successful read, so a failed read is retried by the next
+        caller instead of leaving an empty cache that makes every title look untagged.
+        """
+        tags = await self._get_list('tag')
+        for tag in tags:
             if isinstance(tag, dict) and 'id' in tag and isinstance(tag.get('label'), str):
                 self._tag_ids.setdefault(tag['label'].lower(), tag['id'])
+        self._tags_loaded = True
 
     async def _tag_ids_for(self, labels):
         """Return the ids of the tags with these labels, creating the missing ones.

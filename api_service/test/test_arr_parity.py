@@ -668,3 +668,11 @@ def test_a_slot_whose_alternative_was_delivered_is_not_reopened(memdb):
     memdb.connection.commit()
     memdb.decide_suggestions([1], None, 9, False, replace_rejected=True)
     assert _replacements(memdb)[1] == 'queued'
+
+
+def test_a_failed_tag_read_is_retried_not_taken_for_no_tags():
+    answers = iter([(500, None), (200, [{'id': 9, 'label': 'suggestarr'}])])
+    client = _client('radarr', {('GET', 'movie'): (200, LIBRARY), ('GET', 'tag'): lambda kw: next(answers)})
+    with pytest.raises(RuntimeError):
+        asyncio.run(client.find_owned(1))          # first candidate: the tag read fails, reported as an error
+    assert asyncio.run(client.find_owned(1))[0] == 'ok'   # next candidate reads the tags again
