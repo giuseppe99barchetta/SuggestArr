@@ -610,3 +610,35 @@ def test_a_malformed_library_answer_makes_the_sync_write_nothing():
             patch.object(availability_sync, 'ArrClient', return_value=radarr):
         assert asyncio.run(availability_sync.sync_availability())['status'] == 'unavailable'
     db.save_media_availability.assert_not_called()
+
+
+def test_a_row_cancelled_after_the_worker_read_it_is_never_claimed(memdb):
+    memdb.connection.execute("INSERT INTO pending_requests(id,tmdb_id,media_type,payload,status) "
+                             "VALUES(5,'105','movie','{}','queued')")
+    memdb.connection.commit()
+    assert memdb.mark_pending_submitting(5, 0) is True
+    assert _status(memdb, 5) == 'submitting'
+    assert memdb.mark_pending_submitting(5, 0) is False  # a second worker loses the claim
+    memdb.connection.execute("UPDATE pending_requests SET status='rejected' WHERE id=5")
+    memdb.connection.commit()
+    assert memdb.mark_pending_submitting(5, 0) is False  # cancelled meanwhile: stays rejected
+    assert _status(memdb, 5) == 'rejected'
+
+
+def test_the_worker_does_not_deliver_a_row_it_could_not_claim():
+    from api_service.jobs import queue_worker
+    db = MagicMock()
+    db.expire_pending_approvals.return_value = 0
+    db.get_due_requests.return_value = [{'id': 5, 'tmdb_id': '105', 'media_type': 'movie', 'retry_count': 0,
+                                         'payload': json.dumps({'_backend': 'arr', 'mediaType': 'movie'})}]
+    db.check_request_exists.return_value = False
+    db.mark_pending_submitting.return_value = False
+    client = MagicMock(submit_queued_request=AsyncMock(return_value=True), init=AsyncMock())
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    with patch.object(queue_worker, 'DatabaseManager', return_value=db), \
+            patch.object(queue_worker.ConfigService, 'get_runtime_config', return_value=ARR_ENV), \
+            patch.object(queue_worker, 'ArrRequestClient', return_value=client):
+        assert asyncio.run(queue_worker._run_worker()) == 0
+    client.submit_queued_request.assert_not_awaited()
+    db.mark_pending_submitted.assert_not_called()

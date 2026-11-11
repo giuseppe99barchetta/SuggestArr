@@ -132,8 +132,10 @@ async def _run_worker() -> int:
                     logger.error("Unable to queue request.submitted webhook: %s", exc)
                 continue
 
-            # Mark in-flight so a concurrent worker invocation skips this row
-            db.mark_pending_submitting(row_id, retry_count)
+            # Claim the row: a concurrent worker, or a cancellation since it was read, wins over this one.
+            if not db.mark_pending_submitting(row_id, retry_count):
+                logger.info("Queue worker: delivery id=%s is no longer queued; skipped.", row_id)
+                continue
 
             backend = payload.get('_backend') or 'seer'  # rows queued before the field existed are Seer's
             try:

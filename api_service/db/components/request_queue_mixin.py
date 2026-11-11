@@ -699,14 +699,30 @@ class RequestQueueMixin:
         except Exception as e:
             self.logger.error("Failed to update pending_requests row %s: %s", row_id, e)
 
-    def mark_pending_submitting(self, row_id: int, retry_count: int) -> None:
-        """Mark a row as in-flight so concurrent workers skip it.
+    def mark_pending_submitting(self, row_id: int, retry_count: int) -> bool:
+        """Claim a queued row for delivery, so concurrent workers and cancellations skip it.
+
+        The claim only succeeds while the row is still ``queued``: a row rejected or
+        cancelled after the worker read it (e.g. an alternative cancelled because its
+        original was requested again) is never brought back to life.
 
         :param row_id: Primary key of the pending_requests row.
         :param retry_count: Current retry count (unchanged at this point).
+        :return: True when this caller claimed the row and may deliver it.
         """
-        self._update_pending_status(row_id, 'submitting', retry_count,
-                                    last_attempt_at=datetime.now(timezone.utc))
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"UPDATE pending_requests SET status='submitting', retry_count={ph}, "
+                               f"last_attempt_at={ph}, next_attempt_at=NULL WHERE id={ph} AND status='queued'",
+                               (retry_count, datetime.now(timezone.utc).replace(tzinfo=None), row_id))
+                claimed = cursor.rowcount == 1
+                conn.commit()
+                return claimed
+        except Exception as e:
+            self.logger.error("Failed to claim pending_requests row %s: %s", row_id, e)
+            return False
 
     def mark_pending_submitted(self, row_id: int, retry_count: int) -> None:
         """Mark a row as successfully submitted.
