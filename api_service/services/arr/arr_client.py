@@ -61,6 +61,17 @@ class ArrClient(BaseHTTPClient):
             raise RuntimeError(f'{self.service.capitalize()} answered HTTP {status} for {path}')
         return data
 
+    async def _get_list(self, path, **kwargs):
+        """GET an endpoint that answers a JSON list.
+
+        Anything else (an empty body, a proxy's HTML page) raises instead of passing for an
+        empty library, which would make every title look gone.
+        """
+        data = await self._get(path, **kwargs)
+        if not isinstance(data, list):
+            raise RuntimeError(f'{self.service.capitalize()} answered {path} without a list')
+        return data
+
     async def test_connection(self):
         """Raise if the instance is unreachable or rejects the API key."""
         await self._get('system/status')
@@ -74,7 +85,7 @@ class ArrClient(BaseHTTPClient):
         :return: Set of TMDB ID strings.
         """
         endpoint, _ = SERVICES[self.service]
-        items = await self._get(endpoint)
+        items = await self._get_list(endpoint)
         ids = {str(item['tmdbId']) for item in items if isinstance(item, dict) and item.get('tmdbId')}
         if items and not ids:
             self.logger.warning('%s returned titles without tmdbId: update to a version that exposes it '
@@ -102,7 +113,7 @@ class ArrClient(BaseHTTPClient):
         """
         endpoint, media_type = SERVICES[self.service]
         statuses = {}
-        for item in await self._get(endpoint) or []:
+        for item in await self._get_list(endpoint):
             if not isinstance(item, dict) or not item.get('tmdbId'):
                 continue
             if self.service == 'radarr':
@@ -116,9 +127,9 @@ class ArrClient(BaseHTTPClient):
 
     async def get_options(self):
         """Return the quality profiles, root folders and tags the instance offers (no secrets)."""
-        profiles = await self._get('qualityprofile')
-        folders = await self._get('rootfolder')
-        tags = await self._get('tag')
+        profiles = await self._get_list('qualityprofile')
+        folders = await self._get_list('rootfolder')
+        tags = await self._get_list('tag')
         return {
             'profiles': [{'id': p['id'], 'name': p.get('name')} for p in profiles if isinstance(p, dict) and 'id' in p],
             'rootFolders': [{'path': f['path']} for f in folders if isinstance(f, dict) and f.get('path')],
@@ -128,7 +139,7 @@ class ArrClient(BaseHTTPClient):
     async def _load_tags(self):
         """Cache the id of every tag the instance has, by lowercase label."""
         self._tags_loaded = True
-        for tag in await self._get('tag') or []:
+        for tag in await self._get_list('tag'):
             if isinstance(tag, dict) and 'id' in tag and isinstance(tag.get('label'), str):
                 self._tag_ids.setdefault(tag['label'].lower(), tag['id'])
 
@@ -163,8 +174,8 @@ class ArrClient(BaseHTTPClient):
         # The profile may come from a job or an approval saved while another backend was active:
         # only send what this instance really offers (a root folder is a path on its host).
         if self._options is None:
-            self._options = ({item.get('id') for item in await self._get('qualityprofile') or [] if isinstance(item, dict)},
-                             {item.get('path') for item in await self._get('rootfolder') or [] if isinstance(item, dict)})
+            self._options = ({item.get('id') for item in await self._get_list('qualityprofile') if isinstance(item, dict)},
+                             {item.get('path') for item in await self._get_list('rootfolder') if isinstance(item, dict)})
         profiles, folders = self._options
         # _tag_ids holds every tag of the instance (read in full on the first lookup) plus the ones created.
         if payload.get('profileId') not in profiles or payload.get('rootFolder') not in folders \
@@ -208,7 +219,7 @@ class ArrClient(BaseHTTPClient):
         """
         endpoint, _ = SERVICES[self.service]
         if self._library is None:
-            self._library = {str(item['tmdbId']): item for item in await self._get(endpoint) or []
+            self._library = {str(item['tmdbId']): item for item in await self._get_list(endpoint)
                              if isinstance(item, dict) and item.get('tmdbId') and 'id' in item}
         item = self._library.get(str(tmdb_id))
         if item is None:

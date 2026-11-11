@@ -590,3 +590,23 @@ def test_requesting_the_original_again_cancels_an_alternative_not_yet_sent(memdb
     assert _status(memdb, 1) == 'queued'
     assert _status(memdb, alternative) == ('rejected' if cancelled else alternative_status)
     assert _replacements(memdb)[1] == ('ignored' if cancelled else 'queued')
+
+
+@pytest.mark.parametrize('answer', [(200, None), (200, {'error': 'proxy'})])
+def test_a_library_answer_that_is_not_a_list_is_an_error_not_an_empty_library(answer):
+    with pytest.raises(RuntimeError, match='without a list'):
+        asyncio.run(_client('radarr', {('GET', 'movie'): answer}).get_media_statuses())
+    with pytest.raises(RuntimeError, match='without a list'):
+        asyncio.run(_client('sonarr', {('GET', 'series'): answer}).find_owned(1))
+
+
+def test_a_malformed_library_answer_makes_the_sync_write_nothing():
+    known = {('movie', '1'): {'status': 'available', 'url': None}}
+    db = _db(known, known)
+    radarr = _client('radarr', {('GET', 'movie'): (200, None)})  # e.g. a proxy's HTML page: JSON decoding gives None
+    env = {**RADARR, 'ARR_PROFILE_CONFIG': PROFILES, 'REQUEST_BACKEND': 'arr'}
+    with patch.object(availability_sync.ConfigService, 'get_runtime_config', return_value=env), \
+            patch.object(availability_sync, 'DatabaseManager', return_value=db), \
+            patch.object(availability_sync, 'ArrClient', return_value=radarr):
+        assert asyncio.run(availability_sync.sync_availability())['status'] == 'unavailable'
+    db.save_media_availability.assert_not_called()
