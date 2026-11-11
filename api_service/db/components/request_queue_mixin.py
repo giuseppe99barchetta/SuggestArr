@@ -581,11 +581,30 @@ class RequestQueueMixin:
             cursor.execute(f"SELECT tmdb_id,media_type FROM pending_requests WHERE status='rejected' "
                            f"AND id IN ({marks}){owner_clause}", tuple(params))
             eligible = cursor.fetchall()
-            # The title itself is requested again: a pending alternative for it must not follow.
+            # The title itself is requested again, so its alternative must not be delivered too.
+            # Pending replacements are closed first (a concurrent generation can no longer claim
+            # them); an alternative already queued is cancelled while it has not been sent. One
+            # already sending or sent stays: requesting the original then is an explicit choice.
             cursor.execute(f"UPDATE request_replacements SET status='ignored',"
                            f"reason='Requested again; no alternative needed',checked_at=CURRENT_TIMESTAMP "
                            f"WHERE status='pending' AND delivery_id IN (SELECT id FROM pending_requests "
                            f"WHERE status='rejected' AND id IN ({marks}){owner_clause})", tuple(params))
+            prefixed_clause, _ = ownership_clause(self.db_type, owner_id, include_unassigned, prefix='p.')
+            cursor.execute(f"SELECT r.replacement_delivery_id FROM request_replacements r "
+                           f"JOIN pending_requests p ON p.id=r.delivery_id WHERE p.status='rejected' "
+                           f"AND r.replacement_delivery_id IS NOT NULL AND p.id IN ({marks}){prefixed_clause}",
+                           tuple(params))
+            alternatives = [row[0] for row in cursor.fetchall()]
+            if alternatives:
+                alt_marks = ','.join([ph] * len(alternatives))
+                cursor.execute(f"UPDATE pending_requests SET status='rejected',decided_at=CURRENT_TIMESTAMP,"
+                               f"last_error='Cancelled: the original title was requested again' "
+                               f"WHERE status IN ('awaiting_approval','queued') AND id IN ({alt_marks})",
+                               tuple(alternatives))
+                cursor.execute(f"UPDATE request_replacements SET status='ignored',"
+                               f"reason='Requested again; alternative cancelled',checked_at=CURRENT_TIMESTAMP "
+                               f"WHERE replacement_delivery_id IN (SELECT id FROM pending_requests WHERE "
+                               f"status='rejected' AND id IN ({alt_marks}))", tuple(alternatives))
             if remove_blacklist:
                 for tmdb_id, media_type in eligible:
                     cursor.execute(f"DELETE FROM suggestion_blacklist WHERE tmdb_id={ph} AND media_type={ph}",

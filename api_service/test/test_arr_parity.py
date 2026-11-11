@@ -569,3 +569,24 @@ def test_the_skip_message_names_the_check_that_paused_the_job(approvals, busy, m
     assert manager.repository.log_execution_end.call_args.kwargs['error_message'] == message
     assert webhook.call_args.args[-1] == 'pending_requests_awaiting_approval'  # reason code unchanged
     manager._job_executors['discover'].assert_not_awaited()
+
+
+def _status(db, row_id):
+    return db.connection.execute('SELECT status FROM pending_requests WHERE id=?', (row_id,)).fetchone()[0]
+
+
+@pytest.mark.parametrize('alternative_status,cancelled', [
+    ('awaiting_approval', True), ('queued', True), ('submitting', False), ('submitted', False)])
+def test_requesting_the_original_again_cancels_an_alternative_not_yet_sent(memdb, alternative_status, cancelled):
+    _awaiting(memdb, 1)
+    memdb.decide_suggestions([1], None, 9, False, replace_rejected=True)
+    manager, _, _ = make_manager(memdb)
+    _run_replacements(memdb, manager, {**ARR_ENV, 'REPLACE_REJECTED_REQUESTS': True})
+    alternative = memdb.connection.execute('SELECT replacement_delivery_id FROM request_replacements').fetchone()[0]
+    memdb.connection.execute('UPDATE pending_requests SET status=? WHERE id=?', (alternative_status, alternative))
+    memdb.connection.commit()
+
+    assert memdb.request_rejected([1], None) == 1
+    assert _status(memdb, 1) == 'queued'
+    assert _status(memdb, alternative) == ('rejected' if cancelled else alternative_status)
+    assert _replacements(memdb)[1] == ('ignored' if cancelled else 'queued')
