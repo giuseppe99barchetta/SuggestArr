@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  approvalNeedsDialog, approvalProfileNotice, buildProfilePayload, choiceForServer, defaultChoice, hasJobProfile, hasServers, isChosen, jobProfilePayload, loadSeerServers, mediaTypesOf, profileTypes, serversForItems,
+  approvalNeedsDialog, approvalProfileNotice, buildProfilePayload, choiceForServer, defaultChoice, hasJobProfile, hasServers, incompleteArrJobProfile, isChosen, jobProfilePayload, loadSeerServers, mediaTypesOf, profileTypes, serversForItems,
 } from './requestProfiles.js';
 
 const servers = {
@@ -154,4 +154,12 @@ test('approving direct Radarr/Sonarr rows never asks for a Seer profile, even wh
   assert.equal(approvalProfileNotice(serversForItems(failed, [{ backend: 'arr' }])), '');
   assert.equal(serversForItems(failed, [{ backend: 'arr' }, { backend: 'seer' }]), failed);
   assert.equal(serversForItems(servers, [{}]), servers);  // rows from before the field are Seer's
+});
+
+test('a Radarr/Sonarr job profile without a root folder is incomplete; a Seer one is not judged here', () => {
+  assert.equal(incompleteArrJobProfile({ profileId: 4, rootFolder: '' }), true);
+  assert.equal(incompleteArrJobProfile({ profileId: 0 }), true);
+  assert.equal(incompleteArrJobProfile({ profileId: 4, rootFolder: '/movies' }), false);
+  assert.equal(incompleteArrJobProfile({}), false);
+  assert.equal(incompleteArrJobProfile({ serverId: 0, profileId: 7, rootFolder: '' }), false);
 });

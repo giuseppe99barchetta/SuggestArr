@@ -398,7 +398,7 @@ import SchedulePicker from './SchedulePicker.vue';
 import DryRunResultModal from './DryRunResultModal.vue';
 import { jobsApi } from '@/api/jobsApi';
 import { getArrOptionsApi, listTraktJobUsers } from '@/api/api';
-import { hasJobProfile, isChosen, jobProfilePayload } from '@/utils/requestProfiles.js';
+import { hasJobProfile, incompleteArrJobProfile, isChosen, jobProfilePayload } from '@/utils/requestProfiles.js';
 import { waitForAuthReady, useAuth } from '@/composables/useAuth';
 import { getJobTypeIcon, formatJobSchedule } from '@/utils/jobTypeVisuals.js';
 import { jobRequiresApproval } from '@/utils/requestApproval.js';
@@ -629,6 +629,9 @@ export default {
       if (this.form.prevent_suggestions_if_unwatched && !(this.form.unwatched_suggestion_days >= 1)) return 'Days before pausing must be at least 1.';
       if (!(this.form.max_requests_per_user >= 0 && this.form.max_requests_per_user <= 1000)) return 'Per-user limit must be between 0 and 1000.';
       if (!(this.form.request_limit_window_hours >= 1 && this.form.request_limit_window_hours <= 8760)) return 'Limit window must be between 1 and 8760 hours.';
+      if (this.requestBackend === 'arr' && this.visibleProfileTypes.some(type => incompleteArrJobProfile(this.form.request_profiles[type]))) {
+        return 'Choose a root folder for the Radarr/Sonarr profile, or set the quality profile back to the default.';
+      }
       return '';
     },
     isValid() {

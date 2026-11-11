@@ -223,3 +223,17 @@ test('Job dialog: direct delivery keeps an untouched Seer profile as stored', as
   await page.getByRole('dialog').getByRole('button', { name: 'Save job' }).click();
   await expect.poll(() => page.evaluate(() => window.savedJob?.request_profiles)).toEqual({ movie: SEER_JOB_PROFILE, tv: {} });
 });
+
+test('Job dialog: a Radarr profile without a root folder cannot be saved', async ({ page }) => {
+  await jobModal(page, { ...arrJob, request_profiles: { movie: {}, tv: {} } });
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: /Radarr \/ Sonarr overrides/ }).click();
+  const profiles = page.getByTestId('job-arr-profiles');
+  await profiles.getByRole('combobox', { name: /Quality profile/ }).selectOption({ label: 'HD-1080p' });
+  await expect(dialog.getByText('Choose a root folder for the Radarr/Sonarr profile')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Save job' })).toBeDisabled();
+  await profiles.getByRole('combobox', { name: /Root folder/ }).selectOption('/anime');
+  await dialog.getByRole('button', { name: 'Save job' }).click();
+  await expect.poll(() => page.evaluate(() => window.savedJob?.request_profiles)).toEqual({
+    movie: { profileId: 4, rootFolder: '/anime' }, tv: {} });
+});

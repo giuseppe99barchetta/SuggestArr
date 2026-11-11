@@ -122,6 +122,13 @@ export function jobProfilePayload(profile, backend) {
   };
 }
 
+// A Radarr/Sonarr job profile with a quality profile but no root folder would be dropped on save,
+// leaving the job on the default profile without a word: the dialog refuses to save it instead.
+export function incompleteArrJobProfile(profile) {
+  const p = profile || {};
+  return !isChosen(p.serverId) && isChosen(p.profileId) && !p.rootFolder;
+}
+
 // Whether a job profile is a custom choice for the active backend (drives the summary and the open state).
 export function hasJobProfile(profile, backend) {
   const p = profile || {};
