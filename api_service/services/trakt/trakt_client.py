@@ -162,21 +162,44 @@ class TraktClient(BaseHTTPClient):
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             raise RuntimeError(f"Trakt API request failed: POST {url}: {exc}") from exc
 
+    def _adopt_stored_tokens(self) -> bool:
+        """Take over tokens another run saved for this link, when they differ from ours.
+
+        Trakt refresh tokens are single-use: a second run refreshing the same link with the token the first
+        one already spent would be refused. The saved pair is the newest one, so use it instead.
+        """
+        if not self.link_id or self.token_source != "manual_oauth":
+            return False
+        stored = self.db.get_trakt_oauth_tokens(self.link_id)
+        if not isinstance(stored, dict) or not stored.get("refresh_token") or stored["refresh_token"] == self.refresh_token:
+            return False
+        self.access_token = stored["access_token"]
+        self.refresh_token = stored["refresh_token"]
+        self.expires_at = int(stored.get("expires_at") or 0)
+        return True
+
     async def refresh_access_token(self) -> dict[str, Any]:
+        if self._adopt_stored_tokens():
+            return {"expires_at": self.expires_at}
         if not self.refresh_token:
             raise RuntimeError("Cannot refresh Trakt token without a refresh token")
 
-        payload = await self._request(
-            "POST",
-            "/oauth/token",
-            json=self._with_client_secret({
-                "refresh_token": self.refresh_token,
-                "client_id": self.client_id,
-                "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
-                "grant_type": "refresh_token",
-            }),
-            authenticated=False,
-        )
+        try:
+            payload = await self._request(
+                "POST",
+                "/oauth/token",
+                json=self._with_client_secret({
+                    "refresh_token": self.refresh_token,
+                    "client_id": self.client_id,
+                    "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",
+                    "grant_type": "refresh_token",
+                }),
+                authenticated=False,
+            )
+        except Exception:
+            if self._adopt_stored_tokens():  # a run refreshing at the same moment won; use its tokens
+                return {"expires_at": self.expires_at}
+            raise
         return self._apply_and_persist_tokens(payload)
 
     async def get_recent_items(self, limit: int = 10) -> list[dict[str, str]]:

@@ -226,20 +226,43 @@ class SimklClient(BaseHTTPClient):
             str((payload or {}).get("error_description") or "Simkl device authorization failed")
         )
 
+    def _adopt_stored_tokens(self) -> bool:
+        """Take over tokens another run saved for this link, when they differ from ours.
+
+        Refresh tokens are single-use: a second run refreshing the same link with the token the first one
+        already spent would be refused. The saved pair is the newest one, so use it instead.
+        """
+        if self.db is None or not self.link_id:
+            return False
+        stored = self.db.get_simkl_oauth_tokens(self.link_id)
+        if not isinstance(stored, dict) or not stored.get("refresh_token") or stored["refresh_token"] == self.refresh_token:
+            return False
+        self.access_token = stored["access_token"]
+        self.refresh_token = stored["refresh_token"]
+        self.expires_at = int(stored.get("expires_at") or 0)
+        return True
+
     async def refresh_access_token(self) -> dict[str, Any]:
         """Refresh the access token and persist the new expiry and token pair."""
+        if self._adopt_stored_tokens():
+            return {"expires_at": self.expires_at or None}
         if not self.refresh_token:
             raise SimklAuthError("Simkl access token expired; re-authorization required")
-        payload = await self._request(
-            "POST",
-            "/oauth2/token",
-            data={
-                "grant_type": "refresh_token",
-                "client_id": self.client_id,
-                "refresh_token": self.refresh_token,
-            },
-            authenticated=False,
-        )
+        try:
+            payload = await self._request(
+                "POST",
+                "/oauth2/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "client_id": self.client_id,
+                    "refresh_token": self.refresh_token,
+                },
+                authenticated=False,
+            )
+        except Exception:
+            if self._adopt_stored_tokens():  # a run refreshing at the same moment won; use its tokens
+                return {"expires_at": self.expires_at or None}
+            raise
         return self._apply_and_persist_tokens(payload)
 
     async def revoke_token(self, token: str) -> None:
