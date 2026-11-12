@@ -306,6 +306,10 @@ export const linkPlexIntegration = (data) => axios.post('/api/integrations/plex/
 
 // Own profile update (any authenticated user)
 export const updateMyProfile = (data) => axios.patch('/api/auth/me', data);
+// Own AI provider (administrators and accounts allowed to manage AI)
+export const getMyAiProvider = () => axios.get('/api/config/openai/user');
+export const saveMyAiProvider = (data) => axios.post('/api/config/openai/user', data);
+export const deleteMyAiProvider = () => axios.delete('/api/config/openai/user');
 export const getApiKeys = () => axios.get('/api/auth/api-keys');
 export const createApiKey = (data) => axios.post('/api/auth/api-keys', data);
 export const revokeApiKey = (id) => axios.delete(`/api/auth/api-keys/${id}`);

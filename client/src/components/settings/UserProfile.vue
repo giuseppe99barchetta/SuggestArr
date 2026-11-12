@@ -163,6 +163,8 @@
           </div>
         </SectionCard>
 
+        <UserAiProvider v-if="canManageAi" />
+
         <ApiKeysPanel class="flex-1" />
       </div>
     </div>
@@ -260,6 +262,7 @@ import ToggleTrack from '@/components/common/ToggleTrack.vue';
 import TraktMediaUsers from './TraktMediaUsers.vue';
 import SimklMediaUsers from './SimklMediaUsers.vue';
 import ApiKeysPanel from './ApiKeysPanel.vue';
+import UserAiProvider from './UserAiProvider.vue';
 import UserAvatar from '@/components/ui/UserAvatar.vue';
 import { refreshUserAvatar } from '@/composables/useUserAvatar';
 import { languageOptions, languagePayload } from '@/utils/titleLanguage.js';
@@ -275,7 +278,7 @@ export default {
   name: 'UserProfile',
   emits: ['profile-updated'],
 
-  components: { PageHeader, SectionCard, ToggleTrack, TraktMediaUsers, SimklMediaUsers, ApiKeysPanel, RecapPreferences, UserAvatar },
+  components: { PageHeader, SectionCard, ToggleTrack, TraktMediaUsers, SimklMediaUsers, ApiKeysPanel, UserAiProvider, RecapPreferences, UserAvatar },
 
   // The dashboard shell passes props this page does not declare.
   inheritAttrs: false,
@@ -382,6 +385,9 @@ export default {
     },
     profileUser() {
       return this.currentUser || this.authUser;
+    },
+    canManageAi() {
+      return this.profileUser?.role === 'admin' || !!this.profileUser?.can_manage_ai;
     },
     languageChoices() {
       return languageOptions(this.languages);

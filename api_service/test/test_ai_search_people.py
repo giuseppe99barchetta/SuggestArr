@@ -497,7 +497,7 @@ def _client(monkeypatch, db, user=None, provider='jellyfin'):
     user = user or {'id': 7, 'username': 'Me', 'role': 'user'}
     monkeypatch.setattr(ai_routes, 'DatabaseManager', MagicMock(return_value=db))
     monkeypatch.setattr(ai_routes.ConfigService, 'get_runtime_config', lambda: {'SELECTED_SERVICE': provider})
-    monkeypatch.setattr(ai_routes, 'get_llm_client', lambda: object())
+    monkeypatch.setattr(ai_routes, 'get_llm_client', lambda user_id=None: object())
     service = MagicMock()
     service.config = {'SELECTED_SERVICE': provider}
     service.search = AsyncMock(return_value={'results': [], 'total': 0})

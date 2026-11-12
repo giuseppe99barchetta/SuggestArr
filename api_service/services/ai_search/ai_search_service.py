@@ -49,14 +49,19 @@ class AiSearchService:
     5. Return AI-curated results only — no generic Discover fallback.
     """
 
-    def __init__(self):
+    llm_user_id: Optional[int] = None  # account whose personal AI provider answers; None = the shared one
+
+    def __init__(self, llm_user_id: Optional[int] = None):
         """Initialise AiSearchService from the current application configuration.
+
+        ``llm_user_id`` is the account whose personal AI provider answers (the shared one when it has none).
 
         Uses get_runtime_config() so that DB-backed integration credentials
         (TMDB_API_KEY, JELLYFIN_TOKEN, SEER_TOKEN, etc.) are always present
         even after a config import that only writes keys to the DB.
         """
         self.config = ConfigService.get_runtime_config()
+        self.llm_user_id = llm_user_id
 
     # ------------------------------------------------------------------
     # Public API
@@ -309,6 +314,7 @@ class AiSearchService:
             interpretation_query, [] if people_data else history, media_type,
             max_suggestions=llm_suggestions_count, liked_titles=liked_titles, excluded_titles=excluded_titles,
             people_profiles=people_data["profiles"] if people_data else None,
+            user_id=self.llm_user_id,
         )
         # Enforce the UI selection even if the LLM returns a conflicting language.
         if original_language != "auto":
@@ -439,6 +445,7 @@ class AiSearchService:
             people_context=[{"name": person["name"], "taste": person["taste"], "requester": person["requester"]}
                             for person in people_data["profiles"]]
             if people_data else None,
+            llm_user_id=self.llm_user_id,
         )
 
         final_slice = final[:max_results]
@@ -1033,6 +1040,7 @@ class AiSearchService:
         media_type: str,
         reference_titles: Optional[List[Dict[str, Any]]] = None,
         people_context: Optional[List[Dict[str, Any]]] = None,
+        llm_user_id: Optional[int] = None,
     ) -> None:
         """Set per-item rationale from exact matches, then LLM-generated one-liners, then contextual fallback."""
         llm_rationale_map: Dict[str, str] = {}
@@ -1052,6 +1060,7 @@ class AiSearchService:
                 discover_params=discover_params,
                 results=unresolved_results,
                 **({"people_context": people_context} if people_context else {}),
+                user_id=llm_user_id,
             )
 
         seen_rationales: set = set()

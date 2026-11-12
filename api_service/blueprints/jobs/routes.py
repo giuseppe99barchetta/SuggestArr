@@ -1356,7 +1356,11 @@ def get_llm_status():
     """
     try:
         from api_service.services.llm.llm_service import get_llm_client
-        client = get_llm_client()
+        try:
+            caller = int(g.current_user['id'])
+        except (AttributeError, KeyError, TypeError, ValueError):
+            caller = None  # no person behind the request: only the shared provider counts
+        client = get_llm_client(caller)
         config = load_env_vars()
         advanced_enabled = config.get('ENABLE_ADVANCED_ALGORITHM', False) is True
         return jsonify({

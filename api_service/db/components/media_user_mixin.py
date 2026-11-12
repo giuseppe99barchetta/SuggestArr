@@ -602,6 +602,9 @@ class MediaUserMixin:
         """
         Return all media profile links for a SuggestArr user.
 
+        A person's own AI provider shares this table (provider 'openai') but is not a media-server
+        account, so it is left out.
+
         Access tokens are intentionally excluded from the result so they are
         never serialised into API responses.
 
@@ -615,7 +618,7 @@ class MediaUserMixin:
         ph = self._ph()
         query = (
             f"SELECT id, provider, external_user_id, external_username, created_at, verified "
-            f"FROM user_media_profiles WHERE user_id = {ph} ORDER BY provider"
+            f"FROM user_media_profiles WHERE user_id = {ph} AND provider <> 'openai' ORDER BY provider"
         )
         with self.get_connection() as conn:
             cursor = conn.cursor()

@@ -1001,10 +1001,6 @@ After importing a safe export, links may still show as connected in metadata, bu
 10. Re-link Trakt and Simkl accounts if you imported a safe export without tokens.
 11. Save or restart the container if needed.
 
-#### API note
-
-`GET /api/admin/export-config` is a separate, older endpoint. It exports integrations and settings only and does **not** include `media_users` or restore them on import. Use the Dashboard export/import flow (or `/api/config/export` directly) when Trakt or Simkl user links must move with the instance.
-
 ### Filesystem Backup
 
 Back up the full persistent config folder:

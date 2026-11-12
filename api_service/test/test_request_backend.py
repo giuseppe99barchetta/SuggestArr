@@ -267,23 +267,13 @@ def _import_env():
     return {'SETUP_COMPLETED': True, **SEER, 'SELECTED_SERVICE': 'plex'}
 
 
-def test_admin_import_that_would_blank_the_active_backends_credentials_writes_nothing():
-    from flask import Flask
-    from api_service.blueprints.admin import routes as admin_routes
-
-    app = Flask(__name__)
-    app.config['TESTING'] = True
-    app.register_blueprint(admin_routes.admin_bp, url_prefix='/api/admin')
-    with patch('api_service.auth.middleware.require_role', lambda *_: (lambda f: f)), \
-            patch.object(admin_routes, 'load_env_vars', return_value=_import_env()), \
-            patch.object(admin_routes, 'DatabaseManager') as db:
-        view = admin_routes.import_config.__wrapped__ if hasattr(admin_routes.import_config, '__wrapped__') \
-            else admin_routes.import_config
-        with app.test_request_context('/api/admin/import-config', method='POST',
-                                      json={'schema_version': 2, 'integrations': {'seer': {'api_url': '', 'api_key': ''}}}):
-            response, status = view()
-    assert status == 400 and 'Seer' in response.get_json()['error']
-    db.return_value.set_integration.assert_not_called()
+def test_import_that_would_blank_the_active_backends_credentials_writes_nothing(tmp_path):
+    service, _, db, patches = _import_service(tmp_path)
+    patches[2] = patch.object(service, 'load_env_vars', return_value=_import_env())
+    blanking = {'version': 2, 'integrations': {'seer': {'api_url': '', 'api_key': ''}}, 'settings': {}}
+    with pytest.raises(ValueError, match='Seer'):
+        _run_import(service, blanking, patches)
+    db.set_integration.assert_not_called()
 
 
 def _import_service(tmp_path, save_env_vars=None):
@@ -359,28 +349,6 @@ def test_health_reports_configured_arr_instances_without_failing_readiness():
     with patch('api_service.services.arr.arr_client.ArrClient', return_value=fake):
         assert health._run_arr_checks({**RADARR, **SONARR}) == {'radarr': 'ok', 'sonarr': 'error'}
     assert health._run_arr_checks({}) == {}  # nothing configured: the key is omitted from the response
-
-
-def test_a_failing_admin_import_restores_the_integrations_it_already_wrote():
-    from flask import Flask
-    from api_service.blueprints.admin import routes as admin_routes
-
-    app = Flask(__name__)
-    db = MagicMock()
-    db.get_integration.side_effect = lambda service: {'api_key': 'old'} if service == 'tmdb' else None
-    db.set_integration.side_effect = [None, None, RuntimeError('disk full'), None]  # third write fails
-    payload = {'schema_version': 2, 'integrations': {'tmdb': {'api_key': 'n'}, 'omdb': {'api_key': 'n'},
-                                                     'mdblist': {'api_key': 'n'}}}
-    view = admin_routes.import_config.__wrapped__ if hasattr(admin_routes.import_config, '__wrapped__') \
-        else admin_routes.import_config
-    with patch.object(admin_routes, 'DatabaseManager', return_value=db), \
-            patch.object(admin_routes, 'load_env_vars', return_value={}), \
-            app.test_request_context('/api/admin/import-config', method='POST', json=payload):
-        with pytest.raises(RuntimeError):
-            view()
-    deleted = {c.args[0] for c in db.delete_integration.call_args_list}
-    assert 'omdb' in deleted  # created by the failed import (the row that failed to write is cleared too, harmlessly)
-    assert any(c.args == ('tmdb', {'api_key': 'old'}) for c in db.set_integration.call_args_list)  # restored
 
 
 def test_radarr_and_sonarr_settings_travel_through_the_settings_export_and_import():

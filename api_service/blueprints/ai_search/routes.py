@@ -216,7 +216,7 @@ async def ai_search_query():
 
         # Check LLM is configured (not strictly required — service degrades gracefully,
         # but we surface a clear error before attempting if completely unconfigured)
-        if not get_llm_client():
+        if not get_llm_client(_current_user_id()):
             return jsonify({
                 "status": "error",
                 "message": (
@@ -226,7 +226,7 @@ async def ai_search_query():
                 ),
             }), 400
 
-        service = AiSearchService()
+        service = AiSearchService(llm_user_id=_current_user_id())
         user = getattr(g, "current_user", None)
         people = None
         if raw_people:
@@ -425,7 +425,7 @@ def ai_search_status():
     Returns:
         JSON with 'available' bool and optional 'message'.
     """
-    client = get_llm_client()
+    client = get_llm_client(_current_user_id())
     if client:
         return jsonify({"available": True}), 200
     return jsonify({

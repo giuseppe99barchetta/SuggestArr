@@ -32,7 +32,6 @@ from api_service.blueprints.arr.routes import arr_bp
 from api_service.blueprints.jobs.routes import jobs_bp
 from api_service.blueprints.ai_search.routes import ai_search_bp
 from api_service.blueprints.health.routes import health_bp
-from api_service.blueprints.admin.routes import admin_bp
 from api_service.blueprints.users.routes import users_bp
 from api_service.blueprints.cleanup.routes import cleanup_bp
 from api_service.blueprints.trakt.routes import trakt_bp
@@ -171,7 +170,6 @@ def create_app():
     application.register_blueprint(jobs_bp, url_prefix='/api/jobs')
     application.register_blueprint(ai_search_bp, url_prefix='/api/ai-search')
     application.register_blueprint(health_bp, url_prefix='/api/health')
-    application.register_blueprint(admin_bp, url_prefix='/api/admin')
     application.register_blueprint(users_bp, url_prefix='/api/users')
     application.register_blueprint(cleanup_bp, url_prefix='/api/cleanup')
     application.register_blueprint(trakt_bp, url_prefix='/api/trakt')
