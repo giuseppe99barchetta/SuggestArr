@@ -622,3 +622,13 @@ async def test_only_the_searched_media_type_hides_results_and_a_single_friend_re
     await AiSearchService._apply_suggestion_rationales(results, {}, 'q', {}, 'movie', people_context=people)
     assert results[0]['rationale'] == 'Picked for Bob based on your search.'
 
+
+
+def test_only_a_search_for_the_caller_alone_may_use_their_personal_ai_provider(monkeypatch):
+    client, service = _client(monkeypatch, _route_db(people=[ANN_ROW]))
+    service.llm_user_id = None
+    assert client.post('/api/ai-search/query', json={'query': 'q'}).status_code == 200
+    assert service.llm_user_id == 7  # a plain search: the caller's own provider may answer
+    service.llm_user_id = None
+    assert client.post('/api/ai-search/query', json={'query': 'q', 'people': [7, 9]}).status_code == 200
+    assert service.llm_user_id is None  # Ann's history and taste go only to the shared provider

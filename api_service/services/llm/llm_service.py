@@ -22,6 +22,7 @@ import aiohttp
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
+from api_service.utils.ssrf_guard import validate_url
 from api_service.config.logger_manager import LoggerManager
 from api_service.observability.metrics import integration_error
 from api_service.exceptions.api_exceptions import LLMValidationError
@@ -66,6 +67,8 @@ _LEGACY_TEMPERATURE = "legacy"
 _UNSET_TEMPERATURE = "unset"
 _REASONING_EFFORTS = {"low", "medium", "high"}
 _SEARXNG_TIMEOUT_SECONDS = 5
+# The SDK waits ten minutes per call by default; a provider that stops answering must not hold a job that long.
+_LLM_TIMEOUT_SECONDS = 120
 _SEARXNG_MAX_RESULTS = 3
 
 
@@ -99,6 +102,12 @@ def personal_llm_settings(user_id: Optional[int]) -> Optional[Dict[str, str]]:
     if not isinstance(stored, dict):
         return None
     settings = {key: str(stored.get(key) or "").strip() for key in ("api_key", "base_url", "model")}
+    if settings["base_url"] and account.get("role") != "admin":
+        try:
+            validate_url(settings["base_url"], allow_private=False)  # checked again now: DNS can change after saving
+        except ValueError as exc:
+            logger.warning("Personal AI address of user %s is not allowed: %s", user_id, exc)
+            return None
     return settings if settings["api_key"] or settings["base_url"] else None
 
 
@@ -145,7 +154,7 @@ def get_llm_client(user_id: Optional[int] = None) -> Optional[AsyncOpenAI]:
             return None
 
     try:
-        client_kwargs: Dict[str, Any] = {"api_key": api_key}
+        client_kwargs: Dict[str, Any] = {"api_key": api_key, "timeout": _LLM_TIMEOUT_SECONDS}
         if base_url:
             client_kwargs["base_url"] = base_url
         return AsyncOpenAI(**client_kwargs)
@@ -763,7 +772,9 @@ async def _call_with_validation(
         if response is None:
             raise RuntimeError("LLM request did not return a response")
 
-        raw = response.choices[0].message.content.strip()
+        # A refusal or an empty answer has no text: treat it as an invalid answer, which is retried and then reported.
+        choices = getattr(response, "choices", None) or []
+        raw = ((choices[0].message.content if choices else None) or "").strip()
         content = _extract_json_object(
             _repair_title_qualifiers(_strip_markdown_fences(raw))
         )

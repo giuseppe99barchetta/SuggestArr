@@ -234,7 +234,7 @@ AI Search requires an LLM to be configured (same setup as AI-Powered Recommendat
 
 The provider set up in **Settings → Advanced** is shared: every account's AI Search and every scheduled job uses it.
 
-An administrator can also let an account use its own provider (**Users → Edit → AI settings**). That account then sees **My AI provider** on its profile page, where it enters an API key, an optional address (for a local provider such as Ollama) and an optional model. Its own AI Search then uses that provider; without one, or if the permission is removed, it goes back to the shared provider. The administrator's key is never sent to an address a person chose. Scheduled jobs always use the shared provider, and personal keys are not part of config exports.
+An administrator can also let an account use its own provider (**Users → Edit → AI settings**). That account then sees **My AI provider** on its profile page, where it enters an API key, an optional address (for a local provider such as Ollama) and an optional model. Its own AI Search then uses that provider; without one, or if the permission is removed, it goes back to the shared provider. The administrator's key is never sent to an address a person chose. Only an administrator may use an address on a private network (a local model on the LAN); everyone else needs a public address. A search that includes other people (a group search) always uses the shared provider, so their history and taste never reach a provider they did not agree to. Scheduled jobs always use the shared provider, and personal keys are not part of config exports.
 
 > AI Search is independent of the automated recommendations run — it is triggered manually from the dashboard and does not affect cron-based automation.
 

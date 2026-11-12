@@ -11,6 +11,7 @@ from api_service.config.logger_manager import LoggerManager
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.config_service import ConfigService
 from api_service.services.integration_security import bind_flat_credentials
+from api_service.utils.ssrf_guard import validate_url
 from api_service.services.config_secrets import merge_integration_config
 
 logger = LoggerManager.get_logger("ConfigRoute")
@@ -568,6 +569,12 @@ def save_user_openai_config():
         parsed = urlparse(base_url)
         if parsed.scheme not in ('http', 'https') or not parsed.hostname:
             return jsonify({'error': 'openai_base_url must be an http(s) address'}), 400
+        try:
+            # Only an administrator may point the server at a private address (a local model on the LAN).
+            from flask import g
+            validate_url(base_url, allow_private=g.current_user.get('role') == 'admin')
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
 
     from api_service.services.llm.llm_service import personal_llm_settings
     saved = personal_llm_settings(user_id)

@@ -9,6 +9,7 @@ from api_service.blueprints.config import routes
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.llm import llm_service
 
+PUBLIC = 'https://api.example.com/v1'
 SHARED = {'OPENAI_API_KEY': 'admin-key', 'OPENAI_BASE_URL': '', 'LLM_MODEL': 'shared-model'}
 
 
@@ -19,6 +20,13 @@ def db(tmp_path):
         DatabaseManager._instance = None
         yield DatabaseManager()
         DatabaseManager._instance = None
+
+
+@pytest.fixture(autouse=True)
+def no_dns():
+    """Addresses are checked for real only where a test says so."""
+    with patch.object(routes, 'validate_url'), patch.object(llm_service, 'validate_url'):
+        yield
 
 
 @pytest.fixture
@@ -135,3 +143,24 @@ def test_invalid_provider_settings_are_refused(db, body):
     user = make_user(db, 'hal', can_manage_ai=1)
     assert call(db, user, 'post', body).status_code == 400
     assert llm_service.personal_llm_settings(user) is None
+
+
+# ---- where a personal address may point --------------------------------------
+
+def test_only_an_administrator_may_point_the_server_at_a_private_address(db):
+    from api_service.utils import ssrf_guard
+    plain = make_user(db, 'ivy', can_manage_ai=1)
+    admin = make_user(db, 'root2', role='admin')
+    body = {'openai_base_url': 'http://127.0.0.1:11434/v1'}
+    with patch.object(routes, 'validate_url', ssrf_guard.validate_url):
+        assert call(db, plain, 'post', body).status_code == 400
+        assert call(db, admin, 'post', body).status_code == 200
+    assert llm_service.personal_llm_settings(plain) is None
+    assert llm_service.personal_llm_settings(admin)['base_url'] == body['openai_base_url']
+
+
+def test_an_address_that_stopped_being_public_is_not_used_and_the_shared_provider_answers(db, shared_config):
+    user = make_user(db, 'jo', can_manage_ai=1)
+    save_personal(db, user, api_key='jo-key', base_url=PUBLIC)
+    with patch.object(llm_service, 'validate_url', side_effect=ValueError('Connections to non-public addresses are not allowed')):
+        assert llm_service.llm_runtime_config(user)['OPENAI_API_KEY'] == 'admin-key'

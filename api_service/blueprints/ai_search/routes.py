@@ -226,7 +226,7 @@ async def ai_search_query():
                 ),
             }), 400
 
-        service = AiSearchService(llm_user_id=_current_user_id())
+        service = AiSearchService()
         user = getattr(g, "current_user", None)
         people = None
         if raw_people:
@@ -239,6 +239,11 @@ async def ai_search_query():
             user_ids = [str(profile["external_user_id"])] if profile else []
         if not people and not user_ids:
             use_history = False
+        # Other people's history and taste go only to the shared provider, never to one a person chose.
+        others = bool(user and user.get("role") == "admin" and user_ids) or any(
+            not person.get("requester") for person in people or [])
+        if not others:
+            service.llm_user_id = _current_user_id()
 
         result = await service.search(
             query=query,
