@@ -263,7 +263,10 @@ export const previewMySimklRecent = (limit = 10) =>
 // Cleanup automation
 export const getCleanupSettings = () => axios.get('/api/cleanup/settings');
 export const setCleanupSettings = (payload) => axios.post('/api/cleanup/settings', payload);
-export const runCleanupNow = (dryRun = null) => axios.post('/api/cleanup/run', dryRun === null ? {} : { dry_run: dryRun });
+export const runCleanupNow = (dryRun = null, confirmLarge = false) => axios.post('/api/cleanup/run', {
+  ...(dryRun === null ? {} : { dry_run: dryRun }),
+  ...(confirmLarge ? { confirm_large: true } : {}),
+});
 export const getCleanupLog = (limit = 100) => axios.get('/api/cleanup/log', { params: { limit } });
 
 // Config export: download a configuration snapshot (admin only)

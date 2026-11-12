@@ -53,7 +53,17 @@ class TestCleanupRoutePermissions(unittest.TestCase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.get_json(), {"status": "success", "result": result})
-        execute_cleanup_job.assert_awaited_once_with(force_run=True, override_dry_run=True)
+        execute_cleanup_job.assert_awaited_once_with(force_run=True, override_dry_run=True, confirm_large=False)
+
+    def test_confirm_large_is_passed_through_and_validated(self):
+        self._caller = {"id": "1", "username": "admin", "role": "admin"}
+        with patch("api_service.blueprints.cleanup.routes.execute_cleanup_job",
+                   new=AsyncMock(return_value={"status": "ok"})) as execute_cleanup_job:
+            ok = self.client.post("/api/cleanup/run", json={"dry_run": False, "confirm_large": True})
+            bad = self.client.post("/api/cleanup/run", json={"confirm_large": "yes"})
+        self.assertEqual(ok.status_code, 200)
+        execute_cleanup_job.assert_awaited_once_with(force_run=True, override_dry_run=False, confirm_large=True)
+        self.assertEqual(bad.status_code, 400)
 
 
 if __name__ == "__main__":

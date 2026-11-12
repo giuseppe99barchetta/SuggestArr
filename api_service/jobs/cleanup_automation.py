@@ -5,6 +5,7 @@ a configurable grace period.
 Safe by default: only runs when explicitly enabled, and starts in dry-run mode.
 """
 
+import re
 import threading
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
@@ -22,6 +23,31 @@ from api_service.services.seer.seer_client import SeerClient
 _run_lock = threading.Lock()
 FAVORITE_USER_RATING = 10.0
 SUPPORTED_MEDIA_SERVICES = {"plex", "jellyfin", "emby"}
+# Safety breaker: a run that would delete more than BREAKER_MAX_TITLES titles, or at least BREAKER_MIN_TITLES
+# and more than BREAKER_MAX_SHARE of all candidates, deletes nothing until an admin confirms it.
+BREAKER_MAX_TITLES = 20
+BREAKER_MIN_TITLES = 5
+BREAKER_MAX_SHARE = 0.30
+_BLOCKED_COUNT = re.compile(r"would delete (\d+) of")
+
+
+def _confirmed_deletions(settings: Dict) -> int:
+    """Return how many deletions an admin confirmed: the count of the last blocked run, else 0."""
+    if settings.get('last_run_status') != 'blocked_large_run':
+        return 0
+    match = _BLOCKED_COUNT.search(settings.get('last_run_summary') or '')
+    return int(match.group(1)) if match else 0
+
+
+def _is_large_run(deletions: int, candidates: int) -> bool:
+    """Return True when a run would delete suspiciously many titles.
+
+    :param deletions: Titles the run would delete (upper bound, before the arr/Seer lookups).
+    :param candidates: All candidates evaluated by the run.
+    :return: True if the run must wait for an explicit admin confirmation.
+    """
+    return deletions > BREAKER_MAX_TITLES or (
+        deletions >= BREAKER_MIN_TITLES and deletions > BREAKER_MAX_SHARE * candidates)
 
 
 def _format_utc_timestamp(dt: datetime) -> str:
@@ -70,7 +96,9 @@ async def _build_plex_favorite_map(env_vars: Dict) -> Dict[Tuple[str, str], floa
                     rating = float(item.get('userRating', 0) or 0)
                 except (TypeError, ValueError):
                     rating = 0.0
-                rating_map[(media_type, str(tmdb_id))] = rating
+                key = (media_type, str(tmdb_id))
+                # The same title can sit in several libraries: a favorite copy must never be overwritten.
+                rating_map[key] = max(rating, rating_map.get(key, 0.0))
         return rating_map
     finally:
         await plex_client.close()
@@ -135,6 +163,9 @@ async def _build_jellyfin_favorite_map(env_vars: Dict) -> Dict[Tuple[str, str], 
 
         if not selected_users:
             selected_users = await client.get_all_users()
+        if not selected_users:
+            # With nobody to read favorites from, every title would look un-favorited and be deleted.
+            raise RuntimeError("No Jellyfin/Emby users to read favorites from")
 
         libraries = client.libraries or []
         library_ids = [
@@ -185,11 +216,14 @@ def _missing_service_config(env_vars: Dict, media_service: str) -> Optional[str]
     return None
 
 
-async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optional[bool] = None) -> Dict:
+async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optional[bool] = None,
+                              confirm_large: bool = False) -> Dict:
     """Run the cleanup pass.
 
     :param force_run: If True, bypass the 'enabled' gate (used by 'Run now').
     :param override_dry_run: If set, override the configured dry_run flag for this run only.
+    :param confirm_large: If True, the admin confirmed the run the safety breaker last blocked; it only
+        applies while the run would delete no more titles than that blocked run.
     :return: Summary dict.
     """
     logger = LoggerManager.get_logger("CleanupAutomation")
@@ -233,6 +267,13 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
                                        last_run_status='not_configured', last_run_summary=msg)
             return {'status': 'not_configured', 'message': msg}
 
+    if arr_clients is None and not dry_run and not (env_vars.get('SEER_API_URL') and env_vars.get('SEER_TOKEN')):
+        msg = "Seer is not configured (SEER_API_URL / SEER_TOKEN missing)."
+        logger.warning(msg)
+        db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
+                                   last_run_status='not_configured', last_run_summary=msg)
+        return {'status': 'not_configured', 'message': msg}
+
     cutoff = _format_utc_timestamp(datetime.utcnow() - timedelta(days=grace_days))
     candidates: List[Dict] = db.get_suggestarr_requests_older_than(cutoff)
     logger.info("Cleanup: %d candidate request(s) older than %d day(s) (cutoff=%s, dry_run=%s).",
@@ -253,6 +294,9 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
                                    last_run_status='error', last_run_summary=msg)
         return {'status': 'error', 'message': msg}
 
+    # Grace effectively starts at the latest of the request and the recipient's first watch.
+    recent = db.get_recently_watched_titles(datetime.utcnow() - timedelta(days=grace_days))
+
     seer_client = None
     if arr_clients is not None:
         # Built for dry runs too (read-only), so a dry run reports exactly what a real run would delete.
@@ -271,107 +315,153 @@ async def execute_cleanup_job(force_run: bool = False, override_dry_run: Optiona
             False,
         )
 
-    deleted = kept = missing = errors = untagged = 0
-    for cand in candidates:
-        tmdb_id = cand['tmdb_id']
-        media_type = cand['media_type']
-        title = cand.get('title') or f"tmdb:{tmdb_id}"
-        rating = favorite_map.get((media_type, str(tmdb_id)))
-
-        if rating is None:
-            missing += 1
-            db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
-                               action='skipped_not_in_library', was_dry_run=dry_run,
-                               user_rating=None,
-                               reason=f'Not present in {media_service.title()} library; nothing to delete here.')
-            continue
-
-        if rating >= FAVORITE_USER_RATING:
-            kept += 1
-            db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
-                               action='kept_favorited', was_dry_run=dry_run,
-                               user_rating=rating, reason='Favorited (userRating >= 10).')
-            continue
-
+    deleted = kept = missing = errors = untagged = recent_kept = 0
+    try:
+        eligible = [cand for cand in candidates
+                    if favorite_map.get((cand['media_type'], str(cand['tmdb_id']))) is not None
+                    and favorite_map[(cand['media_type'], str(cand['tmdb_id']))] < FAVORITE_USER_RATING
+                    and (cand['media_type'], str(cand['tmdb_id'])) not in recent]
+        would_delete = len(eligible)
         if arr_clients is not None:
-            client = arr_clients.get(media_type)
-            service = client.service.capitalize() if client else 'Radarr/Sonarr'
-            try:
+            # Direct delivery only deletes titles that exist in Radarr/Sonarr with the suggestarr tag; the
+            # lookups are read-only and cached per client. A failed lookup counts (worst case).
+            would_delete = 0
+            for cand in eligible:
+                client = arr_clients.get(cand['media_type'])
                 if client is None:
-                    outcome = 'not_found'
-                elif dry_run:
-                    outcome, _ = await client.find_owned(tmdb_id)
-                    outcome = 'would_delete' if outcome == 'ok' else outcome
-                else:
-                    outcome = await client.delete(tmdb_id)
+                    continue
+                try:
+                    outcome, _ = await client.find_owned(cand['tmdb_id'])
+                except Exception:
+                    outcome = 'ok'
+                would_delete += outcome == 'ok'
+        large = _is_large_run(would_delete, len(candidates))
+        # A confirmation only covers the run the admin was shown: if more titles would be deleted now, ask again.
+        confirmed = confirm_large and would_delete <= _confirmed_deletions(settings)
+        if large and not dry_run and not confirmed:
+            msg = (f"Blocked: this run would delete {would_delete} of {len(candidates)} candidate titles. "
+                   "Nothing was deleted; confirm the run from the Cleanup page if this is expected.")
+            logger.warning("Cleanup %s", msg)
+            db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
+                                       last_run_status='blocked_large_run', last_run_summary=msg)
+            return {'status': 'blocked_large_run', 'message': msg,
+                    'would_delete': would_delete, 'candidates': len(candidates)}
+
+        for cand in candidates:
+            try:
+                tmdb_id = cand['tmdb_id']
+                media_type = cand['media_type']
+                title = cand.get('title') or f"tmdb:{tmdb_id}"
+                rating = favorite_map.get((media_type, str(tmdb_id)))
+
+                if rating is None:
+                    missing += 1
+                    db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
+                                       action='skipped_not_in_library', was_dry_run=dry_run,
+                                       user_rating=None,
+                                       reason=f'Not present in {media_service.title()} library; nothing to delete here.')
+                    continue
+
+                if rating >= FAVORITE_USER_RATING:
+                    kept += 1
+                    db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
+                                       action='kept_favorited', was_dry_run=dry_run,
+                                       user_rating=rating, reason='Favorited (userRating >= 10).')
+                    continue
+
+                if (media_type, str(tmdb_id)) in recent:
+                    recent_kept += 1
+                    db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
+                                       action='kept_recent_activity', was_dry_run=dry_run, user_rating=rating,
+                                       reason=f'Watched within the last {grace_days} days.')
+                    continue
+
+                if arr_clients is not None:
+                    client = arr_clients.get(media_type)
+                    service = client.service.capitalize() if client else 'Radarr/Sonarr'
+                    try:
+                        if client is None:
+                            outcome = 'not_found'
+                        elif dry_run:
+                            outcome, _ = await client.find_owned(tmdb_id)
+                            outcome = 'would_delete' if outcome == 'ok' else outcome
+                        else:
+                            outcome = await client.delete(tmdb_id)
+                    except Exception as exc:
+                        errors += 1
+                        logger.error("Cleanup: error deleting tmdb_id=%s media_type=%s: %s", tmdb_id, media_type, exc)
+                        db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
+                                           action='error', was_dry_run=dry_run, user_rating=rating, reason=str(exc)[:500])
+                        continue
+                    if outcome == 'not_found':
+                        missing += 1
+                        action, reason = 'skipped_not_in_arr', f'Not in {service}; nothing to delete there.'
+                    elif outcome == 'not_tagged':
+                        untagged += 1
+                        action, reason = 'skipped_not_tagged', f'Not tagged suggestarr in {service}: never deleted.'
+                    else:
+                        deleted += 1
+                        if outcome == 'deleted':
+                            db.delete_request_row(tmdb_id, media_type)
+                        action = 'deleted' if outcome == 'deleted' else 'would_delete'
+                        verb = 'deleted from' if outcome == 'deleted' else 'would delete from'
+                        reason = f'Not favorited after {grace_days} days; {verb} {service} with its files.'
+                    db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title, action=action,
+                                       was_dry_run=dry_run, user_rating=rating, reason=reason)
+                    continue
+
+                if dry_run:
+                    db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
+                                       action='would_delete', was_dry_run=True,
+                                       user_rating=rating,
+                                       reason=f'Not favorited after {grace_days} days; would request file deletion from Seer.')
+                    deleted += 1
+                    continue
+
+                try:
+                    ok = await seer_client.delete_media_file_by_tmdb(int(tmdb_id), media_type)
+                    if ok:
+                        deleted += 1
+                        db.delete_request_row(tmdb_id, media_type)
+                        db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
+                                           action='deleted', was_dry_run=False,
+                                           user_rating=rating,
+                                           reason=f'Not favorited after {grace_days} days; Seer accepted the file deletion request.')
+                    else:
+                        errors += 1
+                        db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
+                                           action='delete_failed', was_dry_run=False,
+                                           user_rating=rating,
+                                           reason='Seer DELETE returned a non-success status; see logs.')
+                except Exception as exc:
+                    errors += 1
+                    logger.error("Cleanup: error deleting tmdb_id=%s media_type=%s: %s", tmdb_id, media_type, exc)
+                    db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
+                                       action='error', was_dry_run=False, user_rating=rating,
+                                       reason=str(exc)[:500])
+            except Exception as exc:  # one bad candidate must not stop the rest of the run
+                errors += 1
+                logger.error("Cleanup: error on tmdb_id=%s media_type=%s: %s", cand['tmdb_id'], cand['media_type'], exc)
+    finally:
+        if seer_client is not None:
+            try:
+                await seer_client.close()
+            except Exception:
+                pass
+        for client in (arr_clients or {}).values():
+            try:
+                await client.close()
             except Exception as exc:
-                errors += 1
-                logger.error("Cleanup: error deleting tmdb_id=%s media_type=%s: %s", tmdb_id, media_type, exc)
-                db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
-                                   action='error', was_dry_run=dry_run, user_rating=rating, reason=str(exc)[:500])
-                continue
-            if outcome == 'not_found':
-                missing += 1
-                action, reason = 'skipped_not_in_arr', f'Not in {service}; nothing to delete there.'
-            elif outcome == 'not_tagged':
-                untagged += 1
-                action, reason = 'skipped_not_tagged', f'Not tagged suggestarr in {service}: never deleted.'
-            else:
-                deleted += 1
-                if outcome == 'deleted':
-                    db.delete_request_row(tmdb_id, media_type)
-                action = 'deleted' if outcome == 'deleted' else 'would_delete'
-                verb = 'deleted from' if outcome == 'deleted' else 'would delete from'
-                reason = f'Not favorited after {grace_days} days; {verb} {service} with its files.'
-            db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title, action=action,
-                               was_dry_run=dry_run, user_rating=rating, reason=reason)
-            continue
-
-        if dry_run:
-            db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
-                               action='would_delete', was_dry_run=True,
-                               user_rating=rating,
-                               reason=f'Not favorited after {grace_days} days; would request file deletion from Seer.')
-            deleted += 1
-            continue
-
-        try:
-            ok = await seer_client.delete_media_file_by_tmdb(int(tmdb_id), media_type)
-            if ok:
-                deleted += 1
-                db.delete_request_row(tmdb_id, media_type)
-                db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
-                                   action='deleted', was_dry_run=False,
-                                   user_rating=rating,
-                                   reason=f'Not favorited after {grace_days} days; Seer accepted the file deletion request.')
-            else:
-                errors += 1
-                db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
-                                   action='delete_failed', was_dry_run=False,
-                                   user_rating=rating,
-                                   reason='Seer DELETE returned a non-success status; see logs.')
-        except Exception as exc:
-            errors += 1
-            logger.error("Cleanup: error deleting tmdb_id=%s media_type=%s: %s", tmdb_id, media_type, exc)
-            db.add_cleanup_log(tmdb_id=tmdb_id, media_type=media_type, title=title,
-                               action='error', was_dry_run=False, user_rating=rating,
-                               reason=str(exc)[:500])
-
-    if seer_client is not None:
-        try:
-            await seer_client.close()
-        except Exception:
-            pass
-    for client in (arr_clients or {}).values():
-        await client.close()
+                logger.warning("Cleanup: could not close a client: %s", exc)
 
     summary = (f"Candidates={len(candidates)} "
                f"{'would_delete' if dry_run else 'deleted'}={deleted} "
-               f"kept_favorited={kept} not_in_library={missing} errors={errors}"
-               + (f" not_tagged={untagged}" if arr_clients is not None else ''))
+               f"kept_favorited={kept} kept_recent={recent_kept} not_in_library={missing} errors={errors}"
+               + (f" not_tagged={untagged}" if arr_clients is not None else '')
+               + (f" breaker=would_block({would_delete}/{len(candidates)})" if large and dry_run else ''))
     db.update_cleanup_settings(last_run_at=_utcnow_for_db(),
-                               last_run_status=('dry_run' if dry_run else 'ok'),
+                               last_run_status=('completed_with_errors' if errors else ('dry_run' if dry_run else 'ok')),
                                last_run_summary=summary)
     logger.info("Cleanup run finished: %s", summary)
-    return {'status': 'ok', 'summary': summary, 'dry_run': dry_run,
+    return {'status': 'completed_with_errors' if errors else 'ok', 'summary': summary, 'dry_run': dry_run,
             'deleted': deleted, 'kept': kept, 'missing': missing, 'errors': errors}

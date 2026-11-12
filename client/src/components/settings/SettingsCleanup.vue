@@ -61,6 +61,10 @@
       <div v-if="settings && settings.last_run_at" class="mt-3 text-sm text-ink-4">
         <span><strong>Last run:</strong> {{ formatTs(settings.last_run_at) }} · {{ settings.last_run_status || '—' }}</span>
         <div v-if="settings.last_run_summary" class="mt-1 font-mono text-[0.82rem]">{{ settings.last_run_summary }}</div>
+        <button v-if="settings.last_run_status === 'blocked_large_run'" type="button" class="ui-btn-danger mt-2" :disabled="running" @click="runNow(false, true)">
+          <i aria-hidden="true" :class="running && lastTrigger === 'real' ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
+          Run anyway
+        </button>
       </div>
     </SectionCard>
 
@@ -189,14 +193,32 @@ export default {
       }
     },
 
-    async runNow(dryRun) {
+    async runNow(dryRun, confirmLarge = false) {
       if (this.running) return;
       this.running = true;
       this.lastTrigger = dryRun ? 'dry' : 'real';
       this.lastResult = null;
       try {
-        const res = await runCleanupNow(dryRun);
+        const res = await runCleanupNow(dryRun, confirmLarge);
         const r = res.data.result || {};
+        if (r.status === 'blocked_large_run') {
+          // The server stopped a suspiciously large deletion; let the admin confirm it explicitly.
+          this.lastResult = { status: 'error', message: r.message };
+          await this.loadSettings();
+          return;
+        }
+        if (r.status === 'completed_with_errors') {
+          this.lastResult = { status: 'error', message: `Run finished with errors (${dryRun ? 'dry-run' : 'real'}): ${r.summary}` };
+          await this.loadSettings();
+          await this.loadLog();
+          return;
+        }
+        if (r.status && r.status !== 'ok') {
+          // not_configured, unsupported, error, skipped: nothing ran, so do not show a green "complete".
+          this.lastResult = { status: 'error', message: r.message || `Cleanup did not run (${r.status}).` };
+          await this.loadSettings();
+          return;
+        }
         this.lastResult = { status: 'success', message: `Run complete (${dryRun ? 'dry-run' : 'real'}): ${r.summary || r.message || 'done'}` };
         await this.loadSettings();
         await this.loadLog();

@@ -4,6 +4,21 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 class CleanupMixin:
+    def get_recently_watched_titles(self, since: datetime) -> Set[tuple]:
+        """Return (media_type, tmdb_id) of requested titles first watched at or after ``since``.
+
+        ``recap_titles.watched_at`` is written by Python (ISO text with 'T' on SQLite), so ``since`` is
+        passed as a datetime, in the same format.
+
+        :param since: Naive UTC datetime.
+        :return: Set of (media_type, tmdb_id) tuples.
+        """
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT media_type, tmdb_id FROM recap_titles WHERE watched_at >= {placeholder}", (since,))
+            return {(row[0], str(row[1])) for row in cursor.fetchall()}
+
     def get_cleanup_settings(self) -> dict:
         with self.get_connection() as conn:
             cursor = conn.cursor()

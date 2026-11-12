@@ -139,10 +139,13 @@ Cleanup Automation is available under **Advanced -> Cleanup Automation**.
 
 It looks at requests created by SuggestArr, waits for the configured grace period, checks whether the item is favorited in Plex, Jellyfin, or Emby, and then:
 
-- keeps favorited items
+- keeps favorited items (with Plex, only the rating of the account behind the Plex token counts; with Jellyfin/Emby, the favorites of the selected users)
+- keeps items watched by the person who requested them within the grace period
 - skips items no longer present in the media library
 - logs what would be deleted in dry-run mode
 - asks Seer to delete matching media files when real mode is enabled, or, with Radarr & Sonarr delivery, deletes them straight in Radarr/Sonarr, only for titles tagged `suggestarr`
+
+A run that would delete more than 20 titles, or at least 5 titles and more than 30% of the candidates, deletes nothing and shows **Run anyway** on the Cleanup page (the scheduled run just stops and logs it). The confirmation only covers the run that was blocked: if more titles would be deleted by the time you confirm, it asks again. A dry-run is never blocked and reports `breaker=would_block` when a real run would be.
 
 Cleanup is off by default and starts safely in dry-run mode. Always run dry-run first and review the audit log before enabling real deletions.
 

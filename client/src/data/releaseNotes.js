@@ -61,6 +61,7 @@ export const WHATS_NEW = {
       points: [
         'Cleanup only ever deletes titles tagged suggestarr.',
         'A dry run lists exactly what a real run would delete.',
+        'A run that would delete a lot waits for your OK, and titles watched recently are kept.',
       ],
       adminOnly: true,
     },

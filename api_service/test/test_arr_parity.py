@@ -367,6 +367,9 @@ class CleanupDB:
     def get_suggestarr_requests_older_than(self, cutoff):
         return self.candidates
 
+    def get_recently_watched_titles(self, since):
+        return set()
+
     def update_cleanup_settings(self, **kwargs):
         self.updates.append(kwargs)
 

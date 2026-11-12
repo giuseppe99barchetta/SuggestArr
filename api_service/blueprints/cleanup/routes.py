@@ -68,8 +68,11 @@ def cleanup_run_now():
         override_dry_run = data.get("dry_run")
         if override_dry_run is not None and not isinstance(override_dry_run, bool):
             return jsonify({"status": "error", "message": "dry_run must be a boolean"}), 400
+        confirm_large = data.get("confirm_large", False)
+        if not isinstance(confirm_large, bool):
+            return jsonify({"status": "error", "message": "confirm_large must be a boolean"}), 400
         result = run_coroutine_sync(
-            execute_cleanup_job(force_run=True, override_dry_run=override_dry_run),
+            execute_cleanup_job(force_run=True, override_dry_run=override_dry_run, confirm_large=confirm_large),
             logger,
         )
         return jsonify({"status": "success", "result": result}), 200
