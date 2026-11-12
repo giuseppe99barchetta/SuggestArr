@@ -195,6 +195,7 @@ paths:
       responses:
         <<: *errorResponses
         '202': {description: Queued run, headers: {Location: {schema: {type: string}, description: URL of the queued run}}, content: {application/json: {schema: {$ref: '#/components/schemas/RunResponse'}}}}
+        '409': {description: The job is already running; no run was created, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}, example: {error: {code: job_running, message: This job is already running.}}}}}
   /api/v1/runs:
     get:
       operationId: publicRuns

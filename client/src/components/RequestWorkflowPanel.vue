@@ -8,6 +8,12 @@
       </div>
     </div>
 
+    <div v-if="pausedMessage" role="status" class="flex flex-wrap items-center gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3 text-sm">
+      <span class="mr-auto text-ink-2"><i aria-hidden="true" class="fas fa-pause-circle mr-1.5 text-caution"></i>{{ pausedMessage }}</span>
+      <button type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[13px] font-bold text-white disabled:opacity-50" :disabled="running" @click="runJob(true)">Run anyway</button>
+      <button type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[13px] font-semibold text-ink-2" @click="pausedMessage = ''">Dismiss</button>
+    </div>
+
     <div v-if="bulkMode" class="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-card border border-brand-soft bg-panel/95 px-4 py-3 backdrop-blur lg:top-4">
       <span class="mr-auto text-sm font-semibold text-ink"><i aria-hidden="true" class="fas fa-check-double mr-1.5 text-brand-ink"></i>{{ selected.length }} selected</span>
       <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[13px] font-bold text-white" @click="confirmAction('approve')">Approve</button>
@@ -109,7 +115,7 @@ export default {
   name: 'RequestWorkflowPanel', components: { AppDialog, MediaCard, MediaGridSkeleton, ApprovalProfileChoice, SeenRatingDialog },
   emits: ['open', 'update:total'],
   props: { statusFilter: { type: String, default: 'all' }, searchQuery: { type: String, default: '' }, mediaType: { type: String, default: 'all' }, requestedFor: { type: String, default: 'all' }, sortBy: { type: String, default: 'date-desc' }, showHeader: { type: Boolean, default: true }, showEmpty: { type: Boolean, default: true }, bulkMode: { type: Boolean, default: false } },
-  data() { return { items: [], selected: [], actionLoading: false, swipeStart: null, seenMenuId: null, seenOptions: SEEN_OPTIONS, seenRatingMode: false, seenRatingItem: null, jobs: [], jobId: null, loading: false, running: false, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,
+  data() { return { items: [], selected: [], actionLoading: false, swipeStart: null, seenMenuId: null, seenOptions: SEEN_OPTIONS, seenRatingMode: false, seenRatingItem: null, jobs: [], jobId: null, loading: false, running: false, pausedMessage: '', pausedJobId: null, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,
     statuses: [{ value: 'awaiting_approval', label: 'Awaiting approval' }, { value: 'queued', label: 'Queued' }, { value: 'submitted', label: 'Submitted' }, { value: 'rejected', label: 'Rejected' }, { value: 'failed', label: 'Failed' }, { value: 'blacklisted', label: 'Blacklisted' }] }; },
   computed: {
     selectedItems() { return this.items.filter(item => this.selected.includes(item.id)); },
@@ -241,7 +247,20 @@ export default {
         this.$toast.open({ message: error.response?.data?.message || 'Could not update requests', type: 'error' });
       } finally { this.actionLoading = false; }
     },
-    async runJob() { this.running = true; try { await axios.post(`/api/jobs/${this.jobId}/run`); await this.load(1); } finally { this.running = false; } }
+    async runJob(force = false) {
+      this.running = true;
+      // "Run anyway" belongs to the job that was paused, even if another one is selected meanwhile.
+      const jobId = force === true && this.pausedJobId ? this.pausedJobId : this.jobId;
+      this.pausedMessage = '';
+      try {
+        const { data } = await axios.post(`/api/jobs/${jobId}/run`, force === true ? { force: true } : {});
+        // A paused job did not run: say why and offer to run it anyway.
+        if (data?.status === 'paused') { this.pausedMessage = data.message; this.pausedJobId = jobId; }
+        await this.load(1);
+      } catch (error) {
+        this.$toast.open({ message: error.response?.status === 409 ? 'This job is already running.' : (error.response?.data?.message || 'Could not run the job'), type: 'error' });
+      } finally { this.running = false; }
+    }
   }
 };
 </script>

@@ -11,7 +11,7 @@ from api_service.auth.middleware import require_role
 from api_service.config.config import load_env_vars
 from api_service.db.database_manager import DatabaseManager
 from api_service.db.job_repository import JobRepository
-from api_service.jobs.job_manager import JobManager
+from api_service.jobs.job_manager import JobBusyError, JobManager
 from api_service.jobs.discover_automation import DiscoverAutomation
 from api_service.jobs.recommendation_automation import RecommendationAutomation
 from api_service.jobs.trakt_recommendations_automation import TraktRecommendationsAutomation
@@ -273,7 +273,10 @@ def start_run(job_id):
     job_data = JobRepository().get_job(job_id)
     if not job_data or not _visible_job(job_data):
         return jsonify({'error': {'code': 'not_found', 'message': 'Job not found.'}}), 404
-    execution_id = JobManager.get_instance().enqueue_job_run(job_id, int(g.current_user['id']), g.api_key_id)
+    try:
+        execution_id = JobManager.get_instance().enqueue_job_run(job_id, int(g.current_user['id']), g.api_key_id)
+    except JobBusyError:
+        return jsonify({'error': {'code': 'job_running', 'message': 'This job is already running.'}}), 409
     run = JobRepository().get_execution(execution_id)
     response = jsonify({'data': _run_payload(run)})
     response.status_code = 202

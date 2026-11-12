@@ -24,6 +24,17 @@
       <button v-if="['failed', 'interrupted'].includes(listImport.status)" type="button" class="ui-btn" :disabled="importStarting" @click="resumeListImport">Resume import</button>
     </section>
 
+    <!-- A manual run stopped by a pause: say why and offer to run anyway -->
+    <div v-if="pausedRun" role="status" class="flex items-center gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3">
+      <i aria-hidden="true" class="fas fa-pause-circle text-caution"></i>
+      <div class="flex flex-1 flex-col text-sm">
+        <strong class="text-ink">{{ pausedRun.job.name }} is paused</strong>
+        <span class="text-ink-3">{{ pausedRun.message }}</span>
+      </div>
+      <button type="button" class="ui-btn" :disabled="isRunning[pausedRun.job.id]" @click="runPausedAnyway">Run anyway</button>
+      <button type="button" class="h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Dismiss" @click="pausedRun = null"><i aria-hidden="true" class="fas fa-times"></i></button>
+    </div>
+
     <!-- Seer delivery queue -->
     <div v-if="queueStatus.total_pending > 0 && !queueBannerDismissed" role="status" class="flex items-center gap-3 rounded-card border border-notice/40 bg-notice/10 px-4 py-3">
       <i aria-hidden="true" class="fas fa-circle-notch fa-spin text-notice"></i>
@@ -277,6 +288,7 @@ export default {
       editingJob: null,
       jobToDelete: null,
       queueStatus: { queued: 0, submitting: 0, submitted: 0, failed: 0, total_pending: 0 },
+      pausedRun: null,
       queuePollInterval: null,
       queueBannerDismissed: localStorage.getItem('sj_queue_banner_dismissed') === '1',
       showInfoBox: localStorage.getItem('sj_info_box_hidden') !== '1',
@@ -514,15 +526,24 @@ export default {
       }
     },
 
-    async runJob(job) {
+    async runPausedAnyway() {
+      const job = this.pausedRun?.job;
+      this.pausedRun = null;
+      if (job) await this.runJob(job, true);
+    },
+
+    async runJob(job, force = false) {
       this.isRunning[job.id] = true;
+      this.pausedRun = null;
       try {
         this.$toast.open({
           message: `Running job: ${job.name}...`,
           type: 'info'
         });
-        const response = await jobsApi.runJobNow(job.id);
-        if (response.status === 'success') {
+        const response = await jobsApi.runJobNow(job.id, force);
+        if (response.status === 'paused') {
+          this.pausedRun = { job, message: response.message };
+        } else if (response.status === 'success') {
           this.$toast.open({
             message: `Job completed: ${response.results_count} found, ${response.requested_count} enqueued for Seer`,
             type: 'success',
@@ -540,7 +561,7 @@ export default {
       } catch (error) {
         console.error('Failed to run job:', error);
         this.$toast.open({
-          message: error.response?.data?.message || 'Failed to run job',
+          message: error.response?.status === 409 ? 'This job is already running.' : (error.response?.data?.message || 'Failed to run job'),
           type: 'error'
         });
       } finally {

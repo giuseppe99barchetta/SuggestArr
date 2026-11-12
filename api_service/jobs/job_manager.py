@@ -21,6 +21,10 @@ from api_service.utils.asyncio_loop import close_event_loop
 from api_service.observability.metrics import observe_job
 
 
+class JobBusyError(RuntimeError):
+    """A job was started while its previous run was still in progress."""
+
+
 class JobManager:
     """
     Singleton class that manages APScheduler jobs for automation.
@@ -30,6 +34,7 @@ class JobManager:
 
     _instance: Optional['JobManager'] = None
     _lock = threading.Lock()
+    _reservation_lock = threading.Lock()  # guards every instance's set of running job ids
 
     def __new__(cls):
         """Create or return the singleton instance."""
@@ -168,40 +173,107 @@ class JobManager:
         self.logger.info(f"Running job {job_id} immediately")
         self._execute_job(job_id)
 
+    def try_reserve(self, job_id: int) -> bool:
+        """Reserve a job for one run; at most one run per job can hold the reservation.
+
+        Every way of starting a job (schedule, Run now, Run all, public API, alternative generation) takes
+        it BEFORE creating a history row or a thread, so a busy job never leaves an orphaned queued run.
+
+        :param job_id: Database ID of the job.
+        :return: True when the caller now owns the reservation and must call :meth:`release`.
+        """
+        with self._reservation_lock:
+            running = self.__dict__.setdefault('_running', set())  # job ids holding a run reservation
+            if job_id in running:
+                return False
+            running.add(job_id)
+            return True
+
+    def release(self, job_id: int) -> None:
+        """Give back a reservation taken with :meth:`try_reserve`."""
+        with self._reservation_lock:
+            self.__dict__.setdefault('_running', set()).discard(job_id)
+
+    def is_running(self, job_id: int) -> bool:
+        """Return True while a run holds the job's reservation (a snapshot, for reporting only)."""
+        with self._reservation_lock:
+            return job_id in self.__dict__.get('_running', set())
+
     def enqueue_job_run(self, job_id: int, initiated_by_user_id=None, api_key_id=None) -> int:
-        """Queue one public run and return its persistent history id immediately."""
+        """Queue one public run and return its persistent history id immediately.
+
+        :raises ValueError: When the job does not exist.
+        :raises JobBusyError: When the job is already running; nothing is created in that case.
+        """
         job = self.repository.get_job(job_id)
         if not job:
             raise ValueError('Job not found')
-        execution_id = self.repository.create_queued_execution(job_id, 'api', initiated_by_user_id, api_key_id)
-        threading.Thread(target=self._execute_job, args=(job_id, execution_id), daemon=True).start()
+        if not self.try_reserve(job_id):
+            raise JobBusyError(f'Job {job_id} is already running')
+        try:
+            execution_id = self.repository.create_queued_execution(job_id, 'api', initiated_by_user_id, api_key_id)
+            threading.Thread(target=self._execute_job, args=(job_id, execution_id, False, True), daemon=True).start()
+        except Exception:
+            self.release(job_id)
+            raise
         return execution_id
 
-    def _execute_job(self, job_id: int, execution_id=None) -> None:
+    def _execute_job(self, job_id: int, execution_id=None, force: bool = False, reserved: bool = False) -> Dict[str, Any]:
         """
-        Internal method to execute a job.
-        Creates a new event loop for async execution.
-        Determines job type and calls appropriate executor.
+        Run a job with every gate a scheduled run applies: one run per job at a time, the pauses
+        (approvals, Seer/Radarr/Sonarr queue, unwatched suggestions), webhooks and metrics.
 
         Args:
             job_id: Database ID of the job.
+            execution_id: History row to fill, when the caller already created one.
+            force: Skip the pauses ("Run anyway"). It never skips the one-run-at-a-time rule.
+            reserved: True when the caller already took the reservation (it is released here either way).
+
+        Returns:
+            Dict with ``status`` (``completed``, ``skipped``, ``failed``, ``busy`` or ``missing``), ``reason``
+            (why it was skipped or failed), and for a completed run ``success``, ``results_count``,
+            ``requested_count`` and ``error_message``.
         """
-        # Get job data to determine type
+        if not reserved and not self.try_reserve(job_id):
+            self.logger.info("Job %s is already running; this start was skipped.", job_id)
+            return {'status': 'busy', 'reason': 'The job is already running.'}
+        try:
+            return self._execute_reserved_job(job_id, execution_id, force)
+        finally:
+            self.release(job_id)
+
+    def _execute_reserved_job(self, job_id: int, execution_id, force: bool) -> Dict[str, Any]:
+        """Body of :meth:`_execute_job`, run while holding the job's reservation."""
         job_data = self.repository.get_job(job_id)
         if not job_data:
             self.logger.error(f"Job not found: {job_id}")
-            return
+            if execution_id is not None:
+                self.repository.finish_execution_if_open(execution_id, 'failed', 'Job not found')
+            return {'status': 'missing', 'reason': 'Job not found'}
 
         job_type = job_data.get('job_type', 'discover')
         started_at = time.monotonic()
         outcome = 'completed'
+        report: Dict[str, Any] = {'status': 'completed', 'success': True, 'results_count': 0,
+                                  'requested_count': 0, 'error_message': None}
         self.logger.info(f"Executing {job_type} job: {job_id} ({job_data['name']})")
 
         # Get the executor for this job type
         executor = self._job_executors.get(job_type)
         if executor is None:
             self.logger.error(f"No executor set for job type: {job_type}")
-            return
+            if execution_id is not None:
+                self.repository.finish_execution_if_open(execution_id, 'failed', f'No executor for job type {job_type}')
+            return {'status': 'failed', 'reason': f'No executor for job type {job_type}'}
+
+        def absorb(result):
+            """Add one executor result to the report (a sliced run has several)."""
+            if result is None:
+                return
+            report['success'] = report['success'] and bool(getattr(result, 'success', True))
+            report['results_count'] += getattr(result, 'results_count', 0) or 0
+            report['requested_count'] += getattr(result, 'requested_count', 0) or 0
+            report['error_message'] = report['error_message'] or getattr(result, 'error_message', None)
 
         try:
             # Create new event loop for this thread
@@ -211,12 +283,12 @@ class JobManager:
             try:
                 if execution_id is not None:
                     self.repository.mark_execution_running(execution_id)
-                if self._should_pause_for_suggestarr_approvals(job_data):
-                    pause_reason = 'suggestions are awaiting approval in SuggestArr'
-                elif loop.run_until_complete(self._should_pause_for_pending_requests(job_data)):
-                    pause_reason = self._pending_reason()
-                else:
-                    pause_reason = None
+                pause_reason = None
+                if not force:
+                    if self._should_pause_for_suggestarr_approvals(job_data):
+                        pause_reason = 'suggestions are awaiting approval in SuggestArr'
+                    elif loop.run_until_complete(self._should_pause_for_pending_requests(job_data)):
+                        pause_reason = self._pending_reason()
                 if pause_reason:
                     exec_id = execution_id or self.repository.log_execution_start(job_id)
                     self.repository.log_execution_end(
@@ -230,14 +302,15 @@ class JobManager:
                     self._queue_webhook("job.skipped", job_id, job_type, execution_id,
                                         "pending_requests_awaiting_approval")
                     outcome = 'skipped'
-                    return
+                    return {'status': 'skipped', 'reason': pause_reason, 'execution_id': exec_id}
                 slices = None
-                if (job_data.get('prevent_suggestions_if_unwatched') and
+                if (not force and job_data.get('prevent_suggestions_if_unwatched') and
                         job_data.get('job_type') not in ('discover', 'list_import')):
                     from api_service.jobs.unwatched_suggestion_gate import UnwatchedSuggestionGate
                     slices = loop.run_until_complete(UnwatchedSuggestionGate().allowed_slices(job_data))
                 if slices == []:
                     exec_id = execution_id or self.repository.log_execution_start(job_id)
+                    reason = 'suggested content has remained unwatched past the configured limit'
                     self.repository.log_execution_end(
                         exec_id=exec_id,
                         status='skipped',
@@ -249,23 +322,36 @@ class JobManager:
                     self._queue_webhook("job.skipped", job_id, job_type, execution_id,
                                         "suggested_content_unwatched")
                     outcome = 'skipped'
-                    return
+                    return {'status': 'skipped', 'reason': reason, 'execution_id': exec_id}
                 if slices is None:
-                    loop.run_until_complete(executor(job_id, execution_id=execution_id) if execution_id is not None else executor(job_id))
+                    absorb(loop.run_until_complete(executor(job_id, execution_id=execution_id) if execution_id is not None else executor(job_id)))
                 else:
                     for overrides in slices:
-                        loop.run_until_complete(executor(job_id, overrides, execution_id=execution_id) if execution_id is not None else executor(job_id, overrides))
+                        absorb(loop.run_until_complete(executor(job_id, overrides, execution_id=execution_id) if execution_id is not None else executor(job_id, overrides)))
             finally:
                 close_event_loop(loop, self.logger)
 
+            report['execution_id'] = execution_id
+            if not report['success']:
+                # Executors report their own errors as an unsuccessful result instead of raising.
+                outcome = 'failed'
+                message = report['error_message'] or 'Job execution failed'
+                self.logger.error(f"Job {job_id} execution failed: {message}")
+                if execution_id is not None:
+                    self.repository.finish_execution_if_open(execution_id, 'failed', message)
+                self._queue_webhook("run.failed", job_id, job_type, execution_id)
+                report['status'] = 'failed'
+                return report
             self.logger.info(f"Job {job_id} execution completed")
             self._queue_webhook("job.completed", job_id, job_type, execution_id)
+            return report
         except Exception as e:
             outcome = 'failed'
             self.logger.error(f"Job {job_id} execution failed: {str(e)}")
             if execution_id is not None:
                 self.repository.log_execution_end(execution_id, 'failed', error_message='Job execution failed')
             self._queue_webhook("run.failed", job_id, job_type, execution_id)
+            return {'status': 'failed', 'reason': 'Job execution failed', 'error_message': 'Job execution failed'}
         finally:
             observe_job(job_type, outcome, time.monotonic() - started_at)
 
@@ -293,17 +379,24 @@ class JobManager:
         if job_type not in ('discover', 'list_import'):
             overrides['user_ids'] = [str(user_id)]
         scoped_job = {**job, **overrides}
-        if (self._should_pause_for_suggestarr_approvals(scoped_job) or
-                await self._should_pause_for_pending_requests(scoped_job)):
-            return 'pending', 'Job is paused for pending approvals'
-        if job_type not in ('discover', 'list_import') and scoped_job.get('prevent_suggestions_if_unwatched'):
-            from api_service.jobs.unwatched_suggestion_gate import UnwatchedSuggestionGate
-            if await UnwatchedSuggestionGate().allowed_slices(scoped_job) == []:
-                return 'pending', 'Job is paused for unwatched suggestions'
         executor = self._job_executors.get(job_type)
         if executor is None:
             return 'ignored', 'Job type is not supported'
-        result = await executor(item['job_id'], overrides=overrides)
+        # Take the reservation first: a run that finishes meanwhile can create approvals, and the pauses
+        # below must be judged while no other run of this job can change them.
+        if not self.try_reserve(item['job_id']):
+            return 'pending', 'Job is already running; will retry'
+        try:
+            if (self._should_pause_for_suggestarr_approvals(scoped_job) or
+                    await self._should_pause_for_pending_requests(scoped_job)):
+                return 'pending', 'Job is paused for pending approvals'
+            if job_type not in ('discover', 'list_import') and scoped_job.get('prevent_suggestions_if_unwatched'):
+                from api_service.jobs.unwatched_suggestion_gate import UnwatchedSuggestionGate
+                if await UnwatchedSuggestionGate().allowed_slices(scoped_job) == []:
+                    return 'pending', 'Job is paused for unwatched suggestions'
+            result = await executor(item['job_id'], overrides=overrides)
+        finally:
+            self.release(item['job_id'])
         if not result.success:
             return 'pending', 'Alternative generation failed; will retry'
         if result.requested_count:

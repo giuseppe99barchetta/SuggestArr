@@ -508,6 +508,25 @@ class JobRepository:
 
             self.logger.debug(f"Updated execution history record ID: {exec_id}")
 
+    def finish_execution_if_open(self, exec_id: int, status: str, error_message: Optional[str] = None) -> None:
+        """Close a history row only if it is still running or queued.
+
+        Used when an executor failed before it could write its own end record, so the row never stays
+        ``running`` forever, without overwriting a row the executor already finished.
+
+        Args:
+            exec_id: ID of the execution history record.
+            status: Final status, normally 'failed'.
+            error_message: Short reason.
+        """
+        placeholder = '%s' if self.db.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        query = (f"UPDATE job_execution_history SET finished_at = {placeholder}, status = {placeholder}, "
+                 f"error_message = {placeholder} WHERE id = {placeholder} AND status IN ('running', 'queued')")
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (datetime.now().isoformat(), status, error_message, exec_id))
+            conn.commit()
+
     def get_job_history(self, job_id: int, limit: int = 50) -> List[Dict[str, Any]]:
         """
         Retrieve execution history for a specific job.

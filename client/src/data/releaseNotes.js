@@ -74,6 +74,7 @@ export const WHATS_NEW = {
       points: [
         'Jobs can wait while Radarr or Sonarr still has downloads in the queue.',
         'A stalled download keeps them waiting until you clear it.',
+        'Run now follows the same pauses; Run anyway overrides them once.',
       ],
       adminOnly: true,
     },

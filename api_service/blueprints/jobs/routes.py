@@ -790,12 +790,23 @@ def toggle_job(job_id: int):
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
+def _wants_force() -> bool:
+    """True when the caller asked to skip the pauses (``?force=true`` or ``{"force": true}``)."""
+    if request.args.get('force', '').lower() in ('1', 'true', 'yes'):
+        return True
+    body = request.get_json(silent=True)
+    return isinstance(body, dict) and body.get('force') is True
+
+
 @jobs_bp.route('/<int:job_id>/run', methods=['POST'])
 @limiter.limit("5 per minute")
 def run_job_now(job_id: int):
     """
-    Execute a job immediately.
-    
+    Execute a job immediately, with the same rules as a scheduled run.
+
+    The pauses (approvals waiting, Seer/Radarr/Sonarr queue, unwatched suggestions) apply, and so does
+    the one-run-at-a-time rule. ``force`` ("Run anyway") skips the pauses only.
+
     Admin users can run any job.
     Normal users can only run jobs they own.
 
@@ -803,7 +814,8 @@ def run_job_now(job_id: int):
         job_id: ID of the job to run.
 
     Returns:
-        JSON with execution result.
+        JSON with execution result, ``paused`` (with the reason) when a pause applies and force was not
+        given, or 409 when the job is already running.
     """
     try:
         repository = JobRepository()
@@ -812,7 +824,7 @@ def run_job_now(job_id: int):
         job = repository.get_job(job_id)
         if not job:
             return jsonify({'status': 'error', 'message': 'Job not found'}), 404
-        
+
         # Apply RBAC: non-admin users can only run their own jobs
         current_user = getattr(g, 'current_user', None)
         if current_user and current_user.get('role') != 'admin':
@@ -821,50 +833,42 @@ def run_job_now(job_id: int):
                 return jsonify({'status': 'error', 'message': 'Insufficient permissions'}), 403
 
         job_type = job.get('job_type', 'discover')
-        logger.info(f"Running {job_type} job {job_id} immediately")
+        force = _wants_force()
+        logger.info(f"Running {job_type} job {job_id} immediately (force={force})")
 
         manager = get_job_manager()
-        if run_async(manager._should_pause_for_pending_requests(job)):
+        if not manager.try_reserve(job_id):
+            return jsonify({'status': 'busy', 'message': 'This job is already running.'}), 409
+        # The reservation is released by _execute_job, whatever the outcome.
+        try:
             exec_id = repository.log_execution_start(job_id)
-            repository.log_execution_end(
-                exec_id=exec_id,
-                status='skipped',
-                results_count=0,
-                requested_count=0,
-                error_message='Paused: Seer has pending requests awaiting approval or denial.'
-            )
+        except Exception:
+            manager.release(job_id)
+            raise
+        report = manager._execute_job(job_id, execution_id=exec_id, force=force, reserved=True)
+
+        if report['status'] == 'skipped':
+            reason = report.get('reason') or 'a pause applies'
             return jsonify({
                 'status': 'paused',
-                'message': 'Job paused because Seer has pending requests awaiting approval or denial.',
+                'reason': reason,
+                'message': f'Job paused: {reason}.',
                 'results_count': 0,
-                'requested_count': 0
+                'requested_count': 0,
+                'run_id': exec_id,
             }), 200
-
-        exec_id = repository.log_execution_start(job_id)
-
-        # Execute job based on type (async function called synchronously)
-        if job_type == 'recommendation':
-            result = run_async(execute_recommendation_job(job_id, execution_id=exec_id))
-        elif job_type == 'trakt_recommendations':
-            result = run_async(execute_trakt_recommendations_job(job_id, execution_id=exec_id))
-        elif job_type == 'list_import':
-            result = run_async(execute_list_import_job(job_id, execution_id=exec_id))
-        else:
-            result = run_async(execute_discover_job(job_id, execution_id=exec_id))
-
-        if result.success:
+        if report['status'] == 'completed' and report.get('success'):
             return jsonify({
                 'status': 'success',
                 'message': 'Job executed successfully',
-                'results_count': result.results_count,
-                'requested_count': result.requested_count,
+                'results_count': report['results_count'],
+                'requested_count': report['requested_count'],
                 'run_id': exec_id,
             }), 200
-        else:
-            return jsonify({
-                'status': 'error',
-                'message': result.error_message or 'Job execution failed'
-            }), 500
+        return jsonify({
+            'status': 'error',
+            'message': report.get('error_message') or report.get('reason') or 'Job execution failed'
+        }), 500
 
     except Exception as e:
         logger.error(f"Error running job {job_id}: {e}", exc_info=True)
@@ -938,46 +942,27 @@ def dry_run_job(job_id: int):
         return jsonify({'status': 'error', 'message': 'An internal error occurred'}), 500
 
 
-def _run_all_jobs_in_background():
+def _run_all_jobs_in_background(force: bool = False):
     """
-    Run all enabled jobs sequentially in a background thread.
-    Each job is executed with its own event loop to avoid conflicts.
+    Run all enabled jobs sequentially in a background thread, with the same rules as a scheduled run.
+    Each job is executed with its own event loop to avoid conflicts; a job already running is skipped.
+
+    Args:
+        force: Skip the pauses ("Run anyway") for every job.
     """
     global _run_all_running
     try:
         repository = JobRepository()
+        manager = get_job_manager()
         jobs = [j for j in repository.get_all_jobs() if j.get('enabled', True)]
         logger.info(f"Force run all: executing {len(jobs)} job(s)")
 
         for job in jobs:
             job_id = job['id']
-            job_type = job.get('job_type', 'discover')
             try:
-                logger.info(f"Force run all: starting {job_type} job {job_id} ({job.get('name', '')})")
-                manager = get_job_manager()
-                if run_async(manager._should_pause_for_pending_requests(job)):
-                    exec_id = repository.log_execution_start(job_id)
-                    repository.log_execution_end(
-                        exec_id=exec_id,
-                        status='skipped',
-                        results_count=0,
-                        requested_count=0,
-                        error_message='Paused: Seer has pending requests awaiting approval or denial.'
-                    )
-                    logger.info(
-                        "Force run all: paused job %s because Seer has pending requests.",
-                        job_id,
-                    )
-                    continue
-                if job_type == 'recommendation':
-                    run_async(execute_recommendation_job(job_id))
-                elif job_type == 'trakt_recommendations':
-                    run_async(execute_trakt_recommendations_job(job_id))
-                elif job_type == 'list_import':
-                    run_async(execute_list_import_job(job_id))
-                else:
-                    run_async(execute_discover_job(job_id))
-                logger.info(f"Force run all: job {job_id} completed")
+                logger.info(f"Force run all: starting {job.get('job_type', 'discover')} job {job_id} ({job.get('name', '')})")
+                report = manager._execute_job(job_id, force=force)
+                logger.info(f"Force run all: job {job_id} {report.get('status')}")
             except Exception as e:
                 logger.error(f"Force run all: error in job {job_id}: {e}", exc_info=True)
 
@@ -1013,13 +998,18 @@ def run_all_jobs():
             _run_all_running = False
         return jsonify({'status': 'error', 'message': 'No enabled jobs found.'}), 404
 
-    thread = threading.Thread(target=_run_all_jobs_in_background, daemon=True)
+    manager = get_job_manager()
+    # Snapshot at request time of the jobs already running; each job is still reserved when its turn comes,
+    # so one that finishes meanwhile may run and one that starts meanwhile is skipped.
+    busy_jobs = [j['id'] for j in jobs if manager.is_running(j['id'])]
+    thread = threading.Thread(target=_run_all_jobs_in_background, kwargs={'force': _wants_force()}, daemon=True)
     thread.start()
 
     return jsonify({
         'status': 'success',
-        'message': f'Running {len(jobs)} job(s) in the background.',
-        'jobs_count': len(jobs)
+        'message': f'Running {len(jobs) - len(busy_jobs)} job(s) in the background.',
+        'jobs_count': len(jobs),
+        'busy_jobs': busy_jobs,
     }), 202
 
 

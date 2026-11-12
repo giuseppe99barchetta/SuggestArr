@@ -87,10 +87,11 @@ export const jobsApi = {
   /**
    * Run a job immediately.
    * @param {number} jobId - Job ID.
-   * @returns {Promise<Object>} Response with execution result.
+   * @param {boolean} force - Skip the pauses ("Run anyway"); never skips the one-run-at-a-time rule.
+   * @returns {Promise<Object>} Response with execution result, or `status: 'paused'` with the reason.
    */
-  async runJobNow(jobId) {
-    const response = await axios.post(`/api/jobs/${jobId}/run`);
+  async runJobNow(jobId, force = false) {
+    const response = await axios.post(`/api/jobs/${jobId}/run`, force ? { force: true } : {});
     return response.data;
   },
 

@@ -119,7 +119,7 @@ SuggestArr includes safety tools for running automation without flooding Seer or
 
 Each job has a **Pause while Seer requests are pending** option in its schedule settings.
 
-When enabled, SuggestArr checks Seer before running that job. If Seer has requests still awaiting approval or denial, the job is skipped and logged as paused/skipped. This applies to scheduled runs, single job runs, and force-run-all.
+When enabled, SuggestArr checks Seer before running that job. If Seer has requests still awaiting approval or denial, the job is skipped and logged as paused/skipped. This applies to scheduled runs, single job runs (**Run now**) and force-run-all. When **Run now** hits a pause (this one, SuggestArr approvals waiting, or unwatched suggestions) it says why and offers **Run anyway**, which skips the pauses for that run only. A job never runs twice at once: starting it while it is running is refused (HTTP 409 from the API).
 
 Recommendation and Trakt Recommendation jobs can also enable **Pause if suggestions remain unwatched**. Movie and TV activity is tracked separately per linked media user. Watching a requested movie or one episode of a requested show starts a fresh cycle; only scheduled runs are paused.
 
