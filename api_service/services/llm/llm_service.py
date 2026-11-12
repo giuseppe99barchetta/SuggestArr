@@ -19,10 +19,11 @@ from typing import Any, Dict, List, Optional, Type, TypeVar
 from urllib.parse import urlparse
 
 import aiohttp
+import httpx
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
-from api_service.utils.ssrf_guard import validate_url
+from api_service.services.http.public_only_transport import PublicOnlyTransport
 from api_service.config.logger_manager import LoggerManager
 from api_service.observability.metrics import integration_error
 from api_service.exceptions.api_exceptions import LLMValidationError
@@ -102,12 +103,9 @@ def personal_llm_settings(user_id: Optional[int]) -> Optional[Dict[str, str]]:
     if not isinstance(stored, dict):
         return None
     settings = {key: str(stored.get(key) or "").strip() for key in ("api_key", "base_url", "model")}
-    if settings["base_url"] and account.get("role") != "admin":
-        try:
-            validate_url(settings["base_url"], allow_private=False)  # checked again now: DNS can change after saving
-        except ValueError as exc:
-            logger.warning("Personal AI address of user %s is not allowed: %s", user_id, exc)
-            return None
+    # Only an administrator may reach a private address; for everyone else the connection itself is
+    # restricted to public addresses (see get_llm_client), not just checked once here.
+    settings["public_only"] = bool(settings["base_url"]) and account.get("role") != "admin"
     return settings if settings["api_key"] or settings["base_url"] else None
 
 
@@ -122,6 +120,7 @@ def llm_runtime_config(user_id: Optional[int] = None) -> Dict[str, Any]:
     if personal:
         config["OPENAI_API_KEY"] = personal["api_key"]
         config["OPENAI_BASE_URL"] = personal["base_url"]
+        config["_LLM_PUBLIC_ONLY"] = personal["public_only"]
         if personal["model"]:
             config["LLM_MODEL"] = personal["model"]
     return config
@@ -157,6 +156,10 @@ def get_llm_client(user_id: Optional[int] = None) -> Optional[AsyncOpenAI]:
         client_kwargs: Dict[str, Any] = {"api_key": api_key, "timeout": _LLM_TIMEOUT_SECONDS}
         if base_url:
             client_kwargs["base_url"] = base_url
+        if config.get("_LLM_PUBLIC_ONLY"):
+            # An address a person chose: public addresses only, checked on the connection itself, no redirects.
+            client_kwargs["http_client"] = httpx.AsyncClient(
+                transport=PublicOnlyTransport(), follow_redirects=False, timeout=_LLM_TIMEOUT_SECONDS)
         return AsyncOpenAI(**client_kwargs)
     except Exception as exc:
         logger.error("Failed to initialize OpenAI client: %s", exc)

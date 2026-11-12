@@ -25,7 +25,7 @@ def db(tmp_path):
 @pytest.fixture(autouse=True)
 def no_dns():
     """Addresses are checked for real only where a test says so."""
-    with patch.object(routes, 'validate_url'), patch.object(llm_service, 'validate_url'):
+    with patch.object(routes, 'validate_url'):
         yield
 
 
@@ -159,8 +159,13 @@ def test_only_an_administrator_may_point_the_server_at_a_private_address(db):
     assert llm_service.personal_llm_settings(admin)['base_url'] == body['openai_base_url']
 
 
-def test_an_address_that_stopped_being_public_is_not_used_and_the_shared_provider_answers(db, shared_config):
+def test_a_non_admin_personal_address_is_connected_to_only_through_the_public_only_transport(db, shared_config):
+    from api_service.services.http.public_only_transport import PublicOnlyTransport
     user = make_user(db, 'jo', can_manage_ai=1)
     save_personal(db, user, api_key='jo-key', base_url=PUBLIC)
-    with patch.object(llm_service, 'validate_url', side_effect=ValueError('Connections to non-public addresses are not allowed')):
-        assert llm_service.llm_runtime_config(user)['OPENAI_API_KEY'] == 'admin-key'
+    client = llm_service.get_llm_client(user)
+    assert isinstance(client._client._transport, PublicOnlyTransport) and client._client.follow_redirects is False
+    admin = make_user(db, 'root3', role='admin')
+    save_personal(db, admin, api_key='k', base_url='http://127.0.0.1:11434/v1')
+    assert not isinstance(llm_service.get_llm_client(admin)._client._transport, PublicOnlyTransport)  # the LAN is allowed
+    assert not isinstance(llm_service.get_llm_client(None)._client._transport, PublicOnlyTransport)  # the shared provider
