@@ -9,7 +9,8 @@ from api_service.exceptions.database_exceptions import DatabaseError
 MYSQL_LONG_TEXT_COLUMNS = {
     'ai_search_feedback': ('rationale',),
     'ai_search_history': ('query',),
-    'discover_jobs': ('user_ids', 'request_profiles', 'filters'),
+    'cleanup_settings': ('last_run_summary',),
+    'discover_jobs': ('user_ids', 'request_profiles', 'filters', 'schedule_value'),
     'integrations': ('config_json',),
     'job_execution_history': ('error_message',),
     'list_import_runs': ('config_json', 'last_error'),
@@ -799,11 +800,11 @@ class SchemaManager:
         return bool(cursor.fetchall())
 
     def _widen_mysql_long_text_columns(self):
-        """Turn the MySQL columns in MYSQL_LONG_TEXT_COLUMNS created as VARCHAR(512) into LONGTEXT.
+        """Turn the MySQL columns in MYSQL_LONG_TEXT_COLUMNS created as VARCHAR(512) or TEXT into LONGTEXT.
 
         Older installs mapped every TEXT column to VARCHAR(512), which rejects or truncates a queued request
         payload, an integration config or an AI rationale longer than 512 characters. A column is only
-        altered when information_schema says it is still a VARCHAR, so a started server is not locked again
+        altered when information_schema says it is still a VARCHAR or TEXT, so a started server is not locked again
         on every boot.
         """
         if self.db_type not in ('mysql', 'mariadb'):
@@ -819,7 +820,8 @@ class SchemaManager:
                             (table, column),
                         )
                         row = cursor.fetchone()
-                        if row and str(row[0]).lower() == 'varchar':
+                        # TEXT too: older installs got these columns as TEXT (64 KB) from earlier corrections.
+                        if row and str(row[0]).lower() in ('varchar', 'text'):
                             nullability = 'NULL' if str(row[1]).upper() == 'YES' else 'NOT NULL'
                             cursor.execute(f"ALTER TABLE {table} MODIFY {column} LONGTEXT {nullability}")
                             self.logger.info("Widened %s.%s to LONGTEXT", table, column)

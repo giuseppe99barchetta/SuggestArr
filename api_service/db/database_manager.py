@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict
 
-from api_service.config.config import load_env_vars
+from api_service.config.config import load_env_vars, normalize_db_type  # noqa: F401  (re-exported)
 from api_service.config.logger_manager import LoggerManager
 from api_service.exceptions.database_exceptions import DatabaseError
 
@@ -41,22 +41,6 @@ from api_service.db.components.watched_media_mixin import WatchedMediaMixin
 
 
 from api_service.db.components.simkl_mixin import SimklMixin
-
-
-_DB_TYPE_ALIASES = {'mariadb': 'mysql', 'postgresql': 'postgres', 'pg': 'postgres'}
-
-
-def normalize_db_type(value) -> str:
-    """Return the canonical database type: lower case, with MariaDB and PostgreSQL spellings folded.
-
-    Every query branch tests for ``sqlite``, ``postgres`` or ``mysql`` only, so a differently spelled
-    ``DB_TYPE`` (``MySQL``, ``mariadb``, ``postgresql``) must be folded once, here.
-
-    :param value: Raw ``DB_TYPE`` setting (may be empty or None).
-    :return: ``sqlite``, ``postgres`` or ``mysql`` (an unknown value is returned lower-cased and rejected later).
-    """
-    text = str(value or 'sqlite').strip().lower()
-    return _DB_TYPE_ALIASES.get(text, text)
 
 
 class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueueMixin, RequestExpiryMixin, RequestReplacementMixin, SuggestionFeedbackMixin, TranslationMixin, AiSearchMixin, CleanupMixin, AuthMixin, MediaUserMixin, WebhookMixin, WatchedMediaMixin, RatingPromptMixin, SimklMixin):

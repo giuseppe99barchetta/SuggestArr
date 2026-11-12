@@ -527,6 +527,22 @@ def save_config_section(section_name, section_data):
     # Save the updated configuration
     save_env_vars(current_config)
 
+_DB_TYPE_ALIASES = {'mariadb': 'mysql', 'postgresql': 'postgres', 'pg': 'postgres'}
+
+
+def normalize_db_type(value) -> str:
+    """Return the canonical database type: lower case, with MariaDB and PostgreSQL spellings folded.
+
+    Every query branch tests for ``sqlite``, ``postgres`` or ``mysql`` only, so a differently spelled
+    ``DB_TYPE`` (``MySQL``, ``mariadb``, ``postgresql``) must be folded once, here.
+
+    :param value: Raw ``DB_TYPE`` setting (may be empty or None).
+    :return: ``sqlite``, ``postgres`` or ``mysql`` (an unknown value is returned lower-cased and rejected later).
+    """
+    text = str(value or 'sqlite').strip().lower()
+    return _DB_TYPE_ALIASES.get(text, text)
+
+
 def is_setup_complete(config_data=None):
     """
     Check if essential setup configuration is complete.
@@ -560,7 +576,7 @@ def is_setup_complete(config_data=None):
         ])
 
     # Database check (always required)
-    db_type = config_data.get('DB_TYPE', 'sqlite')
+    db_type = normalize_db_type(config_data.get('DB_TYPE'))
     if db_type != 'sqlite':
         essential_checks.extend([
             config_data.get('DB_HOST'),

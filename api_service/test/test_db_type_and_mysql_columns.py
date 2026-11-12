@@ -44,9 +44,9 @@ SHORT_ON_PURPOSE = {
     'auth_users.username', 'auth_users.password_hash', 'auth_users.role',
     'auth_users.visible_tabs', 'cleanup_log.tmdb_id', 'cleanup_log.media_type',
     'cleanup_log.title', 'cleanup_log.action', 'cleanup_log.reason',
-    'cleanup_settings.last_run_status', 'cleanup_settings.last_run_summary', 'discover_jobs.name',
+    'cleanup_settings.last_run_status', 'discover_jobs.name',
     'discover_jobs.job_type', 'discover_jobs.media_type', 'discover_jobs.schedule_type',
-    'discover_jobs.schedule_value', 'discover_jobs.delivery_mode',
+    'discover_jobs.delivery_mode',
     'discover_jobs.seer_identity_mode', 'discover_jobs.approval_pause_mode',
     'integrations.service', 'job_execution_history.status', 'job_list_state.source_key',
     'job_list_state.lease_token', 'list_import_runs.id', 'list_import_runs.status',
@@ -198,3 +198,21 @@ def test_mysql_indexes_use_a_prefix_for_the_text_columns():
     assert 'CREATE INDEX idx_pending_requests_due ON pending_requests (status(32), next_attempt_at)' in statements
     assert 'CREATE INDEX idx_job_history_job_started ON job_execution_history (job_id, started_at)' in statements
     assert len(statements) == 4
+
+
+def test_existing_text_columns_are_widened_too():
+    columns = {('discover_jobs', 'request_profiles'): ('text', 'YES'), ('simkl_oauth_tokens', 'access_token'): ('text', 'NO')}
+    manager, cursor = mysql_manager(columns)
+    manager._widen_mysql_long_text_columns()
+    assert 'ALTER TABLE discover_jobs MODIFY request_profiles LONGTEXT NULL' in alters(cursor)
+    assert 'ALTER TABLE simkl_oauth_tokens MODIFY access_token LONGTEXT NOT NULL' in alters(cursor)
+
+
+@pytest.mark.parametrize('spelling', ['sqlite', 'SQLite', ' sqlite ', None])
+def test_setup_validation_uses_the_same_folded_type(spelling):
+    from api_service.config.config import is_setup_complete
+    config = {'SELECTED_SERVICE': 'plex', 'PLEX_API_URL': 'http://p', 'PLEX_TOKEN': 't', 'TMDB_API_KEY': 'k',
+              'DB_TYPE': spelling, 'REQUEST_BACKEND': 'seer', 'SEER_API_URL': 'http://s', 'SEER_TOKEN': 'x'}
+    assert is_setup_complete(config) is True
+    external = dict(config, DB_TYPE='MariaDB')  # needs the external database credentials
+    assert is_setup_complete(external) is False
