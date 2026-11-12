@@ -187,6 +187,7 @@ class SchemaManager:
                     seer_request_id INTEGER,
                     seer_created_at TIMESTAMP NULL,
                     seer_instance TEXT,
+                    unavailable_since TIMESTAMP NULL,
                     UNIQUE(tmdb_id, media_type)
                 )
             """,
@@ -581,6 +582,7 @@ class SchemaManager:
         initialize_recap_schema(self._database)
         self._migrate_execution_history()
         self._migrate_request_expiry()
+        self._migrate_queue_outage()
         self._migrate_media_availability()
         self._migrate_watched_media()
         self._migrate_suggestion_feedback()
@@ -665,6 +667,23 @@ class SchemaManager:
                 cursor.execute('ALTER TABLE watched_media ADD COLUMN excluded INTEGER NOT NULL DEFAULT 0')
             if 'watched_at' not in existing:
                 cursor.execute('ALTER TABLE watched_media ADD COLUMN watched_at TIMESTAMP NULL')
+            conn.commit()
+
+    def _migrate_queue_outage(self):
+        """Add ``pending_requests.unavailable_since``: when the delivery backend was first found unreachable."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if self.db_type == 'sqlite':
+                cursor.execute('PRAGMA table_info(pending_requests)')
+                existing = {row[1] for row in cursor.fetchall()}
+            elif self.db_type == 'postgres':
+                cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name='pending_requests'")
+                existing = {row[0] for row in cursor.fetchall()}
+            else:
+                cursor.execute('SHOW COLUMNS FROM pending_requests')
+                existing = {row[0] for row in cursor.fetchall()}
+            if 'unavailable_since' not in existing:
+                cursor.execute('ALTER TABLE pending_requests ADD COLUMN unavailable_since TIMESTAMP NULL')
             conn.commit()
 
     def _migrate_request_expiry(self):

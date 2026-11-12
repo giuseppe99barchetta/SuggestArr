@@ -1,6 +1,7 @@
 """Persistent outbound webhook delivery queue."""
 import json
 import uuid
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from api_service.services.notification_formats import describe_event, render_notification
@@ -164,21 +165,25 @@ class WebhookMixin:
         ph = "%s" if self.db_type in ("mysql", "mariadb", "postgres") else "?"
         # Personal destinations belong to their users; administrators see only shared webhooks.
         query = ("SELECT id,event_id,webhook_id,event_type,url,status,retry_count,next_attempt_at,last_error,created_at,updated_at "
-                 f"FROM webhook_deliveries WHERE webhook_id NOT LIKE '{self._PERSONAL_PREFIX}%' ORDER BY id DESC LIMIT " + ph)
+                 f"FROM webhook_deliveries WHERE webhook_id NOT LIKE {ph} ORDER BY id DESC LIMIT " + ph)
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query, (max_items,))
+            # The pattern is a parameter: a literal '%' next to %s placeholders breaks psycopg2 and MySQL.
+            cursor.execute(query, (f"{self._PERSONAL_PREFIX}%", max_items))
             columns = [column[0] for column in cursor.description]
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     def get_due_webhook_deliveries(self, max_items=50):
         ph = "%s" if self.db_type in ("mysql", "mariadb", "postgres") else "?"
         query = ("SELECT id,event_id,event_type,url,secret,allow_private,payload,retry_count FROM webhook_deliveries "
-                 "WHERE status='queued' AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP) "
+                 f"WHERE status='queued' AND (next_attempt_at IS NULL OR next_attempt_at <= {ph}) "
                  f"ORDER BY id ASC LIMIT {ph}")
+        # next_attempt_at is written by Python as naive UTC, so compare against the same, not the database clock
+        # (CURRENT_TIMESTAMP is session-zone on MySQL/PostgreSQL and space-separated on SQLite).
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(query, (max_items,))
+            cursor.execute(query, (now, max_items))
             return [dict(row) if self.db_type == "sqlite" else dict(zip([x[0] for x in cursor.description], row))
                     for row in cursor.fetchall()]
 

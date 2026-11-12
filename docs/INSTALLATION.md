@@ -250,7 +250,7 @@ Numeric weekdays follow standard cron: `0` and `7` are Sunday, `1` is Monday.
 - **Radarr & Sonarr**: titles are added straight to Radarr (movies) or Sonarr (TV) and searched for. Seer is not needed. Requires Radarr v5+ and Sonarr v4+, and a default quality profile and root folder for each configured instance (optional anime overrides fall back to the default).
 - **Both**: Seer delivers the requests; Radarr and Sonarr are only read to skip titles you already own.
 
-Switching never reroutes requests already in the queue: each one is delivered by the backend it was queued for.
+Switching never reroutes requests already in the queue: each one is delivered by the backend it was queued for. If that backend cannot be reached (offline, restarting, timeouts, HTTP 502/503/504), the requests stay queued and are retried every 5 minutes without counting as failed attempts; the Jobs page says since when it is unreachable. Only after 7 days of continuous unavailability do they become failed (and send `request.failed`); a request the backend actually rejects still fails after 5 attempts.
 
 With **Radarr & Sonarr**:
 

@@ -241,7 +241,7 @@ class RequestQueueMixin:
             cursor.execute(
                 f"SELECT COUNT(*) FROM pending_requests WHERE job_id={ph} "
                 f"AND COALESCE(user_id, '')={ph} AND created_at >= {ph}",
-                (job_id, '' if user_id is None else str(user_id), cutoff),
+                (job_id, '' if user_id is None else str(user_id), cutoff.strftime('%Y-%m-%d %H:%M:%S')),
             )
             count = cursor.fetchone()[0]
         if count >= max_requests:
@@ -556,7 +556,8 @@ class RequestQueueMixin:
             cursor = conn.cursor()
             cursor.execute(f"UPDATE pending_requests SET status='rejected',decided_at=CURRENT_TIMESTAMP,"
                            f"last_error='Automatically rejected after approval timeout' "
-                           f"WHERE status='awaiting_approval' AND created_at < {ph}", (cutoff,))
+                           f"WHERE status='awaiting_approval' AND created_at < {ph}",
+                           (cutoff.strftime('%Y-%m-%d %H:%M:%S'),))
             changed = cursor.rowcount
             conn.commit()
             return changed
@@ -571,7 +572,7 @@ class RequestQueueMixin:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(f"UPDATE pending_requests SET status='queued',retry_count=0,next_attempt_at=NULL,"
-                           f"last_attempt_at=NULL,last_error=NULL "
+                           f"last_attempt_at=NULL,last_error=NULL,unavailable_since=NULL "
                            f"WHERE status='failed' AND id IN ({marks}){owner_clause}", tuple(params))
             conn.commit()
             return cursor.rowcount
@@ -617,7 +618,8 @@ class RequestQueueMixin:
                     cursor.execute(f"DELETE FROM suggestion_blacklist WHERE tmdb_id={ph} AND media_type={ph}",
                                    (tmdb_id, media_type))
             cursor.execute(f"UPDATE pending_requests SET status='queued',retry_count=0,last_error=NULL,"
-                           f"next_attempt_at=NULL WHERE status='rejected' AND id IN ({marks}){owner_clause}",
+                           f"next_attempt_at=NULL,unavailable_since=NULL "
+                           f"WHERE status='rejected' AND id IN ({marks}){owner_clause}",
                            tuple(params))
             conn.commit()
             return cursor.rowcount
@@ -662,18 +664,22 @@ class RequestQueueMixin:
     def get_due_requests(self, max_items: int = 50) -> List[Dict[str, Any]]:
         """Return up to *max_items* queued rows whose next_attempt_at is due.
 
+        Rows never attempted come first, then the least recently attempted, so rows waiting for an
+        unreachable backend cannot monopolize a batch and starve the ones for a working backend.
+
         :param max_items: Maximum number of rows to return.
-        :return: List of row dicts ordered by created_at ASC.
+        :return: List of row dicts, never-attempted first, then oldest attempt, then oldest created.
         """
         now = self._utc_naive(datetime.now(timezone.utc))
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
 
         query = f"""
-            SELECT id, tmdb_id, media_type, user_id, payload, retry_count, job_id, execution_id
+            SELECT id, tmdb_id, media_type, user_id, payload, retry_count, job_id, execution_id,
+                   unavailable_since
             FROM pending_requests
             WHERE status = 'queued'
               AND (next_attempt_at IS NULL OR next_attempt_at <= {placeholder})
-            ORDER BY created_at ASC
+            ORDER BY CASE WHEN last_attempt_at IS NULL THEN 0 ELSE 1 END, last_attempt_at, created_at ASC
             LIMIT {placeholder}
         """
 
@@ -693,7 +699,7 @@ class RequestQueueMixin:
         """Internal helper - update status / retry columns on a pending_requests row."""
         placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
         query = (f"UPDATE pending_requests SET status={placeholder}, retry_count={placeholder}"
-                 f", last_attempt_at={placeholder}, next_attempt_at={placeholder}"
+                 f", last_attempt_at={placeholder}, next_attempt_at={placeholder}, unavailable_since=NULL"
                  f" WHERE id={placeholder}")
         db_last = self._utc_naive(last_attempt_at) if last_attempt_at is not None else None
         db_next = self._utc_naive(next_attempt_at) if next_attempt_at is not None else None
@@ -705,6 +711,35 @@ class RequestQueueMixin:
                 conn.commit()
         except Exception as e:
             self.logger.error("Failed to update pending_requests row %s: %s", row_id, e)
+
+    def mark_pending_unavailable(self, row_id: int, next_attempt_at: datetime, error: str) -> bool:
+        """Keep a row queued because its backend could not be reached; the retry count is not touched.
+
+        ``unavailable_since`` is set on the first outage only and cleared by every other state change, so it
+        measures continuous unavailability. Both datetimes are written by Python, never by the database clock.
+
+        :param row_id: Primary key of the pending_requests row.
+        :param next_attempt_at: Naive UTC time of the next eligible attempt.
+        :param error: Short reason shown on the row.
+        :return: True when the row was updated; False when it is no longer queued or sending (for example it
+            was cancelled or rejected meanwhile) and was therefore left untouched.
+        """
+        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"UPDATE pending_requests SET status='queued', last_attempt_at={ph}, "
+                               f"next_attempt_at={ph}, last_error={ph}, "
+                               f"unavailable_since=COALESCE(unavailable_since, {ph}) "
+                               f"WHERE id={ph} AND status IN ('queued','submitting')",
+                               (now, next_attempt_at, error[:500], now, row_id))
+                updated = cursor.rowcount == 1
+                conn.commit()
+                return updated
+        except Exception as e:
+            self.logger.error("Failed to mark pending_requests row %s unavailable: %s", row_id, e)
+            return False
 
     def mark_pending_submitting(self, row_id: int, retry_count: int) -> bool:
         """Claim a queued row for delivery, so concurrent workers and cancellations skip it.

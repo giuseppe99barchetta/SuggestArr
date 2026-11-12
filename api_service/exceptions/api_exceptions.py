@@ -1,4 +1,7 @@
 """Custom exceptions for API client errors."""
+import asyncio
+
+import aiohttp
 
 
 class APIClientError(Exception):
@@ -64,3 +67,21 @@ class SeerClientError(APIClientError):
 
 class LLMValidationError(Exception):
     """Raised when the LLM response fails Pydantic validation after all retries."""
+
+class BackendUnavailableError(APIClientError):
+    """A delivery backend (Seer, Radarr, Sonarr) could not be reached or answered 502/503/504.
+
+    Unlike a rejection, it says nothing about the request itself, so it must not count as a failed attempt.
+    """
+
+
+TRANSPORT_ERRORS = (aiohttp.ClientError, asyncio.TimeoutError, ConnectionError)
+
+
+def is_transport_error(exc: BaseException) -> bool:
+    """Return True when ``exc`` means the backend could not be reached (network, timeout, outage).
+
+    :param exc: Exception raised while delivering a request.
+    :return: True for transport failures and :class:`BackendUnavailableError`.
+    """
+    return isinstance(exc, (*TRANSPORT_ERRORS, BackendUnavailableError))

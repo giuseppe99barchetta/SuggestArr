@@ -1,5 +1,6 @@
 """Request client that adds titles straight to Radarr/Sonarr instead of going through Seer."""
 from api_service.config.config import ARR_INSTANCES, arr_default_profile
+from api_service.exceptions.api_exceptions import BackendUnavailableError, is_transport_error
 from api_service.db.database_manager import DatabaseManager
 from api_service.services.arr.arr_client import ArrClient, SUGGESTARR_TAG, arr_tag_label
 from api_service.services.seer.seer_client import SeerClient
@@ -103,18 +104,21 @@ class ArrRequestClient(SeerClient):
     async def submit_queued_request(self, payload):
         """Add one queued request to Radarr/Sonarr.
 
-        :return: True on success (no remote request ID exists to track), False on failure.
+        :return: True on success (no remote request ID exists to track), False when the instance rejected it.
+        :raises BackendUnavailableError: When the instance is not configured, could not be reached or answered
+            502/503/504.
         """
         media_type = payload.get('mediaType')
         instance = self._instance(media_type)
         if instance is None:
-            self.logger.error("Radarr/Sonarr is not configured for %s: restore the configuration and retry "
-                              "the request from the Requests page.", media_type)
-            return False
+            # Not a verdict on the request: it stays queued until the configuration is restored.
+            raise BackendUnavailableError(f"Radarr/Sonarr is not configured for {media_type}", "Radarr/Sonarr")
         service, url, token = instance
         try:
             return await self._arr_client(service, url, token).add(payload, self._extra_tag_labels(payload))
         except Exception as exc:
+            if is_transport_error(exc) or getattr(exc, 'status', None) in (502, 503, 504):
+                raise BackendUnavailableError(f"{service.capitalize()} is unavailable: {exc}", service.capitalize()) from exc
             self.logger.error("%s rejected the request for tmdb:%s: %s", service.capitalize(),
                               payload.get('mediaId'), exc)
             return False

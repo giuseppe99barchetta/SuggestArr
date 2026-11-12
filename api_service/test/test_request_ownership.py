@@ -45,7 +45,8 @@ def _queue():
         CREATE TABLE pending_requests (id INTEGER PRIMARY KEY, tmdb_id TEXT, media_type TEXT, user_id TEXT,
             payload TEXT, status TEXT, retry_count INTEGER DEFAULT 0, last_attempt_at TIMESTAMP,
             next_attempt_at TIMESTAMP, job_id INTEGER, execution_id INTEGER, owner_id INTEGER,
-            decided_at TIMESTAMP, decided_by INTEGER, last_error TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+            decided_at TIMESTAMP, decided_by INTEGER, last_error TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            unavailable_since TIMESTAMP);
         CREATE TABLE metadata (media_id TEXT, media_type TEXT, title TEXT, poster_path TEXT, overview TEXT,
             rating REAL, release_date TEXT, logo_path TEXT, backdrop_path TEXT);
         CREATE TABLE discover_jobs (id INTEGER PRIMARY KEY, name TEXT);

@@ -1318,6 +1318,7 @@ def get_queue_status():
           - submitted:  items successfully delivered this session
           - failed:     items that exhausted retries
           - total_pending: queued + submitting (items not yet delivered)
+          - unavailable_since: when a delivery backend was first found unreachable, or null
     """
     try:
         from api_service.db.database_manager import DatabaseManager
@@ -1330,6 +1331,11 @@ def get_queue_status():
             rows = cursor.fetchall()
 
         counts = {row[0]: row[1] for row in rows}
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT MIN(unavailable_since) FROM pending_requests "
+                           "WHERE status = 'queued' AND unavailable_since IS NOT NULL")
+            unavailable_since = cursor.fetchone()[0]
         queued = counts.get('queued', 0)
         submitting = counts.get('submitting', 0)
         submitted = counts.get('submitted', 0)
@@ -1342,6 +1348,8 @@ def get_queue_status():
             'submitted': submitted,
             'failed': failed,
             'total_pending': queued + submitting,
+            # Oldest time a queued row found its backend unreachable; None while deliveries work.
+            'unavailable_since': unavailable_since.isoformat() if hasattr(unavailable_since, 'isoformat') else unavailable_since,
         }), 200
     except Exception as e:
         logger.error(f"Error retrieving queue status: {e}", exc_info=True)

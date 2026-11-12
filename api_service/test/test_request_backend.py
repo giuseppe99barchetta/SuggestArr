@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from api_service.config.config import validate_request_backend
+from api_service.exceptions.api_exceptions import BackendUnavailableError
 from api_service.jobs.queue_worker import _run_worker
 from api_service.services.arr.arr_client import ArrClient
 from api_service.services.arr.arr_request_client import ArrRequestClient
@@ -194,7 +195,9 @@ def test_submit_delivers_to_the_instance_serving_the_type_and_reports_failures()
         factory.assert_called_once_with('sonarr', 'http://sonarr:8989', 'k')
         fake.add.side_effect = RuntimeError('rejected')
         assert asyncio.run(client.submit_queued_request({'mediaType': 'movie', 'mediaId': 1})) is False
-    assert asyncio.run(ArrRequestClient({'REQUEST_BACKEND': 'arr'}).submit_queued_request({'mediaType': 'movie'})) is False
+    # configuration removed after queueing: an outage of that destination, retried once it is restored
+    with pytest.raises(BackendUnavailableError):
+        asyncio.run(ArrRequestClient({'REQUEST_BACKEND': 'arr'}).submit_queued_request({'mediaType': 'movie'}))
 
 
 # --- queue worker routes each row by its recorded backend -------------------
@@ -241,7 +244,7 @@ def test_rows_are_delivered_by_their_recorded_backend_whatever_the_current_setti
     assert db.track_seer_request.call_count == 2  # only Seer returns a remote id to track
 
 
-def test_a_backend_that_cannot_be_built_retries_its_rows_without_blocking_the_others():
+def test_a_backend_that_cannot_be_built_parks_its_rows_without_blocking_the_others():
     arr = _Client(True)
     seer_cls_error = MagicMock(side_effect=ValueError('no url'))
     db = MagicMock()
@@ -253,7 +256,9 @@ def test_a_backend_that_cannot_be_built_retries_its_rows_without_blocking_the_ot
             patch('api_service.jobs.queue_worker.SeerClient', seer_cls_error), \
             patch('api_service.jobs.queue_worker.ArrRequestClient', return_value=arr):
         assert asyncio.run(_run_worker()) == 1
-    db.increment_pending_retry.assert_called_once()
+    # An unreachable or unusable backend is not a failed attempt: the row stays queued, retry_count untouched.
+    db.mark_pending_unavailable.assert_called_once()
+    db.increment_pending_retry.assert_not_called()
 
 
 # --- import: validate before writing, restore on failure --------------------

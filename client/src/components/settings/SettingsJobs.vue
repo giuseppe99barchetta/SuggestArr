@@ -34,6 +34,9 @@
           <template v-if="queueStatus.submitting > 0"> · {{ queueStatus.submitting }} sending</template>
           <template v-if="queueStatus.failed > 0"> · <span class="text-bad">{{ queueStatus.failed }} failed</span></template>
         </span>
+        <span v-if="queueStatus.unavailable_since" class="text-caution">
+          Waiting for Seer, Radarr or Sonarr: unreachable since {{ formatUtc(queueStatus.unavailable_since) }}. Deliveries resume by themselves; after 7 days of this they are marked failed and can be retried.
+        </span>
       </div>
       <button type="button" class="h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Dismiss" @click="dismissQueueBanner"><i aria-hidden="true" class="fas fa-times"></i></button>
     </div>
@@ -734,6 +737,11 @@ export default {
 
     formatSchedule: formatJobSchedule,
     hitRate,
+
+    formatUtc(isoText) {
+      // The server sends naive UTC timestamps without a zone marker.
+      return this.formatDate(/Z|[+-]\d\d:?\d\d$/.test(isoText) ? isoText : `${isoText}Z`);
+    },
 
     formatDate(dateStr) {
       if (!dateStr) return 'N/A';

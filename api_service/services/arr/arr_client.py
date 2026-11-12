@@ -20,6 +20,14 @@ def arr_tag_label(text):
     return re.sub(r'[^a-z0-9]+', '-', str(text or '').lower()).strip('-')
 
 
+class ArrHTTPError(RuntimeError):
+    """Radarr/Sonarr answered with an unexpected HTTP status; ``status`` tells an outage from a rejection."""
+
+    def __init__(self, message, status):
+        super().__init__(message)
+        self.status = status
+
+
 class ArrClient(BaseHTTPClient):
     """Minimal Radarr/Sonarr v3 API client: library listing, options and adding titles."""
 
@@ -58,7 +66,7 @@ class ArrClient(BaseHTTPClient):
     async def _get(self, path, **kwargs):
         status, data = await self._request('GET', path, **kwargs)
         if status != 200:
-            raise RuntimeError(f'{self.service.capitalize()} answered HTTP {status} for {path}')
+            raise ArrHTTPError(f'{self.service.capitalize()} answered HTTP {status} for {path}', status)
         return data
 
     async def _get_list(self, path, **kwargs):
@@ -151,7 +159,7 @@ class ArrClient(BaseHTTPClient):
     async def _tag_ids_for(self, labels):
         """Return the ids of the tags with these labels, creating the missing ones.
 
-        :raises RuntimeError: When the tags cannot be read or created.
+        :raises ArrHTTPError: When the tags cannot be created (carries the HTTP status).
         """
         if any(label not in self._tag_ids for label in labels):
             await self._load_tags()
@@ -159,7 +167,7 @@ class ArrClient(BaseHTTPClient):
             if label not in self._tag_ids:
                 status, data = await self._request('POST', 'tag', json={'label': label})
                 if status not in (200, 201) or not isinstance(data, dict) or 'id' not in data:
-                    raise RuntimeError(f'{self.service.capitalize()} could not create the tag {label} (HTTP {status})')
+                    raise ArrHTTPError(f'{self.service.capitalize()} could not create the tag {label} (HTTP {status})', status)
                 self._tag_ids[label] = data['id']
         return [self._tag_ids[label] for label in labels]
 
@@ -213,7 +221,7 @@ class ArrClient(BaseHTTPClient):
         if status == 400 and isinstance(data, list) and any(
                 isinstance(e, dict) and e.get('errorCode') in _EXISTS_CODES for e in data):
             return True  # already added: delivery is idempotent
-        raise RuntimeError(f'{self.service.capitalize()} rejected tmdb:{tmdb_id} (HTTP {status})')
+        raise ArrHTTPError(f'{self.service.capitalize()} rejected tmdb:{tmdb_id} (HTTP {status})', status)
 
     async def find_owned(self, tmdb_id):
         """Find a title and tell whether SuggestArr added it (it carries the ``suggestarr`` tag).

@@ -51,6 +51,7 @@ export const WHATS_NEW = {
       points: [
         'Badges on the Requests page, the request.available webhook and personal notifications work without Seer.',
         'There is no play link: Radarr and Sonarr do not know one.',
+        'If Seer, Radarr or Sonarr is offline, requests wait in the queue for up to 7 days and go out when it is back.',
       ],
     },
     {
