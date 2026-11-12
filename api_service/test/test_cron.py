@@ -1,5 +1,5 @@
 """
-Tests for cron expression parsing in cron_jobs.py and JobManager._cron_to_trigger / _preset_to_trigger.
+Tests for JobManager._cron_to_trigger / _preset_to_trigger.
 
 Key regression covered: APScheduler OR-logic bug where CronTrigger(day='1', day_of_week='*')
 fires every day instead of only on the 1st of the month.
@@ -10,90 +10,11 @@ from unittest.mock import MagicMock, patch
 
 from apscheduler.triggers.cron import CronTrigger
 
-from api_service.config.cron_jobs import parse_cron_expression
 
 
 def _next_fire(trigger: CronTrigger, now: datetime) -> datetime:
     """Return the next fire time for a trigger after the given 'now'."""
     return trigger.get_next_fire_time(None, now)
-
-
-class TestParseCronExpression(unittest.TestCase):
-    """Tests for api_service.config.cron_jobs.parse_cron_expression."""
-
-    def test_returns_cron_trigger(self):
-        trigger = parse_cron_expression('0 0 * * *')
-        self.assertIsInstance(trigger, CronTrigger)
-
-    def test_daily_midnight(self):
-        trigger = parse_cron_expression('0 0 * * *')
-        now = datetime(2026, 2, 15, 12, 0, 0, tzinfo=timezone.utc)
-        nxt = _next_fire(trigger, now)
-        self.assertEqual(nxt.hour, 0)
-        self.assertEqual(nxt.minute, 0)
-        self.assertEqual(nxt.day, 16)
-
-    def test_first_of_month_does_not_fire_daily(self):
-        """Regression: '0 0 1 * *' must NOT fire every day."""
-        trigger = parse_cron_expression('0 0 1 * *')
-        # now = 2nd of Feb 2026 at 01:00
-        now = datetime(2026, 2, 2, 1, 0, 0, tzinfo=timezone.utc)
-        nxt = _next_fire(trigger, now)
-        # Must jump to 1st March, not 3rd February
-        self.assertEqual(nxt.month, 3, "Expected next fire in March, not next day")
-        self.assertEqual(nxt.day, 1)
-        self.assertEqual(nxt.hour, 0)
-
-    def test_specific_day_of_week(self):
-        """'0 0 * * mon' must fire only on Monday."""
-        # Use named day to avoid APScheduler vs standard-cron numeric offset ambiguity
-        trigger = parse_cron_expression('0 0 * * mon')
-        # Wednesday 2026-02-18 — next Monday is 2026-02-23
-        now = datetime(2026, 2, 18, 1, 0, 0, tzinfo=timezone.utc)
-        nxt = _next_fire(trigger, now)
-        self.assertEqual(nxt.weekday(), 0)  # Python weekday: 0 = Monday
-
-    def test_standard_numeric_sunday_not_monday(self):
-        now = datetime(2026, 2, 15, 1, 0, 0, tzinfo=timezone.utc)  # Sunday
-        for weekday in ('0', '7'):
-            with self.subTest(weekday=weekday):
-                nxt = _next_fire(parse_cron_expression(f'0 0 * * {weekday}'), now)
-                self.assertEqual(nxt.weekday(), 6)
-                self.assertEqual(nxt.day, 22)
-
-    def test_every_12_hours(self):
-        trigger = parse_cron_expression('0 */12 * * *')
-        now = datetime(2026, 2, 15, 1, 0, 0, tzinfo=timezone.utc)
-        nxt = _next_fire(trigger, now)
-        # Fires at minute 0 of an hour that is a multiple of 12 (0 or 12)
-        self.assertEqual(nxt.minute, 0)
-        self.assertIn(nxt.hour % 12, [0])  # hour must be 0 or 12
-
-    def test_invalid_expression_falls_back_to_daily(self):
-        """A malformed expression should fall back to '0 0 * * *'."""
-        trigger = parse_cron_expression('not a valid cron')
-        self.assertIsInstance(trigger, CronTrigger)
-        now = datetime(2026, 2, 15, 1, 0, 0, tzinfo=timezone.utc)
-        nxt = _next_fire(trigger, now)
-        # Fallback is daily at midnight
-        self.assertEqual(nxt.hour, 0)
-        self.assertEqual(nxt.minute, 0)
-
-    def test_none_expression_falls_back_to_daily(self):
-        trigger = parse_cron_expression(None)
-        self.assertIsInstance(trigger, CronTrigger)
-
-    def test_empty_expression_falls_back_to_daily(self):
-        trigger = parse_cron_expression('')
-        self.assertIsInstance(trigger, CronTrigger)
-
-    def test_monthly_on_15th(self):
-        trigger = parse_cron_expression('0 8 15 * *')
-        now = datetime(2026, 2, 16, 0, 0, 0, tzinfo=timezone.utc)
-        nxt = _next_fire(trigger, now)
-        self.assertEqual(nxt.day, 15)
-        self.assertEqual(nxt.hour, 8)
-        self.assertEqual(nxt.month, 3)
 
 
 class TestJobManagerCronTrigger(unittest.TestCase):

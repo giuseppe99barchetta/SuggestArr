@@ -1,11 +1,10 @@
 import os
 from flask import Blueprint, request, jsonify
-import yaml
 import requests
 from api_service.auth.middleware import require_role
 from api_service.config.config import (
     load_env_vars, save_env_vars, clear_env_vars,
-    get_config_sections, get_config_section, save_config_section, INTEGRATION_TO_FLAT,
+    get_config_section, save_config_section, INTEGRATION_TO_FLAT,
     is_setup_complete
 )
 from api_service.config.logger_manager import LoggerManager
@@ -81,11 +80,6 @@ def _sync_integrations_from_flat(db, flat: dict) -> None:
     for service, changes in service_updates.items():
         existing = db.get_integration(service) or {}
         db.set_integration(service, merge_integration_config(service, changes, existing))
-
-
-def _redact_config(config: dict) -> dict:
-    """Return a copy of config with non-empty secret values replaced by '***'."""
-    return {k: (_REDACTED if k in _SECRET_KEYS and v else v) for k, v in config.items()}
 
 
 def _merge_secrets(incoming: dict, existing: dict) -> dict:
@@ -373,77 +367,6 @@ def set_log_level():
         logger.error(f'Error setting log level: {str(e)}', exc_info=True)
         return jsonify({'message': 'Error setting log level', 'status': 'error'}), 500
 
-@config_bp.route('/pool-stats', methods=['GET'])
-@require_role('admin')
-def get_pool_statistics():
-    """
-    Get database connection pool statistics.
-    """
-    try:
-        db_manager = DatabaseManager()
-        pool_stats = db_manager.get_pool_stats()
-        all_stats = {'status': 'direct_connection', 'message': 'Connection pooling has been removed for better performance'}
-        
-        return jsonify({
-            'message': 'Connection pool statistics retrieved successfully',
-            'current_pool': pool_stats,
-            'all_pools': all_stats,
-            'status': 'success'
-        }), 200
-    except Exception as e:
-        logger.error(f'Error getting pool statistics: {str(e)}', exc_info=True)
-        return jsonify({'message': 'Error getting pool statistics', 'status': 'error'}), 500
-
-@config_bp.route('/force_run', methods=['POST'])
-@require_role('admin')
-def force_run_automation():
-    """
-    Force run the automation script immediately.
-    """
-    try:
-        from api_service.utils.utils import execute_automation
-        logger.info("Force run automation script requested")
-        
-        # Execute automation in background
-        execute_automation(force_run=True)
-        
-        return jsonify({
-            'message': 'Automation script forced successfully!',
-            'status': 'success'
-        }), 200
-    except Exception as e:
-        logger.error(f'Error forcing automation run: {str(e)}', exc_info=True)
-        return jsonify({'message': 'Error forcing automation run', 'status': 'error'}), 500
-
-@config_bp.route('/test-db', methods=['POST'])
-@require_role('admin')
-def test_database_connection():
-    """
-    Test database connection with current configuration.
-    """
-    try:
-        config = load_env_vars()
-        db_config = {
-            'DB_TYPE': config.get('DB_TYPE', 'sqlite'),
-            'DB_HOST': config.get('DB_HOST'),
-            'DB_PORT': config.get('DB_PORT'),
-            'DB_USER': config.get('DB_USER'),
-            'DB_PASSWORD': config.get('DB_PASSWORD'),
-            'DB_NAME': config.get('DB_NAME'),
-            'DB_PATH': os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'config_files', 'requests.db')
-        }
-        
-        db_manager = DatabaseManager()
-        result = db_manager.test_connection(db_config)
-        
-        return jsonify(result), 200
-    except Exception as e:
-        logger.error(f'Error testing database connection: {str(e)}', exc_info=True)
-        return jsonify({
-            'message': 'Error testing database connection',
-            'status': 'error'
-        }), 500
-
 @config_bp.route('/docker-info', methods=['GET'])
 def get_docker_info():
     """
@@ -480,42 +403,6 @@ def get_docker_info():
                     }), 200
             except Exception as e:
                 logger.warning(f'Metadata file read error: {e}')
-        
-        try:
-            import requests
-            container_id = os.environ.get('HOSTNAME', '').split('.')[0]
-            
-            if container_id:
-                sock_url = f"http://unix:///var/run/docker.sock:2375/containers/{container_id}/json"
-                response = requests.get(
-                    sock_url,
-                    timeout=5,
-                    headers={'Accept': 'application/json'}
-                )
-                
-                if response.status_code == 200:
-                    container_info = response.json()
-                    
-                    labels = container_info.get('Config', {}).get('Labels', {})
-                    docker_tag = labels.get('DOCKER_TAG') or labels.get('org.opencontainers.image.version')
-                    
-                    if not docker_tag:
-                        image_name = container_info.get('Config', {}).get('Image', '')
-                        if ':' in image_name:
-                            docker_tag = image_name.split(':')[-1]
-                        else:
-                            docker_tag = 'latest'
-                    
-                    logger.info(f'Docker info from socket: tag={docker_tag}')
-                    return jsonify({
-                        'tag': docker_tag or 'latest',
-                        'build_date': labels.get('BUILD_DATE'),
-                        'source': 'docker_socket',
-                        'status': 'success'
-                    }), 200
-                    
-        except Exception as e:
-            logger.debug(f'Docker socket failed: {e}')
         
         logger.debug('Docker info fallback: latest')
         return jsonify({

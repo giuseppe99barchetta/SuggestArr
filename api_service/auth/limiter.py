@@ -6,7 +6,7 @@ Create the Limiter instance here so it can be imported by both app.py
 without circular imports.
 
 Storage: in-memory (default).  No Redis required for a single-container
-self-hosted deployment.  Multiple gunicorn/uvicorn workers each maintain
+self-hosted deployment.  Multiple uvicorn workers would each maintain
 their own counter — the effective rate is limit × worker_count.  That is
 acceptable here because login brute-force protection is the primary concern
 and the instance count is small.

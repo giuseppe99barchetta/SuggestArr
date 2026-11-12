@@ -1,7 +1,6 @@
 """
 Main Flask application for managing environment variables and running processes.
 """
-from concurrent.futures import ThreadPoolExecutor
 import os
 from flask import Flask, jsonify, render_template, send_from_directory, url_for
 from flask_cors import CORS
@@ -42,32 +41,8 @@ from api_service.blueprints.simkl.routes import simkl_bp
 from api_service.blueprints.discord_interactions import discord_interactions_bp
 from api_service.api.v1 import public_api_v1_bp
 
-class SubpathMiddleware:
-    """
-    WSGI Middleware to strip the SUBPATH from the request URL
-    so Flask routing works correctly behind various reverse proxies.
-    """
-    def __init__(self, app):
-        self.app = app
-
-    def __call__(self, environ, start_response):
-        env_vars = load_env_vars()
-        subpath = env_vars.get('SUBPATH')
-        subpath = str(subpath).strip('/') if subpath else ''
-        
-        if subpath and environ['PATH_INFO'].startswith(f'/{subpath}'):
-            # Strip the subpath from PATH_INFO.
-            # If the URL is exactly /<subpath> (no trailing slash), the result
-            # would be an empty string which is not a valid WSGI PATH_INFO.
-            # Fall back to '/' so Flask can match the root route.
-            stripped = environ['PATH_INFO'][len(subpath) + 1:]
-            environ['PATH_INFO'] = stripped if stripped else '/'
-            # Ensure SCRIPT_NAME correctly reflects the subpath
-            environ['SCRIPT_NAME'] = f'/{subpath}'
-        return self.app(environ, start_response)
 from api_service.frontend_routes import SubpathMiddleware, register_routes
 
-executor = ThreadPoolExecutor(max_workers=3)
 logger = LoggerManager.get_logger("APP") 
 logger.debug(f"Current log level: {logging.getLevelName(logger.getEffectiveLevel())}")
 
@@ -82,8 +57,7 @@ def create_app():
     Create and configure the Flask application.
     """
 
-    if AppUtils.is_last_worker():
-        AppUtils.print_welcome_message() # Print only for last worker
+    AppUtils.print_welcome_message()
 
     static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
     if not os.path.isdir(static_dir):
@@ -410,6 +384,8 @@ def _start_background_services():
         logger.error(traceback.format_exc())
 
 
+# shortcut: one process only. The scheduler, the queue workers and the in-memory rate limiter start at
+# import time, so `uvicorn --workers N` would run every job N times; move them behind a lock before scaling.
 # Tests import this module for its Flask app; starting the scheduler there would let its
 # jobs run against whichever test database is active (and the real one at import time).
 if os.environ.get('SUGGESTARR_DISABLE_BACKGROUND') == '1':

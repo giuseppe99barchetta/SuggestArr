@@ -32,18 +32,13 @@ COPY api_service/ /app/api_service/
 COPY docker/docker_entrypoint.sh /app/
 RUN chmod +x /app/docker_entrypoint.sh
 
-# Create log files for Gunicorn
-RUN touch /var/log/gunicorn.log /var/log/gunicorn_error.log
-
-# Expose the port used by Gunicorn
+# Expose the port the app listens on
 ARG SUGGESTARR_PORT=5000
 EXPOSE ${SUGGESTARR_PORT}
 
-# Start Supervisor to manage Gunicorn
 ENV LOG_LEVEL=info
 # Set the port dynamically
 ENV SUGGESTARR_PORT=${SUGGESTARR_PORT}
 
 # Use the custom port in the entrypoint command
 ENTRYPOINT ["/app/docker_entrypoint.sh"]
-CMD ["--host", "0.0.0.0", "--port", "${SUGGESTARR_PORT}", "--log-level", "info"]

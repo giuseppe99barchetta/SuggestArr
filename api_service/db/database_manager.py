@@ -207,10 +207,3 @@ class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueu
             self.logger.error(f"Error testing database connection: {str(e)}")
             return {'status': 'error', 'message': f"Error testing database connection: {str(e)}"}
     
-    def get_pool_stats(self) -> Dict[str, Any]:
-        """Get connection pool statistics."""
-        return {
-            'status': 'direct_connection',
-            'db_type': self.db_type,
-            'message': 'No connection pooling - using direct connections for better performance'
-        }
