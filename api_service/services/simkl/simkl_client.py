@@ -361,7 +361,7 @@ class SimklClient(BaseHTTPClient):
                     except (aiohttp.ContentTypeError, ValueError):
                         payload = {}
                     return response.status, payload
-            except aiohttp.ClientError as exc:
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 raise SimklError(f"Simkl OAuth request failed: POST {url}: {exc}") from exc
 
     async def _request_with_retries(
@@ -396,7 +396,7 @@ class SimklClient(BaseHTTPClient):
                             f"Simkl API request failed: {method} {url} returned "
                             f"{response.status}: {body[:200]}"
                         )
-            except aiohttp.ClientError as exc:
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 if attempt == self.MAX_RETRIES - 1:
                     raise SimklError(f"Simkl API request failed: {method} {url}: {exc}") from exc
                 last_status = None

@@ -19,6 +19,9 @@ from api_service.services.arr.arr_client import ArrClient
 from api_service.services.config_service import ConfigService
 from api_service.services.llm.llm_service import MAX_GROUP_PEOPLE, get_llm_client
 
+MAX_QUERY_CHARS = 500
+MAX_RESULTS_LIMIT = 24
+
 ai_search_bp = Blueprint("ai_search", __name__)
 logger = LoggerManager.get_logger("AiSearchRoute")
 # Legacy global like/dislike rows, read as the equivalent personal rating.
@@ -167,6 +170,8 @@ async def ai_search_query():
         query = (data.get("query") or "").strip()
         if not query:
             return jsonify({"status": "error", "message": "query is required"}), 400
+        if len(query) > MAX_QUERY_CHARS:
+            return jsonify({"status": "error", "message": f"query must be at most {MAX_QUERY_CHARS} characters"}), 400
 
         media_type = data.get("media_type", "movie")
         if media_type not in ("movie", "tv", "both"):
@@ -187,7 +192,13 @@ async def ai_search_query():
         raw_people = data.get("people")
         if raw_people is not None and not isinstance(raw_people, list):
             return jsonify({"status": "error", "message": "people must be a list"}), 400
-        max_results = int(data.get("max_results") or 12)
+        try:
+            max_results = int(data.get("max_results") or 12)
+        except (TypeError, ValueError):
+            return jsonify({"status": "error", "message": "max_results must be a whole number"}), 400
+        if max_results < 1:
+            return jsonify({"status": "error", "message": "max_results must be at least 1"}), 400
+        max_results = min(max_results, MAX_RESULTS_LIMIT)  # every result costs an LLM and a TMDb call
         use_history = data.get("use_history", True)
         if not isinstance(use_history, bool):
             use_history = True

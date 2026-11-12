@@ -383,6 +383,11 @@ def _start_background_services():
             max_instances=1,
             replace_existing=True,
         )
+        from api_service.jobs.retention import run_retention
+        job_manager.scheduler.add_job(
+            run_retention, 'cron', hour=5, minute=0, id='retention',
+            max_instances=1, replace_existing=True,
+        )
         job_manager.scheduler.add_job(
             run_request_expiry, 'cron', hour=4, minute=30, id='seer_request_expiry',
             max_instances=1, replace_existing=True,

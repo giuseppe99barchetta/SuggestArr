@@ -446,8 +446,62 @@ class JobRepository:
             cursor.execute(query, ('running', datetime.now().isoformat(), execution_id))
             conn.commit()
 
+    _HISTORY_SELECT = (
+        "SELECT h.id, h.job_id, h.started_at, h.finished_at, h.status, h.results_count, h.requested_count, "
+        "h.error_message, j.name as job_name, h.trigger_source "
+        "FROM job_execution_history h JOIN discover_jobs j ON h.job_id = j.id"
+    )
+
+    def _placeholders(self, query: str) -> str:
+        """Use the %s placeholder style of MySQL/MariaDB/PostgreSQL; SQLite keeps ?."""
+        return query.replace('?', '%s') if self.db.db_type in ('mysql', 'mariadb', 'postgres') else query
+
     def get_execution(self, execution_id: int) -> Optional[Dict[str, Any]]:
-        return next((row for row in self.get_recent_history(1000) if row['id'] == execution_id), None)
+        """Return one run by id, however old it is.
+
+        Args:
+            execution_id: ID of the execution history record.
+
+        Returns:
+            History dictionary, or None when no such run exists.
+        """
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(self._placeholders(f"{self._HISTORY_SELECT} WHERE h.id = ?"), (execution_id,))
+            row = cursor.fetchone()
+        return self._row_to_history_dict(row) if row else None
+
+    def list_executions(self, job_id: Optional[int] = None, status: Optional[str] = None,
+                        owner_id: Optional[int] = None, limit: int = 25, offset: int = 0):
+        """Return one page of runs, newest first, filtered and counted in SQL.
+
+        Args:
+            job_id: Only runs of this job.
+            status: Only runs with this status.
+            owner_id: Only runs of jobs owned by this account (regular users); None means all jobs.
+            limit: Page size.
+            offset: Rows to skip.
+
+        Returns:
+            Tuple ``(rows, total)``: the page of history dictionaries and the number of matching runs.
+        """
+        clauses, params = [], []
+        for condition, value in (("h.job_id = ?", job_id), ("h.status = ?", status), ("j.owner_id = ?", owner_id)):
+            if value is not None:
+                clauses.append(condition)
+                params.append(value)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(self._placeholders(
+                f"SELECT COUNT(*) FROM job_execution_history h JOIN discover_jobs j ON h.job_id = j.id{where}"),
+                tuple(params))
+            total = cursor.fetchone()[0]
+            cursor.execute(self._placeholders(
+                f"{self._HISTORY_SELECT}{where} ORDER BY h.started_at DESC, h.id DESC LIMIT ? OFFSET ?"),
+                (*params, limit, offset))
+            rows = [self._row_to_history_dict(row) for row in cursor.fetchall()]
+        return rows, total
 
     def get_execution_deliveries(self, execution_id: int) -> List[Dict[str, Any]]:
         """Return credential-free Seer queue items produced by one job run."""

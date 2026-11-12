@@ -19,6 +19,20 @@ class CleanupMixin:
             cursor.execute(f"SELECT media_type, tmdb_id FROM recap_titles WHERE watched_at >= {placeholder}", (since,))
             return {(row[0], str(row[1])) for row in cursor.fetchall()}
 
+    def prune_cleanup_log(self, older_than_days: int) -> int:
+        """Delete audit-log rows older than ``older_than_days`` (``ran_at`` is written by CURRENT_TIMESTAMP).
+
+        :param older_than_days: Age limit in days.
+        :return: Number of rows deleted.
+        """
+        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=older_than_days)).strftime('%Y-%m-%d %H:%M:%S')
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"DELETE FROM cleanup_log WHERE ran_at < {placeholder}", (cutoff,))
+            conn.commit()
+            return cursor.rowcount
+
     def get_cleanup_settings(self) -> dict:
         with self.get_connection() as conn:
             cursor = conn.cursor()

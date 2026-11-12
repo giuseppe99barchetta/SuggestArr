@@ -16,6 +16,26 @@ def _media_user_name_sql(ph):
 
 
 class RequestQueueMixin:
+    def purge_stale_submission_locks(self, ttl_seconds: int = 3600) -> int:
+        """Delete submission locks older than ``ttl_seconds`` for every title (crash leftovers).
+
+        Locks are written and compared with the database clock, as in :meth:`try_acquire_submission_lock`.
+
+        :param ttl_seconds: Age limit in seconds.
+        :return: Number of rows deleted.
+        """
+        if self.db_type == 'sqlite':
+            query, params = "DELETE FROM submission_locks WHERE locked_at < datetime('now', '-' || ? || ' seconds')", (str(ttl_seconds),)
+        elif self.db_type == 'postgres':
+            query, params = "DELETE FROM submission_locks WHERE locked_at < NOW() - (INTERVAL '1 second' * %s)", (ttl_seconds,)
+        else:  # mysql / mariadb
+            query, params = "DELETE FROM submission_locks WHERE locked_at < DATE_SUB(NOW(), INTERVAL %s SECOND)", (ttl_seconds,)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            conn.commit()
+            return cursor.rowcount
+
     def try_acquire_submission_lock(self, tmdb_id: str, media_type: str, ttl_seconds: int = 60) -> bool:
         """Attempt to acquire a per-media submission lock to prevent cross-process duplicates.
 

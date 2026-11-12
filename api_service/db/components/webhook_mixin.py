@@ -1,7 +1,7 @@
 """Persistent outbound webhook delivery queue."""
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 from api_service.services.notification_formats import describe_event, render_notification
@@ -195,6 +195,24 @@ class WebhookMixin:
             cursor = conn.cursor()
             cursor.execute(query, (status, retry_count, next_attempt_at, (error or "")[:500] or None, delivery_id))
             conn.commit()
+
+    def prune_webhook_deliveries(self, older_than_days: int) -> int:
+        """Delete delivered and permanently failed webhook deliveries not updated for ``older_than_days``.
+
+        Queued deliveries are never touched. ``updated_at`` is written by CURRENT_TIMESTAMP (space-separated
+        text on SQLite), so the cutoff is formatted the same way.
+
+        :param older_than_days: Age limit in days.
+        :return: Number of rows deleted.
+        """
+        ph = "%s" if self.db_type in ("mysql", "mariadb", "postgres") else "?"
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=older_than_days)).strftime("%Y-%m-%d %H:%M:%S")
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"DELETE FROM webhook_deliveries WHERE status IN ('delivered','failed') "
+                           f"AND updated_at < {ph}", (cutoff,))
+            conn.commit()
+            return cursor.rowcount
 
     def retry_webhook_delivery(self, delivery_id):
         ph = "%s" if self.db_type in ("mysql", "mariadb", "postgres") else "?"

@@ -159,7 +159,7 @@ class TraktClient(BaseHTTPClient):
                 if status in (418, 409):
                     raise TraktDeviceDenied("Trakt authorization was denied")
                 raise TraktDeviceFlowError(f"Trakt device authorization failed (status {status})")
-        except aiohttp.ClientError as exc:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             raise RuntimeError(f"Trakt API request failed: POST {url}: {exc}") from exc
 
     async def refresh_access_token(self) -> dict[str, Any]:
@@ -457,7 +457,7 @@ class TraktClient(BaseHTTPClient):
 
                 body = await response.text()
                 raise RuntimeError(f"Trakt API request failed: {method} {url} returned {response.status}: {body}")
-        except aiohttp.ClientError as exc:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             raise RuntimeError(f"Trakt API request failed: {method} {url}: {exc}") from exc
 
     async def _refresh_if_needed(self) -> None:

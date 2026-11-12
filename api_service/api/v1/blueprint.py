@@ -293,14 +293,11 @@ def runs():
     job_id, status = request.args.get('job_id', type=int), request.args.get('status')
     if status and status not in ('queued', 'running', 'completed', 'failed', 'skipped'):
         return jsonify({'error': {'code': 'validation_error', 'message': 'Invalid status.'}}), 400
-    records = JobRepository().get_recent_history(1000)
-    records = [record for record in records if (not job_id or record['job_id'] == job_id) and (not status or record['status'] == status)]
-    if g.current_user['role'] != 'admin':
-        own = {job['id'] for job in JobRepository().get_all_jobs() if _visible_job(job)}
-        records = [record for record in records if record['job_id'] in own]
     page, per_page = pagination
-    total = len(records)
-    return jsonify({'data': [_run_payload(row) for row in records[(page - 1) * per_page:page * per_page]], 'meta': {'page': page, 'per_page': per_page, 'total': total, 'pages': max(1, (total + per_page - 1) // per_page)}}), 200
+    owner_id = None if g.current_user['role'] == 'admin' else int(g.current_user['id'])
+    records, total = JobRepository().list_executions(job_id=job_id or None, status=status or None, owner_id=owner_id,
+                                                      limit=per_page, offset=(page - 1) * per_page)
+    return jsonify({'data': [_run_payload(row) for row in records], 'meta': {'page': page, 'per_page': per_page, 'total': total, 'pages': max(1, (total + per_page - 1) // per_page)}}), 200
 
 
 @public_api_v1_bp.route('/runs/<int:run_id>', methods=['GET'])

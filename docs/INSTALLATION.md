@@ -171,6 +171,8 @@ Jobs can also pause automatically while Seer has pending requests awaiting appro
 
 SQLite is the recommended default. PostgreSQL, MySQL, and MariaDB are available for larger or more advanced deployments.
 
+Once a day (05:00) SuggestArr deletes what nothing reads any more: expired or revoked sign-in sessions, delivered or permanently failed webhook deliveries after 30 days, Cleanup audit-log rows after 90 days, and leftover delivery locks. Requests, suggestions and run history are kept.
+
 ### Advanced
 
 Use this page for AI provider setup, logging, caching, API timeouts, reverse-proxy subpath, registration, authentication, and Cleanup Automation.

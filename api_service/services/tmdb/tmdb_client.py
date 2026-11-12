@@ -243,7 +243,7 @@ class TMDbClient(BaseHTTPClient):
                     return await response.json()
                 else:
                     self.logger.error("Error retrieving %s recommendations: %d", content_type, response.status)
-        except aiohttp.ClientError as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             self.logger.error("An error occurred while requesting %s recommendations: %s", content_type, str(e).replace(self.api_key, "***"))
         return None
     
@@ -283,7 +283,7 @@ class TMDbClient(BaseHTTPClient):
 
             return metadata
 
-        except aiohttp.ClientError as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             self.logger.error("An error occurred while fetching metadata for TMDb ID %s: %s", tmdb_id, str(e).replace(self.api_key, "***"))
         
         return None
@@ -484,7 +484,7 @@ class TMDbClient(BaseHTTPClient):
                 else:
                     self.logger.warning("Failed to fetch details for %s ID %s: HTTP %d",
                                         content_type, content_id, response.status)
-        except aiohttp.ClientError as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             self.logger.warning("Error fetching details for %s ID %s: %s",
                                 content_type, content_id, str(e).replace(self.api_key, "***"))
         return {}
@@ -510,7 +510,7 @@ class TMDbClient(BaseHTTPClient):
                     if response.status not in HTTP_OK:
                         return True
                     parts = (await response.json()).get('parts', [])
-            except aiohttp.ClientError:
+            except (aiohttp.ClientError, asyncio.TimeoutError):
                 return True
 
             released = [
@@ -543,7 +543,7 @@ class TMDbClient(BaseHTTPClient):
                 else:
                     self.logger.warning("Failed to fetch external IDs for TV ID %s: HTTP %d",
                                         tv_id, response.status)
-        except aiohttp.ClientError as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             self.logger.warning("Error fetching external IDs for TV ID %s: %s", tv_id, str(e).replace(self.api_key, "***"))
         return None
 
@@ -713,7 +713,7 @@ class TMDbClient(BaseHTTPClient):
                     self.logger.warning("No results found on TMDb for TVDb ID: %s", tvdb_id)
                 else:
                     self.logger.error("Error converting TVDb ID to TMDb ID: %d", response.status)
-        except aiohttp.ClientError as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             self.logger.error("An error occurred while converting TVDb ID: %s", str(e).replace(self.api_key, "***"))
 
         return None
@@ -788,7 +788,7 @@ class TMDbClient(BaseHTTPClient):
                         return False, None
                 else:
                     self.logger.error("Failed to retrieve watch providers for content ID %s: %d", content_id, response.status)
-        except aiohttp.ClientError as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             self.logger.error("An error occurred while fetching watch providers: %s", str(e).replace(self.api_key, "***"))
 
         return False, None
@@ -842,7 +842,7 @@ class TMDbClient(BaseHTTPClient):
                     return results
                 else:
                     self.logger.error("Error searching TMDb: %d", response.status)
-        except aiohttp.ClientError as e:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             self.logger.error("An error occurred while searching TMDb: %s", str(e).replace(self.api_key, "***"))
         return []
 
