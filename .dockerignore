@@ -60,3 +60,6 @@ out/
 # Ignore config and config files folders
 /config_files
 /config/config_files
+# Test caches and local review copies
+**/.pytest_cache/
+.review-security/
