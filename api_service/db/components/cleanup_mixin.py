@@ -20,16 +20,22 @@ class CleanupMixin:
             return {(row[0], str(row[1])) for row in cursor.fetchall()}
 
     def prune_cleanup_log(self, older_than_days: int) -> int:
-        """Delete audit-log rows older than ``older_than_days`` (``ran_at`` is written by CURRENT_TIMESTAMP).
+        """Delete audit-log rows older than ``older_than_days``.
+
+        ``ran_at`` is written by CURRENT_TIMESTAMP, so the cutoff comes from the database's own clock.
 
         :param older_than_days: Age limit in days.
         :return: Number of rows deleted.
         """
-        placeholder = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=older_than_days)).strftime('%Y-%m-%d %H:%M:%S')
+        if self.db_type == 'sqlite':
+            query, params = "DELETE FROM cleanup_log WHERE ran_at < datetime('now', '-' || ? || ' days')", (str(int(older_than_days)),)
+        elif self.db_type == 'postgres':
+            query, params = "DELETE FROM cleanup_log WHERE ran_at < NOW() - (INTERVAL '1 day' * %s)", (int(older_than_days),)
+        else:  # mysql / mariadb
+            query, params = "DELETE FROM cleanup_log WHERE ran_at < DATE_SUB(NOW(), INTERVAL %s DAY)", (int(older_than_days),)
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(f"DELETE FROM cleanup_log WHERE ran_at < {placeholder}", (cutoff,))
+            cursor.execute(query, params)
             conn.commit()
             return cursor.rowcount
 

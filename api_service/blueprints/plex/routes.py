@@ -92,7 +92,10 @@ async def get_plex_libraries():
 def plex_login():
     client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
     plex_auth = PlexAuth(client_id=client_id)
-    pin_id, auth_url = plex_auth.get_authentication_pin()
+    try:
+        pin_id, auth_url = plex_auth.get_authentication_pin()
+    except Exception:
+        return jsonify({'error': 'Plex is not reachable'}), 502
     return jsonify({'pin_id': pin_id, 'auth_url': auth_url})
 
 @plex_bp.route('/callback', methods=['POST'])
@@ -101,7 +104,10 @@ def check_plex_authentication():
     client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
     plex_auth = PlexAuth(client_id=client_id)
     
-    auth_token = plex_auth.check_authentication(pin_id)
+    try:
+        auth_token = plex_auth.check_authentication(pin_id)
+    except Exception:
+        return jsonify({'error': 'Plex is not reachable'}), 502
     
     if auth_token:
         return jsonify({'auth_token': auth_token})
@@ -122,7 +128,10 @@ def check_plex_auth(pin_id):
     """Check if Plex login has been completed and get the token."""
     client_id = ConfigService.get_runtime_config().get('PLEX_CLIENT_ID')
     plex_auth = PlexAuth(client_id=client_id)
-    auth_token = plex_auth.check_authentication(pin_id)
+    try:
+        auth_token = plex_auth.check_authentication(pin_id)
+    except Exception:
+        return jsonify({'error': 'Plex is not reachable'}), 502
     
     if auth_token:
         return jsonify({'auth_token': auth_token})

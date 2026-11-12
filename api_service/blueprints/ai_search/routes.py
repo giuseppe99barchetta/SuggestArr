@@ -192,9 +192,14 @@ async def ai_search_query():
         raw_people = data.get("people")
         if raw_people is not None and not isinstance(raw_people, list):
             return jsonify({"status": "error", "message": "people must be a list"}), 400
-        try:
-            max_results = int(data.get("max_results") or 12)
-        except (TypeError, ValueError):
+        raw_max = data.get("max_results")
+        if raw_max is None:
+            max_results = 12
+        elif isinstance(raw_max, int) and not isinstance(raw_max, bool):
+            max_results = raw_max
+        elif isinstance(raw_max, str) and raw_max.strip().isdigit():
+            max_results = int(raw_max)
+        else:
             return jsonify({"status": "error", "message": "max_results must be a whole number"}), 400
         if max_results < 1:
             return jsonify({"status": "error", "message": "max_results must be at least 1"}), 400

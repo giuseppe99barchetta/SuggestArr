@@ -185,17 +185,39 @@ def test_retention_never_touches_the_tables_other_code_depends_on(db):
 
 # --- timeouts -------------------------------------------------------------------------------------
 
-def test_plex_pin_calls_have_a_timeout():
+def test_plex_pin_responses_are_checked_before_they_are_trusted():
+    from api_service.services.http.sync_client import OutboundHTTPError
     from api_service.services.plex.plex_auth import PlexAuth
     auth = PlexAuth.__new__(PlexAuth)
     auth.base_url, auth.headers, auth.client_id = 'https://plex.tv/api/v2', {}, 'cid'
-    response = MagicMock()
-    response.json.return_value = {'id': 1, 'code': 'abc'}
-    with patch('api_service.services.plex.plex_auth.requests.post', return_value=response) as post, \
-            patch('api_service.services.plex.plex_auth.requests.get', return_value=response) as get:
-        auth.get_authentication_pin()
-        auth.check_authentication(1)
-    assert post.call_args.kwargs['timeout'] == 10 and get.call_args.kwargs['timeout'] == 10
+    failing = MagicMock()
+    failing.raise_for_status.side_effect = OutboundHTTPError('Upstream HTTP 401')
+    failing.json.return_value = {}
+    with patch('api_service.services.plex.plex_auth.requests.post', return_value=failing), \
+            patch('api_service.services.plex.plex_auth.requests.get', return_value=failing):
+        with pytest.raises(OutboundHTTPError):
+            auth.get_authentication_pin()
+        with pytest.raises(OutboundHTTPError):
+            auth.check_authentication(1)   # a 401 is not "still waiting"
+
+
+def test_plex_routes_report_an_unreachable_plex_as_502():
+    from api_service.blueprints.plex import routes
+    app = Flask(__name__)
+
+    @app.before_request
+    def authenticate():
+        g.current_user = {'id': '1', 'username': 't', 'role': 'admin'}
+
+    app.register_blueprint(routes.plex_bp, url_prefix='/api/plex')
+    boom = MagicMock(side_effect=RuntimeError('Upstream HTTP 503'))
+    with patch.object(routes.PlexAuth, 'get_authentication_pin', boom), \
+            patch.object(routes.PlexAuth, 'check_authentication', boom), \
+            patch.object(routes.ConfigService, 'get_runtime_config', return_value={'PLEX_CLIENT_ID': 'c'}):
+        client = app.test_client()
+        assert client.post('/api/plex/auth').status_code == 502
+        assert client.post('/api/plex/callback', json={'pin_id': 1}).status_code == 502
+        assert client.get('/api/plex/check-auth/1').status_code == 502
 
 
 def test_tmdb_connection_test_reports_a_timeout_instead_of_failing():
@@ -259,7 +281,7 @@ def post(client, **body):
 def test_ai_search_rejects_an_oversized_query_and_bad_result_counts(ai_client):
     client, service = ai_client
     assert post(client, query='x' * 501).status_code == 400
-    for bad in ('abc', -5, [1]):
+    for bad in ('abc', -5, [1], 0, 1.5, True, '2.5'):
         assert post(client, max_results=bad).status_code == 400, bad
     service.search.assert_not_awaited()
 
