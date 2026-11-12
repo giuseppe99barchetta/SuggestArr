@@ -43,6 +43,22 @@ from api_service.db.components.watched_media_mixin import WatchedMediaMixin
 from api_service.db.components.simkl_mixin import SimklMixin
 
 
+_DB_TYPE_ALIASES = {'mariadb': 'mysql', 'postgresql': 'postgres', 'pg': 'postgres'}
+
+
+def normalize_db_type(value) -> str:
+    """Return the canonical database type: lower case, with MariaDB and PostgreSQL spellings folded.
+
+    Every query branch tests for ``sqlite``, ``postgres`` or ``mysql`` only, so a differently spelled
+    ``DB_TYPE`` (``MySQL``, ``mariadb``, ``postgresql``) must be folded once, here.
+
+    :param value: Raw ``DB_TYPE`` setting (may be empty or None).
+    :return: ``sqlite``, ``postgres`` or ``mysql`` (an unknown value is returned lower-cased and rejected later).
+    """
+    text = str(value or 'sqlite').strip().lower()
+    return _DB_TYPE_ALIASES.get(text, text)
+
+
 class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueueMixin, RequestExpiryMixin, RequestReplacementMixin, SuggestionFeedbackMixin, TranslationMixin, AiSearchMixin, CleanupMixin, AuthMixin, MediaUserMixin, WebhookMixin, WatchedMediaMixin, RatingPromptMixin, SimklMixin):
     """Singleton database manager with connection pooling."""
     
@@ -66,7 +82,7 @@ class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueu
         self.logger = LoggerManager.get_logger(self.__class__.__name__)
         self.db_path = DB_PATH
         self.env_vars = load_env_vars()
-        self.db_type = self.env_vars.get('DB_TYPE', 'sqlite')
+        self.db_type = normalize_db_type(self.env_vars.get('DB_TYPE'))
         self.logger.debug(f"Initialized DatabaseManager with {self.db_type} direct connections")
         self.initialize_db()
         # Only mark as initialized after a successful initialize_db() call so
@@ -81,7 +97,7 @@ class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueu
         database connections without requiring a full process restart.
         """
         self.env_vars = load_env_vars(force_reload=True)
-        self.db_type = self.env_vars.get('DB_TYPE', 'sqlite')
+        self.db_type = normalize_db_type(self.env_vars.get('DB_TYPE'))
         self.logger.debug(f"DatabaseManager config refreshed (db_type={self.db_type})")
         self.initialize_db()
 
@@ -174,7 +190,7 @@ class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueu
         """Test database connection based on provided db_config."""
         
         try:
-            db_type = db_config.get('DB_TYPE', 'sqlite')
+            db_type = normalize_db_type(db_config.get('DB_TYPE'))
 
             if db_type == 'postgres':
                 conn = psycopg2.connect(

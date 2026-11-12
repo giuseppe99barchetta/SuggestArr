@@ -1,6 +1,29 @@
 import json
+import re
 
 from api_service.exceptions.database_exceptions import DatabaseError
+
+# Columns that hold free text or JSON and must not be cut by the generic TEXT -> VARCHAR(512) mapping MySQL
+# needs for indexable columns. MySQL rejects a longer value in strict mode and silently truncates it
+# (INSERT IGNORE) otherwise. A test lists every column that stays VARCHAR(512), so a new long column is noticed.
+MYSQL_LONG_TEXT_COLUMNS = {
+    'ai_search_feedback': ('rationale',),
+    'ai_search_history': ('query',),
+    'discover_jobs': ('user_ids', 'request_profiles', 'filters'),
+    'integrations': ('config_json',),
+    'job_execution_history': ('error_message',),
+    'list_import_runs': ('config_json', 'last_error'),
+    'media_availability': ('url',),
+    'pending_requests': ('payload', 'last_error'),
+    'requests': ('rationale',),
+    'simkl_account_links': ('activities_json', 'last_error'),
+    'trakt_account_links': ('last_error',),
+    'suggestion_feedback': ('reason_text',),
+    'simkl_oauth_tokens': ('access_token', 'refresh_token'),
+    'trakt_oauth_tokens': ('access_token', 'refresh_token'),
+    'user_media_profiles': ('access_token',),
+}
+
 
 class SchemaManager:
     def __init__(self, database):
@@ -548,20 +571,12 @@ class SchemaManager:
                 corrections = [
                     ("ALTER TABLE trakt_account_links MODIFY media_user_identity_id INTEGER NOT NULL", ()),
                     ("ALTER TABLE trakt_account_links MODIFY token_source TEXT NOT NULL", ()),
-                    ("ALTER TABLE trakt_account_links MODIFY last_error TEXT", ()),
-                    ("ALTER TABLE trakt_oauth_tokens MODIFY access_token TEXT NOT NULL", ()),
-                    ("ALTER TABLE trakt_oauth_tokens MODIFY refresh_token TEXT NOT NULL", ()),
                     ("ALTER TABLE trakt_sources MODIFY media_user_identity_id INTEGER NOT NULL", ()),
-                    # Restore real TEXT storage on columns the blanket
-                    # TEXT -> VARCHAR(512) rewrite above would truncate.
-                    # activities_json is the critical one: it holds the whole
-                    # /sync/activities payload, and a silent truncation there
-                    # yields unparseable JSON and breaks the sync gate.
+                    # The long text columns (activities_json, tokens, errors...) are LONGTEXT from
+                    # MYSQL_LONG_TEXT_COLUMNS and widened by _widen_mysql_long_text_columns; a MODIFY to
+                    # TEXT here would narrow them again on every start.
                     ("ALTER TABLE simkl_account_links MODIFY media_user_identity_id INTEGER NOT NULL", ()),
                     ("ALTER TABLE simkl_account_links MODIFY token_source TEXT NOT NULL", ()),
-                    ("ALTER TABLE simkl_account_links MODIFY last_error TEXT", ()),
-                    ("ALTER TABLE simkl_account_links MODIFY activities_json TEXT", ()),
-                    ("ALTER TABLE simkl_oauth_tokens MODIFY access_token TEXT NOT NULL", ()),
                 ]
                 with self.get_connection() as conn:
                     cursor = conn.cursor()
@@ -587,6 +602,8 @@ class SchemaManager:
         self._migrate_watched_media()
         self._migrate_suggestion_feedback()
         self._widen_mysql_overview_columns()
+        self._widen_mysql_long_text_columns()
+        self._create_queue_indexes()
         self._create_api_key_indexes()
 
         # Create submission lock table (separate to control column types per DB engine)
@@ -735,6 +752,80 @@ class SchemaManager:
                 conn.commit()
         except Exception as exc:
             raise DatabaseError(error=f"Suggestion-feedback migration failed: {exc}", db_type=self.db_type) from exc
+
+    # (index name, table, columns); MySQL indexes only a prefix of the text columns (they are VARCHAR(512)).
+    QUEUE_INDEXES = (
+        ('idx_pending_requests_due', 'pending_requests', ('status', 'next_attempt_at')),
+        ('idx_pending_requests_execution', 'pending_requests', ('execution_id',)),
+        ('idx_webhook_deliveries_due', 'webhook_deliveries', ('status', 'next_attempt_at')),
+        ('idx_job_history_job_started', 'job_execution_history', ('job_id', 'started_at')),
+    )
+    _MYSQL_PREFIXED_COLUMNS = {'status': 32}
+
+    def _create_queue_indexes(self):
+        """Create the indexes the delivery workers and the run history read through, if missing.
+
+        Without them every worker tick scans tables that only grow. Creation is idempotent on SQLite,
+        PostgreSQL and MySQL/MariaDB, and a failure is raised like any other schema step.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                for name, table, columns in self.QUEUE_INDEXES:
+                    if self._index_exists(cursor, table, name):
+                        continue
+                    if self.db_type in ('mysql', 'mariadb'):
+                        parts = [f"{c}({self._MYSQL_PREFIXED_COLUMNS[c]})" if c in self._MYSQL_PREFIXED_COLUMNS else c
+                                 for c in columns]
+                    else:
+                        parts = list(columns)
+                    cursor.execute(f"CREATE INDEX {name} ON {table} ({', '.join(parts)})")
+                    self.logger.info("Created index %s", name)
+                conn.commit()
+        except Exception as exc:
+            raise DatabaseError(error=f"Index creation failed: {exc}", db_type=self.db_type) from exc
+
+    def _index_exists(self, cursor, table, name):
+        """Return True when the index already exists (engine-specific introspection)."""
+        if self.db_type == 'sqlite':
+            cursor.execute(f"PRAGMA index_list({table})")
+            return any(row[1] == name for row in cursor.fetchall())
+        if self.db_type == 'postgres':
+            cursor.execute("SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND indexname = %s", (name,))
+            return cursor.fetchone() is not None
+        cursor.execute("SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() "
+                       "AND table_name = %s AND index_name = %s", (table, name))
+        # One row per indexed column: read them all, or the next statement fails with "Unread result found".
+        return bool(cursor.fetchall())
+
+    def _widen_mysql_long_text_columns(self):
+        """Turn the MySQL columns in MYSQL_LONG_TEXT_COLUMNS created as VARCHAR(512) into LONGTEXT.
+
+        Older installs mapped every TEXT column to VARCHAR(512), which rejects or truncates a queued request
+        payload, an integration config or an AI rationale longer than 512 characters. A column is only
+        altered when information_schema says it is still a VARCHAR, so a started server is not locked again
+        on every boot.
+        """
+        if self.db_type not in ('mysql', 'mariadb'):
+            return
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                for table, columns in MYSQL_LONG_TEXT_COLUMNS.items():
+                    for column in columns:
+                        cursor.execute(
+                            "SELECT DATA_TYPE, IS_NULLABLE FROM information_schema.columns "
+                            "WHERE table_schema = DATABASE() AND table_name = %s AND column_name = %s",
+                            (table, column),
+                        )
+                        row = cursor.fetchone()
+                        if row and str(row[0]).lower() == 'varchar':
+                            nullability = 'NULL' if str(row[1]).upper() == 'YES' else 'NOT NULL'
+                            cursor.execute(f"ALTER TABLE {table} MODIFY {column} LONGTEXT {nullability}")
+                            self.logger.info("Widened %s.%s to LONGTEXT", table, column)
+                conn.commit()
+        except Exception as exc:
+            raise DatabaseError(error=f"Long text column migration failed: {exc}", db_type=self.db_type) from exc
 
     def _widen_mysql_overview_columns(self):
         """Turn MySQL overview columns created as VARCHAR into TEXT.
@@ -980,6 +1071,9 @@ class SchemaManager:
                 query = query.replace('seer_created_at TIMESTAMP NULL', 'seer_created_at TIMESTAMP(6) NULL')
                 query = query.replace('seer_instance VARCHAR(512)', 'seer_instance TEXT')
 
+            for column in MYSQL_LONG_TEXT_COLUMNS.get(table_name, ()):
+                query = re.sub(rf"(\b{column}\s+)VARCHAR\(512\)", r"\1LONGTEXT", query)
+
             # Overviews are free text; TMDb ones regularly exceed 512 characters.
             if table_name in ('metadata', 'metadata_translations'):
                 query = query.replace("overview VARCHAR(512)", "overview TEXT")
@@ -1158,14 +1252,15 @@ class SchemaManager:
                     )
                 conn.commit()
         except Exception as exc:
-            self.logger.warning("Could not migrate Simkl AUTH V2 columns: %s", exc)
+            self.logger.error("Could not migrate Simkl AUTH V2 columns: %s", exc)
+            raise DatabaseError(error=f"Simkl column migration failed: {exc}", db_type=self.db_type) from exc
 
     def _migrate_viewer_role_to_user(self):
         """Migrate any existing auth_users with role='viewer' to role='user'."""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                ph = self._ph()
+                ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
                 cursor.execute(
                     f"UPDATE auth_users SET role = {ph} WHERE role = {ph}",
                     ('user', 'viewer'),
@@ -1177,7 +1272,8 @@ class SchemaManager:
                         "Migrated %d auth_user(s) from role 'viewer' to 'user'.", affected
                     )
         except Exception as e:
-            self.logger.warning("Could not migrate viewer roles (table may not exist yet): %s", e)
+            self.logger.error("Could not migrate viewer roles: %s", e)
+            raise DatabaseError(error=f"Viewer role migration failed: {e}", db_type=self.db_type) from e
 
     def _migrate_auth_users_table(self):
         """Add missing columns to auth_users table for RBAC permissions."""
@@ -1261,7 +1357,7 @@ class SchemaManager:
 
             except Exception as e:
                 self.logger.error(f"Failed to migrate auth_users table: {e}")
-                # Don't raise - table might not exist yet
+                raise DatabaseError(error=f"auth_users migration failed: {e}", db_type=self.db_type) from e
 
     def _migrate_user_media_profiles_table(self):
         """
@@ -1291,7 +1387,7 @@ class SchemaManager:
                     conn.commit()
             except Exception as e:
                 self.logger.error(f"Failed to migrate user_media_profiles table: {e}")
-                # Don't raise - table might not exist yet
+                raise DatabaseError(error=f"user_media_profiles migration failed: {e}", db_type=self.db_type) from e
 
     def _migrate_discover_jobs_table(self):
         """Add missing columns to discover_jobs table for job type support."""
@@ -1448,7 +1544,7 @@ class SchemaManager:
 
             except Exception as e:
                 self.logger.error(f"Failed to migrate discover_jobs table: {e}")
-                # Don't raise - table might not exist yet
+                raise DatabaseError(error=f"discover_jobs migration failed: {e}", db_type=self.db_type) from e
 
     # ------------------------------------------------------------------
     # Integrations helpers
