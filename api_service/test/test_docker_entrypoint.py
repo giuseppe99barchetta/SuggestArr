@@ -34,10 +34,20 @@ def test_default_port_is_5000(tmp_path):
     assert run_entrypoint(tmp_path)[1][4] == '5000'
 
 
-def test_container_arguments_replace_the_default_and_are_never_evaluated(tmp_path):
+def test_extra_options_are_added_to_the_defaults_not_replacing_them(tmp_path):
+    _, args = run_entrypoint(tmp_path, '--log-level', 'debug', SUGGESTARR_PORT='5099')
+    assert args[:7] == ['api_service.app:asgi_app', '--host', '0.0.0.0', '--port', '5099', '--log-level', 'info']
+    assert args[-2:] == ['--log-level', 'debug']            # the later option wins in uvicorn
+
+
+def test_a_given_port_comes_after_the_default_so_it_wins(tmp_path):
+    _, args = run_entrypoint(tmp_path, '--port', '8080', SUGGESTARR_PORT='5099')
+    assert args[-2:] == ['--port', '8080']
+
+
+def test_container_arguments_are_never_evaluated(tmp_path):
     marker = tmp_path / 'pwned'
-    code, args = run_entrypoint(tmp_path, '--port', '8080', f'; touch {marker}', '$(touch ' + str(marker) + ')')
+    code, args = run_entrypoint(tmp_path, f'; touch {marker}', '$(touch ' + str(marker) + ')')
     assert code == 0
-    assert args[1:3] == ['--port', '8080']
     assert not marker.exists()                       # no eval: the text stays a plain argument
-    assert args[3] == f'; touch {marker}'
+    assert f'; touch {marker}' in args
