@@ -21,79 +21,10 @@ function configureAxiosSubpath(subpath) {
   }
 }
 
-let _configPromise = null;
-
-/**
- * Load config without requiring authentication (setup mode).
- * Uses `_skipAuth: true` so public endpoints work during setup.
- */
-async function loadConfig() {
-  if (_configPromise) return _configPromise;
-
-  _configPromise = axios
-    .get("/api/config/fetch", {
-      _skipAuth: true,
-      timeout: 10000,
-    })
-    .then((response) => {
-      localStorage.setItem("suggestarr_config", JSON.stringify(response.data));
-      return response.data.SUBPATH || "";
-    })
-    .catch((error) => {
-      // If we're not logged in, fetch will return 401 — that's expected.
-      if (error.response?.status !== 401) {
-        console.warn(
-          "Unable to load initial configuration file:",
-          error.message,
-        );
-      }
-      return ""; // Fallback to root subpath
-    })
-    .finally(() => {
-      _configPromise = null;
-    });
-
-  return _configPromise;
-}
-
-let _authConfigPromise = null;
-
-/**
- * Load config with authentication (after token is set).
- * Does NOT use `_skipAuth`, so the Authorization header IS added by the interceptor.
- * This ensures the backend receives the Bearer token for protected endpoints.
- */
-async function loadAuthenticatedConfig() {
-  if (_authConfigPromise) return _authConfigPromise;
-
-  _authConfigPromise = axios
-    .get("/api/config/fetch", {
-      timeout: 10000,
-      // NOTE: NO _skipAuth - the request interceptor WILL add Authorization header
-    })
-    .then((response) => {
-      localStorage.setItem("suggestarr_config", JSON.stringify(response.data));
-      return response.data.SUBPATH || "";
-    })
-    .catch((error) => {
-      console.warn(
-        "Failed to load authenticated configuration:",
-        error.message,
-      );
-      return ""; // Fallback to root subpath
-    })
-    .finally(() => {
-      _authConfigPromise = null;
-    });
-
-  return _authConfigPromise;
-}
-
 let _statusCache = null;
 let _statusCacheTimestamp = 0;
 let _statusPromise = null;
 const STATUS_CACHE_TTL = 1000; // 1 second cache
-let _authModeCache = null;
 
 function isAbortLikeError(error) {
   const code = error?.code || error?.message?.code;
@@ -134,7 +65,8 @@ async function checkSetupStatus() {
       if (!isAbortLikeError(error)) {
         console.error("Error checking setup status:", error.message);
       }
-      return { setup_completed: false, is_complete: false };
+      // Unknown, not "setup incomplete": a failed probe must not push a configured install to the wizard.
+      return { setup_completed: false, is_complete: false, unknown: true };
     })
     .finally(() => {
       _statusPromise = null;
@@ -143,39 +75,18 @@ async function checkSetupStatus() {
   return _statusPromise;
 }
 
-async function getAuthMode() {
-  if (_authModeCache) return _authModeCache;
-
-  try {
-    const cachedConfig = localStorage.getItem("suggestarr_config");
-    if (cachedConfig) {
-      const parsedConfig = JSON.parse(cachedConfig);
-      const cachedMode = (parsedConfig?.AUTH_MODE || "enabled").toString().toLowerCase();
-      if (["enabled", "local_bypass", "disabled"].includes(cachedMode)) {
-        _authModeCache = cachedMode;
-        return _authModeCache;
-      }
-    }
-  } catch {
-    // Ignore cache parse errors and fetch from API.
-  }
-
-  try {
-    const response = await axios.get("/api/config/fetch", { _skipAuth: true, timeout: 10000 });
-    const mode = (response.data?.AUTH_MODE || "enabled").toString().toLowerCase();
-    _authModeCache = ["enabled", "local_bypass", "disabled"].includes(mode) ? mode : "enabled";
-    return _authModeCache;
-  } catch {
-    _authModeCache = "enabled";
-    return _authModeCache;
-  }
-}
-
 export async function createAppRouter() {
   const subpath = readSubpathFromMeta();
   configureAxiosSubpath(subpath);
 
   const auth = useAuth();
+
+  // Older versions stored the whole configuration (API keys, tokens, DB password) in the browser.
+  try {
+    localStorage.removeItem("suggestarr_config");
+  } catch {
+    // Storage can be unavailable; nothing to clean then.
+  }
 
   // Initialize the auth-ready signal so components can wait for auth setup
   initializeAuthReady();
@@ -193,17 +104,6 @@ export async function createAppRouter() {
       await auth.tryRefresh();
     }
 
-    // Load config based on auth state:
-    // - If NOT in setup mode and we have a token (either already or just refreshed),
-    //   use authenticated config loading (WITHOUT _skipAuth, so Authorization header is added)
-    // - If in setup mode, use public config loading (with _skipAuth: true)
-    if (authStatus.auth_setup_complete && auth.accessToken.value) {
-      // Authenticated case: we have a token, so fetch config WITH auth header
-      await loadAuthenticatedConfig().catch(() => {});
-    } else if (!authStatus.auth_setup_complete) {
-      // Setup mode: no auth required yet, fetch with _skipAuth
-      await loadConfig().catch(() => {});
-    }
   } catch (error) {
     console.warn("Auth initialization failed, continuing in logged-out state", error);
   } finally {
@@ -298,31 +198,31 @@ export async function createAppRouter() {
       return;
     }
     const currentStatus = await checkSetupStatus();
-    const authMode = await getAuthMode();
-    const isAuthDisabled = authMode === "disabled";
 
+    // Disabled, local-bypass and trusted-header modes all report themselves as `bypass` here.
     const isBypassAuthenticated = statusAuth.authenticated && statusAuth.bypass;
     const isAuthenticated = !!auth.accessToken.value || isBypassAuthenticated;
 
     // First-run flow:
     // - No auth users yet: force all routes to Login (setup-admin form lives there).
     // - Auth exists + app setup incomplete: keep Login out of the way and use /setup wizard.
-    if (!currentStatus.setup_completed) {
-      if (!isAuthenticated && !isAuthDisabled && to.name !== "Login") {
+    const setupKnown = !currentStatus.unknown;
+    if (setupKnown && !currentStatus.setup_completed) {
+      if (!isAuthenticated && to.name !== "Login") {
         return { name: "Login", query: { redirect: to.fullPath } };
       }
-      if ((isAuthenticated || isAuthDisabled) && to.name === "Login") {
+      if (isAuthenticated && to.name === "Login") {
         return "/setup";
       }
     }
 
     // If setup is not completed and route requires setup, redirect to setup
-    if (to.meta.requiresSetup && !currentStatus.setup_completed) {
+    if (setupKnown && to.meta.requiresSetup && !currentStatus.setup_completed) {
       return "/setup";
     }
 
     // If setup is completed and route is setup-only, redirect to settings
-    if (to.meta.setupOnly && currentStatus.setup_completed) {
+    if (setupKnown && to.meta.setupOnly && currentStatus.setup_completed) {
       return "/dashboard";
     }
 
@@ -330,10 +230,10 @@ export async function createAppRouter() {
     if (auth.authSetupComplete.value) {
       if (to.name === "Login") {
         // Already authenticated → skip login page
-        if (isAuthenticated || isAuthDisabled) return "/dashboard";
+        if (isAuthenticated) return "/dashboard";
         return;
       }
-      if (!isAuthenticated && !isAuthDisabled) {
+      if (!isAuthenticated) {
         return { name: "Login", query: { redirect: to.fullPath } };
       }
     }

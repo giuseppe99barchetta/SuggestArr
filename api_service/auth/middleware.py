@@ -501,6 +501,27 @@ def _is_public_route(path: str) -> bool:
 # Main middleware hook
 # ---------------------------------------------------------------------------
 
+def _load_token_account(payload: dict) -> Optional[dict]:
+    """
+    Return the current, active account a verified access token was issued to.
+
+    Args:
+        payload: Decoded JWT claims (``sub`` is the account id).
+
+    Returns:
+        dict | None: The account record, or None when the token has no valid subject, the account no
+        longer exists or it is deactivated.
+    """
+    try:
+        user_id = int(payload.get("sub"))
+    except (TypeError, ValueError):
+        return None
+    record = _get_database_manager()().get_auth_user_by_id(user_id)
+    if not record or not record.get("is_active", True):
+        return None
+    return record
+
+
 def _apply_auth_context(user: dict, method: str, api_key_id=None, api_key_name=None) -> None:
     g.current_user = {"id": str(user.get("id", user.get("sub"))), "username": user.get("username", ""), "role": user.get("role", "user"), "can_manage_ai": user.get("can_manage_ai", 0), "visible_tabs": user.get("visible_tabs", "requests,jobs,profile")}
     g.auth_method, g.api_key_id, g.api_key_name = method, api_key_id, api_key_name
@@ -586,7 +607,16 @@ def enforce_authentication() -> Optional[tuple]:
         payload = AuthService.verify_access_token(bearer)
         if payload is None:
             return jsonify({"error": "Invalid or expired token"}), 401
-        _apply_auth_context(payload, "jwt")
+        # The token proves who signed in, not what the account may do now: re-read it so a deactivated,
+        # deleted or demoted account loses access immediately instead of when the token expires.
+        try:
+            account = _load_token_account(payload)
+        except Exception as exc:
+            logger.warning("Could not look up the signed-in account: %s", type(exc).__name__)
+            return jsonify({"error": "Authentication service unavailable"}), 503
+        if account is None:
+            return jsonify({"error": "Invalid or expired token"}), 401
+        _apply_auth_context(account, "jwt")
         return None
     if api_key:
         identity = ApiKeyService(_get_database_manager()()).resolve(api_key)
