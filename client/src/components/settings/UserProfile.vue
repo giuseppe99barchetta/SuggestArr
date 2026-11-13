@@ -163,7 +163,7 @@
           </div>
         </SectionCard>
 
-        <UserAiProvider v-if="canManageAi" />
+        <UserAiProvider v-if="canManageAi && profileUser?.role !== 'admin'" />
 
         <ApiKeysPanel class="flex-1" />
       </div>
