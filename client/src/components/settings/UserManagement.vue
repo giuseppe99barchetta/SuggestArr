@@ -210,8 +210,8 @@
           <BaseCheckbox
             v-model="editPermissions.can_manage_ai"
             :disabled="isSavingPermissions"
-            label="Can manage AI settings"
-            description="Lets this user set their own AI provider and key."
+            label="Use their own AI provider"
+            description="Off: this user uses the shared AI provider from Settings. On: they can set their own provider and key on their profile, and use the shared one until they do."
           />
         </section>
 
