@@ -1353,7 +1353,10 @@ class SchemaManager:
                     conn.commit()
                 # Prompts claimed before delivery generations existed belong to generation 0.
                 cursor.execute("SELECT * FROM rating_prompts WHERE 1=0")
-                if 'generation' not in [col[0] for col in cursor.description]:
+                prompt_columns = [col[0] for col in cursor.description]
+                # MySQL requires even an empty result set to be consumed before reuse or close.
+                cursor.fetchall()
+                if 'generation' not in prompt_columns:
                     cursor.execute("ALTER TABLE rating_prompts ADD COLUMN generation INTEGER NOT NULL DEFAULT 0")
                     conn.commit()
 
