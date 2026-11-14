@@ -18,7 +18,7 @@
       ><i aria-hidden="true" :class="icon"></i></span>
       <div class="min-w-0 flex-1 self-center">
         <h2 :id="titleId" class="m-0 text-base font-bold text-ink">{{ title }}</h2>
-        <p v-if="subtitle || $slots.subtitle" class="m-0 mt-0.5 text-[13px] text-ink-3"><slot name="subtitle">{{ subtitle }}</slot></p>
+        <p v-if="subtitle || $slots.subtitle" class="m-0 mt-0.5 text-[0.8125rem] text-ink-3"><slot name="subtitle">{{ subtitle }}</slot></p>
       </div>
       <button type="button" class="-mr-2 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" aria-label="Close" @click="close">
         <i aria-hidden="true" class="fas fa-times"></i>

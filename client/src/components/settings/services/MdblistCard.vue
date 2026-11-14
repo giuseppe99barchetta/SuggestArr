@@ -3,7 +3,7 @@
     <ServiceCardHeader icon="fas fa-list" title="MDBList" description="Import titles from public lists." :status="getMdblistStatus" :status-text="getMdblistStatusText" :folded="isFolded(getMdblistStatus)" @toggle="editing = !editing" />
     <div v-show="!isFolded(getMdblistStatus)">
       <div class="flex min-w-0 flex-col">
-        <div class="mb-4 flex flex-col gap-1.5 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+        <div class="mb-4 flex flex-col gap-1.5 [&>label]:text-[0.8125rem] [&>label]:font-semibold [&>label]:text-ink-2">
           <label for="mdblistApiKey">API key</label>
           <div class="flex gap-2">
             <input id="mdblistApiKey" v-model="localConfig.MDBLIST_API_KEY" :type="showMdblistKey ? 'text' : 'password'" autocomplete="off" class="ui-input" :disabled="isLoading" placeholder="Enter your MDBList API key (optional)" />

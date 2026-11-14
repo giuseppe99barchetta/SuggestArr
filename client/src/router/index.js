@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import axios from "axios";
 import { useAuth, setAuthRouter, initializeAuthReady, markAuthReady, waitForAuthReady } from "@/composables/useAuth";
+import { readStorage, removeStorage } from "@/utils/storage.js";
 
 // Lazy load components for code splitting
 const ConfigWizard = () => import("@/components/ConfigWizard.vue");
@@ -82,11 +83,7 @@ export async function createAppRouter() {
   const auth = useAuth();
 
   // Older versions stored the whole configuration (API keys, tokens, DB password) in the browser.
-  try {
-    localStorage.removeItem("suggestarr_config");
-  } catch {
-    // Storage can be unavailable; nothing to clean then.
-  }
+  removeStorage("suggestarr_config");
 
   // Initialize the auth-ready signal so components can wait for auth setup
   initializeAuthReady();
@@ -99,7 +96,7 @@ export async function createAppRouter() {
     const authStatus = await auth.getAuthStatus();
 
     // If an admin account exists, try refreshing the session from the cookie.
-    const hadSessionHint = localStorage.getItem("suggestarr_had_session") === "1";
+    const hadSessionHint = readStorage("suggestarr_had_session") === "1";
     if (authStatus.auth_setup_complete && hadSessionHint) {
       await auth.tryRefresh();
     }

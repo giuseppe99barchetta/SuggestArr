@@ -3,7 +3,7 @@
     <ServiceCardHeader v-if="!wizardMode" icon="fas fa-star" title="IMDb ratings (OMDb)" description="Lets jobs filter suggestions by IMDb rating." :status="getOmdbStatus" :status-text="getOmdbStatusText" :folded="isFolded(getOmdbStatus)" @toggle="editing = !editing" />
     <div v-show="!isFolded(getOmdbStatus)">
       <div class="min-w-0">
-        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[0.8125rem] [&>label]:font-semibold [&>label]:text-ink-2">
           <label for="omdbApiKey">API key</label>
           <div class="flex gap-2">
             <input
@@ -26,7 +26,7 @@
             <summary class="flex min-h-10 w-fit cursor-pointer list-none items-center gap-2 rounded-ctl text-brand-ink hover:text-ink [&::-webkit-details-marker]:hidden">
               <i aria-hidden="true" class="fas fa-info-circle"></i>
               How IMDb filtering works
-              <i aria-hidden="true" class="fas fa-chevron-down text-[10px] transition-transform group-open:rotate-180"></i>
+              <i aria-hidden="true" class="fas fa-chevron-down text-[0.625rem] transition-transform group-open:rotate-180"></i>
             </summary>
             <div class="space-y-2 border-l border-edge-strong pl-3">
               <p class="m-0">OMDb provides IMDb community ratings so jobs can skip suggestions below your minimum score. Choose IMDb to use these ratings on their own, or Both to combine them with TMDb.</p>

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { ref } from "vue";
+import { writeStorage, removeStorage } from "../utils/storage.js";
 
 // Module-level singleton — shared across all composable instances
 const accessToken = ref(null);
@@ -113,7 +114,7 @@ export function useAuth() {
       .post("/api/auth/refresh", {}, { _skipAuth: true })
       .then((res) => {
         setSessionFromAccessToken(res.data.access_token);
-        localStorage.setItem(SESSION_HINT_KEY, "1");
+        writeStorage(SESSION_HINT_KEY, "1");
         return true;
       })
       .catch((error) => {
@@ -124,7 +125,7 @@ export function useAuth() {
         if (!_refreshTransient) {
           setSessionFromAccessToken(null);
           _refreshFailed = true; // Block further refresh attempts until next login
-          localStorage.removeItem(SESSION_HINT_KEY);
+          removeStorage(SESSION_HINT_KEY);
         }
         return false;
       })
@@ -143,7 +144,7 @@ export function useAuth() {
     setSessionFromAccessToken(res.data.access_token);
     authBypass.value = false;
     _refreshFailed = false; // Allow refresh attempts again after a fresh login
-    localStorage.setItem(SESSION_HINT_KEY, "1");
+    writeStorage(SESSION_HINT_KEY, "1");
     return res.data;
   }
 
@@ -155,12 +156,8 @@ export function useAuth() {
       setSessionFromAccessToken(null);
       authBypass.value = false;
       _refreshFailed = false; // Allow refresh after the user logs in again
-      localStorage.removeItem(SESSION_HINT_KEY);
-      try {
-        localStorage.removeItem("suggestarr_config"); // legacy cache of the full configuration
-      } catch {
-        // Storage can be unavailable.
-      }
+      removeStorage(SESSION_HINT_KEY);
+      removeStorage("suggestarr_config"); // legacy cache of the full configuration
     }
   }
 

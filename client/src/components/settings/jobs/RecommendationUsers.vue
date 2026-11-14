@@ -13,7 +13,7 @@
           type="button"
           role="radio"
           :aria-checked="userMode === mode.value"
-          class="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-[8px] border-0 px-3 py-2 text-[13px] font-semibold transition-colors"
+          class="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-[8px] border-0 px-3 py-2 text-[0.8125rem] font-semibold transition-colors"
           :class="userMode === mode.value ? 'bg-brand text-white' : 'bg-transparent text-ink-3 hover:text-ink'"
           @click="setUserMode(mode.value)"
         >
@@ -81,7 +81,7 @@ export default {
       isLoading: false,
       localUserMode: (this.modelValue.user_ids || []).length ? 'specific' : 'all',
       selectedService: '',
-      emptyClass: 'flex items-center justify-center gap-2 rounded-ctl border border-dashed border-edge-strong p-4 text-[13px] text-ink-4',
+      emptyClass: 'flex items-center justify-center gap-2 rounded-ctl border border-dashed border-edge-strong p-4 text-[0.8125rem] text-ink-4',
       userModes: [
         { value: 'all', label: 'All users', icon: 'fas fa-users' },
         { value: 'specific', label: 'Specific users', icon: 'fas fa-user-check' },

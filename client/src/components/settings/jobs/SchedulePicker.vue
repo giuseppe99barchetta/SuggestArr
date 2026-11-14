@@ -37,10 +37,12 @@
           type="text"
           placeholder="0 0 * * *"
           class="ui-input font-mono"
+          :aria-invalid="cronError ? 'true' : null"
+          :aria-describedby="cronError ? 'cronExpression-error' : null"
           @input="validateCron"
         />
       </label>
-      <small v-if="cronError" class="text-xs text-bad">{{ cronError }}</small>
+      <small v-if="cronError" id="cronExpression-error" class="text-xs text-bad">{{ cronError }}</small>
       <small v-else-if="cronPreview" class="flex items-center gap-1.5 text-xs text-notice">
         <i aria-hidden="true" class="fas fa-clock"></i>{{ cronPreview }}
       </small>
@@ -156,7 +158,7 @@ export default {
 
     chipClass(active) {
       return [
-        'flex cursor-pointer items-center justify-center gap-2 rounded-ctl border px-3 py-2 text-[13px] font-semibold transition-colors',
+        'flex cursor-pointer items-center justify-center gap-2 rounded-ctl border px-3 py-2 text-[0.8125rem] font-semibold transition-colors',
         active ? 'border-brand bg-brand-soft text-ink [&>i]:text-brand-ink' : 'border-edge-strong bg-panel-2 text-ink-2 hover:border-ink-4 hover:text-ink [&>i]:text-ink-4',
       ];
     },

@@ -12,10 +12,10 @@
 import { badgeMedallion } from '@/utils/recapBadges.js';
 
 const SIZES = {
-  xs: { box: 'h-8 w-8', icon: 'text-xs', text: 'text-[10px]', unit: 'hidden' },
-  sm: { box: 'h-11 w-11', icon: 'text-base', text: 'text-sm', unit: 'text-[7px]' },
-  md: { box: 'h-16 w-16 border-2', icon: 'text-2xl', text: 'text-xl', unit: 'text-[8px]' },
-  lg: { box: 'h-20 w-20 border-2', icon: 'text-3xl', text: 'text-2xl', unit: 'text-[9px]' },
+  xs: { box: 'h-8 w-8', icon: 'text-xs', text: 'text-[0.625rem]', unit: 'hidden' },
+  sm: { box: 'h-11 w-11', icon: 'text-base', text: 'text-sm', unit: 'text-[0.4375rem]' },
+  md: { box: 'h-16 w-16 border-2', icon: 'text-2xl', text: 'text-xl', unit: 'text-[0.5rem]' },
+  lg: { box: 'h-20 w-20 border-2', icon: 'text-3xl', text: 'text-2xl', unit: 'text-[0.5625rem]' },
 };
 
 export default {

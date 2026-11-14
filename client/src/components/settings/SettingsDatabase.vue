@@ -3,8 +3,8 @@
     <PageHeader v-if="!wizardMode" title="Database" subtitle="Where SuggestArr keeps requests, jobs and history. SQLite needs no setup; PostgreSQL or MySQL suit larger or shared installs." />
 
     <section class="rounded-card border border-edge bg-panel p-5">
-      <h2 class="m-0 mb-1 text-[17px] font-bold text-ink">Database engine</h2>
-      <p class="m-0 mb-4 text-[13px] text-ink-3">Switching engines does not move existing data.</p>
+      <h2 class="m-0 mb-1 text-[1.0625rem] font-bold text-ink">Database engine</h2>
+      <p class="m-0 mb-4 text-[0.8125rem] text-ink-3">Switching engines does not move existing data.</p>
       <div role="radiogroup" aria-label="Database engine" class="grid gap-3 sm:grid-cols-3">
         <button
           v-for="engine in engines"
@@ -32,26 +32,26 @@
     </section>
 
     <section v-else class="rounded-card border border-edge bg-panel p-5">
-      <h2 class="m-0 mb-1 text-[17px] font-bold text-ink">{{ engineLabel }} connection</h2>
-      <p class="m-0 mb-4 text-[13px] text-ink-3">Create the database first; SuggestArr creates its tables on start.</p>
+      <h2 class="m-0 mb-1 text-[1.0625rem] font-bold text-ink">{{ engineLabel }} connection</h2>
+      <p class="m-0 mb-4 text-[0.8125rem] text-ink-3">Create the database first; SuggestArr creates its tables on start.</p>
       <div class="grid gap-4 sm:grid-cols-[2fr_1fr]">
-        <label class="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+        <label class="flex flex-col gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
           Host
           <input v-model="localConfig.DB_HOST" type="text" placeholder="localhost" :class="inputClass" :disabled="isLoading" />
         </label>
-        <label class="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+        <label class="flex flex-col gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
           Port
           <input v-model.number="localConfig.DB_PORT" type="number" :placeholder="defaultPort" :class="inputClass" :disabled="isLoading" />
         </label>
-        <label class="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+        <label class="flex flex-col gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
           Database name
           <input v-model="localConfig.DB_NAME" type="text" placeholder="suggestarr" :class="inputClass" :disabled="isLoading" />
         </label>
-        <label class="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2">
+        <label class="flex flex-col gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
           Username
           <input v-model="localConfig.DB_USER" type="text" :placeholder="localConfig.DB_TYPE === 'postgres' ? 'postgres' : 'root'" :class="inputClass" :disabled="isLoading" autocomplete="off" />
         </label>
-        <label class="flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2 sm:col-span-2">
+        <label class="flex flex-col gap-1.5 text-[0.8125rem] font-semibold text-ink-2 sm:col-span-2">
           Password
           <span class="flex gap-2">
             <input v-model="localConfig.DB_PASSWORD" :type="showPassword ? 'text' : 'password'" placeholder="Database password" :class="inputClass" class="flex-1" :disabled="isLoading" autocomplete="new-password" />
@@ -72,7 +72,7 @@
     </section>
 
     <section v-if="hasDbTypeChanged && localConfig.DB_TYPE !== 'sqlite'" role="note" class="rounded-card border border-caution/40 bg-caution/10 p-5">
-      <h2 class="m-0 mb-2 text-[15px] font-bold text-ink"><i aria-hidden="true" class="fas fa-exclamation-triangle mr-2 text-caution"></i>Your data does not move by itself</h2>
+      <h2 class="m-0 mb-2 text-[0.9375rem] font-bold text-ink"><i aria-hidden="true" class="fas fa-exclamation-triangle mr-2 text-caution"></i>Your data does not move by itself</h2>
       <ol class="m-0 flex flex-col gap-1 pl-5 text-sm leading-relaxed text-ink-2">
         <li>Export your current configuration (System → Export a backup).</li>
         <li>Back up your SQLite database file.</li>

@@ -3,7 +3,7 @@
     <header class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="m-0 text-3xl font-extrabold tracking-tight text-ink">Requests</h1>
-        <p class="m-0 mt-1.5 text-[15px] text-ink-3">Approve suggestions and follow what has been sent to Seer or Radarr/Sonarr.</p>
+        <p class="m-0 mt-1.5 text-[0.9375rem] text-ink-3">Approve suggestions and follow what has been sent to Seer or Radarr/Sonarr.</p>
       </div>
       <button
         v-if="viewMode === 'all-requests' && approvalEnabled"
@@ -89,9 +89,9 @@
             <i aria-hidden="true" v-else-if="source.visual" :class="source.visual.icon" class="text-xl text-white/90"></i>
           </button>
           <div class="relative flex min-w-0 flex-1 flex-col gap-0.5">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-white/65">{{ source.visual ? 'Suggested by' : 'Because you watched' }}</span>
+            <span class="text-[0.6875rem] font-semibold uppercase tracking-wider text-white/65">{{ source.visual ? 'Suggested by' : 'Because you watched' }}</span>
             <h2 class="m-0 truncate text-xl font-extrabold text-white" :title="source.title">{{ source.title }}</h2>
-            <span v-if="!source.visual && (source.rating || source.release_date)" class="text-[13px] text-white/80">
+            <span v-if="!source.visual && (source.rating || source.release_date)" class="text-[0.8125rem] text-white/80">
               <template v-if="source.release_date">{{ releaseYear(source.release_date) }}</template>
               <template v-if="source.rating && source.release_date"> · </template>
               <template v-if="source.rating"><i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(source.rating) }}</template>
@@ -114,17 +114,17 @@
               <img v-if="request.poster_path" :src="request.poster_path" alt="" loading="lazy" class="absolute inset-0 h-full w-full object-cover" />
               <span v-else class="absolute inset-0 flex items-center justify-center text-2xl text-white/40"><i aria-hidden="true" class="fas fa-film"></i></span>
               <MediaStatusBadge small :watched-at="request.watched_at" :availability="request.availability" class="absolute right-1.5 top-1.5" />
-              <span v-if="request.media_type === 'tv'" class="absolute left-1.5 top-1.5 rounded-md bg-canvas/80 px-1.5 py-0.5 text-[10px] font-bold text-ink">TV</span>
+              <span v-if="request.media_type === 'tv'" class="absolute left-1.5 top-1.5 rounded-md bg-canvas/80 px-1.5 py-0.5 text-[0.625rem] font-bold text-ink">TV</span>
             </span>
-            <span class="block w-full truncate text-[13px] font-semibold leading-snug text-white" :title="request.title">{{ request.title }}</span>
-            <span class="text-[11px] text-white/60">
+            <span class="block w-full truncate text-[0.8125rem] font-semibold leading-snug text-white" :title="request.title">{{ request.title }}</span>
+            <span class="text-[0.6875rem] text-white/60">
               <template v-if="request.release_date">{{ releaseYear(request.release_date) }}</template>
               <template v-if="request.rating && request.release_date"> · </template>
               <template v-if="request.rating"><i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(request.rating) }}</template>
             </span>
             <span
               v-if="showRequestUser && (request.user_name || request.user_id)"
-              class="-mt-1 block w-full truncate text-[11px] text-white/60"
+              class="-mt-1 block w-full truncate text-[0.6875rem] text-white/60"
               :title="`For ${request.user_name || request.user_id}`"
             >For {{ request.user_name || request.user_id }}</span>
           </button>
@@ -240,7 +240,7 @@
               v-for="option in visibleFeedbackOptions"
               :key="option.value"
               type="button"
-              class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold disabled:opacity-50"
+              class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[0.8125rem] font-semibold disabled:opacity-50"
               :class="selectedSource.feedback?.feedback === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong bg-transparent text-ink-2 hover:border-ink-4'"
               :aria-pressed="(selectedSource.feedback?.feedback === option.value).toString()"
               :disabled="isFeedbackSaving(selectedSource)"
@@ -251,10 +251,10 @@
             <button
               v-if="!feedbackExpanded"
               type="button"
-              class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-[13px] font-semibold text-ink-4 hover:text-ink"
+              class="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-2 text-[0.8125rem] font-semibold text-ink-4 hover:text-ink"
               @click="feedbackExpanded = true"
             >
-              More <i aria-hidden="true" class="fas fa-chevron-down text-[10px]"></i>
+              More <i aria-hidden="true" class="fas fa-chevron-down text-[0.625rem]"></i>
             </button>
           </div>
           <p class="m-0 basis-full text-xs text-ink-4">Your answers steer future recommendations for this profile.</p>
@@ -932,7 +932,6 @@ export default {
       this.selectedSource = { ...source, _isAiRequest: isAiRequest };
       this.feedbackExpanded = false;
       this.showModal = true;
-      document.body.style.overflow = 'hidden';
     },
     openWorkflowModal(item) {
       this.openModal({
@@ -948,7 +947,6 @@ export default {
     closeModal() {
       this.showModal = false;
       this.selectedSource = null;
-      document.body.style.overflow = 'auto';
     },
   },
   mounted() {
@@ -972,7 +970,6 @@ export default {
   beforeUnmount() {
     this.cleanupObserver();
     this.cleanupAiObserver();
-    document.body.style.overflow = 'auto';
   },
 };
 </script>

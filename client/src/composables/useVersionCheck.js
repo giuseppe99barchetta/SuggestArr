@@ -117,12 +117,12 @@ export function useVersionCheck() {
         if (isNightly) {
           window.open(
             "https://hub.docker.com/r/ciuse99/suggestarr/tags",
-            "_blank",
+            "_blank", "noopener"
           );
         } else {
           window.open(
             "https://github.com/giuseppe99barchetta/SuggestArr/releases/latest",
-            "_blank",
+            "_blank", "noopener"
           );
         }
       },

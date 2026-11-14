@@ -7,7 +7,7 @@
 
     <div class="relative overflow-hidden bg-radial-[at_50%_30%] from-brand-soft/45 via-panel to-panel px-6 pb-6 pt-10 text-center max-sm:px-4">
       <button type="button" class="absolute right-3 top-3 z-10 grid h-10 w-10 cursor-pointer place-items-center rounded-ctl border-0 bg-transparent text-ink-4 transition-colors hover:bg-raised hover:text-ink" aria-label="Close" @click="$refs.dialog.close()"><i aria-hidden="true" class="fas fa-times"></i></button>
-      <h2 :id="titleId" class="m-0 text-[11px] font-semibold uppercase tracking-[0.3em] text-brand-ink">Badge unlocked</h2>
+      <h2 :id="titleId" class="m-0 text-[0.6875rem] font-semibold uppercase tracking-[0.3em] text-brand-ink">Badge unlocked</h2>
 
       <div :key="badge.id" class="relative mx-auto mt-6 grid h-56 w-56 place-items-center motion-safe:animate-pop sm:h-64 sm:w-64" aria-hidden="true">
         <span class="absolute inset-0 rounded-full bg-[repeating-conic-gradient(var(--color-brand)_0deg_6deg,transparent_6deg_18deg)] opacity-40 [mask-image:radial-gradient(circle,transparent_55%,black_56%,black_70%,transparent_71%)] motion-safe:animate-[spin_24s_linear_infinite]"></span>

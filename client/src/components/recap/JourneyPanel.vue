@@ -6,17 +6,17 @@
           <div aria-hidden="true" class="text-center">
             <i v-if="medallion?.icon" :class="medallion.icon" class="text-2xl text-brand-ink"></i>
             <template v-else-if="medallion">
-              <span class="block text-2xl font-extrabold leading-none tracking-tight text-brand-ink sm:text-[28px]">{{ medallion.text }}</span>
-              <span class="mt-1 block text-[9px] font-semibold uppercase tracking-widest text-brand-ink/80">{{ medallion.unit }}</span>
+              <span class="block text-2xl font-extrabold leading-none tracking-tight text-brand-ink sm:text-[1.75rem]">{{ medallion.text }}</span>
+              <span class="mt-1 block text-[0.5625rem] font-semibold uppercase tracking-widest text-brand-ink/80">{{ medallion.unit }}</span>
             </template>
             <span v-else class="text-sm font-bold text-brand-ink">Start</span>
           </div>
-          <span v-if="latestBadge" class="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border border-brand-ink/25 bg-brand-soft text-[11px] text-brand-ink"><i aria-hidden="true" class="fas fa-award"></i></span>
+          <span v-if="latestBadge" class="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border border-brand-ink/25 bg-brand-soft text-[0.6875rem] text-brand-ink"><i aria-hidden="true" class="fas fa-award"></i></span>
         </button>
         <div class="min-w-0" :class="!recap ? 'col-span-2' : ''">
           <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h2 id="journey-title" class="m-0 text-xs font-medium text-ink-3">Your SuggestArr journey</h2>
-            <span v-if="recap" class="order-3 basis-full text-[11px] text-ink-4 sm:order-none sm:basis-auto"><span class="mr-2 hidden text-edge-strong sm:inline" aria-hidden="true">/</span>{{ recap.scope === 'installation' ? 'This installation' : 'Your linked profiles' }}</span>
+            <span v-if="recap" class="order-3 basis-full text-[0.6875rem] text-ink-4 sm:order-none sm:basis-auto"><span class="mr-2 hidden text-edge-strong sm:inline" aria-hidden="true">/</span>{{ recap.scope === 'installation' ? 'This installation' : 'Your linked profiles' }}</span>
             <p v-if="recap" class="order-2 m-0 basis-full text-lg font-bold leading-snug tracking-tight text-ink sm:order-3 sm:text-xl">{{ latestBadge?.label || 'Discover your next milestone' }}</p>
           </div>
           <p v-if="error" role="alert" class="m-0 mt-2 text-sm text-bad">{{ error }} <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-brand-ink underline" @click="load">Try again</button></p>
@@ -26,13 +26,13 @@
           <p v-else-if="!recap.total" class="m-0 text-sm leading-relaxed text-ink-3">Your journey starts with the first successful title request.</p>
           <template v-else-if="recap.next_badge">
             <progress class="block h-1.5 w-full max-w-xl appearance-none overflow-hidden rounded-full border-0 bg-raised [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-bar]:bg-raised [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-brand [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-brand" :value="recap.total" :max="recap.next_badge.threshold" :aria-label="`Progress toward ${recap.next_badge.label}`"></progress>
-            <div class="mt-2 flex max-w-xl flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[11px]">
+            <div class="mt-2 flex max-w-xl flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-[0.6875rem]">
               <span class="text-ink-3">{{ Math.max(0, recap.next_badge.threshold - recap.total).toLocaleString('en-US') }} more titles to unlock</span>
               <span class="text-ink-4">Next: {{ recap.next_badge.label }}</span>
             </div>
           </template>
           <p v-else class="m-0 text-xs text-ink-3">Every title milestone unlocked.</p>
-          <p v-if="recap.total && (hitRate || recap.streak?.current)" class="m-0 mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-ink-3">
+          <p v-if="recap.total && (hitRate || recap.streak?.current)" class="m-0 mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] text-ink-3">
             <span v-if="hitRate"><i aria-hidden="true" class="fas fa-play-circle mr-1 text-brand-ink"></i>{{ recap.hit_rate }}% of picks watched</span>
             <span v-if="recap.streak?.current"><i aria-hidden="true" class="fas fa-fire mr-1 text-caution"></i>{{ recap.streak.current }}-month watch streak</span>
           </p>
@@ -45,7 +45,7 @@
       <div v-if="announceYear" class="relative flex items-start gap-3 border-t border-edge bg-linear-to-br from-caution/10 to-panel p-5 sm:gap-4 sm:px-6">
         <span aria-hidden="true" class="grid h-10 w-10 shrink-0 place-items-center rounded-ctl border border-caution/30 bg-caution/10 text-caution"><i class="fas fa-film"></i></span>
         <div class="min-w-0 flex-1 pr-8">
-          <p class="m-0 mb-1 text-[11px] font-semibold uppercase tracking-widest text-caution">{{ yearSeason.year }} in stories</p>
+          <p class="m-0 mb-1 text-[0.6875rem] font-semibold uppercase tracking-widest text-caution">{{ yearSeason.year }} in stories</p>
           <h3 class="m-0 text-base font-bold leading-snug text-ink">Your year on screen is ready</h3>
           <p class="m-0 mt-1 text-sm text-ink-3">Discoveries, the picks you watched and the milestones you unlocked, ready to share.</p>
           <button type="button" class="ui-btn mt-3" @click="openAnnouncedYear"><i aria-hidden="true" class="fas fa-play"></i>Play your {{ yearSeason.year }} stories</button>
@@ -66,7 +66,7 @@
       <div class="flex items-start gap-4">
         <span aria-hidden="true" class="hidden h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-soft/60 text-brand-ink ring-4 ring-brand-soft/20 sm:grid"><i class="fas fa-heart"></i></span>
         <div class="min-w-0 flex-1">
-          <p class="m-0 text-[11px] font-semibold uppercase tracking-widest text-brand-ink">{{ prompt.milestone.toLocaleString('en-US') }} titles requested</p>
+          <p class="m-0 text-[0.6875rem] font-semibold uppercase tracking-widest text-brand-ink">{{ prompt.milestone.toLocaleString('en-US') }} titles requested</p>
           <h3 id="support-prompt-title" class="m-0 mt-1 text-base font-bold leading-snug text-ink">Enjoying the discoveries?</h3>
           <p class="m-0 mt-1 max-w-xl text-sm leading-relaxed text-ink-3">A little support helps me keep building SuggestArr in my spare time.</p>
           <div class="mt-4 flex flex-wrap items-center gap-2">

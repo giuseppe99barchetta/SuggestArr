@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import { formatDate, timeFromNow } from './dateUtils.js';
 
 const now = new Date('2026-10-09T12:00:00Z');
@@ -28,4 +28,16 @@ test('formatDate stays relative past a month', () => {
   assert.equal(formatDate(daysAgo(100)), '3 months ago');
   assert.equal(formatDate(daysAgo(400)), '1 year ago');
   assert.equal(formatDate(daysAgo(800)), '2 years ago');
+});
+
+test('formatDate counts the day before a DST change as yesterday', () => {
+  const tz = process.env.TZ;
+  process.env.TZ = 'Europe/Rome'; // clocks went forward on 2026-03-29, a 23-hour day
+  mock.timers.enable({ apis: ['Date'], now: new Date('2026-03-30T12:00:00+02:00') });
+  try {
+    assert.equal(formatDate('2026-03-29T12:00:00+02:00'), 'yesterday');
+  } finally {
+    mock.timers.reset();
+    process.env.TZ = tz;
+  }
 });

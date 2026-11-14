@@ -3,7 +3,7 @@
     <ServiceCardHeader v-if="!wizardMode" icon="fas fa-history" title="Trakt" description="Adds Trakt watch history and personal recommendations. Users link their own accounts from their profile." :status="getTraktStatus" :status-text="getTraktStatusText" :folded="isFolded(getTraktStatus)" @toggle="editing = !editing" />
     <div v-show="!isFolded(getTraktStatus)">
       <div class="min-w-0">
-        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[0.8125rem] [&>label]:font-semibold [&>label]:text-ink-2">
           <label for="traktClientId">Client ID</label>
           <input
             id="traktClientId"
@@ -14,7 +14,7 @@
             :disabled="isLoading"
           />
         </div>
-        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+        <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[0.8125rem] [&>label]:font-semibold [&>label]:text-ink-2">
           <label for="traktClientSecret">Client Secret (optional)</label>
           <div class="flex gap-2">
             <input
@@ -33,7 +33,7 @@
             Create an app at <a href="https://developer.trakt.tv/apps/new" target="_blank" rel="noopener noreferrer" class="text-brand-ink underline underline-offset-2 hover:no-underline">Trakt Developer</a> with <code>urn:ietf:wg:oauth:2.0:oob</code> as Redirect URI (ignore the insecure-URI warning) and leave Allowed origins empty. New Trakt apps use the Client ID without issuing a Client Secret.
           </small>
         </div>
-        <div class="mt-3 flex items-center gap-2 text-[13px] font-semibold text-good" v-if="isTraktAppConfigured">
+        <div class="mt-3 flex items-center gap-2 text-[0.8125rem] font-semibold text-good" v-if="isTraktAppConfigured">
           <i aria-hidden="true" class="fas fa-check-circle"></i>
           Trakt app credentials configured. Users can link their own Trakt accounts from their profile.
         </div>

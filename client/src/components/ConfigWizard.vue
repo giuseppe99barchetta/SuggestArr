@@ -443,10 +443,6 @@ export default {
       }
     });
 
-    watch(showLogs, (open) => {
-      document.body.style.overflow = open ? 'hidden' : '';
-    });
-
     // ─── Methods ─────────────────────────────────────────────────────────────
     function startSetup() {
       screen.value = 'wizard';

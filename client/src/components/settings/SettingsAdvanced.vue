@@ -31,7 +31,7 @@
           <div class="flex flex-col gap-4">
             <div class="grid gap-4 md:grid-cols-2">
             <label class="ui-label" for="openaiApiKey">
-              <span>API key <span class="ml-1.5 rounded-full bg-raised px-2 py-0.5 text-[11px] font-normal text-ink-4">Optional</span></span>
+              <span>API key <span class="ml-1.5 rounded-full bg-raised px-2 py-0.5 text-[0.6875rem] font-normal text-ink-4">Optional</span></span>
               <input id="openaiApiKey" v-model="localConfig.OPENAI_API_KEY" type="password" placeholder="sk-..." class="ui-input" :disabled="isLoading" />
               <span class="text-xs font-normal text-ink-4">Required for OpenAI and hosted providers. For local providers like Ollama or LM Studio, use any placeholder (for example <code>sk-local</code>).</span>
             </label>
@@ -44,7 +44,7 @@
             </div>
 
             <label class="ui-label" for="openaiBaseUrl">
-              <span>Base URL <span class="ml-1.5 rounded-full bg-raised px-2 py-0.5 text-[11px] font-normal text-ink-4">Optional</span></span>
+              <span>Base URL <span class="ml-1.5 rounded-full bg-raised px-2 py-0.5 text-[0.6875rem] font-normal text-ink-4">Optional</span></span>
               <input id="openaiBaseUrl" v-model="localConfig.OPENAI_BASE_URL" type="text" placeholder="https://api.openai.com/v1" class="ui-input" :disabled="isLoading" />
               <span class="text-xs font-normal text-ink-4">Leave blank for OpenAI. Use <code>http://localhost:11434/v1</code> for Ollama, <code>http://localhost:1234/v1</code> for LM Studio, or your LiteLLM/OpenRouter endpoint.</span>
             </label>
@@ -81,7 +81,7 @@
                 </label>
 
                 <label class="ui-label md:col-span-2" for="searxngBaseUrl">
-                  <span>SearXNG base URL <span class="ml-1.5 rounded-full bg-raised px-2 py-0.5 text-[11px] font-normal text-ink-4">Optional</span></span>
+                  <span>SearXNG base URL <span class="ml-1.5 rounded-full bg-raised px-2 py-0.5 text-[0.6875rem] font-normal text-ink-4">Optional</span></span>
                   <input id="searxngBaseUrl" v-model.trim="localConfig.SEARXNG_BASE_URL" type="url" placeholder="http://searxng:8080" class="ui-input" :disabled="isLoading" />
                   <span class="text-xs font-normal text-ink-4">Optional self-hosted SearXNG instance. Its top three JSON search results add current context to AI Search and AI recommendations; leave blank to disable it.</span>
                 </label>
@@ -93,7 +93,7 @@
                 <i aria-hidden="true" :class="isTestingLlm ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>
                 {{ isTestingLlm ? 'Testing…' : 'Test connection' }}
               </button>
-              <span v-if="llmStatus && !isTestingLlm" class="text-[13px] font-semibold" :class="llmStatus === 'ok' ? 'text-good' : 'text-bad'" role="status">
+              <span v-if="llmStatus && !isTestingLlm" class="text-[0.8125rem] font-semibold" :class="llmStatus === 'ok' ? 'text-good' : 'text-bad'" role="status">
                 <i aria-hidden="true" :class="llmStatus === 'ok' ? 'fas fa-check-circle' : 'fas fa-times-circle'"></i>
                 {{ llmStatus === 'ok' ? 'Connected' : 'Connection failed' }}
               </span>
@@ -244,7 +244,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
             </div>
           </div>
 
-          <p class="m-0 flex gap-3 rounded-ctl border border-edge bg-panel-2 p-3 text-[13px] leading-relaxed text-ink-3">
+          <p class="m-0 flex gap-3 rounded-ctl border border-edge bg-panel-2 p-3 text-[0.8125rem] leading-relaxed text-ink-3">
             <i aria-hidden="true" class="fas fa-lightbulb mt-0.5 text-caution"></i>
             <span>The system sends your watch history to the LLM and receives a ranked list of recommendations with reasoning. No personal data is stored by the provider beyond your API usage.</span>
           </p>
@@ -415,7 +415,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
                 <span class="text-sm font-semibold text-ink">Auto-reject after</span>
                 <span class="text-xs leading-snug text-ink-4">Days awaiting review. 0 keeps suggestions indefinitely.</span>
               </span>
-              <span class="flex shrink-0 items-center gap-2 text-[13px] text-ink-3">
+              <span class="flex shrink-0 items-center gap-2 text-[0.8125rem] text-ink-3">
                 <input id="autoRejectApprovalDays" v-model.number="localConfig.AUTO_REJECT_APPROVAL_DAYS" type="number" min="0" max="365" class="ui-input h-9 w-20 px-2.5 tabular-nums" :disabled="isLoading || !localConfig.REQUIRE_REQUEST_APPROVAL" />days
               </span>
             </label>
@@ -430,7 +430,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
                 <span class="text-sm font-semibold text-ink">Auto-decline after</span>
                 <span class="text-xs leading-snug text-ink-4">Days pending in Seerr. 0 disables expiry.</span>
               </span>
-              <span class="flex shrink-0 items-center gap-2 text-[13px] text-ink-3">
+              <span class="flex shrink-0 items-center gap-2 text-[0.8125rem] text-ink-3">
                 <input v-model.number="localConfig.SEER_AUTO_DECLINE_DAYS" aria-label="Auto-decline after (days)" type="number" min="0" max="365" step="1" class="ui-input h-9 w-20 px-2.5 tabular-nums" :disabled="isLoading" />days
               </span>
             </label>
@@ -450,7 +450,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
 
         <SectionCard icon="fas fa-eye" title="Who sees what" description="Choose request visibility and the default title language." class="xl:col-span-2">
           <fieldset class="m-0 min-w-0 border-0 p-0">
-            <legend class="mb-2 p-0 text-[13px] font-semibold text-ink-2">Request visibility</legend>
+            <legend class="mb-2 p-0 text-[0.8125rem] font-semibold text-ink-2">Request visibility</legend>
             <div class="grid gap-2.5 md:grid-cols-3">
             <label
               v-for="option in requestVisibilityOptions"
@@ -469,7 +469,7 @@ LLM_MODEL=gpt-4o-mini</code></pre>
           </fieldset>
 
           <div class="mt-5 grid gap-3 border-t border-edge pt-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] sm:items-center">
-            <label for="tmdbLanguage" class="flex flex-col gap-1 text-[13px] font-semibold text-ink-2">
+            <label for="tmdbLanguage" class="flex flex-col gap-1 text-[0.8125rem] font-semibold text-ink-2">
               Default title language
               <span class="text-xs font-normal leading-relaxed text-ink-4">For everyone who has not picked a language on their profile.</span>
             </label>

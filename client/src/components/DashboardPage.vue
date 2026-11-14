@@ -13,8 +13,8 @@
       <!-- Sidebar -->
       <nav
         aria-label="Main"
-        class="fixed inset-y-0 left-0 z-50 w-64 shrink-0 flex flex-col gap-6 px-3.5 py-5 bg-side border-r border-edge overflow-y-auto transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
-        :class="showMobileNav ? 'translate-x-0' : '-translate-x-full'"
+        class="fixed inset-y-0 left-0 z-50 w-64 shrink-0 flex flex-col gap-6 px-3.5 py-5 bg-side border-r border-edge overflow-y-auto transition-[translate,visibility] lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
+        :class="showMobileNav ? 'translate-x-0' : '-translate-x-full max-lg:invisible'"
       >
         <a
           href="https://github.com/giuseppe99barchetta/SuggestArr"
@@ -28,7 +28,7 @@
 
         <div class="flex flex-col gap-0.5" data-tour-id="nav-tabs">
           <template v-for="group in navGroups" :key="group.label">
-            <div v-if="group.label" class="px-3 pt-4 pb-1.5 text-[11px] font-bold uppercase tracking-widest text-ink-4">{{ group.label }}</div>
+            <div v-if="group.label" class="px-3 pt-4 pb-1.5 text-[0.6875rem] font-bold uppercase tracking-widest text-ink-4">{{ group.label }}</div>
             <router-link
               v-for="tab in group.tabs"
               :key="tab.id"
@@ -41,7 +41,7 @@
             >
               <i aria-hidden="true" :class="tab.icon" class="w-[18px] text-center"></i>
               <span>{{ tab.name }}</span>
-              <span v-if="tab.id === 'requests' && requestCount > 0" class="ml-auto text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
+              <span v-if="tab.id === 'requests' && requestCount > 0" class="ml-auto text-[0.6875rem] font-bold px-2 py-0.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
             </router-link>
           </template>
         </div>
@@ -52,14 +52,14 @@
             :href="`https://github.com/giuseppe99barchetta/SuggestArr/releases/latest`"
             target="_blank"
             rel="noopener noreferrer"
-            class="flex items-center gap-2 px-3 py-2.5 rounded-ctl bg-brand-soft/60 border border-brand-soft text-brand-ink text-[13px] font-semibold no-underline"
+            class="flex items-center gap-2 px-3 py-2.5 rounded-ctl bg-brand-soft/60 border border-brand-soft text-brand-ink text-[0.8125rem] font-semibold no-underline"
           >
             <i aria-hidden="true" class="fas fa-arrow-up"></i> Update available
           </a>
           <div class="flex items-center gap-2.5 p-2">
-            <UserAvatar :user="currentUser" class="h-8 w-8 text-[32px]" />
+            <UserAvatar :user="currentUser" class="h-8 w-8 text-[2rem]" />
             <div class="flex flex-col min-w-0">
-              <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }" class="text-[13px] font-semibold truncate text-ink no-underline hover:text-brand-ink" title="Your profile" @click="showMobileNav = false">{{ currentUser.username }}</router-link>
+              <router-link :to="{ name: 'DashboardTab', params: { tab: 'profile' } }" class="text-[0.8125rem] font-semibold truncate text-ink no-underline hover:text-brand-ink" title="Your profile" @click="showMobileNav = false">{{ currentUser.username }}</router-link>
               <button type="button" class="text-left text-xs text-ink-4 hover:text-ink-2 bg-transparent border-0 p-0 cursor-pointer" title="What's new" data-testid="open-whats-new" @click="openVersionNotes">
                 {{ currentUser.role === 'admin' ? 'Admin' : 'User' }} · {{ currentVersion }}<span v-if="currentImageTag === 'nightly'"> (nightly)</span>
               </button>
@@ -108,14 +108,14 @@
           v-for="tab in quickTabs"
           :key="tab.id"
           :to="{ name: 'DashboardTab', params: { tab: tab.id } }"
-          class="relative flex flex-col items-center gap-1 py-2 text-[11px] font-semibold no-underline"
+          class="relative flex flex-col items-center gap-1 py-2 text-[0.6875rem] font-semibold no-underline"
           :class="activeTab === tab.id ? 'text-brand-ink' : 'text-ink-3'"
         >
           <i aria-hidden="true" :class="tab.icon" class="text-lg"></i>
           {{ tab.name }}
-          <span v-if="tab.id === 'requests' && requestCount > 0" class="absolute top-0.5 left-1/2 ml-2 text-[10px] font-bold px-1.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
+          <span v-if="tab.id === 'requests' && requestCount > 0" class="absolute top-0.5 left-1/2 ml-2 text-[0.625rem] font-bold px-1.5 rounded-full bg-brand text-white">{{ requestCount }}</span>
         </router-link>
-        <button type="button" class="flex flex-col items-center gap-1 py-2 text-[11px] font-semibold text-ink-3 bg-transparent border-0 cursor-pointer" :aria-expanded="showMobileNav ? 'true' : 'false'" @click="showMobileNav = true">
+        <button ref="navToggle" type="button" class="flex flex-col items-center gap-1 py-2 text-[0.6875rem] font-semibold text-ink-3 bg-transparent border-0 cursor-pointer" :aria-expanded="showMobileNav ? 'true' : 'false'" @click="showMobileNav = true">
           <i aria-hidden="true" class="fas fa-bars text-lg"></i>
           More
         </button>
@@ -214,6 +214,7 @@ import { approvalEnabled } from '@/utils/requestApproval';
 import HomePage from './HomePage.vue';
 import { exportConfig, importConfig } from '@/api/api';
 import { REQUESTS_CHANGED } from '@/utils/requestEvents.js';
+import { readStorage, removeStorage } from '@/utils/storage.js';
 
 // Tabs load on first visit to keep the dashboard chunk small.
 const SettingsServices = defineAsyncComponent(() => import('./settings/SettingsServices.vue'));
@@ -436,6 +437,11 @@ export default {
     },
   },
   watch: {
+    // Escape closes the mobile drawer while it is open.
+    showMobileNav(open) {
+      if (open) document.addEventListener('keydown', this.onDrawerKeydown);
+      else document.removeEventListener('keydown', this.onDrawerKeydown);
+    },
     // The badge was only counted once at load; recount when moving between pages so
     // suggestions created by a job run in the meantime show up too.
     activeTab() {
@@ -453,6 +459,7 @@ export default {
     }
   },
   beforeUnmount() {
+    document.removeEventListener('keydown', this.onDrawerKeydown);
     window.removeEventListener(REQUESTS_CHANGED, this.loadRequestCount);
   },
   async mounted() {
@@ -476,7 +483,7 @@ export default {
       this.loadRequestCount();
 
       // Auto-start tour on first visit or when ?tour=1 is in the URL
-      const tourDone = localStorage.getItem(TOUR_STORAGE_KEY);
+      const tourDone = readStorage(TOUR_STORAGE_KEY);
       const tourForced = window.location.search.includes('tour=1');
       if (!tourDone || tourForced) {
         setTimeout(() => { this.showTour = true; }, 900);
@@ -496,6 +503,11 @@ export default {
     }
   },
   methods: {
+    onDrawerKeydown(event) {
+      if (event.key !== 'Escape') return;
+      this.showMobileNav = false;
+      this.$refs.navToggle?.focus();
+    },
     normalizeTabId(tabId) {
       if (!tabId) return '';
       if (tabId === 'suggestions') return 'requests';
@@ -567,7 +579,7 @@ export default {
       this.whatsNewEntry = null;
     },
     restartTour() {
-      localStorage.removeItem(TOUR_STORAGE_KEY);
+      removeStorage(TOUR_STORAGE_KEY);
       this.showTour = true;
     },
     async loadConfig() {

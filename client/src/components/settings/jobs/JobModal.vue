@@ -7,7 +7,7 @@
         <span aria-hidden="true" class="grid h-9 w-9 shrink-0 place-items-center rounded-ctl bg-brand-soft text-sm text-brand-ink"><i aria-hidden="true" :class="jobTypeInfoIcon"></i></span>
         <div class="min-w-0 flex-1 self-center">
           <h2 id="job-modal-title" class="m-0 text-base font-bold text-ink">{{ oneTime ? 'Import list once' : isEditing ? 'Edit job' : 'New job' }}</h2>
-          <p class="m-0 mt-0.5 truncate text-[13px] text-ink-3">{{ oneTime ? 'Import all matching titles without creating a scheduled job.' : isEditing ? form.name : 'Pick what to look for, when, and how it reaches Seer.' }}</p>
+          <p class="m-0 mt-0.5 truncate text-[0.8125rem] text-ink-3">{{ oneTime ? 'Import all matching titles without creating a scheduled job.' : isEditing ? form.name : 'Pick what to look for, when, and how it reaches Seer.' }}</p>
         </div>
         <button type="button" class="-mr-2 grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-raised hover:text-ink" aria-label="Close" @click="requestClose">
           <i aria-hidden="true" class="fas fa-times"></i>
@@ -27,9 +27,9 @@
               :aria-current="activeSection === section.id ? 'step' : null"
               @click="scrollToSection(section.id)"
             >
-              <span class="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-bold" :class="activeSection === section.id ? 'bg-brand text-white' : 'bg-raised text-ink-3'">{{ index + 1 }}</span>
+              <span class="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-[0.6875rem] font-bold" :class="activeSection === section.id ? 'bg-brand text-white' : 'bg-raised text-ink-3'">{{ index + 1 }}</span>
               <span class="flex min-w-0 flex-col">
-                <span class="text-[13px] font-semibold" :class="activeSection === section.id ? 'text-ink' : 'text-ink-2'">{{ section.title }}</span>
+                <span class="text-[0.8125rem] font-semibold" :class="activeSection === section.id ? 'text-ink' : 'text-ink-2'">{{ section.title }}</span>
                 <span class="truncate text-xs text-ink-4">{{ section.summary }}</span>
               </span>
             </button>
@@ -129,7 +129,7 @@
                       v-for="type in visibleMediaTypes"
                       :key="type.value"
                       type="button"
-                      class="flex h-[32px] flex-1 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border-0 px-2 text-[13px] font-semibold transition-colors"
+                      class="flex h-[32px] flex-1 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border-0 px-2 text-[0.8125rem] font-semibold transition-colors"
                       :class="form.media_type === type.value ? 'bg-brand text-white' : 'bg-transparent text-ink-3 hover:text-ink'"
                       :aria-pressed="form.media_type === type.value ? 'true' : 'false'"
                       @click="form.media_type = type.value"
@@ -141,7 +141,7 @@
                 </div>
 
                 <div v-if="!oneTime" class="flex flex-col gap-1.5">
-                  <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                  <div class="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
                     <label for="jobName">Name</label>
                     <InfoTip text="Shown in the job list and history. Leave it empty to use the suggested name." />
                   </div>
@@ -188,7 +188,7 @@
               <template v-else>
                 <button type="button" :class="disclosureClass" :aria-expanded="qualityOpen.toString()" aria-controls="job-quality-filters" @click="qualityOpen = !qualityOpen">
                   <span class="flex min-w-0 flex-col items-start gap-0.5">
-                    <span class="text-[13px] font-semibold text-ink">Quality filters</span>
+                    <span class="text-[0.8125rem] font-semibold text-ink">Quality filters</span>
                     <span class="text-xs font-normal text-ink-4">Rating, votes, runtime, release date, language, genres and streaming services.</span>
                   </span>
                   <i aria-hidden="true" class="fas fa-chevron-down ml-auto text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': qualityOpen }"></i>
@@ -241,7 +241,7 @@
                       <BaseCheckbox v-model="form.prevent_suggestions_if_unwatched" label="Pause if suggestions remain unwatched" />
                       <InfoTip text="Waits until people actually watch what was suggested before adding more." />
                     </div>
-                    <label v-if="form.prevent_suggestions_if_unwatched" class="flex items-center gap-2 text-[13px] text-ink-3" for="unwatchedDays">
+                    <label v-if="form.prevent_suggestions_if_unwatched" class="flex items-center gap-2 text-[0.8125rem] text-ink-3" for="unwatchedDays">
                       for
                       <input id="unwatchedDays" v-model.number="form.unwatched_suggestion_days" class="ui-input h-9! w-20" type="number" min="1" required />
                       days
@@ -280,21 +280,21 @@
                 <div :class="fieldLabelClass"><span>Limits</span></div>
                 <div class="grid gap-4 sm:grid-cols-3">
                   <div class="flex flex-col gap-1.5">
-                    <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                    <div class="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
                       <label for="maxResults">Per run</label>
                       <InfoTip :text="maxResultsHelp" />
                     </div>
                     <input id="maxResults" v-model.number="form.max_results" class="ui-input" type="number" min="1" :max="maxResultsLimit" required />
                   </div>
                   <div class="flex flex-col gap-1.5">
-                    <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                    <div class="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
                       <label for="maxRequestsPerUser">Per user</label>
                       <InfoTip :text="`Most automatic requests ${requestBackend === 'arr' ? 'made for one user' : 'credited to one Seer user'} within the window. 0 means no extra limit; the per-run limit still applies.`" />
                     </div>
                     <input id="maxRequestsPerUser" v-model.number="form.max_requests_per_user" class="ui-input" type="number" min="0" max="1000" required />
                   </div>
                   <div v-if="form.max_requests_per_user > 0" class="flex flex-col gap-1.5">
-                    <div class="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
+                    <div class="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-2">
                       <label for="requestLimitWindowHours">Window (hours)</label>
                       <InfoTip text="The per-user limit counts requests made in this many past hours, e.g. 24 for a daily cap or 168 for a weekly one." />
                     </div>
@@ -305,7 +305,7 @@
 
               <button type="button" :class="disclosureClass" :aria-expanded="profilesOpen.toString()" aria-controls="job-request-profiles" @click="profilesOpen = !profilesOpen">
                 <span class="flex min-w-0 flex-col items-start gap-0.5">
-                  <span class="text-[13px] font-semibold text-ink">Radarr / Sonarr overrides</span>
+                  <span class="text-[0.8125rem] font-semibold text-ink">Radarr / Sonarr overrides</span>
                   <span class="text-xs font-normal text-ink-4">{{ profilesSummary }}</span>
                 </span>
                 <i aria-hidden="true" class="fas fa-chevron-down ml-auto text-xs text-ink-4 transition-transform" :class="{ 'rotate-180': profilesOpen }"></i>
@@ -466,9 +466,9 @@ export default {
       profilesOpen: false,
       activeSection: 'source',
       sectionClass: 'scroll-mt-2 border-b border-edge py-7 last:border-b-0',
-      sectionTitleClass: 'm-0 mb-5 flex items-center gap-2.5 text-[15px] font-bold text-ink',
+      sectionTitleClass: 'm-0 mb-5 flex items-center gap-2.5 text-[0.9375rem] font-bold text-ink',
       sectionNumberClass: 'grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-soft text-xs font-bold text-brand-ink',
-      fieldLabelClass: 'mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-2',
+      fieldLabelClass: 'mb-2 flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ink-2',
       disclosureClass: 'flex w-full cursor-pointer items-center gap-3 rounded-ctl border border-edge-strong bg-panel-2 px-4 py-3 text-left hover:border-ink-4',
       jobTypes: [
         { value: 'list_import', label: 'Import list', description: 'Public MDBList or Trakt list', icon: 'fas fa-list' },

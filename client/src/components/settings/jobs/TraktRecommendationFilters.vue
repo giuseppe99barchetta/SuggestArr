@@ -63,7 +63,7 @@ export default {
   emits: ['update:modelValue'],
   data() {
     return {
-      noticeClass: 'flex items-center gap-2 rounded-ctl border border-dashed border-edge-strong p-3 text-[13px] text-ink-4',
+      noticeClass: 'flex items-center gap-2 rounded-ctl border border-dashed border-edge-strong p-3 text-[0.8125rem] text-ink-4',
     };
   },
   computed: {

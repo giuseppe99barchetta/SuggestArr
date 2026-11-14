@@ -6,7 +6,7 @@
       <div class="flex min-w-0 flex-col gap-5">
         <SectionCard icon="fas fa-user-circle" title="Account" description="The name you sign in with and your password.">
           <div class="flex items-center gap-4">
-            <UserAvatar :user="profileUser" class="h-16 w-16 shrink-0 text-[64px]" />
+            <UserAvatar :user="profileUser" class="h-16 w-16 shrink-0 text-[4rem]" />
             <div class="min-w-0 flex-1">
               <form v-if="editingName" class="flex gap-2" @submit.prevent="saveUsername">
                 <label class="sr-only" for="newUsername">New username</label>
@@ -43,9 +43,9 @@
             <label class="ui-label">Current password<input id="currentPassword" ref="currentPasswordInput" v-model="passwordForm.current" :type="showPasswords ? 'text' : 'password'" class="ui-input" autocomplete="current-password" :disabled="isSavingPassword" /></label>
             <div class="grid gap-3 sm:grid-cols-2">
               <label class="ui-label">New password<input id="newPassword" v-model="passwordForm.new" :type="showPasswords ? 'text' : 'password'" class="ui-input" placeholder="At least 8 characters" autocomplete="new-password" :disabled="isSavingPassword" /></label>
-              <label class="ui-label">Confirm new password<input id="confirmPassword" v-model="passwordForm.confirm" :type="showPasswords ? 'text' : 'password'" class="ui-input" autocomplete="new-password" :disabled="isSavingPassword" :aria-invalid="passwordMismatch" /></label>
+              <label class="ui-label">Confirm new password<input id="confirmPassword" v-model="passwordForm.confirm" :type="showPasswords ? 'text' : 'password'" class="ui-input" autocomplete="new-password" :disabled="isSavingPassword" :aria-invalid="passwordMismatch" :aria-describedby="passwordMismatch ? 'password-mismatch' : null" /></label>
             </div>
-            <p v-if="passwordMismatch" class="m-0 text-xs text-bad">Passwords don't match.</p>
+            <p v-if="passwordMismatch" id="password-mismatch" class="m-0 text-xs text-bad">Passwords don't match.</p>
             <label class="flex cursor-pointer items-center gap-2 self-start text-xs text-ink-3"><input v-model="showPasswords" type="checkbox" />Show passwords</label>
             <p v-if="passwordError" role="alert" class="ui-alert-bad">{{ passwordError }}</p>
             <div class="flex gap-2">
@@ -179,14 +179,14 @@
               <span v-if="currentLink" class="truncate text-xs text-ink-3"><i aria-hidden="true" class="fas fa-check-circle mr-1 text-good"></i>Linked as {{ currentLink.external_username }}</span>
               <span v-else class="text-xs text-ink-4">Not linked</span>
             </span>
-            <button v-if="currentLink" type="button" class="ui-btn h-9 px-3 text-[13px]" :disabled="isUnlinking" @click="unlinkAccount">
+            <button v-if="currentLink" type="button" class="ui-btn h-9 px-3 text-[0.8125rem]" :disabled="isUnlinking" @click="unlinkAccount">
               <i aria-hidden="true" :class="isUnlinking ? 'fas fa-spinner fa-spin' : 'fas fa-unlink'"></i>Unlink
             </button>
           </div>
 
           <template v-if="!currentLink">
             <div v-if="isPlexService" class="flex flex-col gap-3">
-              <p class="m-0 text-[13px] text-ink-3">Sign in with Plex in a new window to link your account.</p>
+              <p class="m-0 text-[0.8125rem] text-ink-3">Sign in with Plex in a new window to link your account.</p>
               <p v-if="linkError" role="alert" class="ui-alert-bad">{{ linkError }}</p>
               <button type="button" class="ui-btn-primary self-start" :disabled="isLinking" @click="linkPlexWithOAuth">
                 <i aria-hidden="true" :class="isLinking ? 'fas fa-spinner fa-spin' : 'fas fa-link'"></i>{{ isLinking ? 'Waiting for Plex…' : 'Link Plex account' }}

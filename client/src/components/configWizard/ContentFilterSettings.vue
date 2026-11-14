@@ -14,8 +14,9 @@
                     <input type="number" :value="config[field.key]"
                         @input="field.validate($event.target.value)"
                         class="ui-input"
+                        :aria-invalid="errors[field.key] ? 'true' : null" :aria-describedby="errors[field.key] ? `${field.key}-error` : null"
                         :id="field.key" :placeholder="field.placeholder" min="0" :max="field.max">
-                    <span v-if="errors[field.key]" class="text-[0.8125rem] font-medium text-bad">{{ errors[field.key] }}</span>
+                    <span v-if="errors[field.key]" :id="`${field.key}-error`" class="text-[0.8125rem] font-medium text-bad">{{ errors[field.key] }}</span>
                 </label>
             </div>
             <p class="m-0 mt-2 flex items-center gap-2 text-[0.8rem] text-ink-4">

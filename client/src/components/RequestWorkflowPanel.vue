@@ -10,18 +10,18 @@
 
     <div v-if="pausedMessage" role="status" class="flex flex-wrap items-center gap-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3 text-sm">
       <span class="mr-auto text-ink-2"><i aria-hidden="true" class="fas fa-pause-circle mr-1.5 text-caution"></i>{{ pausedMessage }}</span>
-      <button type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[13px] font-bold text-white disabled:opacity-50" :disabled="running" @click="runJob(true)">Run anyway</button>
-      <button type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[13px] font-semibold text-ink-2" @click="pausedMessage = ''">Dismiss</button>
+      <button type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[0.8125rem] font-bold text-white disabled:opacity-50" :disabled="running" @click="runJob(true)">Run anyway</button>
+      <button type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[0.8125rem] font-semibold text-ink-2" @click="pausedMessage = ''">Dismiss</button>
     </div>
 
     <div v-if="bulkMode" class="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-card border border-brand-soft bg-panel/95 px-4 py-3 backdrop-blur lg:top-4">
       <span class="mr-auto text-sm font-semibold text-ink"><i aria-hidden="true" class="fas fa-check-double mr-1.5 text-brand-ink"></i>{{ selected.length }} selected</span>
-      <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[13px] font-bold text-white" @click="confirmAction('approve')">Approve</button>
-      <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[13px] font-semibold text-ink-2" @click="confirmAction('reject')">Reject</button>
-      <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[13px] font-semibold text-bad" @click="confirmAction('blacklist')">Blacklist</button>
-      <button v-if="canRetry" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand-soft px-3.5 text-[13px] font-bold text-brand-ink" @click="confirmAction('retry')">Retry</button>
-      <button v-if="canRequestAgain" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand-soft px-3.5 text-[13px] font-bold text-brand-ink" @click="confirmAction('request-again')">Request again</button>
-      <span v-if="!selected.length" class="text-[13px] text-ink-4">Click cards to select them</span>
+      <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[0.8125rem] font-bold text-white" @click="confirmAction('approve')">Approve</button>
+      <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[0.8125rem] font-semibold text-ink-2" @click="confirmAction('reject')">Reject</button>
+      <button v-if="canApprove" type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[0.8125rem] font-semibold text-bad" @click="confirmAction('blacklist')">Blacklist</button>
+      <button v-if="canRetry" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand-soft px-3.5 text-[0.8125rem] font-bold text-brand-ink" @click="confirmAction('retry')">Retry</button>
+      <button v-if="canRequestAgain" type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand-soft px-3.5 text-[0.8125rem] font-bold text-brand-ink" @click="confirmAction('request-again')">Request again</button>
+      <span v-if="!selected.length" class="text-[0.8125rem] text-ink-4">Click cards to select them</span>
     </div>
 
     <p v-if="!bulkMode && items.some(item => item.status === 'awaiting_approval')" class="m-0 text-xs text-ink-4"><span class="max-sm:hidden">Focus a card and press A to approve, R to reject, S if already seen.</span><span class="sm:hidden">Swipe right to approve, left to reject.</span></p>
@@ -53,12 +53,12 @@
             <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Cancel" title="Cancel" @click.stop="seenMenuId = null"><i aria-hidden="true" class="fas fa-undo"></i></button>
           </template>
           <template v-else-if="item.status === 'awaiting_approval'">
-            <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand text-[13px] font-bold text-white disabled:opacity-50" :disabled="actionLoading" aria-label="Approve request" @click.stop="decideOne('approve', item.id)">Approve</button>
+            <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand text-[0.8125rem] font-bold text-white disabled:opacity-50" :disabled="actionLoading" aria-label="Approve request" @click.stop="decideOne('approve', item.id)">Approve</button>
             <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoading" aria-label="Already seen it" title="Already seen it" @click.stop="openSeen(item)"><i aria-hidden="true" class="fas fa-eye"></i></button>
             <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-bad disabled:opacity-50" :disabled="actionLoading" aria-label="Reject request" title="Reject" @click.stop="confirmSingle('reject', item.id)"><i aria-hidden="true" class="fas fa-times"></i></button>
           </template>
-          <button v-else-if="item.status === 'failed'" type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand-soft text-[13px] font-bold text-brand-ink disabled:opacity-50" :disabled="actionLoading" @click.stop="decideOne('retry', item.id)"><i aria-hidden="true" class="fas fa-redo mr-1"></i>Retry</button>
-          <button v-else type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand-soft text-[13px] font-bold text-brand-ink disabled:opacity-50" :disabled="actionLoading" @click.stop="confirmRequestAgain(item)">Request again</button>
+          <button v-else-if="item.status === 'failed'" type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand-soft text-[0.8125rem] font-bold text-brand-ink disabled:opacity-50" :disabled="actionLoading" @click.stop="decideOne('retry', item.id)"><i aria-hidden="true" class="fas fa-redo mr-1"></i>Retry</button>
+          <button v-else type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand-soft text-[0.8125rem] font-bold text-brand-ink disabled:opacity-50" :disabled="actionLoading" @click.stop="confirmRequestAgain(item)">Request again</button>
         </template>
         <div class="media-card-body flex flex-col gap-1 text-xs">
           <span class="font-semibold text-ink-2">{{ item.media_type === 'movie' ? 'Movie' : 'TV' }}<template v-if="item.rating"> · <i aria-hidden="true" class="fas fa-star text-caution"></i> {{ formatRating(item.rating) }}</template></span>

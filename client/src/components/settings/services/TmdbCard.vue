@@ -3,7 +3,7 @@
     <ServiceCardHeader v-if="!wizardMode" icon="fas fa-film" title="TMDB" description="Recommendations, posters and metadata." :status="getTmdbStatus" :status-text="getTmdbStatusText" :folded="isFolded(getTmdbStatus)" @toggle="editing = !editing" />
     <div v-show="!isFolded(getTmdbStatus)">
       <div class="flex min-w-0 flex-col">
-      <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+      <div class="mb-4 flex flex-col gap-1.5 last:mb-0 [&>label]:text-[0.8125rem] [&>label]:font-semibold [&>label]:text-ink-2">
         <label for="tmdbApiKey">API key</label>
         <div class="flex gap-2">
           <input

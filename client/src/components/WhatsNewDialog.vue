@@ -12,12 +12,12 @@
             <div class="relative flex h-20 w-20 items-center justify-center rounded-2xl border bg-panel/80 shadow-lg backdrop-blur-sm max-sm:h-16 max-sm:w-16" :class="[tone.ring, tone.text]">
               <i class="fas text-[2rem] max-sm:text-2xl" :class="slide.icon"></i>
             </div>
-            <span class="absolute bottom-3 left-4 font-mono text-[11px] font-semibold tracking-widest opacity-70 max-sm:hidden" :class="tone.text">{{ String(index + 1).padStart(2, '0') }} / {{ String(entry.slides.length).padStart(2, '0') }}</span>
+            <span class="absolute bottom-3 left-4 font-mono text-[0.6875rem] font-semibold tracking-widest opacity-70 max-sm:hidden" :class="tone.text">{{ String(index + 1).padStart(2, '0') }} / {{ String(entry.slides.length).padStart(2, '0') }}</span>
           </div>
 
           <div class="flex min-w-0 flex-col gap-3 p-6 max-sm:p-4">
             <h3 class="m-0 text-xl leading-snug font-bold text-ink">{{ slide.heading }}</h3>
-            <p class="m-0 text-[15px] leading-relaxed text-ink-2">{{ slide.text }}</p>
+            <p class="m-0 text-[0.9375rem] leading-relaxed text-ink-2">{{ slide.text }}</p>
             <ul v-if="slide.points?.length" class="m-0 mt-1 flex list-none flex-col gap-2.5 p-0">
               <li v-for="point in slide.points" :key="point" class="flex gap-2.5 text-sm leading-snug text-ink-3">
                 <i aria-hidden="true" class="fas fa-circle-check mt-0.5 shrink-0" :class="tone.text"></i>

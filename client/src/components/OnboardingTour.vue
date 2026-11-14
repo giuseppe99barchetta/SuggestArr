@@ -54,6 +54,7 @@
 </template>
 
 <script>
+import { writeStorage } from '@/utils/storage.js';
 const TOUR_STORAGE_KEY = 'suggestarr_tour_done';
 const TOOLTIP_WIDTH = 300;
 const TOOLTIP_EST_HEIGHT = 190;
@@ -260,12 +261,12 @@ export default {
     },
 
     skip() {
-      localStorage.setItem(TOUR_STORAGE_KEY, '1');
+      writeStorage(TOUR_STORAGE_KEY, '1');
       this.$emit('done');
     },
 
     finish() {
-      localStorage.setItem(TOUR_STORAGE_KEY, '1');
+      writeStorage(TOUR_STORAGE_KEY, '1');
       this.$emit('done');
     },
   },

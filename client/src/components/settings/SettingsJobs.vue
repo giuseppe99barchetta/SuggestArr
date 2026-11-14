@@ -3,7 +3,7 @@
     <header class="flex flex-wrap items-end justify-between gap-4" data-tour-id="jobs-section-header">
       <div>
         <h1 class="m-0 text-3xl font-extrabold tracking-tight text-ink">Jobs</h1>
-        <p class="m-0 mt-1.5 max-w-2xl text-[15px] text-ink-3">Discover titles, find recommendations or import a public list. Each job runs on its own schedule and sends requests to Seer or Radarr/Sonarr.</p>
+        <p class="m-0 mt-1.5 max-w-2xl text-[0.9375rem] text-ink-3">Discover titles, find recommendations or import a public list. Each job runs on its own schedule and sends requests to Seer or Radarr/Sonarr.</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <button type="button" class="h-[42px] w-[42px] cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 text-ink-3 hover:text-ink" title="Replay the Jobs tour" aria-label="Replay the Jobs tour" @click="restartJobsTour"><i aria-hidden="true" class="fas fa-question-circle"></i></button>
@@ -66,7 +66,7 @@
       <dl class="m-0 grid grid-cols-1 gap-3 @xl:grid-cols-2 @5xl:grid-cols-4">
         <div v-for="type in jobTypes" :key="type.id" class="flex min-w-0 flex-col gap-2 rounded-ctl border border-edge bg-canvas/40 p-3.5">
           <dt class="flex items-center gap-2.5 text-sm font-bold" :class="type.text"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-ctl" :class="type.bg"><i aria-hidden="true" :class="type.icon"></i></span>{{ type.label }}</dt>
-          <dd class="m-0 text-[13px] leading-relaxed text-ink-3">{{ type.description }}</dd>
+          <dd class="m-0 text-[0.8125rem] leading-relaxed text-ink-3">{{ type.description }}</dd>
         </div>
       </dl>
       <button type="button" class="absolute right-3 top-3 h-8 w-8 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Hide job types" @click="dismissInfoBox"><i aria-hidden="true" class="fas fa-times"></i></button>
@@ -87,7 +87,7 @@
         <h2 id="hit-rate-title" class="m-0 text-sm font-bold text-ink">Watched after request</h2>
         <dl class="m-0 flex flex-wrap gap-x-6 gap-y-2">
           <div v-for="source in sourceHitRates" :key="source.label" class="flex items-baseline gap-2" :title="`${source.watched} of ${source.requested} requested titles watched`">
-            <dt class="text-[13px] text-ink-3">{{ source.label }}</dt>
+            <dt class="text-[0.8125rem] text-ink-3">{{ source.label }}</dt>
             <dd class="m-0 text-sm font-bold text-ink">{{ source.rate }}%</dd>
           </div>
         </dl>
@@ -104,9 +104,9 @@
           <div class="flex min-w-0 flex-col gap-1.5">
             <div class="flex flex-wrap items-center gap-2">
               <h2 class="m-0 text-base font-bold text-ink">{{ job.name }}</h2>
-              <span v-if="!job.enabled" class="rounded-md bg-caution/15 px-2 py-0.5 text-[11px] font-bold text-caution"><i aria-hidden="true" class="fas fa-pause mr-1 text-[9px]"></i>Paused</span>
-              <span class="rounded-md bg-raised px-2 py-0.5 text-[11px] font-bold text-ink-2">{{ getJobTypeLabel(job.job_type) }}</span>
-              <span class="rounded-md bg-raised px-2 py-0.5 text-[11px] font-bold text-ink-2"><i aria-hidden="true" :class="getMediaTypeIcon(job.media_type)" class="mr-1"></i>{{ getMediaTypeLabel(job.media_type) }}</span>
+              <span v-if="!job.enabled" class="rounded-md bg-caution/15 px-2 py-0.5 text-[0.6875rem] font-bold text-caution"><i aria-hidden="true" class="fas fa-pause mr-1 text-[0.5625rem]"></i>Paused</span>
+              <span class="rounded-md bg-raised px-2 py-0.5 text-[0.6875rem] font-bold text-ink-2">{{ getJobTypeLabel(job.job_type) }}</span>
+              <span class="rounded-md bg-raised px-2 py-0.5 text-[0.6875rem] font-bold text-ink-2"><i aria-hidden="true" :class="getMediaTypeIcon(job.media_type)" class="mr-1"></i>{{ getMediaTypeLabel(job.media_type) }}</span>
             </div>
             <div v-if="hasFilters(job)" class="flex flex-wrap gap-1.5 text-xs text-ink-3">
               <span>Up to {{ job.max_results }} per run</span>
@@ -161,7 +161,7 @@
 
     <section v-if="recentHistory.length > 0" class="flex flex-col gap-3.5" data-tour-id="jobs-history">
       <div class="flex items-baseline justify-between gap-3">
-        <h2 class="m-0 text-[19px] font-bold text-ink">Recent runs</h2>
+        <h2 class="m-0 text-[1.1875rem] font-bold text-ink">Recent runs</h2>
         <button type="button" class="cursor-pointer border-0 bg-transparent p-0 text-sm font-semibold text-brand-ink hover:text-brand" @click="showHistoryModal = true">Full history →</button>
       </div>
       <div class="overflow-x-auto rounded-card border border-edge bg-panel">
@@ -179,7 +179,7 @@
               <td class="px-[18px] py-3.5 font-semibold text-ink">{{ exec.job_name }}</td>
               <td class="px-[18px] py-3.5 text-ink-2">{{ formatDate(exec.started_at) }}</td>
               <td class="px-[18px] py-3.5 text-ink-2">{{ exec.status === 'failed' && exec.error_message ? exec.error_message : `${exec.results_count} found · ${exec.requested_count} requested` }}</td>
-              <td class="px-[18px] py-3.5"><span class="inline-flex items-center gap-1.5 text-[13px] font-semibold" :class="runStatus(exec.status).text"><span class="h-2 w-2 rounded-full" :class="runStatus(exec.status).dot"></span>{{ runStatus(exec.status).label }}</span></td>
+              <td class="px-[18px] py-3.5"><span class="inline-flex items-center gap-1.5 text-[0.8125rem] font-semibold" :class="runStatus(exec.status).text"><span class="h-2 w-2 rounded-full" :class="runStatus(exec.status).dot"></span>{{ runStatus(exec.status).label }}</span></td>
             </tr>
           </tbody>
         </table>
@@ -248,6 +248,7 @@ import ActionMenu from '@/components/ui/ActionMenu.vue';
 import { timeFromNow } from '@/utils/dateUtils.js';
 import { hitRate, hitRatesBySource } from '@/utils/jobHitRates.js';
 import { getJobTypeIcon as resolveJobTypeIcon, getJobTypeLabel as resolveJobTypeLabel, formatJobSchedule } from '@/utils/jobTypeVisuals.js';
+import { readStorage, writeStorage, removeStorage } from '@/utils/storage.js';
 
 const JOBS_TOUR_KEY = 'suggestarr_jobs_tour_done';
 // Index of the first step that targets elements inside the job modal
@@ -290,8 +291,8 @@ export default {
       queueStatus: { queued: 0, submitting: 0, submitted: 0, failed: 0, total_pending: 0 },
       pausedRun: null,
       queuePollInterval: null,
-      queueBannerDismissed: localStorage.getItem('sj_queue_banner_dismissed') === '1',
-      showInfoBox: localStorage.getItem('sj_info_box_hidden') !== '1',
+      queueBannerDismissed: readStorage('sj_queue_banner_dismissed') === '1',
+      showInfoBox: readStorage('sj_info_box_hidden') !== '1',
       showJobsTour: false,
       jobTypes: [
         { id: 'discover', label: 'Discover', icon: 'fas fa-search', bg: 'bg-notice/15', text: 'text-notice', description: 'Finds titles with TMDb filters (genre, rating, year), independent of what anyone watched.' },
@@ -400,7 +401,7 @@ export default {
     await this.pollQueueStatus();
     await this.pollListImport();
 
-    if (!localStorage.getItem(JOBS_TOUR_KEY)) {
+    if (!readStorage(JOBS_TOUR_KEY)) {
       setTimeout(() => this.startJobsTour(), 600);
     }
   },
@@ -514,7 +515,7 @@ export default {
           this.queueStatus = response;
           if (response.total_pending > 0 && !this.queuePollInterval) {
             this.queueBannerDismissed = false;
-            localStorage.removeItem('sj_queue_banner_dismissed');
+            removeStorage('sj_queue_banner_dismissed');
             this.queuePollInterval = setInterval(this.pollQueueStatus, 5000);
           } else if (response.total_pending === 0 && this.queuePollInterval) {
             clearInterval(this.queuePollInterval);
@@ -702,12 +703,12 @@ export default {
 
     dismissQueueBanner() {
       this.queueBannerDismissed = true;
-      localStorage.setItem('sj_queue_banner_dismissed', '1');
+      writeStorage('sj_queue_banner_dismissed', '1');
     },
 
     dismissInfoBox() {
       this.showInfoBox = false;
-      localStorage.setItem('sj_info_box_hidden', '1');
+      writeStorage('sj_info_box_hidden', '1');
     },
 
     startJobsTour() {
@@ -717,7 +718,7 @@ export default {
     },
 
     restartJobsTour() {
-      localStorage.removeItem(JOBS_TOUR_KEY);
+      removeStorage(JOBS_TOUR_KEY);
       this.showJobsTour = false;
       this.$nextTick(() => this.startJobsTour());
     },
@@ -744,7 +745,7 @@ export default {
 
     onJobsTourDone() {
       this.showJobsTour = false;
-      localStorage.setItem(JOBS_TOUR_KEY, '1');
+      writeStorage(JOBS_TOUR_KEY, '1');
       // Close the modal if it was opened by the tour
       if (this.editingJob || this.showCreateModal) {
         this.closeModal();

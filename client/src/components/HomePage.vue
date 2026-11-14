@@ -3,7 +3,7 @@
     <header class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="m-0 text-3xl font-extrabold tracking-tight text-ink">{{ greeting }}<template v-if="currentUser?.username">, {{ currentUser.username }}</template></h1>
-        <p class="m-0 mt-1.5 text-[15px] text-ink-3">{{ summary }}</p>
+        <p class="m-0 mt-1.5 text-[0.9375rem] text-ink-3">{{ summary }}</p>
       </div>
       <div class="flex flex-wrap gap-2.5">
         <router-link :to="tabLink('jobs')" class="inline-flex h-[42px] items-center gap-2 rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink no-underline hover:border-ink-4 hover:text-ink">
@@ -17,11 +17,11 @@
 
     <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       <div v-for="tile in statTiles" :key="tile.label" class="flex flex-col gap-1.5 rounded-card border border-edge bg-panel px-4 py-4 sm:px-5 sm:py-[18px]">
-        <span class="text-[13px] font-medium text-ink-3">{{ tile.label }}</span>
+        <span class="text-[0.8125rem] font-medium text-ink-3">{{ tile.label }}</span>
         <span class="flex items-baseline gap-2">
-          <span class="text-[28px] font-extrabold tracking-tight text-ink">{{ tile.value }}</span>
+          <span class="text-[1.75rem] font-extrabold tracking-tight text-ink">{{ tile.value }}</span>
           <span v-if="tile.trend" class="text-xs font-bold" :class="tile.trend.delta > 0 ? 'text-good' : tile.trend.delta < 0 ? 'text-ink-3' : 'text-ink-4'" :title="tile.trend.title">
-            <i aria-hidden="true" :class="tile.trend.delta > 0 ? 'fas fa-arrow-up' : tile.trend.delta < 0 ? 'fas fa-arrow-down' : 'fas fa-equals'" class="mr-0.5 text-[10px]"></i>{{ Math.abs(tile.trend.delta) || '' }}<span class="sr-only">{{ tile.trend.title }}</span>
+            <i aria-hidden="true" :class="tile.trend.delta > 0 ? 'fas fa-arrow-up' : tile.trend.delta < 0 ? 'fas fa-arrow-down' : 'fas fa-equals'" class="mr-0.5 text-[0.625rem]"></i>{{ Math.abs(tile.trend.delta) || '' }}<span class="sr-only">{{ tile.trend.title }}</span>
           </span>
         </span>
         <span class="text-xs text-ink-4">{{ tile.hint }}</span>
@@ -33,7 +33,7 @@
     <section v-if="pendingRequests.length" class="flex flex-col gap-4">
       <div class="flex items-baseline justify-between gap-3">
         <div class="flex flex-col gap-0.5">
-          <h2 class="m-0 text-[19px] font-bold text-ink">Waiting for your approval</h2>
+          <h2 class="m-0 text-[1.1875rem] font-bold text-ink">Waiting for your approval</h2>
           <p class="m-0 text-xs text-ink-4"><span class="max-sm:hidden">Focus a card and press A to approve, R to reject, S if already seen.</span><span class="sm:hidden">Swipe right to approve, left to reject.</span></p>
         </div>
         <router-link :to="tabLink('requests')" class="text-sm font-semibold no-underline">See all {{ pendingTotal }} →</router-link>
@@ -52,7 +52,7 @@
         >
           <template #actions>
             <template v-if="confirmRejectId === request.id">
-              <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-bad text-[13px] font-bold text-on-bad disabled:opacity-50" :disabled="actionLoadingId === request.id" @click="decidePending('reject', request.id)">Reject</button>
+              <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-bad text-[0.8125rem] font-bold text-on-bad disabled:opacity-50" :disabled="actionLoadingId === request.id" @click="decidePending('reject', request.id)">Reject</button>
               <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Cancel rejection" @click="confirmRejectId = null"><i aria-hidden="true" class="fas fa-undo"></i></button>
             </template>
             <template v-else-if="seenMenuId === request.id">
@@ -60,7 +60,7 @@
               <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border-0 bg-transparent text-ink-4 hover:text-ink" aria-label="Cancel" @click="seenMenuId = null"><i aria-hidden="true" class="fas fa-undo"></i></button>
             </template>
             <template v-else>
-              <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand text-[13px] font-bold text-white disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Approve request" @click="requestApprove(request)">Approve</button>
+              <button type="button" class="h-9 flex-1 cursor-pointer rounded-[8px] border-0 bg-brand text-[0.8125rem] font-bold text-white disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Approve request" @click="requestApprove(request)">Approve</button>
               <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-ink disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Already seen it" title="Already seen it" @click="openSeen(request)"><i aria-hidden="true" class="fas fa-eye"></i></button>
               <button type="button" class="h-9 w-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent text-ink-2 hover:text-bad disabled:opacity-50" :disabled="actionLoadingId === request.id" aria-label="Reject request" title="Reject" @click="confirmRejectId = request.id"><i aria-hidden="true" class="fas fa-times"></i></button>
             </template>
@@ -75,7 +75,7 @@
     <!-- In the library and not watched yet: the payoff of every request. -->
     <section v-if="readyShown.length" class="flex flex-col gap-4">
       <div class="flex items-baseline justify-between gap-3">
-        <h2 class="m-0 text-[19px] font-bold text-ink">Ready to watch</h2>
+        <h2 class="m-0 text-[1.1875rem] font-bold text-ink">Ready to watch</h2>
         <router-link :to="{ name: 'DashboardTab', params: { tab: 'requests' }, query: { status: 'sent', progress: 'available' } }" class="text-sm font-semibold no-underline">See all →</router-link>
       </div>
       <CardRow label="titles ready to watch">
@@ -96,7 +96,7 @@
 
     <section class="flex flex-col gap-4">
       <div class="flex items-baseline justify-between gap-3">
-        <h2 class="m-0 text-[19px] font-bold text-ink">Recently requested</h2>
+        <h2 class="m-0 text-[1.1875rem] font-bold text-ink">Recently requested</h2>
         <router-link v-if="recentShown.length" :to="tabLink('requests')" class="text-sm font-semibold no-underline">See all {{ stats.total || '' }} →</router-link>
       </div>
       <MediaGridSkeleton v-if="loading" :count="6" label="Loading recent requests…" />
@@ -125,28 +125,28 @@
 
     <div v-if="activity.length || upcomingJobs.length" class="grid grid-cols-[repeat(auto-fit,minmax(min(340px,100%),1fr))] gap-5">
       <section v-if="activity.length" class="flex flex-col rounded-card border border-edge bg-panel px-5 py-5 sm:px-6">
-        <h2 class="m-0 mb-2.5 text-[17px] font-bold text-ink">Recent activity</h2>
+        <h2 class="m-0 mb-2.5 text-[1.0625rem] font-bold text-ink">Recent activity</h2>
         <div v-for="run in activity" :key="run.id" class="flex gap-3.5 border-t border-edge py-3">
           <span class="mt-[5px] h-2.5 w-2.5 shrink-0 rounded-full" :class="run.dot"></span>
           <div class="flex min-w-0 flex-1 flex-col gap-0.5">
             <span class="text-sm font-semibold text-ink">{{ run.title }}</span>
-            <span class="text-[13px] text-ink-3">{{ run.detail }}</span>
+            <span class="text-[0.8125rem] text-ink-3">{{ run.detail }}</span>
           </div>
           <span class="whitespace-nowrap text-xs text-ink-4">{{ run.when }}</span>
         </div>
       </section>
       <section v-if="upcomingJobs.length" class="flex flex-col rounded-card border border-edge bg-panel px-5 py-5 sm:px-6">
         <div class="mb-2.5 flex items-baseline justify-between">
-          <h2 class="m-0 text-[17px] font-bold text-ink">Upcoming jobs</h2>
-          <router-link :to="tabLink('jobs')" class="text-[13px] font-semibold no-underline">Manage →</router-link>
+          <h2 class="m-0 text-[1.0625rem] font-bold text-ink">Upcoming jobs</h2>
+          <router-link :to="tabLink('jobs')" class="text-[0.8125rem] font-semibold no-underline">Manage →</router-link>
         </div>
         <div v-for="job in upcomingJobs" :key="job.id" class="flex items-center gap-3.5 border-t border-edge py-3">
           <span class="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-ctl bg-raised text-ink-2"><i aria-hidden="true" :class="job.icon"></i></span>
           <div class="flex min-w-0 flex-1 flex-col gap-0.5">
             <span class="truncate text-sm font-semibold text-ink">{{ job.name }}</span>
-            <span class="text-[13px] text-ink-3">{{ job.schedule }}</span>
+            <span class="text-[0.8125rem] text-ink-3">{{ job.schedule }}</span>
           </div>
-          <span class="whitespace-nowrap text-[13px] font-semibold" :class="job.enabled ? 'text-ink' : 'text-caution'">{{ job.next }}</span>
+          <span class="whitespace-nowrap text-[0.8125rem] font-semibold" :class="job.enabled ? 'text-ink' : 'text-caution'">{{ job.next }}</span>
         </div>
       </section>
     </div>

@@ -61,7 +61,7 @@
                 <div class="flex min-w-0 flex-[1_1_180px] items-center gap-3">
                   <UserAvatar :user="user" class="h-9 w-9" />
                   <div class="min-w-0">
-                    <h3 class="m-0 flex items-center gap-1.5 text-sm font-bold text-ink"><span class="truncate" :title="user.username">{{ user.username }}</span><span v-if="isSelf(user)" class="shrink-0 rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">you</span></h3>
+                    <h3 class="m-0 flex items-center gap-1.5 text-sm font-bold text-ink"><span class="truncate" :title="user.username">{{ user.username }}</span><span v-if="isSelf(user)" class="shrink-0 rounded-full bg-brand px-1.5 py-0.5 text-[0.625rem] font-bold uppercase tracking-wide text-white">you</span></h3>
                     <p class="m-0 text-xs text-ink-3">{{ user.role === 'admin' ? 'Administrator' : 'User' }} · <span :title="formatDate(user.last_login)">{{ user.last_login ? `seen ${relativeTime(user.last_login)}` : 'never signed in' }}</span></p>
                   </div>
                 </div>
@@ -84,7 +84,7 @@
               <div class="flex items-start gap-3">
                 <UserAvatar :user="user" class="h-12 w-12" />
                 <div class="min-w-0 flex-1">
-                  <h3 class="m-0 flex items-center gap-1.5 text-base font-bold text-ink"><span class="truncate" :title="user.username">{{ user.username }}</span><span v-if="isSelf(user)" class="shrink-0 rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">you</span></h3>
+                  <h3 class="m-0 flex items-center gap-1.5 text-base font-bold text-ink"><span class="truncate" :title="user.username">{{ user.username }}</span><span v-if="isSelf(user)" class="shrink-0 rounded-full bg-brand px-1.5 py-0.5 text-[0.625rem] font-bold uppercase tracking-wide text-white">you</span></h3>
                   <p class="m-0 mt-1 text-xs text-ink-3"><i aria-hidden="true" :class="user.role === 'admin' ? 'fas fa-user-shield' : 'fas fa-user'" class="mr-1.5"></i>{{ user.role === 'admin' ? 'Administrator' : 'User' }}</p>
                 </div>
                 <button type="button" :disabled="statusLocked(user) || !!isSaving[user.id]" :aria-label="`${user.is_active ? 'Deactivate' : 'Activate'} ${user.username}`" :title="statusTitle(user)" :class="statusClass(user)" @click="toggleActive(user)"><span aria-hidden="true" class="h-1.5 w-1.5 rounded-full" :class="user.is_active ? 'bg-good' : 'bg-ink-4'"></span>{{ user.is_active ? 'Enabled' : 'Disabled' }}</button>
@@ -96,8 +96,8 @@
               </dl>
 
               <div class="mt-4 flex flex-wrap gap-1.5" :aria-label="`Page access for ${user.username}`">
-                <span class="inline-flex items-center gap-1.5 rounded-md bg-canvas/70 px-2 py-1 text-[11px] font-semibold text-ink-2" :title="pagesTitle(user)"><i aria-hidden="true" class="fas fa-layer-group text-ink-4"></i>{{ pagesSummary(user) }}</span>
-                <span v-if="user.role === 'admin' || user.can_manage_ai" class="inline-flex items-center gap-1.5 rounded-md bg-brand-soft/60 px-2 py-1 text-[11px] font-semibold text-brand-ink"><i aria-hidden="true" class="fas fa-robot"></i>AI settings</span>
+                <span class="inline-flex items-center gap-1.5 rounded-md bg-canvas/70 px-2 py-1 text-[0.6875rem] font-semibold text-ink-2" :title="pagesTitle(user)"><i aria-hidden="true" class="fas fa-layer-group text-ink-4"></i>{{ pagesSummary(user) }}</span>
+                <span v-if="user.role === 'admin' || user.can_manage_ai" class="inline-flex items-center gap-1.5 rounded-md bg-brand-soft/60 px-2 py-1 text-[0.6875rem] font-semibold text-brand-ink"><i aria-hidden="true" class="fas fa-robot"></i>AI settings</span>
               </div>
 
               <div class="mb-4 mt-3 flex gap-2">
@@ -130,7 +130,7 @@
         </button>
 
         <fieldset v-if="localAllowRegistration" class="m-0 mt-4 flex flex-col gap-2 border-0 p-0" :disabled="isSavingRegistration">
-          <legend class="mb-2 p-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Pages for new accounts</legend>
+          <legend class="mb-2 p-0 text-[0.6875rem] font-bold uppercase tracking-wider text-ink-4">Pages for new accounts</legend>
           <label v-for="tab in availableTabs" :key="tab.value" class="flex items-center gap-3 rounded-ctl border border-edge bg-panel-2 px-3 py-2 text-sm text-ink-2" :class="tab.required ? 'opacity-60' : 'cursor-pointer hover:border-ink-4'">
             <input type="checkbox" class="accent-brand" :checked="tab.required || registrationTabs.includes(tab.value)" :disabled="tab.required" @change="toggleRegistrationTab(tab.value)" />
             <i aria-hidden="true" class="w-4 text-center text-ink-4" :class="tab.icon"></i>
@@ -160,7 +160,7 @@
           </span>
         </div>
         <fieldset class="m-0 flex flex-col gap-2 border-0 p-0">
-          <legend class="mb-1.5 p-0 text-[13px] font-semibold text-ink-2">Role</legend>
+          <legend class="mb-1.5 p-0 text-[0.8125rem] font-semibold text-ink-2">Role</legend>
           <label v-for="role in roleOptions" :key="role.value" class="flex cursor-pointer items-start gap-3 rounded-ctl border p-3" :class="newUser.role === role.value ? 'border-brand bg-brand-soft' : 'border-edge-strong bg-panel-2 hover:border-ink-4'">
             <input v-model="newUser.role" type="radio" name="new-user-role" :value="role.value" class="mt-0.5 accent-brand" :disabled="isCreating" />
             <span class="text-sm font-semibold text-ink">{{ role.label }}<span class="block text-xs font-normal text-ink-3">{{ role.description }}</span></span>
@@ -193,7 +193,7 @@
       </template>
       <div class="flex flex-col gap-6">
         <fieldset class="m-0 flex flex-col gap-2 border-0 p-0" :disabled="isSavingPermissions || !!roleLockReason(permissionsTarget)">
-          <legend class="mb-2 p-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Role</legend>
+          <legend class="mb-2 p-0 text-[0.6875rem] font-bold uppercase tracking-wider text-ink-4">Role</legend>
           <div class="grid gap-2 sm:grid-cols-2">
             <label v-for="role in roleOptions" :key="role.value" class="flex items-start gap-3 rounded-ctl border p-3" :class="[editPermissions.role === role.value ? 'border-brand bg-brand-soft' : 'border-edge-strong bg-panel-2', roleLockReason(permissionsTarget) ? 'opacity-60' : 'cursor-pointer hover:border-ink-4']">
               <input v-model="editPermissions.role" type="radio" name="edit-user-role" :value="role.value" class="mt-0.5 accent-brand" />
@@ -206,7 +206,7 @@
         <p v-if="editPermissions.role === 'admin'" class="m-0 rounded-ctl border border-edge bg-canvas/50 p-3 text-xs text-ink-3">Admins see every page and can manage AI settings.</p>
 
         <section v-if="editPermissions.role !== 'admin'" class="flex flex-col gap-3">
-          <h3 class="m-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Features</h3>
+          <h3 class="m-0 text-[0.6875rem] font-bold uppercase tracking-wider text-ink-4">Features</h3>
           <BaseCheckbox
             v-model="editPermissions.can_manage_ai"
             :disabled="isSavingPermissions"
@@ -216,15 +216,15 @@
         </section>
 
         <section class="flex flex-col gap-2">
-          <h3 class="m-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Seer identity</h3>
-          <p class="m-0 text-[13px] text-ink-3">Approved requests are credited to this Seer user.</p>
+          <h3 class="m-0 text-[0.6875rem] font-bold uppercase tracking-wider text-ink-4">Seer identity</h3>
+          <p class="m-0 text-[0.8125rem] text-ink-3">Approved requests are credited to this Seer user.</p>
           <select v-model="editPermissions.seer_user_id" class="ui-input" aria-label="Seer identity" :disabled="isSavingPermissions">
             <option v-for="option in seerUserOptions" :key="option.value ?? 'fallback'" :value="option.value">{{ option.label }}</option>
           </select>
         </section>
 
         <fieldset v-if="editPermissions.role !== 'admin'" class="m-0 flex flex-col gap-2 border-0 p-0">
-          <legend class="mb-2 p-0 text-[11px] font-bold uppercase tracking-wider text-ink-4">Visible pages</legend>
+          <legend class="mb-2 p-0 text-[0.6875rem] font-bold uppercase tracking-wider text-ink-4">Visible pages</legend>
           <div class="grid gap-2 sm:grid-cols-2">
             <label
               v-for="tab in availableTabs"
@@ -242,7 +242,7 @@
               />
               <i aria-hidden="true" class="w-4 text-center text-ink-4" :class="tab.icon"></i>
               <span class="flex-1">{{ tab.label }}</span>
-              <span v-if="tab.required" class="text-[10px] font-bold uppercase tracking-wide text-ink-4">Always</span>
+              <span v-if="tab.required" class="text-[0.625rem] font-bold uppercase tracking-wide text-ink-4">Always</span>
             </label>
           </div>
         </fieldset>
@@ -491,7 +491,7 @@ export default {
       return user.is_active ? 'Enabled — click to disable sign-in' : 'Disabled — click to enable sign-in';
     },
     statusClass(user) {
-      return ['inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-2 text-[11px] font-semibold disabled:cursor-not-allowed',
+      return ['inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-2 text-[0.6875rem] font-semibold disabled:cursor-not-allowed',
         user.is_active ? 'border-good/40 bg-good/10 text-good hover:enabled:bg-good/20' : 'border-edge-strong bg-raised text-ink-3 hover:enabled:text-ink'];
     },
     deleteTitle(user) {

@@ -8,7 +8,7 @@
       <div class="flex min-w-0 flex-col gap-5">
         <SectionCard icon="fas fa-satellite-dish" title="Destinations" description="Each destination receives the events it subscribes to.">
           <template #actions>
-            <button type="button" class="ui-btn h-9 px-3 text-[13px]" :disabled="loading" @click="load">
+            <button type="button" class="ui-btn h-9 px-3 text-[0.8125rem]" :disabled="loading" @click="load">
               <i aria-hidden="true" :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i>Refresh
             </button>
           </template>
@@ -17,11 +17,11 @@
             <li v-for="webhook in webhooks" :key="webhook.id" class="flex items-start gap-3 rounded-ctl border border-edge bg-panel-2 p-4">
               <div class="flex min-w-0 flex-1 flex-col gap-2">
                 <div class="flex min-w-0 flex-col gap-0.5">
-                  <span class="flex items-center gap-2 text-sm font-bold text-ink">{{ webhook.name }}<span class="rounded-md bg-raised px-1.5 py-0.5 text-[11px] font-semibold text-ink-3">{{ formatLabel(webhook.format) }}</span></span>
+                  <span class="flex items-center gap-2 text-sm font-bold text-ink">{{ webhook.name }}<span class="rounded-md bg-raised px-1.5 py-0.5 text-[0.6875rem] font-semibold text-ink-3">{{ formatLabel(webhook.format) }}</span></span>
                   <code class="break-all font-mono text-xs text-ink-3">{{ webhook.url }}</code>
                 </div>
                 <div class="flex flex-wrap gap-1.5">
-                  <span v-for="event in webhook.events" :key="event" class="rounded-full bg-raised px-2 py-0.5 font-mono text-[11px] text-ink-2">{{ event }}</span>
+                  <span v-for="event in webhook.events" :key="event" class="rounded-full bg-raised px-2 py-0.5 font-mono text-[0.6875rem] text-ink-2">{{ event }}</span>
                 </div>
               </div>
               <button type="button" class="ui-btn-icon-danger" :aria-label="`Delete ${webhook.name}`" title="Delete destination" @click="remove(webhook)">
@@ -33,7 +33,7 @@
             <i aria-hidden="true" class="fas fa-plug text-2xl text-ink-4"></i>
             <div>
               <p class="m-0 text-sm font-semibold text-ink-2">No destinations yet</p>
-              <p class="m-0 mt-1 text-[13px] text-ink-3">Add one to start delivering events.</p>
+              <p class="m-0 mt-1 text-[0.8125rem] text-ink-3">Add one to start delivering events.</p>
             </div>
             <button type="button" class="ui-btn" @click="openCreate"><i aria-hidden="true" class="fas fa-plus"></i>Add destination</button>
           </div>
@@ -41,9 +41,9 @@
 
         <SectionCard icon="fas fa-history" title="Recent deliveries" description="Failed deliveries retry automatically; you can also requeue them by hand.">
           <div v-if="deliveries.length" class="-mx-5 overflow-x-auto">
-            <table class="w-full border-collapse text-left text-[13px]">
+            <table class="w-full border-collapse text-left text-[0.8125rem]">
               <thead>
-                <tr class="text-[11px] font-bold uppercase tracking-wider text-ink-4">
+                <tr class="text-[0.6875rem] font-bold uppercase tracking-wider text-ink-4">
                   <th class="px-5 py-2 font-bold">Event</th>
                   <th class="px-3 py-2 font-bold">Status</th>
                   <th class="px-3 py-2 font-bold">Retries</th>
@@ -73,7 +73,7 @@
               </tbody>
             </table>
           </div>
-          <p v-else class="m-0 text-[13px] text-ink-3">No deliveries yet. They appear here once a subscribed event fires.</p>
+          <p v-else class="m-0 text-[0.8125rem] text-ink-3">No deliveries yet. They appear here once a subscribed event fires.</p>
         </SectionCard>
       </div>
 
@@ -81,7 +81,7 @@
         <SectionCard icon="fas fa-shield-alt" title="Allowed hostnames" description="Restrict delivery to trusted hosts.">
           <form class="flex flex-col gap-3" @submit.prevent="saveAllowlist">
             <label class="sr-only" for="webhook-allowlist">Allowed hostnames</label>
-            <textarea id="webhook-allowlist" v-model="allowedHostsText" rows="4" class="ui-input h-auto resize-y py-2.5 font-mono text-[13px]" placeholder="hooks.example.com&#10;automation.example.org"></textarea>
+            <textarea id="webhook-allowlist" v-model="allowedHostsText" rows="4" class="ui-input h-auto resize-y py-2.5 font-mono text-[0.8125rem]" placeholder="hooks.example.com&#10;automation.example.org"></textarea>
             <p class="m-0 text-xs leading-relaxed text-ink-4">One hostname per line. Empty allows any destination that passes SSRF validation.</p>
             <button type="submit" class="ui-btn self-start" :disabled="savingAllowlist">
               <i aria-hidden="true" :class="savingAllowlist ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>Save allowlist
@@ -90,15 +90,15 @@
         </SectionCard>
 
         <SectionCard icon="fas fa-info-circle" title="How it works">
-          <ol class="m-0 flex list-none flex-col gap-3 p-0 text-[13px] leading-relaxed text-ink-3">
+          <ol class="m-0 flex list-none flex-col gap-3 p-0 text-[0.8125rem] leading-relaxed text-ink-3">
             <li v-for="(step, index) in guideSteps" :key="step.title" class="flex gap-3">
               <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-raised text-xs font-bold text-brand-ink">{{ index + 1 }}</span>
               <span><strong class="block text-ink-2">{{ step.title }}</strong>{{ step.text }}</span>
             </li>
           </ol>
           <details class="group mt-4 rounded-ctl border border-edge bg-panel-2">
-            <summary class="flex cursor-pointer list-none items-center gap-2 px-3.5 py-2.5 text-[13px] font-semibold text-ink-2 [&::-webkit-details-marker]:hidden">
-              <i aria-hidden="true" class="fas fa-chevron-right text-[10px] text-ink-4 transition-transform group-open:rotate-90"></i>Verifying signatures
+            <summary class="flex cursor-pointer list-none items-center gap-2 px-3.5 py-2.5 text-[0.8125rem] font-semibold text-ink-2 [&::-webkit-details-marker]:hidden">
+              <i aria-hidden="true" class="fas fa-chevron-right text-[0.625rem] text-ink-4 transition-transform group-open:rotate-90"></i>Verifying signatures
             </summary>
             <p class="m-0 border-t border-edge px-3.5 py-3 text-xs leading-relaxed text-ink-3">
               Validate <code class="text-ink-2">X-SuggestArr-Signature</code> with HMAC-SHA256 over <code class="text-ink-2">&lt;timestamp&gt;.&lt;raw body&gt;</code>, using your secret and <code class="text-ink-2">X-SuggestArr-Timestamp</code>. Use <code class="text-ink-2">X-SuggestArr-Event-Id</code> to ignore duplicates.
@@ -112,11 +112,11 @@
       <form class="flex flex-col gap-5 p-6" @submit.prevent="create">
         <header>
           <h2 id="webhook-create-title" class="m-0 text-lg font-bold text-ink">Add destination</h2>
-          <p class="m-0 mt-1 text-[13px] text-ink-3">Send a readable message to a chat app, or a signed JSON payload to your own automation.</p>
+          <p class="m-0 mt-1 text-[0.8125rem] text-ink-3">Send a readable message to a chat app, or a signed JSON payload to your own automation.</p>
         </header>
 
         <fieldset class="m-0 border-0 p-0">
-          <legend class="mb-2 p-0 text-[13px] font-semibold text-ink-2">Send to</legend>
+          <legend class="mb-2 p-0 text-[0.8125rem] font-semibold text-ink-2">Send to</legend>
           <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <label v-for="option in formats" :key="option.value" class="flex cursor-pointer items-center gap-2 rounded-ctl border px-3 py-2.5 text-sm font-semibold has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-ink" :class="form.format === option.value ? 'border-brand-ink bg-brand-soft text-brand-ink' : 'border-edge-strong text-ink-2 hover:border-ink-4'">
               <input v-model="form.format" type="radio" name="webhook-format" :value="option.value" class="sr-only" />
@@ -141,10 +141,10 @@
         </div>
 
         <fieldset class="m-0 flex flex-col gap-3 border-0 p-0">
-          <legend class="mb-2 p-0 text-[13px] font-semibold text-ink-2">Events</legend>
+          <legend class="mb-2 p-0 text-[0.8125rem] font-semibold text-ink-2">Events</legend>
           <div class="grid gap-3 sm:grid-cols-3">
             <div v-for="group in eventGroups" :key="group.label" class="flex flex-col gap-1.5 rounded-ctl border border-edge bg-panel-2 p-3">
-              <span class="text-[11px] font-bold uppercase tracking-wider text-ink-4">{{ group.label }}</span>
+              <span class="text-[0.6875rem] font-bold uppercase tracking-wider text-ink-4">{{ group.label }}</span>
               <label v-for="event in group.events" :key="event" class="flex cursor-pointer items-center gap-2 font-mono text-xs text-ink-2">
                 <input v-model="form.events" type="checkbox" :value="event" class="accent-brand" />{{ event.split('.')[1] }}
               </label>

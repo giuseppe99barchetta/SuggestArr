@@ -122,6 +122,10 @@
   body {
     @apply overflow-x-hidden bg-canvas font-sans leading-normal text-ink;
   }
+  /* The page behind an open modal <dialog> does not scroll. */
+  body:has(dialog:modal) {
+    overflow: hidden;
+  }
 
   /* Element defaults the screens were built on (formerly the legacy global.css). */
   h1, h2, h3, h4, h5, h6 { @apply font-bold leading-tight text-ink; }
@@ -237,10 +241,10 @@ select:disabled { cursor: not-allowed; }
 /* Form controls shared by the settings screens. */
 @layer components {
   .ui-input {
-    @apply h-[42px] w-full min-w-0 rounded-ctl border border-edge-strong bg-canvas px-3 text-sm font-normal text-ink placeholder:text-ink-4 focus:border-brand-ink disabled:opacity-60;
+    @apply h-[42px] w-full min-w-0 rounded-ctl border border-edge-strong bg-canvas px-3 text-sm font-normal text-ink placeholder:text-ink-4 focus:border-brand-ink disabled:opacity-60 user-invalid:border-bad aria-[invalid=true]:border-bad;
   }
   .ui-label {
-    @apply flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2;
+    @apply flex flex-col gap-1.5 text-[0.8125rem] font-semibold text-ink-2;
   }
   .ui-btn {
     @apply inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink hover:border-ink-4 disabled:cursor-not-allowed disabled:opacity-50;
@@ -255,10 +259,10 @@ select:disabled { cursor: not-allowed; }
     @apply inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border-0 bg-transparent text-ink-3 hover:bg-bad/15 hover:text-bad disabled:opacity-50;
   }
   .ui-alert-bad {
-    @apply m-0 rounded-[8px] border border-bad/40 bg-bad/10 px-3 py-2 text-[13px] text-ink-2;
+    @apply m-0 rounded-[8px] border border-bad/40 bg-bad/10 px-3 py-2 text-[0.8125rem] text-ink-2;
   }
   .ui-alert-good {
-    @apply m-0 rounded-[8px] border border-good/40 bg-good/10 px-3 py-2 text-[13px] text-ink-2;
+    @apply m-0 rounded-[8px] border border-good/40 bg-good/10 px-3 py-2 text-[0.8125rem] text-ink-2;
   }
 
   /* Trakt brand mark from Simple Icons (CC0-1.0), drawn in currentColor like the Font Awesome icons. */

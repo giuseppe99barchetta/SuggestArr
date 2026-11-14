@@ -3,8 +3,8 @@
     <header class="mb-4 flex gap-3.5 max-sm:flex-wrap" :class="description ? 'items-start' : 'items-center'">
       <span v-if="icon" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-ctl bg-raised text-ink-2"><i aria-hidden="true" :class="icon"></i></span>
       <div class="flex min-w-0 flex-1 basis-48 flex-col gap-1">
-        <h2 class="m-0 text-[17px] font-bold text-ink">{{ title }}</h2>
-        <p v-if="description" class="m-0 text-[13px] leading-relaxed text-ink-3">{{ description }}</p>
+        <h2 class="m-0 text-[1.0625rem] font-bold text-ink">{{ title }}</h2>
+        <p v-if="description" class="m-0 text-[0.8125rem] leading-relaxed text-ink-3">{{ description }}</p>
       </div>
       <div v-if="$slots.actions" class="flex shrink-0 gap-2"><slot name="actions" /></div>
     </header>

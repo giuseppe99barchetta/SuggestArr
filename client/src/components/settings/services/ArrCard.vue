@@ -3,11 +3,11 @@
     <ServiceCardHeader icon="fas fa-film" title="Radarr &amp; Sonarr" :description="description" :status="status" :status-text="statusText" :folded="isFolded(status)" @toggle="editing = !editing" />
     <div v-show="!isFolded(status)" class="flex min-w-0 flex-col gap-5">
       <div v-for="svc in arrServices" :key="svc.id" :data-testid="`${svc.id}-connection`" class="flex min-w-0 flex-col gap-3">
-        <div class="flex flex-col gap-1.5 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+        <div class="flex flex-col gap-1.5 [&>label]:text-[0.8125rem] [&>label]:font-semibold [&>label]:text-ink-2">
           <label :for="`${svc.id}Url`">{{ svc.name }} URL</label>
           <input :id="`${svc.id}Url`" v-model="localConfig[svc.urlKey]" type="url" autocomplete="off" class="ui-input" :disabled="isLoading" :placeholder="svc.placeholder" />
         </div>
-        <div class="flex flex-col gap-1.5 [&>label]:text-[13px] [&>label]:font-semibold [&>label]:text-ink-2">
+        <div class="flex flex-col gap-1.5 [&>label]:text-[0.8125rem] [&>label]:font-semibold [&>label]:text-ink-2">
           <label :for="`${svc.id}Key`">{{ svc.name }} API key</label>
           <div class="flex gap-2">
             <input :id="`${svc.id}Key`" v-model="localConfig[svc.keyKey]" :type="shown[svc.id] ? 'text' : 'password'" autocomplete="off" class="ui-input" :disabled="isLoading" :placeholder="`${svc.name} API key (Settings → General)`" />
@@ -25,7 +25,7 @@
         <!-- Where new titles go: only meaningful once the instance answered and its options were read -->
         <div v-if="usesDirectDelivery && options[svc.id]" class="flex min-w-0 flex-col gap-4 rounded-lg border border-edge p-3" :data-testid="`${svc.id}-profiles`">
           <div v-for="kind in kinds" :key="kind.id" class="flex min-w-0 flex-col gap-2">
-            <p class="m-0 text-[13px] font-semibold text-ink-2">{{ kind.label }} <span v-if="kind.id === 'anime'" class="font-normal text-ink-4">(optional — empty uses the default)</span></p>
+            <p class="m-0 text-[0.8125rem] font-semibold text-ink-2">{{ kind.label }} <span v-if="kind.id === 'anime'" class="font-normal text-ink-4">(optional — empty uses the default)</span></p>
             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <select class="ui-input" :aria-label="`${svc.name} ${kind.label} quality profile`" :disabled="isLoading" :value="field(kind, svc, 'profileId') ?? ''" @change="setField(kind, svc, 'profileId', numberOrNull($event.target.value))">
                 <option value="">{{ kind.id === 'anime' ? 'Same as default' : 'Choose a quality profile' }}</option>
