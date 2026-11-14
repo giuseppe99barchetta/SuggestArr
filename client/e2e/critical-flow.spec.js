@@ -37,6 +37,7 @@ async function mockApi(page, { subpath = "", setupCompleted = true, radarrServer
     if (apiPath === "/api/auth/login") return json({ access_token: token });
     if (apiPath === "/api/auth/refresh") return json({ access_token: token });
     if (apiPath === "/api/auth/me") return json({ id: 1, username: "admin", role: "admin" });
+    if (apiPath === "/api/users/me/links") return json([]);
     if (apiPath === "/api/config/fetch") return json({ AUTH_MODE: "enabled" });
     if (apiPath === "/api/config/status") return json({ setup_completed: setupCompleted, is_complete: setupCompleted });
     if (apiPath === "/api/jobs") {
