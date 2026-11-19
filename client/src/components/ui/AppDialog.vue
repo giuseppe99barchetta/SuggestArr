@@ -7,6 +7,7 @@
     :class="[width, immersive ? 'h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)]' : 'w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] sm:max-h-[min(80dvh,52rem)]']"
     :aria-labelledby="title ? titleId : (labelledby || null)"
     @close="$emit('close')"
+    @cancel="busy && $event.preventDefault()"
     @click.self="close"
   >
     <header v-if="title" class="flex shrink-0 items-start gap-3 border-b border-edge px-6 py-4 max-sm:px-4">
@@ -42,6 +43,7 @@ let nextId = 0;
  * Modal shell around the native <dialog> element.
  * Mount it with v-if; it opens on mount and emits `close` on Escape, backdrop click or close().
  * Pass `title` for the standard header with close button; the `footer` slot sticks to the bottom.
+ * While `busy` (work in flight that must not be abandoned), Escape, backdrop and close() keep it open.
  */
 export default {
   name: 'AppDialog',
@@ -54,6 +56,7 @@ export default {
     icon: { type: String, default: '' },
     tone: { type: String, default: '' },
     bodyClass: { type: String, default: 'p-6 max-sm:p-4' },
+    busy: { type: Boolean, default: false },
   },
   emits: ['close'],
   data() {
@@ -64,7 +67,7 @@ export default {
   },
   methods: {
     close() {
-      this.$refs.dialog.close();
+      if (!this.busy) this.$refs.dialog.close();
     },
   },
 };

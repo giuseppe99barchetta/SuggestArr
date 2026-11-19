@@ -24,6 +24,10 @@
       <span v-if="!selected.length" class="text-[0.8125rem] text-ink-4">Click cards to select them</span>
     </div>
 
+    <div v-if="!bulkMode && status === 'awaiting_approval' && total > 0" class="flex flex-wrap items-center gap-2">
+      <button type="button" class="h-9 cursor-pointer rounded-[8px] border-0 bg-brand px-3.5 text-[0.8125rem] font-bold text-white disabled:opacity-50" :disabled="loadingAll || actionLoading" @click="confirmAll('approve')"><i aria-hidden="true" class="fas fa-check-double mr-1.5"></i>Approve all ({{ total }})</button>
+      <button type="button" class="h-9 cursor-pointer rounded-[8px] border border-edge-strong bg-transparent px-3.5 text-[0.8125rem] font-semibold text-ink-2 disabled:opacity-50" :disabled="loadingAll || actionLoading" @click="confirmAll('reject')"><i aria-hidden="true" class="fas fa-times mr-1.5"></i>Reject all ({{ total }})</button>
+    </div>
     <p v-if="!bulkMode && items.some(item => item.status === 'awaiting_approval')" class="m-0 text-xs text-ink-4"><span class="max-sm:hidden">Focus a card and press A to approve, R to reject, S if already seen.</span><span class="sm:hidden">Swipe right to approve, left to reject.</span></p>
     <MediaGridSkeleton v-if="loading && !items.length" :count="6" label="Loading requests…" />
     <div v-else-if="!items.length && showEmpty" class="py-10 text-center text-sm text-ink-3">No requests in this state.</div>
@@ -73,7 +77,7 @@
 
     <SeenRatingDialog v-if="seenRatingItem" :item="seenRatingItem" :busy="actionLoading" @save="saveSeenRating" @close="seenRatingItem = null" />
 
-    <AppDialog v-if="confirmation" width="max-w-2xl" labelledby="confirm-title" @close="confirmation = null">
+    <AppDialog v-if="confirmation" width="max-w-2xl" labelledby="confirm-title" :busy="actionLoading" @close="confirmation = null">
       <div class="flex flex-col gap-4 p-6">
         <div class="flex flex-col gap-1">
           <h3 id="confirm-title" class="m-0 text-lg font-bold" :class="confirmation.action === 'reject' || confirmation.action === 'blacklist' ? 'text-bad' : 'text-ink'"><i aria-hidden="true" :class="confirmation.icon" class="mr-2"></i>{{ confirmation.title }}</h3>
@@ -91,7 +95,7 @@
         </template>
         <ApprovalProfileChoice v-if="confirmation.action === 'approve'" ref="profileChoice" :servers="serversForItems(servers, confirmation.items)" :media-types="confirmationMediaTypes" />
         <div class="mt-2 flex justify-end gap-2">
-          <button type="button" class="h-10 cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink" @click="confirmation = null">Cancel</button>
+          <button type="button" class="h-10 cursor-pointer rounded-ctl border border-edge-strong bg-panel-2 px-4 text-sm font-semibold text-ink disabled:opacity-50" :disabled="actionLoading" @click="confirmation = null">Cancel</button>
           <button type="button" class="h-10 cursor-pointer rounded-ctl border-0 px-4 text-sm font-bold disabled:opacity-50" :class="confirmation.action === 'reject' || confirmation.action === 'blacklist' ? 'bg-bad text-on-bad' : 'bg-brand text-white'" :disabled="actionLoading" @click="decide">{{ confirmation.confirmLabel }}</button>
         </div>
       </div>
@@ -110,12 +114,13 @@ import { approvalNotice, deliveryLabel } from '@/utils/deliveryTarget.js';
 import { SEEN_OPTIONS, loadSeenRatingMode, ratedSeenOption, saveSeenFeedback } from '@/utils/suggestionFeedback.js';
 import SeenRatingDialog from '@/components/SeenRatingDialog.vue';
 import { notifyRequestsChanged } from '@/utils/requestEvents.js';
+import { chunkIds } from '@/utils/requestApproval.js';
 import { keyDecision, swipeDecision, touchPoint } from '@/utils/quickDecision.js';
 export default {
   name: 'RequestWorkflowPanel', components: { AppDialog, MediaCard, MediaGridSkeleton, ApprovalProfileChoice, SeenRatingDialog },
   emits: ['open', 'update:total'],
   props: { statusFilter: { type: String, default: 'all' }, searchQuery: { type: String, default: '' }, mediaType: { type: String, default: 'all' }, requestedFor: { type: String, default: 'all' }, sortBy: { type: String, default: 'date-desc' }, showHeader: { type: Boolean, default: true }, showEmpty: { type: Boolean, default: true }, bulkMode: { type: Boolean, default: false } },
-  data() { return { items: [], selected: [], actionLoading: false, swipeStart: null, seenMenuId: null, seenOptions: SEEN_OPTIONS, seenRatingMode: false, seenRatingItem: null, jobs: [], jobId: null, loading: false, running: false, pausedMessage: '', pausedJobId: null, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,
+  data() { return { items: [], selected: [], actionLoading: false, loadingAll: false, loadSeq: 0, swipeStart: null, seenMenuId: null, seenOptions: SEEN_OPTIONS, seenRatingMode: false, seenRatingItem: null, jobs: [], jobId: null, loading: false, running: false, pausedMessage: '', pausedJobId: null, search: '', status: this.statusFilter, page: 1, pages: 1, total: 0, confirmation: null, searchTimer: null, observer: null, servers: null,
     statuses: [{ value: 'awaiting_approval', label: 'Awaiting approval' }, { value: 'queued', label: 'Queued' }, { value: 'submitted', label: 'Submitted' }, { value: 'rejected', label: 'Rejected' }, { value: 'failed', label: 'Failed' }, { value: 'blacklisted', label: 'Blacklisted' }] }; },
   computed: {
     selectedItems() { return this.items.filter(item => this.selected.includes(item.id)); },
@@ -135,17 +140,42 @@ export default {
   async mounted() { const requested = this.$route.query.status; if (this.statuses.some(option => option.value === requested)) this.status = requested; const response = await axios.get('/api/jobs'); this.jobs = (response.data.jobs || []).filter(job => job.delivery_mode === 'manual'); this.load(); loadSeenRatingMode(axios).then(enabled => { this.seenRatingMode = enabled; }); this.servers = await loadSeerServers(axios); },
   beforeUnmount() { clearTimeout(this.searchTimer); this.observer?.disconnect(); },
   methods: {
+    // A page-one load always runs and supersedes one in flight, so filter changes and
+    // post-decision refreshes are never skipped; superseded responses are dropped.
     async load(page = this.page) {
-      if (this.loading) return;
+      if (this.loading && page !== 1) return;
+      const seq = ++this.loadSeq;
       this.loading = true;
       try {
-        const data = (await axios.get('/api/automation/requests/workflow', { params: { status: this.status, search: this.search, media_type: this.mediaType, user_id: this.requestedFor === 'all' ? undefined : this.requestedFor, sort_by: this.sortBy, page, per_page: 24 } })).data;
+        const data = (await axios.get('/api/automation/requests/workflow', { params: { ...this.filterParams(), status: this.status, page, per_page: 24 } })).data;
+        if (seq !== this.loadSeq) return;
         this.items = page === 1 ? data.items : [...this.items, ...data.items];
         Object.assign(this, { total: data.total, page: data.page, pages: data.pages });
         this.$emit('update:total', data.total);
         if (page === 1) this.selected = [];
         this.$nextTick(this.observeLoadMore);
-      } finally { this.loading = false; }
+      } finally { if (seq === this.loadSeq) this.loading = false; }
+    },
+    filterParams() { return { search: this.search, media_type: this.mediaType, user_id: this.requestedFor === 'all' ? undefined : this.requestedFor, sort_by: this.sortBy }; },
+    // "Approve all" / "Reject all" act on one server snapshot of every matching suggestion,
+    // not on the pages loaded so far; a response for filters changed meanwhile is dropped.
+    async confirmAll(action) {
+      const filters = JSON.stringify([this.status, this.filterParams()]);
+      this.loadingAll = true;
+      try {
+        const { data } = await axios.get('/api/automation/requests/workflow/pending', { params: this.filterParams() });
+        // Dropped if the filters changed or the user moved on to another dialog meanwhile.
+        if (JSON.stringify([this.status, this.filterParams()]) !== filters || this.bulkMode || this.confirmation || this.seenRatingItem) return;
+        const items = data.items || [];
+        if (!items.length) {
+          this.$toast.open({ message: 'Nothing is waiting for approval', type: 'info' });
+          this.load(1);
+          return;
+        }
+        this.confirmAction(action, items, data.truncated ? ` Only the first ${items.length} are included; the rest stay in the queue.` : '');
+      } catch (error) {
+        this.$toast.open({ message: error.response?.data?.message || 'Could not load the approval queue', type: 'error' });
+      } finally { this.loadingAll = false; }
     },
     observeLoadMore() {
       this.observer?.disconnect();
@@ -210,7 +240,7 @@ export default {
         this.$toast.open({ message: action === 'approve' ? approvalNotice([item]) : 'Request updated', type: 'success' });
       } finally { this.actionLoading = false; }
     },
-    confirmAction(action) { const labels = { approve: [`Send to ${deliveryLabel(this.selectedItems)}`, `Send ${this.selected.length} selected items using the identity and profiles shown on each card?`, 'fas fa-paper-plane', 'Send'], reject: ['Reject requests', `${this.selected.length} selected items will be removed from the approval queue.`, 'fas fa-archive', 'Reject requests'], blacklist: ['Blacklist requests', `Permanently prevent ${this.selected.length} items from being suggested again?`, 'fas fa-ban', 'Blacklist'], retry: ['Retry failed requests', `Queue ${this.selected.length} failed items for another delivery attempt?`, 'fas fa-redo', 'Retry'], 'request-again': ['Request again', `Remove any blacklist and send ${this.selected.length} selected items to ${deliveryLabel(this.selectedItems)}?`, 'fas fa-paper-plane', 'Request again'] }; this.confirmation = { action, ids: [...this.selected], items: [...this.selectedItems], removeBlacklist: action === 'request-again' && this.selectedItems.some(item => item.status === 'blacklisted'), title: labels[action][0], message: labels[action][1], icon: labels[action][2], confirmLabel: labels[action][3] }; },
+    confirmAction(action, items = this.selectedItems, note = '') { const labels = { approve: [`Send to ${deliveryLabel(items)}`, `Send ${items.length} selected items using the identity and profiles shown on each card?`, 'fas fa-paper-plane', 'Send'], reject: ['Reject requests', `${items.length} selected items will be removed from the approval queue.`, 'fas fa-archive', 'Reject requests'], blacklist: ['Blacklist requests', `Permanently prevent ${items.length} items from being suggested again?`, 'fas fa-ban', 'Blacklist'], retry: ['Retry failed requests', `Queue ${items.length} failed items for another delivery attempt?`, 'fas fa-redo', 'Retry'], 'request-again': ['Request again', `Remove any blacklist and send ${items.length} selected items to ${deliveryLabel(items)}?`, 'fas fa-paper-plane', 'Request again'] }; this.confirmation = { action, ids: items.map(item => item.id), items: [...items], removeBlacklist: action === 'request-again' && items.some(item => item.status === 'blacklisted'), title: labels[action][0], message: labels[action][1] + note, icon: labels[action][2], confirmLabel: labels[action][3] }; },
     serversForItems,
     keyDecision,
     swipeDecision,
@@ -231,20 +261,32 @@ export default {
     },
     confirmRequestAgain(item) { this.confirmation = { action: 'request-again', ids: [item.id], items: [item], removeBlacklist: item.status === 'blacklisted', title: 'Request again', message: item.status === 'blacklisted' ? `Remove this item from the blacklist and send it to ${deliveryLabel([item])}?` : `Send this rejected item to ${deliveryLabel([item])}?`, icon: 'fas fa-paper-plane', confirmLabel: 'Request again' }; },
     async decide() {
+      // Read once: the dialog may be gone by the time the last chunk returns.
       const { action, ids, removeBlacklist } = this.confirmation;
+      const decided = [...(this.confirmation.items || [])];
       const profile = action === 'approve' ? this.$refs.profileChoice?.payload() : null;
       this.actionLoading = true;
+      let sent = 0;
+      let ignoredOverrides = 0;
       try {
-        const { data } = await axios.post(`/api/automation/requests/workflow/${action}`, { ids, remove_blacklist: removeBlacklist, ...(profile ? { profile } : {}) });
-        notifyRequestsChanged();
-        const decided = [...(this.confirmation.items || [])];
+        for (const chunk of chunkIds(ids)) {
+          const { data } = await axios.post(`/api/automation/requests/workflow/${action}`, { ids: chunk, remove_blacklist: removeBlacklist, ...(profile ? { profile } : {}) });
+          notifyRequestsChanged();
+          sent += chunk.length;
+          ignoredOverrides += data?.ignored_overrides || 0;
+        }
         this.confirmation = null;
         await this.load(1);
-        this.$toast.open({ message: action === 'approve' ? approvalNotice(decided, data?.ignored_overrides || 0) : 'Requests updated', type: 'success' });
+        this.$toast.open({ message: action === 'approve' ? approvalNotice(decided, ignoredOverrides) : 'Requests updated', type: 'success' });
       } catch (error) {
         // A rejected profile comes back as 400 with a reason. Swallowing it
         // would leave the dialog looking as if nothing had happened.
         this.$toast.open({ message: error.response?.data?.message || 'Could not update requests', type: 'error' });
+        // Part of a large batch went through: show what was applied.
+        if (sent) {
+          this.confirmation = null;
+          await this.load(1);
+        }
       } finally { this.actionLoading = false; }
     },
     async runJob(force = false) {

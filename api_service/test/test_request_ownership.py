@@ -368,3 +368,27 @@ def test_a_regular_user_approves_only_what_they_own(monkeypatch):
     assert client.post('/api/automation/requests/workflow/approve', json={'ids': [2]}).status_code == 200
     db.decide_suggestions.assert_called_once_with(
         [2], ROBERT_ID, ROBERT_ID, True, False, profiles={}, include_unassigned=False, report=ANY, replace_rejected=False)
+
+
+def test_the_pending_snapshot_follows_the_same_rule_and_reports_truncation(monkeypatch):
+    db = _db([ROBERT])
+    monkeypatch.setattr(automation_routes, '_ALL_PENDING_MAX', 2)
+    db.list_suggestions.return_value = ([{'id': n, 'tmdb_id': str(n), 'media_type': 'movie'} for n in (1, 2, 3)], 0)
+    client = _client(monkeypatch, USER, 'own', db)
+    response = client.get('/api/automation/requests/workflow/pending?media_type=movie&search=dune')
+    assert response.status_code == 200
+    assert [item['id'] for item in response.json['items']] == [1, 2]
+    assert response.json['truncated'] is True
+    args = db.list_suggestions.call_args[0]
+    assert args[:6] == (ROBERT_ID, 'awaiting_approval', 'dune', 1, 3, 'movie')  # cap + 1 rows, one query
+    assert args[6] == [ROBERT] and args[7] is None and args[8] is False
+
+    db.list_suggestions.return_value = ([{'id': n, 'tmdb_id': str(n), 'media_type': 'movie'} for n in (1, 2)], 99)
+    response = client.get('/api/automation/requests/workflow/pending')
+    assert [item['id'] for item in response.json['items']] == [1, 2]
+    assert response.json['truncated'] is False  # decided by the rows, not the separate count
+
+
+def test_the_pending_snapshot_rejects_an_unknown_media_type(monkeypatch):
+    client = _client(monkeypatch, ADMIN, 'all', _db([]))
+    assert client.get('/api/automation/requests/workflow/pending?media_type=music').status_code == 400

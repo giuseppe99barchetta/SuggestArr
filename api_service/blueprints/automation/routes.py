@@ -163,13 +163,14 @@ def _suggestion_scope(db):
         db, g.current_user, load_env_vars(), request.args.get('user_id', ''))
 
 
-def _localize(db, *groups):
+def _localize(db, *groups, logos=True):
     """
     Show the listed titles in the reader's language (see services/tmdb/localization.py).
 
     Args:
         db: Database manager.
         groups: (items, fields) pairs, localized with one shared lookup budget.
+        logos: Also fill localized logos in the background.
     """
     env = load_env_vars()
     try:
@@ -180,7 +181,8 @@ def _localize(db, *groups):
     integration = db.get_integration('tmdb') or {}
     api_key = integration.get('api_key') or env.get('TMDB_API_KEY')
     localize_groups(list(groups), language, db, api_key)
-    fill_logos(list(groups), language, db, api_key)
+    if logos:
+        fill_logos(list(groups), language, db, api_key)
 
 
 def _visible_request_user_ids(db):
@@ -211,6 +213,40 @@ def request_workflow():
     _localize(db, (items, [('tmdb_id', 'media_type', 'title', 'overview')]))
     return jsonify({'status': 'success', 'items': items, 'total': total, 'page': page,
                     'pages': max(1, (total + per_page - 1) // per_page)}), 200
+
+
+# Upper bound of one "Approve all" / "Reject all": bounds per-row lookups and decide calls.
+_ALL_PENDING_MAX = 1000
+
+
+@automation_bp.route('/requests/workflow/pending', methods=['GET'])
+@limiter.limit('20 per minute')
+def pending_workflow():
+    """
+    List every suggestion awaiting approval that matches the Requests filters.
+
+    Backs "Approve all" / "Reject all": one query, so the confirmation shows a
+    consistent set instead of pages of a list that may change while loading.
+
+    Returns:
+        JSON with ``items`` (at most ``_ALL_PENDING_MAX``) and ``truncated``,
+        true when more matching suggestions are waiting than were returned.
+    """
+    media_type = request.args.get('media_type', 'all')
+    if media_type not in ('all', 'movie', 'tv'):
+        return jsonify({'status': 'error', 'message': 'Invalid media type'}), 400
+    db = DatabaseManager()
+    scope = _suggestion_scope(db)
+    # One row past the cap tells from this same SELECT whether anything was left out.
+    items, _total = db.list_suggestions(
+        scope.owner_id, 'awaiting_approval', request.args.get('search', '').strip()[:100], 1,
+        _ALL_PENDING_MAX + 1, media_type, scope.media_user_ids, None, scope.include_unassigned,
+        include_owned_list_imports=scope.include_owned_list_imports,
+        sort_by=request.args.get('sort_by', 'date-desc'))
+    truncated = len(items) > _ALL_PENDING_MAX
+    items = items[:_ALL_PENDING_MAX]
+    _localize(db, (items, [('tmdb_id', 'media_type', 'title', 'overview')]), logos=False)
+    return jsonify({'status': 'success', 'items': items, 'truncated': truncated}), 200
 
 
 def _requested_profiles():

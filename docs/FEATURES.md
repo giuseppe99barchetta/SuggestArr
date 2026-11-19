@@ -16,7 +16,9 @@ New jobs follow the global **Approve requests before sending them to Seer** sett
 disabled by default under **Advanced**. Each job can inherit that setting or override
 it to always approve or always send automatically. Held results appear on the
 Requests page, where the job owner or an administrator can send them to Seer,
-reject them, or blacklist them globally.
+reject them, or blacklist them globally. **Approve all** and **Reject all** act on
+every suggestion waiting for approval that matches the current filters (up to 1000
+at a time), not only the cards loaded on screen.
 
 The global Request Workflow settings can also pause a job while its SuggestArr
 suggestions await review and automatically reject suggestions left pending for a
