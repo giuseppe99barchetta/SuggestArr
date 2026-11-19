@@ -24,24 +24,13 @@ export const WHATS_NEW = {
       icon: 'fa-route',
       tone: 'brand',
       heading: 'Choose where requests go',
-      text: 'Connections and the setup wizard now ask how requests are delivered: through Seer, straight to Radarr and Sonarr, or both.',
+      text: 'Connections and the setup wizard ask how requests go: through Seer, straight to Radarr (movies) and Sonarr (TV), or both. Direct requests are added and searched right away.',
       points: [
         'Existing setups stay on Seer until you change it.',
-        'With Both, Seer takes requests and Radarr and Sonarr report what you own.',
+        'Direct titles are tagged suggestarr and never added twice.',
         'Only auto-decline of old pending requests still needs Seer.',
       ],
       adminOnly: true,
-    },
-    {
-      icon: 'fa-tag',
-      tone: 'good',
-      heading: 'Titles added straight to your libraries',
-      text: 'With direct delivery, an approved suggestion is added to Radarr (movies) or Sonarr (TV) and searched for right away.',
-      points: [
-        'Tagged suggestarr, and optionally with who it was suggested for.',
-        'A title already in Radarr or Sonarr is never added twice.',
-        'Titles added before this update are not tagged.',
-      ],
     },
     {
       icon: 'fa-bell',
@@ -77,6 +66,17 @@ export const WHATS_NEW = {
         'Run now follows the same pauses; Run anyway overrides them once.',
       ],
       adminOnly: true,
+    },
+    {
+      icon: 'fa-check-double',
+      tone: 'good',
+      heading: 'Clear the queue in one click',
+      text: 'Approve all and Reject all act on every suggestion waiting for approval that matches your filters, not only the cards on screen.',
+      points: [
+        'Up to 1000 at a time, after the usual confirmation.',
+        'Per-card actions and Select several work as before.',
+        'Chat notifications for AI picks now say why the title was suggested.',
+      ],
     },
   ],
 };
