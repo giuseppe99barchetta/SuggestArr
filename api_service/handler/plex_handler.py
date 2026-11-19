@@ -4,6 +4,7 @@ import unicodedata
 from api_service.handler.base_handler import BaseMediaHandler
 from api_service.services.plex.plex_client import PlexClient, normalize_guid_provider_id
 from api_service.db.database_manager import DatabaseManager
+from api_service.utils.asyncio_loop import gather_cancelling
 
 def to_ascii(value):
     """
@@ -89,7 +90,7 @@ class PlexHandler(BaseMediaHandler):
             return
 
         # Resolve all Plex items to seed dicts in parallel.
-        plex_seeds = await asyncio.gather(*[
+        plex_seeds = await gather_cancelling(*[
             self._plex_item_to_seed(item) for item in recent_items_response
         ])
         plex_seeds = [s for s in plex_seeds if s is not None]
@@ -200,7 +201,7 @@ class PlexHandler(BaseMediaHandler):
             )
             tasks.append(self._process_merged_seeds(merged, user_id))
         if tasks:
-            await asyncio.gather(*tasks)
+            await gather_cancelling(*tasks)
 
     async def _process_merged_seeds(self, seeds, user_id=None):
         """Process merged seeds: dispatch to LLM or non-LLM path."""
@@ -229,9 +230,9 @@ class PlexHandler(BaseMediaHandler):
                 else:
                     tasks.append(self.process_llm_recommendations(tv_history, 'tv', self.max_similar_tv))
             if tasks:
-                await asyncio.gather(*tasks)
+                await gather_cancelling(*tasks)
         else:
-            await asyncio.gather(*[
+            await gather_cancelling(*[
                 self._process_seed(seed) for seed in seeds
             ])
 
@@ -437,7 +438,7 @@ class PlexHandler(BaseMediaHandler):
                 await asyncio.sleep(self.request_delay)
         else:
             if tasks:
-                await asyncio.gather(*tasks)
+                await gather_cancelling(*tasks)
 
     async def _request_media_and_log(self, media_type, media, source_tmdb_obj, is_anime=False, user_id=None):
         """Helper method to request media and log the result."""

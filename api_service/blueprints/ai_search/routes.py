@@ -75,7 +75,11 @@ def _record_local_request(media_type, tmdb_id, metadata, rationale):
         metadata: Output of :func:`_display_metadata`.
         rationale: Text stored with the request.
     """
-    db = DatabaseManager()
+    try:
+        db = DatabaseManager()
+    except Exception as exc:
+        logger.error("AI search: database unavailable, %s %s not recorded locally: %s", media_type, tmdb_id, exc)
+        return
     try:
         db.save_metadata({**metadata, "id": str(tmdb_id)}, media_type)
     except Exception as exc:

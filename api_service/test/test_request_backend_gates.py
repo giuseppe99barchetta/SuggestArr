@@ -162,6 +162,17 @@ def test_ai_search_request_is_recorded_even_when_metadata_save_fails():
     db.return_value.save_request.assert_called_once()
 
 
+def test_ai_search_request_succeeds_when_the_database_cannot_open():
+    arr = MagicMock()
+    arr.__aenter__ = AsyncMock(return_value=arr)
+    arr.__aexit__ = AsyncMock(return_value=False)
+    arr.add = AsyncMock(return_value=True)
+    with patch.object(ai_routes.ConfigService, 'get_runtime_config', return_value=ARR),             patch.object(ai_routes, 'ArrClient', return_value=arr),             patch.object(ai_routes, 'DatabaseManager', side_effect=RuntimeError('database is locked')):
+        response = _ai_client(ARR).post('/api/ai-search/request', json={'tmdb_id': 27205, 'media_type': 'movie'})
+    assert response.status_code == 200
+    arr.add.assert_awaited_once()
+
+
 def test_ai_search_request_for_a_type_without_instance_is_refused():
     with patch.object(ai_routes.ConfigService, 'get_runtime_config', return_value=ARR), \
             patch.object(ai_routes, 'ArrClient') as factory:

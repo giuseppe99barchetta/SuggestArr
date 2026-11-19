@@ -646,7 +646,8 @@ class RecommendationAutomation:
             self.logger.error(f"Traceback: {traceback.format_exc()}")
 
             # Requests queued before the failure still count: a sliced run uses this number
-            # to share its request cap, and the history should show what was sent.
+            # to share its request cap, and the history should show what was sent. The handlers'
+            # gather_cancelling has already stopped sibling tasks, so the count is final.
             requested_count = 0 if dry_run else getattr(self.media_handler, 'request_count', 0) or 0
             if record_end and exec_id is not None:
                 self.repository.log_execution_end(

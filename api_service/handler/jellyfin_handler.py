@@ -3,6 +3,7 @@ import asyncio
 from api_service.handler.base_handler import BaseMediaHandler
 from api_service.services.jellyfin.jellyfin_client import JellyfinClient
 from api_service.db.database_manager import DatabaseManager
+from api_service.utils.asyncio_loop import gather_cancelling
 
 class JellyfinHandler(BaseMediaHandler):
     def __init__(self, jellyfin_client:JellyfinClient, seer_client, tmdb_client, logger, max_similar_movie, max_similar_tv, selected_users, library_anime_map=None, use_llm=None, request_delay=0, honor_seer_discovery=False, seer_discovered_ids=None, dry_run=False, max_total_requests=None, trakt_augmentor=None, max_content=10, feedback_repository=None, feedback_owner_id=None, feedback_media_service=None, watched_history_repository=None, simkl_augmentor=None):
@@ -62,7 +63,7 @@ class JellyfinHandler(BaseMediaHandler):
         users = self.selected_users if len(self.selected_users) > 0 else await self.jellyfin_client.get_all_users()
         self.logger.debug(f"Users to process: {users}")
         tasks = [self.process_user_recent_items(user) for user in users]
-        await asyncio.gather(*tasks)
+        await gather_cancelling(*tasks)
         self.logger.info(f"Total media requested: {self.request_count}")
 
     async def process_user_recent_items(self, user):
@@ -89,7 +90,7 @@ class JellyfinHandler(BaseMediaHandler):
                 for item in items:
                     flat_items.append((item, library_name, is_anime))
 
-            jf_seeds = await asyncio.gather(*[
+            jf_seeds = await gather_cancelling(*[
                 self._jellyfin_item_to_seed(item, library_name, is_anime, user)
                 for item, library_name, is_anime in flat_items
             ])
@@ -196,9 +197,9 @@ class JellyfinHandler(BaseMediaHandler):
             if tv_history and self.max_similar_tv > 0:
                 tasks.append(self.process_llm_recommendations(user, tv_history, 'tv', self.max_similar_tv))
             if tasks:
-                await asyncio.gather(*tasks)
+                await gather_cancelling(*tasks)
         else:
-            await asyncio.gather(*[
+            await gather_cancelling(*[
                 self._process_seed(user, seed) for seed in seeds
             ])
 
@@ -400,7 +401,7 @@ class JellyfinHandler(BaseMediaHandler):
                 await asyncio.sleep(self.request_delay)
         else:
             if tasks:
-                await asyncio.gather(*tasks)
+                await gather_cancelling(*tasks)
 
     async def _request_media_and_log(self, media_type, media, source_tmdb_obj, user, is_anime=False):
         """Helper method to request media and log the result."""

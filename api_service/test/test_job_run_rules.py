@@ -490,3 +490,39 @@ def test_a_failed_recommendation_run_still_reports_what_it_queued():
 
     assert result.success is False and result.requested_count == 2
     automation.repository.log_execution_end.assert_not_called()
+
+
+def test_a_failed_run_stops_sibling_seed_tasks_before_counting():
+    """Plain gather leaves sibling seeds running after one raises; they must not queue more after the count."""
+    from api_service.jobs.recommendation_automation import RecommendationAutomation
+    automation = object.__new__(RecommendationAutomation)
+    automation.job_id = 1
+    automation.job_data = {'name': 'Rec', '_defer_history': True}
+    automation.logger = MagicMock()
+    automation.repository = MagicMock()
+    automation.no_users_reason = None
+    handler = SimpleNamespace(add_available_content=AsyncMock(), request_count=0)
+
+    async def slow_seed():
+        await asyncio.sleep(0.05)
+        handler.request_count += 1  # would land after the failure without cancellation
+
+    async def failing_seed():
+        handler.request_count += 1
+        raise RuntimeError('TMDb timeout')
+
+    async def process_recent_items():
+        from api_service.utils.asyncio_loop import gather_cancelling
+        await gather_cancelling(slow_seed(), failing_seed())  # what the handlers use
+    handler.process_recent_items = process_recent_items
+    automation.media_handler = handler
+
+    async def run_then_wait():
+        # The caller awaits the run as its own task: it must get the failed result, not be cancelled.
+        result = await asyncio.create_task(automation.run(execution_id=55))
+        await asyncio.sleep(0.1)  # the next slice would run here, on the same loop
+        return result
+
+    result = asyncio.run(run_then_wait())
+
+    assert result.requested_count == 1 and handler.request_count == 1

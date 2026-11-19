@@ -8,6 +8,7 @@ from api_service.services.llm.llm_service import is_llm_configured, get_recommen
 from api_service.config.config import load_env_vars
 from api_service.config.config import load_env_vars
 from api_service.services.library_content import load_library_content, merge_content_sets
+from api_service.utils.asyncio_loop import gather_cancelling
 
 # Seed origins whose rating was given inside SuggestArr (watched_media sources).
 _OWN_RATING_ORIGINS = frozenset({'manual', 'csv_import', 'server'})
@@ -531,7 +532,7 @@ class BaseMediaHandler(ABC):
         
         async def resolve(rec):
             """Fetch TMDB data for the recommended item and its source in parallel."""
-            rec_results, source_obj = await asyncio.gather(
+            rec_results, source_obj = await gather_cancelling(
                 search_fn(rec.get("title"), rec.get("year")),
                 self._resolve_llm_source(rec.get("source_title"), item_type),
             )
@@ -539,7 +540,7 @@ class BaseMediaHandler(ABC):
             self._mark_source_origin(source_obj, history_origins.get(source_key))
             return rec, rec_results, source_obj
         
-        resolved = await asyncio.gather(*[resolve(rec) for rec in llm_recommendations])
+        resolved = await gather_cancelling(*[resolve(rec) for rec in llm_recommendations])
         feedback_signals = self._feedback_signals(item_type, user)
         positive_weights = self._positive_weights()
         resolved = sorted(
@@ -597,7 +598,7 @@ class BaseMediaHandler(ABC):
         
         if request_tasks:
             self.logger.info(f"LLM matched {len(request_tasks)} {item_type} items to TMDb.")
-            await asyncio.gather(*request_tasks)
+            await gather_cancelling(*request_tasks)
     
     @abstractmethod
     async def _request_llm_recommendation(self, media, item_type, source_obj, user=None):
