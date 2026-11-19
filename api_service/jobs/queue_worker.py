@@ -6,6 +6,8 @@ max_instances=1 to prevent overlap).
 """
 import asyncio
 import json
+import math
+import time
 from contextlib import AsyncExitStack
 from datetime import datetime, timedelta, timezone
 
@@ -20,6 +22,17 @@ from api_service.observability.metrics import INTEGRATION_ERRORS, QUEUE_RETRIES
 
 MAX_RETRIES = 5
 WORKER_BATCH = 50
+# time.monotonic() of the last Seer delivery, kept across cycles so SEER_REQUEST_DELAY also
+# spaces the last request of one cycle and the first of the next (one worker runs at a time).
+_last_seer_send = None
+# shortcut: while SEER_REQUEST_DELAY is on, a cycle sends at most 1 + 100 // delay Seer requests
+# (capped at WORKER_BATCH; 2 at 60 s) and leaves the rest queued, so the pauses keep a run near the 2-minute
+# schedule; time spent on Radarr/Sonarr does not count. A long delay therefore caps Seer
+# throughput. get_due_requests puts new rows first, so a retry behind 50+ new rows waits for the
+# backlog to drain; retries inside the batch go first.
+# Radarr/Sonarr rows in the batch go first; one behind 50+ older Seer rows (only after switching
+# REQUEST_BACKEND with Seer requests still queued) waits until those drain.
+SEER_PACING_SECONDS = 100
 # A backend that cannot be reached is retried at a fixed pace without counting as a failed attempt,
 # and given up on only after this long of continuous unavailability.
 UNAVAILABLE_RETRY_SECONDS = 300
@@ -69,6 +82,14 @@ def _as_naive_utc(value):
     return value
 
 
+def _is_seer_row(item) -> bool:
+    """True when a queued row is delivered to Seer (rows queued before ``_backend`` existed are Seer's)."""
+    try:
+        return (json.loads(item['payload']).get('_backend') or 'seer') == 'seer'
+    except (ValueError, TypeError, AttributeError):
+        return True  # corrupt payloads are reported when their turn comes
+
+
 def _seer_request_delay(env) -> float:
     """
     Seconds to wait between two Seer requests in one worker cycle (SEER_REQUEST_DELAY).
@@ -77,9 +98,10 @@ def _seer_request_delay(env) -> float:
     :return: The delay, clamped to 0-60 like the settings field; 0 when unset or invalid.
     """
     try:
-        return min(max(float(env.get('SEER_REQUEST_DELAY') or 0), 0.0), 60.0)
+        delay = float(env.get('SEER_REQUEST_DELAY') or 0)
     except (TypeError, ValueError):
         return 0.0
+    return min(max(delay, 0.0), 60.0) if math.isfinite(delay) else 0.0
 
 
 async def _run_worker() -> int:
@@ -101,6 +123,9 @@ async def _run_worker() -> int:
     if not items:
         logger.debug("Queue worker: nothing to process.")
         return 0
+    # Radarr/Sonarr rows first: the Seer pause below must not hold them back. Among Seer rows,
+    # retries go before new ones, so a paced cycle does not keep pushing them back.
+    items.sort(key=lambda item: (_is_seer_row(item), not item.get('retry_count')))
 
     logger.info("Queue worker: processing %d item(s).", len(items))
 
@@ -108,7 +133,6 @@ async def _run_worker() -> int:
     # current setting, so switching REQUEST_BACKEND cannot reroute queued requests.
     clients = {}
     down = set()  # backends that cannot be built, and destinations found unreachable, in this cycle
-    cycle_start = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def park_unavailable(item, backend, destination, reason, claimed=False):
         """Keep the row queued, or fail it once the outage has lasted BACKEND_OUTAGE_MAX_DAYS.
@@ -119,7 +143,9 @@ async def _run_worker() -> int:
         :param claimed: True when the caller already claimed the row for delivery.
         """
         since = _as_naive_utc(item.get('unavailable_since'))
-        if since is not None and cycle_start - since >= timedelta(days=BACKEND_OUTAGE_MAX_DAYS):
+        # The current time, not the cycle's start: a paced cycle can run for minutes.
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if since is not None and now - since >= timedelta(days=BACKEND_OUTAGE_MAX_DAYS):
             if not claimed and not db.mark_pending_submitting(item['id'], item['retry_count']):
                 logger.info("Queue worker: delivery id=%s is no longer queued; skipped.", item['id'])
                 return
@@ -137,7 +163,7 @@ async def _run_worker() -> int:
             logger.error("Queue worker: %s unreachable for %d days; delivery id=%s failed.",
                          destination, BACKEND_OUTAGE_MAX_DAYS, item['id'])
             return
-        if not db.mark_pending_unavailable(item['id'], cycle_start + timedelta(seconds=UNAVAILABLE_RETRY_SECONDS),
+        if not db.mark_pending_unavailable(item['id'], now + timedelta(seconds=UNAVAILABLE_RETRY_SECONDS),
                                            reason):
             logger.info("Queue worker: delivery id=%s is no longer queued; left as is.", item['id'])
             return
@@ -171,8 +197,32 @@ async def _run_worker() -> int:
 
     # Pause between Seer requests (#118): a burst makes Seer drop notifications. Applied before
     # claiming the row, so nothing sits in 'submitting' while the worker waits.
+    global _last_seer_send
     seer_delay = _seer_request_delay(env)
-    seer_sent = False
+    # Bounded before int(): a tiny delay would make the quotient infinite.
+    seer_cap = min(WORKER_BATCH, 1 + int(min(SEER_PACING_SECONDS // seer_delay, WORKER_BATCH))) if seer_delay else WORKER_BATCH
+    seer_posts = 0
+
+    def already_submitted(item, payload):
+        """Close a row that another path (e.g. AI Search) already requested while it sat in the queue."""
+        if not db.check_request_exists(item['media_type'], item['tmdb_id']):
+            return False
+        # Claim first, as a delivery does: a row cancelled in the meantime must stay cancelled.
+        if not db.mark_pending_submitting(item['id'], item['retry_count']):
+            logger.info("Queue worker: delivery id=%s is no longer queued; skipped.", item['id'])
+            return True
+        logger.info("Queue worker: delivery id=%s from job run id=%s was already submitted.",
+                    item['id'], item.get('execution_id'))
+        db.mark_pending_submitted(item['id'], item['retry_count'])
+        try:
+            db.enqueue_webhook_event("request.submitted", {
+                "tmdb_id": str(item['tmdb_id']), "media_type": item['media_type'], "job_id": item.get("job_id"),
+                "execution_id": item.get("execution_id"), "delivery_id": item['id'],
+                **({"rationale": payload["_rationale"]} if payload.get("_rationale") else {}),
+            })
+        except Exception as exc:
+            logger.error("Unable to queue request.submitted webhook: %s", exc)
+        return True
 
     async with AsyncExitStack() as stack:
         submitted = 0
@@ -200,18 +250,7 @@ async def _run_worker() -> int:
                     logger.error("Unable to queue request.failed webhook: %s", webhook_exc)
                 continue
 
-            # Skip if the item was submitted by another path while it sat in the queue
-            if db.check_request_exists(media_type, tmdb_id):
-                logger.info("Queue worker: delivery id=%s from job run id=%s was already submitted.", row_id, item.get('execution_id'))
-                db.mark_pending_submitted(row_id, retry_count)
-                try:
-                    db.enqueue_webhook_event("request.submitted", {
-                        "tmdb_id": str(tmdb_id), "media_type": media_type, "job_id": item.get("job_id"),
-                        "execution_id": item.get("execution_id"), "delivery_id": row_id,
-                        **({"rationale": payload["_rationale"]} if payload.get("_rationale") else {}),
-                    })
-                except Exception as exc:
-                    logger.error("Unable to queue request.submitted webhook: %s", exc)
+            if already_submitted(item, payload):
                 continue
 
             backend = payload.get('_backend') or 'seer'  # rows queued before the field existed are Seer's
@@ -229,17 +268,33 @@ async def _run_worker() -> int:
                 park_unavailable(item, backend, destination, f"The {backend} backend is not usable")
                 continue
 
-            if backend == 'seer':
-                if seer_sent and seer_delay:
-                    await asyncio.sleep(seer_delay)
-                seer_sent = True
+            if backend == 'seer' and seer_delay:
+                if seer_posts >= seer_cap:
+                    # Seer rows come last in the batch, so everything left waits for the next cycle.
+                    logger.info("Queue worker: %d Seer request(s) sent with SEER_REQUEST_DELAY=%ss; "
+                                "the rest stay queued for the next cycle.", seer_posts, seer_delay)
+                    break
+                wait = 0.0
+                if _last_seer_send is not None:
+                    wait = max(seer_delay - (time.monotonic() - _last_seer_send), 0.0)
+                if wait:
+                    await asyncio.sleep(wait)
+                    # Another path may have requested the title during the pause.
+                    if already_submitted(item, payload):
+                        continue
 
             # Claim the row: a concurrent worker, or a cancellation since it was read, wins over this one.
             if not db.mark_pending_submitting(row_id, retry_count):
                 logger.info("Queue worker: delivery id=%s is no longer queued; skipped.", row_id)
                 continue
             try:
-                success = await client.submit_queued_request(payload)
+                try:
+                    success = await client.submit_queued_request(payload)
+                finally:
+                    if backend == 'seer':
+                        # Measured once Seer has answered, so preparation (login, defaults) adds to the gap.
+                        _last_seer_send = time.monotonic()
+                        seer_posts += 1
             except Exception as exc:
                 if is_transport_error(exc):
                     # Not a verdict on the request: keep it queued without spending a retry.

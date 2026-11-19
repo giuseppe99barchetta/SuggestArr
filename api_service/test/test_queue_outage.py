@@ -230,19 +230,170 @@ def work(rows, arr=None, seer=None, env=None):
     return db
 
 
+class _FakeClock:
+    """time.monotonic and asyncio.sleep for the queue worker: sleeping moves the clock forward."""
+
+    def __init__(self):
+        self.now = 1000.0
+        self.sleeps = []
+
+    def monotonic(self):
+        return self.now
+
+    async def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    from api_service.jobs import queue_worker
+    fake = _FakeClock()
+    monkeypatch.setattr(queue_worker, '_last_seer_send', None)
+    monkeypatch.setattr(queue_worker.time, 'monotonic', fake.monotonic)
+    monkeypatch.setattr(queue_worker.asyncio, 'sleep', fake.sleep)
+    return fake
+
+
 @pytest.mark.parametrize('delay,rows,expected', [
     (2, [row(1, backend='seer'), row(2, backend='seer'), row(3, backend='seer')], [2, 2]),
     (0, [row(1, backend='seer'), row(2, backend='seer')], []),
     (2, [row(1, backend='arr'), row(2, backend='arr')], []),          # the setting is for Seer only
     ('abc', [row(1, backend='seer'), row(2, backend='seer')], []),    # invalid value: no pause
+    ('nan', [row(1, backend='seer'), row(2, backend='seer')], []),    # NaN would crash asyncio.sleep
     (999, [row(1, backend='seer'), row(2, backend='seer')], [60.0]),  # clamped like the settings field
+    (1e-309, [row(1, backend='seer'), row(2, backend='seer')], [1e-309]),  # tiny but valid: no overflow
 ])
-def test_seer_request_delay_spaces_out_seer_requests(delay, rows, expected):
+def test_seer_request_delay_spaces_out_seer_requests(clock, delay, rows, expected):
     """SEER_REQUEST_DELAY (#118): a pause between Seer requests, none before the first."""
-    sleep = AsyncMock()
-    with patch('api_service.jobs.queue_worker.asyncio.sleep', sleep):
-        work(rows, seer=Client(True), env={**ENV, 'SEER_REQUEST_DELAY': delay})
-    assert [call.args[0] for call in sleep.await_args_list] == expected
+    work(rows, seer=Client(True), env={**ENV, 'SEER_REQUEST_DELAY': delay})
+    assert clock.sleeps == expected
+
+
+def test_seer_request_delay_also_spaces_consecutive_cycles(clock):
+    env = {**ENV, 'SEER_REQUEST_DELAY': 10}
+    work([row(1, backend='seer')], seer=Client(True), env=env)
+    clock.now += 3  # the next cycle starts 3 s after the last request
+    work([row(2, backend='seer')], seer=Client(True), env=env)
+    assert clock.sleeps == [7]
+
+
+def test_radarr_and_sonarr_rows_are_not_held_behind_paced_seer_rows(clock):
+    seer, arr = Client(True), Client(True)
+    order = []
+    seer.submit_queued_request = AsyncMock(side_effect=lambda payload: order.append(('seer', clock.now)) or True)
+    arr.submit_queued_request = AsyncMock(side_effect=lambda payload: order.append(('arr', clock.now)) or True)
+    work([row(1, backend='seer'), row(2, backend='seer'), row(3, backend='arr')],
+         seer=seer, arr=arr, env={**ENV, 'SEER_REQUEST_DELAY': 30})
+    assert order[0] == ('arr', 1000.0)
+    assert [name for name, _ in order] == ['arr', 'seer', 'seer']
+
+
+def test_seer_request_delay_counts_from_when_seer_answered(clock):
+    """Preparing a request (login, defaults) must not eat into the pause before the next POST."""
+    seer = Client(True)
+    posts = []
+
+    async def submit(payload):
+        if not posts:
+            clock.now += 5  # the first request spends 5 s logging in before it is sent
+        posts.append(clock.now)
+        return True
+    seer.submit_queued_request = submit
+    work([row(1, backend='seer'), row(2, backend='seer')], seer=seer, env={**ENV, 'SEER_REQUEST_DELAY': 2})
+    assert clock.sleeps == [2] and posts[1] - posts[0] == 2
+
+
+def test_a_long_delay_leaves_the_rest_of_the_seer_batch_for_the_next_cycle(clock):
+    db = work([row(i, backend='seer') for i in range(1, 5)], seer=Client(True),
+              env={**ENV, 'SEER_REQUEST_DELAY': 60})
+    assert clock.sleeps == [60]                       # 1 + 100 // 60 = 2 requests this cycle
+    assert db.mark_pending_submitting.call_count == 2  # rows 3 and 4 stay queued, unclaimed
+
+
+def test_a_title_requested_during_the_pause_is_not_sent_again(clock):
+    seer = Client(True)
+    requested = set()
+
+    async def sleep_while_ai_search_requests(seconds):
+        clock.sleeps.append(seconds)
+        clock.now += seconds
+        requested.add('2')  # AI Search sends tmdb 2 while the worker waits
+    from api_service.jobs import queue_worker
+    with patch.object(queue_worker.asyncio, 'sleep', sleep_while_ai_search_requests):
+        db = MagicMock()
+        db.expire_pending_approvals.return_value = 0
+        db.mark_pending_submitting.return_value = True
+        db.check_request_exists.side_effect = lambda media_type, tmdb_id: str(tmdb_id) in requested
+        db.get_due_requests.return_value = [row(1, backend='seer'), row(2, backend='seer')]
+        with patch('api_service.jobs.queue_worker.DatabaseManager', return_value=db),                 patch('api_service.jobs.queue_worker.ConfigService.get_runtime_config',
+                      return_value={**ENV, 'SEER_REQUEST_DELAY': 2}),                 patch('api_service.jobs.queue_worker.SeerClient', return_value=seer):
+            asyncio.run(_run_worker())
+    assert [payload['mediaId'] for payload in seer.calls] == [1]
+    db.mark_pending_submitted.assert_any_call(2, 0)
+
+
+def test_a_row_cancelled_during_the_pause_is_not_revived_as_submitted(clock):
+    """Cancelled and requested elsewhere while the worker waited: it stays cancelled, no webhook."""
+    from api_service.jobs import queue_worker
+    state = {'2': 'queued'}
+    requested = set()
+
+    async def sleep_while_cancelled(seconds):
+        clock.now += seconds
+        state['2'] = 'cancelled'
+        requested.add('2')
+    db = MagicMock()
+    db.expire_pending_approvals.return_value = 0
+    db.check_request_exists.side_effect = lambda media_type, tmdb_id: str(tmdb_id) in requested
+    db.mark_pending_submitting.side_effect = lambda row_id, retry: state.get(str(row_id), 'queued') == 'queued'
+    db.get_due_requests.return_value = [row(1, backend='seer'), row(2, backend='seer')]
+    seer = Client(True)
+    with patch.object(queue_worker.asyncio, 'sleep', sleep_while_cancelled),             patch('api_service.jobs.queue_worker.DatabaseManager', return_value=db),             patch('api_service.jobs.queue_worker.ConfigService.get_runtime_config',
+                  return_value={**ENV, 'SEER_REQUEST_DELAY': 2}),             patch('api_service.jobs.queue_worker.SeerClient', return_value=seer):
+        asyncio.run(_run_worker())
+    assert [payload['mediaId'] for payload in seer.calls] == [1]
+    assert all(call.args[0] != 2 for call in db.mark_pending_submitted.call_args_list)
+    assert all(call.args[1].get('delivery_id') != 2 for call in db.enqueue_webhook_event.call_args_list)
+
+
+def test_slow_radarr_deliveries_do_not_starve_seer(clock):
+    """Time spent on Radarr/Sonarr does not count against the Seer limit of a paced cycle."""
+    arr, seer = Client(True), Client(True)
+
+    async def slow_arr(payload):
+        clock.now += 200
+        arr.calls.append(payload)
+        return True
+    arr.submit_queued_request = slow_arr
+    work([row(1, backend='arr'), row(2, backend='seer'), row(3, backend='seer')],
+         arr=arr, seer=seer, env={**ENV, 'SEER_REQUEST_DELAY': 60})
+    assert len(arr.calls) == 1 and len(seer.calls) == 2
+
+
+def test_paced_cycles_send_seer_retries_before_new_rows(clock):
+    seer = Client(True)
+    work([row(1, backend='seer'), row(2, backend='seer'), row(3, backend='seer', retry=2)],
+         seer=seer, env={**ENV, 'SEER_REQUEST_DELAY': 60})
+    assert [payload['mediaId'] for payload in seer.calls] == [3, 1]  # cap 2: the retry is not pushed back
+
+
+def test_outage_retry_time_is_taken_when_the_row_is_parked(clock, monkeypatch):
+    """A paced cycle can run for minutes; the 5-minute retry must count from the outage, not the cycle start."""
+    from api_service.jobs import queue_worker
+    start = datetime(2026, 11, 19, 12, 0, 0)
+
+    class Clocked(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            moment = start + timedelta(seconds=clock.now - 1000.0)
+            return moment.replace(tzinfo=timezone.utc) if tz else moment
+    monkeypatch.setattr(queue_worker, 'datetime', Clocked)
+    seer = Client(True, fail_media=('tv',))
+    db = work([row(1, backend='seer'), row(2, media='tv', backend='seer')],
+              seer=seer, env={**ENV, 'SEER_REQUEST_DELAY': 60})
+    next_attempt = db.mark_pending_unavailable.call_args.args[1]
+    assert next_attempt == start + timedelta(seconds=60 + queue_worker.UNAVAILABLE_RETRY_SECONDS)
 
 
 def test_unavailable_backend_keeps_the_row_queued_without_spending_a_retry():

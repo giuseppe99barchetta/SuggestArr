@@ -256,6 +256,8 @@ Numeric weekdays follow standard cron: `0` and `7` are Sunday, `1` is Monday.
 
 Switching never reroutes requests already in the queue: each one is delivered by the backend it was queued for. If that backend cannot be reached (offline, restarting, timeouts, HTTP 502/503/504), the requests stay queued and are retried every 5 minutes without counting as failed attempts; the Jobs page says since when it is unreachable. Only after 7 days of continuous unavailability do they become failed (and send `request.failed`); a request the backend actually rejects still fails after 5 attempts.
 
+**Delay between requests** (Seer card, default 2 seconds, 0–60) spaces the requests that jobs queue for Seer, so a large batch does not make Seer skip notifications. The queue is checked every 2 minutes and each check sends at most 1 + 100 ÷ delay Seer requests (all 50 of a batch at 2 s, 2 at 60 s); the rest wait for the next check. A long delay therefore slows down large batches. Requests you send yourself from AI Search go out at once, and Radarr and Sonarr requests are not delayed.
+
 With **Radarr & Sonarr**:
 
 - Every title SuggestArr adds is tagged `suggestarr`. **Also tag each title with who it was suggested for** (`ARR_TAG_BY_USER`) adds `suggestarr-user-<name>` as well. Titles that were already in Radarr or Sonarr keep their own tags. Titles added before this tag existed are not tagged.
