@@ -234,11 +234,24 @@ export default {
       if (action === 'approve' && approvalNeedsDialog(serversForItems(this.servers, [item]))) { this.confirmSingle('approve', id); return; }
       this.actionLoading = true;
       try {
-        await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] });
-        notifyRequestsChanged();
+        try {
+          await axios.post(`/api/automation/requests/workflow/${action}`, { ids: [id] });
+          notifyRequestsChanged();
+        } catch (error) {
+          if (!error.response) this.refreshAfterLostResponse();
+          throw error;
+        }
         await this.load(1);
         this.$toast.open({ message: action === 'approve' ? approvalNotice([item]) : 'Request updated', type: 'success' });
       } finally { this.actionLoading = false; }
+    },
+    // A decision whose response was lost may have been applied, or still be committing on the
+    // server: look again now and once more shortly after, so the queue does not stay stale.
+    refreshAfterLostResponse() {
+      const refresh = () => { notifyRequestsChanged(); this.load(1).catch(() => {}); };
+      refresh();
+      // Skipped while the user is selecting or deciding: that reload would wipe their work, and their next action reloads anyway.
+      setTimeout(() => { if (!this.bulkMode && !this.confirmation && !this.seenRatingItem) refresh(); }, 3000);
     },
     confirmAction(action, items = this.selectedItems, note = '') { const labels = { approve: [`Send to ${deliveryLabel(items)}`, `Send ${items.length} selected items using the identity and profiles shown on each card?`, 'fas fa-paper-plane', 'Send'], reject: ['Reject requests', `${items.length} selected items will be removed from the approval queue.`, 'fas fa-archive', 'Reject requests'], blacklist: ['Blacklist requests', `Permanently prevent ${items.length} items from being suggested again?`, 'fas fa-ban', 'Blacklist'], retry: ['Retry failed requests', `Queue ${items.length} failed items for another delivery attempt?`, 'fas fa-redo', 'Retry'], 'request-again': ['Request again', `Remove any blacklist and send ${items.length} selected items to ${deliveryLabel(items)}?`, 'fas fa-paper-plane', 'Request again'] }; this.confirmation = { action, ids: items.map(item => item.id), items: [...items], removeBlacklist: action === 'request-again' && items.some(item => item.status === 'blacklisted'), title: labels[action][0], message: labels[action][1] + note, icon: labels[action][2], confirmLabel: labels[action][3] }; },
     serversForItems,
@@ -268,25 +281,34 @@ export default {
       this.actionLoading = true;
       let sent = 0;
       let ignoredOverrides = 0;
+      let failure = null;
       try {
         for (const chunk of chunkIds(ids)) {
-          const { data } = await axios.post(`/api/automation/requests/workflow/${action}`, { ids: chunk, remove_blacklist: removeBlacklist, ...(profile ? { profile } : {}) });
-          notifyRequestsChanged();
-          sent += chunk.length;
-          ignoredOverrides += data?.ignored_overrides || 0;
+          try {
+            const { data } = await axios.post(`/api/automation/requests/workflow/${action}`, { ids: chunk, remove_blacklist: removeBlacklist, ...(profile ? { profile } : {}) });
+            notifyRequestsChanged();
+            sent += chunk.length;
+            ignoredOverrides += data?.ignored_overrides || 0;
+          } catch (error) { failure = error; break; }
         }
+        // No response means the server may still have applied that chunk.
+        const lost = failure && !failure.response;
+        if (failure) {
+          // A rejected profile comes back as 400 with a reason. Swallowing it
+          // would leave the dialog looking as if nothing had happened.
+          this.$toast.open({ message: lost ? 'The connection dropped; some requests may already be updated' : (failure.response.data?.message || 'Could not update requests'), type: 'error' });
+          if (!sent && !lost) return;
+        }
+        // Done, partly done, or maybe done: show the queue as it now is.
         this.confirmation = null;
-        await this.load(1);
-        this.$toast.open({ message: action === 'approve' ? approvalNotice(decided, ignoredOverrides) : 'Requests updated', type: 'success' });
-      } catch (error) {
-        // A rejected profile comes back as 400 with a reason. Swallowing it
-        // would leave the dialog looking as if nothing had happened.
-        this.$toast.open({ message: error.response?.data?.message || 'Could not update requests', type: 'error' });
-        // Part of a large batch went through: show what was applied.
-        if (sent) {
-          this.confirmation = null;
+        if (lost) { this.refreshAfterLostResponse(); return; }
+        try {
           await this.load(1);
+        } catch {
+          this.$toast.open({ message: 'Requests were updated, but the list could not be refreshed', type: 'error' });
+          return;
         }
+        if (!failure) this.$toast.open({ message: action === 'approve' ? approvalNotice(decided, ignoredOverrides) : 'Requests updated', type: 'success' });
       } finally { this.actionLoading = false; }
     },
     async runJob(force = false) {

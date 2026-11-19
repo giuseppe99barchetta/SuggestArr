@@ -10,8 +10,8 @@ const pending = Array.from({ length: 130 }, (_, index) => ({
   name: "Manual job", status: "awaiting_approval", backend: "seer",
 }));
 
-async function mockApi(page) {
-  const calls = { pending: 0, reject: [] };
+async function mockApi(page, { rejectFails } = {}) {
+  const calls = { pending: 0, reject: [], lists: 0 };
   await page.route((url) => !["127.0.0.1", "localhost"].includes(url.hostname), (route) => route.abort());
   await page.route(/\/src\/data\/releaseNotes\.js/, route => route.fulfill({ contentType: 'application/javascript', body: 'export const RELEASES_URL = ""; export const WHATS_NEW = {id:"none",title:"none",slides:[]};' }));
   await page.addInitScript(() => {
@@ -41,11 +41,14 @@ async function mockApi(page) {
     }
     if (apiPath === "/api/automation/requests/workflow/reject" && request.method() === "POST") {
       calls.reject.push(request.postDataJSON().ids);
+      if (rejectFails === "drop") return route.abort("failed");
+      if (rejectFails === "refused") return json({ status: "error", message: "Invalid profile request" }, 400);
       // Slow enough to try closing the dialog while the batch is in flight.
       await new Promise((resolve) => setTimeout(resolve, 1500));
       return json({ status: "success", updated: request.postDataJSON().ids.length });
     }
     if (apiPath === "/api/automation/requests/workflow") {
+      calls.lists += 1;
       const done = calls.reject.length >= 2;
       return json({ status: "success", items: done ? [] : pending.slice(0, 24), total: done ? 0 : pending.length, page: 1, pages: done ? 1 : 6 });
     }
@@ -53,6 +56,15 @@ async function mockApi(page) {
     return json({});
   });
   return calls;
+}
+
+async function openQueue(page) {
+  await page.goto("/login");
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill("e2e-password");
+  await page.getByRole("button", { name: "Sign In" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto("/requests?status=awaiting_approval");
 }
 
 test("reject all covers every waiting suggestion and cannot be dismissed while sending", async ({ page }) => {
@@ -81,4 +93,28 @@ test("reject all covers every waiting suggestion and cannot be dismissed while s
   await expect(dialog).toBeHidden({ timeout: 10_000 });
   expect(calls.reject.map(ids => ids.length)).toEqual([100, 30]);
   expect(calls.reject.flat()).toEqual(pending.map(item => item.id));
+});
+
+test("a lost response refreshes the queue, since the server may have applied it", async ({ page }) => {
+  const calls = await mockApi(page, { rejectFails: "drop" });
+  await openQueue(page);
+  await page.getByRole("button", { name: "Reject all (130)" }).click();
+  const lists = calls.lists;
+  await page.getByRole("dialog").getByRole("button", { name: "Reject requests" }).click();
+
+  await expect(page.getByText("The connection dropped; some requests may already be updated")).toBeVisible();
+  await expect(page.getByRole("dialog")).toBeHidden();
+  // Once now and once more after the server had time to commit a late decision.
+  await expect.poll(() => calls.lists, { timeout: 8_000 }).toBeGreaterThanOrEqual(lists + 2);
+});
+
+test("a refused request keeps the dialog open with the reason", async ({ page }) => {
+  const calls = await mockApi(page, { rejectFails: "refused" });
+  await openQueue(page);
+  await page.getByRole("button", { name: "Reject all (130)" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Reject requests" }).click();
+
+  await expect(page.getByText("Invalid profile request")).toBeVisible();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  expect(calls.reject).toHaveLength(1);
 });
