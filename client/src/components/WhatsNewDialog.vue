@@ -1,10 +1,10 @@
 <template>
-  <AppDialog width="max-w-3xl" :title="entry.title" :subtitle="`What's new · ${position}`" icon="fas fa-wand-magic-sparkles" body-class="p-0" @close="$emit('close')">
+  <AppDialog width="max-w-lg" :title="entry.title" :subtitle="`What's new · ${position}`" icon="fas fa-wand-magic-sparkles" body-class="p-0" @close="$emit('close')">
     <div class="overflow-hidden" aria-live="polite" data-testid="whats-new-slide">
       <transition mode="out-in" enter-active-class="transition duration-200 motion-reduce:transition-none" leave-active-class="transition duration-150 motion-reduce:transition-none" :enter-from-class="enterFrom" :leave-to-class="leaveTo">
-        <div :key="index" class="grid min-w-0 sm:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]">
+        <div :key="index" class="min-w-0">
           <!-- Visual: the slide's icon on a tinted panel; decorative only. -->
-          <div class="relative flex items-center justify-center overflow-hidden border-edge py-8 max-sm:border-b sm:border-r sm:py-0" :class="tone.panel" aria-hidden="true">
+          <div class="relative flex h-48 items-center justify-center overflow-hidden border-b border-edge max-sm:h-36" :class="tone.panel" aria-hidden="true">
             <div class="absolute inset-0 opacity-[.14]" :class="tone.text" style="background-image: radial-gradient(currentColor 1px, transparent 1px); background-size: 14px 14px; mask-image: radial-gradient(circle at center, #000 30%, transparent 75%);"></div>
             <div class="absolute h-44 w-44 rounded-full border opacity-30" :class="tone.ring"></div>
             <div class="absolute h-64 w-64 rounded-full border opacity-15" :class="tone.ring"></div>
