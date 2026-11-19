@@ -32,7 +32,7 @@
     "eslint-plugin-vue": "~10.12.0",
     "globals": "^17.14.0",
     "postcss-html": "^2.0.0",
-    "stylelint": "^17.15.0",
+    "stylelint": "^18.0.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",
