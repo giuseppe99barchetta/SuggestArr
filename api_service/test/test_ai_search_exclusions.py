@@ -188,7 +188,6 @@ class TestSearchSinglePromptWiring:
              patch.object(service, '_excluded_titles_for_prompt', wraps=service._excluded_titles_for_prompt), \
              patch('api_service.services.ai_search.ai_search_service._OWNED_PROMPT_TIMEOUT', timeout or 5.0), \
              patch('api_service.db.database_manager.DatabaseManager') as MockDB:
-            MockDB.return_value.get_requested_tmdb_ids.return_value = set()
             MockDB.return_value.get_ai_dislike_ids.return_value = []
             MockDB.return_value.get_ai_likes.return_value = []
             MockDB.return_value.get_ai_dislikes.return_value = []

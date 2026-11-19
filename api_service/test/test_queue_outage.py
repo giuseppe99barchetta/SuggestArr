@@ -488,32 +488,16 @@ def test_webhook_retry_scheduled_for_later_today_becomes_due_on_time(db):
     assert [d['event_id'] for d in db.get_due_webhook_deliveries()] == ['past']
 
 
-class _Clock:
-    """Freeze the 'now' seen by request_queue_mixin so a cutoff and the rows around it share a calendar day."""
-
-    def __init__(self, fixed):
-        class Fixed(datetime):
-            @classmethod
-            def now(cls, tz=None):
-                return fixed if tz else fixed.replace(tzinfo=None)
-        self.patch = patch('api_service.db.components.request_queue_mixin.datetime', Fixed)
-
-    def __enter__(self):
-        return self.patch.__enter__()
-
-    def __exit__(self, *exc):
-        return self.patch.__exit__(*exc)
-
-
-NOW = datetime(2026, 11, 12, 15, 0, 0, tzinfo=timezone.utc)
+def _db_time(db, *modifiers):
+    """A CURRENT_TIMESTAMP-style text value on the database clock, shifted by SQLite modifiers."""
+    return db.connection.execute(f"SELECT datetime('now', {', '.join('?' * len(modifiers))})", modifiers).fetchone()[0]
 
 
 def test_approval_expiry_respects_the_cutoff_within_the_same_day(db):
-    # cutoff = now - 1 day = 2026-11-11 15:00; CURRENT_TIMESTAMP writes space-separated text.
-    db.add(1, status='awaiting_approval', created_at='2026-11-11 14:55:00')   # before the cutoff -> expires
-    db.add(2, status='awaiting_approval', created_at='2026-11-11 15:05:00')   # after the cutoff -> stays
-    with _Clock(NOW):
-        assert db.expire_pending_approvals(1) == 1
+    # The cutoff is computed on the database clock, the same clock CURRENT_TIMESTAMP writes with.
+    db.add(1, status='awaiting_approval', created_at=_db_time(db, '-1 day', '-5 minutes'))   # before -> expires
+    db.add(2, status='awaiting_approval', created_at=_db_time(db, '-1 day', '+5 minutes'))   # after -> stays
+    assert db.expire_pending_approvals(1) == 1
     rows = dict(db.connection.execute('SELECT tmdb_id, status FROM pending_requests').fetchall())
     assert rows == {'1': 'rejected', '2': 'awaiting_approval'}
 
@@ -522,11 +506,10 @@ def test_rate_limit_window_counts_rows_after_the_cutoff_on_the_same_day(db):
     db.connection.execute(
         "INSERT INTO discover_jobs (id, name, media_type, filters, schedule_type, schedule_value, "
         "max_requests_per_user, request_limit_window_hours) VALUES (7, 'j', 'movie', '{}', 'preset', 'daily', 1, 24)")
-    db.add(1, job_id=7, user_id='u', created_at='2026-11-11 14:55:00')  # outside the 24h window
-    db.add(2, job_id=7, user_id='u', created_at='2026-11-11 15:05:00')  # inside it: the limit of 1 is reached
+    db.add(1, job_id=7, user_id='u', created_at=_db_time(db, '-24 hours', '-5 minutes'))  # outside the window
+    db.add(2, job_id=7, user_id='u', created_at=_db_time(db, '-24 hours', '+5 minutes'))  # inside: limit reached
     db.connection.commit()
-    with _Clock(NOW):
-        reason = db._automated_submission_skip_reason(7, None, '3', 'movie', 'u')
+    reason = db._automated_submission_skip_reason(7, None, '3', 'movie', 'u')
     assert reason and 'limit' in reason.lower()
 
 
@@ -534,7 +517,6 @@ def test_rate_limit_window_ignores_rows_before_the_cutoff(db):
     db.connection.execute(
         "INSERT INTO discover_jobs (id, name, media_type, filters, schedule_type, schedule_value, "
         "max_requests_per_user, request_limit_window_hours) VALUES (7, 'j', 'movie', '{}', 'preset', 'daily', 1, 24)")
-    db.add(1, job_id=7, user_id='u', created_at='2026-11-11 14:55:00')  # only an old row
+    db.add(1, job_id=7, user_id='u', created_at=_db_time(db, '-24 hours', '-5 minutes'))  # only an old row
     db.connection.commit()
-    with _Clock(NOW):
-        assert db._automated_submission_skip_reason(7, None, '3', 'movie', 'u') is None
+    assert db._automated_submission_skip_reason(7, None, '3', 'movie', 'u') is None

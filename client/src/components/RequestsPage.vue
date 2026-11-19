@@ -342,6 +342,9 @@ export default {
       totalPages: 1,
       observer: null,
       retryTimeout: null,
+      timers: [],
+      isUnmounted: false,
+      fetchToken: 0,
       totalSourcesCount: 0,
       totalRequestsCount: 0,
       // AI Requests state
@@ -544,9 +547,7 @@ export default {
     viewMode(newMode) {
       if (newMode === 'ai-requests') return;
       this.$nextTick(() => {
-        setTimeout(() => {
-          this.initObserver();
-        }, 400);
+        this.later(() => this.initObserver(), 400);
       });
     },
 
@@ -800,13 +801,23 @@ export default {
       }
     },
 
+    // setTimeout that is skipped after unmount and cleared in beforeUnmount.
+    later(fn, ms) {
+      const id = setTimeout(() => {
+        if (!this.isUnmounted) fn();
+      }, ms);
+      this.timers.push(id);
+    },
+
     initObserver() {
+      if (this.isUnmounted) return;
       // Cleanup existing observer
       this.cleanupObserver();
 
       if (!this.hasMoreData || !this.showsLoadMoreTrigger) return;
 
       this.$nextTick(() => {
+        if (this.isUnmounted) return;
         const triggerRef = this.viewMode === 'by-content' 
           ? this.$refs.loadMoreTrigger 
           : this.$refs.loadMoreTriggerRequests;
@@ -820,9 +831,7 @@ export default {
           this.observer.observe(triggerRef);
         } else {
           // The trigger renders after the next update; try again shortly.
-          this.retryTimeout = setTimeout(() => {
-            this.initObserver();
-          }, 200);
+          this.retryTimeout = setTimeout(() => this.initObserver(), 200);
         }
       });
     },
@@ -846,10 +855,14 @@ export default {
     },
 
     async fetchRequests(page = 1) {
-      if (page > this.totalPages || this.loading) {
+      // Page 1 (first load or a filter reset) never waits for an older fetch: it takes a new
+      // token, so every response still in flight is dropped instead of landing under new filters.
+      if (page > this.totalPages || (this.loading && page !== 1)) {
         return;
       }
-      
+
+      if (page === 1) this.fetchToken += 1;
+      const token = this.fetchToken;
       this.loading = true;
       
       try {
@@ -862,7 +875,8 @@ export default {
 
         const response = await axios.get('/api/automation/requests', { params });
         const { data, total_pages, total_sources, total_requests, request_users } = response.data;
-        
+        if (token !== this.fetchToken) return;
+
         if (page === 1) {
           this.totalSourcesCount = total_sources;
           this.totalRequestsCount = total_requests;
@@ -905,17 +919,16 @@ export default {
           })),
         }));
 
-        this.sources = [...this.sources, ...newSources];
+        this.sources = page === 1 ? newSources : [...this.sources, ...newSources];
         this.totalPages = total_pages;
         this.currentPage = page;
 
         this.$nextTick(() => {
-          setTimeout(() => {
-            this.initObserver();
-          }, 150);
+          this.later(() => this.initObserver(), 150);
         });
 
       } catch (error) {
+        if (token !== this.fetchToken) return;
         console.error("Failed to fetch requests:", error);
         this.$toast.open({
           message: 'Failed to load requests',
@@ -924,7 +937,7 @@ export default {
           position: 'top-right'
         });
       } finally {
-        this.loading = false;
+        if (token === this.fetchToken) this.loading = false;
       }
     },
 
@@ -958,7 +971,7 @@ export default {
     if (PROGRESS_OPTIONS.some(option => option.value === this.$route.query.progress)) {
       this.progressFilter = this.$route.query.progress;
     }
-    setTimeout(() => {
+    this.later(() => {
       this.fetchRequests();
 
       this.$nextTick(() => {
@@ -968,6 +981,8 @@ export default {
   },
 
   beforeUnmount() {
+    this.isUnmounted = true;
+    this.timers.forEach(clearTimeout);
     this.cleanupObserver();
     this.cleanupAiObserver();
   },

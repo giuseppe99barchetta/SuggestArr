@@ -257,13 +257,13 @@ class RequestQueueMixin:
         if max_requests <= 0:
             return None
 
-        cutoff = (datetime.now(timezone.utc) - timedelta(hours=max(1, window_hours))).replace(tzinfo=None)
+        hours = max(1, window_hours)
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 f"SELECT COUNT(*) FROM pending_requests WHERE job_id={ph} "
-                f"AND COALESCE(user_id, '')={ph} AND created_at >= {ph}",
-                (job_id, '' if user_id is None else str(user_id), cutoff.strftime('%Y-%m-%d %H:%M:%S')),
+                f"AND COALESCE(user_id, '')={ph} AND created_at >= {self._db_clock_minus(hours, 'HOUR')}",
+                (job_id, '' if user_id is None else str(user_id), hours),
             )
             count = cursor.fetchone()[0]
         if count >= max_requests:
@@ -569,17 +569,33 @@ class RequestQueueMixin:
                            (job_id,))
             return cursor.fetchone() is not None
 
+    def _db_clock_minus(self, amount: int, unit: str) -> str:
+        """
+        SQL for "now minus ``amount`` ``unit``" on the database's own clock.
+
+        ``pending_requests.created_at`` is filled by CURRENT_TIMESTAMP, which on PostgreSQL
+        and MySQL is the session's local time, so the cutoff must use the same clock.
+        The expression takes one bound parameter: ``amount``.
+
+        :param amount: Number of hours or days (bound as a parameter).
+        :param unit: 'HOUR' or 'DAY'.
+        :return: SQL expression with one placeholder.
+        """
+        if self.db_type == 'sqlite':
+            return f"datetime('now', '-' || ? || ' {unit.lower()}s')"
+        if self.db_type == 'postgres':
+            return f"NOW() - (INTERVAL '1 {unit.lower()}' * %s)"
+        return f"DATE_SUB(NOW(), INTERVAL %s {unit})"
+
     def expire_pending_approvals(self, days: int) -> int:
         if days <= 0:
             return 0
-        ph = '%s' if self.db_type in ('mysql', 'mariadb', 'postgres') else '?'
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).replace(tzinfo=None)
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(f"UPDATE pending_requests SET status='rejected',decided_at=CURRENT_TIMESTAMP,"
                            f"last_error='Automatically rejected after approval timeout' "
-                           f"WHERE status='awaiting_approval' AND created_at < {ph}",
-                           (cutoff.strftime('%Y-%m-%d %H:%M:%S'),))
+                           f"WHERE status='awaiting_approval' AND created_at < {self._db_clock_minus(days, 'DAY')}",
+                           (int(days),))
             changed = cursor.rowcount
             conn.commit()
             return changed

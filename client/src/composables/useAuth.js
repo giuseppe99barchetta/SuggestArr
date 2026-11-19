@@ -151,7 +151,7 @@ export function useAuth() {
   async function logout() {
     try {
       // _skipAuth: true prevents the 401 interceptor from re-entering this path
-      await axios.post("/api/auth/logout", {}, { _skipAuth: true });
+      await axios.post("/api/auth/refresh/revoke", {}, { _skipAuth: true });
     } finally {
       setSessionFromAccessToken(null);
       authBypass.value = false;

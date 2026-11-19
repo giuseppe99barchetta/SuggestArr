@@ -111,7 +111,7 @@ class RecommendationAutomation:
     Automates the process of retrieving watched content from Jellyfin/Plex,
     finding similar content via TMDb, and requesting it via Seer.
 
-    This is similar to ContentAutomation but configured per-job with:
+    It is configured per job with:
     - Specific user IDs to monitor
     - Custom filters
     - Scheduled execution via JobManager
@@ -127,21 +127,6 @@ class RecommendationAutomation:
         self.media_handler = None
         self.env_vars: Optional[Dict[str, Any]] = None
         self.no_users_reason: Optional[str] = None
-
-    def _get_seer_discovered_tmdb_ids(self) -> set[str]:
-        """Return TMDb IDs discovered/requested directly in Seer (non-SuggestArr source)."""
-        discovered_ids: set[str] = set()
-        query = "SELECT DISTINCT tmdb_request_id FROM requests WHERE requested_by = 'Seer'"
-
-        try:
-            with self.db_manager.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(query)
-                discovered_ids = {str(row[0]) for row in cursor.fetchall()}
-        except Exception as exc:
-            self.logger.warning("Could not load Seer discovery IDs: %s", exc)
-
-        return discovered_ids
 
     @classmethod
     async def create(cls, job_id: int, dry_run: bool = False, overrides=None) -> 'RecommendationAutomation':
@@ -243,7 +228,7 @@ class RecommendationAutomation:
             {**job_filters, **normalized_filters}, self.env_vars
         )
         honor_seer_discovery = _resolve_honor_seer_discovery(job_filters, self.env_vars)
-        seer_discovered_ids = self._get_seer_discovered_tmdb_ids() if honor_seer_discovery else set()
+        seer_discovered_ids = self.db_manager.get_seer_discovered_keys() if honor_seer_discovery else set()
 
         # Watch-tracker seed / exclusion flags — job overrides env, default True.
         # Trakt and Simkl are toggled independently so a user who links both can
@@ -597,8 +582,10 @@ class RecommendationAutomation:
             f"{'[DRY RUN] ' if dry_run else ''}Starting recommendation job: {self.job_data['name']}"
         )
         exec_id = None if dry_run else (execution_id or self.repository.log_execution_start(self.job_id))
+        # A sliced run's shared history row is closed once by JobManager after the last slice.
+        record_end = not dry_run and not self.job_data.get('_defer_history')
         if self.no_users_reason:
-            if not dry_run:
+            if record_end:
                 self.repository.log_execution_end(
                     exec_id=exec_id, status='skipped', results_count=0,
                     requested_count=0, error_message=self.no_users_reason,
@@ -638,7 +625,7 @@ class RecommendationAutomation:
                 f"{requested_count} {'would be ' if dry_run else ''}requested"
             )
 
-            if not dry_run:
+            if record_end:
                 self.repository.log_execution_end(
                     exec_id=exec_id,
                     status='completed',
@@ -658,19 +645,22 @@ class RecommendationAutomation:
             self.logger.error(f"Job failed: {error_msg}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
 
-            if not dry_run and exec_id is not None:
+            # Requests queued before the failure still count: a sliced run uses this number
+            # to share its request cap, and the history should show what was sent.
+            requested_count = 0 if dry_run else getattr(self.media_handler, 'request_count', 0) or 0
+            if record_end and exec_id is not None:
                 self.repository.log_execution_end(
                     exec_id=exec_id,
                     status='failed',
-                    results_count=0,
-                    requested_count=0,
+                    results_count=requested_count,
+                    requested_count=requested_count,
                     error_message=error_msg
                 )
 
             return ExecutionResult(
                 success=False,
-                results_count=0,
-                requested_count=0,
+                results_count=requested_count,
+                requested_count=requested_count,
                 error_message=error_msg
             )
 

@@ -48,7 +48,7 @@ class BaseMediaHandler(ABC):
             use_llm: Override for LLM mode
             request_delay: Seconds to wait between consecutive requests
             honor_seer_discovery: Whether to honor Seer discovery
-            seer_discovered_ids: Set of already discovered item IDs
+            seer_discovered_ids: Set of "<media_type>:<tmdb_id>" keys requested directly in Seer
             dry_run: Whether to simulate requests
             max_total_requests: Maximum requestable items for the whole run
             trakt_augmentor: Optional MediaUserTraktAugmentor used to add Trakt

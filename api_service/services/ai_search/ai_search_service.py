@@ -265,7 +265,8 @@ class AiSearchService:
         already_requested: set = set()
         try:
             from api_service.db.database_manager import DatabaseManager  # local import avoids circular deps
-            already_requested = DatabaseManager().get_requested_tmdb_ids()
+            # Typed: a requested movie must not hide a show with the same TMDb id.
+            already_requested = DatabaseManager().get_requested_tmdb_ids_by_type(media_type)
         except Exception as exc:
             logger.warning("Could not fetch already-requested IDs: %s", exc)
 

@@ -45,7 +45,6 @@ class JellyfinHandler(BaseMediaHandler):
         )
         self.jellyfin_client = jellyfin_client
         self.selected_users = selected_users
-        self.processed_series = set()
         self._populate_existing_content_sets()
     
     def _populate_existing_content_sets(self):
@@ -136,13 +135,14 @@ class JellyfinHandler(BaseMediaHandler):
         _user_data = item.get('UserData') or {}
         for val in (_user_data.get('LastPlayedDate'), item.get('DatePlayed'),
                     item.get('DateCreated'), item.get('PremiereDate')):
-            if val:
-                try:
-                    from datetime import datetime as dt
-                    date = int(dt.fromisoformat(str(val).replace('Z', '+00:00')).timestamp())
-                except (ValueError, TypeError):
-                    pass
-                break
+            if not val:
+                continue
+            try:
+                from datetime import datetime as dt
+                date = int(dt.fromisoformat(str(val).replace('Z', '+00:00')).timestamp())
+            except (ValueError, TypeError):
+                continue
+            break
 
         source_obj = None
         try:
@@ -234,72 +234,6 @@ class JellyfinHandler(BaseMediaHandler):
         """Request a single LLM recommendation via Jellyfin."""
         await self.request_similar_media([media], item_type, 1, source_obj, user)
 
-    async def process_item(self, user, item, is_anime=False):
-        """Process an individual item (movie or TV show episode)."""
-        self.logger.debug(f"Processing item: {item}")
-        item_type = item['Type'].lower()
-        if item_type == 'movie' and self.max_similar_movie > 0:
-            await self.process_movie(user, item, is_anime)
-        elif item_type == 'episode' and self.max_similar_tv > 0:
-            await self.process_episode(user, item, is_anime)
-
-    async def process_movie(self, user, item, is_anime=False):
-        provider_ids = item.get("ProviderIds", {})
-        source_tmdb_id = provider_ids.get("Tmdb")
-
-        if not source_tmdb_id:
-            self.logger.debug("Movie skipped: no TMDb ID")
-            return
-
-        source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmdb_id, 'movie')
-        if not source_tmdb_obj:
-            self.logger.warning(f"Movie skipped: failed to fetch TMDb metadata for ID {source_tmdb_id}")
-            return
-        similar_movies = await self.tmdb_client.find_similar_movies(source_tmdb_id, dry_run=self.dry_run)
-
-        await self.request_similar_media(
-            similar_movies,
-            'movie',
-            self.max_similar_movie,
-            source_tmdb_obj,
-            user,
-            is_anime
-        )
-
-    async def process_episode(self, user, item, is_anime=False):
-        series_id = item.get("SeriesId")
-
-        if not series_id or series_id in self.processed_series:
-            return
-
-        self.processed_series.add(series_id)
-
-        provider_ids = item.get("SeriesProviderIds") or {}
-        source_tmdb_id = provider_ids.get("Tmdb")
-
-        if not source_tmdb_id:
-            provider_ids = await self.jellyfin_client.get_series_provider_ids(series_id)
-            source_tmdb_id = provider_ids.get("Tmdb")
-
-        if not source_tmdb_id:
-            self.logger.debug("Series skipped: no TMDb ID")
-            return
-
-        source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmdb_id, 'tv')
-        if not source_tmdb_obj:
-            self.logger.warning(f"Series skipped: failed to fetch TMDb metadata for ID {source_tmdb_id}")
-            return
-        similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmdb_id, dry_run=self.dry_run)
-
-        await self.request_similar_media(
-            similar_tvshows,
-            'tv',
-            self.max_similar_tv,
-            source_tmdb_obj,
-            user,
-            is_anime
-        )
-
     async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj, user, is_anime=False):
         """Request similar media (movie/TV show) via the Seer service."""
         self.logger.debug(f"Requesting {max_items} similar media (anime={is_anime})")
@@ -334,7 +268,7 @@ class JellyfinHandler(BaseMediaHandler):
                 already_downloaded = await self.seer_client.check_already_downloaded(media_id, media_type, self.existing_content_sets)
                 excluded_by_discovery = (
                     self.honor_seer_discovery
-                    and str(media_id) in self.seer_discovered_ids
+                    and f"{media_type}:{media_id}" in self.seer_discovered_ids
                 )
                 in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
 
@@ -449,7 +383,7 @@ class JellyfinHandler(BaseMediaHandler):
                 self.logger.debug(f"Skipping [{media_type}, {media_title}]: already downloaded (local set check).")
                 continue
 
-            if self.honor_seer_discovery and media_id in self.seer_discovered_ids:
+            if self.honor_seer_discovery and f"{media_type}:{media_id}" in self.seer_discovered_ids:
                 self.logger.debug(
                     "Skipping [%s, %s]: already discovered/requested in Seer.",
                     media_type,

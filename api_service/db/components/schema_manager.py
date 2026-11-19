@@ -86,7 +86,7 @@ class SchemaManager:
             """,
             'requests': """
                 CREATE TABLE IF NOT EXISTS requests (
-                    tmdb_request_id TEXT NOT NULL PRIMARY KEY,
+                    tmdb_request_id TEXT NOT NULL,
                     media_type TEXT NOT NULL,
                     tmdb_source_id TEXT,
                     source_origin TEXT,
@@ -94,13 +94,14 @@ class SchemaManager:
                     requested_by TEXT,
                     user_id TEXT,
                     rationale TEXT,
+                    PRIMARY KEY (media_type, tmdb_request_id),
                     UNIQUE(media_type, tmdb_request_id, tmdb_source_id),
                     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
                 )
             """,
             'metadata': """
                 CREATE TABLE IF NOT EXISTS metadata (
-                    media_id TEXT PRIMARY KEY,
+                    media_id TEXT NOT NULL,
                     media_type TEXT NOT NULL,
                     title TEXT,
                     overview TEXT,
@@ -112,6 +113,7 @@ class SchemaManager:
                     genre_ids TEXT,
                     logo_path TEXT,
                     backdrop_path TEXT,
+                    PRIMARY KEY (media_id, media_type),
                     UNIQUE(media_id, media_type)
                 )
             """,
@@ -594,6 +596,7 @@ class SchemaManager:
 
         # Add missing columns
         self.add_missing_columns()
+        self._migrate_composite_media_keys()
         from api_service.db.recap_repository import initialize_recap_schema
         initialize_recap_schema(self._database)
         self._migrate_execution_history()
@@ -609,6 +612,142 @@ class SchemaManager:
 
         # Create submission lock table (separate to control column types per DB engine)
         self._create_submission_locks_table()
+
+    # Tables whose primary key was the bare TMDb id, so a movie and a show with the same id
+    # could not both be stored. Value: (new primary key columns, MySQL sizes for those columns,
+    # table constraints the SQLite rebuild must keep besides the primary key).
+    _COMPOSITE_MEDIA_KEYS = {
+        'requests': (
+            ('media_type', 'tmdb_request_id'),
+            {'media_type': 'VARCHAR(16)', 'tmdb_request_id': 'VARCHAR(32)'},
+            ('UNIQUE(media_type, tmdb_request_id, tmdb_source_id)',
+             'FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE'),
+        ),
+        'metadata': (
+            ('media_id', 'media_type'),
+            {'media_id': 'VARCHAR(32)', 'media_type': 'VARCHAR(16)'},
+            ('UNIQUE(media_id, media_type)',),
+        ),
+    }
+
+    def _migrate_composite_media_keys(self):
+        """
+        Give ``requests`` and ``metadata`` a (media type, TMDb id) primary key.
+
+        Idempotent: a table whose primary key already has the new columns is left alone.
+        SQLite cannot alter a primary key, so the table is rebuilt in one transaction;
+        PostgreSQL and MySQL swap the key in place.
+
+        Raises:
+            DatabaseError: When the migration fails (the transaction is rolled back).
+        """
+        for table, (key, mysql_sizes, constraints) in self._COMPOSITE_MEDIA_KEYS.items():
+            try:
+                with self.get_connection() as conn:
+                    cursor = conn.cursor()
+                    if set(self._primary_key_columns(cursor, table)) == set(key):
+                        continue
+                    self.logger.info("Migrating %s to a (%s) primary key...", table, ", ".join(key))
+                    try:
+                        if self.db_type == 'sqlite':
+                            self._rebuild_sqlite_table_with_key(cursor, table, key, constraints)
+                        elif self.db_type == 'postgres':
+                            cursor.execute(
+                                "SELECT constraint_name FROM information_schema.table_constraints "
+                                "WHERE table_name = %s AND table_schema = current_schema() "
+                                "AND constraint_type = 'PRIMARY KEY'",
+                                (table,),
+                            )
+                            for (name,) in cursor.fetchall():
+                                cursor.execute(f'ALTER TABLE {table} DROP CONSTRAINT "{name}"')
+                            cursor.execute(f"ALTER TABLE {table} ADD PRIMARY KEY ({', '.join(key)})")
+                        else:
+                            cursor.execute(self._mysql_composite_key_alter(cursor, table, key, mysql_sizes))
+                        conn.commit()
+                    except Exception:
+                        conn.rollback()
+                        raise
+            except Exception as exc:
+                raise DatabaseError(error=f"{table} primary key migration failed: {exc}", db_type=self.db_type) from exc
+
+    def _primary_key_columns(self, cursor, table):
+        """Return the primary key columns of ``table``, in key order."""
+        if self.db_type == 'sqlite':
+            cursor.execute(f'PRAGMA table_info({table})')
+            return [row[1] for row in sorted(cursor.fetchall(), key=lambda row: row[5]) if row[5]]
+        if self.db_type == 'postgres':
+            cursor.execute(
+                "SELECT kcu.column_name FROM information_schema.table_constraints tc "
+                "JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name "
+                "AND kcu.table_schema = tc.table_schema AND kcu.table_name = tc.table_name "
+                "WHERE tc.table_name = %s AND tc.table_schema = current_schema() "
+                "AND tc.constraint_type = 'PRIMARY KEY' ORDER BY kcu.ordinal_position",
+                (table,),
+            )
+            return [row[0] for row in cursor.fetchall()]
+        cursor.execute(f"SHOW KEYS FROM {table} WHERE Key_name = 'PRIMARY'")
+        return [row[4] for row in sorted(cursor.fetchall(), key=lambda row: row[3])]
+
+    def _rebuild_sqlite_table_with_key(self, cursor, table, key, constraints):
+        """
+        Recreate a SQLite table with a new primary key, keeping every column and row.
+
+        Columns come from the live table (``PRAGMA table_info``), so columns added by later
+        migrations survive. Only explicit indexes are recreated: the ``sqlite_autoindex_*``
+        ones have no SQL and come back from the new table's own constraints.
+        """
+        cursor.execute(f'PRAGMA table_info({table})')
+        columns = cursor.fetchall()
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL",
+                       (table,))
+        indexes = [row[0] for row in cursor.fetchall()]
+
+        definitions = []
+        for _cid, name, kind, notnull, default, _pk in columns:
+            column = f'"{name}" {kind}'.rstrip()
+            if notnull or name in key:
+                column += ' NOT NULL'
+            if default is not None:
+                column += f' DEFAULT {default}'
+            definitions.append(column)
+        definitions.append(f"PRIMARY KEY ({', '.join(key)})")
+        definitions.extend(constraints)
+        names = ', '.join(f'"{column[1]}"' for column in columns)
+
+        cursor.execute('BEGIN')
+        cursor.execute(f"CREATE TABLE {table}__new ({', '.join(definitions)})")
+        cursor.execute(f"INSERT INTO {table}__new ({names}) SELECT {names} FROM {table}")
+        cursor.execute(f"DROP TABLE {table}")
+        cursor.execute(f"ALTER TABLE {table}__new RENAME TO {table}")
+        for index_sql in indexes:
+            cursor.execute(index_sql)
+
+    def _mysql_composite_key_alter(self, cursor, table, key, sizes):
+        """
+        Build the single ALTER TABLE that moves a MySQL table to the new primary key.
+
+        The key columns shrink to ``sizes`` so the key fits InnoDB's 3072-byte limit. Any
+        other index on those columns is dropped and re-added in the same statement, without
+        a prefix on the shrunk columns: MySQL rejects a prefix longer than its column.
+        """
+        cursor.execute(f"SHOW INDEX FROM {table}")
+        indexes = {}
+        for row in sorted(cursor.fetchall(), key=lambda row: (row[2], row[3])):
+            non_unique, name, column, sub_part = row[1], row[2], row[4], row[7]
+            if name != 'PRIMARY':
+                indexes.setdefault(name, (non_unique, []))[1].append((column, sub_part))
+        clauses = [f"MODIFY {column} {size} NOT NULL" for column, size in sizes.items()]
+        readd = []
+        for name, (non_unique, parts) in indexes.items():
+            if not any(column in sizes for column, _ in parts):
+                continue
+            clauses.append(f"DROP INDEX {name}")
+            columns = ', '.join(column if column in sizes or not sub_part else f"{column}({sub_part})"
+                                for column, sub_part in parts)
+            kind = 'KEY' if int(non_unique) else 'UNIQUE KEY'
+            readd.append(f"ADD {kind} {name} ({columns})")
+        clauses += ["DROP PRIMARY KEY", f"ADD PRIMARY KEY ({', '.join(key)})"] + readd
+        return f"ALTER TABLE {table} " + ', '.join(clauses)
 
     def _create_api_key_indexes(self):
         """Create API-key lookup indexes after the table exists."""
@@ -860,15 +999,20 @@ class SchemaManager:
         if db_type in ['mysql', 'mariadb']:
             # Keep full VARCHAR storage but constrain indexed prefixes to stay
             # under InnoDB's key-length limit when using utf8mb4.
+            # The (type, id) primary keys need sized columns: two VARCHAR(512) would be 4096 bytes.
             if table_name == 'requests':
+                query = query.replace("tmdb_request_id TEXT NOT NULL,", "tmdb_request_id VARCHAR(32) NOT NULL,")
+                query = query.replace("media_type TEXT NOT NULL,", "media_type VARCHAR(16) NOT NULL,", 1)
                 query = query.replace(
                     "UNIQUE(media_type, tmdb_request_id, tmdb_source_id),",
-                    "UNIQUE KEY uniq_requests_identity (media_type(191), tmdb_request_id(191), tmdb_source_id(191)),"
+                    "UNIQUE KEY uniq_requests_identity (media_type, tmdb_request_id, tmdb_source_id(191)),"
                 )
             elif table_name == 'metadata':
+                query = query.replace("media_id TEXT NOT NULL,", "media_id VARCHAR(32) NOT NULL,")
+                query = query.replace("media_type TEXT NOT NULL,", "media_type VARCHAR(16) NOT NULL,", 1)
                 query = query.replace(
                     "UNIQUE(media_id, media_type)",
-                    "UNIQUE KEY uniq_metadata_media_type (media_id(191), media_type(191))"
+                    "UNIQUE KEY uniq_metadata_media_type (media_id, media_type)"
                 )
             elif table_name == 'pending_requests':
                 query = query.replace(

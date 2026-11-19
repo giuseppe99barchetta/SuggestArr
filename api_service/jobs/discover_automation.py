@@ -17,6 +17,9 @@ from api_service.utils.clients import build_request_client
 from api_service.services.request_sources import DISCOVER_SOURCE
 from api_service.services.tmdb.tmdb_discover import TMDbDiscover
 
+# Candidates a discover or Trakt run may inspect, whatever max_results is (see fetch_discover_results).
+DISCOVER_SCAN_BUDGET = 100
+
 
 @dataclass
 class ExecutionResult:
@@ -208,10 +211,12 @@ class DiscoverAutomation:
         normalized_filters = normalize_filters(raw_filters)
         filters = {**raw_filters, **normalized_filters}
         media_type = self.job_data.get('media_type', 'movie')
-        max_results = self.job_data.get('max_results', 20)
-        if self.job_data.get('_replacement_for') is not None:
-            # shortcut: scan at most 100 candidates; paginate if searches often exhaust.
-            max_results = 100
+        # Scan past titles that are already requested or owned: the request cap
+        # (max_results) is applied in filter_and_request, not here.
+        # shortcut: scan at most 100 candidates (5 TMDb pages; with IMDb filtering, up to 100 OMDb
+        # lookups). Once a filter's top 100 are all requested or owned, the job finds nothing new;
+        # store a page cursor per job if that happens often.
+        scan_budget = DISCOVER_SCAN_BUDGET
 
         raw_language_filter = normalized_filters.get('language') or filters.get('with_original_language')
         normalized_language_filter = self.tmdb_discover._normalize_language_code(raw_language_filter)
@@ -226,9 +231,9 @@ class DiscoverAutomation:
         self.logger.debug(f"Fetching {media_type} with filters: {filters}")
 
         if media_type == 'movie':
-            return await self.tmdb_discover.discover_movies(filters, max_results)
+            return await self.tmdb_discover.discover_movies(filters, scan_budget)
         else:
-            return await self.tmdb_discover.discover_tv(filters, max_results)
+            return await self.tmdb_discover.discover_tv(filters, scan_budget)
 
     async def filter_and_request(
         self, results: List[Dict[str, Any]], dry_run: bool = False
@@ -247,9 +252,10 @@ class DiscoverAutomation:
         requested_count = 0
         dry_run_items: Optional[List[Dict[str, Any]]] = [] if dry_run else None
         media_type = self.job_data.get('media_type', 'movie')
+        cap = 1 if self.job_data.get('_replacement_for') is not None else int(self.job_data.get('max_results') or 20)
 
         for item in results:
-            if self.job_data.get('_replacement_for') is not None and requested_count >= 1:
+            if requested_count >= cap:
                 break
             tmdb_id = item['id']
             title = item.get('title', 'Unknown')
@@ -330,30 +336,6 @@ class DiscoverAutomation:
             'overview': item.get('overview'),
         }
 
-    async def _save_metadata(self, item: Dict[str, Any], media_type: str) -> None:
-        """
-        Save metadata for a content item.
-
-        Args:
-            item: Content item dictionary.
-            media_type: 'movie' or 'tv'.
-        """
-        try:
-            metadata = {
-                'id': item['id'],
-                'title': item.get('title', 'Unknown'),
-                'overview': item.get('overview', ''),
-                'release_date': item.get('release_date'),
-                'poster_path': item.get('poster_path', ''),
-                'rating': item.get('rating'),
-                'votes': item.get('votes'),
-                'origin_country': item.get('origin_country', []),
-                'genre_ids': item.get('genre_ids', []),
-                'backdrop_path': item.get('backdrop_path', ''),
-            }
-            self.db_manager.save_metadata(metadata, media_type)
-        except Exception as e:
-            self.logger.warning(f"Failed to save metadata for {item.get('title')}: {str(e)}")
 
 
 async def execute_discover_job(job_id: int, execution_id=None, *, overrides=None) -> ExecutionResult:

@@ -395,3 +395,98 @@ def test_public_api_returns_409_for_a_running_job_without_creating_a_run():
     assert response.status_code == 409 and response.get_json()['error']['code'] == 'job_running'
     manager.repository.create_queued_execution.assert_not_called()
     manager.release(1)
+
+
+# --- per-user slices -------------------------------------------------------------------------------
+
+def _sliced_manager(results, max_results=3):
+    """A recommendation job split into two user slices; ``results`` is one result per slice."""
+    job = {'id': 1, 'name': 'Rec', 'job_type': 'recommendation', 'prevent_suggestions_if_unwatched': 1,
+           'max_results': max_results}
+    executor = AsyncMock(side_effect=[SimpleNamespace(error_message=None, results_count=n, **r)
+                                      for n, r in results])
+    manager = make_manager(job, executor=executor)
+    manager._job_executors['recommendation'] = executor
+    return manager, executor
+
+
+def _run_sliced(manager, **kwargs):
+    slices = [{'media_type': 'movie', 'user_ids': ['a']}, {'media_type': 'movie', 'user_ids': ['b']}]
+    with patch('api_service.jobs.unwatched_suggestion_gate.UnwatchedSuggestionGate') as gate:
+        gate.return_value.allowed_slices = AsyncMock(return_value=slices)
+        return run(manager, **kwargs)
+
+
+def test_slices_share_one_request_cap():
+    manager, executor = _sliced_manager([(2, {'success': True, 'requested_count': 2}),
+                                         (1, {'success': True, 'requested_count': 1})])
+    report, _ = _run_sliced(manager)
+    assert report['requested_count'] == 3
+    assert [call.args[1]['max_results'] for call in executor.await_args_list] == [3, 1]
+
+
+def test_a_slice_that_uses_the_whole_cap_stops_the_next_ones():
+    manager, executor = _sliced_manager([(3, {'success': True, 'requested_count': 3})])
+    report, _ = _run_sliced(manager)
+    assert report['requested_count'] == 3 and executor.await_count == 1
+
+
+def test_api_sliced_run_keeps_the_row_open_and_closes_it_once():
+    manager, executor = _sliced_manager([(0, {'success': False, 'requested_count': 0}),
+                                         (1, {'success': True, 'requested_count': 1})])
+    manager._job_executors['recommendation'] = executor
+    first = SimpleNamespace(success=False, results_count=0, requested_count=0, error_message='Plex down')
+    second = SimpleNamespace(success=True, results_count=1, requested_count=1, error_message=None)
+
+    async def slice_run(job_id, overrides, execution_id=None):
+        assert overrides['_defer_history'] is True and execution_id == 55
+        manager.repository.log_execution_end.assert_not_called()  # still running between slices
+        return first if executor.await_count == 1 else second
+    executor.side_effect = slice_run
+
+    report, _ = _run_sliced(manager, execution_id=55)
+
+    assert report['status'] == 'failed'
+    manager.repository.log_execution_end.assert_called_once_with(
+        exec_id=55, status='failed', results_count=1, requested_count=1, error_message='Plex down')
+
+
+@pytest.mark.parametrize('defer', [True, False])
+def test_recommendation_run_leaves_the_shared_row_to_the_manager_when_deferred(defer):
+    from api_service.jobs.recommendation_automation import RecommendationAutomation
+    automation = object.__new__(RecommendationAutomation)
+    automation.job_id = 1
+    automation.job_data = {'name': 'Rec', '_defer_history': defer}
+    automation.logger = MagicMock()
+    automation.repository = MagicMock()
+    automation.no_users_reason = None
+    automation.media_handler = SimpleNamespace(add_available_content=AsyncMock(),
+                                               process_recent_items=AsyncMock(), request_count=2)
+
+    result = asyncio.run(automation.run(execution_id=55))
+
+    assert result.success is True and result.requested_count == 2
+    assert automation.repository.log_execution_end.called is (not defer)
+
+
+def test_a_failed_recommendation_run_still_reports_what_it_queued():
+    """A slice that queues 2 requests and then fails must count them, or the next slice exceeds the cap."""
+    from api_service.jobs.recommendation_automation import RecommendationAutomation
+    automation = object.__new__(RecommendationAutomation)
+    automation.job_id = 1
+    automation.job_data = {'name': 'Rec', '_defer_history': True}
+    automation.logger = MagicMock()
+    automation.repository = MagicMock()
+    automation.no_users_reason = None
+    handler = SimpleNamespace(add_available_content=AsyncMock(), request_count=0)
+
+    async def queue_two_then_fail():
+        handler.request_count = 2
+        raise RuntimeError('Plex went away')
+    handler.process_recent_items = queue_two_then_fail
+    automation.media_handler = handler
+
+    result = asyncio.run(automation.run(execution_id=55))
+
+    assert result.success is False and result.requested_count == 2
+    automation.repository.log_execution_end.assert_not_called()

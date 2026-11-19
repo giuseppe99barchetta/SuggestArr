@@ -326,8 +326,29 @@ class JobManager:
                 if slices is None:
                     absorb(loop.run_until_complete(executor(job_id, execution_id=execution_id) if execution_id is not None else executor(job_id)))
                 else:
+                    # One request cap for the whole run, shared first come, first served across
+                    # slices, as BaseHandler shares it across users in a non-sliced run.
+                    # An empty or zero max_results means no cap, as in BaseHandler.
+                    cap = int(job_data.get('max_results') or 0)
                     for overrides in slices:
+                        overrides = dict(overrides)
+                        if cap > 0:
+                            remaining = cap - report['requested_count']
+                            if remaining <= 0:
+                                break
+                            overrides['max_results'] = remaining
+                        if execution_id is not None:
+                            overrides['_defer_history'] = True
                         absorb(loop.run_until_complete(executor(job_id, overrides, execution_id=execution_id) if execution_id is not None else executor(job_id, overrides)))
+                    if execution_id is not None:
+                        # Slices left the shared row running; close it once with the summed result.
+                        self.repository.log_execution_end(
+                            exec_id=execution_id,
+                            status='completed' if report['success'] else 'failed',
+                            results_count=report['results_count'],
+                            requested_count=report['requested_count'],
+                            error_message=None if report['success'] else (report['error_message'] or 'Job execution failed'),
+                        )
             finally:
                 close_event_loop(loop, self.logger)
 

@@ -214,3 +214,58 @@ def test_preview_survives_localization_setup_failure(monkeypatch, path):
 
     assert response.status_code == 200
     assert response.get_json()["items"] == [_preview_item()]
+
+
+@pytest.mark.parametrize("schedule_type,schedule_value", [
+    ("cron", "0 0 * *"),
+    ("preset", "fortnightly"),
+    ("preset", None),
+    ("cron", 5),
+    ("preset", []),
+])
+def test_update_job_rejects_invalid_schedule(monkeypatch, schedule_type, schedule_value):
+    """An invalid schedule is refused before saving; saving it would silently unschedule the job."""
+    existing = {"id": 1, "job_type": "discover", "owner_id": 1, "media_type": "movie", "user_ids": [],
+                "schedule_type": "preset", "schedule_value": "daily"}
+    client, repository = _make_client(monkeypatch, existing_job=existing)
+
+    response = client.put("/api/jobs/1", json={"schedule_type": schedule_type, "schedule_value": schedule_value})
+
+    assert response.status_code == 400
+    repository.update_job.assert_not_called()
+
+
+def test_update_job_checks_new_value_against_stored_type(monkeypatch):
+    existing = {"id": 1, "job_type": "discover", "owner_id": 1, "media_type": "movie", "user_ids": [],
+                "schedule_type": "cron", "schedule_value": "0 0 * * *"}
+    client, repository = _make_client(monkeypatch, existing_job=existing)
+
+    assert client.put("/api/jobs/1", json={"schedule_value": "daily"}).status_code == 400
+    repository.update_job.assert_not_called()
+    repository.update_job.reset_mock()
+    client.put("/api/jobs/1", json={"schedule_value": "30 4 * * 1"})
+    repository.update_job.assert_called_once()
+
+
+@pytest.mark.parametrize("schedule_value", ["0 0 * *", None, 5])
+def test_create_job_rejects_invalid_schedule(monkeypatch, schedule_value):
+    client, repository = _make_client(monkeypatch)
+
+    response = client.post("/api/jobs", json={
+        "name": "Bad schedule", "media_type": "movie", "filters": {},
+        "schedule_type": "cron", "schedule_value": schedule_value,
+    })
+
+    assert response.status_code == 400
+    repository.create_job.assert_not_called()
+
+
+@pytest.mark.parametrize("raw,expected", [("-1", 1), ("100000000", 500), ("20", 20), ("abc", 100)])
+def test_history_limit_is_clamped(monkeypatch, raw, expected):
+    client, repository = _make_client(monkeypatch)
+    repository.get_recent_history.return_value = []
+
+    response = client.get(f"/api/jobs/history?limit={raw}")
+
+    assert response.status_code == 200
+    repository.get_recent_history.assert_called_once_with(expected, owner_id=None)

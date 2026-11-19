@@ -66,7 +66,8 @@ PUBLIC_ROUTES: frozenset[str] = frozenset({
     "/api/health/live",     # Docker / reverse-proxy liveness probe — must
                             # always respond even during startup/shutdown.
     "/api/auth/login",      # Credential exchange endpoint.
-    "/api/auth/refresh",    # Token renewal via httpOnly cookie.
+    "/api/auth/refresh",    # Token renewal via httpOnly cookie; also covers
+                            # /api/auth/refresh/revoke (logout under the cookie path).
     "/api/auth/setup",      # First-run admin creation (guarded internally
                             # by user-count check — see auth blueprint).
     "/api/auth/status",     # Read-only setup state for frontend routing

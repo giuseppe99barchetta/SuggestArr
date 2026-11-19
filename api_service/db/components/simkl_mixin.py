@@ -451,16 +451,6 @@ class SimklMixin:
             "access_token": row[0], "refresh_token": row[1], "expires_at": row[2],
         }
 
-    def delete_simkl_oauth_tokens(self, link_id: int) -> bool:
-        ph = self._ph()
-        query = f"DELETE FROM simkl_oauth_tokens WHERE link_id = {ph}"
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(query, (link_id,))
-            deleted = cursor.rowcount
-            conn.commit()
-        return deleted > 0
-
     # ---- simkl_sources --------------------------------------------------------
 
     def upsert_simkl_source(

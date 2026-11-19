@@ -165,6 +165,8 @@ Use this page to create, preview, run, enable, or disable automated recommendati
 
 Jobs can also pause automatically while Seer has pending requests awaiting approval or denial.
 
+A job's request limit counts new requests only. Discover and Trakt Recommendation jobs skip titles that are already requested or in your library and keep looking, up to 100 candidates per run. Once all 100 top matches of a job's filters have been requested, that job finds nothing new until you change its filters. When a job runs separately per user (because of **Pause if suggestions remain unwatched**), the limit covers the whole run, not each user.
+
 ![SuggestArr jobs](assets/screenshots/jobs.png)
 
 ### Database

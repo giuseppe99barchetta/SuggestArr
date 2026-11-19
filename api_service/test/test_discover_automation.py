@@ -47,6 +47,29 @@ class TestDiscoverLibraryExclusion(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(requested_count, 1)
         self.assertEqual([item['tmdb_id'] for item in dry_run_items], [155])
 
+    async def test_already_requested_titles_do_not_use_up_max_results(self):
+        """Day 2 of a job must not stop at the titles day 1 already requested."""
+        automation = _automation()
+        automation.job_data['max_results'] = 2
+        automation.db_manager.check_request_exists.side_effect = lambda media_type, tmdb_id: tmdb_id in {'1', '2'}
+        results = [{'id': i, 'title': str(i)} for i in range(1, 7)]
+
+        requested_count, _ = await automation.filter_and_request(results)
+
+        self.assertEqual(requested_count, 2)
+        self.assertEqual([c.args[1]['id'] for c in automation.seer_client.request_media.await_args_list], [3, 4])
+
+    async def test_fetch_scans_the_whole_budget(self):
+        automation = _automation()
+        automation.job_data.update(max_results=5, filters={})
+        automation.tmdb_discover = MagicMock()
+        automation.tmdb_discover._normalize_language_code.return_value = None
+        automation.tmdb_discover.discover_movies = AsyncMock(return_value=[])
+
+        await automation.fetch_discover_results()
+
+        self.assertEqual(automation.tmdb_discover.discover_movies.await_args.args[1], 100)
+
     async def test_run_loads_library_content_before_filtering(self):
         automation = _automation()
         automation.env_vars = {'SELECTED_SERVICE': 'jellyfin'}

@@ -67,7 +67,7 @@ test('a 401 on a token that has not expired still ends the session cleanly when 
       refreshCalls += 1;
       return respond(config, 401);
     }
-    if (config.url === '/api/auth/logout') return respond(config, 200);
+    if (config.url === '/api/auth/refresh/revoke') return respond(config, 200);
     return respond(config, 401);
   };
   await assert.rejects(axios.get('/api/data'));

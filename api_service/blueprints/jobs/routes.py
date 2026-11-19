@@ -133,6 +133,44 @@ def _foreign_user_ids_error(job_type, user_ids, current_user, require_link=False
     return None
 
 
+def _history_limit(default: int) -> int:
+    """
+    Read the ``limit`` query parameter for history lists, clamped to 1..500.
+
+    A negative LIMIT means "no limit" on SQLite and is an error on PostgreSQL/MySQL.
+
+    Args:
+        default: Value used when the parameter is missing or not a number.
+
+    Returns:
+        int: The clamped limit.
+    """
+    return min(max(request.args.get('limit', default, type=int), 1), 500)
+
+
+def _schedule_error(schedule_type, schedule_value):
+    """
+    Check that a schedule can be turned into a trigger before it is saved.
+
+    An invalid schedule must be refused here: ``JobManager.schedule_job`` removes
+    the old trigger before it parses the new one, so saving it would silently stop the job.
+
+    Args:
+        schedule_type: 'preset' or 'cron'.
+        schedule_value: Preset name or cron expression.
+
+    Returns:
+        str | None: An error message, or None when the schedule is valid.
+    """
+    if schedule_type not in ('preset', 'cron'):
+        return 'schedule_type must be "preset" or "cron"'
+    if not isinstance(schedule_value, str) or not schedule_value.strip():
+        return 'schedule_value must be a non-empty string'
+    if JobManager.get_instance()._create_trigger(schedule_type, schedule_value) is None:
+        return 'Invalid schedule'
+    return None
+
+
 def get_job_manager() -> JobManager:
     """
     Get the JobManager instance and ensure it's configured.
@@ -558,12 +596,9 @@ def create_job():
         if scope_error:
             return jsonify({'status': 'error', 'message': scope_error[0]}), scope_error[1]
 
-        # Validate schedule_type
-        if data['schedule_type'] not in ['preset', 'cron']:
-            return jsonify({
-                'status': 'error',
-                'message': 'schedule_type must be "preset" or "cron"'
-            }), 400
+        schedule_error = _schedule_error(data['schedule_type'], data['schedule_value'])
+        if schedule_error:
+            return jsonify({'status': 'error', 'message': schedule_error}), 400
 
         # Create job
         repository = JobRepository()
@@ -681,12 +716,13 @@ def update_job(job_id: int):
         if scope_error:
             return jsonify({'status': 'error', 'message': scope_error[0]}), scope_error[1]
 
-        # Validate schedule_type if provided
-        if 'schedule_type' in data and data['schedule_type'] not in ['preset', 'cron']:
-            return jsonify({
-                'status': 'error',
-                'message': 'schedule_type must be "preset" or "cron"'
-            }), 400
+        if 'schedule_type' in data or 'schedule_value' in data:
+            schedule_error = _schedule_error(
+                data.get('schedule_type', existing.get('schedule_type')),
+                data.get('schedule_value', existing.get('schedule_value')),
+            )
+            if schedule_error:
+                return jsonify({'status': 'error', 'message': schedule_error}), 400
 
         # Update job
         updated = repository.update_job(job_id, data)
@@ -1065,7 +1101,7 @@ def get_job_history(job_id: int):
             if job.get('owner_id') != user_id:
                 return jsonify({'status': 'error', 'message': 'Job not found'}), 404
 
-        limit = request.args.get('limit', 50, type=int)
+        limit = _history_limit(50)
         history = repository.get_job_history(job_id, limit)
 
         return jsonify({
@@ -1092,21 +1128,12 @@ def get_all_history():
     """
     try:
         repository = JobRepository()
-        limit = request.args.get('limit', 100, type=int)
-        history = repository.get_recent_history(limit)
-
+        limit = _history_limit(100)
         current_user = getattr(g, 'current_user', None)
+        owner_id = None
         if current_user and current_user.get('role') != 'admin':
-            user_id = int(current_user['id'])
-            owned_job_ids = {
-                job['id']
-                for job in repository.get_all_jobs()
-                if job.get('owner_id') == user_id
-            }
-            history = [
-                item for item in history
-                if item.get('job_id') in owned_job_ids
-            ]
+            owner_id = int(current_user['id'])
+        history = repository.get_recent_history(limit, owner_id=owner_id)
 
         return jsonify({'status': 'success', 'history': history}), 200
 

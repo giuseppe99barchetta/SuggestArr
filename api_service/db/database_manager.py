@@ -164,12 +164,6 @@ class DatabaseManager(IntegrationMixin, RequestMixin, MetadataMixin, RequestQueu
         """Initialize and migrate the configured database schema."""
         return SchemaManager(self).initialize_db()
 
-    def ensure_connection(self):
-        """Legacy method - now handled by connection pool."""
-        # This method is kept for backward compatibility
-        # Connection pooling handles connection management automatically
-        pass
-    
     def test_connection(self, db_config: Dict[str, Any]) -> Dict[str, str]:
         """Test database connection based on provided db_config."""
         

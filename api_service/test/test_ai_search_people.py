@@ -296,7 +296,6 @@ class FakePeopleDb:
         self.identities = identities or {}
         self.negatives = negatives or {}
 
-    def get_requested_tmdb_ids(self): return set()
     def get_ai_dislike_ids(self, media_type): return []
     def get_ai_likes(self, media_type): raise AssertionError('legacy likes belong to no one in a people search')
     def get_ai_dislikes(self, media_type): return []

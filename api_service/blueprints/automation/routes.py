@@ -1,14 +1,10 @@
-import asyncio
-import threading
 from flask import Blueprint, jsonify, request, g
 from api_service.auth.limiter import limiter
 from api_service.auth.middleware import require_role
-from api_service.automate_process import ContentAutomation
 from api_service.config.config import load_env_vars
 from api_service.config.logger_manager import LoggerManager
 from api_service.db.components.suggestion_feedback_mixin import FEEDBACK_REASONS, FEEDBACK_VALUES
 from api_service.db.database_manager import DatabaseManager
-from api_service.utils.asyncio_loop import close_event_loop
 from api_service.utils.request_profiles import (
     validate_request_profiles,
     validate_request_profiles_with_arr,
@@ -25,8 +21,6 @@ from api_service.utils.asyncio_loop import run_coroutine_sync
 logger = LoggerManager().get_logger("AutomationRoute")
 automation_bp = Blueprint('automation', __name__)
 
-_force_run_lock = threading.Lock()
-_force_run_running = False
 _FEEDBACK_VALUES = FEEDBACK_VALUES
 _FEEDBACK_REASONS = FEEDBACK_REASONS
 
@@ -415,41 +409,6 @@ def clear_sent_request_feedback(media_type, tmdb_id):
     removed = db.clear_media_feedback(int(g.current_user['id']), media_user_id, tmdb_id, media_type)
     return jsonify({'status': 'success', 'removed': removed}), 200
 
-
-def _run_automation_in_background():
-    """Run the automation in a dedicated thread with its own event loop."""
-    global _force_run_running
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        content_automation = loop.run_until_complete(ContentAutomation.create())
-        loop.run_until_complete(content_automation.run())
-        logger.info("Force run completed successfully.")
-    except Exception as e:
-        logger.error(f'Background force run error: {str(e)}', exc_info=True)
-    finally:
-        close_event_loop(loop, logger)
-        with _force_run_lock:
-            _force_run_running = False
-
-
-@automation_bp.route('/force_run', methods=['POST'])
-@require_role('admin')
-@limiter.limit("5 per minute")
-def run_now():
-    """
-    Endpoint to execute the automation process in a background thread.
-    Returns immediately while the task runs asynchronously.
-    """
-    global _force_run_running
-    with _force_run_lock:
-        if _force_run_running:
-            return jsonify({'status': 'busy', 'message': 'A force run is already in progress.'}), 409
-        _force_run_running = True
-
-    thread = threading.Thread(target=_run_automation_in_background, daemon=True)
-    thread.start()
-    return jsonify({'status': 'success', 'message': 'Task started in the background!'}), 202
 
 def _list_page(default_per_page):
     """

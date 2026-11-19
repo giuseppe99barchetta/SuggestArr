@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from api_service.config.logger_manager import LoggerManager
+from api_service.db.cascading_delete import delete_cascading
 from api_service.db.database_manager import DatabaseManager
 
 
@@ -621,28 +622,33 @@ class JobRepository:
 
             return history
 
-    def get_recent_history(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_recent_history(self, limit: int = 100, owner_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Retrieve recent execution history across all jobs.
 
         Args:
             limit: Maximum number of records to return.
+            owner_id: When given, only runs of jobs owned by this account. The filter
+                runs before the LIMIT, so an owner's older runs are not crowded out
+                by newer runs of other people's jobs.
 
         Returns:
             List of execution history dictionaries.
         """
         self.logger.debug(f"Retrieving recent history, limit: {limit}")
 
-        query = """
+        owner_clause = "WHERE j.owner_id = ?" if owner_id is not None else ""
+        query = f"""
             SELECT h.id, h.job_id, h.started_at, h.finished_at, h.status,
                    h.results_count, h.requested_count, h.error_message,
                    j.name as job_name, h.trigger_source
             FROM job_execution_history h
             JOIN discover_jobs j ON h.job_id = j.id
+            {owner_clause}
             ORDER BY h.started_at DESC
             LIMIT ?
         """
-        params = (limit,)
+        params = (limit,) if owner_id is None else (owner_id, limit)
 
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
@@ -827,24 +833,16 @@ class JobRepository:
                 return False
 
         query = "DELETE FROM discover_jobs WHERE id = ?"
-        params = (job_id,)
+        if self.db.db_type in ['mysql', 'postgres']:
+            query = query.replace("?", "%s")
 
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
-
-            if self.db.db_type in ['mysql', 'postgres']:
-                query = query.replace("?", "%s")
-
-            cursor.execute(query, params)
-            conn.commit()
-
-            deleted = cursor.rowcount > 0
-            if deleted:
-                self.logger.info(f"Deleted discover job ID: {job_id}")
-            else:
-                self.logger.warning(f"No job found with ID: {job_id}")
-
-            return deleted
+        # Cascades to the job's history, list state and unwatched-cycle rows, on SQLite too.
+        deleted = delete_cascading(self.db, query, (job_id,)) > 0
+        if deleted:
+            self.logger.info(f"Deleted discover job ID: {job_id}")
+        else:
+            self.logger.warning(f"No job found with ID: {job_id}")
+        return deleted
 
     def _row_to_history_dict(self, row) -> Dict[str, Any]:
         """

@@ -6,37 +6,79 @@ import pytest
 from api_service.jobs.trakt_recommendations_automation import TraktRecommendationsAutomation
 
 
-@pytest.mark.asyncio
-async def test_fetch_trakt_recommendations_applies_max_results():
+def _trakt_automation(media_type, max_results, lists):
     automation = TraktRecommendationsAutomation()
     automation.job_data = {
-        "media_type": "movie",
-        "max_results": 2,
+        "media_type": media_type,
+        "max_results": max_results,
         "filters": {"ignore_collected": True, "ignore_watched": True},
     }
     automation.trakt_client = AsyncMock()
-    automation.trakt_client.get_recommendations.return_value = [
-        {"tmdb_id": "1", "title": "One", "media_type": "movie"},
-        {"tmdb_id": "2", "title": "Two", "media_type": "movie"},
-        {"tmdb_id": "3", "title": "Three", "media_type": "movie"},
-    ]
-    automation._enrich_and_filter_item = AsyncMock(side_effect=lambda item: {
-        "id": int(item["tmdb_id"]),
-        "title": item["title"],
-        "media_type": item["media_type"],
-        "vote_average": 8.0,
-        "vote_count": 1000,
-    })
+    automation.trakt_client.get_recommendations.side_effect = lambda item_type, **_: lists[item_type]
+    return automation
+
+
+def _passes(item):
+    return {"id": int(item["tmdb_id"]), "title": item["tmdb_id"], "media_type": item["media_type"]}
+
+
+@pytest.mark.asyncio
+async def test_fetch_keeps_scanning_past_max_results():
+    """The cap is applied when requesting, so the fetch returns every quality-passing candidate."""
+    lists = {"movie": [{"tmdb_id": str(i)} for i in range(1, 4)]}
+    automation = _trakt_automation("movie", 2, lists)
+    automation._enrich_and_filter_item = AsyncMock(side_effect=_passes)
 
     results = await automation.fetch_trakt_recommendations()
 
-    assert len(results) == 2
+    assert [r["id"] for r in results] == [1, 2, 3]
     automation.trakt_client.get_recommendations.assert_awaited_once_with(
-        "movie",
-        limit=6,
-        ignore_collected=True,
-        ignore_watched=True,
+        "movie", limit=100, ignore_collected=True, ignore_watched=True,
     )
+
+
+@pytest.mark.asyncio
+async def test_both_types_share_one_inspection_budget():
+    lists = {"movie": [{"tmdb_id": str(i)} for i in range(100)],
+             "tv": [{"tmdb_id": str(1000 + i)} for i in range(100)]}
+    automation = _trakt_automation("both", 100, lists)
+    automation._enrich_and_filter_item = AsyncMock(side_effect=_passes)
+
+    await automation.fetch_trakt_recommendations()
+
+    inspected = [call.args[0]["media_type"] for call in automation._enrich_and_filter_item.await_args_list]
+    assert len(inspected) == 100 and inspected.count("movie") == inspected.count("tv") == 50
+
+
+@pytest.mark.asyncio
+async def test_unused_budget_of_one_type_goes_to_the_other():
+    lists = {"movie": [{"tmdb_id": str(i)} for i in range(80)], "tv": []}
+    automation = _trakt_automation("both", 100, lists)
+    automation._enrich_and_filter_item = AsyncMock(side_effect=_passes)
+
+    results = await automation.fetch_trakt_recommendations()
+
+    assert len(results) == 80
+
+
+@pytest.mark.asyncio
+async def test_filter_and_request_stops_at_max_results_after_skipping_requested():
+    automation = _trakt_automation("movie", 2, {})
+    automation.db_manager = MagicMock()
+    automation.db_manager.check_request_exists.side_effect = lambda media_type, tmdb_id: tmdb_id in {"1", "2"}
+    automation.seer_discovered_ids = set()
+    automation.local_content = {}
+    automation.seer_client = MagicMock()
+    automation.seer_client.check_already_downloaded = AsyncMock(return_value=False)
+    automation.seer_client.check_already_requested = AsyncMock(return_value=False)
+    automation.seer_client.request_media = AsyncMock(return_value=True)
+    automation.job_data["user_ids"] = ["u1"]
+    results = [{"id": i, "title": str(i), "media_type": "movie"} for i in range(1, 7)]
+
+    requested, _ = await automation.filter_and_request(results)
+
+    assert requested == 2
+    assert [c.args[1]["id"] for c in automation.seer_client.request_media.await_args_list] == [3, 4]
 
 
 @pytest.mark.asyncio
@@ -210,7 +252,7 @@ async def test_filter_and_request_skips_seer_discovered_ids():
     automation = TraktRecommendationsAutomation()
     automation.job_data = {"media_type": "movie"}
     automation.local_content = {}
-    automation.seer_discovered_ids = {"27205"}
+    automation.seer_discovered_ids = {"movie:27205"}
     automation.db_manager = MagicMock()
     automation.db_manager.check_request_exists.return_value = False
     automation.seer_client = MagicMock()

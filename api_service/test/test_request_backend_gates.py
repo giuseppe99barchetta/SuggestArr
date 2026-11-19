@@ -132,6 +132,36 @@ def test_ai_search_request_goes_to_arr_in_direct_mode_whatever_seer_credentials_
     db.return_value.save_request.assert_called_once()
 
 
+@pytest.mark.parametrize('metadata', [{'origin_country': 5}, {'origin_country': [1, 'US'], 'title': 7}, 'not-a-dict'])
+def test_ai_search_request_survives_bad_metadata_after_upstream_success(metadata):
+    """Bad client metadata must not turn an upstream success into a 500 or skip recording it."""
+    arr = MagicMock()
+    arr.__aenter__ = AsyncMock(return_value=arr)
+    arr.__aexit__ = AsyncMock(return_value=False)
+    arr.add = AsyncMock(return_value=True)
+    with patch.object(ai_routes.ConfigService, 'get_runtime_config', return_value=ARR),             patch.object(ai_routes, 'ArrClient', return_value=arr),             patch.object(ai_routes, 'DatabaseManager') as db:
+        response = _ai_client(ARR).post('/api/ai-search/request',
+                                        json={'tmdb_id': 27205, 'media_type': 'movie', 'metadata': metadata})
+    assert response.status_code == 200
+    saved = db.return_value.save_metadata.call_args.args[0]
+    assert all(isinstance(v, str) for v in saved.get('origin_country', []))
+    assert 'title' not in saved
+    db.return_value.save_request.assert_called_once()
+
+
+def test_ai_search_request_is_recorded_even_when_metadata_save_fails():
+    arr = MagicMock()
+    arr.__aenter__ = AsyncMock(return_value=arr)
+    arr.__aexit__ = AsyncMock(return_value=False)
+    arr.add = AsyncMock(return_value=True)
+    with patch.object(ai_routes.ConfigService, 'get_runtime_config', return_value=ARR),             patch.object(ai_routes, 'ArrClient', return_value=arr),             patch.object(ai_routes, 'DatabaseManager') as db:
+        db.return_value.save_metadata.side_effect = RuntimeError('disk full')
+        response = _ai_client(ARR).post('/api/ai-search/request',
+                                        json={'tmdb_id': 27205, 'media_type': 'movie', 'metadata': {'title': 'Inception'}})
+    assert response.status_code == 200
+    db.return_value.save_request.assert_called_once()
+
+
 def test_ai_search_request_for_a_type_without_instance_is_refused():
     with patch.object(ai_routes.ConfigService, 'get_runtime_config', return_value=ARR), \
             patch.object(ai_routes, 'ArrClient') as factory:

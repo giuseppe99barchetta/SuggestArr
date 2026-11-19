@@ -7,8 +7,10 @@ Public endpoints (no JWT required — listed in middleware.PUBLIC_ROUTES):
   POST /api/auth/login    — credential exchange → JWT + refresh cookie
   POST /api/auth/refresh  — refresh cookie → new JWT
 
+  POST /api/auth/refresh/revoke — revoke the refresh cookie's token (logout)
+  POST /api/auth/logout   — clear the cookie (kept for API clients)
+
 Protected endpoints (JWT required — enforced by middleware):
-  POST /api/auth/logout   — revoke refresh token, clear cookie
   GET  /api/auth/me       — current user identity
 
 Security decisions
@@ -388,16 +390,20 @@ def refresh():
 # ---------------------------------------------------------------------------
 
 @auth_bp.route('/logout', methods=['POST'])
+@auth_bp.route('/refresh/revoke', methods=['POST'])
 def logout():
     """
     Revoke the current refresh token and clear the cookie.
 
+    The SPA calls ``/api/auth/refresh/revoke``: it lies under the refresh
+    cookie's path, so the browser sends the cookie and the token is revoked
+    server-side. ``/api/auth/logout`` is kept for API clients, but a browser
+    never sends the cookie there, so on that path it only clears the cookie.
+
     The JWT access token naturally expires after ACCESS_TOKEN_EXPIRE_MINUTES
     (15 min) — no server-side access-token blocklist is maintained.
 
-    This endpoint does NOT require the JWT middleware to pass (the middleware
-    runs first and will enforce auth for non-public routes), but it is
-    intentionally safe even if called without a valid JWT because the only
+    Both paths are public (no JWT needed). That is safe because the only
     state change is revoking a cookie-bound refresh token.
 
     Response (200): { "message": "Logged out" }

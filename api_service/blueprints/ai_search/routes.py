@@ -30,6 +30,63 @@ _METADATA_FIELDS = ("title", "name", "overview", "release_date", "poster_path", 
                     "logo_path", "rating", "votes", "genre_ids", "origin_country")
 
 
+_MAX_METADATA_TEXT = 2000
+
+
+def _display_metadata(metadata) -> dict:
+    """
+    Keep only well-formed display fields from client-supplied metadata.
+
+    The values go into the shared metadata cache, so wrong types are dropped
+    instead of failing after the upstream request has already been made.
+
+    Args:
+        metadata: The ``metadata`` object from the request body (any JSON value).
+
+    Returns:
+        dict: Allowed fields only; strings capped, numbers kept, lists of str/int as str.
+    """
+    if not isinstance(metadata, dict):
+        return {}
+    clean = {}
+    for key in _METADATA_FIELDS:
+        value = metadata.get(key)
+        if key in ("genre_ids", "origin_country"):
+            if isinstance(value, list) and all(isinstance(v, (str, int)) and not isinstance(v, bool) for v in value):
+                clean[key] = [str(v)[:16] for v in value[:50]]
+        elif key in ("rating", "votes"):
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                clean[key] = value
+        elif isinstance(value, str):
+            clean[key] = value[:_MAX_METADATA_TEXT]
+    return clean
+
+
+def _record_local_request(media_type, tmdb_id, metadata, rationale):
+    """
+    Store the metadata and the request locally after the upstream request succeeded.
+
+    Each write is isolated: a failure is logged and never turns the success into an
+    error, and a metadata failure does not skip recording the request.
+
+    Args:
+        media_type: 'movie' or 'tv'.
+        tmdb_id: TMDb id of the requested title.
+        metadata: Output of :func:`_display_metadata`.
+        rationale: Text stored with the request.
+    """
+    db = DatabaseManager()
+    try:
+        db.save_metadata({**metadata, "id": str(tmdb_id)}, media_type)
+    except Exception as exc:
+        logger.error("AI search: could not save metadata for %s %s: %s", media_type, tmdb_id, exc)
+    try:
+        # Tagged 'ai_search' to keep these requests out of the "By Watched Content" view.
+        db.save_request(media_type, str(tmdb_id), "ai_search", None, rationale=rationale)
+    except Exception as exc:
+        logger.error("AI search: could not record request for %s %s: %s", media_type, tmdb_id, exc)
+
+
 @ai_search_bp.before_request
 def require_ai_search_page():
     """Searching and requesting belong to the AI Search page; personal history stays open."""
@@ -305,7 +362,7 @@ async def ai_search_request():
         media_type = data.get("media_type", "movie")
         rationale = data.get("rationale") or None
         search_query = (data.get("search_query") or "").strip() or None
-        metadata = data.get("metadata") or {}
+        metadata = _display_metadata(data.get("metadata"))
         # Prefer the original search query as the stored rationale so the
         # "AI Requests" tab can show what the user was looking for.
         db_rationale = search_query or rationale
@@ -361,11 +418,7 @@ async def ai_search_request():
             except Exception as exc:
                 logger.error("%s request failed: %s", service.capitalize(), exc)
                 return jsonify({"status": "error", "message": f"{service.capitalize()} could not add the title."}), 500
-            db = DatabaseManager()
-            media_dict = {key: metadata[key] for key in _METADATA_FIELDS if key in metadata}
-            media_dict["id"] = str(tmdb_id)
-            db.save_metadata(media_dict, media_type)
-            db.save_request(media_type, str(tmdb_id), "ai_search", None, rationale=db_rationale)
+            _record_local_request(media_type, tmdb_id, metadata, db_rationale)
             return jsonify({"status": "success", "message": "Request submitted successfully."}), 200
 
         # A stored Seer session can be valid but belong to a user without request
@@ -388,18 +441,9 @@ async def ai_search_request():
                         continue
 
                     if response.status in (200, 201, 202):
-                        db = DatabaseManager()
-                        # Persist metadata using data supplied by the frontend so the
-                        # title and poster are stored correctly in the local DB.
-                        # Only display fields, keyed to the requested id: the cache is shared by all users.
-                        media_dict = {key: metadata[key] for key in _METADATA_FIELDS if key in metadata}
-                        media_dict["id"] = str(tmdb_id)
-                        db.save_metadata(media_dict, media_type)
-                        # Tag with 'ai_search' source to keep these requests out of the
-                        # "By Watched Content" view in the dashboard.
-                        db.save_request(
-                            media_type, str(tmdb_id), "ai_search", None, rationale=db_rationale
-                        )
+                        # Metadata comes from the frontend so the title and poster show locally;
+                        # only display fields, keyed to the requested id (the cache is shared).
+                        _record_local_request(media_type, tmdb_id, metadata, db_rationale)
                         return jsonify({"status": "success", "message": "Request submitted successfully."}), 200
 
                     if response.status == 409:

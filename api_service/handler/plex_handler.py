@@ -122,16 +122,21 @@ class PlexHandler(BaseMediaHandler):
         is_anime = self.library_anime_map.get(library_section_id, False)
 
         # Parse date: prefer viewedAt, fall back to addedAt, then 0.
+        # Plex sends epoch seconds for viewedAt/addedAt/updatedAt and an ISO date for originallyAvailableAt.
         date = 0
         for field in ('viewedAt', 'addedAt', 'updatedAt', 'originallyAvailableAt'):
             val = item.get(field)
-            if val:
-                try:
+            if not val:
+                continue
+            try:
+                if isinstance(val, (int, float)) or str(val).isdigit():
+                    date = int(float(val))
+                else:
                     from datetime import datetime as dt
                     date = int(dt.fromisoformat(str(val).replace('Z', '+00:00')).timestamp())
-                except (ValueError, TypeError):
-                    pass
-                break
+            except (ValueError, TypeError):
+                continue
+            break
 
         source_obj = None
         try:
@@ -264,69 +269,6 @@ class PlexHandler(BaseMediaHandler):
         user_id = user.get("id") if isinstance(user, dict) else user
         await self.request_similar_media([media], item_type, 1, source_obj, user_id=user_id)
 
-    async def process_item(self, item, title, is_anime=False):
-        """Process an individual item (movie or TV show episode)."""
-        self.logger.debug(f"Processing item: {item}")
-
-        item_type = item['type'].lower()
-
-        if (item_type == 'movie' and self.max_similar_movie > 0) or (item_type == 'episode' and self.max_similar_tv > 0):
-            try:
-                key = self.extract_rating_key(item, item_type)
-                self.logger.debug(f"Extracted key: {key} for item type: {item_type}")
-                if key:
-                    if item_type == 'movie':
-                        await self.process_movie(key, title, is_anime)
-                    elif item_type == 'episode':
-                        await self.process_episode(key, title, is_anime)
-                else:
-                    raise ValueError(f"Missing key for {item_type} '{title}'. Cannot process this item. Skipping.")
-            except Exception as e:
-                self.logger.warning(f"Error while processing item: {str(e)}")
-
-    def extract_rating_key(self, item, item_type):
-        """Extract the appropriate key depending on the item type."""
-        key = item.get('key') if item_type == 'movie' else item.get('grandparentKey') if item_type == 'episode' else None
-        self.logger.debug(f"Extracted rating key: {key} for item type: {item_type}")
-        return key if key else None
-
-    async def process_movie(self, movie_key, title, is_anime=False):
-        """Find similar movies via TMDb and request them via Seer."""
-        self.logger.debug(f"Processing movie with key: {movie_key} - {title}")
-        source_tmbd_id = await self.plex_client.get_metadata_provider_id(movie_key)
-        self.logger.debug(f"TMDb ID retrieved: {source_tmbd_id}")
-
-        if source_tmbd_id:
-            source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmbd_id, 'movie')
-            self.logger.info(f"TMDb metadata: {source_tmdb_obj}")
-            if not source_tmdb_obj:
-                self.logger.warning(f"Failed to fetch TMDb metadata for movie '{title}' (ID: {source_tmbd_id}). Skipping.")
-                return
-            similar_movies = await self.tmdb_client.find_similar_movies(source_tmbd_id, dry_run=self.dry_run)
-            self.logger.debug(f"Found similar movies: {similar_movies}")
-            await self.request_similar_media(similar_movies, 'movie', self.max_similar_movie, source_tmdb_obj, is_anime)
-        else:
-            self.logger.warning(f"Error while processing item: 'tmdb_id' not found for movie '{title}'. Skipping.")
-
-    async def process_episode(self, show_key, title, is_anime=False):
-        """Process a TV show episode by finding similar TV shows via TMDb."""
-        self.logger.debug(f"Processing episode with show key: {show_key} - {title}")
-        if show_key:
-            source_tmbd_id = await self.plex_client.get_metadata_provider_id(show_key)
-            self.logger.debug(f"TMDb ID retrieved: {source_tmbd_id}")
-
-            if source_tmbd_id:
-                source_tmdb_obj = await self.tmdb_client.get_metadata(source_tmbd_id, 'tv')
-                self.logger.debug(f"TMDb metadata: {source_tmdb_obj}")
-                if not source_tmdb_obj:
-                    self.logger.warning(f"Failed to fetch TMDb metadata for TV show '{title}' (ID: {source_tmbd_id}). Skipping.")
-                    return
-                similar_tvshows = await self.tmdb_client.find_similar_tvshows(source_tmbd_id, dry_run=self.dry_run)
-                self.logger.debug(f"Found {len(similar_tvshows)} similar TV shows")
-                await self.request_similar_media(similar_tvshows, 'tv', self.max_similar_tv, source_tmdb_obj, is_anime)
-            else:
-                self.logger.warning(f"Error while processing item: 'tmdb_id' not found for tv show '{title}'. Skipping.")
-
     async def request_similar_media(self, media_ids, media_type, max_items, source_tmdb_obj, is_anime=False, user_id=None):
         """Request similar media (movie/TV show) via the Seer service."""
         self.logger.debug(f"Requesting {max_items} similar media (anime={is_anime})")
@@ -360,7 +302,7 @@ class PlexHandler(BaseMediaHandler):
                 already_downloaded = await self.seer_client.check_already_downloaded(media_id, media_type, self.existing_content_sets)
                 excluded_by_discovery = (
                     self.honor_seer_discovery
-                    and str(media_id) in self.seer_discovered_ids
+                    and f"{media_type}:{media_id}" in self.seer_discovered_ids
                 )
                 in_excluded_streaming_service, provider = await self.tmdb_client.get_watch_providers(source_tmdb_obj['id'], media_type)
 
@@ -475,7 +417,7 @@ class PlexHandler(BaseMediaHandler):
                 self.logger.info(f"Skipping [{media_type}, {media_title}]: already downloaded (local set check).")
                 continue
 
-            if self.honor_seer_discovery and media_id in self.seer_discovered_ids:
+            if self.honor_seer_discovery and f"{media_type}:{media_id}" in self.seer_discovered_ids:
                 self.logger.debug(
                     "Skipping [%s, %s]: already discovered/requested in Seer.",
                     media_type,
