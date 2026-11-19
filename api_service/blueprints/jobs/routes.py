@@ -47,6 +47,30 @@ def run_async(coro):
     return run_coroutine_sync(coro, logger)
 
 
+def _localize_preview(items):
+    """
+    Show dry-run items in the reader's display language, like the request lists.
+
+    Best effort: any failure keeps the default-language items, so a preview
+    never fails because of localization.
+
+    Args:
+        items: Dry-run item dicts (tmdb_id, media_type, title, overview), changed in place.
+
+    Returns:
+        list: The same items.
+    """
+    if not items:
+        return items
+    try:
+        from api_service.blueprints.automation.routes import _localize
+        from api_service.db.database_manager import DatabaseManager
+        _localize(DatabaseManager(), (items, [('tmdb_id', 'media_type', 'title', 'overview')]))
+    except Exception as exc:
+        logger.warning("Preview localization skipped: %s", exc)
+    return items
+
+
 def _validate_request_limits(data):
     """Normalise the optional rolling per-user automation guardrail."""
     try:
@@ -209,7 +233,7 @@ def preview_public_list():
         result = run_async(preview())
         if not result.success:
             return jsonify({'status': 'error', 'message': result.error_message}), 502
-        return jsonify({'status': 'success', 'items': result.dry_run_items or [],
+        return jsonify({'status': 'success', 'items': _localize_preview(result.dry_run_items or []),
                         'scanned_count': result.results_count, 'next_offset': automation.next_offset,
                         'has_more': not automation.scan_complete}), 200
     except PublicListError as exc:
@@ -929,7 +953,7 @@ def dry_run_job(job_id: int):
                 'status': 'success',
                 'dry_run': True,
                 'items_count': result.results_count,
-                'items': result.dry_run_items or [],
+                'items': _localize_preview(result.dry_run_items or []),
             }), 200
         else:
             return jsonify({

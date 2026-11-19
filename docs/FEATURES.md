@@ -62,6 +62,9 @@ expires (up to 10 minutes).
 It checks up to 100 list entries at a time without creating requests; use
 **Load more titles** to inspect the next page. The import rechecks availability
 before enqueueing, so titles acquired since the preview are still excluded.
+Like a job's **Preview**, it shows titles and descriptions in your display
+language (profile **Title language**, else `TMDB_LANGUAGE`); requests are still
+sent in the default language.
 
 Use `https://mdblist.com/lists/username/list-name` or
 `https://trakt.tv/users/username/lists/list-name`, then **Verify list**. Private

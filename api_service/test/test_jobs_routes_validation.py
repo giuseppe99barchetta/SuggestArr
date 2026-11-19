@@ -2,6 +2,7 @@ import asyncio
 import os
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from flask import Flask, g
 
 from api_service.auth.limiter import limiter
@@ -145,3 +146,71 @@ def test_dry_run_trakt_job_initializes_in_dry_run_mode(monkeypatch):
 
     assert response.status_code == 200
     create.assert_awaited_once_with(2, dry_run=True)
+
+
+def _preview_item():
+    return {"tmdb_id": 1186, "media_type": "tv", "title": "My Lovely Sam Soon",
+            "overview": "English overview", "would_request": True}
+
+
+def _stub_dry_run(monkeypatch, client_path):
+    """Make the job dry-run or the list preview return one English item."""
+    automation = MagicMock()
+    automation.next_offset = 1
+    automation.scan_complete = True
+    automation.run = AsyncMock(return_value=ExecutionResult(
+        success=True, results_count=1, requested_count=1, dry_run_items=[_preview_item()]))
+    create = AsyncMock(return_value=automation)
+    monkeypatch.setattr(jobs_routes.DiscoverAutomation, "create", create)
+    monkeypatch.setattr(jobs_routes.ListImportAutomation, "from_config", create)
+    monkeypatch.setattr(jobs_routes, "_list_import_config", lambda data: {})
+    monkeypatch.setattr(jobs_routes, "run_async", lambda coro: asyncio.run(coro))
+    return {} if client_path.endswith("dry-run") else {"offset": 0}
+
+
+@pytest.mark.parametrize("path", ["/api/jobs/1/dry-run", "/api/jobs/lists/preview"])
+def test_preview_items_follow_display_language(monkeypatch, path):
+    """Issue #568: preview titles use TMDB_LANGUAGE like the request lists."""
+    from api_service.blueprints.automation import routes as automation_routes
+    from api_service.db import database_manager
+    from api_service.services.tmdb import localization
+
+    client, _ = _make_client(monkeypatch, existing_job={"id": 1, "job_type": "discover", "owner_id": 1})
+    body = _stub_dry_run(monkeypatch, path)
+    db = MagicMock()
+    db.get_user_language.return_value = None
+    db.get_integration.return_value = {"api_key": "key"}
+    monkeypatch.setattr(database_manager, "DatabaseManager", lambda: db)
+    monkeypatch.setattr(automation_routes, "load_env_vars", lambda: {"TMDB_LANGUAGE": "ko"})
+    seen = {}
+
+    def translations(_db, api_key, pairs, language, run):
+        seen["language"] = language
+        return {("1186", "tv"): {"title": "내 이름은 김삼순", "overview": "한국어 줄거리"}}
+
+    monkeypatch.setattr(localization, "translations_for", translations)
+
+    response = client.post(path, json=body)
+
+    assert response.status_code == 200
+    item = response.get_json()["items"][0]
+    assert (item["title"], item["overview"]) == ("내 이름은 김삼순", "한국어 줄거리")
+    assert seen["language"] == "ko"
+
+
+@pytest.mark.parametrize("path", ["/api/jobs/1/dry-run", "/api/jobs/lists/preview"])
+def test_preview_survives_localization_setup_failure(monkeypatch, path):
+    from api_service.db import database_manager
+
+    client, _ = _make_client(monkeypatch, existing_job={"id": 1, "job_type": "discover", "owner_id": 1})
+    body = _stub_dry_run(monkeypatch, path)
+
+    def broken():
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(database_manager, "DatabaseManager", broken)
+
+    response = client.post(path, json=body)
+
+    assert response.status_code == 200
+    assert response.get_json()["items"] == [_preview_item()]
