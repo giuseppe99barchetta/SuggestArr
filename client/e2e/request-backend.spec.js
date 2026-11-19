@@ -52,7 +52,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     const errors = await whatsNew(page);
     const dialog = page.getByRole('dialog');
-    const headings = ['Choose where requests go', 'Titles added straight to your libraries', 'Know when it is ready', 'Replacements and cleanup', 'Profiles and pause, per job'];
+    const headings = ['Choose where requests go', 'Know when it is ready', 'Replacements and cleanup', 'Profiles and pause, per job', 'Clear the queue in one click'];
     await expect(dialog.getByRole('button', { name: 'Back' })).toHaveCount(0);
     for (const [index, heading] of headings.entries()) {
       if (index) await dialog.getByRole('button', { name: 'Next' }).click();
@@ -63,11 +63,11 @@ for (const width of [1440, 390]) {
     }
     await expect(dialog.getByRole('button', { name: 'Next' })).toHaveCount(0);
     await page.keyboard.press('ArrowLeft');
-    await expect(dialog.getByRole('heading', { name: 'Replacements and cleanup' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Profiles and pause, per job' })).toBeVisible();
     await dialog.getByRole('button', { name: /Go to slide 1 of 5/ }).click();
     await expect(dialog.getByRole('heading', { name: 'Choose where requests go' })).toBeVisible();
     await page.keyboard.press('Escape');
-    expect(await page.evaluate(() => window.events)).toContain('close');
+    await expect.poll(() => page.evaluate(() => window.events)).toContain('close'); // native <dialog> fires close async
     expect(errors).toEqual([]);
   });
 }
