@@ -208,6 +208,8 @@ class RequestQueueMixin:
                     "delivery_id": delivery_id, "execution_id": execution_id, "tmdb_id": str(tmdb_id),
                     "media_type": media_type, "job_id": job_id, "status": status,
                 }
+                if payload.get('_rationale'):
+                    event_data["rationale"] = payload['_rationale']
                 try:
                     self.enqueue_webhook_event("suggestion.created", event_data)
                     if status == "awaiting_approval":

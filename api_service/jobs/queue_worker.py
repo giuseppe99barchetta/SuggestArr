@@ -190,6 +190,7 @@ async def _run_worker() -> int:
                     db.enqueue_webhook_event("request.submitted", {
                         "tmdb_id": str(tmdb_id), "media_type": media_type, "job_id": item.get("job_id"),
                         "execution_id": item.get("execution_id"), "delivery_id": row_id,
+                        **({"rationale": payload["_rationale"]} if payload.get("_rationale") else {}),
                     })
                 except Exception as exc:
                     logger.error("Unable to queue request.submitted webhook: %s", exc)
@@ -260,6 +261,7 @@ async def _run_worker() -> int:
                     db.enqueue_webhook_event("request.submitted", {
                         "tmdb_id": str(tmdb_id), "media_type": media_type, "job_id": item.get("job_id"),
                         "execution_id": item.get("execution_id"), "delivery_id": row_id,
+                        **({"rationale": payload["_rationale"]} if payload.get("_rationale") else {}),
                     })
                 except Exception as exc:
                     logger.error("Unable to queue request.submitted webhook: %s", exc)

@@ -120,3 +120,13 @@ def test_the_administrators_allowlist_also_binds_personal_destinations(db):
     with db_patch, patch.object(routes, "validate_url"):
         response = client.put("/api/users/me/notifications", json={"format": "discord", "url": "https://discord.com/api/webhooks/1/x"})
     assert response.status_code == 400 and "allowlist" in response.get_json()["error"]
+
+
+@pytest.mark.parametrize("payload, expected", [({"_rationale": "Because you watched Dark"}, "Because you watched Dark"),
+                                               ({}, None)])
+def test_suggestion_events_carry_the_ai_rationale_only_when_there_is_one(db, payload, expected):
+    with patch.object(db, "enqueue_webhook_event") as enqueue:
+        assert db.enqueue_request("438631", "movie", None, payload, status="awaiting_approval", owner_id=3)
+    events = [call.args for call in enqueue.call_args_list]
+    assert [event for event, _ in events] == ["suggestion.created", "suggestion.awaiting_approval"]
+    assert all(data.get("rationale") == expected and ("rationale" in data) == bool(expected) for _, data in events)

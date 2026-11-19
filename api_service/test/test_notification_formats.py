@@ -56,7 +56,7 @@ def test_event_text_names_the_title_or_job_and_falls_back_to_ids():
 
 def test_each_service_gets_its_own_body_and_url():
     assert render_notification('discord', 'https://discord.com/api/webhooks/1/x', 'Hi') == (
-        'https://discord.com/api/webhooks/1/x', json.dumps({'content': 'Hi', 'username': 'SuggestArr'}))
+        'https://discord.com/api/webhooks/1/x', json.dumps({'content': 'Hi', 'username': 'SuggestArr', 'allowed_mentions': {'parse': []}}))
     url, body = render_notification('ntfy', 'https://ntfy.example.test/sub/alerts', 'Hi')
     assert url == 'https://ntfy.example.test/sub/'
     assert json.loads(body) == {'topic': 'alerts', 'title': 'SuggestArr', 'message': 'Hi'}
@@ -138,3 +138,31 @@ def test_chat_formats_need_no_secret_but_signed_json_still_does():
     saved = db.create_webhook.call_args.args[0]
     assert saved['format'] == 'discord' and len(saved['secret']) >= 16
     assert unsigned.status_code == 400
+
+
+def test_ai_rationale_goes_on_a_quoted_second_line():
+    data = {'tmdb_id': '1', 'media_type': 'tv', 'rationale': 'Because you watched Dark:\n slow-burn mystery.'}
+    assert describe_event('suggestion.created', data, title='Severance') == (
+        'New suggestion: Severance\n"Because you watched Dark: slow-burn mystery."')
+    for rationale in (None, '', '   '):
+        assert describe_event('suggestion.created', {'rationale': rationale}, title='Dune') == 'New suggestion: Dune'
+
+
+def test_long_rationale_is_trimmed_to_fit_discord():
+    text = describe_event('suggestion.awaiting_approval', {'rationale': 'x' * 3000}, title='Dune')
+    assert len(text) < 2000 and text.endswith('…"') and text.count('\n') == 1
+
+
+def test_rationale_reaches_chat_text_and_full_json_data():
+    db = _NotifyDb([
+        {**_hook('signed', 'json', 'https://hooks.example.test'), 'events': ['suggestion.created']},
+        {**_hook('discord', 'discord', 'https://discord.com/api/webhooks/1/x'), 'events': ['suggestion.created']},
+    ])
+    rationale = '@everyone ' + 'y' * 600
+    db.enqueue_webhook_event('suggestion.created', {'tmdb_id': '438631', 'media_type': 'movie', 'rationale': rationale})
+
+    sent = db.deliveries()
+    assert sent['signed'][1]['data']['rationale'] == rationale
+    first, second = sent['discord'][1]['content'].split('\n')
+    assert first == 'New suggestion: Dune' and second.startswith('"@everyone y')
+    assert sent['discord'][1]['allowed_mentions'] == {'parse': []}

@@ -254,3 +254,36 @@ def test_successful_seer_submission_queues_webhook_event():
             'execution_id': None, 'delivery_id': 7,
         }
     )
+
+
+def test_submitted_webhook_carries_the_ai_rationale():
+    class Seer:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return None
+
+        async def init(self):
+            return None
+
+        async def submit_queued_request(self, _payload):
+            return True
+
+    db = MagicMock()
+    db.expire_pending_approvals.return_value = 0
+    db.check_request_exists.return_value = False
+    db.get_due_requests.return_value = [{
+        'id': 7, 'tmdb_id': '42', 'media_type': 'movie', 'retry_count': 0,
+        'job_id': 3, 'payload': '{"_rationale": "Because"}',
+    }]
+    with patch('api_service.jobs.queue_worker.DatabaseManager', return_value=db), \
+            patch('api_service.jobs.queue_worker.ConfigService.get_runtime_config', return_value={}), \
+            patch('api_service.jobs.queue_worker.SeerClient', return_value=Seer()):
+        assert asyncio.run(_run_worker()) == 1
+    db.enqueue_webhook_event.assert_called_once_with(
+        'request.submitted', {
+            'tmdb_id': '42', 'media_type': 'movie', 'job_id': 3,
+            'execution_id': None, 'delivery_id': 7, 'rationale': 'Because',
+        }
+    )
