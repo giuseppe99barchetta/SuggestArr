@@ -69,6 +69,19 @@ def _as_naive_utc(value):
     return value
 
 
+def _seer_request_delay(env) -> float:
+    """
+    Seconds to wait between two Seer requests in one worker cycle (SEER_REQUEST_DELAY).
+
+    :param env: Runtime configuration.
+    :return: The delay, clamped to 0-60 like the settings field; 0 when unset or invalid.
+    """
+    try:
+        return min(max(float(env.get('SEER_REQUEST_DELAY') or 0), 0.0), 60.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 async def _run_worker() -> int:
     """Core async drain loop.
 
@@ -156,6 +169,11 @@ async def _run_worker() -> int:
                 clients[backend] = None
         return clients[backend]
 
+    # Pause between Seer requests (#118): a burst makes Seer drop notifications. Applied before
+    # claiming the row, so nothing sits in 'submitting' while the worker waits.
+    seer_delay = _seer_request_delay(env)
+    seer_sent = False
+
     async with AsyncExitStack() as stack:
         submitted = 0
 
@@ -210,6 +228,11 @@ async def _run_worker() -> int:
                 down.add(backend)
                 park_unavailable(item, backend, destination, f"The {backend} backend is not usable")
                 continue
+
+            if backend == 'seer':
+                if seer_sent and seer_delay:
+                    await asyncio.sleep(seer_delay)
+                seer_sent = True
 
             # Claim the row: a concurrent worker, or a cancellation since it was read, wins over this one.
             if not db.mark_pending_submitting(row_id, retry_count):

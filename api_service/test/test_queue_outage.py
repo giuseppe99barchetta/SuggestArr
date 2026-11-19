@@ -216,18 +216,33 @@ def row(row_id, media='movie', backend='arr', retry=0, since=None):
             'payload': f'{{"mediaType": "{media}", "mediaId": {row_id}, "_backend": "{backend}"}}'}
 
 
-def work(rows, arr=None, seer=None):
+def work(rows, arr=None, seer=None, env=None):
     db = MagicMock()
     db.expire_pending_approvals.return_value = 0
     db.check_request_exists.return_value = False
     db.mark_pending_submitting.return_value = True
     db.get_due_requests.return_value = rows
     with patch('api_service.jobs.queue_worker.DatabaseManager', return_value=db), \
-            patch('api_service.jobs.queue_worker.ConfigService.get_runtime_config', return_value=ENV), \
+            patch('api_service.jobs.queue_worker.ConfigService.get_runtime_config', return_value=env or ENV), \
             patch('api_service.jobs.queue_worker.SeerClient', return_value=seer or Client()), \
             patch('api_service.jobs.queue_worker.ArrRequestClient', return_value=arr or Client()):
         asyncio.run(_run_worker())
     return db
+
+
+@pytest.mark.parametrize('delay,rows,expected', [
+    (2, [row(1, backend='seer'), row(2, backend='seer'), row(3, backend='seer')], [2, 2]),
+    (0, [row(1, backend='seer'), row(2, backend='seer')], []),
+    (2, [row(1, backend='arr'), row(2, backend='arr')], []),          # the setting is for Seer only
+    ('abc', [row(1, backend='seer'), row(2, backend='seer')], []),    # invalid value: no pause
+    (999, [row(1, backend='seer'), row(2, backend='seer')], [60.0]),  # clamped like the settings field
+])
+def test_seer_request_delay_spaces_out_seer_requests(delay, rows, expected):
+    """SEER_REQUEST_DELAY (#118): a pause between Seer requests, none before the first."""
+    sleep = AsyncMock()
+    with patch('api_service.jobs.queue_worker.asyncio.sleep', sleep):
+        work(rows, seer=Client(True), env={**ENV, 'SEER_REQUEST_DELAY': delay})
+    assert [call.args[0] for call in sleep.await_args_list] == expected
 
 
 def test_unavailable_backend_keeps_the_row_queued_without_spending_a_retry():
